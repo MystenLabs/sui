@@ -1,0 +1,16 @@
+[package]
+name = "fastpay_core"
+version = "0.1.0"
+authors = ["Libra <oncall+libra@xmail.facebook.com>"]
+publish = false
+edition = "2018"
+
+[dependencies]
+base64 = "0.12.0"
+bincode = "1.2.1"
+failure = "0.1.7"
+futures = "0.3.4"
+rand = "0.7.3"
+serde = { version = "1.0.106", features = ["derive"] }
+tokio = { version = "0.2.18", features = ["full"] }
+ed25519-dalek = { version = "1.0.0-pre.3", features = ["batch"] }
