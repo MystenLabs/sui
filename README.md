@@ -20,13 +20,14 @@ FastPay allows a set of distributed authorities, some of which are Byzantine, to
 ```bash
 cargo build --release
 cd target/release
+rm -f *.json
 
 # Create configuration files for 4 authorities with 4 shards each.
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the FastPay committee.
 for I in 1 2 3 4
 do
-    ./server -- --server server"$I".json generate --host 127.0.0.1 --port 9"$I"00 --shards 4 >> committee.json
+    ./server --server server"$I".json generate --host 127.0.0.1 --port 9"$I"00 --shards 4 >> committee.json
 done
 
 # Create configuration files for 1000 user accounts.
@@ -64,6 +65,8 @@ grep "$ACCOUNT1" accounts.json
 
 # Kill servers
 kill %1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14 %15 %16
+
+cd ../..
 ```
 
 ## References
