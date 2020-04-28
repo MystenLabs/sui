@@ -6,6 +6,7 @@
 
 # FastPay
 
+[![Build Status](https://circleci.com/gh/calibra/fastpay/tree/master.svg?style=shield)](https://circleci.com/gh/calibra/fastpay/tree/master)
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE.md)
 
 This repository is dedicated to sharing material related to the FastPay protocol, developed at Calibra Research. Software is provided for research-purpose only and is not meant to be used in production.
