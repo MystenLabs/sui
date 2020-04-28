@@ -127,7 +127,7 @@ impl Authority for AuthorityState {
                     }
                 );
                 let signed_order = SignedTransferOrder::new(order, self.name, &self.secret);
-                account.pending_confirmation = Some(signed_order.clone());
+                account.pending_confirmation = Some(signed_order);
                 Ok(account.make_account_info(sender))
             }
         }
@@ -151,7 +151,7 @@ impl Authority for AuthorityState {
         let mut sender_account = self
             .accounts
             .entry(transfer.sender)
-            .or_insert(AccountOffchainState::new());
+            .or_insert_with(AccountOffchainState::new);
         let mut sender_sequence_number = sender_account.next_sequence_number;
         let mut sender_balance = sender_account.balance;
 
@@ -165,7 +165,7 @@ impl Authority for AuthorityState {
             // Transfer was already confirmed.
             return Ok((sender_account.make_account_info(transfer.sender), None));
         }
-        sender_balance = sender_balance.sub(transfer.amount.into())?;
+        sender_balance = sender_balance.try_sub(transfer.amount.into())?;
         sender_sequence_number = sender_sequence_number.increment()?;
 
         // Commit sender state back to the database (Must never fail!)
@@ -188,12 +188,12 @@ impl Authority for AuthorityState {
             let recipient_account = self
                 .accounts
                 .entry(recipient)
-                .or_insert(AccountOffchainState::new());
+                .or_insert_with(AccountOffchainState::new);
             recipient_account.balance = recipient_account
                 .balance
-                .add(transfer.amount.into())
-                .unwrap_or(Balance::max());
-            recipient_account.received_log.push(certificate.clone());
+                .try_add(transfer.amount.into())
+                .unwrap_or_else(|_| Balance::max());
+            recipient_account.received_log.push(certificate);
             // Done updating recipient.
             return Ok((info, None));
         }
@@ -223,11 +223,11 @@ impl Authority for AuthorityState {
         let recipient_account = self
             .accounts
             .entry(recipient)
-            .or_insert(AccountOffchainState::new());
+            .or_insert_with(AccountOffchainState::new);
         recipient_account.balance = recipient_account
             .balance
-            .add(transfer.amount.into())
-            .unwrap_or(Balance::max());
+            .try_add(transfer.amount.into())
+            .unwrap_or_else(|_| Balance::max());
         recipient_account.received_log.push(certificate);
         Ok(())
     }
@@ -244,7 +244,7 @@ impl Authority for AuthorityState {
         let recipient_account = self
             .accounts
             .entry(recipient)
-            .or_insert(AccountOffchainState::new());
+            .or_insert_with(AccountOffchainState::new);
         if order.transaction_index <= self.last_transaction_index {
             // Ignore old transaction index.
             return Ok(recipient_account.make_account_info(recipient));
@@ -253,7 +253,7 @@ impl Authority for AuthorityState {
             order.transaction_index == self.last_transaction_index.increment()?,
             FastPayError::UnexpectedTransactionIndex
         );
-        let recipient_balance = recipient_account.balance.add(order.amount.into())?;
+        let recipient_balance = recipient_account.balance.try_add(order.amount.into())?;
         let last_transaction_index = self.last_transaction_index.increment()?;
         recipient_account.balance = recipient_balance;
         recipient_account.synchronization_log.push(order);
@@ -282,8 +282,8 @@ impl Authority for AuthorityState {
     }
 }
 
-impl AccountOffchainState {
-    pub fn new() -> Self {
+impl Default for AccountOffchainState {
+    fn default() -> Self {
         Self {
             balance: Balance::zero(),
             next_sequence_number: SequenceNumber::new(),
@@ -292,6 +292,12 @@ impl AccountOffchainState {
             synchronization_log: Vec::new(),
             received_log: Vec::new(),
         }
+    }
+}
+
+impl AccountOffchainState {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     fn make_account_info(&self, sender: FastPayAddress) -> AccountInfoResponse {

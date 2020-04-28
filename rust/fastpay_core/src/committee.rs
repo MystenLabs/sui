@@ -49,6 +49,6 @@ impl Committee {
                 return value;
             }
         }
-        return V::default();
+        V::default()
     }
 }

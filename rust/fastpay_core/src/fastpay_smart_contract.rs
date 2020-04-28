@@ -61,7 +61,7 @@ impl FastPaySmartContract for FastPaySmartContractState {
         // TODO: Make sure that under overflow/underflow we are consistent.
         self.last_transaction_index = self.last_transaction_index.increment()?;
         self.blockchain.push(transaction);
-        self.total_balance = self.total_balance.add(amount)?;
+        self.total_balance = self.total_balance.try_add(amount)?;
         Ok(())
     }
 
@@ -80,13 +80,13 @@ impl FastPaySmartContract for FastPaySmartContractState {
         let account = self
             .accounts
             .entry(transfer.sender)
-            .or_insert(AccountOnchainState::new());
+            .or_insert_with(AccountOnchainState::new);
         ensure!(
             account.last_redeemed < Some(transfer.sequence_number),
             "Transfer certificates to Primary must have increasing sequence numbers.",
         );
         account.last_redeemed = Some(transfer.sequence_number);
-        self.total_balance = self.total_balance.sub(transfer.amount)?;
+        self.total_balance = self.total_balance.try_sub(transfer.amount)?;
         // Transfer Primary coins to order.recipient
 
         Ok(())

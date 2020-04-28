@@ -4,7 +4,6 @@
 use super::messages::*;
 use crate::error::*;
 
-use bincode;
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
@@ -13,13 +12,13 @@ mod serialize_tests;
 
 #[derive(Serialize, Deserialize)]
 pub enum SerializedMessage {
-    Order(TransferOrder),
-    Vote(SignedTransferOrder),
-    Cert(CertifiedTransferOrder),
-    CrossShard(CertifiedTransferOrder),
-    Error(FastPayError),
-    InfoReq(AccountInfoRequest),
-    InfoResp(AccountInfoResponse),
+    Order(Box<TransferOrder>),
+    Vote(Box<SignedTransferOrder>),
+    Cert(Box<CertifiedTransferOrder>),
+    CrossShard(Box<CertifiedTransferOrder>),
+    Error(Box<FastPayError>),
+    InfoReq(Box<AccountInfoRequest>),
+    InfoResp(Box<AccountInfoResponse>),
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.

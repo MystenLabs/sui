@@ -9,7 +9,7 @@ use crate::messages::*;
 
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
 use std::convert::TryFrom;
 
 #[cfg(test)]
@@ -106,6 +106,7 @@ pub trait Client {
 }
 
 impl<A> ClientState<A> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         address: FastPayAddress,
         secret: SecretKey,
@@ -259,10 +260,9 @@ where
             .iter_mut()
             .map(|(name, client)| {
                 let fut = client.handle_account_info_request(request.clone());
-                let name = name.clone();
                 async move {
                     match fut.await {
-                        Ok(info) => Some((name, info.next_sequence_number)),
+                        Ok(info) => Some((*name, info.next_sequence_number)),
                         _ => None,
                     }
                 }
@@ -287,10 +287,9 @@ where
             .iter_mut()
             .map(|(name, client)| {
                 let fut = client.handle_account_info_request(request.clone());
-                let name = name.clone();
                 async move {
                     match fut.await {
-                        Ok(info) => Some((name, info.balance)),
+                        Ok(info) => Some((*name, info.balance)),
                         _ => None,
                     }
                 }
@@ -314,9 +313,8 @@ where
         let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
             .map(|(name, client)| {
-                let name = name.clone();
                 let execute = execute.clone();
-                async move { (name.clone(), execute(name, client).await) }
+                async move { (*name, execute(*name, client).await) }
             })
             .collect();
 
@@ -458,7 +456,7 @@ where
             // * each answer is a vote signed by the expected authority.
             certificates.push(certificate);
         }
-        return Ok(certificates);
+        Ok(certificates)
     }
 
     /// Make sure we have all our certificates with sequence number
@@ -483,7 +481,7 @@ where
                 let certificate = requester.query(number).await?;
                 sent_certificates.push(certificate);
             }
-            number = number.increment().unwrap_or(SequenceNumber::max());
+            number = number.increment().unwrap_or_else(|_| SequenceNumber::max());
         }
         sent_certificates.sort_by_key(|cert| cert.value.transfer.sequence_number);
         Ok(sent_certificates)
@@ -529,18 +527,18 @@ where
         let mut new_balance = self.balance;
         let mut new_next_sequence_number = self.next_sequence_number;
         for new_cert in &sent_certificates {
-            new_balance = new_balance.sub(new_cert.value.transfer.amount.into())?;
+            new_balance = new_balance.try_sub(new_cert.value.transfer.amount.into())?;
             if new_cert.value.transfer.sequence_number >= new_next_sequence_number {
                 new_next_sequence_number = new_cert
                     .value
                     .transfer
                     .sequence_number
                     .increment()
-                    .unwrap_or(SequenceNumber::max());
+                    .unwrap_or_else(|_| SequenceNumber::max());
             }
         }
         for old_cert in &self.sent_certificates {
-            new_balance = new_balance.add(old_cert.value.transfer.amount.into())?;
+            new_balance = new_balance.try_add(old_cert.value.transfer.amount.into())?;
         }
         // Atomic update
         self.sent_certificates = sent_certificates;
@@ -632,7 +630,7 @@ where
             let amount = if self.balance < Balance::zero() {
                 Amount::zero()
             } else {
-                Amount::try_from(self.balance).unwrap_or(std::u64::MAX.into())
+                Amount::try_from(self.balance).unwrap_or_else(|_| std::u64::MAX.into())
             };
             Ok(amount)
         })
@@ -659,10 +657,11 @@ where
             .await?;
             // Everything worked: update the local balance.
             let transfer = &certificate.value.transfer;
-            let key = transfer.key();
-            if !self.received_certificates.contains_key(&key) {
-                self.balance = self.balance.add(transfer.amount.into()).unwrap();
-                self.received_certificates.insert(key, certificate);
+            if let btree_map::Entry::Vacant(entry) =
+                self.received_certificates.entry(transfer.key())
+            {
+                self.balance = self.balance.try_add(transfer.amount.into())?;
+                entry.insert(certificate);
             }
             Ok(())
         })

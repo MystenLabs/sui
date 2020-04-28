@@ -12,9 +12,9 @@ fn test_error() {
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
     if let SerializedMessage::Error(o) = result.unwrap() {
-        assert!(o == err);
+        assert!(*o == err);
     } else {
-        assert!(false)
+        panic!()
     }
 }
 
@@ -40,14 +40,14 @@ fn test_info_request() {
     assert!(result2.is_ok());
 
     if let SerializedMessage::InfoReq(o) = result1.unwrap() {
-        assert!(o == req1);
+        assert!(*o == req1);
     } else {
-        assert!(false)
+        panic!()
     }
     if let SerializedMessage::InfoReq(o) = result2.unwrap() {
-        assert!(o == req2);
+        assert!(*o == req2);
     } else {
-        assert!(false)
+        panic!()
     }
 }
 
@@ -68,9 +68,9 @@ fn test_order() {
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
     if let SerializedMessage::Order(o) = result.unwrap() {
-        assert!(o == transfer_order);
+        assert!(*o == transfer_order);
     } else {
-        assert!(false)
+        panic!()
     }
 
     let (sender_name, sender_key) = get_key_pair();
@@ -87,9 +87,9 @@ fn test_order() {
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
     if let SerializedMessage::Order(o) = result.unwrap() {
-        assert!(o == transfer_order2);
+        assert!(*o == transfer_order2);
     } else {
-        assert!(false)
+        panic!()
     }
 }
 
@@ -112,9 +112,9 @@ fn test_vote() {
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
     if let SerializedMessage::Vote(o) = result.unwrap() {
-        assert!(o == vote);
+        assert!(*o == vote);
     } else {
-        assert!(false)
+        panic!()
     }
 }
 
@@ -145,9 +145,9 @@ fn test_cert() {
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
     if let SerializedMessage::Cert(o) = result.unwrap() {
-        assert!(o == cert);
+        assert!(*o == cert);
     } else {
-        assert!(false)
+        panic!()
     }
 }
 
@@ -167,7 +167,7 @@ fn test_info_response() {
     let vote = SignedTransferOrder::new(order.clone(), auth_name, &auth_key);
 
     let mut cert = CertifiedTransferOrder {
-        value: order.clone(),
+        value: order,
         signatures: Vec::new(),
     };
 
@@ -216,9 +216,9 @@ fn test_info_response() {
         let result = deserialize_message(buf.as_slice());
         assert!(result.is_ok());
         if let SerializedMessage::InfoResp(o) = result.unwrap() {
-            assert!(o == *resp);
+            assert!(*o == *resp);
         } else {
-            assert!(false)
+            panic!()
         }
     }
 }

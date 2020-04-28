@@ -31,7 +31,7 @@ fn test_handle_transfer_order_zero_amount() {
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
 
     // test transfer non-positive amount
-    let mut zero_amount_transfer = transfer_order.transfer.clone();
+    let mut zero_amount_transfer = transfer_order.transfer;
     zero_amount_transfer.amount = Amount::zero();
     let zero_amount_transfer_order = TransferOrder::new(zero_amount_transfer, &sender_key);
     assert!(authority_state
@@ -53,7 +53,7 @@ fn test_handle_transfer_order_unknown_sender() {
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
     let (unknown_address, unknown_key) = get_key_pair();
 
-    let mut unknown_sender_transfer = transfer_order.transfer.clone();
+    let mut unknown_sender_transfer = transfer_order.transfer;
     unknown_sender_transfer.sender = unknown_address;
     let unknown_sender_transfer_order = TransferOrder::new(unknown_sender_transfer, &unknown_key);
     assert!(authority_state
@@ -83,7 +83,7 @@ fn test_handle_transfer_order_bad_sequence_number() {
             .increment()
             .unwrap();
     assert!(sequence_number_state
-        .handle_transfer_order(transfer_order.clone())
+        .handle_transfer_order(transfer_order)
         .is_err());
     assert!(sequence_number_state
         .accounts
@@ -118,7 +118,7 @@ fn test_handle_transfer_order_ok() {
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
 
     let account_info = authority_state
-        .handle_transfer_order(transfer_order.clone())
+        .handle_transfer_order(transfer_order)
         .unwrap();
     let pending_confirmation = authority_state
         .accounts
@@ -144,7 +144,7 @@ fn test_handle_transfer_order_double_spend() {
         .handle_transfer_order(transfer_order.clone())
         .unwrap();
     let double_spend_signed_order = authority_state
-        .handle_transfer_order(transfer_order.clone())
+        .handle_transfer_order(transfer_order)
         .unwrap();
     assert_eq!(signed_order, double_spend_signed_order);
 }
@@ -163,7 +163,7 @@ fn test_handle_confirmation_order_unknown_sender() {
     );
 
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     assert!(authority_state.accounts.get(&recipient).is_some());
 }
@@ -194,7 +194,7 @@ fn test_handle_confirmation_order_bad_sequence_number() {
     );
     // Replays are ignored.
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     let new_account = authority_state.accounts.get_mut(&sender).unwrap();
     assert_eq!(old_balance, new_account.balance);
@@ -217,7 +217,7 @@ fn test_handle_confirmation_order_exceed_balance() {
         &authority_state,
     );
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     let new_account = authority_state.accounts.get(&sender).unwrap();
     assert_eq!(Balance::from(-995), new_account.balance);
@@ -243,7 +243,7 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
         &authority_state,
     );
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     let new_sender_account = authority_state.accounts.get(&sender).unwrap();
     assert_eq!(Balance::from(0), new_sender_account.balance);
@@ -269,7 +269,7 @@ fn test_handle_confirmation_order_receiver_equal_sender() {
         &authority_state,
     );
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     let account = authority_state.accounts.get(&address).unwrap();
     assert_eq!(Balance::from(1), account.balance);
@@ -291,7 +291,7 @@ fn test_handle_cross_shard_recipient_commit() {
         &authority_state,
     );
     assert!(authority_state
-        .handle_cross_shard_recipient_commit(certified_transfer_order.clone())
+        .handle_cross_shard_recipient_commit(certified_transfer_order)
         .is_ok());
     let account = authority_state.accounts.get(&recipient).unwrap();
     assert_eq!(Balance::from(11), account.balance);
@@ -317,14 +317,14 @@ fn test_handle_confirmation_order_ok() {
     next_sequence_number = next_sequence_number.increment().unwrap();
     let mut remaining_balance = old_account.balance;
     remaining_balance = remaining_balance
-        .sub(certified_transfer_order.value.transfer.amount.into())
+        .try_sub(certified_transfer_order.value.transfer.amount.into())
         .unwrap();
 
     let (info, _) = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .unwrap();
     assert_eq!(sender, info.sender);
-    assert_eq!(remaining_balance, info.balance.into());
+    assert_eq!(remaining_balance, info.balance);
     assert_eq!(next_sequence_number, info.next_sequence_number);
     assert_eq!(None, info.pending_confirmation);
     assert_eq!(
@@ -454,7 +454,7 @@ fn init_state_with_accounts<I: IntoIterator<Item = (FastPayAddress, Balance)>>(
         let account = state
             .accounts
             .entry(address)
-            .or_insert(AccountOffchainState::new());
+            .or_insert_with(AccountOffchainState::new);
         account.balance = balance;
     }
     state
@@ -473,8 +473,8 @@ fn init_transfer_order(
     amount: Amount,
 ) -> TransferOrder {
     let transfer = Transfer {
-        sender: sender,
-        recipient: recipient,
+        sender,
+        recipient,
         amount,
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
@@ -509,8 +509,8 @@ fn init_primary_synchronization_order(recipient: FastPayAddress) -> PrimarySynch
     let mut transaction_index = VersionNumber::new();
     transaction_index = transaction_index.increment().unwrap();
     PrimarySynchronizationOrder {
-        recipient: recipient,
+        recipient,
         amount: Amount::from(5),
-        transaction_index: transaction_index,
+        transaction_index,
     }
 }

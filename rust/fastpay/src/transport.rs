@@ -18,7 +18,7 @@ use tokio::prelude::*;
 mod transport_tests;
 
 /// Suggested buffer size
-pub const DEFAULT_MAX_DATAGRAM_SIZE: &'static str = "65507";
+pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
 
 // Supported transport protocols.
 arg_enum! {
@@ -43,7 +43,7 @@ pub trait DataStreamPool: Send {
     fn send_data_to<'a>(
         &'a mut self,
         buffer: &'a [u8],
-        address: &'a String,
+        address: &'a str,
     ) -> future::BoxFuture<'a, Result<(), io::Error>>;
 }
 
@@ -76,7 +76,7 @@ impl SpawnedServer {
 impl NetworkProtocol {
     /// Create a DataStream for this protocol.
     pub async fn connect(
-        &self,
+        self,
         address: String,
         max_data_size: usize,
     ) -> Result<Box<dyn DataStream>, std::io::Error> {
@@ -89,7 +89,7 @@ impl NetworkProtocol {
 
     /// Create a DataStreamPool for this protocol.
     pub async fn make_outgoing_connection_pool(
-        &self,
+        self,
     ) -> Result<Box<dyn DataStreamPool>, std::io::Error> {
         let pool: Box<dyn DataStreamPool> = match self {
             Self::Udp => Box::new(UdpDataStreamPool::new().await?),
@@ -100,8 +100,8 @@ impl NetworkProtocol {
 
     /// Run a server for this protocol and the given message handler.
     pub async fn spawn_server<S>(
-        &self,
-        address: &String,
+        self,
+        address: &str,
         state: S,
         buffer_size: usize,
     ) -> Result<SpawnedServer, std::io::Error>
@@ -177,7 +177,7 @@ impl DataStreamPool for UdpDataStreamPool {
     fn send_data_to<'a>(
         &'a mut self,
         buffer: &'a [u8],
-        address: &'a String,
+        address: &'a str,
     ) -> future::BoxFuture<'a, Result<(), std::io::Error>> {
         Box::pin(async move {
             self.socket.send_to(buffer, address).await?;
@@ -293,11 +293,11 @@ impl TcpDataStreamPool {
         Ok(Self { streams })
     }
 
-    async fn get_stream(&mut self, address: &String) -> Result<&mut TcpStream, io::Error> {
+    async fn get_stream(&mut self, address: &str) -> Result<&mut TcpStream, io::Error> {
         if !self.streams.contains_key(address) {
             match TcpStream::connect(address).await {
                 Ok(s) => {
-                    self.streams.insert(address.clone(), s);
+                    self.streams.insert(address.to_string(), s);
                 }
                 Err(error) => {
                     error!("Failed to open connection to {}: {}", address, error);
@@ -313,7 +313,7 @@ impl DataStreamPool for TcpDataStreamPool {
     fn send_data_to<'a>(
         &'a mut self,
         buffer: &'a [u8],
-        address: &'a String,
+        address: &'a str,
     ) -> future::BoxFuture<'a, Result<(), std::io::Error>> {
         Box::pin(async move {
             let stream = self.get_stream(address).await?;

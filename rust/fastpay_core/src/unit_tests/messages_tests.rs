@@ -73,12 +73,12 @@ fn test_certificates() {
     c.signatures.pop();
     assert!(c.check(&committee).is_err());
 
-    let mut builder = SignatureAggregator::try_new(order.clone(), &committee).unwrap();
+    let mut builder = SignatureAggregator::try_new(order, &committee).unwrap();
     assert!(builder
         .append(v1.authority, v1.signature)
         .unwrap()
         .is_none());
     assert!(builder.append(v3.authority, v3.signature).is_err());
 
-    assert!(SignatureAggregator::try_new(bad_order.clone(), &committee).is_err());
+    assert!(SignatureAggregator::try_new(bad_order, &committee).is_err());
 }

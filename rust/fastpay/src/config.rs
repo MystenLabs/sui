@@ -154,7 +154,7 @@ impl AccountsConfig {
                     .received_certificates
                     .binary_search_by_key(&certificate.key(), CertifiedTransferOrder::key)
                 {
-                    config.balance = config.balance.add(transfer.amount.into()).unwrap();
+                    config.balance = config.balance.try_add(transfer.amount.into()).unwrap();
                     config.received_certificates.insert(position, certificate)
                 }
             }

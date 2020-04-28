@@ -126,7 +126,7 @@ fn fund_account<I: IntoIterator<Item = i128>>(
         client.0.as_ref().try_lock().unwrap().accounts_mut().insert(
             address,
             AccountOffchainState::new_with_balance(
-                balances.next().unwrap_or(Balance::zero()),
+                balances.next().unwrap_or_else(Balance::zero),
                 /* no receive log to justify the balances */ Vec::new(),
             ),
         );
@@ -136,7 +136,7 @@ fn fund_account<I: IntoIterator<Item = i128>>(
 #[cfg(test)]
 fn init_local_client_state(balances: Vec<i128>) -> ClientState<LocalAuthorityClient> {
     let (mut authority_clients, committee) = init_local_authorities(balances.len());
-    let client = make_client(authority_clients.clone(), committee.clone());
+    let client = make_client(authority_clients.clone(), committee);
     fund_account(&mut authority_clients, client.address, balances);
     client
 }
@@ -177,7 +177,7 @@ fn test_initiating_valid_transfer() {
         .block_on(sender.transfer_to_fastpay(
             Amount::from(3),
             recipient,
-            UserData(Some(b"hello...........hello...........".clone())),
+            UserData(Some(*b"hello...........hello...........")),
         ))
         .unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
@@ -204,7 +204,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
         .block_on(sender.transfer_to_fastpay(
             Amount::from(3),
             recipient,
-            UserData(Some(b"hello...........hello...........".clone())),
+            UserData(Some(*b"hello...........hello...........")),
         ))
         .unwrap();
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));

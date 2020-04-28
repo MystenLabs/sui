@@ -146,11 +146,11 @@ impl MessageHandler for RunningServerState {
                         SerializedMessage::Order(message) => self
                             .server
                             .state
-                            .handle_transfer_order(message)
+                            .handle_transfer_order(*message)
                             .map(|info| Some(serialize_info_response(&info))),
                         SerializedMessage::Cert(message) => {
                             let confirmation_order = ConfirmationOrder {
-                                transfer_certificate: message.clone(),
+                                transfer_certificate: message.as_ref().clone(),
                             };
                             match self
                                 .server
@@ -181,13 +181,13 @@ impl MessageHandler for RunningServerState {
                         SerializedMessage::InfoReq(message) => self
                             .server
                             .state
-                            .handle_account_info_request(message)
+                            .handle_account_info_request(*message)
                             .map(|info| Some(serialize_info_response(&info))),
                         SerializedMessage::CrossShard(message) => {
                             match self
                                 .server
                                 .state
-                                .handle_cross_shard_recipient_commit(message)
+                                .handle_cross_shard_recipient_commit(*message)
                             {
                                 Ok(_) => Ok(None), // Nothing to reply
                                 Err(error) => {
@@ -280,16 +280,14 @@ impl Client {
         buf: Vec<u8>,
     ) -> Result<AccountInfoResponse, FastPayError> {
         match self.send_recv_bytes_internal(shard, buf).await {
-            Err(error) => {
-                return Err(FastPayError::ClientIOError {
-                    error: format!("{}", error),
-                });
-            }
+            Err(error) => Err(FastPayError::ClientIOError {
+                error: format!("{}", error),
+            }),
             Ok(response) => {
                 // Parse reply
                 match deserialize_message(&response[..]) {
-                    Ok(SerializedMessage::InfoResp(resp)) => Ok(resp),
-                    Ok(SerializedMessage::Error(error)) => Err(error),
+                    Ok(SerializedMessage::InfoResp(resp)) => Ok(*resp),
+                    Ok(SerializedMessage::Error(error)) => Err(*error),
                     Err(_) => Err(FastPayError::InvalidDecoding),
                     _ => Err(FastPayError::UnexpectedMessage),
                 }
@@ -445,7 +443,7 @@ impl MassClient {
                     let responses = client
                         .run_shard(shard, requests)
                         .await
-                        .unwrap_or(Vec::new());
+                        .unwrap_or_else(|_| Vec::new());
                     info!(
                         "Done sending {} requests to {}:{} (shard {})",
                         client.network_protocol,
@@ -455,7 +453,7 @@ impl MassClient {
                     );
                     responses
                 })
-                .then(|x| async { x.unwrap_or(Vec::new()) }),
+                .then(|x| async { x.unwrap_or_else(|_| Vec::new()) }),
             );
         }
         handles

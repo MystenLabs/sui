@@ -1,7 +1,6 @@
 // Copyright (c) Facebook Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use base64;
 use ed25519_dalek as dalek;
 use ed25519_dalek::Digest;
 use rand::rngs::OsRng;
@@ -73,7 +72,7 @@ pub fn encode_address(key: &EdPublicKeyBytes) -> String {
     base64::encode(&key.0[..])
 }
 
-pub fn decode_address(s: &String) -> Result<EdPublicKeyBytes, failure::Error> {
+pub fn decode_address(s: &str) -> Result<EdPublicKeyBytes, failure::Error> {
     let value = base64::decode(s)?;
     let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
     address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
@@ -155,7 +154,7 @@ impl Amount {
         Amount(0)
     }
 
-    pub fn add(&self, other: Self) -> Result<Self, FastPayError> {
+    pub fn try_add(self, other: Self) -> Result<Self, FastPayError> {
         let val = self.0.checked_add(other.0);
         match val {
             None => Err(FastPayError::AmountOverflow),
@@ -163,7 +162,7 @@ impl Amount {
         }
     }
 
-    pub fn sub(&self, other: Self) -> Result<Self, FastPayError> {
+    pub fn try_sub(self, other: Self) -> Result<Self, FastPayError> {
         let val = self.0.checked_sub(other.0);
         match val {
             None => Err(FastPayError::AmountUnderflow),
@@ -181,7 +180,7 @@ impl Balance {
         Balance(std::i128::MAX)
     }
 
-    pub fn add(&self, other: Self) -> Result<Self, FastPayError> {
+    pub fn try_add(&self, other: Self) -> Result<Self, FastPayError> {
         let val = self.0.checked_add(other.0);
         match val {
             None => Err(FastPayError::BalanceOverflow),
@@ -189,7 +188,7 @@ impl Balance {
         }
     }
 
-    pub fn sub(&self, other: Self) -> Result<Self, FastPayError> {
+    pub fn try_sub(&self, other: Self) -> Result<Self, FastPayError> {
         let val = self.0.checked_sub(other.0);
         match val {
             None => Err(FastPayError::BalanceUnderflow),
@@ -224,10 +223,10 @@ impl SequenceNumber {
     }
 
     pub fn max() -> Self {
-        SequenceNumber(0x7fffffffffffffff)
+        SequenceNumber(0x7fff_ffff_ffff_ffff)
     }
 
-    pub fn increment(&self) -> Result<SequenceNumber, FastPayError> {
+    pub fn increment(self) -> Result<SequenceNumber, FastPayError> {
         let val = self.0.checked_add(1);
         match val {
             None => Err(FastPayError::SequenceOverflow),
@@ -235,7 +234,7 @@ impl SequenceNumber {
         }
     }
 
-    pub fn decrement(&self) -> Result<SequenceNumber, FastPayError> {
+    pub fn decrement(self) -> Result<SequenceNumber, FastPayError> {
         let val = self.0.checked_sub(1);
         match val {
             None => Err(FastPayError::SequenceUnderflow),

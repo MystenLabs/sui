@@ -20,6 +20,7 @@ use futures::future::join_all;
 use log::*;
 use tokio::runtime::Runtime;
 
+#[allow(clippy::too_many_arguments)]
 fn make_shard_server(
     local_ip_addr: &str,
     server_config_path: &str,
@@ -41,7 +42,7 @@ fn make_shard_server(
     let num_shards = server_config.authority.num_shards;
 
     let mut state = AuthorityState::new_shard(
-        committee.clone(),
+        committee,
         server_config.authority.address,
         server_config.key.copy(),
         shard,

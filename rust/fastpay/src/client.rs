@@ -226,7 +226,7 @@ async fn mass_broadcast_orders(
             let shard = AuthorityState::get_shard(num_shards, address);
             sharded_requests
                 .entry(shard)
-                .or_insert(Vec::new())
+                .or_insert_with(Vec::new)
                 .push(buf.clone());
         }
         streams.push(client.run(sharded_requests));
@@ -240,7 +240,7 @@ async fn mass_broadcast_orders(
     );
     warn!(
         "Estimated server throughput: {} {} orders per sec",
-        (orders.len() as u128) * 1000000 / time_elapsed.as_micros(),
+        (orders.len() as u128) * 1_000_000 / time_elapsed.as_micros(),
         phase
     );
     responses
@@ -252,14 +252,14 @@ fn mass_update_recipients(
 ) {
     for (_sender, buf) in certificates {
         if let Ok(SerializedMessage::Cert(certificate)) = deserialize_message(&buf[..]) {
-            accounts_config.update_for_received_transfer(certificate);
+            accounts_config.update_for_received_transfer(*certificate);
         }
     }
 }
 
 fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
     match deserialize_message(response) {
-        Ok(SerializedMessage::InfoResp(info)) => Some(info),
+        Ok(SerializedMessage::InfoResp(info)) => Some(*info),
         Ok(SerializedMessage::Error(error)) => {
             error!("Received error value: {}", error);
             None
@@ -447,7 +447,7 @@ fn main() {
                 .value_of("max_orders")
                 .unwrap()
                 .parse()
-                .unwrap_or(accounts_config.num_accounts());
+                .unwrap_or_else(|_| accounts_config.num_accounts());
             let server_configs = if subm.is_present("server_configs") {
                 let files: Vec<_> = subm.values_of("server_configs").unwrap().collect();
                 Some(files)

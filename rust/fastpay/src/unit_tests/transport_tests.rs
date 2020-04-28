@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use net2;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::runtime::Runtime;
@@ -58,7 +57,7 @@ async fn test_server(protocol: NetworkProtocol) -> Result<(usize, usize), std::i
     // Try to read data on the first connection (should fail).
     received += timeout(Duration::from_millis(500), client.read_data())
         .await
-        .unwrap_or(Ok(Vec::new()))?
+        .unwrap_or_else(|_| Ok(Vec::new()))?
         .len();
 
     // Attempt to gracefully kill server.
@@ -69,7 +68,7 @@ async fn test_server(protocol: NetworkProtocol) -> Result<(usize, usize), std::i
         .unwrap_or(Ok(()))?;
     received += timeout(Duration::from_millis(500), client.read_data())
         .await
-        .unwrap_or(Ok(Vec::new()))?
+        .unwrap_or_else(|_| Ok(Vec::new()))?
         .len();
 
     Ok((counter.load(Ordering::Relaxed), received))

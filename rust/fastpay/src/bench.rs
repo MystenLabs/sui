@@ -94,7 +94,7 @@ impl ClientServerBenchmark {
         for i in 0..self.num_shards {
             let state = AuthorityState::new_shard(
                 committee.clone(),
-                public_auth0.clone(),
+                public_auth0,
                 secret_auth0.copy(),
                 i as u32,
                 self.num_shards,
@@ -126,7 +126,7 @@ impl ClientServerBenchmark {
         let mut next_recipient = get_key_pair().0;
         for (pubx, secx) in account_keys.iter() {
             let transfer = Transfer {
-                sender: pubx.clone(),
+                sender: *pubx,
                 recipient: Address::FastPay(next_recipient),
                 amount: Amount::from(50),
                 sequence_number: SequenceNumber::from(0),
@@ -138,7 +138,7 @@ impl ClientServerBenchmark {
 
             // Serialize order
             let bufx = serialize_transfer_order(&order);
-            assert!(bufx.len() > 0);
+            assert!(!bufx.is_empty());
 
             // Make certificate
             let mut certificate = CertifiedTransferOrder {
@@ -152,7 +152,7 @@ impl ClientServerBenchmark {
             }
 
             let bufx2 = serialize_cert(&certificate);
-            assert!(bufx2.len() > 0);
+            assert!(!bufx2.is_empty());
 
             orders.push((shard, bufx2.into()));
             orders.push((shard, bufx.into()));
@@ -197,7 +197,7 @@ impl ClientServerBenchmark {
             for (shard, buf) in orders.iter().rev() {
                 sharded_requests
                     .entry(*shard)
-                    .or_insert(Vec::new())
+                    .or_insert_with(Vec::new)
                     .push(buf.clone());
             }
             let responses = mass_client.run(sharded_requests).concat().await;
@@ -214,7 +214,7 @@ impl ClientServerBenchmark {
                 self.recv_timeout,
             );
 
-            while orders.len() > 0 {
+            while !orders.is_empty() {
                 if orders.len() % 1000 == 0 {
                     info!("Process message {}...", orders.len());
                 }
@@ -236,7 +236,7 @@ impl ClientServerBenchmark {
             "Total time: {}ms, items: {}, tx/sec: {}",
             time_total,
             items_number,
-            1000000.0 * (items_number as f64) / (time_total as f64)
+            1_000_000.0 * (items_number as f64) / (time_total as f64)
         );
     }
 

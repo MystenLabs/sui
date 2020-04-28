@@ -75,7 +75,7 @@ fn test_handle_redeem_transaction_ok() {
         .transfer
         .sequence_number;
     assert_eq!(account.last_redeemed, Some(sequence_number));
-    old_total_balance = old_total_balance.sub(amount).unwrap();
+    old_total_balance = old_total_balance.try_sub(amount).unwrap();
     assert_eq!(contract_state.total_balance, old_total_balance);
 }
 
@@ -100,10 +100,10 @@ fn test_handle_redeem_transaction_negative_balance() {
         .value
         .transfer
         .amount
-        .add(too_much_money)
+        .try_add(too_much_money)
         .unwrap();
     assert!(contract_state
-        .handle_redeem_transaction(redeem_transaction.clone())
+        .handle_redeem_transaction(redeem_transaction)
         .is_err());
     assert_eq!(old_balance, contract_state.total_balance);
     assert!(contract_state.accounts.is_empty());
@@ -124,7 +124,7 @@ fn test_handle_redeem_transaction_double_spend() {
     let old_balance = contract_state.total_balance;
 
     assert!(contract_state
-        .handle_redeem_transaction(redeem_transaction.clone())
+        .handle_redeem_transaction(redeem_transaction)
         .is_err());
     assert_eq!(old_balance, contract_state.total_balance);
 }

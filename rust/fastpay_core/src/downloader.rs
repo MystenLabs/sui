@@ -4,7 +4,6 @@
 use futures::channel::{mpsc, oneshot};
 use futures::{future, SinkExt, StreamExt};
 use std::collections::BTreeMap;
-use tokio;
 
 #[cfg(test)]
 #[path = "unit_tests/downloader_tests.rs"]
