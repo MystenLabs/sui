@@ -33,7 +33,7 @@ jobs:
       - checkout
       - run:
           name: Version Information
-          command: rustc --version; cargo --version; rustup --version; python3 --version; clang++ --version; javac -version
+          command: rustc --version; cargo --version; rustup --version
       - run:
           name: Setup Env
           command: |
