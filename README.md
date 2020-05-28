@@ -1,15 +1,15 @@
-<a href="https://calibra.com/">
-	<img width="200" src=".assets/calibra.png" alt="Calibra Logo" />
+<a href="https://novi.com/">
+	<img width="100" src=".assets/novi.png" alt="Novi Logo" />
 </a>
 
 <hr/>
 
 # FastPay
 
-[![Build Status](https://circleci.com/gh/calibra/fastpay/tree/master.svg?style=shield)](https://circleci.com/gh/calibra/fastpay/tree/master)
+[![Build Status](https://circleci.com/gh/novifinancial/fastpay/tree/master.svg?style=shield)](https://circleci.com/gh/novifinancial/fastpay/tree/master)
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE.md)
 
-This repository is dedicated to sharing material related to the FastPay protocol, developed at Calibra Research. Software is provided for research-purpose only and is not meant to be used in production.
+This repository is dedicated to sharing material related to the FastPay protocol, developed at Novi Financial (formerly Calibra). Software is provided for research-purpose only and is not meant to be used in production.
 
 ## Summary
 
@@ -79,4 +79,4 @@ Read our [Contributing guide](https://developers.libra.org/docs/community/contri
 
 ## License
 
-The content of this repository is licensed as [Apache 2.0](https://github.com/calibra/research/blob/master/LICENSE)
+The content of this repository is licensed as [Apache 2.0](https://github.com/novifinancial/research/blob/master/LICENSE)
