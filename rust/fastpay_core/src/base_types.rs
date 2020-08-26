@@ -1,8 +1,10 @@
 // Copyright (c) Facebook Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use ed25519::signature::Signature as _;
 use ed25519_dalek as dalek;
-use ed25519_dalek::Digest;
+use ed25519_dalek::{Digest, Signer, Verifier};
+
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
@@ -282,8 +284,8 @@ impl Digestible for [u8; 5] {
         let mut h = dalek::Sha512::new();
         let mut hash = [0u8; 64];
         let mut digest = [0u8; 32];
-        h.input(&self);
-        hash.copy_from_slice(h.result().as_slice());
+        h.update(&self);
+        hash.copy_from_slice(h.finalize().as_slice());
         digest.copy_from_slice(&hash[..32]);
         digest
     }

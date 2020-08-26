@@ -169,27 +169,27 @@ impl Digestible for Transfer {
         let mut hash: [u8; 64] = [0u8; 64];
         let mut digest: [u8; 32] = [0u8; 32];
 
-        h.input(&self.sender.0);
+        h.update(&self.sender.0);
         match self.recipient {
             Address::Primary(addr) => {
-                h.input([0x03]);
-                h.input(&addr.0);
+                h.update([0x03]);
+                h.update(&addr.0);
             }
             Address::FastPay(addr) => {
-                h.input([0x04]);
-                h.input(&addr.0);
+                h.update([0x04]);
+                h.update(&addr.0);
             }
         }
-        h.input(u64::from(self.amount).to_le_bytes());
-        h.input(u64::from(self.sequence_number).to_le_bytes());
+        h.update(u64::from(self.amount).to_le_bytes());
+        h.update(u64::from(self.sequence_number).to_le_bytes());
         match self.user_data.0 {
-            None => h.input([0x00]),
+            None => h.update([0x00]),
             Some(data) => {
-                h.input([0x01]);
-                h.input(data);
+                h.update([0x01]);
+                h.update(data);
             }
         }
-        hash.copy_from_slice(h.result().as_slice());
+        hash.copy_from_slice(h.finalize().as_slice());
         digest.copy_from_slice(&hash[..32]);
         digest
     }

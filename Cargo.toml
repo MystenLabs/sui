@@ -9,14 +9,3 @@ debug = true
 
 [profile.bench]
 debug = true
-
-# This is a workaround to the following ed25519 issue
-# https://github.com/dalek-cryptography/ed25519-dalek/issues/126
-# It forces cargo resolution for ed25519 to follow the "git" flavor over
-# version numbers, depending on the particular patched merlin that "works"
-# given our usage of the "batch" feature. This comment and the following two
-# lines should just be deleted once #126 above is fixed, along with updating
-# the verison requirement of ed25519-dalek to the (presumptive) version
-# 1.0.0-pre.4
-[patch.crates-io]
-ed25519-dalek = { git = "http://github.com/dalek-cryptography/ed25519-dalek" }
