@@ -263,7 +263,7 @@ impl<'a> SignatureAggregator<'a> {
             !self.used_authorities.contains(&authority),
             FastPayError::CertificateAuthorityReuse
         );
-        self.used_authorities.insert(authority.clone());
+        self.used_authorities.insert(authority);
         // Update weight.
         let voting_rights = self.committee.weight(&authority);
         fp_ensure!(voting_rights > 0, FastPayError::UnknownSigner);
@@ -296,7 +296,7 @@ impl CertifiedTransferOrder {
                 !used_authorities.contains(authority),
                 FastPayError::CertificateAuthorityReuse
             );
-            used_authorities.insert(authority.clone());
+            used_authorities.insert(*authority);
             // Update weight.
             let voting_rights = committee.weight(authority);
             fp_ensure!(voting_rights > 0, FastPayError::UnknownSigner);

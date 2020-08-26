@@ -276,7 +276,7 @@ impl From<SequenceNumber> for usize {
 }
 
 pub trait Digestible {
-    fn digest(self: &Self) -> [u8; 32];
+    fn digest(&self) -> [u8; 32];
 }
 
 impl Digestible for [u8; 5] {
