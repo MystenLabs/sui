@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "fastpay",
+    "fastpay_core",
+]
