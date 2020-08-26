@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![deny(warnings)]
+#![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
 extern crate fastpay;
 extern crate fastpay_core;
