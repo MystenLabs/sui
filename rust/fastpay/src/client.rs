@@ -370,10 +370,10 @@ fn main() {
     let committee_config_path = &matches.committee;
     let buffer_size = matches.buffer_size.parse::<usize>().unwrap();
 
-    let mut accounts_config = AccountsConfig::read_or_create(accounts_config_path)
-        .expect("Unable to read user accounts");
-    let committee_config = CommitteeConfig::read(committee_config_path)
-        .expect("Unable to read committee config file");
+    let mut accounts_config =
+        AccountsConfig::read_or_create(accounts_config_path).expect("Unable to read user accounts");
+    let committee_config =
+        CommitteeConfig::read(committee_config_path).expect("Unable to read committee config file");
 
     match matches.cmd {
         ClientCommands::Transfer { from, to, amount } => {
