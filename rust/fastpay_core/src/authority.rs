@@ -375,7 +375,7 @@ impl AuthorityState {
     ) -> Result<&AccountOffchainState, FastPayError> {
         self.accounts
             .get(address)
-            .ok_or_else(|| FastPayError::UnknownSenderAccount)
+            .ok_or(FastPayError::UnknownSenderAccount)
     }
 
     #[cfg(test)]

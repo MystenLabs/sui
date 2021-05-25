@@ -213,15 +213,13 @@ impl MessageHandler for RunningServerState {
             }
 
             match reply {
-                Ok(x) => {
-                    return x;
-                }
+                Ok(x) => x,
                 Err(error) => {
                     warn!("User query failed: {}", error);
                     self.server.user_errors += 1;
-                    return Some(serialize_error(&error));
+                    Some(serialize_error(&error))
                 }
-            };
+            }
         })
     }
 }
@@ -280,7 +278,7 @@ impl Client {
         buf: Vec<u8>,
     ) -> Result<AccountInfoResponse, FastPayError> {
         match self.send_recv_bytes_internal(shard, buf).await {
-            Err(error) => Err(FastPayError::ClientIOError {
+            Err(error) => Err(FastPayError::ClientIoError {
                 error: format!("{}", error),
             }),
             Ok(response) => {

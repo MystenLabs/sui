@@ -95,5 +95,5 @@ pub enum FastPayError {
     #[fail(display = "Unexpected message.")]
     UnexpectedMessage,
     #[fail(display = "Network error while querying service: {:?}.", error)]
-    ClientIOError { error: String },
+    ClientIoError { error: String },
 }
