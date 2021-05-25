@@ -248,7 +248,7 @@ fn main() {
             let authority = AuthorityConfig {
                 network_protocol,
                 address,
-                host: host,
+                host,
                 base_port: port,
                 num_shards: shards,
             };
