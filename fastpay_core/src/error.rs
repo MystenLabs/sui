@@ -1,11 +1,9 @@
 // Copyright (c) Facebook Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    base_types::*,
-    messages::*,
-    serde::{Deserialize, Serialize},
-};
+use crate::{base_types::*, messages::*};
+use failure::Fail;
+use serde::{Deserialize, Serialize};
 
 #[macro_export]
 macro_rules! fp_bail {

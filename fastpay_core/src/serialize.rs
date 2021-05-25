@@ -4,6 +4,7 @@
 use super::messages::*;
 use crate::error::*;
 
+use failure::format_err;
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{base_types::*, committee::Committee, downloader::*, error::FastPayError, messages::*};
-
+use failure::{bail, ensure};
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
 use std::{

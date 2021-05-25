@@ -3,10 +3,6 @@
 
 #![deny(warnings)]
 
-extern crate env_logger;
-extern crate fastpay;
-extern crate fastpay_core;
-
 use fastpay::{config::*, network, transport};
 use fastpay_core::{authority::*, base_types::*, committee::Committee};
 

@@ -3,10 +3,6 @@
 
 #![deny(warnings)]
 
-extern crate fastpay;
-extern crate fastpay_core;
-extern crate log;
-
 use fastpay::{network, transport};
 use fastpay_core::{authority::*, base_types::*, committee::*, messages::*, serialize::*};
 

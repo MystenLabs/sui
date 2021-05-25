@@ -1,13 +1,11 @@
 // Copyright (c) Facebook Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    fastpay_core::{
-        base_types::*,
-        client::ClientState,
-        messages::{Address, CertifiedTransferOrder},
-    },
-    transport::NetworkProtocol,
+use crate::transport::NetworkProtocol;
+use fastpay_core::{
+    base_types::*,
+    client::ClientState,
+    messages::{Address, CertifiedTransferOrder},
 };
 
 use serde::{Deserialize, Serialize};

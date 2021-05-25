@@ -4,14 +4,6 @@
 #![deny(warnings)]
 
 #[macro_use]
-extern crate failure;
-extern crate base64;
-extern crate bincode;
-extern crate ed25519_dalek;
-extern crate futures;
-extern crate serde;
-
-#[macro_use]
 pub mod error;
 
 pub mod authority;

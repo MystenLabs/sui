@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{base_types::*, committee::Committee, messages::*};
+use failure::ensure;
 use std::collections::BTreeMap;
 
 #[cfg(test)]
