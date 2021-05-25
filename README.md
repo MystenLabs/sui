@@ -1,9 +1,3 @@
-<a href="https://novi.com/">
-	<img width="100" src=".assets/novi.png" alt="Novi Logo" />
-</a>
-
-<hr/>
-
 # FastPay
 
 [![Build Status](https://github.com/novifinancial/fastpay/actions/workflows/rust.yml/badge.svg)](https://github.com/novifinancial/fastpay/actions/workflows/rust.yml)
