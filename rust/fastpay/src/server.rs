@@ -3,7 +3,6 @@
 
 #![deny(warnings)]
 
-extern crate clap;
 extern crate env_logger;
 extern crate fastpay;
 extern crate fastpay_core;
@@ -104,17 +103,19 @@ fn make_servers(
     servers
 }
 
-
 #[derive(StructOpt)]
-#[structopt(name = "FastPay Server", about = "A byzantine fault tolerant payments sidechain with low-latency finality and high throughput")]
+#[structopt(
+    name = "FastPay Server",
+    about = "A byzantine fault tolerant payments sidechain with low-latency finality and high throughput"
+)]
 struct ServerOpt {
     /// Path to the file containing the server configuration of this FastPay authority (including its secret key)
     #[structopt(long = "server")]
-        server : String,
+    server: String,
 
     /// Subcommands. Acceptable values are run and generate.
     #[structopt(subcommand)]
-        cmd : ServerCommands
+    cmd: ServerCommands,
 }
 
 #[derive(StructOpt)]
@@ -124,27 +125,27 @@ enum ServerCommands {
     Run {
         /// Maximum size of datagrams received and sent (bytes)
         #[structopt(long = "buffer_size", default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
-            buffer_size : String,
+        buffer_size: String,
 
         /// Number of cross shards messages allowed before blocking the main server loop
         #[structopt(long = "cross_shard_queue_size", default_value = "1000")]
-            cross_shard_queue_size : usize,
+        cross_shard_queue_size: usize,
 
         /// Path to the file containing the public description of all authorities in this FastPay committee
         #[structopt(long = "committee")]
-            committee: String,
+        committee: String,
 
         /// Path to the file describing the initial user accounts
         #[structopt(long = "initial_accounts")]
-            initial_accounts: String,
+        initial_accounts: String,
 
         /// Path to the file describing the initial balance of user accounts
         #[structopt(long = "initial_balance")]
-            initial_balance: String,
+        initial_balance: String,
 
         /// Runs a specific shard (from 0 to shards-1)
         #[structopt(long = "shard")]
-            shard: String,
+        shard: String,
     },
 
     /// Generate a new server configuration and output its public description
@@ -152,31 +153,37 @@ enum ServerCommands {
     Generate {
         /// Chooses a network protocol between Udp and Tcp
         #[structopt(long = "protocol", default_value = "Udp")]
-            protocol : String,
+        protocol: String,
 
         /// Sets the public name of the host
         #[structopt(long = "host")]
-            host: String,
+        host: String,
 
         /// Sets the base port, i.e. the port on which the server listens for the first shard
         #[structopt(long = "port")]
-            port: u32,
+        port: u32,
 
         /// Number of shards for this authority
         #[structopt(long = "shards")]
-            shards: u32,
-
-    }
+        shards: u32,
+    },
 }
 
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let matches = ServerOpt::from_args();
-    
+
     let server_config_path = &matches.server;
 
     match matches.cmd {
-        ServerCommands::Run { buffer_size, cross_shard_queue_size, committee, initial_accounts, initial_balance, shard } => {
+        ServerCommands::Run {
+            buffer_size,
+            cross_shard_queue_size,
+            committee,
+            initial_accounts,
+            initial_balance,
+            shard,
+        } => {
             let committee_config_path = &committee;
             let initial_accounts_config_path = &initial_accounts;
             let initial_balance = Balance::from(initial_balance.parse::<i128>().unwrap());
@@ -228,9 +235,14 @@ fn main() {
                 });
             }
             rt.block_on(join_all(handles));
-        },
+        }
 
-        ServerCommands::Generate { protocol, host, port, shards } => {
+        ServerCommands::Generate {
+            protocol,
+            host,
+            port,
+            shards,
+        } => {
             let network_protocol = protocol.parse().unwrap();
             let (address, key) = get_key_pair();
             let authority = AuthorityConfig {
@@ -245,7 +257,7 @@ fn main() {
                 .write(server_config_path)
                 .expect("Unable to write server config file");
             info!("Wrote server config file");
-            server.authority.print();    
+            server.authority.print();
         }
     }
 }

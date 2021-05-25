@@ -277,60 +277,59 @@ fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
     }
 }
 
-
 #[derive(StructOpt)]
-#[structopt(name = "FastPay Client", about = "A Byzantine fault tolerant payments sidechain with low-latency finality and high throughput")]
+#[structopt(
+    name = "FastPay Client",
+    about = "A Byzantine fault tolerant payments sidechain with low-latency finality and high throughput"
+)]
 struct ClientOpt {
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
     #[structopt(long = "accounts")]
-        accounts: String,
+    accounts: String,
 
     /// Sets the file describing the public configurations of all authorities
     #[structopt(long = "committee")]
-        committee: String,
+    committee: String,
 
     /// Timeout for sending queries (us)
     #[structopt(long = "send_timeout", default_value = "4000000")]
-        send_timeout : u64,
+    send_timeout: u64,
 
     /// Timeout for receiving responses (us)
     #[structopt(long = "recv_timeout", default_value = "4000000")]
-        recv_timeout : u64,
+    recv_timeout: u64,
 
     /// Maximum size of datagrams received and sent (bytes)
     #[structopt(long = "buffer_size", default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
-        buffer_size : String,
+    buffer_size: String,
 
     /// Subcommands. Acceptable values are transfer, query_balance, benchmark, and create_accounts.
     #[structopt(subcommand)]
-        cmd : ClientCommands
-    
+    cmd: ClientCommands,
 }
 
 #[derive(StructOpt)]
 enum ClientCommands {
-
     /// Transfer funds
     #[structopt(name = "transfer")]
     Transfer {
-
         /// Sending address (must be one of our accounts)
         #[structopt(long = "from")]
-            from : String,
+        from: String,
 
         /// Recipient address
         #[structopt(long = "to")]
-            to : String,
+        to: String,
 
         /// Amount to transfer
-        amount : u64
+        amount: u64,
     },
 
     /// Obtain the spendable balance
     #[structopt(name = "query_balance")]
     QueryBalance {
         /// Address of the account
-        address : String
+        address: String,
     },
 
     /// Send one transfer per account in bulk mode
@@ -338,15 +337,15 @@ enum ClientCommands {
     Benchmark {
         /// Maximum number of requests in flight
         #[structopt(long = "max_in_flight", default_value = "200")]
-            max_in_flight : u64,
+        max_in_flight: u64,
 
         /// Use a subset of the accounts to generate N transfers
         #[structopt(long = "max_orders", default_value = "")]
-            max_orders : String,
+        max_orders: String,
 
         /// Use server configuration files to generate certificates (instead of aggregating received votes).
         #[structopt(long = "server_configs", min_values = 1)]
-            server_configs : Vec<String>
+        server_configs: Vec<String>,
     },
 
     /// Create new user accounts and print the public keys
@@ -354,14 +353,12 @@ enum ClientCommands {
     CreateAccounts {
         /// known initial balance of the account
         #[structopt(long = "initial_funding", default_value = "0")]
-            initial_funding : i128,
+        initial_funding: i128,
 
         /// Number of additional accounts to create
-        num : u32
-    }
-   
+        num: u32,
+    },
 }
-
 
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -373,11 +370,10 @@ fn main() {
     let committee_config_path = &matches.committee;
     let buffer_size = matches.buffer_size.parse::<usize>().unwrap();
 
-    let mut accounts_config =
-        AccountsConfig::read_or_create(&accounts_config_path).expect("Unable to read user accounts");
-    let committee_config =
-        CommitteeConfig::read(&committee_config_path).expect("Unable to read committee config file");
-
+    let mut accounts_config = AccountsConfig::read_or_create(&accounts_config_path)
+        .expect("Unable to read user accounts");
+    let committee_config = CommitteeConfig::read(&committee_config_path)
+        .expect("Unable to read committee config file");
 
     match matches.cmd {
         ClientCommands::Transfer { from, to, amount } => {
@@ -424,7 +420,7 @@ fn main() {
                     .expect("Unable to write user accounts");
                 info!("Saved user account states");
             });
-        },
+        }
 
         ClientCommands::QueryBalance { address } => {
             let user_address = decode_address(&address).expect("Failed to decode address");
@@ -451,11 +447,17 @@ fn main() {
                     .expect("Unable to write user accounts");
                 info!("Saved client account state");
             });
-        },
+        }
 
-        ClientCommands::Benchmark { max_in_flight, max_orders, server_configs} => {
-            let max_orders: usize = max_orders.parse().unwrap_or_else(|_| accounts_config.num_accounts());
-            let files : Vec<_> = server_configs.iter().map(AsRef::as_ref).collect();
+        ClientCommands::Benchmark {
+            max_in_flight,
+            max_orders,
+            server_configs,
+        } => {
+            let max_orders: usize = max_orders
+                .parse()
+                .unwrap_or_else(|_| accounts_config.num_accounts());
+            let files: Vec<_> = server_configs.iter().map(AsRef::as_ref).collect();
             let parsed_server_configs = Some(files);
 
             let mut rt = Runtime::new().unwrap();
@@ -523,10 +525,12 @@ fn main() {
                     .expect("Unable to write user accounts");
                 info!("Saved client account state");
             });
+        }
 
-        },
-
-        ClientCommands::CreateAccounts { initial_funding, num } => {
+        ClientCommands::CreateAccounts {
+            initial_funding,
+            num,
+        } => {
             let num_accounts: u32 = num;
             for _ in 0..num_accounts {
                 let account = UserAccount::new(Balance::from(initial_funding));
@@ -536,7 +540,6 @@ fn main() {
             accounts_config
                 .write(accounts_config_path)
                 .expect("Unable to write user accounts");
-
         }
     }
 }
