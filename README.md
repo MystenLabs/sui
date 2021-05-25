@@ -6,7 +6,7 @@
 
 # FastPay
 
-[![Build Status](https://circleci.com/gh/novifinancial/fastpay/tree/master.svg?style=shield)](https://circleci.com/gh/novifinancial/fastpay/tree/master)
+[![Build Status](https://github.com/novifinancial/fastpay/actions/workflows/rust.yml/badge.svg)](https://github.com/novifinancial/fastpay/actions/workflows/rust.yml)
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE.md)
 
 This repository is dedicated to sharing material related to the FastPay protocol, developed at Novi Financial (formerly Calibra). Software is provided for research-purpose only and is not meant to be used in production.
