@@ -1,7 +1,7 @@
 [workspace]
 members = [
-        "rust/fastpay_core",
-        "rust/fastpay",
+        "fastpay_core",
+        "fastpay",
 ]
 
 [profile.release]
