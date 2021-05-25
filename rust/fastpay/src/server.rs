@@ -15,9 +15,9 @@ use fastpay_core::authority::*;
 use fastpay_core::base_types::*;
 use fastpay_core::committee::Committee;
 
-use clap::{App, Arg, SubCommand};
 use futures::future::join_all;
 use log::*;
+use structopt::StructOpt;
 use tokio::runtime::Runtime;
 
 #[allow(clippy::too_many_arguments)]
@@ -104,75 +104,85 @@ fn make_servers(
     servers
 }
 
+
+#[derive(StructOpt)]
+#[structopt(name = "FastPay Server", about = "A byzantine fault tolerant payments sidechain with low-latency finality and high throughput")]
+struct ServerOpt {
+    /// Path to the file containing the server configuration of this FastPay authority (including its secret key)
+    #[structopt(long = "server")]
+        server : String,
+
+    /// Subcommands. Acceptable values are run and generate.
+    #[structopt(subcommand)]
+        cmd : ServerCommands
+}
+
+#[derive(StructOpt)]
+enum ServerCommands {
+    /// Runs a service for each shard of the FastPay authority")
+    #[structopt(name = "run")]
+    Run {
+        /// Maximum size of datagrams received and sent (bytes)
+        #[structopt(long = "buffer_size", default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
+            buffer_size : String,
+
+        /// Number of cross shards messages allowed before blocking the main server loop
+        #[structopt(long = "cross_shard_queue_size", default_value = "1000")]
+            cross_shard_queue_size : usize,
+
+        /// Path to the file containing the public description of all authorities in this FastPay committee
+        #[structopt(long = "committee")]
+            committee: String,
+
+        /// Path to the file describing the initial user accounts
+        #[structopt(long = "initial_accounts")]
+            initial_accounts: String,
+
+        /// Path to the file describing the initial balance of user accounts
+        #[structopt(long = "initial_balance")]
+            initial_balance: String,
+
+        /// Runs a specific shard (from 0 to shards-1)
+        #[structopt(long = "shard")]
+            shard: String,
+    },
+
+    /// Generate a new server configuration and output its public description
+    #[structopt(name = "generate")]
+    Generate {
+        /// Chooses a network protocol between Udp and Tcp
+        #[structopt(long = "protocol", default_value = "Udp")]
+            protocol : String,
+
+        /// Sets the public name of the host
+        #[structopt(long = "host")]
+            host: String,
+
+        /// Sets the base port, i.e. the port on which the server listens for the first shard
+        #[structopt(long = "port")]
+            port: u32,
+
+        /// Number of shards for this authority
+        #[structopt(long = "shards")]
+            shards: u32,
+
+    }
+}
+
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    let matches = App::new("FastPay server")
-        .about("A byzantine fault tolerant payments sidechain with low-latency finality and high throughput")
-        .args_from_usage("
-            --server=<PATH>  'Path to the file containing the server configuration of this FastPay authority (including its secret key)'
-            ")
-        .subcommand(SubCommand::with_name("run")
-            .about("Runs a service for each shard of the FastPay authority")
-            .arg(
-                Arg::with_name("buffer_size")
-                    .long("buffer_size")
-                    .help("Maximum size of datagrams received and sent (bytes")
-                    .default_value(transport::DEFAULT_MAX_DATAGRAM_SIZE),
-            )
-            .arg(
-                Arg::with_name("cross_shard_queue_size")
-                    .long("cross_shard_queue_size")
-                    .help("Number of cross shards messages allowed before blocking the main server loop")
-                    .default_value("1000"),
-            )
-            .args_from_usage("
-            --committee=<PATH>   'Path to the file containing the public description of all authorities in this FastPay committee'
-            --initial_accounts=<PATH>    'Path to the file describing the initial user accounts'
-            --initial_balance=<INT>      'Path to the file describing the initial balance of user accounts'
-            --shard=[INT]                'Runs a specific shard (from 0 to shards-1)'
-            "))
-        .subcommand(SubCommand::with_name("generate")
-            .about("Generate a new server configuration and output its public description")
-            .arg(
-                Arg::with_name("protocol")
-                    .long("protocol")
-                    .help("Chooses a network protocol between Udp and Tcp")
-                    .default_value("Udp"),
-            )
-            .args_from_usage("
-            --host=<ADDRESS>      'Sets the public name of the host'
-            --port=<PORT>         'Sets the base port, i.e. the port on which the server listens for the first shard'
-            --shards=<SHARDS>     'Number of shards for this authority'"))
-        .get_matches();
+    let matches = ServerOpt::from_args();
+    
+    let server_config_path = &matches.server;
 
-    match matches.subcommand() {
-        ("run", Some(subm)) => {
-            // Reading our own config
-            let server_config_path = matches.value_of("server").unwrap();
-            let committee_config_path = subm.value_of("committee").unwrap();
-            let initial_accounts_config_path = subm.value_of("initial_accounts").unwrap();
-            let initial_balance = Balance::from(
-                subm.value_of("initial_balance")
-                    .unwrap()
-                    .parse::<i128>()
-                    .unwrap(),
-            );
-            let buffer_size = subm
-                .value_of("buffer_size")
-                .unwrap()
-                .parse::<usize>()
-                .unwrap();
-            let cross_shard_queue_size = subm
-                .value_of("cross_shard_queue_size")
-                .unwrap()
-                .parse::<usize>()
-                .unwrap();
-            let specific_shard = if subm.is_present("shard") {
-                let shard = subm.value_of("shard").unwrap();
-                Some(shard.parse::<u32>().unwrap())
-            } else {
-                None
-            };
+    match matches.cmd {
+        ServerCommands::Run { buffer_size, cross_shard_queue_size, committee, initial_accounts, initial_balance, shard } => {
+            let committee_config_path = &committee;
+            let initial_accounts_config_path = &initial_accounts;
+            let initial_balance = Balance::from(initial_balance.parse::<i128>().unwrap());
+            let buffer_size = buffer_size.parse::<usize>().unwrap();
+            // let parsed_cross_shard_queue_size = cross_shard_queue_size.parse::<usize>().unwrap();
+            let specific_shard = Some(shard.parse::<u32>().unwrap());
 
             // Run the server
             let servers = if let Some(shard) = specific_shard {
@@ -218,27 +228,24 @@ fn main() {
                 });
             }
             rt.block_on(join_all(handles));
-        }
-        ("generate", Some(subm)) => {
-            let network_protocol = subm.value_of("protocol").unwrap().parse().unwrap();
-            let server_config_path = matches.value_of("server").unwrap();
+        },
+
+        ServerCommands::Generate { protocol, host, port, shards } => {
+            let network_protocol = protocol.parse().unwrap();
             let (address, key) = get_key_pair();
             let authority = AuthorityConfig {
                 network_protocol,
                 address,
-                host: subm.value_of("host").unwrap().parse().unwrap(),
-                base_port: subm.value_of("port").unwrap().parse().unwrap(),
-                num_shards: subm.value_of("shards").unwrap().parse().unwrap(),
+                host: host,
+                base_port: port,
+                num_shards: shards,
             };
             let server = AuthorityServerConfig { authority, key };
             server
                 .write(server_config_path)
                 .expect("Unable to write server config file");
             info!("Wrote server config file");
-            server.authority.print();
-        }
-        _ => {
-            error!("Unknown command");
+            server.authority.print();    
         }
     }
 }
