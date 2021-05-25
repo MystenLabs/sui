@@ -3,7 +3,6 @@
 
 #![deny(warnings)]
 
-extern crate clap;
 extern crate env_logger;
 extern crate fastpay;
 extern crate fastpay_core;
@@ -18,11 +17,11 @@ use fastpay_core::messages::*;
 use fastpay_core::serialize::*;
 
 use bytes::Bytes;
-use clap::{App, Arg, SubCommand};
 use futures::stream::StreamExt;
 use log::*;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
+use structopt::StructOpt;
 use tokio::runtime::Runtime;
 
 fn make_authority_clients(
@@ -278,101 +277,113 @@ fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
     }
 }
 
+
+#[derive(StructOpt)]
+#[structopt(name = "FastPay Client", about = "A Byzantine fault tolerant payments sidechain with low-latency finality and high throughput")]
+struct ClientOpt {
+    /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
+    #[structopt(long = "accounts")]
+        accounts: String,
+
+    /// Sets the file describing the public configurations of all authorities
+    #[structopt(long = "committee")]
+        committee: String,
+
+    /// Timeout for sending queries (us)
+    #[structopt(long = "send_timeout", default_value = "4000000")]
+        send_timeout : u64,
+
+    /// Timeout for receiving responses (us)
+    #[structopt(long = "recv_timeout", default_value = "4000000")]
+        recv_timeout : u64,
+
+    /// Maximum size of datagrams received and sent (bytes)
+    #[structopt(long = "buffer_size", default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
+        buffer_size : String,
+
+    /// Subcommands. Acceptable values are transfer, query_balance, benchmark, and create_accounts.
+    #[structopt(subcommand)]
+        cmd : ClientCommands
+    
+}
+
+#[derive(StructOpt)]
+enum ClientCommands {
+
+    /// Transfer funds
+    #[structopt(name = "transfer")]
+    Transfer {
+
+        /// Sending address (must be one of our accounts)
+        #[structopt(long = "from")]
+            from : String,
+
+        /// Recipient address
+        #[structopt(long = "to")]
+            to : String,
+
+        /// Amount to transfer
+        amount : u64
+    },
+
+    /// Obtain the spendable balance
+    #[structopt(name = "query_balance")]
+    QueryBalance {
+        /// Address of the account
+        address : String
+    },
+
+    /// Send one transfer per account in bulk mode
+    #[structopt(name = "benchmark")]
+    Benchmark {
+        /// Maximum number of requests in flight
+        #[structopt(long = "max_in_flight", default_value = "200")]
+            max_in_flight : u64,
+
+        /// Use a subset of the accounts to generate N transfers
+        #[structopt(long = "max_orders", default_value = "")]
+            max_orders : String,
+
+        /// Use server configuration files to generate certificates (instead of aggregating received votes).
+        #[structopt(long = "server_configs", min_values = 1)]
+            server_configs : Vec<String>
+    },
+
+    /// Create new user accounts and print the public keys
+    #[structopt(name = "create_accounts")]
+    CreateAccounts {
+        /// known initial balance of the account
+        #[structopt(long = "initial_funding", default_value = "0")]
+            initial_funding : i128,
+
+        /// Number of additional accounts to create
+        num : u32
+    }
+   
+}
+
+
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    let matches = App::new("FastPay client")
-        .about("A Byzantine fault tolerant payments sidechain with low-latency finality and high throughput")
-        .args_from_usage("
-            --accounts=<FILE>     'Sets the file storing the state of our user accounts (an empty one will be created if missing)'
-            --committee=<CONFIG>  'Sets the file describing the public configurations of all authorities'
-        ")
-        .arg(
-            Arg::with_name("send_timeout")
-                .long("send_timeout")
-                .help("Timeout for sending queries (us)")
-                .default_value("4000000"),
-        )
-        .arg(
-            Arg::with_name("recv_timeout")
-                .long("recv_timeout")
-                .help("Timeout for receiving responses (us)")
-                .default_value("4000000"),
-        )
-        .arg(
-            Arg::with_name("buffer_size")
-                .long("buffer_size")
-                .help("Maximum size of datagrams received and sent (bytes")
-                .default_value(transport::DEFAULT_MAX_DATAGRAM_SIZE),
-        )
-        .subcommand(SubCommand::with_name("transfer")
-            .about("Transfer funds")
-            .args_from_usage("
-            --from=<ADDRESS>     'Sending address (must be one of our accounts)'
-            --to=<ADDRESS>       'Recipient address'
-            <amount>             'Amount to transfer'
-            "))
-        .subcommand(SubCommand::with_name("query_balance")
-            .about("Obtain the spendable balance")
-            .args_from_usage("
-            <address>            'Address of the account'
-            "))
-        .subcommand(SubCommand::with_name("benchmark")
-            .about("Send one transfer per account in bulk mode")
-            .arg(
-                Arg::with_name("max_in_flight")
-                    .long("max_in_flight")
-                    .help("Maximum number of requests in flight")
-                    .default_value("200"),
-            )
-            .arg(
-                Arg::with_name("max_orders")
-                    .long("max_orders")
-                    .help("Use a subset of the accounts to generate N transfers")
-                    .default_value(""),
-            )
-            .arg(
-                Arg::with_name("server_configs")
-                    .long("server_configs")
-                    .help("Use server configuration files to generate certificates (instead of aggregating received votes).")
-                    .min_values(1),
-            ))
-        .subcommand(SubCommand::with_name("create_accounts")
-            .about("Create new user accounts and print the public keys")
-            .arg(
-                Arg::with_name("initial_funding")
-                    .long("initial_funding")
-                    .help("known initial balance of the account")
-                    .default_value("0"),
-            )
-            .args_from_usage("
-            <num>                'Number of additional accounts to create'
-            "))
-        .get_matches();
+    let matches = ClientOpt::from_args();
 
-    let send_timeout =
-        Duration::from_micros(matches.value_of("send_timeout").unwrap().parse().unwrap());
-    let recv_timeout =
-        Duration::from_micros(matches.value_of("recv_timeout").unwrap().parse().unwrap());
-    let accounts_config_path = matches.value_of("accounts").unwrap();
-    let committee_config_path = matches.value_of("committee").unwrap();
-    let buffer_size = matches
-        .value_of("buffer_size")
-        .unwrap()
-        .parse::<usize>()
-        .unwrap();
+    let send_timeout = Duration::from_micros(matches.send_timeout);
+    let recv_timeout = Duration::from_micros(matches.recv_timeout);
+    let accounts_config_path = &matches.accounts;
+    let committee_config_path = &matches.committee;
+    let buffer_size = matches.buffer_size.parse::<usize>().unwrap();
 
     let mut accounts_config =
-        AccountsConfig::read_or_create(accounts_config_path).expect("Unable to read user accounts");
+        AccountsConfig::read_or_create(&accounts_config_path).expect("Unable to read user accounts");
     let committee_config =
-        CommitteeConfig::read(committee_config_path).expect("Unable to read committee config file");
+        CommitteeConfig::read(&committee_config_path).expect("Unable to read committee config file");
 
-    match matches.subcommand() {
-        ("transfer", Some(subm)) => {
-            let sender = decode_address(&subm.value_of("from").unwrap().to_string())
-                .expect("Failed to decode sender's address");
-            let recipient = decode_address(&subm.value_of("to").unwrap().to_string())
-                .expect("Failed to decode recipient's address");
-            let amount = Amount::from(subm.value_of("amount").unwrap().parse::<u64>().unwrap());
+
+    match matches.cmd {
+        ClientCommands::Transfer { from, to, amount } => {
+            let sender = decode_address(&from).expect("Failed to decode sender's address");
+            let recipient = decode_address(&to).expect("Failed to decode recipient's address");
+            let amount = Amount::from(amount);
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
@@ -413,17 +424,17 @@ fn main() {
                     .expect("Unable to write user accounts");
                 info!("Saved user account states");
             });
-        }
-        ("query_balance", Some(subm)) => {
-            let address = decode_address(&subm.value_of("address").unwrap().to_string())
-                .expect("Failed to decode address");
+        },
+
+        ClientCommands::QueryBalance { address } => {
+            let user_address = decode_address(&address).expect("Failed to decode address");
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 let mut client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
-                    address,
+                    user_address,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
@@ -440,20 +451,12 @@ fn main() {
                     .expect("Unable to write user accounts");
                 info!("Saved client account state");
             });
-        }
-        ("benchmark", Some(subm)) => {
-            let max_in_flight: u64 = subm.value_of("max_in_flight").unwrap().parse().unwrap();
-            let max_orders: usize = subm
-                .value_of("max_orders")
-                .unwrap()
-                .parse()
-                .unwrap_or_else(|_| accounts_config.num_accounts());
-            let server_configs = if subm.is_present("server_configs") {
-                let files: Vec<_> = subm.values_of("server_configs").unwrap().collect();
-                Some(files)
-            } else {
-                None
-            };
+        },
+
+        ClientCommands::Benchmark { max_in_flight, max_orders, server_configs} => {
+            let max_orders: usize = max_orders.parse().unwrap_or_else(|_| accounts_config.num_accounts());
+            let files : Vec<_> = server_configs.iter().map(AsRef::as_ref).collect();
+            let parsed_server_configs = Some(files);
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
@@ -479,7 +482,7 @@ fn main() {
                 warn!("Received {} valid votes.", votes.len());
 
                 warn!("Starting benchmark phase 2 (confirmation orders)");
-                let certificates = if let Some(files) = server_configs {
+                let certificates = if let Some(files) = parsed_server_configs {
                     make_benchmark_certificates_from_orders_and_server_configs(orders, files)
                 } else {
                     make_benchmark_certificates_from_votes(&committee_config, votes)
@@ -520,26 +523,20 @@ fn main() {
                     .expect("Unable to write user accounts");
                 info!("Saved client account state");
             });
-        }
-        ("create_accounts", Some(subm)) => {
-            let num_accounts: u32 = subm.value_of("num").unwrap().parse().unwrap();
-            let known_initial_funding = subm
-                .value_of("initial_funding")
-                .unwrap()
-                .parse::<i128>()
-                .unwrap();
 
+        },
+
+        ClientCommands::CreateAccounts { initial_funding, num } => {
+            let num_accounts: u32 = num;
             for _ in 0..num_accounts {
-                let account = UserAccount::new(Balance::from(known_initial_funding));
+                let account = UserAccount::new(Balance::from(initial_funding));
                 println!("{}", encode_address(&account.address));
                 accounts_config.insert(account);
             }
             accounts_config
                 .write(accounts_config_path)
                 .expect("Unable to write user accounts");
-        }
-        _ => {
-            error!("Unknown command");
+
         }
     }
 }
