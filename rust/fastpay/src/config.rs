@@ -1,15 +1,21 @@
 // Copyright (c) Facebook Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::fastpay_core::base_types::*;
-use crate::fastpay_core::client::ClientState;
-use crate::fastpay_core::messages::{Address, CertifiedTransferOrder};
-use crate::transport::NetworkProtocol;
+use crate::{
+    fastpay_core::{
+        base_types::*,
+        client::ClientState,
+        messages::{Address, CertifiedTransferOrder},
+    },
+    transport::NetworkProtocol,
+};
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::{
+    collections::BTreeMap,
+    fs::{self, File, OpenOptions},
+    io::{BufRead, BufReader, BufWriter, Write},
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthorityConfig {

@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
-use tokio::runtime::Runtime;
-use tokio::time::timeout;
+use std::{
+    sync::atomic::{AtomicUsize, Ordering},
+    time::Duration,
+};
+use tokio::{runtime::Runtime, time::timeout};
 
 async fn get_new_local_address() -> Result<String, std::io::Error> {
     let builder = net2::TcpBuilder::new_v4()?;

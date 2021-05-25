@@ -2,18 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::transport::*;
-use fastpay_core::authority::*;
-use fastpay_core::base_types::*;
-use fastpay_core::client::*;
-use fastpay_core::error::*;
-use fastpay_core::messages::*;
-use fastpay_core::serialize::*;
+use fastpay_core::{authority::*, base_types::*, client::*, error::*, messages::*, serialize::*};
 
 use bytes::Bytes;
-use futures::channel::mpsc;
-use futures::future::FutureExt;
-use futures::sink::SinkExt;
-use futures::stream::StreamExt;
+use futures::{channel::mpsc, future::FutureExt, sink::SinkExt, stream::StreamExt};
 use log::*;
 use std::io;
 use tokio::time;

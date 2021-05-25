@@ -5,13 +5,11 @@ use clap::arg_enum;
 use futures::future;
 use log::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::io;
-use std::sync::Arc;
-use tokio::net::TcpListener;
-use tokio::net::{TcpStream, UdpSocket};
-use tokio::prelude::*;
+use std::{collections::HashMap, convert::TryInto, io, sync::Arc};
+use tokio::{
+    net::{TcpListener, TcpStream, UdpSocket},
+    prelude::*,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/transport_tests.rs"]

@@ -8,20 +8,17 @@ extern crate fastpay_core;
 extern crate log;
 
 use fastpay::{network, transport};
-use fastpay_core::authority::*;
-use fastpay_core::base_types::*;
-use fastpay_core::committee::*;
-use fastpay_core::messages::*;
-use fastpay_core::serialize::*;
+use fastpay_core::{authority::*, base_types::*, committee::*, messages::*, serialize::*};
 
 use bytes::Bytes;
 use clap::{App, Arg};
 use futures::stream::StreamExt;
 use log::*;
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
-use tokio::runtime::Builder;
-use tokio::time;
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
+use tokio::{runtime::Builder, time};
 
 use std::thread;
 

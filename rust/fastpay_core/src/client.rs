@@ -1,16 +1,14 @@
 // Copyright (c) Facebook Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::*;
-use crate::committee::Committee;
-use crate::downloader::*;
-use crate::error::FastPayError;
-use crate::messages::*;
+use crate::{base_types::*, committee::Committee, downloader::*, error::FastPayError, messages::*};
 
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
-use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
-use std::convert::TryFrom;
+use std::{
+    collections::{btree_map, BTreeMap, BTreeSet, HashMap},
+    convert::TryFrom,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]

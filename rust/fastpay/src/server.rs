@@ -7,12 +7,8 @@ extern crate env_logger;
 extern crate fastpay;
 extern crate fastpay_core;
 
-use fastpay::config::*;
-use fastpay::network;
-use fastpay::transport;
-use fastpay_core::authority::*;
-use fastpay_core::base_types::*;
-use fastpay_core::committee::Committee;
+use fastpay::{config::*, network, transport};
+use fastpay_core::{authority::*, base_types::*, committee::Committee};
 
 use futures::future::join_all;
 use log::*;

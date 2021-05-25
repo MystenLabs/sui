@@ -7,20 +7,18 @@ extern crate env_logger;
 extern crate fastpay;
 extern crate fastpay_core;
 
-use fastpay::config::*;
-use fastpay::{network, transport};
-use fastpay_core::authority::*;
-use fastpay_core::base_types::*;
-use fastpay_core::client::*;
-use fastpay_core::committee::Committee;
-use fastpay_core::messages::*;
-use fastpay_core::serialize::*;
+use fastpay::{config::*, network, transport};
+use fastpay_core::{
+    authority::*, base_types::*, client::*, committee::Committee, messages::*, serialize::*,
+};
 
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
-use std::collections::{HashMap, HashSet};
-use std::time::{Duration, Instant};
+use std::{
+    collections::{HashMap, HashSet},
+    time::{Duration, Instant},
+};
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
 

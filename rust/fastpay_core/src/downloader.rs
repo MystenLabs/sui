@@ -1,8 +1,10 @@
 // Copyright (c) Facebook Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::channel::{mpsc, oneshot};
-use futures::{future, SinkExt, StreamExt};
+use futures::{
+    channel::{mpsc, oneshot},
+    future, SinkExt, StreamExt,
+};
 use std::collections::BTreeMap;
 
 #[cfg(test)]

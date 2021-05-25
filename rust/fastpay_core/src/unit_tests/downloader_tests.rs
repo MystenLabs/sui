@@ -3,8 +3,10 @@
 
 use super::*;
 use futures::future;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc,
+};
 use tokio::runtime::Runtime;
 
 #[derive(Clone)]

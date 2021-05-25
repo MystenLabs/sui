@@ -1,9 +1,7 @@
 // Copyright (c) Facebook Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::base_types::*;
-use super::committee::Committee;
-use super::error::*;
+use super::{base_types::*, committee::Committee, error::*};
 
 use ed25519_dalek::{Digest, Sha512};
 
@@ -12,8 +10,10 @@ use ed25519_dalek::{Digest, Sha512};
 mod messages_tests;
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::hash::{Hash, Hasher};
+use std::{
+    collections::HashSet,
+    hash::{Hash, Hasher},
+};
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct FundingTransaction {

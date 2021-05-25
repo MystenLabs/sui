@@ -1,12 +1,8 @@
 // Copyright (c) Facebook Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::*;
-use crate::committee::Committee;
-use crate::error::FastPayError;
-use crate::messages::*;
-use std::collections::BTreeMap;
-use std::convert::TryInto;
+use crate::{base_types::*, committee::Committee, error::FastPayError, messages::*};
+use std::{collections::BTreeMap, convert::TryInto};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
