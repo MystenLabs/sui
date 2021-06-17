@@ -1,4 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
 from log import LogParser
 from committee import CommitteeParser
 from aggregator import LogAggregator as NewAggregator
@@ -22,7 +21,7 @@ SETUP_SCRIPT = 'aws-setup.sh'
 
 # --- Start Config ---
 REPO = 'mempool-research'
-BRANCH = 'tusk_cleanup'
+BRANCH = 'block_explorer'
 LOCAL_BINARY_PATH = '../rust/target/release/'
 BINARY = 'bench_worker'
 LOCAL_BINARY = join(LOCAL_BINARY_PATH, BINARY)
@@ -422,8 +421,8 @@ def tps(ctx, txs_size=512, batch_size=10**4, rate=100_000, delay=300,
 
 
 @task
-def local(ctx, txs_size=512, batch_size=1_000, rate=60_000, nodes=4,
-          workers=1, delay=30, share_load=True, hide=False, faults=0):
+def local(ctx, txs_size=512, batch_size=1_000, rate=30_000, nodes=10,
+          workers=1, delay=30, share_load=True, hide=False, faults=3):
     ''' Run a tps benchmark on the local host. '''
     print(f'Running benchmark (nodes={nodes}, workers={workers})')
     system(f'(cd {LOCAL_BINARY_PATH} && cargo build --release)')
@@ -497,12 +496,12 @@ def bench(ctx):
     runs = 1
     delay = 300
     share_load = True
-    single_machine = True
+    single_machine = False
 
     # Exactly one of the parameters below must be a list.
-    nodes, workers = 20, 1
+    nodes, workers = 4, 4
     faults = 0
-    txs_size, batch_size, rate = 512, 1_000, [140_000]
+    txs_size, batch_size, rate = 512, 1_000, [350_000]
     # --- end config ---
 
     params = {
@@ -533,7 +532,7 @@ def bench(ctx):
         config(ctx, nodes=n, workers=w, single_machine=mode)
 
         rate = clone_params['rate']
-        clone_params['rate'] //= w
+        clone_params['rate'] //= w 
         for _ in range(runs):
             parser = tps(ctx, **clone_params)
             with open(f'results/scaling/benchmark.dag.{n}.{w}.{rate}.{faults}.txt', 'a') as f:

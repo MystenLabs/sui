@@ -1,4 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
 from re import findall, search, split
 from glob import glob
 import matplotlib.pyplot as plt

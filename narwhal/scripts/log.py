@@ -1,4 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
 from re import findall, search
 from statistics import mean, stdev
 from multiprocessing import Pool

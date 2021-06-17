@@ -1,4 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
 #!/bin/bash
 #
 # NOTE: Create an AWS instance with enough SSD storage in the primary

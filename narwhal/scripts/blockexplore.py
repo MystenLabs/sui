@@ -1,4 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
     # Run as:
 #  $ grep CERT: node-1.log > xx.txt
 #  $ python blockexplore.py xx.txt > g.dot

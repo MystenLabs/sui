@@ -1,4 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
 from re import search
 from collections import defaultdict
 from statistics import mean, stdev
