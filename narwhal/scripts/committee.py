@@ -13,6 +13,9 @@ class CommitteeParser:
     def to_json(self):
         return self.committee
 
+    def size(self):
+        return len(self.committee['authorities'])
+
     def primaries_hosts(self):
         authorities = self.committee['authorities']
         return [x['primary']['host'] for x in authorities]

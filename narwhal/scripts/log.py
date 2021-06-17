@@ -149,8 +149,6 @@ class LogParser:
         self.results += "Node\tHeader    \tCert    \tCommit\n"
         for num in summary_node_data:
             [count, [cA, cB, cC], [tA, tB, tC]] = summary_node_data[num]
-            if count == 0:
-                continue # In case this machine runs only a primar (no workers)
 
             timeA = int(tA/cA) if cA else 0
             timeB = int(tB/cB) if cB else 0

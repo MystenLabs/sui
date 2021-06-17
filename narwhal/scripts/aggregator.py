@@ -89,7 +89,7 @@ class LogAggregator:
 
     def print(self):
         results = [
-            self._print_latency(), self._print_tps(), self._print_tps_workers(), self._print_robustness()
+            self._print_latency(), self._print_tps(), self._print_robustness()
         ]
         for records in results:
             for setup, values in records.items():
@@ -124,7 +124,7 @@ class LogAggregator:
 
         return organized
 
-    def _print_tps(self, max_latencies=[4_000, 6_000]):
+    def _print_tps(self, max_latencies=[5_000, 10_000, 15_000]):
         records = deepcopy(self.records)
         organized = defaultdict(list)
         for max_latency in max_latencies:
@@ -144,30 +144,6 @@ class LogAggregator:
                             highest_tps = True
                     if new_point or highest_tps:
                         organized[setup] += [(nodes, result)]
-
-        [v.sort(key=lambda x: x[0]) for v in organized.values()]
-        return organized
-
-    def _print_tps_workers(self, max_latencies=[4_000, 10_000]):
-        records = deepcopy(self.records)
-        organized = defaultdict(list)
-        for max_latency in max_latencies:
-            for setup, result in records.items():
-                setup = deepcopy(setup)
-                if result.mean_latency <= max_latency:
-                    workers = setup.workers
-                    setup.workers = 'x'
-                    setup.rate = 'any'
-                    setup.max_latency = max_latency
-
-                    new_point = all(workers != x[0] for x in organized[setup])
-                    highest_tps = False
-                    for w, r in organized[setup]:
-                        if result.mean_tps > r.mean_tps and workers == w:
-                            organized[setup].remove((w, r))
-                            highest_tps = True
-                    if new_point or highest_tps:
-                        organized[setup] += [(workers, result)]
 
         [v.sort(key=lambda x: x[0]) for v in organized.values()]
         return organized

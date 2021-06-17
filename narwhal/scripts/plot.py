@@ -5,14 +5,6 @@ from matplotlib.ticker import MaxNLocator, StrMethodFormatter
 from os.path import join
 from statistics import mean
 import sys
-from itertools import cycle
-import matplotlib.ticker as ticker
-
-
-# FuncFormatter can be used as a decorator
-@ticker.FuncFormatter
-def major_formatter(x, pos):
-    return f"{x/1000:0.0f}k"
 
 
 class Ploter:
@@ -78,8 +70,7 @@ class Ploter:
         faults = f'({f} faulty)' if f != '0' else ''
         return f'Max latency: {float(x) / 1000:,.1f} s {faults}'
 
-    def _plot(self, xlabel, ylabel, y_axis, z_axis, filename):
-        markers = cycle(['o', 'v', 's'])
+    def _plot(self, xlabel, ylabel, y_axis, z_axis, filename, legend_loc):
         plt.figure()
         for result in self.results:
             y_values, y_err = y_axis(result)
@@ -87,21 +78,20 @@ class Ploter:
             assert len(y_values) == len(y_err) and len(y_err) == len(x_values)
             plt.errorbar(
                 x_values, y_values, yerr=y_err,  # uplims=True, lolims=True,
-                marker=next(markers), label=z_axis(result), linestyle='dotted'
+                marker='o', label=z_axis(result), linestyle='dotted'
             )
             # plt.yscale('log')
 
-        plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1), ncol=3)
         plt.xlim(xmin=0)
         plt.ylim(bottom=0)
         plt.ylim = [0, 10]
-        plt.grid(True, which='both')
         plt.xlabel(xlabel)
         plt.ylabel(ylabel[0])
+        plt.legend(loc=legend_loc)
         ax = plt.gca()
         #ax.ticklabel_format(useOffset=False, style='plain')
         # ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-        ax.xaxis.set_major_formatter(major_formatter)
+        ax.xaxis.set_major_formatter(StrMethodFormatter('{x:,.0f}'))
         ax.yaxis.set_major_formatter(StrMethodFormatter('{x:,.0f}'))
         if len(ylabel) > 1:
             secaxy = ax.secondary_yaxis(
@@ -117,14 +107,14 @@ class Ploter:
         assert isinstance(xlabel, str)
         assert hasattr(z_axis, '__call__')
         ylabel = ['Throughput (tx/s)', 'Throughput (MB/s)']
-        self._plot(xlabel, ylabel, self._tps, z_axis, 'tps')
+        self._plot(xlabel, ylabel, self._tps, z_axis, 'tps', 'upper left')
 
     def plot_client_latency(self, z_axis):
         assert hasattr(z_axis, '__call__')
         xlabel = 'Throughput (tx/s)'
         ylabel = ['Client latency (s)']
         self._plot(
-            xlabel, ylabel, self._latency, z_axis, 'latency'
+            xlabel, ylabel, self._latency, z_axis, 'latency', 'upper left'
         )
 
     def plot_robustness(self, z_axis):
@@ -132,18 +122,16 @@ class Ploter:
         x_label = 'Input rate (tx/s)'
         y_label = ['Throughput (tx/s)', 'Throughput (MB/s)']
         self._plot(x_label, y_label, self._tps,
-                   z_axis, 'robustness')
+                   z_axis, 'robustness', 'upper left')
 
 
 if __name__ == '__main__':
     results = []
-    #name = 'agg-4-x-0-512-1000-any-*.txt'
-    name = 'agg-4-*-0-512-1000-any-any.txt'
-    for filename in glob(join(sys.argv[1], name)):
+    for filename in glob(join(sys.argv[1], '*.txt')):
         with open(filename, 'r') as f:
             results += [f.read()]
 
     ploter = Ploter(results)
-    #ploter.plot_tps('Workers per validator', ploter.max_latency)
+    ploter.plot_tps('Committee size', ploter.tx_size)
     #ploter.plot_tps('Committee size', ploter.tx_size)
-    ploter.plot_client_latency(ploter.workers)
+    # ploter.plot_client_latency(ploter.workers)

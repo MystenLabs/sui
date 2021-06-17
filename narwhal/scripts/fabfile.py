@@ -21,7 +21,7 @@ SETUP_SCRIPT = 'aws-setup.sh'
 
 # --- Start Config ---
 REPO = 'mempool-research'
-BRANCH = 'block_explorer'
+BRANCH = 'mempool'
 LOCAL_BINARY_PATH = '../rust/target/release/'
 BINARY = 'bench_worker'
 LOCAL_BINARY = join(LOCAL_BINARY_PATH, BINARY)
@@ -128,7 +128,8 @@ def info(ctx):
 
 
 @task
-def start(ctx, max=4):
+
+def start(ctx, max=2):
     ''' Start at most 'max' instances per data center. '''
     count = 0
     for region in REGIONS:
@@ -322,7 +323,7 @@ def logs(ctx, hide=False, faults=0):
     keep = [
         'Committee size', 'Number of workers per node', 'Txs batch size',
         'certified digest', 'Commit digest', 'Making header', 'warn ', 'panic',
-        'Received a tx digest'#, 'CERT'
+        'Received a tx digest', 'CERT'
     ]
 
     # Download log files.
@@ -373,7 +374,6 @@ def tps(ctx, txs_size=512, batch_size=10**4, rate=100_000, delay=300,
 
     # Run clients.
     # The clients will wait for all workers to be ready.
-    print('Running clients...')
     hosts, ports = committee.workers_hosts(), committee.workers_ports()
     addresses = [f'{x}:{y}' for x, y in zip(hosts, ports)]
     rate_share = ceil(rate / n) if share_load else rate
@@ -411,18 +411,33 @@ def tps(ctx, txs_size=512, batch_size=10**4, rate=100_000, delay=300,
     print(f'Running benchmark ({delay} sec)...')
     sleep(delay)  # Wait for the nodes to process all txs.
     print('Killing testbed...')
+    # reboot(ctx)
     kill(ctx, hide=True, cleanup=False)
+    sleep(60)
 
     # Download log files and print results.
     parser = logs(ctx, hide=True, faults=faults)
+
+    '''
+    n = len(committee.primaries_hosts())
+    with open(f'benchmark.dag.{n}.{rate}.txt', 'a') as f:
+        f.write(parser.config)
+        f.write(parser.dag_results)
+        f.write('\n')
+    with open(f'benchmark.consensus.{n}.{rate}.txt', 'a') as f:
+        f.write(parser.config)
+        f.write(parser.consensus_results)
+        f.write('\n')
+    '''
+
     if not hide:
         print(parser.results)
     return parser
 
 
 @task
-def local(ctx, txs_size=512, batch_size=1_000, rate=30_000, nodes=10,
-          workers=1, delay=30, share_load=True, hide=False, faults=3):
+def local(ctx, txs_size=512, batch_size=1_000, rate=30_000, nodes=4,
+          workers=1, delay=15, share_load=True, hide=False):
     ''' Run a tps benchmark on the local host. '''
     print(f'Running benchmark (nodes={nodes}, workers={workers})')
     system(f'(cd {LOCAL_BINARY_PATH} && cargo build --release)')
@@ -430,20 +445,18 @@ def local(ctx, txs_size=512, batch_size=1_000, rate=30_000, nodes=10,
     system('rm .storage_* >/dev/null 2>&1')
     system('tmux kill-server >/dev/null 2>&1')
 
-
     # Generate all configuration files.
     system(f'./{LOCAL_BINARY} generate --nodes {nodes} --workers {workers}')
 
     # Run nodes.
     for i in range(nodes):
         cmd_name = run_node_command(i, batch_size, local=True)
-        # print(cmd_name)
+        #print(cmd_name)
         system(cmd_name)
     sleep(2)  # Wait for the nodes to connect with each other.
 
     # Run clients.
     committee = CommitteeParser(LOCAL_COMMITTEE_CONFIG_FILE)
-    committee.remove_faulty(faults)
     ports = committee.workers_ports()
     addresses = [f'127.0.0.1:{x}' for x in ports]
     rate_share = ceil(rate / len(addresses))
@@ -451,7 +464,7 @@ def local(ctx, txs_size=512, batch_size=1_000, rate=30_000, nodes=10,
         command = run_client_command(
             i, txs_size, addr, rate_share, addresses, local=True
         )
-        # print(command)
+        #print(command)
         system(command)
 
     sleep(delay)  # Wait for the nodes to process all txs.
@@ -466,7 +479,7 @@ def local(ctx, txs_size=512, batch_size=1_000, rate=30_000, nodes=10,
         with open(logfile, 'r') as f:
             nodes_logs += [f.read()]
 
-    parser = LogParser(clients_logs, nodes_logs, nodes_logs, faults=faults)
+    parser = LogParser(clients_logs, nodes_logs, nodes_logs)
     if not hide:
         print(parser.results)
     return parser
@@ -493,15 +506,15 @@ def stats(ctx, hide=False):
 def bench(ctx):
     ''' Run multiple TPS benchmarks on AWS. '''
     # --- start config ---
-    runs = 1
+    runs = 2
     delay = 300
     share_load = True
-    single_machine = False
+    single_machine = True
 
     # Exactly one of the parameters below must be a list.
-    nodes, workers = 4, 4
+    nodes, workers = 20, 1
     faults = 0
-    txs_size, batch_size, rate = 512, 1_000, [350_000]
+    txs_size, batch_size, rate = 512, 10_000, [30_000]
     # --- end config ---
 
     params = {
@@ -531,17 +544,14 @@ def bench(ctx):
         mode = clone_params['single_machine']
         config(ctx, nodes=n, workers=w, single_machine=mode)
 
-        rate = clone_params['rate']
-        clone_params['rate'] //= w 
         for _ in range(runs):
+            rate = clone_params['rate']
             parser = tps(ctx, **clone_params)
-            with open(f'results/scaling/benchmark.dag.{n}.{w}.{rate}.{faults}.txt', 'a') as f:
-                f.write(f'Branch: {BRANCH}\n')
+            with open(f'results/benchmark.dag.{n}.{rate}.{faults}.txt', 'a') as f:
                 f.write(parser.config)
                 f.write(parser.dag_results)
                 f.write('\n')
-            with open(f'results/scaling/benchmark.consensus.{n}.{w}.{rate}.{faults}.txt', 'a') as f:
-                f.write(f'Branch: {BRANCH}\n')
+            with open(f'results/benchmark.consensus.{n}.{rate}.{faults}.txt', 'a') as f:
                 f.write(parser.config)
                 f.write(parser.consensus_results)
                 f.write('\n')
@@ -549,7 +559,7 @@ def bench(ctx):
 
 @task
 def aggregate(ctx):
-    files = glob('results/scaling/benchmark.consensus.*.txt')
+    files = glob('results/benchmark.consensus.*.txt')
     NewAggregator(files).print()
 
 
@@ -561,6 +571,6 @@ def plot(ctx):
             results += [f.read()]
 
     ploter = Ploter(results)
-    #ploter.plot_tps('Workers per validator', ploter.max_latency)
-    ploter.plot_client_latency(ploter.workers)
+    #ploter.plot_tps('Committee Size', ploter.max_latency)
+    ploter.plot_client_latency(ploter.nodes)
     #ploter.plot_robustness(ploter.nodes)
