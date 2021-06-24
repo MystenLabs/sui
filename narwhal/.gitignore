@@ -6,6 +6,7 @@
 .venv/
 .idea/*
 rust/.idea/*
+.db-*
 
 target/
 !/**/src/**/target/
