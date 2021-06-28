@@ -1,7 +1,7 @@
 # Narwhal and Tusk
 
-[![build status](https://img.shields.io/github/workflow/status/facebookresearch/narwhal/Build/master?style=flat-square&logo=github)](https://github.com/facebookresearch/narwhal/actions)
-[![rustc](https://img.shields.io/badge/rustc-1.48+-blue?style=flat-square&logo=rust)](https://www.rust-lang.org)
+[![build status](https://img.shields.io/github/workflow/status/facebookresearch/narwhal/Rust/master?style=flat-square&logo=github)](https://github.com/facebookresearch/narwhal/actions)
+[![rustc](https://img.shields.io/badge/rustc-1.52+-blue?style=flat-square&logo=rust)](https://www.rust-lang.org)
 [![license](https://img.shields.io/badge/license-Apache-blue.svg?style=flat-square)](LICENSE)
 
 This repo contains a prototype of Narwhal and Tusk. It supplements the paper [Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus](https://arxiv.org/pdf/2105.11827.pdf).
