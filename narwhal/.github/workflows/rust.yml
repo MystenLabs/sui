@@ -1,0 +1,32 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup
+      run: |
+        rustup toolchain install 1.51.0-x86_64-unknown-linux-gnu
+        rustup component add rustfmt --toolchain 1.51.0-x86_64-unknown-linux-gnu
+        rustup component add clippy --toolchain 1.51.0-x86_64-unknown-linux-gnu
+    - name: Build (default)
+      run: cargo build --all-targets --verbose
+    - name: Build (all features)
+      run: cargo build --all-features --all-targets --verbose
+    - name: Run tests (all features)
+      run: cargo test --all-features --verbose
+    - name: Rustfmt
+      run: cargo fmt -- --check
+    - name: Clippy
+      run: cargo clippy --all-features --all-targets
