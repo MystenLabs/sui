@@ -61,7 +61,7 @@ fn make_certificates(
     start: Round,
     stop: Round,
     initial_parents: &BTreeSet<Digest>,
-    keys: &Vec<PublicKey>,
+    keys: &[PublicKey],
 ) -> (VecDeque<Certificate>, BTreeSet<Digest>) {
     let mut certificates = VecDeque::new();
     let mut parents = initial_parents.iter().cloned().collect::<BTreeSet<_>>();
@@ -185,7 +185,7 @@ async fn not_enough_support() {
     let mut certificates = VecDeque::new();
 
     // Round 1: Fully connected graph.
-    let nodes = keys.iter().cloned().take(3).collect();
+    let nodes: Vec<_> = keys.iter().cloned().take(3).collect();
     let (out, parents) = make_certificates(1, 1, &genesis, &nodes);
     certificates.extend(out);
 
@@ -194,7 +194,7 @@ async fn not_enough_support() {
     let (leader_2_digest, certificate) = mock_certificate(keys[0], 2, parents.clone());
     certificates.push_back(certificate);
 
-    let nodes = keys.iter().cloned().skip(1).collect();
+    let nodes: Vec<_> = keys.iter().cloned().skip(1).collect();
     let (out, mut parents) = make_certificates(2, 2, &parents, &nodes);
     certificates.extend(out);
 
@@ -220,7 +220,7 @@ async fn not_enough_support() {
     parents = next_parents.clone();
 
     // Rounds 4, 5, and 6: Fully connected graph.
-    let nodes = keys.iter().cloned().take(3).collect();
+    let nodes: Vec<_> = keys.iter().cloned().take(3).collect();
     let (out, parents) = make_certificates(4, 6, &parents, &nodes);
     certificates.extend(out);
 
@@ -279,7 +279,7 @@ async fn missing_leader() {
     let mut certificates = VecDeque::new();
 
     // Remove the leader for rounds 1 and 2.
-    let nodes = keys.iter().cloned().skip(1).collect();
+    let nodes: Vec<_> = keys.iter().cloned().skip(1).collect();
     let (out, parents) = make_certificates(1, 2, &genesis, &nodes);
     certificates.extend(out);
 

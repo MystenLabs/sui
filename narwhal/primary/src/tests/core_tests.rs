@@ -76,7 +76,7 @@ async fn process_header() {
     let received = handle.await.unwrap();
     match bincode::deserialize(&received).unwrap() {
         PrimaryMessage::Vote(x) => assert_eq!(x, expected),
-        x => assert!(false, "Unexpected message: {:?}", x),
+        x => panic!("Unexpected message: {:?}", x),
     }
 
     // Ensure the header is correctly stored.
@@ -277,7 +277,7 @@ async fn process_votes() {
     for received in try_join_all(handles).await.unwrap() {
         match bincode::deserialize(&received).unwrap() {
             PrimaryMessage::Certificate(x) => assert_eq!(x, expected),
-            x => assert!(false, "Unexpected message: {:?}", x),
+            x => panic!("Unexpected message: {:?}", x),
         }
     }
 }

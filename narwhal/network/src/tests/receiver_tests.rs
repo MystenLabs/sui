@@ -30,7 +30,7 @@ async fn receive() {
     // Make the network receiver.
     let address = "127.0.0.1:4000".parse::<SocketAddr>().unwrap();
     let (tx, mut rx) = channel(1);
-    Receiver::spawn(address.clone(), TestHandler { deliver: tx });
+    Receiver::spawn(address, TestHandler { deliver: tx });
     sleep(Duration::from_millis(50)).await;
 
     // Send a message.

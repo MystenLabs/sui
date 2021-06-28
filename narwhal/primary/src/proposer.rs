@@ -91,7 +91,7 @@ impl Proposer {
         debug!("Created {:?}", header);
 
         #[cfg(feature = "benchmark")]
-        for (digest, _) in &header.payload {
+        for digest in header.payload.keys() {
             // NOTE: This log entry is used to compute performance.
             info!("Created {} -> {:?}", header, digest);
         }

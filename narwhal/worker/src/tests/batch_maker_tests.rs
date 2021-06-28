@@ -27,7 +27,7 @@ async fn make_batch() {
     let QuorumWaiterMessage { batch, handlers: _ } = rx_message.recv().await.unwrap();
     match bincode::deserialize(&batch).unwrap() {
         WorkerMessage::Batch(batch) => assert_eq!(batch, expected_batch),
-        _ => assert!(false, "Unexpected message"),
+        _ => panic!("Unexpected message"),
     }
 }
 
@@ -54,6 +54,6 @@ async fn batch_timeout() {
     let QuorumWaiterMessage { batch, handlers: _ } = rx_message.recv().await.unwrap();
     match bincode::deserialize(&batch).unwrap() {
         WorkerMessage::Batch(batch) => assert_eq!(batch, expected_batch),
-        _ => assert!(false, "Unexpected message"),
+        _ => panic!("Unexpected message"),
     }
 }

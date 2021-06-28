@@ -20,7 +20,7 @@ async fn synchronize() {
 
     // Spawn a `Synchronizer` instance.
     Synchronizer::spawn(
-        name.clone(),
+        name,
         id,
         committee.clone(),
         store.clone(),
