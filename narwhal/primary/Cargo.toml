@@ -1,0 +1,31 @@
+[package]
+name = "primary"
+version = "0.1.0"
+authors = ["Libra <oncall+libra@xmail.facebook.com>"]
+publish = false
+edition = "2018"
+
+[dependencies]
+futures = "0.3.6"
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.5.0", features = ["sync", "rt", "macros"] }
+tokio-util = { version = "0.6.2", features= ["codec"] }
+ed25519-dalek = "1.0.1"
+thiserror = "1.0.20"
+bincode = "1.3.1"
+bytes = "1.0.1"
+env_logger = "0.7.1"
+log = "0.4.11"
+async-recursion = "0.3.2"
+async-trait = "0.1.50"
+
+crypto = { path = "../crypto" }
+store = { path = "../store" }
+config = { path = "../config" }
+network = { path = "../network" }
+
+[dev-dependencies]
+rand = "0.7.3"
+
+[features]
+benchmark = []

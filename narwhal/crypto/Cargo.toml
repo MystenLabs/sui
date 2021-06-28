@@ -1,0 +1,13 @@
+[package]
+name = "crypto"
+version = "0.1.0"
+authors = ["Alberto Sonnino <alberto@sonnino.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+tokio = { version = "1.5.0", features = ["sync", "rt", "macros"] }
+ed25519-dalek = { version = "1.0.1", features = ["batch"] }
+serde = { version = "1.0", features = ["derive"] }
+rand = "0.7.3"
+base64 = "0.13.0"

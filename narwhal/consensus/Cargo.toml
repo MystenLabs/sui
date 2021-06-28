@@ -1,0 +1,19 @@
+[package]
+name = "consensus"
+version = "0.1.0"
+authors = ["Alberto Sonnino <asonnino@fb.com>"]
+edition = "2018"
+
+[dependencies]
+tokio = { version = "1.5.0", features = ["sync"] }
+log = "0.4.14"
+
+crypto = { path = "../crypto" }
+config = { path = "../config" }
+primary = { path = "../primary" }
+
+[dev-dependencies]
+rand = "0.7.3"
+
+[features]
+benchmark = []
