@@ -2,7 +2,7 @@
 This document explains how to benchmark the codebase and read benchmarks' results. It also provides a step-by-step tutorial to run benchmarks on [Amazon Web Services (AWS)](https://aws.amazon.com) accross multiple data centers (WAN).
 
 ## Local Benchmarks
-When running benchmarks, the codebase is automatically compiled with the feature flag `benchmark`. This enables the node to print some special log entries that are then read by the python scripts and used to compute performance. These special log entries are clearly indicated with comments in the code, but make sure to not modify or delete them (otherwise the benchmark scripts will fail to interpret the logs).
+When running benchmarks, the codebase is automatically compiled with the feature flag `benchmark`. This enables the node to print some special log entries that are then read by the python scripts and used to compute performance. These special log entries are clearly indicated with comments in the code: make sure to not modify or delete them (otherwise the benchmark scripts will fail to interpret the logs).
 
 ### Parametrize the benchmark
 After cloning the repo and [installing all dependencies](https://github.com/facebookresearch/narwhal#quick-start), you can use [Fabric](http://www.fabfile.org/) to run benchmarks on your local machine.  Locate the task called `local` in the file [fabfile.py](https://github.com/facebookresearch/narwhal/blob/master/benchmark/fabfile.py):
