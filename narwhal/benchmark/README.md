@@ -187,16 +187,18 @@ This may take a long time as the command will first update all instances.
 The commands `fab stop` and `fab start` respectively stop and start the testbed without destroying it (it is good practice to stop the testbed when not in use as AWS can be quite expensive); and `fab destroy` terminates all instances and destroys the testbed. Note that, depending on the instance types, AWS instances may take up to several minutes to fully start or stop. The command `fab info` displays a nice summary of all available machines and information to manually connect to them (for debug).
 
 ### Step 5. Run a benchmark
-After setting up the testbed, running a benchmark on AWS is similar to running it locally (see [Run Local Benchmarks](https://github.com/asonnino/hotstuff/wiki/Local-Benchmarks)). Locate the task `remote` in [fabfile.py](https://github.com/facebookresearch/narwhal/blob/master/benchmark/fabfile.py):
+After setting up the testbed, running a benchmark on AWS is similar to running it locally (see [Run Local Benchmarks](https://github.com/facebookresearch/narwhal/tree/master/benchmark#local-benchmarks)). Locate the task `remote` in [fabfile.py](https://github.com/facebookresearch/narwhal/blob/master/benchmark/fabfile.py):
 ```python
 @task
 def remote(ctx):
     ...
 ```
-The benchmark parameters are similar to [local benchmarks](https://github.com/asonnino/hotstuff/wiki/Local-Benchmarks) but allow to specify the number of nodes and the input rate as arrays to automate multiple benchmarks with a single command; the parameter `runs` specifies the number of times to repeat each benchmark (to later compute the average and stdev of the results):
+The benchmark parameters are similar to [local benchmarks](https://github.com/facebookresearch/narwhal/tree/master/benchmark#local-benchmarks) but allow to specify the number of nodes and the input rate as arrays to automate multiple benchmarks with a single command. The parameter `runs` specifies the number of times to repeat each benchmark (to later compute the average and stdev of the results), and the parameter `collocate` specifies whether to collocate all the node's workers and the primary on the same machine. If `collocate` is set to `False`, the script will run one node per data center (AWS region), with its primary and each of its worker running on a dedicated instance.
 ```python
 bench_params = {
     'nodes': [10, 20, 30],
+    'workers: 2,
+    'collocate': True,
     'rate': [20_000, 30_000, 40_000],
     'tx_size': 512,
     'faults': 0,
@@ -204,20 +206,20 @@ bench_params = {
     'runs': 2,
 }
 ```
-Similarly to local benchmarks, the scripts will deploy as many clients as nodes and divide the input rate equally amongst each client. Each client shares an AWS instance with a node, and only submit transactions to the node with whom they share the machine.
+Similarly to local benchmarks, the scripts will deploy as many clients as workers and divide the input rate equally amongst each client. Each client is colocated with a worker, and only submit transactions to the worker with whom they share the machine.
 
 Once you specified both `bench_params` and `node_params` as desired, run:
 ```
 $ fab remote
 ```
-This command first updates all machines with the latest commit of the GitHub repo and branch specified in your file [settings.json](https://github.com/asonnino/hotstuff/blob/main/benchmark/settings.json) (step 3); this ensures that benchmarks are always run with the latest version of the code. It then generates and uploads the configuration files to each machine, runs the benchmarks with the specified parameters, and downloads the logs. It finally parses the logs and prints the results into a folder called `results` (which is automatically created if it doesn't already exists). You can run `fab remote` multiple times without fearing to override previous results, the command either appends new results to a file containing existing ones or prints them in separate files. If anything goes wrong during a benchmark, you can always stop it by running `fab kill`.
+This command first updates all machines with the latest commit of the GitHub repo and branch specified in your file [settings.json](https://github.com/facebookresearch/narwhal/blob/master/benchmark/settings.json) (step 3); this ensures that benchmarks are always run with the latest version of the code. It then generates and uploads the configuration files to each machine, runs the benchmarks with the specified parameters, and downloads the logs. It finally parses the logs and prints the results into a folder called `results` (which is automatically created if it doesn't already exists). You can run `fab remote` multiple times without fearing to override previous results, the command either appends new results to a file containing existing ones or prints them in separate files. If anything goes wrong during a benchmark, you can always stop it by running `fab kill`.
  
 ### Step 6. Plot the results
 Once you have enough results, you can aggregate and plot them:
 ```
 $ fab plot
 ```
-This command creates a latency graph, a throughput graph, and a robustness graph in a folder called `plots` (which is automatically created if it doesn't already exists). The [next section](https://github.com/asonnino/hotstuff/wiki/Interpreting-the-Results) provides insights on how to interpret those graphs. You can adjust the plot parameters to filter which curves to add to the plot:
+This command creates a latency graph, a throughput graph, and a robustness graph in a folder called `plots` (which is automatically created if it doesn't already exists). You can adjust the plot parameters to filter which curves to add to the plot:
 ```python
 plot_params = {
     'nodes': [10, 20],
@@ -226,3 +228,9 @@ plot_params = {
     'max_latency': [2_000, 5_000]
 }
 ```
+
+The first graph ('latency') plots the latency versus the throughput. It shows that the latency is low until a fairly neat threshold after which it drastically increases. Determining this threshold is crucial to understand the limits of the system. 
+
+Another challenge is comparing apples-to-apples between different deployments of the system. The challenge here is again that latency and throughput are interdependent, as a result a throughput/number of nodes chart could be tricky to produce fairly. The way to do it is to define a maximum latency and measure the throughput at this point instead of simply pushing every system to its peak throughput (where latency is meaningless). The second graph ('tps') plots the maximum achievable throughput under a maximum latency for different numbers of nodes.
+
+The last graph ('robustness') plots the throughput versus the input rate (and provides no information on latency). This graph is a bit redundant given the other two but clearly shows the threshold where the system saturates (and the throughput may decrease). This threshold is crucial to determine how to configure a rate-limiter to block excess transactions from entering the system.
