@@ -111,8 +111,8 @@ The file [settings.json](https://github.com/facebookresearch/narwhal/blob/master
     },
     "port": 5000,
     "repo": {
-        "name": "hotstuff",
-        "url": "https://github.com/asonnino/hotstuff.git",
+        "name": "narwhal",
+        "url": "https://github.com/facebookresearch/narwhal.git",
         "branch": "main"
     },
     "instances": {
