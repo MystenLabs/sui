@@ -113,7 +113,7 @@ The file [settings.json](https://github.com/facebookresearch/narwhal/blob/master
     "repo": {
         "name": "narwhal",
         "url": "https://github.com/facebookresearch/narwhal.git",
-        "branch": "main"
+        "branch": "master"
     },
     "instances": {
         "type": "m5d.8xlarge",
