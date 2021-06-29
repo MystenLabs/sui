@@ -15,7 +15,7 @@ The task specifies two types of parameters, the *benchmark parameters* and the *
 ```python
 bench_params = {
     'nodes': 4,
-    'workers: 1,
+    'workers': 1,
     'rate': 50_000,
     'tx_size': 512,
     'faults': 0,
