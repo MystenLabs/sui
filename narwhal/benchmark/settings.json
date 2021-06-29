@@ -7,7 +7,7 @@
     "repo": {
         "name": "narwhal",
         "url": "https://github.com/facebookresearch/narwhal",
-        "branch": "cleanup-primary"
+        "branch": "master"
     },
     "instances": {
         "type": "m5d.8xlarge",
