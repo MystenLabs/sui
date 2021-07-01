@@ -11,8 +11,10 @@ from benchmark.utils import PathMaker
 
 
 class Setup:
-    def __init__(self, nodes, rate, tx_size, faults):
+    def __init__(self, faults, nodes, workers, collocate, rate, tx_size):
         self.nodes = nodes
+        self.workers = workers
+        self.collocate = collocate
         self.rate = rate
         self.tx_size = tx_size
         self.faults = faults
@@ -20,10 +22,12 @@ class Setup:
 
     def __str__(self):
         return (
-            f' Committee size: {self.nodes} nodes\n'
+            f' Faults: {self.faults}\n'
+            f' Committee size: {self.nodes}\n'
+            f' Workers per node: {self.workers}\n'
+            f' Collocate primary and workers: {self.collocate}\n'
             f' Input rate: {self.rate} tx/s\n'
             f' Transaction size: {self.tx_size} B\n'
-            f' Faults: {self.faults} nodes\n'
             f' Max latency: {self.max_latency} ms\n'
         )
 
@@ -35,11 +39,15 @@ class Setup:
 
     @classmethod
     def from_str(cls, raw):
-        nodes = int(search(r'.* Committee size: (\d+)', raw).group(1))
-        rate = int(search(r'.* Input rate: (\d+)', raw).group(1))
-        tx_size = int(search(r'.* Transaction size: (\d+)', raw).group(1))
-        faults = int(search(r'.* Faults: (\d+)', raw).group(1))
-        return cls(nodes, rate, tx_size, faults)
+        faults = int(search(r'Faults: (\d+)', raw).group(1))
+        nodes = int(search(r'Committee size: (\d+)', raw).group(1))
+        workers = int(search(r'Worker\(s\) per node: (\d+)', raw).group(1))
+        collocate = bool(
+            search(r'Collocate primary and workers: ((?:True|False))', raw).group(1)
+        )
+        rate = int(search(r'Input rate: (\d+)', raw).group(1))
+        tx_size = int(search(r'Transaction size: (\d+)', raw).group(1))
+        return cls(faults, nodes, workers, collocate, rate, tx_size)
 
 
 class Result:
@@ -57,8 +65,8 @@ class Result:
 
     @classmethod
     def from_str(cls, raw):
-        tps = int(search(r'.* End-to-end TPS: (\d+)', raw).group(1))
-        latency = int(search(r'.* End-to-end latency: (\d+)', raw).group(1))
+        tps = int(search(r'End-to-end TPS: (\d+)', raw).group(1))
+        latency = int(search(r'End-to-end latency: (\d+)', raw).group(1))
         return cls(tps, latency)
 
     @classmethod
@@ -114,13 +122,17 @@ class LogAggregator:
                     f'{data}'
                     '-----------------------------------------\n'
                 )
+
+                max_lat = setup.max_latency
                 filename = PathMaker.agg_file(
                     name,
-                    setup.nodes, 
-                    setup.rate, 
-                    setup.tx_size, 
                     setup.faults,
-                    max_latency=setup.max_latency
+                    setup.nodes,
+                    setup.workers,
+                    setup.collocate,
+                    setup.rate,
+                    setup.tx_size,
+                    max_latency=None if max_lat == 'any' else max_lat,
                 )
                 with open(filename, 'w') as f:
                     f.write(string)

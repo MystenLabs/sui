@@ -143,20 +143,43 @@ class Ploter:
         LogAggregator(params.max_latency).print()
 
         # Load the aggregated log files.
-        robustness_files, latency_files, tps_files = [], [], []
-        tx_size = params.tx_size
-        
+        robustness_files, latency_files, tps_files = [], [], []        
         for f in params.faults:
             for n in params.nodes:
                 robustness_files += glob(
-                    PathMaker.agg_file('robustness', n, 'x', tx_size, f, 'any')
+                    PathMaker.agg_file(
+                        'robustness', 
+                        f, 
+                        n,
+                        params.workers,
+                        params.collocate,
+                        'x', 
+                        params.tx_size,
+                    )
                 )
                 latency_files += glob(
-                    PathMaker.agg_file('latency', n, 'any', tx_size, f, 'any')
+                    PathMaker.agg_file(
+                        'latency', 
+                        f,
+                        n, 
+                        params.workers,
+                        params.collocate,
+                        'any', 
+                        params.tx_size, 
+                    )
                 )
             for l in params.max_latency:
                 tps_files += glob(
-                    PathMaker.agg_file('tps', 'x', 'any', tx_size, f, l)
+                    PathMaker.agg_file(
+                        'tps', 
+                        f,
+                        'x', 
+                        params.workers,
+                        params.collocate,
+                        'any', 
+                        params.tx_size, 
+                        max_latency=l
+                    )
                 )
 
         # Make the plots.
