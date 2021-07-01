@@ -42,9 +42,9 @@ class Setup:
         faults = int(search(r'Faults: (\d+)', raw).group(1))
         nodes = int(search(r'Committee size: (\d+)', raw).group(1))
         workers = int(search(r'Worker\(s\) per node: (\d+)', raw).group(1))
-        collocate = bool(
-            search(r'Collocate primary and workers: ((?:True|False))', raw).group(1)
-        )
+        collocate = 'True' == search(
+            r'Collocate primary and workers: (True|False)', raw
+        ).group(1)
         rate = int(search(r'Input rate: (\d+)', raw).group(1))
         tx_size = int(search(r'Transaction size: (\d+)', raw).group(1))
         return cls(faults, nodes, workers, collocate, rate, tx_size)
