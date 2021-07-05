@@ -24,10 +24,12 @@ This command may take a long time the first time you run it (compiling rust code
  SUMMARY:
 -----------------------------------------
  + CONFIG:
+ Faults: 0 node(s)
  Committee size: 4 node(s)
+ Worker(s) per node: 1 worker(s)
+ Collocate primary and workers: True
  Input rate: 50,000 tx/s
  Transaction size: 512 B
- Faults: 0 node(s)
  Execution time: 19 s
 
  Header size: 1,000 B
