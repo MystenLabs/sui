@@ -94,7 +94,7 @@ class Ploter:
                 linestyle='dotted', marker=next(markers), capsize=3
             )
 
-        plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1), ncol=2)
+        plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1), ncol=3)
         plt.xlim(xmin=0)
         plt.ylim(bottom=0)
         plt.xlabel(x_label, fontweight='bold')
@@ -144,7 +144,7 @@ class Ploter:
         assert all(isinstance(x, str) for x in files)
         z_axis = cls.workers if scalability else cls.nodes
         x_label = 'Throughput (tx/s)'
-        y_label = ['Latency (ms)']
+        y_label = ['Latency (s)']
         ploter = cls(files)
         ploter._plot(x_label, y_label, ploter._latency, z_axis, 'latency')
 
