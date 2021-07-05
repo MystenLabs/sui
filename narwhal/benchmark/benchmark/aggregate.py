@@ -105,7 +105,10 @@ class LogAggregator:
             os.makedirs(PathMaker.plots_path())
 
         results = [
-            self._print_latency(), self._print_tps(), self._print_robustness()
+            self._print_latency(),
+            self._print_tps(scalability=False),
+            self._print_tps(scalability=True),
+            self._print_robustness()
         ]
         for name, records in results:
             for setup, values in records.items():
@@ -151,26 +154,30 @@ class LogAggregator:
 
         return 'latency', organized
 
-    def _print_tps(self):
+    def _print_tps(self, scalability):
         records = deepcopy(self.records)
         organized = defaultdict(list)
         for max_latency in self.max_latencies:
             for setup, result in records.items():
                 setup = deepcopy(setup)
                 if result.mean_latency <= max_latency:
-                    nodes = setup.nodes
-                    setup.nodes = 'x'
                     setup.rate = 'any'
                     setup.max_latency = max_latency
+                    if scalability:
+                        variable = setup.workers
+                        setup.workers = 'x'
+                    else:
+                        variable = setup.nodes
+                        setup.nodes = 'x'
 
-                    new_point = all(nodes != x[0] for x in organized[setup])
+                    new_point = all(variable != x[0] for x in organized[setup])
                     highest_tps = False
-                    for w, r in organized[setup]:
-                        if result.mean_tps > r.mean_tps and nodes == w:
-                            organized[setup].remove((w, r))
+                    for v, r in organized[setup]:
+                        if result.mean_tps > r.mean_tps and variable == v:
+                            organized[setup].remove((v, r))
                             highest_tps = True
                     if new_point or highest_tps:
-                        organized[setup] += [(nodes, result)]
+                        organized[setup] += [(variable, result)]
 
         [v.sort(key=lambda x: x[0]) for v in organized.values()]
         return 'tps', organized

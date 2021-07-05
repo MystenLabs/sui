@@ -144,7 +144,7 @@ class Bench:
             ips = list(set([x for y in hosts for x in y]))
 
         Print.info(
-            f'Updating {len(ips)} nodes (branch "{self.settings.branch}")...'
+            f'Updating {len(ips)} machines (branch "{self.settings.branch}")...'
         )
         cmd = [
             f'(cd {self.settings.repo_name} && git fetch -f)',

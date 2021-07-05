@@ -1,4 +1,5 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
+from collections import defaultdict
 from re import findall, search, split
 import matplotlib.pyplot as plt
 from matplotlib.ticker import StrMethodFormatter
@@ -96,6 +97,13 @@ class Ploter:
         return f'{x} nodes {faults}'
 
     @staticmethod
+    def workers(data):
+        x = search(r'Workers per node: (\d+)', data).group(1)
+        f = search(r'Faults: (\d+)', data).group(1)
+        faults = f'({f} faulty)' if f != '0' else ''
+        return f'{x} workers {faults}'
+
+    @staticmethod
     def max_latency(data):
         x = search(r'Max latency: (\d+)', data).group(1)
         f = search(r'Faults: (\d+)', data).group(1)
@@ -103,31 +111,31 @@ class Ploter:
         return f'Max latency: {float(x) / 1000:,.1f} s {faults}'
 
     @classmethod
-    def plot_robustness(cls, files):
+    def plot_latency(cls, files, scalability):
         assert isinstance(files, list)
         assert all(isinstance(x, str) for x in files)
-        z_axis = cls.nodes
-        x_label = 'Input rate (tx/s)'
-        y_label = ['Throughput (tx/s)', 'Throughput (MB/s)']
-        ploter = cls(files)
-        ploter._plot(x_label, y_label, ploter._tps, z_axis, 'robustness')
-
-    @classmethod
-    def plot_latency(cls, files):
-        assert isinstance(files, list)
-        assert all(isinstance(x, str) for x in files)
-        z_axis = cls.nodes
+        z_axis = cls.workers if scalability else cls.nodes
         x_label = 'Throughput (tx/s)'
         y_label = ['Latency (ms)']
         ploter = cls(files)
         ploter._plot(x_label, y_label, ploter._latency, z_axis, 'latency')
 
     @classmethod
-    def plot_tps(cls, files):
+    def plot_robustness(cls, files, scalability):
+        assert isinstance(files, list)
+        assert all(isinstance(x, str) for x in files)
+        z_axis = cls.workers if scalability else cls.nodes
+        x_label = 'Input rate (tx/s)'
+        y_label = ['Throughput (tx/s)', 'Throughput (MB/s)']
+        ploter = cls(files)
+        ploter._plot(x_label, y_label, ploter._tps, z_axis, 'robustness')
+
+    @classmethod
+    def plot_tps(cls, files, scalability):
         assert isinstance(files, list)
         assert all(isinstance(x, str) for x in files)
         z_axis = cls.max_latency
-        x_label = 'Committee size'
+        x_label = 'Workers per node' if scalability else 'Committee size'
         y_label = ['Throughput (tx/s)', 'Throughput (MB/s)']
         ploter = cls(files)
         ploter._plot(x_label, y_label, ploter._tps, z_axis, 'tps')
@@ -142,39 +150,41 @@ class Ploter:
         # Aggregate the logs.
         LogAggregator(params.max_latency).print()
 
-        # Load the aggregated log files.
-        robustness_files, latency_files, tps_files = [], [], []        
+        # Make the latency, tps, and robustness graphs. 
+        iterator = params.workers if params.scalability() else params.nodes
+        latency_files, robustness_files, tps_files = [], [], []
         for f in params.faults:
-            for n in params.nodes:
-                robustness_files += glob(
-                    PathMaker.agg_file(
-                        'robustness', 
-                        f, 
-                        n,
-                        params.workers,
-                        params.collocate,
-                        'x', 
-                        params.tx_size,
-                    )
-                )
+            for x in iterator:
                 latency_files += glob(
                     PathMaker.agg_file(
                         'latency', 
                         f,
-                        n, 
-                        params.workers,
+                        x if not params.scalability() else params.nodes[0], 
+                        x if params.scalability() else params.workers[0],
                         params.collocate,
                         'any', 
                         params.tx_size, 
                     )
                 )
+                robustness_files += glob(
+                    PathMaker.agg_file(
+                        'robustness', 
+                        f,
+                        x if not params.scalability() else params.nodes[0], 
+                        x if params.scalability() else params.workers[0],
+                        params.collocate,
+                        'x', 
+                        params.tx_size, 
+                    )
+                )
+
             for l in params.max_latency:
                 tps_files += glob(
                     PathMaker.agg_file(
                         'tps', 
                         f,
-                        'x', 
-                        params.workers,
+                        'x' if not params.scalability() else params.nodes[0], 
+                        'x' if params.scalability() else params.workers[0],
                         params.collocate,
                         'any', 
                         params.tx_size, 
@@ -182,7 +192,6 @@ class Ploter:
                     )
                 )
 
-        # Make the plots.
-        cls.plot_robustness(robustness_files)
-        cls.plot_latency(latency_files)
-        cls.plot_tps(tps_files)
+        cls.plot_latency(latency_files, params.scalability())
+        cls.plot_tps(tps_files, params.scalability())
+        cls.plot_robustness(latency_files, params.scalability())

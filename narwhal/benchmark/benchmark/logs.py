@@ -22,7 +22,7 @@ class LogParser:
 
         self.faults = faults
         self.committee_size = len(primaries) + faults
-        self.workers = len(primaries) // len(workers)
+        self.workers =  len(workers) // len(primaries)
 
         # Parse the clients logs.
         try:

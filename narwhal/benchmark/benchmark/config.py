@@ -239,7 +239,11 @@ class PlotParameters:
                 raise ConfigError('Missing number of nodes')
             self.nodes = [int(x) for x in nodes]
 
-            self.workers = int(json['workers'])
+            workers = json['workers']
+            workers = workers if isinstance(workers, list) else [workers]
+            if not workers:
+                raise ConfigError('Missing number of workers')
+            self.workers = [int(x) for x in workers]
 
             if 'collocate' in json:
                 self.collocate = bool(json['collocate'])
@@ -259,3 +263,11 @@ class PlotParameters:
 
         except ValueError:
             raise ConfigError('Invalid parameters type')
+
+        if len(self.nodes) > 1 and len(self.workers) > 1:
+            raise ConfigError(
+                'Either the "nodes" or the "workers can be a list (not both)'
+            )
+
+    def scalability(self):
+        return len(self.workers) > 1
