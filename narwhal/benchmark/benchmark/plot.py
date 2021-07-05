@@ -2,13 +2,37 @@
 from collections import defaultdict
 from re import findall, search, split
 import matplotlib.pyplot as plt
-from matplotlib.ticker import StrMethodFormatter
+import matplotlib.ticker as tick
 from glob import glob
 from itertools import cycle
 
 from benchmark.utils import PathMaker
 from benchmark.config import PlotParameters
 from benchmark.aggregate import LogAggregator
+
+
+@tick.FuncFormatter
+def default_major_formatter(x, pos):
+    if pos is None:
+        return
+    if x >= 1_000:
+        return f'{x/1000:.0f}k'
+    else:
+        return f'{x:.0f}'
+
+
+@tick.FuncFormatter
+def sec_major_formatter(x, pos):
+    if pos is None:
+        return
+    return f'{float(x)/1000:.1f}'
+
+
+@tick.FuncFormatter
+def mb_major_formatter(x, pos):
+    if pos is None:
+        return
+    return f'{x:,.0f}'
 
 
 class PlotError(Exception):
@@ -73,18 +97,22 @@ class Ploter:
         plt.legend(loc='lower center', bbox_to_anchor=(0.5, 1), ncol=2)
         plt.xlim(xmin=0)
         plt.ylim(bottom=0)
-        plt.xlabel(x_label)
-        plt.ylabel(y_label[0])
+        plt.xlabel(x_label, fontweight='bold')
+        plt.ylabel(y_label[0], fontweight='bold')
+        plt.xticks(weight='bold')
+        plt.yticks(weight='bold')
         plt.grid()
         ax = plt.gca()
-        ax.xaxis.set_major_formatter(StrMethodFormatter('{x:,.0f}'))
-        ax.yaxis.set_major_formatter(StrMethodFormatter('{x:,.0f}'))
+        ax.xaxis.set_major_formatter(default_major_formatter)
+        ax.yaxis.set_major_formatter(default_major_formatter)
+        if 'latency' in type:
+            ax.yaxis.set_major_formatter(sec_major_formatter)
         if len(y_label) > 1:
             secaxy = ax.secondary_yaxis(
                 'right', functions=(self._tps2bps, self._bps2tps)
             )
             secaxy.set_ylabel(y_label[1])
-            secaxy.yaxis.set_major_formatter(StrMethodFormatter('{x:,.0f}'))
+            secaxy.yaxis.set_major_formatter(mb_major_formatter)
 
         for x in ['pdf', 'png']:
             plt.savefig(PathMaker.plot_file(type, x), bbox_inches='tight')
@@ -150,44 +178,44 @@ class Ploter:
         # Aggregate the logs.
         LogAggregator(params.max_latency).print()
 
-        # Make the latency, tps, and robustness graphs. 
+        # Make the latency, tps, and robustness graphs.
         iterator = params.workers if params.scalability() else params.nodes
         latency_files, robustness_files, tps_files = [], [], []
         for f in params.faults:
             for x in iterator:
                 latency_files += glob(
                     PathMaker.agg_file(
-                        'latency', 
+                        'latency',
                         f,
-                        x if not params.scalability() else params.nodes[0], 
+                        x if not params.scalability() else params.nodes[0],
                         x if params.scalability() else params.workers[0],
                         params.collocate,
-                        'any', 
-                        params.tx_size, 
+                        'any',
+                        params.tx_size,
                     )
                 )
                 robustness_files += glob(
                     PathMaker.agg_file(
-                        'robustness', 
+                        'robustness',
                         f,
-                        x if not params.scalability() else params.nodes[0], 
+                        x if not params.scalability() else params.nodes[0],
                         x if params.scalability() else params.workers[0],
                         params.collocate,
-                        'x', 
-                        params.tx_size, 
+                        'x',
+                        params.tx_size,
                     )
                 )
 
             for l in params.max_latency:
                 tps_files += glob(
                     PathMaker.agg_file(
-                        'tps', 
+                        'tps',
                         f,
-                        'x' if not params.scalability() else params.nodes[0], 
+                        'x' if not params.scalability() else params.nodes[0],
                         'x' if params.scalability() else params.workers[0],
                         params.collocate,
-                        'any', 
-                        params.tx_size, 
+                        'any',
+                        params.tx_size,
                         max_latency=l
                     )
                 )
