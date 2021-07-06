@@ -21,8 +21,12 @@ class LogParser:
         assert all(x for x in inputs)
 
         self.faults = faults
-        self.committee_size = len(primaries) + faults
-        self.workers =  len(workers) // len(primaries)
+        if isinstance(faults, int):
+            self.committee_size = len(primaries) + int(faults)
+            self.workers =  len(workers) // len(primaries)
+        else:
+            self.committee_size = '?'
+            self.workers = '?'
 
         # Parse the clients logs.
         try:
@@ -203,8 +207,8 @@ class LogParser:
             ' SUMMARY:\n'
             '-----------------------------------------\n'
             ' + CONFIG:\n'
-            f' Faults: {self.faults:,} node(s)\n'
-            f' Committee size: {self.committee_size:,} node(s)\n'
+            f' Faults: {self.faults} node(s)\n'
+            f' Committee size: {self.committee_size} node(s)\n'
             f' Worker(s) per node: {self.workers} worker(s)\n'
             f' Collocate primary and workers: {self.collocate}\n'
             f' Input rate: {sum(self.rate):,} tx/s\n'
