@@ -68,8 +68,7 @@ pub struct Parameters {
     pub max_header_delay: u64,
     /// The depth of the garbage collection (Denominated in number of rounds).
     pub gc_depth: u64,
-    /// The delay after which the synchronizer retries to send sync requests.
-    /// Denominated in ms.
+    /// The delay after which the synchronizer retries to send sync requests. Denominated in ms.
     pub sync_retry_delay: u64,
     /// Determine with how many nodes to sync when re-trying to send sync-request. These nodes
     /// are picked at random from the committee.

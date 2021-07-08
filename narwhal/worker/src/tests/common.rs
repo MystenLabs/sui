@@ -122,7 +122,7 @@ pub fn listener(address: SocketAddr, expected: Option<Bytes>) -> JoinHandle<()> 
                     assert_eq!(received.freeze(), expected);
                 }
             }
-            _ => assert!(false, "Failed to receive network message"),
+            _ => panic!("Failed to receive network message"),
         }
     })
 }

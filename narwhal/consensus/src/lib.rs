@@ -181,7 +181,7 @@ impl Consensus {
                 info!("Committed {}", certificate.header);
 
                 #[cfg(feature = "benchmark")]
-                for (digest, _) in &certificate.header.payload {
+                for digest in certificate.header.payload.keys() {
                     // NOTE: This log entry is used to compute performance.
                     info!("Committed {} -> {:?}", certificate.header, digest);
                 }

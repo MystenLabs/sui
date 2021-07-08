@@ -189,26 +189,32 @@ class NodeParameters:
 class BenchParameters:
     def __init__(self, json):
         try:
+            self.faults = int(json['faults'])
+
             nodes = json['nodes']
             nodes = nodes if isinstance(nodes, list) else [nodes]
             if not nodes or any(x <= 1 for x in nodes):
                 raise ConfigError('Missing or invalid number of nodes')
+            self.nodes = [int(x) for x in nodes]
 
             rate = json['rate']
             rate = rate if isinstance(rate, list) else [rate]
             if not rate:
                 raise ConfigError('Missing input rate')
+            self.rate = [int(x) for x in rate]
 
-            self.nodes = [int(x) for x in nodes]
+            
             self.workers = int(json['workers'])
+
             if 'collocate' in json:
                 self.collocate = bool(json['collocate'])
             else:
                 self.collocate = True
-            self.rate = [int(x) for x in rate]
+
             self.tx_size = int(json['tx_size'])
-            self.faults = int(json['faults'])
+           
             self.duration = int(json['duration'])
+
             self.runs = int(json['runs']) if 'runs' in json else 1
         except KeyError as e:
             raise ConfigError(f'Malformed bench parameters: missing key {e}')
@@ -223,17 +229,28 @@ class BenchParameters:
 class PlotParameters:
     def __init__(self, json):
         try:
+            faults = json['faults']
+            faults = faults if isinstance(faults, list) else [faults]
+            self.faults = [int(x) for x in faults] if faults else [0]
+
             nodes = json['nodes']
             nodes = nodes if isinstance(nodes, list) else [nodes]
             if not nodes:
                 raise ConfigError('Missing number of nodes')
             self.nodes = [int(x) for x in nodes]
 
-            self.tx_size = int(json['tx_size'])
+            workers = json['workers']
+            workers = workers if isinstance(workers, list) else [workers]
+            if not workers:
+                raise ConfigError('Missing number of workers')
+            self.workers = [int(x) for x in workers]
 
-            faults = json['faults']
-            faults = faults if isinstance(faults, list) else [faults]
-            self.faults = [int(x) for x in faults] if faults else [0]
+            if 'collocate' in json:
+                self.collocate = bool(json['collocate'])
+            else:
+                self.collocate = True
+
+            self.tx_size = int(json['tx_size'])
 
             max_lat = json['max_latency']
             max_lat = max_lat if isinstance(max_lat, list) else [max_lat]
@@ -246,3 +263,11 @@ class PlotParameters:
 
         except ValueError:
             raise ConfigError('Invalid parameters type')
+
+        if len(self.nodes) > 1 and len(self.workers) > 1:
+            raise ConfigError(
+                'Either the "nodes" or the "workers can be a list (not both)'
+            )
+
+    def scalability(self):
+        return len(self.workers) > 1

@@ -200,6 +200,7 @@ impl Primary {
         // The `Helper` is dedicated to reply to certificates requests from other primaries.
         Helper::spawn(committee.clone(), store, rx_cert_requests);
 
+        // NOTE: This log entry is used to compute performance.
         info!(
             "Primary {} successfully booted on {}",
             name,

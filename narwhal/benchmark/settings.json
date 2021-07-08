@@ -1,0 +1,16 @@
+{
+    "key": {
+        "name": "aws-fb",
+        "path": "/Users/asonnino/.ssh/aws-fb.pem"
+    },
+    "port": 5000,
+    "repo": {
+        "name": "narwhal",
+        "url": "https://github.com/facebookresearch/narwhal",
+        "branch": "master"
+    },
+    "instances": {
+        "type": "m5d.8xlarge",
+        "regions": ["us-east-1", "eu-north-1", "ap-southeast-2", "us-west-1", "ap-northeast-1"]
+    }
+}

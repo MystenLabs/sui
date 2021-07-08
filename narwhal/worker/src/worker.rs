@@ -85,6 +85,7 @@ impl Worker {
             rx_primary,
         );
 
+        // NOTE: This log entry is used to compute performance.
         info!(
             "Worker {} successfully booted on {}",
             id,

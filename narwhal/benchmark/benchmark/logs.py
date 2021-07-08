@@ -21,7 +21,12 @@ class LogParser:
         assert all(x for x in inputs)
 
         self.faults = faults
-        self.committee_size = len(primaries) + faults
+        if isinstance(faults, int):
+            self.committee_size = len(primaries) + int(faults)
+            self.workers =  len(workers) // len(primaries)
+        else:
+            self.committee_size = '?'
+            self.workers = '?'
 
         # Parse the clients logs.
         try:
@@ -39,7 +44,7 @@ class LogParser:
                 results = p.map(self._parse_primaries, primaries)
         except (ValueError, IndexError, AttributeError) as e:
             raise ParseError(f'Failed to parse nodes\' logs: {e}')
-        proposals, commits, self.configs = zip(*results)
+        proposals, commits, self.configs, primary_ips = zip(*results)
         self.proposals = self._merge_results([x.items() for x in proposals])
         self.commits = self._merge_results([x.items() for x in commits])
 
@@ -49,10 +54,13 @@ class LogParser:
                 results = p.map(self._parse_workers, workers)
         except (ValueError, IndexError, AttributeError) as e:
             raise ParseError(f'Failed to parse workers\' logs: {e}')
-        sizes, self.received_samples = zip(*results)
+        sizes, self.received_samples, workers_ips = zip(*results)
         self.sizes = {
             k: v for x in sizes for k, v in x.items() if k in self.commits
         }
+
+        # Determine whether the primary and the workers are collocated.
+        self.collocate = set(primary_ips) == set(workers_ips)
 
         # Check whether clients missed their target rate.
         if self.misses != 0:
@@ -121,8 +129,10 @@ class LogParser:
                 search(r'Max batch delay .* (\d+)', log).group(1)
             ),
         }
+
+        ip = search(r'booted on (\d+.\d+.\d+.\d+)', log).group(1)
         
-        return proposals, commits, configs
+        return proposals, commits, configs, ip
 
     def _parse_workers(self, log):
         if search(r'(?:panic|Error)', log) is not None:
@@ -134,7 +144,9 @@ class LogParser:
         tmp = findall(r'Batch ([^ ]+) contains sample tx (\d+)', log)
         samples = {int(s): d for d, s in tmp}
 
-        return sizes, samples
+        ip = search(r'booted on (\d+.\d+.\d+.\d+)', log).group(1)
+
+        return sizes, samples, ip
 
     def _to_posix(self, string):
         x = datetime.fromisoformat(string.replace('Z', '+00:00'))
@@ -195,10 +207,12 @@ class LogParser:
             ' SUMMARY:\n'
             '-----------------------------------------\n'
             ' + CONFIG:\n'
-            f' Committee size: {self.committee_size:,} node(s)\n'
+            f' Faults: {self.faults} node(s)\n'
+            f' Committee size: {self.committee_size} node(s)\n'
+            f' Worker(s) per node: {self.workers} worker(s)\n'
+            f' Collocate primary and workers: {self.collocate}\n'
             f' Input rate: {sum(self.rate):,} tx/s\n'
             f' Transaction size: {self.size[0]:,} B\n'
-            f' Faults: {self.faults:,} node(s)\n'
             f' Execution time: {round(duration):,} s\n'
             '\n'
             f' Header size: {header_size:,} B\n'

@@ -18,7 +18,7 @@ pub fn listener(address: SocketAddr, expected: String) -> JoinHandle<()> {
                 assert_eq!(received, expected);
                 writer.send(Bytes::from("Ack")).await.unwrap()
             }
-            _ => assert!(false, "Failed to receive network message"),
+            _ => panic!("Failed to receive network message"),
         }
     })
 }

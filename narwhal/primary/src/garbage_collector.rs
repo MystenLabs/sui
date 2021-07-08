@@ -56,7 +56,7 @@ impl GarbageCollector {
             let round = certificate.round();
             if round > last_committed_round {
                 last_committed_round = round;
-                
+
                 // Trigger cleanup on the primary.
                 self.consensus_round.store(round, Ordering::Relaxed);
 
