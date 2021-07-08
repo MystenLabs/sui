@@ -153,7 +153,7 @@ class Bench:
             'source $HOME/.cargo/env',
             f'(cd {self.settings.repo_name}/node && {CommandMaker.compile()})',
             CommandMaker.alias_binaries(
-                f'./{self.settings.repo_name}/rust/target/release/'
+                f'./{self.settings.repo_name}/target/release/'
             )
         ]
         g = Group(*ips, user='ubuntu', connect_kwargs=self.connect)
