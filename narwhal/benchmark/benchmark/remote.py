@@ -1,6 +1,5 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
 from collections import OrderedDict
-from os import error
 from fabric import Connection, ThreadingGroup as Group
 from fabric.exceptions import GroupException
 from paramiko import RSAKey
@@ -15,7 +14,7 @@ from benchmark.config import Committee, Key, NodeParameters, BenchParameters, Co
 from benchmark.utils import BenchError, Print, PathMaker, progress_bar
 from benchmark.commands import CommandMaker
 from benchmark.logs import LogParser, ParseError
-from aws.instance import InstanceManager
+from benchmark.instance import InstanceManager
 
 
 class FabricError(Exception):
