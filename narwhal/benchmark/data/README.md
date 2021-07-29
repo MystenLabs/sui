@@ -15,7 +15,7 @@ where:
 - `INPUT_RATE`: The total rate at which clients submit transactions to the system.
 - `TX_SIZE`: The size of each transactions (in bytes).
 
-For instance, a file called `bench-0-50-1-True-100000-512` indicates it contains results of a benchmark run with 50 nodes, 1 worker per node collocated on the same machine as the primary, 100K input rate, a transaction size of 512B, and 0 faulty nodes.
+For instance, a file called `bench-0-50-1-True-100000-512.txt` indicates it contains results of a benchmark run with 50 nodes, 1 worker per node collocated on the same machine as the primary, 100K input rate, a transaction size of 512B, and 0 faulty nodes.
 
 ### Experimental step
 The content of our [settings.json](https://github.com/facebookresearch/narwhal/blob/master/benchmark/settings.json) file looks as follows:
