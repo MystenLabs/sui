@@ -224,15 +224,15 @@ $ fab plot
 This command creates a latency graph, a throughput graph, and a robustness graph in a folder called `plots` (which is automatically created if it doesn't already exists). You can adjust the plot parameters to filter which curves to add to the plot:
 ```python
 plot_params = {
-    'nodes': [10, 20],
-    'tx_size': 512,
     'faults': [0],
-    'max_latency': [2_000, 5_000]
+    'nodes': [10, 20, 50],
+    'workers': [1],
+    'collocate': True,
+    'tx_size': 512,
+    'max_latency': [3_500, 4_500]
 }
 ```
 
 The first graph ('latency') plots the latency versus the throughput. It shows that the latency is low until a fairly neat threshold after which it drastically increases. Determining this threshold is crucial to understand the limits of the system. 
 
 Another challenge is comparing apples-to-apples between different deployments of the system. The challenge here is again that latency and throughput are interdependent, as a result a throughput/number of nodes chart could be tricky to produce fairly. The way to do it is to define a maximum latency and measure the throughput at this point instead of simply pushing every system to its peak throughput (where latency is meaningless). The second graph ('tps') plots the maximum achievable throughput under a maximum latency for different numbers of nodes.
-
-The last graph ('robustness') plots the throughput versus the input rate (and provides no information on latency). This graph is a bit redundant given the other two but clearly shows the threshold where the system saturates (and the throughput may decrease). This threshold is crucial to determine how to configure a rate-limiter to block excess transactions from entering the system.

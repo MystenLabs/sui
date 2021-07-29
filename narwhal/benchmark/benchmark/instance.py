@@ -5,7 +5,7 @@ from collections import defaultdict, OrderedDict
 from time import sleep
 
 from benchmark.utils import Print, BenchError, progress_bar
-from aws.settings import Settings, SettingsError
+from benchmark.settings import Settings, SettingsError
 
 
 class AWSError(Exception):

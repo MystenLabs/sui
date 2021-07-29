@@ -108,7 +108,6 @@ class LogAggregator:
             self._print_latency(),
             self._print_tps(scalability=False),
             self._print_tps(scalability=True),
-            self._print_robustness()
         ]
         for name, records in results:
             for setup, values in records.items():
@@ -181,14 +180,3 @@ class LogAggregator:
 
         [v.sort(key=lambda x: x[0]) for v in organized.values()]
         return 'tps', organized
-
-    def _print_robustness(self):
-        records = deepcopy(self.records)
-        organized = defaultdict(list)
-        for setup, result in records.items():
-            rate = setup.rate
-            setup.rate = 'x'
-            organized[setup] += [(rate, result)]
-
-        [v.sort(key=lambda x: x[0]) for v in organized.values()]
-        return 'robustness', organized
