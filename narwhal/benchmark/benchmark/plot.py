@@ -149,16 +149,6 @@ class Ploter:
         ploter._plot(x_label, y_label, ploter._latency, z_axis, 'latency')
 
     @classmethod
-    def plot_robustness(cls, files, scalability):
-        assert isinstance(files, list)
-        assert all(isinstance(x, str) for x in files)
-        z_axis = cls.workers if scalability else cls.nodes
-        x_label = 'Input rate (tx/s)'
-        y_label = ['Throughput (tx/s)', 'Throughput (MB/s)']
-        ploter = cls(files)
-        ploter._plot(x_label, y_label, ploter._tps, z_axis, 'robustness')
-
-    @classmethod
     def plot_tps(cls, files, scalability):
         assert isinstance(files, list)
         assert all(isinstance(x, str) for x in files)
@@ -180,7 +170,7 @@ class Ploter:
 
         # Make the latency, tps, and robustness graphs.
         iterator = params.workers if params.scalability() else params.nodes
-        latency_files, robustness_files, tps_files = [], [], []
+        latency_files, tps_files = [], []
         for f in params.faults:
             for x in iterator:
                 latency_files += glob(
@@ -191,17 +181,6 @@ class Ploter:
                         x if params.scalability() else params.workers[0],
                         params.collocate,
                         'any',
-                        params.tx_size,
-                    )
-                )
-                robustness_files += glob(
-                    PathMaker.agg_file(
-                        'robustness',
-                        f,
-                        x if not params.scalability() else params.nodes[0],
-                        x if params.scalability() else params.workers[0],
-                        params.collocate,
-                        'x',
                         params.tx_size,
                     )
                 )
@@ -222,4 +201,3 @@ class Ploter:
 
         cls.plot_latency(latency_files, params.scalability())
         cls.plot_tps(tps_files, params.scalability())
-        cls.plot_robustness(latency_files, params.scalability())

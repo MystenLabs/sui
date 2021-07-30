@@ -96,7 +96,7 @@ class LogParser:
 
     def _parse_primaries(self, log):
         if search(r'(?:panicked|Error)', log) is not None:
-            raise ParseError('Node(s) panicked')
+            raise ParseError('Primary(s) panicked')
 
         tmp = findall(r'\[(.*Z) .* Created B\d+\([^ ]+\) -> ([^ ]+=)', log)
         tmp = [(d, self._to_posix(t)) for t, d in tmp]
