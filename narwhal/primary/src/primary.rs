@@ -156,7 +156,13 @@ impl Primary {
         );
 
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
-        GarbageCollector::spawn(&name, &committee, consensus_round.clone(), rx_consensus);
+        GarbageCollector::spawn(
+            &name,
+            &committee,
+            consensus_round.clone(),
+            rx_consensus,
+            tx_certificates_loopback.clone(),
+        );
 
         // Receives batch digests from other workers. They are only used to validate headers.
         PayloadReceiver::spawn(store.clone(), /* rx_workers */ rx_others_digests);

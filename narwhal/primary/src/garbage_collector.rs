@@ -8,7 +8,7 @@ use network::SimpleSender;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{Receiver, Sender};
 
 /// Receives the highest round reached by consensus and update it for all tasks.
 pub struct GarbageCollector {
@@ -16,6 +16,8 @@ pub struct GarbageCollector {
     consensus_round: Arc<AtomicU64>,
     /// Receives the ordered certificates from consensus.
     rx_consensus: Receiver<Certificate>,
+    /// A loopback channel to the primary's core.
+    tx_loopback: Sender<Certificate>,
     /// The network addresses of our workers.
     addresses: Vec<SocketAddr>,
     /// A network sender to notify our workers of cleanup events.
@@ -28,6 +30,7 @@ impl GarbageCollector {
         committee: &Committee,
         consensus_round: Arc<AtomicU64>,
         rx_consensus: Receiver<Certificate>,
+        tx_loopback: Sender<Certificate>,
     ) {
         let addresses = committee
             .our_workers(name)
@@ -40,6 +43,7 @@ impl GarbageCollector {
             Self {
                 consensus_round,
                 rx_consensus,
+                tx_loopback,
                 addresses,
                 network: SimpleSender::new(),
             }
@@ -53,6 +57,13 @@ impl GarbageCollector {
         while let Some(certificate) = self.rx_consensus.recv().await {
             // TODO [issue #9]: Re-include batch digests that have not been sequenced into our next block.
 
+            // Loop back the certificate from HotStuff in case we haven't seen it.
+            self.tx_loopback
+                .send(certificate.clone())
+                .await
+                .expect("Failed to loop back certificate to core");
+
+            // Cleanup all the modules.
             let round = certificate.round();
             if round > last_committed_round {
                 last_committed_round = round;
