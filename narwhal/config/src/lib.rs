@@ -103,7 +103,7 @@ impl Import for Parameters {}
 impl Parameters {
     pub fn log(&self) {
         // NOTE: These log entries are needed to compute performance.
-        info!("Timeout delay set to {} rounds", self.timeout_delay);
+        info!("Timeout delay set to {} ms", self.timeout_delay);
         info!("Header size set to {} B", self.header_size);
         info!("Max header delay set to {} ms", self.max_header_delay);
         info!("Garbage collection depth set to {} rounds", self.gc_depth);
