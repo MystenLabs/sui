@@ -21,10 +21,10 @@ store = { path = "../store" }
 crypto = { path = "../crypto" }
 primary = { path = "../primary" }
 worker = { path = "../worker" }
-consensus = { path = "../consensus" }
+hotstuff = { path = "../hotstuff" }
 
 [features]
-benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
+benchmark = ["worker/benchmark", "primary/benchmark", "hotstuff/benchmark"]
 
 [[bin]]         
 name = "benchmark_client"   

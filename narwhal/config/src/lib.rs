@@ -60,6 +60,8 @@ pub type WorkerId = u32;
 
 #[derive(Deserialize, Clone)]
 pub struct Parameters {
+    /// The timeout delay of the consensus protocol.
+    pub timeout_delay: u64,
     /// The preferred header size. The primary creates a new header when it has enough parents and
     /// enough batches' digests to reach `header_size`. Denominated in bytes.
     pub header_size: usize,
@@ -84,6 +86,7 @@ pub struct Parameters {
 impl Default for Parameters {
     fn default() -> Self {
         Self {
+            timeout_delay: 5_000,
             header_size: 1_000,
             max_header_delay: 100,
             gc_depth: 50,
@@ -99,6 +102,8 @@ impl Import for Parameters {}
 
 impl Parameters {
     pub fn log(&self) {
+        // NOTE: These log entries are needed to compute performance.
+        info!("Timeout delay set to {} rounds", self.timeout_delay);
         info!("Header size set to {} B", self.header_size);
         info!("Max header delay set to {} ms", self.max_header_delay);
         info!("Garbage collection depth set to {} rounds", self.gc_depth);
@@ -107,6 +112,12 @@ impl Parameters {
         info!("Batch size set to {} B", self.batch_size);
         info!("Max batch delay set to {} ms", self.max_batch_delay);
     }
+}
+
+#[derive(Clone, Deserialize)]
+pub struct ConsensusAddresses {
+    /// Address to receive messages from other consensus nodes (WAN).
+    pub consensus_to_consensus: SocketAddr,
 }
 
 #[derive(Clone, Deserialize)]
@@ -131,6 +142,8 @@ pub struct WorkerAddresses {
 pub struct Authority {
     /// The voting power of this authority.
     pub stake: Stake,
+    /// The network addresses of the consensus protocol.
+    pub consensus: ConsensusAddresses,
     /// The network addresses of the primary.
     pub primary: PrimaryAddresses,
     /// Map of workers' id and their network addresses.
@@ -178,6 +191,23 @@ impl Committee {
         // then (N + 2) / 3 = f + 1 + k/3 = f + 1
         let total_votes: Stake = self.authorities.values().map(|x| x.stake).sum();
         (total_votes + 2) / 3
+    }
+
+    /// Returns the consensus addresses of the target consensus node.
+    pub fn consensus(&self, to: &PublicKey) -> Result<ConsensusAddresses, ConfigError> {
+        self.authorities
+            .get(to)
+            .map(|x| x.consensus.clone())
+            .ok_or_else(|| ConfigError::NotInCommittee(*to))
+    }
+
+    /// Returns the addresses of all consensus nodes except `myself`.
+    pub fn others_consensus(&self, myself: &PublicKey) -> Vec<(PublicKey, ConsensusAddresses)> {
+        self.authorities
+            .iter()
+            .filter(|(name, _)| name != &myself)
+            .map(|(name, authority)| (*name, authority.consensus.clone()))
+            .collect()
     }
 
     /// Returns the primary addresses of the target primary.

@@ -16,15 +16,16 @@ def local(ctx, debug=True):
         'faults': 0,
         'nodes': 4,
         'workers': 1,
-        'rate': 50_000,
+        'rate': 10_000,
         'tx_size': 512,
-        'duration': 20,
+        'duration': 60,
     }
     node_params = {
+        'timeout_delay': 500,  # ms
         'header_size': 1_000,  # bytes
         'max_header_delay': 200,  # ms
         'gc_depth': 50,  # rounds
-        'sync_retry_delay': 10_000,  # ms
+        'sync_retry_delay': 5_000,  # ms
         'sync_retry_nodes': 3,  # number of nodes
         'batch_size': 500_000,  # bytes
         'max_batch_delay': 200  # ms
@@ -94,20 +95,21 @@ def install(ctx):
 def remote(ctx, debug=False):
     ''' Run benchmarks on AWS '''
     bench_params = {
-        'faults': 3,
+        'faults': 0,
         'nodes': [10],
         'workers': 1,
         'collocate': True,
-        'rate': [10_000, 110_000],
+        'rate': [80_000, 100_000, 110_000],
         'tx_size': 512,
         'duration': 300,
         'runs': 2,
     }
     node_params = {
+        'timeout_delay': 5_000,  # ms
         'header_size': 1_000,  # bytes
         'max_header_delay': 200,  # ms
         'gc_depth': 50,  # rounds
-        'sync_retry_delay': 10_000,  # ms
+        'sync_retry_delay': 5_000,  # ms
         'sync_retry_nodes': 3,  # number of nodes
         'batch_size': 500_000,  # bytes
         'max_batch_delay': 200  # ms

@@ -6,8 +6,8 @@
     "port": 5000,
     "repo": {
         "name": "narwhal",
-        "url": "https://github.com/facebookresearch/narwhal",
-        "branch": "master"
+        "url": "https://github.com/asonnino/narwhal",
+        "branch": "narwhal-hs"
     },
     "instances": {
         "type": "m5d.8xlarge",

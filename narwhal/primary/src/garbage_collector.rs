@@ -3,15 +3,19 @@ use crate::messages::Certificate;
 use crate::primary::PrimaryWorkerMessage;
 use bytes::Bytes;
 use config::Committee;
+use crypto::Hash as _;
 use crypto::PublicKey;
 use network::SimpleSender;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 /// Receives the highest round reached by consensus and update it for all tasks.
 pub struct GarbageCollector {
+    /// The persistent storage.
+    store: Store,
     /// The current consensus round (used for cleanup).
     consensus_round: Arc<AtomicU64>,
     /// Receives the ordered certificates from consensus.
@@ -28,6 +32,7 @@ impl GarbageCollector {
     pub fn spawn(
         name: &PublicKey,
         committee: &Committee,
+        store: Store,
         consensus_round: Arc<AtomicU64>,
         rx_consensus: Receiver<Certificate>,
         tx_loopback: Sender<Certificate>,
@@ -41,6 +46,7 @@ impl GarbageCollector {
 
         tokio::spawn(async move {
             Self {
+                store,
                 consensus_round,
                 rx_consensus,
                 tx_loopback,
@@ -58,10 +64,18 @@ impl GarbageCollector {
             // TODO [issue #9]: Re-include batch digests that have not been sequenced into our next block.
 
             // Loop back the certificate from HotStuff in case we haven't seen it.
-            self.tx_loopback
-                .send(certificate.clone())
+            if self
+                .store
+                .read(certificate.digest().to_vec())
                 .await
-                .expect("Failed to loop back certificate to core");
+                .expect("Failed to read from store")
+                .is_none()
+            {
+                self.tx_loopback
+                    .send(certificate.clone())
+                    .await
+                    .expect("Failed to loop back certificate to core");
+            }
 
             // Cleanup all the modules.
             let round = certificate.round();
