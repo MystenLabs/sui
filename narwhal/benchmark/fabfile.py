@@ -99,10 +99,10 @@ def remote(ctx, debug=False):
         'nodes': [10],
         'workers': 1,
         'collocate': True,
-        'rate': [50_000, 100_000],
-        'tx_size': 512,
+        'rate': [100_000],
+        'tx_size': 512, 
         'duration': 300,
-        'runs': 2,
+        'runs': 1,
     }
     node_params = {
         'timeout_delay': 5_000,  # ms
