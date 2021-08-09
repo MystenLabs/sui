@@ -102,7 +102,7 @@ def remote(ctx, debug=True):
         'rate': [100_000],
         'tx_size': 512, 
         'duration': 300,
-        'runs': 2,
+        'runs': 1,
     }
     node_params = {
         'timeout_delay': 5_000,  # ms
