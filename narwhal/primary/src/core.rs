@@ -318,15 +318,10 @@ impl Core {
     }
 
     fn sanitize_vote(&mut self, vote: &Vote) -> DagResult<()> {
-        /*
         ensure!(
             self.current_header.round <= vote.round,
             DagError::TooOld(vote.digest(), vote.round)
         );
-        */
-        if self.current_header.round > vote.round {
-            return Ok(());
-        }
 
         // Ensure we receive a vote on the expected header.
         ensure!(
@@ -411,6 +406,7 @@ impl Core {
                 self.certificates_aggregators.retain(|k, _| k >= &gc_round);
                 self.cancel_handlers.retain(|k, _| k >= &gc_round);
                 self.gc_round = gc_round;
+                debug!("GC round moved to {}", self.gc_round);
             }
         }
     }
