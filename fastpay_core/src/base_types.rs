@@ -3,7 +3,7 @@
 
 use ed25519::signature::Signature as _;
 use ed25519_dalek as dalek;
-use ed25519_dalek::{Digest, Signer, Verifier};
+use ed25519_dalek::{Signer, Verifier};
 
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -279,8 +279,11 @@ pub trait Digestible {
     fn digest(&self) -> [u8; 32];
 }
 
+#[cfg(test)]
 impl Digestible for [u8; 5] {
     fn digest(self: &[u8; 5]) -> [u8; 32] {
+        use ed25519_dalek::Digest;
+
         let mut h = dalek::Sha512::new();
         let mut hash = [0u8; 64];
         let mut digest = [0u8; 32];

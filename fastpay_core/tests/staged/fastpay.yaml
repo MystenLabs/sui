@@ -1,0 +1,197 @@
+---
+AccountInfoRequest:
+  STRUCT:
+    - sender:
+        TYPENAME: EdPublicKeyBytes
+    - request_sequence_number:
+        OPTION:
+          TYPENAME: SequenceNumber
+    - request_received_transfers_excluding_first_nth:
+        OPTION: U64
+AccountInfoResponse:
+  STRUCT:
+    - sender:
+        TYPENAME: EdPublicKeyBytes
+    - balance:
+        TYPENAME: Balance
+    - next_sequence_number:
+        TYPENAME: SequenceNumber
+    - pending_confirmation:
+        OPTION:
+          TYPENAME: SignedTransferOrder
+    - requested_certificate:
+        OPTION:
+          TYPENAME: CertifiedTransferOrder
+    - requested_received_transfers:
+        SEQ:
+          TYPENAME: CertifiedTransferOrder
+Address:
+  ENUM:
+    0:
+      Primary:
+        NEWTYPE:
+          TYPENAME: EdPublicKeyBytes
+    1:
+      FastPay:
+        NEWTYPE:
+          TYPENAME: EdPublicKeyBytes
+Amount:
+  NEWTYPESTRUCT: U64
+Balance:
+  NEWTYPESTRUCT: I128
+CertifiedTransferOrder:
+  STRUCT:
+    - value:
+        TYPENAME: TransferOrder
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: EdPublicKeyBytes
+            - TYPENAME: Signature
+EdPublicKeyBytes:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+FastPayError:
+  ENUM:
+    0:
+      InvalidSignature:
+        STRUCT:
+          - error: STR
+    1:
+      UnknownSigner: UNIT
+    2:
+      CertificateRequiresQuorum: UNIT
+    3:
+      IncorrectTransferAmount: UNIT
+    4:
+      UnexpectedSequenceNumber: UNIT
+    5:
+      InsufficientFunding:
+        STRUCT:
+          - current_balance:
+              TYPENAME: Balance
+    6:
+      PreviousTransferMustBeConfirmedFirst:
+        STRUCT:
+          - pending_confirmation:
+              TYPENAME: TransferOrder
+    7:
+      ErrorWhileProcessingTransferOrder: UNIT
+    8:
+      ErrorWhileRequestingCertificate: UNIT
+    9:
+      MissingEalierConfirmations:
+        STRUCT:
+          - current_sequence_number:
+              TYPENAME: SequenceNumber
+    10:
+      UnexpectedTransactionIndex: UNIT
+    11:
+      CertificateNotfound: UNIT
+    12:
+      UnknownSenderAccount: UNIT
+    13:
+      CertificateAuthorityReuse: UNIT
+    14:
+      InvalidSequenceNumber: UNIT
+    15:
+      SequenceOverflow: UNIT
+    16:
+      SequenceUnderflow: UNIT
+    17:
+      AmountOverflow: UNIT
+    18:
+      AmountUnderflow: UNIT
+    19:
+      BalanceOverflow: UNIT
+    20:
+      BalanceUnderflow: UNIT
+    21:
+      WrongShard: UNIT
+    22:
+      InvalidCrossShardUpdate: UNIT
+    23:
+      InvalidDecoding: UNIT
+    24:
+      UnexpectedMessage: UNIT
+    25:
+      ClientIoError:
+        STRUCT:
+          - error: STR
+SequenceNumber:
+  NEWTYPESTRUCT: U64
+SerializedMessage:
+  ENUM:
+    0:
+      Order:
+        NEWTYPE:
+          TYPENAME: TransferOrder
+    1:
+      Vote:
+        NEWTYPE:
+          TYPENAME: SignedTransferOrder
+    2:
+      Cert:
+        NEWTYPE:
+          TYPENAME: CertifiedTransferOrder
+    3:
+      CrossShard:
+        NEWTYPE:
+          TYPENAME: CertifiedTransferOrder
+    4:
+      Error:
+        NEWTYPE:
+          TYPENAME: FastPayError
+    5:
+      InfoReq:
+        NEWTYPE:
+          TYPENAME: AccountInfoRequest
+    6:
+      InfoResp:
+        NEWTYPE:
+          TYPENAME: AccountInfoResponse
+Signature:
+  STRUCT:
+    - part1:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 32
+    - part2:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 32
+SignedTransferOrder:
+  STRUCT:
+    - value:
+        TYPENAME: TransferOrder
+    - authority:
+        TYPENAME: EdPublicKeyBytes
+    - signature:
+        TYPENAME: Signature
+Transfer:
+  STRUCT:
+    - sender:
+        TYPENAME: EdPublicKeyBytes
+    - recipient:
+        TYPENAME: Address
+    - amount:
+        TYPENAME: Amount
+    - sequence_number:
+        TYPENAME: SequenceNumber
+    - user_data:
+        TYPENAME: UserData
+TransferOrder:
+  STRUCT:
+    - transfer:
+        TYPENAME: Transfer
+    - signature:
+        TYPENAME: Signature
+UserData:
+  NEWTYPESTRUCT:
+    OPTION:
+      TUPLEARRAY:
+        CONTENT: U8
+        SIZE: 32
+
