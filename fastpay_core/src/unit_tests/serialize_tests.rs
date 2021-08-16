@@ -213,7 +213,7 @@ fn test_info_response() {
     };
 
     for resp in [resp1, resp2, resp3, resp4].iter() {
-        let buf = serialize_info_response(&resp);
+        let buf = serialize_info_response(resp);
         let result = deserialize_message(buf.as_slice());
         assert!(result.is_ok());
         if let SerializedMessage::InfoResp(o) = result.unwrap() {

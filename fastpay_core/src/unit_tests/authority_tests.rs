@@ -479,7 +479,7 @@ fn init_transfer_order(
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
-    TransferOrder::new(transfer, &secret)
+    TransferOrder::new(transfer, secret)
 }
 
 #[cfg(test)]

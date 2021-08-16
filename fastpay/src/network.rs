@@ -381,7 +381,7 @@ impl MassClient {
                     }
                     Some(request) => request,
                 };
-                let status = time::timeout(self.send_timeout, stream.write_data(&request)).await;
+                let status = time::timeout(self.send_timeout, stream.write_data(request)).await;
                 if let Err(error) = status {
                     error!("Failed to send request: {}", error);
                     continue;

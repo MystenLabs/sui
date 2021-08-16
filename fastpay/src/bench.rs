@@ -127,7 +127,7 @@ impl ClientServerBenchmark {
             };
             next_recipient = *pubx;
             let order = TransferOrder::new(transfer.clone(), secx);
-            let shard = AuthorityState::get_shard(self.num_shards, &pubx);
+            let shard = AuthorityState::get_shard(self.num_shards, pubx);
 
             // Serialize order
             let bufx = serialize_transfer_order(&order);
