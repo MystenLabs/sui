@@ -2,7 +2,7 @@
 AccountInfoRequest:
   STRUCT:
     - sender:
-        TYPENAME: EdPublicKeyBytes
+        TYPENAME: PublicKeyBytes
     - request_sequence_number:
         OPTION:
           TYPENAME: SequenceNumber
@@ -11,7 +11,7 @@ AccountInfoRequest:
 AccountInfoResponse:
   STRUCT:
     - sender:
-        TYPENAME: EdPublicKeyBytes
+        TYPENAME: PublicKeyBytes
     - balance:
         TYPENAME: Balance
     - next_sequence_number:
@@ -30,11 +30,11 @@ Address:
     0:
       Primary:
         NEWTYPE:
-          TYPENAME: EdPublicKeyBytes
+          TYPENAME: PublicKeyBytes
     1:
       FastPay:
         NEWTYPE:
-          TYPENAME: EdPublicKeyBytes
+          TYPENAME: PublicKeyBytes
 Amount:
   NEWTYPESTRUCT: U64
 Balance:
@@ -46,13 +46,8 @@ CertifiedTransferOrder:
     - signatures:
         SEQ:
           TUPLE:
-            - TYPENAME: EdPublicKeyBytes
+            - TYPENAME: PublicKeyBytes
             - TYPENAME: Signature
-EdPublicKeyBytes:
-  NEWTYPESTRUCT:
-    TUPLEARRAY:
-      CONTENT: U8
-      SIZE: 32
 FastPayError:
   ENUM:
     0:
@@ -120,6 +115,11 @@ FastPayError:
       ClientIoError:
         STRUCT:
           - error: STR
+PublicKeyBytes:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
 SequenceNumber:
   NEWTYPESTRUCT: U64
 SerializedMessage:
@@ -162,13 +162,13 @@ SignedTransferOrder:
     - value:
         TYPENAME: TransferOrder
     - authority:
-        TYPENAME: EdPublicKeyBytes
+        TYPENAME: PublicKeyBytes
     - signature:
         TYPENAME: Signature
 Transfer:
   STRUCT:
     - sender:
-        TYPENAME: EdPublicKeyBytes
+        TYPENAME: PublicKeyBytes
     - recipient:
         TYPENAME: Address
     - amount:

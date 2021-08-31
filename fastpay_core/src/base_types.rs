@@ -37,29 +37,29 @@ pub struct UserData(pub Option<[u8; 32]>);
 pub struct SecretKey(dalek::Keypair);
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct EdPublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
+pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
-pub type PrimaryAddress = EdPublicKeyBytes;
-pub type FastPayAddress = EdPublicKeyBytes;
-pub type AuthorityName = EdPublicKeyBytes;
+pub type PrimaryAddress = PublicKeyBytes;
+pub type FastPayAddress = PublicKeyBytes;
+pub type AuthorityName = PublicKeyBytes;
 
 pub fn get_key_pair() -> (FastPayAddress, SecretKey) {
     let mut csprng = OsRng;
     let keypair = dalek::Keypair::generate(&mut csprng);
     (
-        EdPublicKeyBytes(keypair.public.to_bytes()),
+        PublicKeyBytes(keypair.public.to_bytes()),
         SecretKey(keypair),
     )
 }
 
-pub fn address_as_base64<S>(key: &EdPublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
+pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::ser::Serializer,
 {
     serializer.serialize_str(&encode_address(key))
 }
 
-pub fn address_from_base64<'de, D>(deserializer: D) -> Result<EdPublicKeyBytes, D::Error>
+pub fn address_from_base64<'de, D>(deserializer: D) -> Result<PublicKeyBytes, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
@@ -68,21 +68,21 @@ where
     Ok(value)
 }
 
-pub fn encode_address(key: &EdPublicKeyBytes) -> String {
+pub fn encode_address(key: &PublicKeyBytes) -> String {
     base64::encode(&key.0[..])
 }
 
-pub fn decode_address(s: &str) -> Result<EdPublicKeyBytes, failure::Error> {
+pub fn decode_address(s: &str) -> Result<PublicKeyBytes, failure::Error> {
     let value = base64::decode(s)?;
     let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
     address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
-    Ok(EdPublicKeyBytes(address))
+    Ok(PublicKeyBytes(address))
 }
 
 #[cfg(test)]
 pub fn dbg_addr(name: u8) -> FastPayAddress {
     let addr = [name; dalek::PUBLIC_KEY_LENGTH];
-    EdPublicKeyBytes(addr)
+    PublicKeyBytes(addr)
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
@@ -114,7 +114,8 @@ impl<'de> Deserialize<'de> for SecretKey {
     {
         let s = String::deserialize(deserializer)?;
         let value = base64::decode(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
-        let key = dalek::Keypair::from_bytes(&value).map_err(|err| serde::de::Error::custom(err.to_string()))?;
+        let key = dalek::Keypair::from_bytes(&value)
+            .map_err(|err| serde::de::Error::custom(err.to_string()))?;
         Ok(SecretKey(key))
     }
 }
@@ -127,7 +128,7 @@ impl std::fmt::Debug for Signature {
     }
 }
 
-impl std::fmt::Debug for EdPublicKeyBytes {
+impl std::fmt::Debug for PublicKeyBytes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let s = base64::encode(&self.0);
         write!(f, "{}", s)?;
@@ -274,7 +275,7 @@ pub trait Digestible {
 #[cfg(test)]
 impl Digestible for [u8; 5] {
     fn digest(self: &[u8; 5]) -> [u8; 32] {
-        use ed25519_dalek::Digest;
+        use dalek::Digest;
 
         let mut h = dalek::Sha512::new();
         let mut hash = [0u8; 64];
