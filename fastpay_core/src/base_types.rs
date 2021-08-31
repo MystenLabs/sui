@@ -1,7 +1,6 @@
 // Copyright (c) Facebook Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use ed25519::signature::Signature as _;
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
 
@@ -34,9 +33,8 @@ pub type VersionNumber = SequenceNumber;
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
-// Ensure Secrets are not copyable and movable to control where they are in memory
-// TODO: Keep the native Dalek keypair type instead of bytes.
-pub struct SecretKey(pub [u8; dalek::KEYPAIR_LENGTH]);
+// TODO: Make sure secrets are not copyable and movable to control where they are in memory
+pub struct SecretKey(dalek::Keypair);
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 pub struct EdPublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
@@ -50,7 +48,7 @@ pub fn get_key_pair() -> (FastPayAddress, SecretKey) {
     let keypair = dalek::Keypair::generate(&mut csprng);
     (
         EdPublicKeyBytes(keypair.public.to_bytes()),
-        SecretKey(keypair.to_bytes()),
+        SecretKey(keypair),
     )
 }
 
@@ -87,29 +85,16 @@ pub fn dbg_addr(name: u8) -> FastPayAddress {
     EdPublicKeyBytes(addr)
 }
 
-// TODO: Remove Eq, PartialEq, Ord, PartialOrd and Hash from signatures.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct Signature {
-    pub part1: [u8; dalek::SIGNATURE_LENGTH / 2],
-    pub part2: [u8; dalek::SIGNATURE_LENGTH / 2],
-}
-
-// Zero the secret key when unallocating.
-impl Drop for SecretKey {
-    fn drop(&mut self) {
-        for i in 0..dalek::KEYPAIR_LENGTH {
-            self.0[i] = 0;
-        }
-    }
-}
+#[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
+pub struct Signature(dalek::Signature);
 
 impl SecretKey {
+    /// Avoid implementing `clone` on secret keys to prevent mistakes.
     pub fn copy(&self) -> SecretKey {
-        let mut sec_bytes = SecretKey {
-            0: [0; dalek::KEYPAIR_LENGTH],
-        };
-        sec_bytes.0.copy_from_slice(&(self.0)[..]);
-        sec_bytes
+        SecretKey(dalek::Keypair {
+            secret: dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),
+            public: dalek::PublicKey::from_bytes(self.0.public.as_bytes()).unwrap(),
+        })
     }
 }
 
@@ -118,7 +103,7 @@ impl Serialize for SecretKey {
     where
         S: serde::ser::Serializer,
     {
-        serializer.serialize_str(&base64::encode(&self.0[..]))
+        serializer.serialize_str(&base64::encode(&self.0.to_bytes()))
     }
 }
 
@@ -129,15 +114,14 @@ impl<'de> Deserialize<'de> for SecretKey {
     {
         let s = String::deserialize(deserializer)?;
         let value = base64::decode(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
-        let mut key = [0u8; dalek::KEYPAIR_LENGTH];
-        key.copy_from_slice(&value[..dalek::KEYPAIR_LENGTH]);
+        let key = dalek::Keypair::from_bytes(&value).map_err(|err| serde::de::Error::custom(err.to_string()))?;
         Ok(SecretKey(key))
     }
 }
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = base64::encode(&self.to_array()[..]);
+        let s = base64::encode(&self.0);
         write!(f, "{}", s)?;
         Ok(())
     }
@@ -303,28 +287,14 @@ impl Digestible for [u8; 5] {
 }
 
 impl Signature {
-    pub fn to_array(&self) -> [u8; 64] {
-        let mut sig: [u8; 64] = [0; 64];
-        sig[0..32].clone_from_slice(&self.part1);
-        sig[32..64].clone_from_slice(&self.part2);
-        sig
-    }
-
     pub fn new<T>(value: &T, secret: &SecretKey) -> Self
     where
         T: Digestible,
     {
         let message = value.digest();
-        let key_pair = dalek::Keypair::from_bytes(&secret.0).unwrap();
+        let key_pair = &secret.0;
         let signature = key_pair.sign(&message);
-        let sig_bytes = signature.to_bytes();
-
-        let mut part1 = [0; 32];
-        let mut part2 = [0; 32];
-        part1.clone_from_slice(&sig_bytes[0..32]);
-        part2.clone_from_slice(&sig_bytes[32..64]);
-
-        Signature { part1, part2 }
+        Signature(signature)
     }
 
     fn check_internal<T>(
@@ -337,9 +307,7 @@ impl Signature {
     {
         let message = value.digest();
         let public_key = dalek::PublicKey::from_bytes(&author.0)?;
-        let sig = self.to_array();
-        let dalex_sig = dalek::Signature::from_bytes(&sig)?;
-        public_key.verify(&message, &dalex_sig)
+        public_key.verify(&message, &self.0)
     }
 
     pub fn check<T>(&self, value: &T, author: FastPayAddress) -> Result<(), FastPayError>
@@ -363,7 +331,7 @@ impl Signature {
         let mut public_keys: Vec<dalek::PublicKey> = Vec::new();
         for (addr, sig) in votes.into_iter() {
             messages.push(msg);
-            signatures.push(dalek::Signature::from_bytes(&sig.to_array())?);
+            signatures.push(sig.0);
             public_keys.push(dalek::PublicKey::from_bytes(&addr.0)?);
         }
         dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..])

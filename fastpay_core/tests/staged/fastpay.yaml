@@ -153,15 +153,10 @@ SerializedMessage:
         NEWTYPE:
           TYPENAME: AccountInfoResponse
 Signature:
-  STRUCT:
-    - part1:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 32
-    - part2:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 32
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 64
 SignedTransferOrder:
   STRUCT:
     - value:

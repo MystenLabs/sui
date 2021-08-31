@@ -14,7 +14,7 @@ rand = "0.7.3"
 serde = { version = "1.0.115", features = ["derive"] }
 tokio = { version = "0.2.22", features = ["full"] }
 ed25519 = { version = "1.0.1"}
-ed25519-dalek = { version = "1.0.0-pre.3", features = ["batch"] }
+ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 serde-reflection = "0.3.2"
 serde_yaml = "0.8.17"
 structopt = "0.3.21"

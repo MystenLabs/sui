@@ -175,20 +175,22 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf038a7b6fd7ef78ad3348b63f3a17550877b0e28f8d68bcc94894d1412158bc"
 dependencies = [
+ "serde",
  "signature",
 ]
 
 [[package]]
 name = "ed25519-dalek"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53d2e93f837d749c16d118e7ddf7a4dfd0ac8f452cf51e46e9348824e5ef6851"
+checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
  "merlin",
  "rand 0.7.3",
  "serde",
+ "serde_bytes",
  "sha2",
  "zeroize",
 ]
@@ -865,6 +867,15 @@ dependencies = [
  "once_cell",
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16ae07dd2f88a366f15bd0632ba725227018c69a1c8550a927324f8eb8368bb9"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
