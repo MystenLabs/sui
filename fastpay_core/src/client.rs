@@ -40,7 +40,7 @@ pub struct ClientState<AuthorityClient> {
     /// Our FastPay address.
     address: FastPayAddress,
     /// Our signature key.
-    secret: SecretKey,
+    secret: KeyPair,
     /// Our FastPay committee.
     committee: Committee,
     /// How to talk to this committee.
@@ -107,7 +107,7 @@ impl<A> ClientState<A> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         address: FastPayAddress,
-        secret: SecretKey,
+        secret: KeyPair,
         committee: Committee,
         authority_clients: HashMap<AuthorityName, A>,
         next_sequence_number: SequenceNumber,

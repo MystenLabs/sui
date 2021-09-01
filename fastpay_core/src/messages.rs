@@ -148,7 +148,7 @@ impl Transfer {
 }
 
 impl TransferOrder {
-    pub fn new(transfer: Transfer, secret: &SecretKey) -> Self {
+    pub fn new(transfer: Transfer, secret: &KeyPair) -> Self {
         let signature = Signature::new(&transfer, secret);
         Self {
             transfer,
@@ -163,7 +163,7 @@ impl TransferOrder {
 
 impl SignedTransferOrder {
     /// Use signing key to create a signed object.
-    pub fn new(value: TransferOrder, authority: AuthorityName, secret: &SecretKey) -> Self {
+    pub fn new(value: TransferOrder, authority: AuthorityName, secret: &KeyPair) -> Self {
         let signature = Signature::new(&value.transfer, secret);
         Self {
             value,

@@ -30,7 +30,7 @@ pub struct AuthorityState {
     /// Committee of this FastPay instance.
     pub committee: Committee,
     /// The signature key of the authority.
-    pub secret: SecretKey,
+    pub secret: KeyPair,
     /// Offchain states of FastPay accounts.
     pub accounts: BTreeMap<FastPayAddress, AccountOffchainState>,
     /// The latest transaction index of the blockchain that the authority has seen.
@@ -321,7 +321,7 @@ impl AccountOffchainState {
 }
 
 impl AuthorityState {
-    pub fn new(committee: Committee, name: AuthorityName, secret: SecretKey) -> Self {
+    pub fn new(committee: Committee, name: AuthorityName, secret: KeyPair) -> Self {
         AuthorityState {
             committee,
             name,
@@ -336,7 +336,7 @@ impl AuthorityState {
     pub fn new_shard(
         committee: Committee,
         name: AuthorityName,
-        secret: SecretKey,
+        secret: KeyPair,
         shard_id: u32,
         number_of_shards: u32,
     ) -> Self {

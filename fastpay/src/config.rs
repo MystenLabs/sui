@@ -38,7 +38,7 @@ impl AuthorityConfig {
 #[derive(Serialize, Deserialize)]
 pub struct AuthorityServerConfig {
     pub authority: AuthorityConfig,
-    pub key: SecretKey,
+    pub key: KeyPair,
 }
 
 impl AuthorityServerConfig {
@@ -97,7 +97,7 @@ pub struct UserAccount {
         deserialize_with = "address_from_base64"
     )]
     pub address: FastPayAddress,
-    pub key: SecretKey,
+    pub key: KeyPair,
     pub next_sequence_number: SequenceNumber,
     pub balance: Balance,
     pub sent_certificates: Vec<CertifiedTransferOrder>,

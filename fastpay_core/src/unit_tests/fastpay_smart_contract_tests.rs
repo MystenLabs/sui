@@ -131,7 +131,7 @@ fn test_handle_redeem_transaction_double_spend() {
 
 // helpers
 #[cfg(test)]
-fn init_contract() -> (FastPaySmartContractState, AuthorityName, SecretKey) {
+fn init_contract() -> (FastPaySmartContractState, AuthorityName, KeyPair) {
     let (authority_address, authority_key) = get_key_pair();
     let mut authorities = BTreeMap::new();
     authorities.insert(
@@ -157,7 +157,7 @@ fn init_funding_transaction() -> FundingTransaction {
 fn init_redeem_transaction(
     committee: Committee,
     name: AuthorityName,
-    secret: SecretKey,
+    secret: KeyPair,
 ) -> RedeemTransaction {
     let (sender_address, sender_key) = get_key_pair();
     let primary_transfer = Transfer {

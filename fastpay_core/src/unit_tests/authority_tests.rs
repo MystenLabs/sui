@@ -468,7 +468,7 @@ fn init_state_with_account(address: FastPayAddress, balance: Balance) -> Authori
 #[cfg(test)]
 fn init_transfer_order(
     sender: FastPayAddress,
-    secret: &SecretKey,
+    secret: &KeyPair,
     recipient: Address,
     amount: Amount,
 ) -> TransferOrder {
@@ -485,7 +485,7 @@ fn init_transfer_order(
 #[cfg(test)]
 fn init_certified_transfer_order(
     sender: FastPayAddress,
-    secret: &SecretKey,
+    secret: &KeyPair,
     recipient: Address,
     amount: Amount,
     authority_state: &AuthorityState,

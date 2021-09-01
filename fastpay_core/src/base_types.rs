@@ -34,7 +34,7 @@ pub type VersionNumber = SequenceNumber;
 pub struct UserData(pub Option<[u8; 32]>);
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
-pub struct SecretKey(dalek::Keypair);
+pub struct KeyPair(dalek::Keypair);
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
@@ -43,13 +43,10 @@ pub type PrimaryAddress = PublicKeyBytes;
 pub type FastPayAddress = PublicKeyBytes;
 pub type AuthorityName = PublicKeyBytes;
 
-pub fn get_key_pair() -> (FastPayAddress, SecretKey) {
+pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;
     let keypair = dalek::Keypair::generate(&mut csprng);
-    (
-        PublicKeyBytes(keypair.public.to_bytes()),
-        SecretKey(keypair),
-    )
+    (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
 }
 
 pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
@@ -88,17 +85,17 @@ pub fn dbg_addr(name: u8) -> FastPayAddress {
 #[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub struct Signature(dalek::Signature);
 
-impl SecretKey {
+impl KeyPair {
     /// Avoid implementing `clone` on secret keys to prevent mistakes.
-    pub fn copy(&self) -> SecretKey {
-        SecretKey(dalek::Keypair {
+    pub fn copy(&self) -> KeyPair {
+        KeyPair(dalek::Keypair {
             secret: dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),
             public: dalek::PublicKey::from_bytes(self.0.public.as_bytes()).unwrap(),
         })
     }
 }
 
-impl Serialize for SecretKey {
+impl Serialize for KeyPair {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
@@ -107,8 +104,8 @@ impl Serialize for SecretKey {
     }
 }
 
-impl<'de> Deserialize<'de> for SecretKey {
-    fn deserialize<D>(deserializer: D) -> Result<SecretKey, D::Error>
+impl<'de> Deserialize<'de> for KeyPair {
+    fn deserialize<D>(deserializer: D) -> Result<KeyPair, D::Error>
     where
         D: serde::de::Deserializer<'de>,
     {
@@ -116,7 +113,7 @@ impl<'de> Deserialize<'de> for SecretKey {
         let value = base64::decode(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
         let key = dalek::Keypair::from_bytes(&value)
             .map_err(|err| serde::de::Error::custom(err.to_string()))?;
-        Ok(SecretKey(key))
+        Ok(KeyPair(key))
     }
 }
 
@@ -292,7 +289,7 @@ where
 }
 
 impl Signature {
-    pub fn new<T>(value: &T, secret: &SecretKey) -> Self
+    pub fn new<T>(value: &T, secret: &KeyPair) -> Self
     where
         T: Signable<Vec<u8>>,
     {
