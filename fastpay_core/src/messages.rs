@@ -3,8 +3,6 @@
 
 use super::{base_types::*, committee::Committee, error::*};
 
-use ed25519_dalek::{Digest, Sha512};
-
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
@@ -163,48 +161,10 @@ impl TransferOrder {
     }
 }
 
-impl Digestible for Transfer {
-    fn digest(self: &Transfer) -> [u8; 32] {
-        let mut h: Sha512 = Sha512::new();
-        let mut hash: [u8; 64] = [0u8; 64];
-        let mut digest: [u8; 32] = [0u8; 32];
-
-        h.update(&self.sender.0);
-        match self.recipient {
-            Address::Primary(addr) => {
-                h.update([0x03]);
-                h.update(&addr.0);
-            }
-            Address::FastPay(addr) => {
-                h.update([0x04]);
-                h.update(&addr.0);
-            }
-        }
-        h.update(u64::from(self.amount).to_le_bytes());
-        h.update(u64::from(self.sequence_number).to_le_bytes());
-        match self.user_data.0 {
-            None => h.update([0x00]),
-            Some(data) => {
-                h.update([0x01]);
-                h.update(data);
-            }
-        }
-        hash.copy_from_slice(h.finalize().as_slice());
-        digest.copy_from_slice(&hash[..32]);
-        digest
-    }
-}
-
-impl Digestible for TransferOrder {
-    fn digest(self: &TransferOrder) -> [u8; 32] {
-        self.transfer.digest()
-    }
-}
-
 impl SignedTransferOrder {
     /// Use signing key to create a signed object.
     pub fn new(value: TransferOrder, authority: AuthorityName, secret: &SecretKey) -> Self {
-        let signature = Signature::new(&value, secret);
+        let signature = Signature::new(&value.transfer, secret);
         Self {
             value,
             authority,
@@ -217,7 +177,7 @@ impl SignedTransferOrder {
         self.value.check_signature()?;
         let weight = committee.weight(&self.authority);
         fp_ensure!(weight > 0, FastPayError::UnknownSigner);
-        self.signature.check(&self.value, self.authority)?;
+        self.signature.check(&self.value.transfer, self.authority)?;
         Ok(weight)
     }
 }
@@ -257,7 +217,7 @@ impl<'a> SignatureAggregator<'a> {
         authority: AuthorityName,
         signature: Signature,
     ) -> Result<Option<CertifiedTransferOrder>, FastPayError> {
-        signature.check(&self.partial.value, authority)?;
+        signature.check(&self.partial.value.transfer, authority)?;
         // Check that each authority only appears once.
         fp_ensure!(
             !self.used_authorities.contains(&authority),
@@ -309,7 +269,7 @@ impl CertifiedTransferOrder {
         // All what is left is checking signatures!
         let inner_sig = (self.value.transfer.sender, self.value.signature);
         Signature::verify_batch(
-            &self.value,
+            &self.value.transfer,
             std::iter::once(&inner_sig).chain(&self.signatures),
         )
     }
@@ -330,3 +290,5 @@ impl ConfirmationOrder {
         }
     }
 }
+
+impl BcsSignable for Transfer {}

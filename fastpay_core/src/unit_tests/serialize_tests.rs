@@ -137,7 +137,7 @@ fn test_cert() {
 
     for _ in 0..3 {
         let (authority_name, authority_key) = get_key_pair();
-        let sig = Signature::new(&cert.value, &authority_key);
+        let sig = Signature::new(&cert.value.transfer, &authority_key);
 
         cert.signatures.push((authority_name, sig));
     }
@@ -174,7 +174,7 @@ fn test_info_response() {
 
     for _ in 0..3 {
         let (authority_name, authority_key) = get_key_pair();
-        let sig = Signature::new(&cert.value, &authority_key);
+        let sig = Signature::new(&cert.value.transfer, &authority_key);
 
         cert.signatures.push((authority_name, sig));
     }
@@ -283,7 +283,9 @@ fn test_time_vote() {
     let now = Instant::now();
     for _ in 0..100 {
         if let SerializedMessage::Vote(vote) = deserialize_message(&mut buf2).unwrap() {
-            vote.signature.check(&vote.value, vote.authority).unwrap();
+            vote.signature
+                .check(&vote.value.transfer, vote.authority)
+                .unwrap();
         }
     }
     assert!(deserialize_message(&mut buf2).is_err());
@@ -312,7 +314,7 @@ fn test_time_cert() {
 
     for _ in 0..7 {
         let (authority_name, authority_key) = get_key_pair();
-        let sig = Signature::new(&cert.value, &authority_key);
+        let sig = Signature::new(&cert.value.transfer, &authority_key);
         cert.signatures.push((authority_name, sig));
     }
 
@@ -328,7 +330,7 @@ fn test_time_cert() {
     let mut buf2 = buf.as_slice();
     for _ in 0..count {
         if let SerializedMessage::Cert(cert) = deserialize_message(&mut buf2).unwrap() {
-            Signature::verify_batch(&cert.value, &cert.signatures).unwrap();
+            Signature::verify_batch(&cert.value.transfer, &cert.signatures).unwrap();
         }
     }
     assert!(deserialize_message(buf2).is_err());

@@ -145,7 +145,7 @@ fn make_benchmark_certificates_from_orders_and_server_configs(
         };
         for i in 0..committee.quorum_threshold() {
             let (pubx, secx) = keys.get(i).unwrap();
-            let sig = Signature::new(&certificate.value, secx);
+            let sig = Signature::new(&certificate.value.transfer, secx);
             certificate.signatures.push((*pubx, sig));
         }
         let serialized_certificate = serialize_cert(&certificate);

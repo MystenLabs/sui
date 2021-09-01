@@ -268,33 +268,37 @@ impl From<SequenceNumber> for usize {
     }
 }
 
-pub trait Digestible {
-    fn digest(&self) -> [u8; 32];
+/// Something that we know how to hash and sign.
+pub trait Signable<Hasher> {
+    fn write(&self, hasher: &mut Hasher);
 }
 
-#[cfg(test)]
-impl Digestible for [u8; 5] {
-    fn digest(self: &[u8; 5]) -> [u8; 32] {
-        use dalek::Digest;
+/// Activate the blanket implementation of `Signable` based on serde and BCS.
+/// * We use `serde_name` to extract a seed from the name of structs and enums.
+/// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
+pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
 
-        let mut h = dalek::Sha512::new();
-        let mut hash = [0u8; 64];
-        let mut digest = [0u8; 32];
-        h.update(&self);
-        hash.copy_from_slice(h.finalize().as_slice());
-        digest.copy_from_slice(&hash[..32]);
-        digest
+impl<T, Hasher> Signable<Hasher> for T
+where
+    T: BcsSignable,
+    Hasher: std::io::Write,
+{
+    fn write(&self, hasher: &mut Hasher) {
+        let name = serde_name::trace_name::<Self>().expect("Self must be a struct or an enum");
+        // Note: This assumes that names never contain the separator `::`.
+        write!(hasher, "{}::", name).expect("Hasher should not fail");
+        bcs::serialize_into(hasher, &self).expect("Message serialization should not fail");
     }
 }
 
 impl Signature {
     pub fn new<T>(value: &T, secret: &SecretKey) -> Self
     where
-        T: Digestible,
+        T: Signable<Vec<u8>>,
     {
-        let message = value.digest();
-        let key_pair = &secret.0;
-        let signature = key_pair.sign(&message);
+        let mut message = Vec::new();
+        value.write(&mut message);
+        let signature = secret.0.sign(&message);
         Signature(signature)
     }
 
@@ -304,16 +308,17 @@ impl Signature {
         author: FastPayAddress,
     ) -> Result<(), dalek::SignatureError>
     where
-        T: Digestible,
+        T: Signable<Vec<u8>>,
     {
-        let message = value.digest();
+        let mut message = Vec::new();
+        value.write(&mut message);
         let public_key = dalek::PublicKey::from_bytes(&author.0)?;
         public_key.verify(&message, &self.0)
     }
 
     pub fn check<T>(&self, value: &T, author: FastPayAddress) -> Result<(), FastPayError>
     where
-        T: Digestible,
+        T: Signable<Vec<u8>>,
     {
         self.check_internal(value, author)
             .map_err(|error| FastPayError::InvalidSignature {
@@ -323,15 +328,16 @@ impl Signature {
 
     fn verify_batch_internal<'a, T, I>(value: &'a T, votes: I) -> Result<(), dalek::SignatureError>
     where
-        T: Digestible,
+        T: Signable<Vec<u8>>,
         I: IntoIterator<Item = &'a (FastPayAddress, Signature)>,
     {
-        let msg: &[u8] = &value.digest();
+        let mut msg = Vec::new();
+        value.write(&mut msg);
         let mut messages: Vec<&[u8]> = Vec::new();
         let mut signatures: Vec<dalek::Signature> = Vec::new();
         let mut public_keys: Vec<dalek::PublicKey> = Vec::new();
         for (addr, sig) in votes.into_iter() {
-            messages.push(msg);
+            messages.push(&msg);
             signatures.push(sig.0);
             public_keys.push(dalek::PublicKey::from_bytes(&addr.0)?);
         }
@@ -340,7 +346,7 @@ impl Signature {
 
     pub fn verify_batch<'a, T, I>(value: &'a T, votes: I) -> Result<(), FastPayError>
     where
-        T: Digestible,
+        T: Signable<Vec<u8>>,
         I: IntoIterator<Item = &'a (FastPayAddress, Signature)>,
     {
         Signature::verify_batch_internal(value, votes).map_err(|error| {

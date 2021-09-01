@@ -66,6 +66,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
 
 [[package]]
+name = "bcs"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "510fd83e3eaf7263b06182f3550b4c0af2af42cb36ab8024969ff5ea7fcb2833"
+dependencies = [
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "bincode"
 version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -254,6 +264,7 @@ name = "fastpay_core"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "bcs",
  "bincode",
  "ed25519",
  "ed25519-dalek",
@@ -261,6 +272,7 @@ dependencies = [
  "futures",
  "rand 0.7.3",
  "serde",
+ "serde-name",
  "serde-reflection",
  "serde_yaml",
  "structopt",
@@ -856,6 +868,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f03b9878abf6d14e6779d3f24f07b2cfa90352cfec4acc5aab8f1ac7f146fae8"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-name"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12c47087018ec281d1cdab673d36aea22d816b54d498264029c05d5fa1910da6"
+dependencies = [
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
