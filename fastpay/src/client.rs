@@ -129,15 +129,19 @@ fn make_benchmark_certificates_from_orders_and_server_configs(
         let server_config = AuthorityServerConfig::read(file).expect("Fail to read server config");
         keys.push((server_config.authority.address, server_config.key));
     }
+    let committee = Committee {
+        voting_rights: keys.iter().map(|(k, _)| (*k, 1)).collect(),
+        total_votes: keys.len(),
+    };
+    assert!(
+        keys.len() >= committee.quorum_threshold(),
+        "Not enough server configs were provided with --server-configs"
+    );
     let mut serialized_certificates = Vec::new();
     for order in orders {
         let mut certificate = CertifiedTransferOrder {
             value: order.clone(),
             signatures: Vec::new(),
-        };
-        let committee = Committee {
-            voting_rights: keys.iter().map(|(k, _)| (*k, 1)).collect(),
-            total_votes: keys.len(),
         };
         for i in 0..committee.quorum_threshold() {
             let (pubx, secx) = keys.get(i).unwrap();
@@ -278,24 +282,24 @@ fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
 )]
 struct ClientOpt {
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
-    #[structopt(long = "accounts")]
+    #[structopt(long)]
     accounts: String,
 
     /// Sets the file describing the public configurations of all authorities
-    #[structopt(long = "committee")]
+    #[structopt(long)]
     committee: String,
 
     /// Timeout for sending queries (us)
-    #[structopt(long = "send_timeout", default_value = "4000000")]
+    #[structopt(long, default_value = "4000000")]
     send_timeout: u64,
 
     /// Timeout for receiving responses (us)
-    #[structopt(long = "recv_timeout", default_value = "4000000")]
+    #[structopt(long, default_value = "4000000")]
     recv_timeout: u64,
 
     /// Maximum size of datagrams received and sent (bytes)
-    #[structopt(long = "buffer_size", default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
-    buffer_size: String,
+    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
+    buffer_size: usize,
 
     /// Subcommands. Acceptable values are transfer, query_balance, benchmark, and create_accounts.
     #[structopt(subcommand)]
@@ -308,11 +312,11 @@ enum ClientCommands {
     #[structopt(name = "transfer")]
     Transfer {
         /// Sending address (must be one of our accounts)
-        #[structopt(long = "from")]
+        #[structopt(long)]
         from: String,
 
         /// Recipient address
-        #[structopt(long = "to")]
+        #[structopt(long)]
         to: String,
 
         /// Amount to transfer
@@ -330,24 +334,24 @@ enum ClientCommands {
     #[structopt(name = "benchmark")]
     Benchmark {
         /// Maximum number of requests in flight
-        #[structopt(long = "max_in_flight", default_value = "200")]
+        #[structopt(long, default_value = "200")]
         max_in_flight: u64,
 
         /// Use a subset of the accounts to generate N transfers
-        #[structopt(long = "max_orders", default_value = "")]
-        max_orders: String,
+        #[structopt(long)]
+        max_orders: Option<usize>,
 
         /// Use server configuration files to generate certificates (instead of aggregating received votes).
-        #[structopt(long = "server_configs", min_values = 1)]
-        server_configs: Vec<String>,
+        #[structopt(long)]
+        server_configs: Option<Vec<String>>,
     },
 
     /// Create new user accounts and print the public keys
     #[structopt(name = "create_accounts")]
     CreateAccounts {
         /// known initial balance of the account
-        #[structopt(long = "initial_funding", default_value = "0")]
-        initial_funding: i128,
+        #[structopt(long, default_value = "0")]
+        initial_funding: Balance,
 
         /// Number of additional accounts to create
         num: u32,
@@ -356,20 +360,20 @@ enum ClientCommands {
 
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    let matches = ClientOpt::from_args();
+    let options = ClientOpt::from_args();
 
-    let send_timeout = Duration::from_micros(matches.send_timeout);
-    let recv_timeout = Duration::from_micros(matches.recv_timeout);
-    let accounts_config_path = &matches.accounts;
-    let committee_config_path = &matches.committee;
-    let buffer_size = matches.buffer_size.parse::<usize>().unwrap();
+    let send_timeout = Duration::from_micros(options.send_timeout);
+    let recv_timeout = Duration::from_micros(options.recv_timeout);
+    let accounts_config_path = &options.accounts;
+    let committee_config_path = &options.committee;
+    let buffer_size = options.buffer_size;
 
     let mut accounts_config =
         AccountsConfig::read_or_create(accounts_config_path).expect("Unable to read user accounts");
     let committee_config =
         CommitteeConfig::read(committee_config_path).expect("Unable to read committee config file");
 
-    match matches.cmd {
+    match options.cmd {
         ClientCommands::Transfer { from, to, amount } => {
             let sender = decode_address(&from).expect("Failed to decode sender's address");
             let recipient = decode_address(&to).expect("Failed to decode recipient's address");
@@ -448,11 +452,7 @@ fn main() {
             max_orders,
             server_configs,
         } => {
-            let max_orders: usize = max_orders
-                .parse()
-                .unwrap_or_else(|_| accounts_config.num_accounts());
-            let files: Vec<_> = server_configs.iter().map(AsRef::as_ref).collect();
-            let parsed_server_configs = Some(files);
+            let max_orders = max_orders.unwrap_or_else(|| accounts_config.num_accounts());
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
@@ -478,9 +478,12 @@ fn main() {
                 warn!("Received {} valid votes.", votes.len());
 
                 warn!("Starting benchmark phase 2 (confirmation orders)");
-                let certificates = if let Some(files) = parsed_server_configs {
+                let certificates = if let Some(files) = server_configs {
+                    warn!("Using server configs provided by --server-configs");
+                    let files = files.iter().map(AsRef::as_ref).collect();
                     make_benchmark_certificates_from_orders_and_server_configs(orders, files)
                 } else {
+                    warn!("Using committee config");
                     make_benchmark_certificates_from_votes(&committee_config, votes)
                 };
                 let responses = mass_broadcast_orders(
@@ -527,7 +530,7 @@ fn main() {
         } => {
             let num_accounts: u32 = num;
             for _ in 0..num_accounts {
-                let account = UserAccount::new(Balance::from(initial_funding));
+                let account = UserAccount::new(initial_funding);
                 println!("{}", encode_address(&account.address));
                 accounts_config.insert(account);
             }

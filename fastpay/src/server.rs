@@ -102,7 +102,7 @@ fn make_servers(
 )]
 struct ServerOpt {
     /// Path to the file containing the server configuration of this FastPay authority (including its secret key)
-    #[structopt(long = "server")]
+    #[structopt(long)]
     server: String,
 
     /// Subcommands. Acceptable values are run and generate.
@@ -116,58 +116,58 @@ enum ServerCommands {
     #[structopt(name = "run")]
     Run {
         /// Maximum size of datagrams received and sent (bytes)
-        #[structopt(long = "buffer_size", default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
-        buffer_size: String,
+        #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
+        buffer_size: usize,
 
         /// Number of cross shards messages allowed before blocking the main server loop
-        #[structopt(long = "cross_shard_queue_size", default_value = "1000")]
+        #[structopt(long, default_value = "1000")]
         cross_shard_queue_size: usize,
 
         /// Path to the file containing the public description of all authorities in this FastPay committee
-        #[structopt(long = "committee")]
+        #[structopt(long)]
         committee: String,
 
         /// Path to the file describing the initial user accounts
-        #[structopt(long = "initial_accounts")]
+        #[structopt(long)]
         initial_accounts: String,
 
         /// Path to the file describing the initial balance of user accounts
-        #[structopt(long = "initial_balance")]
-        initial_balance: String,
+        #[structopt(long)]
+        initial_balance: Balance,
 
         /// Runs a specific shard (from 0 to shards-1)
-        #[structopt(long = "shard")]
-        shard: String,
+        #[structopt(long)]
+        shard: Option<u32>,
     },
 
     /// Generate a new server configuration and output its public description
     #[structopt(name = "generate")]
     Generate {
         /// Chooses a network protocol between Udp and Tcp
-        #[structopt(long = "protocol", default_value = "Udp")]
-        protocol: String,
+        #[structopt(long, default_value = "Udp")]
+        protocol: transport::NetworkProtocol,
 
         /// Sets the public name of the host
-        #[structopt(long = "host")]
+        #[structopt(long)]
         host: String,
 
         /// Sets the base port, i.e. the port on which the server listens for the first shard
-        #[structopt(long = "port")]
+        #[structopt(long)]
         port: u32,
 
         /// Number of shards for this authority
-        #[structopt(long = "shards")]
+        #[structopt(long)]
         shards: u32,
     },
 }
 
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    let matches = ServerOpt::from_args();
+    let options = ServerOpt::from_args();
 
-    let server_config_path = &matches.server;
+    let server_config_path = &options.server;
 
-    match matches.cmd {
+    match options.cmd {
         ServerCommands::Run {
             buffer_size,
             cross_shard_queue_size,
@@ -176,38 +176,34 @@ fn main() {
             initial_balance,
             shard,
         } => {
-            let committee_config_path = &committee;
-            let initial_accounts_config_path = &initial_accounts;
-            let initial_balance = Balance::from(initial_balance.parse::<i128>().unwrap());
-            let buffer_size = buffer_size.parse::<usize>().unwrap();
-            // let parsed_cross_shard_queue_size = cross_shard_queue_size.parse::<usize>().unwrap();
-            let specific_shard = Some(shard.parse::<u32>().unwrap());
-
             // Run the server
-            let servers = if let Some(shard) = specific_shard {
-                info!("Running shard number {}", shard);
-                let server = make_shard_server(
-                    "0.0.0.0", // Allow local IP address to be different from the public one.
-                    server_config_path,
-                    committee_config_path,
-                    initial_accounts_config_path,
-                    initial_balance,
-                    buffer_size,
-                    cross_shard_queue_size,
-                    shard,
-                );
-                vec![server]
-            } else {
-                info!("Running all shards");
-                make_servers(
-                    "0.0.0.0", // Allow local IP address to be different from the public one.
-                    server_config_path,
-                    committee_config_path,
-                    initial_accounts_config_path,
-                    initial_balance,
-                    buffer_size,
-                    cross_shard_queue_size,
-                )
+            let servers = match shard {
+                Some(shard) => {
+                    info!("Running shard number {}", shard);
+                    let server = make_shard_server(
+                        "0.0.0.0", // Allow local IP address to be different from the public one.
+                        server_config_path,
+                        &committee,
+                        &initial_accounts,
+                        initial_balance,
+                        buffer_size,
+                        cross_shard_queue_size,
+                        shard,
+                    );
+                    vec![server]
+                }
+                None => {
+                    info!("Running all shards");
+                    make_servers(
+                        "0.0.0.0", // Allow local IP address to be different from the public one.
+                        server_config_path,
+                        &committee,
+                        &initial_accounts,
+                        initial_balance,
+                        buffer_size,
+                        cross_shard_queue_size,
+                    )
+                }
             };
 
             let mut rt = Runtime::new().unwrap();
@@ -235,10 +231,9 @@ fn main() {
             port,
             shards,
         } => {
-            let network_protocol = protocol.parse().unwrap();
             let (address, key) = get_key_pair();
             let authority = AuthorityConfig {
-                network_protocol,
+                network_protocol: protocol,
                 address,
                 host,
                 base_port: port,

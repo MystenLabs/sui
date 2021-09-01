@@ -199,6 +199,14 @@ impl Balance {
     }
 }
 
+impl std::str::FromStr for Balance {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        Ok(Self(i128::from_str(src)?))
+    }
+}
+
 impl From<Amount> for u64 {
     fn from(val: Amount) -> Self {
         val.0

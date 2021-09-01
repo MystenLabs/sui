@@ -27,16 +27,16 @@ done
 # Create configuration files for 1000 user accounts.
 # * Private account states are stored in one local wallet `accounts.json`.
 # * `initial_accounts.json` is used to mint initial balances on the server side.
-./client --committee committee.json --accounts accounts.json create_accounts 1000 --initial_funding 100 >> initial_accounts.json
+./client --committee committee.json --accounts accounts.json create_accounts 1000 --initial-funding 100 >> initial_accounts.json
 
 # Start servers
 for I in 1 2 3 4
 do
     for J in $(seq 0 3)
     do
-        ./server --server server"$I".json run --shard "$J" --initial_accounts initial_accounts.json --initial_balance 100 --committee committee.json &
+        ./server --server server"$I".json run --shard "$J" --initial-accounts initial_accounts.json --initial-balance 100 --committee committee.json &
     done
-done
+ done
 
 # Query (locally cached) balance for first and last user account
 ACCOUNT1="`head -n 1 initial_accounts.json`"
