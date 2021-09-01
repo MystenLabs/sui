@@ -7,35 +7,61 @@ use fastpay::{network, transport};
 use fastpay_core::{authority::*, base_types::*, committee::*, messages::*, serialize::*};
 
 use bytes::Bytes;
-use clap::{App, Arg};
 use futures::stream::StreamExt;
 use log::*;
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
 };
+use structopt::StructOpt;
 use tokio::{runtime::Builder, time};
 
 use std::thread;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, StructOpt)]
+#[structopt(
+    name = "FastPay Benchmark",
+    about = "Local end-to-end test and benchmark of the FastPay protocol"
+)]
 struct ClientServerBenchmark {
-    network_protocol: transport::NetworkProtocol,
+    /// Choose a network protocol between Udp and Tcp
+    #[structopt(long, default_value = "udp")]
+    protocol: transport::NetworkProtocol,
+    /// Hostname
+    #[structopt(long, default_value = "127.0.0.1")]
     host: String,
+    /// Base port number
+    #[structopt(long, default_value = "9555")]
     port: u32,
+    /// Size of the FastPay committee
+    #[structopt(long, default_value = "10")]
     committee_size: usize,
+    /// Number of shards per FastPay authority
+    #[structopt(long, default_value = "15")]
     num_shards: u32,
+    /// Maximum number of requests in flight (0 for blocking client)
+    #[structopt(long, default_value = "1000")]
     max_in_flight: usize,
+    /// Number of accounts and transactions used in the benchmark
+    #[structopt(long, default_value = "40000")]
     num_accounts: usize,
-    send_timeout: Duration,
-    recv_timeout: Duration,
+    /// Timeout for sending queries (us)
+    #[structopt(long, default_value = "4000000")]
+    send_timeout_us: u64,
+    /// Timeout for receiving responses (us)
+    #[structopt(long, default_value = "4000000")]
+    recv_timeout_us: u64,
+    /// Maximum size of datagrams received and sent (bytes)
+    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
+    /// Number of cross shards messages allowed before blocking the main server loop
+    #[structopt(long, default_value = "1")]
     cross_shard_queue_size: usize,
 }
 
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    let benchmark = ClientServerBenchmark::from_command_line();
+    let benchmark = ClientServerBenchmark::from_args();
 
     let (states, orders) = benchmark.make_structures();
 
@@ -156,7 +182,7 @@ impl ClientServerBenchmark {
 
     async fn spawn_server(&self, state: AuthorityState) -> transport::SpawnedServer {
         let server = network::Server::new(
-            self.network_protocol,
+            self.protocol,
             self.host.clone(),
             self.port,
             state,
@@ -178,12 +204,12 @@ impl ClientServerBenchmark {
         info!("Sending requests.");
         if self.max_in_flight > 0 {
             let mass_client = network::MassClient::new(
-                self.network_protocol,
+                self.protocol,
                 self.host.clone(),
                 self.port,
                 self.buffer_size,
-                self.send_timeout,
-                self.recv_timeout,
+                Duration::from_micros(self.send_timeout_us),
+                Duration::from_micros(self.recv_timeout_us),
                 max_in_flight as u64,
             );
             let mut sharded_requests = HashMap::new();
@@ -198,13 +224,13 @@ impl ClientServerBenchmark {
         } else {
             // Use actual client core
             let mut client = network::Client::new(
-                self.network_protocol,
+                self.protocol,
                 self.host.clone(),
                 self.port,
                 self.num_shards,
                 self.buffer_size,
-                self.send_timeout,
-                self.recv_timeout,
+                Duration::from_micros(self.send_timeout_us),
+                Duration::from_micros(self.recv_timeout_us),
             );
 
             while !orders.is_empty() {
@@ -231,99 +257,5 @@ impl ClientServerBenchmark {
             items_number,
             1_000_000.0 * (items_number as f64) / (time_total as f64)
         );
-    }
-
-    fn from_command_line() -> Self {
-        let matches = App::new("FastPay benchmark")
-            .about("Local end-to-end test and benchmark of the FastPay protocol")
-            .arg(
-                Arg::with_name("protocol")
-                    .long("protocol")
-                    .help("Choose a network protocol between Udp and Tcp")
-                    .default_value("Udp"),
-            )
-            .arg(
-                Arg::with_name("host")
-                    .long("host")
-                    .help("Hostname")
-                    .default_value("127.0.0.1"),
-            )
-            .arg(
-                Arg::with_name("port")
-                    .long("port")
-                    .help("Base port number")
-                    .default_value("9555"),
-            )
-            .arg(
-                Arg::with_name("committee_size")
-                    .long("committee_size")
-                    .help("Size of the FastPay committee")
-                    .default_value("10"),
-            )
-            .arg(
-                Arg::with_name("num_shards")
-                    .long("num_shards")
-                    .help("Number of shards per FastPay authority")
-                    .default_value("15"),
-            )
-            .arg(
-                Arg::with_name("max_in_flight")
-                    .long("max_in_flight")
-                    .help("Maximum number of requests in flight (0 for blocking client)")
-                    .default_value("1000"),
-            )
-            .arg(
-                Arg::with_name("num_accounts")
-                    .long("num_accounts")
-                    .help("Number of accounts and transactions used in the benchmark")
-                    .default_value("40000"),
-            )
-            .arg(
-                Arg::with_name("send_timeout")
-                    .long("send_timeout")
-                    .help("Timeout for sending queries (us)")
-                    .default_value("4000000"),
-            )
-            .arg(
-                Arg::with_name("recv_timeout")
-                    .long("recv_timeout")
-                    .help("Timeout for receiving responses (us)")
-                    .default_value("4000000"),
-            )
-            .arg(
-                Arg::with_name("buffer_size")
-                    .long("buffer_size")
-                    .help("Maximum size of datagrams received and sent (bytes")
-                    .default_value(transport::DEFAULT_MAX_DATAGRAM_SIZE),
-            )
-            .arg(
-                Arg::with_name("cross_shard_queue_size")
-                    .long("cross_shard_queue_size")
-                    .help("Number of cross shards messages allowed before blocking the main server loop")
-                    .default_value("1"),
-            )
-            .get_matches();
-
-        Self {
-            network_protocol: matches.value_of("protocol").unwrap().parse().unwrap(),
-            host: matches.value_of("host").unwrap().to_string(),
-            port: matches.value_of("port").unwrap().parse().unwrap(),
-            committee_size: matches.value_of("committee_size").unwrap().parse().unwrap(),
-            num_shards: matches.value_of("num_shards").unwrap().parse().unwrap(),
-            max_in_flight: matches.value_of("max_in_flight").unwrap().parse().unwrap(),
-            num_accounts: matches.value_of("num_accounts").unwrap().parse().unwrap(),
-            send_timeout: Duration::from_micros(
-                matches.value_of("send_timeout").unwrap().parse().unwrap(),
-            ),
-            recv_timeout: Duration::from_micros(
-                matches.value_of("recv_timeout").unwrap().parse().unwrap(),
-            ),
-            buffer_size: matches.value_of("buffer_size").unwrap().parse().unwrap(),
-            cross_shard_queue_size: matches
-                .value_of("cross_shard_queue_size")
-                .unwrap()
-                .parse()
-                .unwrap(),
-        }
     }
 }
