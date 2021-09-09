@@ -23,7 +23,7 @@ class LogParser:
         self.faults = faults
         if isinstance(faults, int):
             self.committee_size = len(primaries) + int(faults)
-            self.workers =  len(workers) // len(primaries)
+            self.workers = len(workers) // len(primaries)
         else:
             self.committee_size = '?'
             self.workers = '?'
@@ -134,7 +134,7 @@ class LogParser:
         }
 
         ip = search(r'booted on (\d+.\d+.\d+.\d+)', log).group(1)
-        
+
         return proposals, commits, configs, ip
 
     def _parse_workers(self, log):
