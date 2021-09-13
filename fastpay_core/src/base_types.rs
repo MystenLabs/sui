@@ -181,6 +181,12 @@ impl Balance {
     }
 }
 
+impl std::fmt::Display for Balance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl std::str::FromStr for Balance {
     type Err = std::num::ParseIntError;
 

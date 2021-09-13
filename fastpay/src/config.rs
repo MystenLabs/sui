@@ -193,26 +193,32 @@ impl AccountsConfig {
 }
 
 pub struct InitialStateConfig {
-    pub addresses: Vec<FastPayAddress>,
+    pub accounts: Vec<(FastPayAddress, Balance)>,
 }
 
 impl InitialStateConfig {
     pub fn read(path: &str) -> Result<Self, failure::Error> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-        let mut addresses = Vec::new();
+        let mut accounts = Vec::new();
         for line in reader.lines() {
-            addresses.push(decode_address(&line?)?);
+            let line = line?;
+            let elements = line.split(':').collect::<Vec<_>>();
+            if elements.len() != 2 {
+                failure::bail!("expecting two columns separated with ':'")
+            }
+            let address = decode_address(elements[0])?;
+            let balance = elements[1].parse()?;
+            accounts.push((address, balance));
         }
-        Ok(Self { addresses })
+        Ok(Self { accounts })
     }
 
     pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
         let file = OpenOptions::new().create(true).write(true).open(path)?;
         let mut writer = BufWriter::new(file);
-        for address in &self.addresses {
-            writer.write_all(encode_address(address).as_ref())?;
-            writer.write_all(b"\n")?;
+        for (address, balance) in &self.accounts {
+            writeln!(writer, "{}:{}", encode_address(address), balance)?;
         }
         Ok(())
     }

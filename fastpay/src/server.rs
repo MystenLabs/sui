@@ -17,7 +17,6 @@ fn make_shard_server(
     server_config_path: &str,
     committee_config_path: &str,
     initial_accounts_config_path: &str,
-    initial_balance: Balance,
     buffer_size: usize,
     cross_shard_queue_size: usize,
     shard: u32,
@@ -41,12 +40,12 @@ fn make_shard_server(
     );
 
     // Load initial states
-    for address in &initial_accounts_config.addresses {
+    for (address, balance) in &initial_accounts_config.accounts {
         if AuthorityState::get_shard(num_shards, address) != shard {
             continue;
         }
         let client = AccountOffchainState {
-            balance: initial_balance,
+            balance: *balance,
             next_sequence_number: SequenceNumber::from(0),
             pending_confirmation: None,
             confirmed_log: Vec::new(),
@@ -71,7 +70,6 @@ fn make_servers(
     server_config_path: &str,
     committee_config_path: &str,
     initial_accounts_config_path: &str,
-    initial_balance: Balance,
     buffer_size: usize,
     cross_shard_queue_size: usize,
 ) -> Vec<network::Server> {
@@ -86,7 +84,6 @@ fn make_servers(
             server_config_path,
             committee_config_path,
             initial_accounts_config_path,
-            initial_balance,
             buffer_size,
             cross_shard_queue_size,
             shard,
@@ -131,10 +128,6 @@ enum ServerCommands {
         #[structopt(long)]
         initial_accounts: String,
 
-        /// Path to the file describing the initial balance of user accounts
-        #[structopt(long)]
-        initial_balance: Balance,
-
         /// Runs a specific shard (from 0 to shards-1)
         #[structopt(long)]
         shard: Option<u32>,
@@ -173,7 +166,6 @@ fn main() {
             cross_shard_queue_size,
             committee,
             initial_accounts,
-            initial_balance,
             shard,
         } => {
             // Run the server
@@ -185,7 +177,6 @@ fn main() {
                         server_config_path,
                         &committee,
                         &initial_accounts,
-                        initial_balance,
                         buffer_size,
                         cross_shard_queue_size,
                         shard,
@@ -199,7 +190,6 @@ fn main() {
                         server_config_path,
                         &committee,
                         &initial_accounts,
-                        initial_balance,
                         buffer_size,
                         cross_shard_queue_size,
                     )

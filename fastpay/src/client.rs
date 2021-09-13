@@ -531,7 +531,7 @@ fn main() {
             let num_accounts: u32 = num;
             for _ in 0..num_accounts {
                 let account = UserAccount::new(initial_funding);
-                println!("{}", encode_address(&account.address));
+                println!("{}:{}", encode_address(&account.address), initial_funding);
                 accounts_config.insert(account);
             }
             accounts_config

@@ -14,7 +14,7 @@ FastPay allows a set of distributed authorities, some of which are Byzantine, to
 ```bash
 cargo build --release
 cd target/release
-rm -f *.json
+rm -f *.json *.txt
 
 # Create configuration files for 4 authorities with 4 shards each.
 # * Private server states are stored in `server*.json`.
@@ -26,21 +26,21 @@ done
 
 # Create configuration files for 1000 user accounts.
 # * Private account states are stored in one local wallet `accounts.json`.
-# * `initial_accounts.json` is used to mint initial balances on the server side.
-./client --committee committee.json --accounts accounts.json create_accounts 1000 --initial-funding 100 >> initial_accounts.json
+# * `initial_accounts.txt` is used to mint the corresponding initial balances at startup on the server side.
+./client --committee committee.json --accounts accounts.json create_accounts 1000 --initial-funding 100 >> initial_accounts.txt
 
 # Start servers
 for I in 1 2 3 4
 do
     for J in $(seq 0 3)
     do
-        ./server --server server"$I".json run --shard "$J" --initial-accounts initial_accounts.json --initial-balance 100 --committee committee.json &
+        ./server --server server"$I".json run --shard "$J" --initial-accounts initial_accounts.txt --committee committee.json &
     done
  done
 
 # Query (locally cached) balance for first and last user account
-ACCOUNT1="`head -n 1 initial_accounts.json`"
-ACCOUNT2="`tail -n -1 initial_accounts.json`"
+ACCOUNT1="`head -n 1 initial_accounts.txt | awk -F: '{ print $1 }'`"
+ACCOUNT2="`tail -n -1 initial_accounts.txt | awk -F: '{ print $1 }'`"
 ./client --committee committee.json --accounts accounts.json query_balance "$ACCOUNT1"
 ./client --committee committee.json --accounts accounts.json query_balance "$ACCOUNT2"
 
