@@ -3,8 +3,9 @@
 
 #[test]
 fn test_format() {
-    let status = std::process::Command::new("target/debug/generate-format")
+    let status = std::process::Command::new("cargo")
         .current_dir("..")
+        .args(&["run", "--example", "generate-format", "--"])
         .arg("test")
         .status()
         .expect("failed to execute process");
