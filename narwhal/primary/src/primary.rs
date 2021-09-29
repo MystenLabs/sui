@@ -11,7 +11,7 @@ use crate::proposer::Proposer;
 use crate::synchronizer::Synchronizer;
 use async_trait::async_trait;
 use bytes::Bytes;
-use config::{Committee, KeyPair, Parameters, WorkerId};
+use config::{Committee, Parameters, WorkerId};
 use crypto::{Digest, PublicKey, SignatureService};
 use futures::sink::SinkExt as _;
 use log::info;
@@ -59,9 +59,10 @@ pub struct Primary;
 
 impl Primary {
     pub fn spawn(
-        keypair: KeyPair,
+        name: PublicKey,
         committee: Committee,
         parameters: Parameters,
+        signature_service: SignatureService,
         store: Store,
         tx_consensus: Sender<Certificate>,
         rx_consensus: Receiver<Certificate>,
@@ -78,11 +79,8 @@ impl Primary {
         let (tx_cert_requests, rx_cert_requests) = channel(CHANNEL_CAPACITY);
 
         // Write the parameters to the logs.
+        // NOTE: These log entries are needed to compute performance.
         parameters.log();
-
-        // Parse the public and secret key of this authority.
-        let name = keypair.name;
-        let secret = keypair.secret;
 
         // Atomic variable use to synchronizer all tasks with the latest consensus round. This is only
         // used for cleanup. The only tasks that write into this variable is `GarbageCollector`.
@@ -135,9 +133,6 @@ impl Primary {
             /* tx_certificate_waiter */ tx_sync_certificates,
         );
 
-        // The `SignatureService` is used to require signatures on specific digests.
-        let signature_service = SignatureService::new(secret);
-
         // The `Core` receives and handles headers, votes, and certificates from the other primaries.
         Core::spawn(
             name,
@@ -156,7 +151,14 @@ impl Primary {
         );
 
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
-        GarbageCollector::spawn(&name, &committee, consensus_round.clone(), rx_consensus);
+        GarbageCollector::spawn(
+            &name,
+            &committee,
+            store.clone(),
+            consensus_round.clone(),
+            rx_consensus,
+            tx_certificates_loopback.clone(),
+        );
 
         // Receives batch digests from other workers. They are only used to validate headers.
         PayloadReceiver::spawn(store.clone(), /* rx_workers */ rx_others_digests);
