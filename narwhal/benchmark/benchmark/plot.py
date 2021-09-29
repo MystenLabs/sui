@@ -7,7 +7,7 @@ from glob import glob
 from itertools import cycle
 
 from benchmark.utils import PathMaker
-from benchmark.config import PlotParameters, ConfigError
+from benchmark.config import PlotParameters
 from benchmark.aggregate import LogAggregator
 
 
@@ -162,8 +162,8 @@ class Ploter:
     def plot(cls, params_dict):
         try:
             params = PlotParameters(params_dict)
-        except ConfigError as e:
-            raise PlotError(e)
+        except PlotError as e:
+            raise PlotError('Invalid nodes or bench parameters', e)
 
         # Aggregate the logs.
         LogAggregator(params.max_latency).print()

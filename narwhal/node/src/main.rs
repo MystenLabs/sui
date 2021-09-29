@@ -4,10 +4,9 @@ use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::Export as _;
 use config::Import as _;
 use config::{Committee, KeyPair, Parameters, WorkerId};
-use crypto::SignatureService;
+use consensus::Consensus;
 use env_logger::Env;
-use hotstuff::{Block, Consensus};
-use primary::Primary;
+use primary::{Certificate, Primary};
 use store::Store;
 use tokio::sync::mpsc::{channel, Receiver};
 use worker::Worker;
@@ -75,7 +74,6 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
 
     // Read the committee and node's keypair from file.
     let keypair = KeyPair::import(key_file).context("Failed to load the node's keypair")?;
-    let name = keypair.name;
     let committee =
         Committee::import(committee_file).context("Failed to load the committee information")?;
 
@@ -86,9 +84,6 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
         }
         None => Parameters::default(),
     };
-
-    // The `SignatureService` provides signatures on input digests.
-    let signature_service = SignatureService::new(keypair.secret);
 
     // Make the data store.
     let store = Store::new(store_path).context("Failed to create a store")?;
@@ -103,22 +98,18 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
             let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
             let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
             Primary::spawn(
-                name,
+                keypair,
                 committee.clone(),
                 parameters.clone(),
-                signature_service.clone(),
-                store.clone(),
+                store,
                 /* tx_consensus */ tx_new_certificates,
                 /* rx_consensus */ rx_feedback,
             );
             Consensus::spawn(
-                name,
                 committee,
-                parameters,
-                signature_service,
-                store,
-                /* rx_mempool */ rx_new_certificates,
-                /* tx_mempool */ tx_feedback,
+                parameters.gc_depth,
+                /* rx_primary */ rx_new_certificates,
+                /* tx_primary */ tx_feedback,
                 tx_output,
             );
         }
@@ -143,8 +134,8 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
 }
 
 /// Receives an ordered list of certificates and apply any application-specific logic.
-async fn analyze(mut rx_output: Receiver<Block>) {
-    while let Some(_block) = rx_output.recv().await {
+async fn analyze(mut rx_output: Receiver<Certificate>) {
+    while let Some(_certificate) = rx_output.recv().await {
         // NOTE: Here goes the application logic.
     }
 }

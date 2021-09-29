@@ -1,7 +1,7 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 use crate::messages::{Certificate, Header, Vote};
 use bytes::Bytes;
-use config::{Authority, Committee, ConsensusAddresses, PrimaryAddresses, WorkerAddresses};
+use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses};
 use crypto::Hash as _;
 use crypto::{generate_keypair, PublicKey, SecretKey, Signature};
 use futures::sink::SinkExt as _;
@@ -38,9 +38,6 @@ pub fn committee() -> Committee {
             .iter()
             .enumerate()
             .map(|(i, (id, _))| {
-                let consensus = ConsensusAddresses {
-                    consensus_to_consensus: format!("127.0.0.1:{}", 0 + i).parse().unwrap(),
-                };
                 let primary = PrimaryAddresses {
                     primary_to_primary: format!("127.0.0.1:{}", 100 + i).parse().unwrap(),
                     worker_to_primary: format!("127.0.0.1:{}", 200 + i).parse().unwrap(),
@@ -60,7 +57,6 @@ pub fn committee() -> Committee {
                     *id,
                     Authority {
                         stake: 1,
-                        consensus,
                         primary,
                         workers,
                     },

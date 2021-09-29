@@ -163,7 +163,7 @@ impl HeaderWaiter {
                             }
                             for (worker_id, digests) in requires_sync {
                                 let address = self.committee
-                                    .worker(&self.name, &worker_id)
+                                    .worker(&author, &worker_id)
                                     .expect("Author of valid header is not in the committee")
                                     .primary_to_worker;
                                 let message = PrimaryWorkerMessage::Synchronize(digests, author);
@@ -225,7 +225,6 @@ impl HeaderWaiter {
 
                 Some(result) = waiting.next() => match result {
                     Ok(Some(header)) => {
-                        debug!("Finished synching {:?}", header);
                         let _ = self.pending.remove(&header.id);
                         for x in header.payload.keys() {
                             let _ = self.batch_requests.remove(x);

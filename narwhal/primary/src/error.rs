@@ -54,12 +54,6 @@ pub enum DagError {
     #[error("Parents of header {0} are not a quorum")]
     HeaderRequiresQuorum(Digest),
 
-    #[error("Header {0} (round {1}) too old")]
-    HeaderTooOld(Digest, Round),
-
-    #[error("Vote {0} (round {1}) too old")]
-    VoteTooOld(Digest, Round),
-
-    #[error("Certificate {0} (round {1}) too old")]
-    CertificateTooOld(Digest, Round),
+    #[error("Message {0} (round {1}) too old")]
+    TooOld(Digest, Round),
 }

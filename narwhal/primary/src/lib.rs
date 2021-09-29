@@ -17,6 +17,5 @@ mod synchronizer;
 #[path = "tests/common.rs"]
 mod common;
 
-pub use crate::error::DagError;
 pub use crate::messages::{Certificate, Header};
 pub use crate::primary::{Primary, PrimaryWorkerMessage, Round, WorkerPrimaryMessage};

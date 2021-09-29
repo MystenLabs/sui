@@ -306,7 +306,7 @@ impl Core {
     fn sanitize_header(&mut self, header: &Header) -> DagResult<()> {
         ensure!(
             self.gc_round <= header.round,
-            DagError::HeaderTooOld(header.id.clone(), header.round)
+            DagError::TooOld(header.id.clone(), header.round)
         );
 
         // Verify the header's signature.
@@ -320,7 +320,7 @@ impl Core {
     fn sanitize_vote(&mut self, vote: &Vote) -> DagResult<()> {
         ensure!(
             self.current_header.round <= vote.round,
-            DagError::VoteTooOld(vote.digest(), vote.round)
+            DagError::TooOld(vote.digest(), vote.round)
         );
 
         // Ensure we receive a vote on the expected header.
@@ -338,7 +338,7 @@ impl Core {
     fn sanitize_certificate(&mut self, certificate: &Certificate) -> DagResult<()> {
         ensure!(
             self.gc_round <= certificate.round(),
-            DagError::CertificateTooOld(certificate.digest(), certificate.round())
+            DagError::TooOld(certificate.digest(), certificate.round())
         );
 
         // Verify the certificate (and the embedded header).
@@ -393,9 +393,7 @@ impl Core {
                     error!("{}", e);
                     panic!("Storage failure: killing node.");
                 }
-                Err(e @ DagError::HeaderTooOld(..)) => debug!("{}", e),
-                Err(e @ DagError::VoteTooOld(..)) => debug!("{}", e),
-                Err(e @ DagError::CertificateTooOld(..)) => debug!("{}", e),
+                Err(e @ DagError::TooOld(..)) => debug!("{}", e),
                 Err(e) => warn!("{}", e),
             }
 
@@ -408,7 +406,6 @@ impl Core {
                 self.certificates_aggregators.retain(|k, _| k >= &gc_round);
                 self.cancel_handlers.retain(|k, _| k >= &gc_round);
                 self.gc_round = gc_round;
-                debug!("GC round moved to {}", self.gc_round);
             }
         }
     }
