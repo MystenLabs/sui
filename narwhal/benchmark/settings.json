@@ -1,13 +1,13 @@
 {
     "key": {
-        "name": "aws",
-        "path": "/Users/asonnino/.ssh/aws"
+        "name": "aws-fb",
+        "path": "/Users/asonnino/.ssh/aws-fb.pem"
     },
     "port": 5000,
     "repo": {
         "name": "narwhal",
-        "url": "https://github.com/asonnino/narwhal",
-        "branch": "narwhal-hs"
+        "url": "https://github.com/facebookresearch/narwhal",
+        "branch": "master"
     },
     "instances": {
         "type": "m5d.8xlarge",
