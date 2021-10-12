@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) Facebook, Inc. and its affiliates.
+# SPDX-License-Identifier: Apache-2.0
 
 num_shards=15
 num_accounts=500000
