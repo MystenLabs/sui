@@ -76,4 +76,4 @@ Read our [Contributing guide](https://developers.libra.org/docs/community/contri
 
 ## License
 
-The content of this repository is licensed as [Apache 2.0](https://github.com/novifinancial/research/blob/master/LICENSE)
+The content of this repository is licensed as [Apache 2.0](https://github.com/novifinancial/fastpay/blob/main/LICENSE)

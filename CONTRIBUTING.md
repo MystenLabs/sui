@@ -18,7 +18,7 @@ Please refer to the documentation to determine the status of each project (e.g. 
 
 To submit your pull request:
 
-1. Fork `fastpay` repository and create your branch from `master`.
+1. Fork `fastpay` repository and create your branch from `main`.
 2. If you have added code that should be tested, add unit tests.
 3. If you have made changes to APIs, update the relevant documentation, and build and test the developer site.
 4. Verify and ensure that the test suite passes.
@@ -27,4 +27,4 @@ To submit your pull request:
 7. Submit your pull request.
 
 ## Code of Conduct
-Please refer to the [Code of Conduct](https://github.com/libra/libra/blob/master/CODE_OF_CONDUCT.md) for guidelines on interacting with the community.
+Please refer to the [Code of Conduct](https://github.com/libra/libra/blob/main/CODE_OF_CONDUCT.md) for guidelines on interacting with the community.
