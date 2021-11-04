@@ -17,7 +17,7 @@ impl MessageHandler for TestHandler {
         let _ = writer.send(Bytes::from("Ack")).await;
 
         // Deserialize the message.
-        let message = bincode::deserialize(&message).unwrap();
+        let message = bincode::deserialize(&message)?;
 
         // Deliver the message to the application.
         self.deliver.send(message).await.unwrap();

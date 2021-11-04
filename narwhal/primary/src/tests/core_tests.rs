@@ -328,11 +328,7 @@ async fn process_certificates() {
     );
 
     // Send enough certificates to the core.
-    let certificates: Vec<_> = headers()
-        .iter()
-        .take(3)
-        .map(certificate)
-        .collect();
+    let certificates: Vec<_> = headers().iter().take(3).map(certificate).collect();
 
     for x in certificates.clone() {
         tx_primary_messages
