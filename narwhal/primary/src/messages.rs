@@ -56,7 +56,7 @@ impl Header {
         // Ensure all worker ids are correct.
         for worker_id in self.payload.values() {
             committee
-                .worker(&self.author, &worker_id)
+                .worker(&self.author, worker_id)
                 .map_err(|_| DagError::MalformedHeader(self.id.clone()))?;
         }
 

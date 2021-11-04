@@ -331,7 +331,7 @@ async fn process_certificates() {
     let certificates: Vec<_> = headers()
         .iter()
         .take(3)
-        .map(|header| certificate(header))
+        .map(certificate)
         .collect();
 
     for x in certificates.clone() {
