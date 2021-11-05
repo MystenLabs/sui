@@ -1,0 +1,60 @@
+name: Benchmark
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+
+jobs:
+  bench:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      id: cache-id
+      with:
+        path: ${{ runner.temp }}/benchmark-cache-directory
+        key: ${{ runner.os }}-benchmark-cache-v1.0
+    - uses: airvzxf/cache-anything-new-action@v1.0.1
+      with:
+        script: 'install.sh'
+        is_cached: ${{ steps.cache-id.outputs.cache-hit }}
+        cache: ${{ runner.temp }}/benchmark-cache-directory
+        snapshot: '/'
+        exclude: '/boot /data /dev /mnt /proc /run /sys'
+    - name: Install python dependencies
+      run: |
+        if [ -f benchmark/requirements.txt ]; then pip install -r benchmark/requirements.txt; fi
+    - name: Install minimal rust stable
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - uses: Swatinem/rust-cache@v1
+    - name: prepare artifact directory
+      run: |
+        mkdir -p artifacts
+        echo '# Bench results' > artifacts/bench_results.md
+    - name: build benchmarks
+      run: cd benchmark && fab local | tail -n 34 | tee -a ../artifacts/bench_results.md
+    - name: finish the benchmark results
+      run: |
+          cat >> artifacts/bench_results.md <<EOF
+          <details>
+          <summary>PR to merge $GITHUB_HEAD_REF $GITHUB_SHA -> $GITHUB_BASE_REF</summary>
+          \`\`\`
+          $(env | sort)
+          \`\`\`
+          </details>
+          EOF
+    - name: Save PR message as artifact
+      uses: actions/upload-artifact@v1
+      with:
+        name: pr_message
+        path: artifacts
