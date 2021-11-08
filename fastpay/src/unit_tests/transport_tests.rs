@@ -11,7 +11,7 @@ use tokio::{runtime::Runtime, time::timeout};
 async fn get_new_local_address() -> Result<String, std::io::Error> {
     let builder = net2::TcpBuilder::new_v4()?;
     builder.reuse_address(true)?;
-    builder.bind("0.0.0.0:0")?;
+    builder.bind("127.0.0.1:0")?;
     Ok(format!("{}", builder.local_addr()?))
 }
 
