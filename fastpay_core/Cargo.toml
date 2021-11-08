@@ -23,6 +23,7 @@ structopt = "0.3.21"
 similar-asserts = { version = "1.1.0" }
 serde-reflection = "0.3.2"
 serde_yaml = "0.8.17"
+assert-str = "0.1"
 
 [[example]]
 name = "generate-format"
