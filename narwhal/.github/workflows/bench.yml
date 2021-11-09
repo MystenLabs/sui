@@ -5,9 +5,6 @@ on:
     branches:
       - main
       - master
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-
 
 jobs:
   bench:
@@ -53,8 +50,15 @@ jobs:
           \`\`\`
           </details>
           EOF
-    - name: Save PR message as artifact
-      uses: actions/upload-artifact@v1
+    - name: escape benchmark results
+      id: get-comment-body
+      run: |
+        body=$(cat artifacts/bench-results.md)
+        body="${body//'%'/'%25'}"
+        body="${body//$'\n'/'%0A'}"
+        body="${body//$'\r'/'%0D'}"
+        echo ::set-output name=body::$body
+    - name: Create commit comment
+      uses: peter-evans/commit-comment@v1
       with:
-        name: pr_message
-        path: artifacts
+        body: ${{ steps.get-comment-body.outputs.body }}
