@@ -53,7 +53,7 @@ jobs:
     - name: escape benchmark results
       id: get-comment-body
       run: |
-        body=$(cat artifacts/bench-results.md)
+        body=$(cat artifacts/bench_results.md)
         body="${body//'%'/'%25'}"
         body="${body//$'\n'/'%0A'}"
         body="${body//$'\r'/'%0D'}"
@@ -61,4 +61,5 @@ jobs:
     - name: Create commit comment
       uses: peter-evans/commit-comment@v1
       with:
+        token: ${{ secrets.GITHUB_TOKEN }}
         body: ${{ steps.get-comment-body.outputs.body }}
