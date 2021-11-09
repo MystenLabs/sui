@@ -39,15 +39,12 @@ jobs:
         mkdir -p artifacts
         echo '# Bench results' > artifacts/bench_results.md
     - name: build benchmarks
-      run: cd benchmark && fab local | tail -n 34 | tee -a ../artifacts/bench_results.md
+      run: cd benchmark && fab local | tail -n 31 | tee -a ../artifacts/bench_results.md
     - name: finish the benchmark results
       run: |
           cat >> artifacts/bench_results.md <<EOF
           <details>
           <summary>PR to merge $GITHUB_HEAD_REF $GITHUB_SHA -> $GITHUB_BASE_REF</summary>
-          \`\`\`
-          $(env | sort)
-          \`\`\`
           </details>
           EOF
     - name: escape benchmark results
