@@ -1,6 +1,7 @@
 [package]
 name = "node"
 version = "0.1.0"
+license = "Apache-2.0"
 authors = ["George Danezis <gdanezis@fb.com>"]
 edition = "2018"
 

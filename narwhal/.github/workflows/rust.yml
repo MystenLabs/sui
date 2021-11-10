@@ -22,7 +22,7 @@ jobs:
         toolchain: [stable, nightly]
         os: [ubuntu]
     steps:
-      - uses: actions/checkout@main
+      - uses: actions/checkout@v2
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -40,7 +40,7 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@main
+      - uses: actions/checkout@v2
       - name: Install minimal nightly with clippy
         uses: actions-rs/toolchain@v1
         with:
@@ -59,7 +59,7 @@ jobs:
     name: rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@main
+      - uses: actions/checkout@v2
       - name: Install minimal nightly with rustfmt
         uses: actions-rs/toolchain@v1
         with:
@@ -73,3 +73,10 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
+
+  cargo-deny:
+    name: cargo-deny (advisories, licenses, bans, ...)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: EmbarkStudios/cargo-deny-action@v1
