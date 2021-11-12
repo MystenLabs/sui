@@ -53,7 +53,9 @@ impl State {
 
         for (name, round) in &self.last_committed {
             self.dag.retain(|r, authorities| {
-                authorities.retain(|n, _| n != name || r >= round);
+                if r < round {
+                    authorities.retain(|n, _| n != name);
+                }
                 !authorities.is_empty() && r + gc_depth >= last_committed_round
             });
         }
