@@ -217,7 +217,7 @@ impl Consensus {
         let leader = keys[coin as usize % self.committee.size()];
 
         // Return its certificate and the certificate's digest.
-        dag.get(&round).map(|x| x.get(&leader)).flatten()
+        dag.get(&round).and_then(|x| x.get(&leader))
     }
 
     /// Order the past leaders that we didn't already commit.
@@ -273,8 +273,7 @@ impl Consensus {
                 let (digest, certificate) = match state
                     .dag
                     .get(&(x.round() - 1))
-                    .map(|x| x.values().find(|(x, _)| x == parent))
-                    .flatten()
+                    .and_then(|x| x.values().find(|(x, _)| x == parent))
                 {
                     Some(x) => x,
                     None => continue, // We already ordered or GC up to here.
