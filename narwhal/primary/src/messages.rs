@@ -84,7 +84,7 @@ impl Hash for Header {
 }
 
 impl fmt::Debug for Header {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
             "{}: B{}({}, {})",
@@ -97,7 +97,7 @@ impl fmt::Debug for Header {
 }
 
 impl fmt::Display for Header {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "B{}({})", self.round, self.author)
     }
 }
@@ -153,7 +153,7 @@ impl Hash for Vote {
 }
 
 impl fmt::Debug for Vote {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
             "{}: V{}({}, {})",
@@ -234,7 +234,7 @@ impl Hash for Certificate {
 }
 
 impl fmt::Debug for Certificate {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
             "{}: C{}({}, {})",

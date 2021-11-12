@@ -1,4 +1,11 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
+#![warn(
+    future_incompatible,
+    nonstandard_style,
+    rust_2018_idioms,
+    rust_2021_compatibility
+)]
+
 use config::{Committee, Stake};
 use crypto::Hash as _;
 use crypto::{Digest, PublicKey};

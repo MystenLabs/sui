@@ -18,7 +18,7 @@ impl PartialEq for SecretKey {
 }
 
 impl fmt::Debug for SecretKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{}", self.encode_base64())
     }
 }
