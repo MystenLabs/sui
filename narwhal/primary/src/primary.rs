@@ -18,6 +18,7 @@ use log::info;
 use network::{MessageHandler, Receiver as NetworkReceiver, Writer};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use store::Store;
@@ -58,6 +59,8 @@ pub enum WorkerPrimaryMessage {
 pub struct Primary;
 
 impl Primary {
+    const INADDR_ANY: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+
     pub fn spawn(
         keypair: KeyPair,
         committee: Committee,
@@ -93,7 +96,7 @@ impl Primary {
             .primary(&name)
             .expect("Our public key or worker id is not in the committee")
             .primary_to_primary;
-        address.set_ip("0.0.0.0".parse().unwrap());
+        address.set_ip(Primary::INADDR_ANY);
         NetworkReceiver::spawn(
             address,
             /* handler */
@@ -112,7 +115,7 @@ impl Primary {
             .primary(&name)
             .expect("Our public key or worker id is not in the committee")
             .worker_to_primary;
-        address.set_ip("0.0.0.0".parse().unwrap());
+        address.set_ip(Primary::INADDR_ANY);
         NetworkReceiver::spawn(
             address,
             /* handler */

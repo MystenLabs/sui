@@ -15,6 +15,7 @@ use network::{MessageHandler, Receiver, Writer};
 use primary::PrimaryWorkerMessage;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::net::{IpAddr, Ipv4Addr};
 use store::Store;
 use tokio::sync::mpsc::{channel, Sender};
 
@@ -53,6 +54,8 @@ pub struct Worker {
 }
 
 impl Worker {
+    const INADDR_ANY: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,
@@ -108,7 +111,7 @@ impl Worker {
             .worker(&self.name, &self.id)
             .expect("Our public key or worker id is not in the committee")
             .primary_to_worker;
-        address.set_ip("0.0.0.0".parse().unwrap());
+        address.set_ip(Worker::INADDR_ANY);
         Receiver::spawn(
             address,
             /* handler */
@@ -146,7 +149,7 @@ impl Worker {
             .worker(&self.name, &self.id)
             .expect("Our public key or worker id is not in the committee")
             .transactions;
-        address.set_ip("0.0.0.0".parse().unwrap());
+        address.set_ip(Worker::INADDR_ANY);
         Receiver::spawn(
             address,
             /* handler */ TxReceiverHandler { tx_batch_maker },
@@ -204,7 +207,7 @@ impl Worker {
             .worker(&self.name, &self.id)
             .expect("Our public key or worker id is not in the committee")
             .worker_to_worker;
-        address.set_ip("0.0.0.0".parse().unwrap());
+        address.set_ip(Worker::INADDR_ANY);
         Receiver::spawn(
             address,
             /* handler */

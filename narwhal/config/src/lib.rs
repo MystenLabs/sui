@@ -213,7 +213,8 @@ impl Committee {
 
     /// Returns the addresses of all our workers.
     pub fn our_workers(&self, myself: &PublicKey) -> Result<Vec<WorkerAddresses>, ConfigError> {
-        self.authorities
+        let res = self
+            .authorities
             .iter()
             .find(|(name, _)| name == &myself)
             .map(|(_, authority)| authority)
@@ -221,8 +222,8 @@ impl Committee {
             .workers
             .values()
             .cloned()
-            .map(Ok)
-            .collect()
+            .collect();
+        Ok(res)
     }
 
     /// Returns the addresses of all workers with a specific id except the ones of the authority
