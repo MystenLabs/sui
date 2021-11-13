@@ -1,4 +1,4 @@
-# FastPay
+# FastNFT (pre-alpha)
 
 [![Build Status](https://github.com/novifinancial/fastpay/actions/workflows/rust.yml/badge.svg)](https://github.com/novifinancial/fastpay/actions/workflows/rust.yml)
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE.md)
@@ -7,9 +7,11 @@ This repository is dedicated to sharing material related to the FastPay protocol
 
 ## Summary
 
+FastNFT extends FastPay by allowing objects to be transacted.
+
 FastPay allows a set of distributed authorities, some of which are Byzantine, to maintain a high-integrity and availability settlement system for pre-funded payments. It can be used to settle payments in a native unit of value (crypto-currency), or as a financial side-infrastructure to support retail payments in fiat currencies. FastPay is based on Byzantine Consistent Broadcast as its core primitive, foregoing the expenses of full atomic commit channels (consensus). The resulting system has low-latency for both confirmation and payment finality. Remarkably, each authority can be sharded across many machines to allow unbounded horizontal scalability. Our experiments demonstrate intra-continental confirmation latency of less than 100ms, making FastPay applicable to point of sale payments. In laboratory environments, we achieve over 80,000 transactions per second with 20 authorities---surpassing the requirements of current retail card payment networks, while significantly increasing their robustness.
 
-## Quickstart with FastPay Prototype
+## Quickstart with FastNFT Prototype
 
 ```bash
 cargo build --release
@@ -68,12 +70,12 @@ cd ../..
 
 ## References
 
-* [FastPay: High-Performance Byzantine Fault Tolerant Settlement](https://arxiv.org/abs/2003.11506)
+* FastNFT is based on FastPay: [FastPay: High-Performance Byzantine Fault Tolerant Settlement](https://arxiv.org/pdf/2003.11506.pdf)
 
 ## Contributing
 
-Read our [Contributing guide](https://developers.libra.org/docs/community/contributing).
+Read [Eng Plan](https://docs.google.com/document/d/1Cqxaw23PR2hc5bkbhXIDCnWjxA3AbfjsuB45ltWns4U/edit#).
 
 ## License
 
-The content of this repository is licensed as [Apache 2.0](https://github.com/novifinancial/fastpay/blob/main/LICENSE)
+The content of this repository is licensed as [Apache 2.0](https://github.com/MystenLabs/fastnft/blob/update-readme/LICENSE)
