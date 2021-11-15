@@ -361,15 +361,47 @@ mod tests {
                 .iter()
                 .map(|x| x.digest())
                 .collect::<BTreeSet<_>>();
-            let (certificates, _next_parents) = make_certificates(1, rounds, &genesis, &keys);
+            let (certificates, _next_parents) =
+                make_optimal_certificates(1, rounds, &genesis, &keys);
             let committee = mock_committee(&keys);
 
             let mut state = State::new(Certificate::genesis(&mock_committee(&keys[..])));
             for certificate in certificates {
                 Consensus::process_certificate(&committee, gc_depth, &mut state, certificate);
             }
-            // with "optimal" certificates (see `make_certificates`), we need at most 6 rounds lookbehind
+            // with "optimal" certificates (see `make_optimal_certificates`), we need at most 6 rounds lookbehind
             assert!(state.dag.len() <= 6, "DAG size: {}", state.dag.len());
+        }
+    }
+
+    #[test]
+    fn imperfect_state_limits_test() {
+        let repeats = 10;
+        for _repeat in 1..repeats {
+            let gc_depth = 12;
+            let rounds: Round = rand::thread_rng().gen_range(10, 1000);
+
+            // process certificates for rounds, check we don't grow the dag too much
+            let keys: Vec<_> = keys().into_iter().map(|(x, _)| x).collect();
+            let genesis = Certificate::genesis(&mock_committee(&keys[..]))
+                .iter()
+                .map(|x| x.digest())
+                .collect::<BTreeSet<_>>();
+            // TODO: evidence that this test fails when `failure_probability` parameter >= 1/3
+            let (certificates, _next_parents) =
+                make_certificates(1, rounds, &genesis, &keys, 0.333);
+            let committee = mock_committee(&keys);
+
+            let mut state = State::new(Certificate::genesis(&mock_committee(&keys[..])));
+            for certificate in certificates {
+                Consensus::process_certificate(&committee, gc_depth, &mut state, certificate);
+            }
+            // with "less optimal" certificates (see `make_certificates`), we should keep at most gc_depth rounds lookbehind
+            assert!(
+                state.dag.len() <= gc_depth as usize,
+                "DAG size: {}",
+                state.dag.len()
+            );
         }
     }
 }
