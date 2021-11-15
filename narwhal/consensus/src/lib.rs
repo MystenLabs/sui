@@ -117,74 +117,12 @@ impl Consensus {
 
         // Listen to incoming certificates.
         while let Some(certificate) = self.rx_primary.recv().await {
-            debug!("Processing {:?}", certificate);
-            let round = certificate.round();
-
-            // Add the new certificate to the local storage.
-            state
-                .dag
-                .entry(round)
-                .or_insert_with(HashMap::new)
-                .insert(certificate.origin(), (certificate.digest(), certificate));
-
-            // Try to order the dag to commit. Start from the highest round for which we have at least
-            // 2f+1 certificates. This is because we need them to reveal the common coin.
-            let r = round - 1;
-
-            // We only elect leaders for even round numbers.
-            if r % 2 != 0 || r < 4 {
-                continue;
-            }
-
-            // Get the certificate's digest of the leader of round r-2. If we already ordered this leader,
-            // there is nothing to do.
-            let leader_round = r - 2;
-            if leader_round <= state.last_committed_round {
-                continue;
-            }
-            let (leader_digest, leader) = match self.leader(leader_round, &state.dag) {
-                Some(x) => x,
-                None => continue,
-            };
-
-            // Check if the leader has f+1 support from its children (ie. round r-1).
-            let stake: Stake = state
-                .dag
-                .get(&(r - 1))
-                .expect("We should have the whole history by now")
-                .values()
-                .filter(|(_, x)| x.header.parents.contains(leader_digest))
-                .map(|(_, x)| self.committee.stake(&x.origin()))
-                .sum();
-
-            // If it is the case, we can commit the leader. But first, we need to recursively go back to
-            // the last committed leader, and commit all preceding leaders in the right order. Committing
-            // a leader block means committing all its dependencies.
-            if stake < self.committee.validity_threshold() {
-                debug!("Leader {:?} does not have enough support", leader);
-                continue;
-            }
-
-            // Get an ordered list of past leaders that are linked to the current leader.
-            debug!("Leader {:?} has enough support", leader);
-            let mut sequence = Vec::new();
-            for leader in self.order_leaders(leader, &state).iter().rev() {
-                // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
-                for x in self.order_dag(leader, &state) {
-                    // Update and clean up internal state.
-                    state.update(&x, self.gc_depth);
-
-                    // Add the certificate to the sequence.
-                    sequence.push(x);
-                }
-            }
-
-            // Log the latest committed round of every authority (for debug).
-            if log_enabled!(log::Level::Debug) {
-                for (name, round) in &state.last_committed {
-                    debug!("Latest commit of {}: Round {}", name, round);
-                }
-            }
+            let sequence = Consensus::process_certificate(
+                &self.committee,
+                self.gc_depth,
+                &mut state,
+                certificate,
+            );
 
             // Output the sequence in the right order.
             for certificate in sequence {
@@ -209,9 +147,94 @@ impl Consensus {
         }
     }
 
+    fn process_certificate(
+        committee: &Committee,
+        gc_depth: Round,
+        state: &mut State,
+        certificate: Certificate,
+    ) -> Vec<Certificate> {
+        debug!("Processing {:?}", certificate);
+        let round = certificate.round();
+
+        // Add the new certificate to the local storage.
+        state
+            .dag
+            .entry(round)
+            .or_insert_with(HashMap::new)
+            .insert(certificate.origin(), (certificate.digest(), certificate));
+
+        // Try to order the dag to commit. Start from the highest round for which we have at least
+        // 2f+1 certificates. This is because we need them to reveal the common coin.
+        let r = round - 1;
+
+        // We only elect leaders for even round numbers.
+        if r % 2 != 0 || r < 4 {
+            return Vec::new();
+        }
+
+        // Get the certificate's digest of the leader of round r-2. If we already ordered this leader,
+        // there is nothing to do.
+        let leader_round = r - 2;
+        if leader_round <= state.last_committed_round {
+            return Vec::new();
+        }
+        let (leader_digest, leader) = match Consensus::leader(committee, leader_round, &state.dag) {
+            Some(x) => x,
+            None => return Vec::new(),
+        };
+
+        // Check if the leader has f+1 support from its children (ie. round r-1).
+        let stake: Stake = state
+            .dag
+            .get(&(r - 1))
+            .expect("We should have the whole history by now")
+            .values()
+            .filter(|(_, x)| x.header.parents.contains(leader_digest))
+            .map(|(_, x)| committee.stake(&x.origin()))
+            .sum();
+
+        // If it is the case, we can commit the leader. But first, we need to recursively go back to
+        // the last committed leader, and commit all preceding leaders in the right order. Committing
+        // a leader block means committing all its dependencies.
+        if stake < committee.validity_threshold() {
+            debug!("Leader {:?} does not have enough support", leader);
+            return Vec::new();
+        }
+
+        // Get an ordered list of past leaders that are linked to the current leader.
+        debug!("Leader {:?} has enough support", leader);
+        let mut sequence = Vec::new();
+        for leader in Consensus::order_leaders(committee, leader, state)
+            .iter()
+            .rev()
+        {
+            // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
+            for x in Consensus::order_dag(gc_depth, leader, state) {
+                // Update and clean up internal state.
+                state.update(&x, gc_depth);
+
+                // Add the certificate to the sequence.
+                sequence.push(x);
+            }
+        }
+
+        // Log the latest committed round of every authority (for debug).
+        if log_enabled!(log::Level::Debug) {
+            for (name, round) in &state.last_committed {
+                debug!("Latest commit of {}: Round {}", name, round);
+            }
+        }
+
+        sequence
+    }
+
     /// Returns the certificate (and the certificate's digest) originated by the leader of the
     /// specified round (if any).
-    fn leader<'a>(&self, round: Round, dag: &'a Dag) -> Option<&'a (Digest, Certificate)> {
+    fn leader<'a>(
+        committee: &Committee,
+        round: Round,
+        dag: &'a Dag,
+    ) -> Option<&'a (Digest, Certificate)> {
         // TODO: We should elect the leader of round r-2 using the common coin revealed at round r.
         // At this stage, we are guaranteed to have 2f+1 certificates from round r (which is enough to
         // compute the coin). We currently just use round-robin.
@@ -221,16 +244,20 @@ impl Consensus {
         let coin = round;
 
         // Elect the leader.
-        let mut keys: Vec<_> = self.committee.authorities.keys().cloned().collect();
+        let mut keys: Vec<_> = committee.authorities.keys().cloned().collect();
         keys.sort();
-        let leader = keys[coin as usize % self.committee.size()];
+        let leader = keys[coin as usize % committee.size()];
 
         // Return its certificate and the certificate's digest.
         dag.get(&round).and_then(|x| x.get(&leader))
     }
 
     /// Order the past leaders that we didn't already commit.
-    fn order_leaders(&self, leader: &Certificate, state: &State) -> Vec<Certificate> {
+    fn order_leaders(
+        committee: &Committee,
+        leader: &Certificate,
+        state: &State,
+    ) -> Vec<Certificate> {
         let mut to_commit = vec![leader.clone()];
         let mut leader = leader;
         for r in (state.last_committed_round + 2..leader.round())
@@ -238,13 +265,13 @@ impl Consensus {
             .step_by(2)
         {
             // Get the certificate proposed by the previous leader.
-            let (_, prev_leader) = match self.leader(r, &state.dag) {
+            let (_, prev_leader) = match Consensus::leader(committee, r, &state.dag) {
                 Some(x) => x,
                 None => continue,
             };
 
             // Check whether there is a path between the last two leaders.
-            if self.linked(leader, prev_leader, &state.dag) {
+            if Consensus::linked(leader, prev_leader, &state.dag) {
                 to_commit.push(prev_leader.clone());
                 leader = prev_leader;
             }
@@ -253,7 +280,7 @@ impl Consensus {
     }
 
     /// Checks if there is a path between two leaders.
-    fn linked(&self, leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
+    fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
         let mut parents = vec![leader];
         for r in (prev_leader.round()..leader.round()).rev() {
             parents = dag
@@ -269,7 +296,7 @@ impl Consensus {
 
     /// Flatten the dag referenced by the input certificate. This is a classic depth-first search (pre-order):
     /// https://en.wikipedia.org/wiki/Tree_traversal#Pre-order
-    fn order_dag(&self, leader: &Certificate, state: &State) -> Vec<Certificate> {
+    fn order_dag(gc_depth: Round, leader: &Certificate, state: &State) -> Vec<Certificate> {
         debug!("Processing sub-dag of {:?}", leader);
         let mut ordered = Vec::new();
         let mut already_ordered = HashSet::new();
@@ -303,10 +330,46 @@ impl Consensus {
         }
 
         // Ensure we do not commit garbage collected certificates.
-        ordered.retain(|x| x.round() + self.gc_depth >= state.last_committed_round);
+        ordered.retain(|x| x.round() + gc_depth >= state.last_committed_round);
 
         // Ordering the output by round is not really necessary but it makes the commit sequence prettier.
         ordered.sort_by_key(|x| x.round());
         ordered
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    use primary::Certificate;
+    use rand::Rng;
+
+    use super::consensus_tests::*;
+
+    #[test]
+    fn state_limits_test() {
+        let repeats = 10;
+        for _repeat in 1..repeats {
+            let gc_depth = 12;
+            let rounds: Round = rand::thread_rng().gen_range(10, 1000);
+
+            // process certificates for rounds, check we don't grow the dag too much
+            let keys: Vec<_> = keys().into_iter().map(|(x, _)| x).collect();
+            let genesis = Certificate::genesis(&mock_committee(&keys[..]))
+                .iter()
+                .map(|x| x.digest())
+                .collect::<BTreeSet<_>>();
+            let (certificates, _next_parents) = make_certificates(1, rounds, &genesis, &keys);
+            let committee = mock_committee(&keys);
+
+            let mut state = State::new(Certificate::genesis(&mock_committee(&keys[..])));
+            for certificate in certificates {
+                Consensus::process_certificate(&committee, gc_depth, &mut state, certificate);
+            }
+            // with "optimal" certificates (see `make_certificates`), we need at most 6 rounds lookbehind
+            assert!(state.dag.len() <= 6, "DAG size: {}", state.dag.len());
+        }
     }
 }

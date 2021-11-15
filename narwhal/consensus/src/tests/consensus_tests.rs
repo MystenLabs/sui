@@ -9,7 +9,7 @@ use std::collections::{BTreeSet, VecDeque};
 use tokio::sync::mpsc::channel;
 
 // Fixture
-fn keys() -> Vec<(PublicKey, SecretKey)> {
+pub fn keys() -> Vec<(PublicKey, SecretKey)> {
     let mut rng = StdRng::from_seed([0; 32]);
     (0..4).map(|_| generate_keypair(&mut rng)).collect()
 }
@@ -37,7 +37,7 @@ pub fn mock_committee(keys: &[PublicKey]) -> Committee {
 }
 
 // Fixture
-fn mock_certificate(
+pub fn mock_certificate(
     origin: PublicKey,
     round: Round,
     parents: BTreeSet<Digest>,
@@ -57,7 +57,7 @@ fn mock_certificate(
 // Creates one certificate per authority starting and finishing at the specified rounds (inclusive).
 // Outputs a VecDeque of certificates (the certificate with higher round is on the front) and a set
 // of digests to be used as parents for the certificates of the next round.
-fn make_certificates(
+pub fn make_certificates(
     start: Round,
     stop: Round,
     initial_parents: &BTreeSet<Digest>,
