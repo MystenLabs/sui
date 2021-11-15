@@ -60,9 +60,11 @@ impl State {
 
         for (name, round) in &self.last_committed {
             self.dag.retain(|r, authorities| {
+                // We purge certificates for `name` prior to its latest commit
                 if r < round {
                     authorities.retain(|n, _| n != name);
                 }
+                // We purge all certificates past the gc depth
                 !authorities.is_empty() && r + gc_depth >= last_committed_round
             });
         }

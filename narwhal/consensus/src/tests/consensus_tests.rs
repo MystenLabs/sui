@@ -15,11 +15,11 @@ fn keys() -> Vec<(PublicKey, SecretKey)> {
 }
 
 // Fixture
-pub fn mock_committee() -> Committee {
+pub fn mock_committee(keys: &[PublicKey]) -> Committee {
     Committee {
-        authorities: keys()
+        authorities: keys
             .iter()
-            .map(|(id, _)| {
+            .map(|id| {
                 (
                     *id,
                     Authority {
@@ -85,7 +85,7 @@ fn make_certificates(
 async fn commit_one() {
     // Make certificates for rounds 1 to 4.
     let keys: Vec<_> = keys().into_iter().map(|(x, _)| x).collect();
-    let genesis = Certificate::genesis(&mock_committee())
+    let genesis = Certificate::genesis(&mock_committee(&keys[..]))
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -100,7 +100,7 @@ async fn commit_one() {
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
     Consensus::spawn(
-        mock_committee(),
+        mock_committee(&keys[..]),
         /* gc_depth */ 50,
         rx_waiter,
         tx_primary,
@@ -133,7 +133,7 @@ async fn dead_node() {
     keys.sort(); // Ensure we don't remove one of the leaders.
     let _ = keys.pop().unwrap();
 
-    let genesis = Certificate::genesis(&mock_committee())
+    let genesis = Certificate::genesis(&mock_committee(&keys[..]))
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -145,7 +145,7 @@ async fn dead_node() {
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
     Consensus::spawn(
-        mock_committee(),
+        mock_committee(&keys[..]),
         /* gc_depth */ 50,
         rx_waiter,
         tx_primary,
@@ -177,7 +177,7 @@ async fn not_enough_support() {
     let mut keys: Vec<_> = keys().into_iter().map(|(x, _)| x).collect();
     keys.sort();
 
-    let genesis = Certificate::genesis(&mock_committee())
+    let genesis = Certificate::genesis(&mock_committee(&keys[..]))
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -233,7 +233,7 @@ async fn not_enough_support() {
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
     Consensus::spawn(
-        mock_committee(),
+        mock_committee(&keys[..]),
         /* gc_depth */ 50,
         rx_waiter,
         tx_primary,
@@ -271,7 +271,7 @@ async fn missing_leader() {
     let mut keys: Vec<_> = keys().into_iter().map(|(x, _)| x).collect();
     keys.sort();
 
-    let genesis = Certificate::genesis(&mock_committee())
+    let genesis = Certificate::genesis(&mock_committee(&keys[..]))
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -296,7 +296,7 @@ async fn missing_leader() {
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
     Consensus::spawn(
-        mock_committee(),
+        mock_committee(&keys[..]),
         /* gc_depth */ 50,
         rx_waiter,
         tx_primary,
