@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::{
-    authority::{AccountOffchainState, Authority, AuthorityState},
+    authority::{ObjectState, Authority, AuthorityState},
     base_types::Amount,
 };
 use futures::lock::Mutex;
@@ -130,7 +130,7 @@ fn fund_account<I: IntoIterator<Item = i128>>(
     for (_, client) in clients.iter_mut() {
         client.0.as_ref().try_lock().unwrap().accounts_mut().insert(
             address,
-            AccountOffchainState::new_with_balance(
+            ObjectState::new_with_balance(
                 balances.next().unwrap_or_else(Balance::zero),
                 /* no receive log to justify the balances */ Vec::new(),
             ),

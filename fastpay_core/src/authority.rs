@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, convert::TryInto};
 mod authority_tests;
 
 #[derive(Eq, PartialEq, Debug)]
-pub struct AccountOffchainState {
+pub struct ObjectState {
     /// Balance of the FastPay account.
     pub balance: Balance,
     /// Sequence number tracking spending actions.
@@ -32,7 +32,7 @@ pub struct AuthorityState {
     /// The signature key of the authority.
     pub secret: KeyPair,
     /// Offchain states of FastPay accounts.
-    pub accounts: BTreeMap<FastPayAddress, AccountOffchainState>,
+    pub accounts: BTreeMap<FastPayAddress, ObjectState>,
     /// The latest transaction index of the blockchain that the authority has seen.
     pub last_transaction_index: VersionNumber,
     /// The sharding ID of this authority shard. 0 if one shard.
@@ -147,7 +147,7 @@ impl Authority for AuthorityState {
         let mut sender_account = self
             .accounts
             .entry(transfer.sender)
-            .or_insert_with(AccountOffchainState::new);
+            .or_insert_with(ObjectState::new);
         let mut sender_sequence_number = sender_account.next_sequence_number;
         let mut sender_balance = sender_account.balance;
 
@@ -184,7 +184,7 @@ impl Authority for AuthorityState {
             let recipient_account = self
                 .accounts
                 .entry(recipient)
-                .or_insert_with(AccountOffchainState::new);
+                .or_insert_with(ObjectState::new);
             recipient_account.balance = recipient_account
                 .balance
                 .try_add(transfer.amount.into())
@@ -219,7 +219,7 @@ impl Authority for AuthorityState {
         let recipient_account = self
             .accounts
             .entry(recipient)
-            .or_insert_with(AccountOffchainState::new);
+            .or_insert_with(ObjectState::new);
         recipient_account.balance = recipient_account
             .balance
             .try_add(transfer.amount.into())
@@ -240,7 +240,7 @@ impl Authority for AuthorityState {
         let recipient_account = self
             .accounts
             .entry(recipient)
-            .or_insert_with(AccountOffchainState::new);
+            .or_insert_with(ObjectState::new);
         if order.transaction_index <= self.last_transaction_index {
             // Ignore old transaction index.
             return Ok(recipient_account.make_account_info(recipient));
@@ -278,7 +278,7 @@ impl Authority for AuthorityState {
     }
 }
 
-impl Default for AccountOffchainState {
+impl Default for ObjectState {
     fn default() -> Self {
         Self {
             balance: Balance::zero(),
@@ -291,7 +291,7 @@ impl Default for AccountOffchainState {
     }
 }
 
-impl AccountOffchainState {
+impl ObjectState {
     pub fn new() -> Self {
         Self::default()
     }
@@ -368,14 +368,14 @@ impl AuthorityState {
     fn account_state(
         &self,
         address: &FastPayAddress,
-    ) -> Result<&AccountOffchainState, FastPayError> {
+    ) -> Result<&ObjectState, FastPayError> {
         self.accounts
             .get(address)
             .ok_or(FastPayError::UnknownSenderAccount)
     }
 
     #[cfg(test)]
-    pub fn accounts_mut(&mut self) -> &mut BTreeMap<FastPayAddress, AccountOffchainState> {
+    pub fn accounts_mut(&mut self) -> &mut BTreeMap<FastPayAddress, ObjectState> {
         &mut self.accounts
     }
 }

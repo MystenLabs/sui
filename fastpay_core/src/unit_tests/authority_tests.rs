@@ -454,7 +454,7 @@ fn init_state_with_accounts<I: IntoIterator<Item = (FastPayAddress, Balance)>>(
         let account = state
             .accounts
             .entry(address)
-            .or_insert_with(AccountOffchainState::new);
+            .or_insert_with(ObjectState::new);
         account.balance = balance;
     }
     state
