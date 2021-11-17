@@ -36,7 +36,7 @@ impl AuthorityClient for LocalAuthorityClient {
                 .lock()
                 .await
                 .handle_confirmation_order(order)
-                .map(|(info, _)| info)
+                .map(|info| info)
         })
     }
 

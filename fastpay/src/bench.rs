@@ -189,7 +189,7 @@ impl ClientServerBenchmark {
             self.port,
             state,
             self.buffer_size,
-            self.cross_shard_queue_size,
+            // self.cross_shard_queue_size,
         );
         server.spawn().await.unwrap()
     }

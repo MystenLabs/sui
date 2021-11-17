@@ -5,7 +5,7 @@ use crate::transport::*;
 use fastpay_core::{authority::*, base_types::*, client::*, error::*, messages::*, serialize::*};
 
 use bytes::Bytes;
-use futures::{channel::mpsc, future::FutureExt, sink::SinkExt, stream::StreamExt};
+use futures::{future::FutureExt};
 use log::*;
 use std::io;
 use tokio::time;
@@ -16,7 +16,7 @@ pub struct Server {
     base_port: u32,
     state: AuthorityState,
     buffer_size: usize,
-    cross_shard_queue_size: usize,
+    // cross_shard_queue_size: usize,
     // Stats
     packets_processed: u64,
     user_errors: u64,
@@ -29,7 +29,7 @@ impl Server {
         base_port: u32,
         state: AuthorityState,
         buffer_size: usize,
-        cross_shard_queue_size: usize,
+        // cross_shard_queue_size: usize,
     ) -> Self {
         Self {
             network_protocol,
@@ -37,7 +37,7 @@ impl Server {
             base_port,
             state,
             buffer_size,
-            cross_shard_queue_size,
+            // cross_shard_queue_size,
             packets_processed: 0,
             user_errors: 0,
         }
@@ -51,6 +51,7 @@ impl Server {
         self.user_errors
     }
 
+    /*
     async fn forward_cross_shard_queries(
         network_protocol: NetworkProtocol,
         base_address: String,
@@ -85,6 +86,7 @@ impl Server {
             }
         }
     }
+    */
 
     pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
         info!(
@@ -99,6 +101,7 @@ impl Server {
             self.base_port + self.state.shard_id
         );
 
+        /*
         let (cross_shard_sender, cross_shard_receiver) = mpsc::channel(self.cross_shard_queue_size);
         tokio::spawn(Self::forward_cross_shard_queries(
             self.network_protocol,
@@ -107,12 +110,13 @@ impl Server {
             self.state.shard_id,
             cross_shard_receiver,
         ));
+        */
 
         let buffer_size = self.buffer_size;
         let protocol = self.network_protocol;
         let state = RunningServerState {
             server: self,
-            cross_shard_sender,
+            // cross_shard_sender,
         };
         // Launch server for the appropriate protocol.
         protocol.spawn_server(&address, state, buffer_size).await
@@ -121,7 +125,7 @@ impl Server {
 
 struct RunningServerState {
     server: Server,
-    cross_shard_sender: mpsc::Sender<(Vec<u8>, ShardId)>,
+    // cross_shard_sender: mpsc::Sender<(Vec<u8>, ShardId)>,
 }
 
 impl MessageHandler for RunningServerState {
@@ -149,7 +153,8 @@ impl MessageHandler for RunningServerState {
                                 .state
                                 .handle_confirmation_order(confirmation_order)
                             {
-                                Ok((info, send_shard)) => {
+                                Ok(info) => {
+                                    /*
                                     // Send a message to other shard
                                     if let Some(cross_shard_update) = send_shard {
                                         let shard = cross_shard_update.shard_id;
@@ -163,6 +168,7 @@ impl MessageHandler for RunningServerState {
                                             .await
                                             .expect("internal channel should not fail");
                                     };
+                                    */
 
                                     // Response
                                     Ok(Some(serialize_info_response(&info)))

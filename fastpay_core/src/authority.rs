@@ -10,8 +10,9 @@ mod authority_tests;
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct ObjectState {
-    /// Balance of the FastPay account.
+    /// The authenticator that unlocks this object (eg. public key, or other).
     pub owner: FastPayAddress,
+    /// The contents of the Object. Right now just a blob.
     pub contents: Vec<u8>,
     /// Sequence number tracking spending actions.
     pub next_sequence_number: SequenceNumber,
@@ -26,7 +27,7 @@ pub struct ObjectState {
 }
 
 pub struct AuthorityState {
-    /// The name of this autority.
+    /// The name of this authority.
     pub name: AuthorityName,
     /// Committee of this FastPay instance.
     pub committee: Committee,
@@ -56,7 +57,7 @@ pub trait Authority {
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> Result<(AccountInfoResponse, Option<CrossShardUpdate>), FastPayError>;
+    ) -> Result<AccountInfoResponse, FastPayError>;
 
     /// Force synchronization to finalize transfers from Primary to FastPay.
     fn handle_primary_synchronization_order(
@@ -138,7 +139,7 @@ impl Authority for AuthorityState {
     fn handle_confirmation_order(
         &mut self,
         confirmation_order: ConfirmationOrder,
-    ) -> Result<(AccountInfoResponse, Option<CrossShardUpdate>), FastPayError> {
+    ) -> Result<AccountInfoResponse, FastPayError> {
         let certificate = confirmation_order.transfer_certificate;
         // Check the certificate and retrieve the transfer data.
         fp_ensure!(
@@ -164,7 +165,7 @@ impl Authority for AuthorityState {
         }
         if sender_sequence_number > transfer.sequence_number {
             // Transfer was already confirmed.
-            return Ok((sender_object.make_account_info(transfer.sender), None));
+            return Ok(sender_object.make_account_info(transfer.sender));
         }
         //sender_balance = sender_balance.try_sub(transfer.amount.into())?;
         sender_sequence_number = sender_sequence_number.increment()?;
@@ -207,7 +208,7 @@ impl Authority for AuthorityState {
         });
         */
 
-        Ok((info, None))
+        Ok(info)
     }
 
     /* Fastnft has no recipient updates

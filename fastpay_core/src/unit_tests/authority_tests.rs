@@ -326,7 +326,7 @@ fn test_handle_confirmation_order_ok() {
     //     .try_sub(certified_transfer_order.value.transfer.amount.into())
     //     .unwrap();
 
-    let (info, _) = authority_state
+    let info = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .unwrap();
     assert_eq!(sender, info.sender);
