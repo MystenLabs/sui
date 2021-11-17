@@ -22,8 +22,6 @@ pub struct ObjectState {
     pub confirmed_log: Vec<CertifiedTransferOrder>,
     /// All executed Primary synchronization orders for this recipient.
     pub synchronization_log: Vec<PrimarySynchronizationOrder>,
-    /// All confirmed certificates as a receiver.
-    pub received_log: Vec<CertifiedTransferOrder>,
 }
 
 pub struct AuthorityState {
@@ -284,9 +282,10 @@ impl Authority for AuthorityState {
                 fp_bail!(FastPayError::CertificateNotfound)
             }
         }
+        /*
         if let Some(idx) = request.request_received_transfers_excluding_first_nth {
             response.requested_received_transfers = account.received_log[idx..].to_vec();
-        }
+        }*/
         Ok(response)
     }
 }
@@ -301,7 +300,7 @@ impl Default for ObjectState {
             pending_confirmation: None,
             confirmed_log: Vec::new(),
             synchronization_log: Vec::new(),
-            received_log: Vec::new(),
+            // received_log: Vec::new(),
         }
     }
 }
@@ -323,7 +322,7 @@ impl ObjectState {
     }
 
     #[cfg(test)]
-    pub fn new_with_balance(contents: Vec<u8>, received_log: Vec<CertifiedTransferOrder>) -> Self {
+    pub fn new_with_balance(contents: Vec<u8>, _received_log: Vec<CertifiedTransferOrder>) -> Self {
         Self {
             owner : PublicKeyBytes([0; 32]),
             contents : contents,
@@ -331,7 +330,7 @@ impl ObjectState {
             pending_confirmation: None,
             confirmed_log: Vec::new(),
             synchronization_log: Vec::new(),
-            received_log,
+            // received_log,
         }
     }
 }

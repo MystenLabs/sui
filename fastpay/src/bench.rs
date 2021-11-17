@@ -135,7 +135,7 @@ impl ClientServerBenchmark {
                 pending_confirmation: None,
                 confirmed_log: Vec::new(),
                 synchronization_log: Vec::new(),
-                received_log: Vec::new(),
+                // received_log: Vec::new(),
             };
             states[i].accounts.insert(keypair.0, client);
             account_keys.push(keypair);
