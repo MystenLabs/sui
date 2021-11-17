@@ -46,7 +46,7 @@ pub type AuthorityName = PublicKeyBytes;
 // Define digests and object IDs
 pub type ObjectID = [u8; 20];
 pub type TxDigest = [u8; 20];
-pub type ObjectRef = (ObjectID, TxDigest);
+pub type ObjectRef = (ObjectID, SequenceNumber);
 
 
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {

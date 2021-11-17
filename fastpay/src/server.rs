@@ -10,6 +10,7 @@ use futures::future::join_all;
 use log::*;
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
+use std::convert::TryInto;
 
 #[allow(clippy::too_many_arguments)]
 fn make_shard_server(
@@ -44,10 +45,11 @@ fn make_shard_server(
         if AuthorityState::get_shard(num_shards, address) != shard {
             continue;
         }
+
         let client = ObjectState {
-            // balance: *balance,
+            id: address.0[..20].try_into().expect("slice with incorrect length"),
             contents: Vec::new(),
-            owner: PublicKeyBytes([0; 32]),
+            owner: address.clone(),
             next_sequence_number: SequenceNumber::from(0),
             pending_confirmation: None,
             confirmed_log: Vec::new(),

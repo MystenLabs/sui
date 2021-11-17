@@ -15,6 +15,7 @@ use std::{
 };
 use structopt::StructOpt;
 use tokio::{runtime::Builder, time};
+use std::convert::TryInto;
 
 use std::thread;
 
@@ -129,8 +130,9 @@ impl ClientServerBenchmark {
             assert!(states[i].in_shard(&keypair.0));
             let client = ObjectState {
                 // balance: Balance::from(Amount::from(100)),
+                id: keypair.0.0[0..20].try_into().expect("wrong size"),
                 contents: Vec::new(),
-                owner: FastPayAddress::from(PublicKeyBytes([0; 32])),
+                owner: FastPayAddress::from(keypair.0.clone()),
                 next_sequence_number: SequenceNumber::from(0),
                 pending_confirmation: None,
                 confirmed_log: Vec::new(),

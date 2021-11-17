@@ -10,13 +10,15 @@ mod authority_tests;
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct ObjectState {
+    /// The object identifier
+    pub id: ObjectID,
     /// The authenticator that unlocks this object (eg. public key, or other).
+    pub next_sequence_number: SequenceNumber,
+    /// Whether we have signed a transfer for this sequence number already.
     pub owner: FastPayAddress,
     /// The contents of the Object. Right now just a blob.
     pub contents: Vec<u8>,
     /// Sequence number tracking spending actions.
-    pub next_sequence_number: SequenceNumber,
-    /// Whether we have signed a transfer for this sequence number already.
     pub pending_confirmation: Option<SignedTransferOrder>,
     /// All confirmed certificates for this sender.
     pub confirmed_log: Vec<CertifiedTransferOrder>,
@@ -293,7 +295,7 @@ impl Authority for AuthorityState {
 impl Default for ObjectState {
     fn default() -> Self {
         Self {
-            // balance: Balance::zero(),
+            id: [0;20],
             contents: Vec::new(),
             owner : PublicKeyBytes([0; 32]),
             next_sequence_number: SequenceNumber::new(),
@@ -310,6 +312,10 @@ impl ObjectState {
         Self::default()
     }
 
+    pub fn to_object_reference(&self) -> ObjectRef {
+        (self.id, self.next_sequence_number)
+    }
+
     fn make_account_info(&self, sender: FastPayAddress) -> AccountInfoResponse {
         AccountInfoResponse {
             sender,
@@ -324,6 +330,7 @@ impl ObjectState {
     #[cfg(test)]
     pub fn new_with_balance(contents: Vec<u8>, _received_log: Vec<CertifiedTransferOrder>) -> Self {
         Self {
+            id: [0; 20],
             owner : PublicKeyBytes([0; 32]),
             contents : contents,
             next_sequence_number: SequenceNumber::new(),
