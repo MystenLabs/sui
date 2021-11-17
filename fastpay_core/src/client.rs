@@ -287,7 +287,7 @@ where
                 let fut = client.handle_account_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => Some((*name, info.balance)),
+                        Ok(_info) => Some((*name, Balance::from(0))),
                         _ => None,
                     }
                 }

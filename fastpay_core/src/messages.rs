@@ -81,7 +81,7 @@ pub struct AccountInfoRequest {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AccountInfoResponse {
     pub sender: FastPayAddress,
-    pub balance: Balance,
+    // pub balance: Balance,
     pub next_sequence_number: SequenceNumber,
     pub pending_confirmation: Option<SignedTransferOrder>,
     pub requested_certificate: Option<CertifiedTransferOrder>,

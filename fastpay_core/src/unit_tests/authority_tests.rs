@@ -177,11 +177,11 @@ fn test_handle_confirmation_order_bad_sequence_number() {
     sender_account.next_sequence_number = sender_account.next_sequence_number.increment().unwrap();
     // let old_account = sender_account;
 
-    let old_balance;
+    // let old_balance;
     let old_seq_num;
     {
         let old_account = authority_state.accounts.get_mut(&sender).unwrap();
-        old_balance = old_account.balance;
+        // old_balance = old_account.balance;
         old_seq_num = old_account.next_sequence_number;
     }
 
@@ -197,7 +197,7 @@ fn test_handle_confirmation_order_bad_sequence_number() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     let new_account = authority_state.accounts.get_mut(&sender).unwrap();
-    assert_eq!(old_balance, new_account.balance);
+    // assert_eq!(old_balance, new_account.balance);
     assert_eq!(old_seq_num, new_account.next_sequence_number);
     assert_eq!(new_account.confirmed_log, Vec::new());
     assert!(authority_state.accounts.get(&recipient).is_none());
@@ -220,7 +220,7 @@ fn test_handle_confirmation_order_exceed_balance() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     let new_account = authority_state.accounts.get(&sender).unwrap();
-    assert_eq!(Balance::from(-995), new_account.balance);
+    // assert_eq!(Balance::from(-995), new_account.balance);
     assert_eq!(SequenceNumber::from(1), new_account.next_sequence_number);
     assert_eq!(new_account.confirmed_log.len(), 1);
     assert!(authority_state.accounts.get(&recipient).is_some());
@@ -246,14 +246,14 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     let new_sender_account = authority_state.accounts.get(&sender).unwrap();
-    assert_eq!(Balance::from(0), new_sender_account.balance);
+    // assert_eq!(Balance::from(0), new_sender_account.balance);
     assert_eq!(
         SequenceNumber::from(1),
         new_sender_account.next_sequence_number
     );
     assert_eq!(new_sender_account.confirmed_log.len(), 1);
-    let new_recipient_account = authority_state.accounts.get(&recipient).unwrap();
-    assert_eq!(Balance::max(), new_recipient_account.balance);
+    // let new_recipient_account = authority_state.accounts.get(&recipient).unwrap();
+    // assert_eq!(Balance::max(), new_recipient_account.balance);
 }
 
 #[test]
@@ -272,11 +272,12 @@ fn test_handle_confirmation_order_receiver_equal_sender() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     let account = authority_state.accounts.get(&address).unwrap();
-    assert_eq!(Balance::from(1), account.balance);
+    // assert_eq!(Balance::from(1), account.balance);
     assert_eq!(SequenceNumber::from(1), account.next_sequence_number);
     assert_eq!(account.confirmed_log.len(), 1);
 }
 
+/* No such thing in fastnft
 #[test]
 fn test_handle_cross_shard_recipient_commit() {
     let (sender, sender_key) = get_key_pair();
@@ -290,14 +291,17 @@ fn test_handle_cross_shard_recipient_commit() {
         Amount::from(10),
         &authority_state,
     );
+    /*
     assert!(authority_state
         .handle_cross_shard_recipient_commit(certified_transfer_order)
         .is_ok());
+    */
     let account = authority_state.accounts.get(&recipient).unwrap();
-    assert_eq!(Balance::from(11), account.balance);
+    // assert_eq!(Balance::from(11), account.balance);
     assert_eq!(SequenceNumber::from(0), account.next_sequence_number);
     assert_eq!(account.confirmed_log.len(), 0);
 }
+*/
 
 #[test]
 fn test_handle_confirmation_order_ok() {
@@ -315,16 +319,16 @@ fn test_handle_confirmation_order_ok() {
     let old_account = authority_state.accounts.get_mut(&sender).unwrap();
     let mut next_sequence_number = old_account.next_sequence_number;
     next_sequence_number = next_sequence_number.increment().unwrap();
-    let mut remaining_balance = old_account.balance;
-    remaining_balance = remaining_balance
-        .try_sub(certified_transfer_order.value.transfer.amount.into())
-        .unwrap();
+    // let mut remaining_balance = old_account.balance;
+    // remaining_balance = remaining_balance
+    //     .try_sub(certified_transfer_order.value.transfer.amount.into())
+    //     .unwrap();
 
     let (info, _) = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .unwrap();
     assert_eq!(sender, info.sender);
-    assert_eq!(remaining_balance, info.balance);
+    // assert_eq!(remaining_balance, info.balance);
     assert_eq!(next_sequence_number, info.next_sequence_number);
     assert_eq!(None, info.pending_confirmation);
     assert_eq!(
@@ -332,11 +336,11 @@ fn test_handle_confirmation_order_ok() {
         vec![certified_transfer_order.clone()]
     );
 
-    let recipient_account = authority_state.accounts.get(&recipient).unwrap();
-    assert_eq!(
+    // let recipient_account = authority_state.accounts.get(&recipient).unwrap();
+    /* assert_eq!(
         recipient_account.balance,
         certified_transfer_order.value.transfer.amount.into()
-    );
+    ); */
 
     let info_request = AccountInfoRequest {
         sender: recipient,
@@ -368,8 +372,8 @@ fn test_handle_primary_synchronization_order_update() {
         .is_ok());
     updated_transaction_index = updated_transaction_index.increment().unwrap();
     assert_eq!(state.last_transaction_index, updated_transaction_index);
-    let account = state.accounts.get(&address).unwrap();
-    assert_eq!(account.balance, order.amount.into());
+    // let account = state.accounts.get(&address).unwrap();
+    // assert_eq!(account.balance, order.amount.into());
     assert_eq!(state.accounts.len(), 1);
 }
 
@@ -389,8 +393,8 @@ fn test_handle_primary_synchronization_order_double_spend() {
         .handle_primary_synchronization_order(order.clone())
         .is_ok());
     assert_eq!(state.last_transaction_index, updated_transaction_index);
-    let account = state.accounts.get(&address).unwrap();
-    assert_eq!(account.balance, order.amount.into());
+    // let account = state.accounts.get(&address).unwrap();
+    // assert_eq!(account.balance, order.amount.into());
     assert_eq!(state.accounts.len(), 1);
 }
 
@@ -450,12 +454,12 @@ fn init_state_with_accounts<I: IntoIterator<Item = (FastPayAddress, Balance)>>(
     balances: I,
 ) -> AuthorityState {
     let mut state = init_state();
-    for (address, balance) in balances {
-        let account = state
+    for (address, _balance) in balances {
+        let _account = state
             .accounts
             .entry(address)
             .or_insert_with(ObjectState::new);
-        account.balance = balance;
+        // account.balance = balance;
     }
     state
 }

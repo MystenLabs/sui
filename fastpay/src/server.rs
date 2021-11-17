@@ -40,12 +40,14 @@ fn make_shard_server(
     );
 
     // Load initial states
-    for (address, balance) in &initial_accounts_config.accounts {
+    for (address, _balance) in &initial_accounts_config.accounts {
         if AuthorityState::get_shard(num_shards, address) != shard {
             continue;
         }
         let client = ObjectState {
-            balance: *balance,
+            // balance: *balance,
+            contents: Vec::new(),
+            owner: PublicKeyBytes([0; 32]),
             next_sequence_number: SequenceNumber::from(0),
             pending_confirmation: None,
             confirmed_log: Vec::new(),

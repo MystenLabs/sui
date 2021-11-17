@@ -175,6 +175,7 @@ impl MessageHandler for RunningServerState {
                             .state
                             .handle_account_info_request(*message)
                             .map(|info| Some(serialize_info_response(&info))),
+                        /* No cross shard in fastnft
                         SerializedMessage::CrossShard(message) => {
                             match self
                                 .server
@@ -188,6 +189,7 @@ impl MessageHandler for RunningServerState {
                                 }
                             }
                         }
+                        */
                         _ => Err(FastPayError::UnexpectedMessage),
                     }
                 }

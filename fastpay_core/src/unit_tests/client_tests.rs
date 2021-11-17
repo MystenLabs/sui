@@ -126,12 +126,12 @@ fn fund_account<I: IntoIterator<Item = i128>>(
     address: FastPayAddress,
     balances: I,
 ) {
-    let mut balances = balances.into_iter().map(Balance::from);
+    let _balances = balances.into_iter().map(Balance::from);
     for (_, client) in clients.iter_mut() {
         client.0.as_ref().try_lock().unwrap().accounts_mut().insert(
             address,
             ObjectState::new_with_balance(
-                balances.next().unwrap_or_else(Balance::zero),
+                Vec::new(),
                 /* no receive log to justify the balances */ Vec::new(),
             ),
         );

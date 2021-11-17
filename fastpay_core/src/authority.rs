@@ -11,7 +11,8 @@ mod authority_tests;
 #[derive(Eq, PartialEq, Debug)]
 pub struct ObjectState {
     /// Balance of the FastPay account.
-    pub balance: Balance,
+    pub owner: FastPayAddress,
+    pub contents: Vec<u8>,
     /// Sequence number tracking spending actions.
     pub next_sequence_number: SequenceNumber,
     /// Whether we have signed a transfer for this sequence number already.
@@ -69,12 +70,14 @@ pub trait Authority {
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, FastPayError>;
 
+    /*
     /// Handle cross updates from another shard of the same authority.
     /// This relies on deliver-once semantics of a trusted channel between shards.
     fn handle_cross_shard_recipient_commit(
         &mut self,
         certificate: CertifiedTransferOrder,
     ) -> Result<(), FastPayError>;
+    */
 }
 
 impl Authority for AuthorityState {
@@ -116,12 +119,14 @@ impl Authority for AuthorityState {
                     account.next_sequence_number == transfer.sequence_number,
                     FastPayError::UnexpectedSequenceNumber
                 );
+                /*
                 fp_ensure!(
                     account.balance >= transfer.amount.into(),
                     FastPayError::InsufficientFunding {
                         current_balance: account.balance
                     }
                 );
+                */ 
                 let signed_order = SignedTransferOrder::new(order, self.name, &self.secret);
                 account.pending_confirmation = Some(signed_order);
                 Ok(account.make_account_info(sender))
@@ -144,12 +149,12 @@ impl Authority for AuthorityState {
         let transfer = certificate.value.transfer.clone();
 
         // First we copy all relevant data from sender.
-        let mut sender_account = self
+        let mut sender_object = self
             .accounts
             .entry(transfer.sender)
             .or_insert_with(ObjectState::new);
-        let mut sender_sequence_number = sender_account.next_sequence_number;
-        let mut sender_balance = sender_account.balance;
+        let mut sender_sequence_number = sender_object.next_sequence_number;
+        //let mut sender_balance = sender_account.balance;
 
         // Check and update the copied state
         if sender_sequence_number < transfer.sequence_number {
@@ -159,18 +164,20 @@ impl Authority for AuthorityState {
         }
         if sender_sequence_number > transfer.sequence_number {
             // Transfer was already confirmed.
-            return Ok((sender_account.make_account_info(transfer.sender), None));
+            return Ok((sender_object.make_account_info(transfer.sender), None));
         }
-        sender_balance = sender_balance.try_sub(transfer.amount.into())?;
+        //sender_balance = sender_balance.try_sub(transfer.amount.into())?;
         sender_sequence_number = sender_sequence_number.increment()?;
 
         // Commit sender state back to the database (Must never fail!)
-        sender_account.balance = sender_balance;
-        sender_account.next_sequence_number = sender_sequence_number;
-        sender_account.pending_confirmation = None;
-        sender_account.confirmed_log.push(certificate.clone());
-        let info = sender_account.make_account_info(transfer.sender);
+        //sender_account.balance = sender_balance;
+        sender_object.next_sequence_number = sender_sequence_number;
+        sender_object.pending_confirmation = None;
+        sender_object.confirmed_log.push(certificate.clone());
+        let info = sender_object.make_account_info(transfer.sender);
 
+
+        /* FastNFT does not update recipients
         // Update FastPay recipient state locally or issue a cross-shard update (Must never fail!)
         let recipient = match transfer.recipient {
             Address::FastPay(recipient) => recipient,
@@ -198,9 +205,12 @@ impl Authority for AuthorityState {
             shard_id: self.which_shard(&recipient),
             transfer_certificate: certificate,
         });
-        Ok((info, cross_shard))
+        */
+
+        Ok((info, None))
     }
 
+    /* Fastnft has no recipient updates
     // NOTE: Need to rely on deliver-once semantics from comms channel
     fn handle_cross_shard_recipient_commit(
         &mut self,
@@ -227,6 +237,7 @@ impl Authority for AuthorityState {
         recipient_account.received_log.push(certificate);
         Ok(())
     }
+    */
 
     /// Finalize a transfer from Primary.
     fn handle_primary_synchronization_order(
@@ -249,9 +260,10 @@ impl Authority for AuthorityState {
             order.transaction_index == self.last_transaction_index.increment()?,
             FastPayError::UnexpectedTransactionIndex
         );
-        let recipient_balance = recipient_account.balance.try_add(order.amount.into())?;
+        // No balance in FastNFT
+        // let recipient_balance = recipient_account.balance.try_add(order.amount.into())?;
         let last_transaction_index = self.last_transaction_index.increment()?;
-        recipient_account.balance = recipient_balance;
+        // recipient_account.balance = recipient_balance;
         recipient_account.synchronization_log.push(order);
         self.last_transaction_index = last_transaction_index;
         Ok(recipient_account.make_account_info(recipient))
@@ -281,7 +293,9 @@ impl Authority for AuthorityState {
 impl Default for ObjectState {
     fn default() -> Self {
         Self {
-            balance: Balance::zero(),
+            // balance: Balance::zero(),
+            contents: Vec::new(),
+            owner : PublicKeyBytes([0; 32]),
             next_sequence_number: SequenceNumber::new(),
             pending_confirmation: None,
             confirmed_log: Vec::new(),
@@ -299,7 +313,7 @@ impl ObjectState {
     fn make_account_info(&self, sender: FastPayAddress) -> AccountInfoResponse {
         AccountInfoResponse {
             sender,
-            balance: self.balance,
+            // balance: 0,
             next_sequence_number: self.next_sequence_number,
             pending_confirmation: self.pending_confirmation.clone(),
             requested_certificate: None,
@@ -308,9 +322,10 @@ impl ObjectState {
     }
 
     #[cfg(test)]
-    pub fn new_with_balance(balance: Balance, received_log: Vec<CertifiedTransferOrder>) -> Self {
+    pub fn new_with_balance(contents: Vec<u8>, received_log: Vec<CertifiedTransferOrder>) -> Self {
         Self {
-            balance,
+            owner : PublicKeyBytes([0; 32]),
+            contents : contents,
             next_sequence_number: SequenceNumber::new(),
             pending_confirmation: None,
             confirmed_log: Vec::new(),

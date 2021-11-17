@@ -128,7 +128,9 @@ impl ClientServerBenchmark {
             let i = AuthorityState::get_shard(self.num_shards, &keypair.0) as usize;
             assert!(states[i].in_shard(&keypair.0));
             let client = ObjectState {
-                balance: Balance::from(Amount::from(100)),
+                // balance: Balance::from(Amount::from(100)),
+                contents: Vec::new(),
+                owner: FastPayAddress::from(PublicKeyBytes([0; 32])),
                 next_sequence_number: SequenceNumber::from(0),
                 pending_confirmation: None,
                 confirmed_log: Vec::new(),

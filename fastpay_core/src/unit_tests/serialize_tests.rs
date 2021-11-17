@@ -181,7 +181,7 @@ fn test_info_response() {
 
     let resp1 = AccountInfoResponse {
         sender: dbg_addr(0x20),
-        balance: Balance::from(50),
+        // balance: Balance::from(50),
         next_sequence_number: SequenceNumber::new(),
         pending_confirmation: None,
         requested_certificate: None,
@@ -189,7 +189,7 @@ fn test_info_response() {
     };
     let resp2 = AccountInfoResponse {
         sender: dbg_addr(0x20),
-        balance: Balance::from(50),
+        // balance: Balance::from(50),
         next_sequence_number: SequenceNumber::new(),
         pending_confirmation: Some(vote.clone()),
         requested_certificate: None,
@@ -197,7 +197,7 @@ fn test_info_response() {
     };
     let resp3 = AccountInfoResponse {
         sender: dbg_addr(0x20),
-        balance: Balance::from(50),
+        // balance: Balance::from(50),
         next_sequence_number: SequenceNumber::new(),
         pending_confirmation: None,
         requested_certificate: Some(cert.clone()),
@@ -205,7 +205,7 @@ fn test_info_response() {
     };
     let resp4 = AccountInfoResponse {
         sender: dbg_addr(0x20),
-        balance: Balance::from(50),
+        // balance: Balance::from(50),
         next_sequence_number: SequenceNumber::new(),
         pending_confirmation: Some(vote),
         requested_certificate: Some(cert),
