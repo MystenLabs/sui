@@ -6,11 +6,17 @@
     "port": 5000,
     "repo": {
         "name": "narwhal",
-        "url": "https://github.com/facebookresearch/narwhal",
+        "url": "https://github.com/mystenlabs/narwhal",
         "branch": "master"
     },
     "instances": {
         "type": "m5d.8xlarge",
-        "regions": ["us-east-1", "eu-north-1", "ap-southeast-2", "us-west-1", "ap-northeast-1"]
+        "regions": [
+            "us-east-1",
+            "eu-north-1",
+            "ap-southeast-2",
+            "us-west-1",
+            "ap-northeast-1"
+        ]
     }
 }
