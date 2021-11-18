@@ -126,11 +126,12 @@ impl ClientServerBenchmark {
         let mut account_keys = Vec::new();
         for _ in 0..self.num_accounts {
             let keypair = get_key_pair();
-            let i = AuthorityState::get_shard(self.num_shards, &keypair.0) as usize;
-            assert!(states[i].in_shard(&keypair.0));
+            let object_id : ObjectID = keypair.0.0[0..20].try_into().expect("wrong size");
+            let i = AuthorityState::get_shard(self.num_shards, &object_id) as usize;
+            assert!(states[i].in_shard(&object_id));
             let client = ObjectState {
                 // balance: Balance::from(Amount::from(100)),
-                id: keypair.0.0[0..20].try_into().expect("wrong size"),
+                id: object_id,
                 contents: Vec::new(),
                 owner: FastPayAddress::from(keypair.0.clone()),
                 next_sequence_number: SequenceNumber::from(0),
@@ -158,7 +159,7 @@ impl ClientServerBenchmark {
             };
             next_recipient = *pubx;
             let order = TransferOrder::new(transfer.clone(), secx);
-            let shard = AuthorityState::get_shard(self.num_shards, pubx);
+            let shard = AuthorityState::get_shard(self.num_shards, &order.transfer.object_id);
 
             // Serialize order
             let bufx = serialize_transfer_order(&order);

@@ -88,6 +88,12 @@ pub fn dbg_addr(name: u8) -> FastPayAddress {
     PublicKeyBytes(addr)
 }
 
+#[cfg(test)]
+pub fn dbg_object_id(name: u8) -> ObjectID {
+    let obj_id = [name; 20];
+    obj_id
+}
+
 #[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub struct Signature(dalek::Signature);
 

@@ -23,12 +23,12 @@ fn test_error() {
 #[test]
 fn test_info_request() {
     let req1 = AccountInfoRequest {
-        sender: dbg_addr(0x20),
+        object_id: dbg_object_id(0x20),
         request_sequence_number: None,
         request_received_transfers_excluding_first_nth: None,
     };
     let req2 = AccountInfoRequest {
-        sender: dbg_addr(0x20),
+        object_id: dbg_object_id(0x20),
         request_sequence_number: Some(SequenceNumber::from(129)),
         request_received_transfers_excluding_first_nth: None,
     };
@@ -186,32 +186,32 @@ fn test_info_response() {
     }
 
     let resp1 = AccountInfoResponse {
-        sender: dbg_addr(0x20),
-        // balance: Balance::from(50),
+        object_id: dbg_object_id(0x20),
+        owner: dbg_addr(0x20),
         next_sequence_number: SequenceNumber::new(),
         pending_confirmation: None,
         requested_certificate: None,
         requested_received_transfers: Vec::new(),
     };
     let resp2 = AccountInfoResponse {
-        sender: dbg_addr(0x20),
-        // balance: Balance::from(50),
+        object_id: dbg_object_id(0x20),
+        owner: dbg_addr(0x20),
         next_sequence_number: SequenceNumber::new(),
         pending_confirmation: Some(vote.clone()),
         requested_certificate: None,
         requested_received_transfers: Vec::new(),
     };
     let resp3 = AccountInfoResponse {
-        sender: dbg_addr(0x20),
-        // balance: Balance::from(50),
+        object_id: dbg_object_id(0x20),
+        owner: dbg_addr(0x20),
         next_sequence_number: SequenceNumber::new(),
         pending_confirmation: None,
         requested_certificate: Some(cert.clone()),
         requested_received_transfers: Vec::new(),
     };
     let resp4 = AccountInfoResponse {
-        sender: dbg_addr(0x20),
-        // balance: Balance::from(50),
+        object_id: dbg_object_id(0x20),
+        owner: dbg_addr(0x20),
         next_sequence_number: SequenceNumber::new(),
         pending_confirmation: Some(vote),
         requested_certificate: Some(cert),

@@ -301,7 +301,7 @@ impl AuthorityClient for Client {
         order: TransferOrder,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
-            let shard = AuthorityState::get_shard(self.num_shards, &order.transfer.sender);
+            let shard = AuthorityState::get_shard(self.num_shards, &order.transfer.object_id);
             self.send_recv_bytes(shard, serialize_transfer_order(&order))
                 .await
         })
@@ -315,7 +315,7 @@ impl AuthorityClient for Client {
         Box::pin(async move {
             let shard = AuthorityState::get_shard(
                 self.num_shards,
-                &order.transfer_certificate.value.transfer.sender,
+                &order.transfer_certificate.value.transfer.object_id,
             );
             self.send_recv_bytes(shard, serialize_cert(&order.transfer_certificate))
                 .await
@@ -328,7 +328,7 @@ impl AuthorityClient for Client {
         request: AccountInfoRequest,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
-            let shard = AuthorityState::get_shard(self.num_shards, &request.sender);
+            let shard = AuthorityState::get_shard(self.num_shards, &request.object_id);
             self.send_recv_bytes(shard, serialize_info_request(&request))
                 .await
         })

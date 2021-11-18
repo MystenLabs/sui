@@ -188,7 +188,8 @@ where
     ) -> AsyncResult<'_, CertifiedTransferOrder, FastPayError> {
         Box::pin(async move {
             let request = AccountInfoRequest {
-                sender: self.sender,
+                // TODO: fix this
+                object_id: self.sender.0[0..20].try_into().expect("Hack to get an obj id from a sender"),
                 request_sequence_number: Some(sequence_number),
                 request_received_transfers_excluding_first_nth: None,
             };
@@ -250,7 +251,8 @@ where
         sender: FastPayAddress,
     ) -> SequenceNumber {
         let request = AccountInfoRequest {
-            sender,
+            // TODO: hack fix me
+            object_id: sender.0[0..20].try_into().expect("Hack to get obj id from address"),
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
@@ -277,7 +279,8 @@ where
     #[cfg(test)]
     async fn get_strong_majority_balance(&mut self) -> Balance {
         let request = AccountInfoRequest {
-            sender: self.address,
+            // TODO: fix this
+            object_id: self.address.0[0..20].try_into().expect("Hack to convert addr to obj id"),
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
@@ -384,7 +387,8 @@ where
                 Box::pin(async move {
                     // Figure out which certificates this authority is missing.
                     let request = AccountInfoRequest {
-                        sender,
+                        // TODO: Fix this 
+                        object_id: sender.0[0..20].try_into().expect("Hack to get a onj id from an address"),
                         request_sequence_number: None,
                         request_received_transfers_excluding_first_nth: None,
                     };
@@ -694,3 +698,4 @@ where
         })
     }
 }
+

@@ -77,15 +77,15 @@ pub struct ConfirmationOrder {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
-    pub sender: FastPayAddress,
+    pub object_id: ObjectID,
     pub request_sequence_number: Option<SequenceNumber>,
     pub request_received_transfers_excluding_first_nth: Option<usize>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AccountInfoResponse {
-    pub sender: FastPayAddress,
-    // pub balance: Balance,
+    pub object_id: ObjectID,
+    pub owner: FastPayAddress,
     pub next_sequence_number: SequenceNumber,
     pub pending_confirmation: Option<SignedTransferOrder>,
     pub requested_certificate: Option<CertifiedTransferOrder>,

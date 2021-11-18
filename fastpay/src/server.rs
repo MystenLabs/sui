@@ -42,12 +42,15 @@ fn make_shard_server(
 
     // Load initial states
     for (address, _balance) in &initial_accounts_config.accounts {
-        if AuthorityState::get_shard(num_shards, address) != shard {
+        // TODO: fix this total hack
+        let id : ObjectID = address.0[..20].try_into().expect("slice with incorrect length");
+
+        if AuthorityState::get_shard(num_shards, &id) != shard {
             continue;
         }
 
         let client = ObjectState {
-            id: address.0[..20].try_into().expect("slice with incorrect length"),
+            id, 
             contents: Vec::new(),
             owner: address.clone(),
             next_sequence_number: SequenceNumber::from(0),

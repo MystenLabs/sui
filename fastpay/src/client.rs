@@ -222,7 +222,9 @@ async fn mass_broadcast_orders(
         // Re-index orders by shard for this particular authority client.
         let mut sharded_requests = HashMap::new();
         for (address, buf) in &orders {
-            let shard = AuthorityState::get_shard(num_shards, address);
+            // TODO: fix this
+            let id : ObjectID = address.0[0..20].try_into().expect("Hack to get a obj_id from an address");
+            let shard = AuthorityState::get_shard(num_shards, &id);
             sharded_requests
                 .entry(shard)
                 .or_insert_with(Vec::new)
@@ -504,7 +506,7 @@ fn main() {
                         .iter()
                         .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
                             Some(info) => {
-                                confirmed.insert(info.sender);
+                                confirmed.insert(info.object_id);
                                 acc + 1
                             }
                             None => acc,

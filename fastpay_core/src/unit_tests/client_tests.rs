@@ -129,7 +129,7 @@ fn fund_account<I: IntoIterator<Item = i128>>(
     let _balances = balances.into_iter().map(Balance::from);
     for (_, client) in clients.iter_mut() {
         client.0.as_ref().try_lock().unwrap().accounts_mut().insert(
-            address,
+            address.0[0..20].try_into().expect("hack to convert an addr to a obj_id"),
             ObjectState::new_with_balance(
                 Vec::new(),
                 /* no receive log to justify the balances */ Vec::new(),

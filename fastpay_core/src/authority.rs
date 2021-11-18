@@ -41,7 +41,7 @@ pub struct AuthorityState {
     /// The signature key of the authority.
     pub secret: KeyPair,
     /// States of fastnft objects
-    accounts: BTreeMap<FastPayAddress, ObjectState>,
+    accounts: BTreeMap<ObjectID, ObjectState>,
 
     /// The latest transaction index of the blockchain that the authority has seen.
     // pub last_transaction_index: VersionNumber,
@@ -103,12 +103,13 @@ impl Authority for AuthorityState {
     ) -> Result<AccountInfoResponse, FastPayError> {
         // Check the sender's signature and retrieve the transfer data.
         fp_ensure!(
-            self.in_shard(&order.transfer.sender),
+            self.in_shard(&order.transfer.object_id),
             FastPayError::WrongShard
         );
         order.check_signature()?;
         let transfer = &order.transfer;
-        let sender = transfer.sender;
+        // let sender = transfer.sender;
+        let object_id = transfer.object_id;
         fp_ensure!(
             transfer.sequence_number <= SequenceNumber::max(),
             FastPayError::InvalidSequenceNumber
@@ -119,7 +120,7 @@ impl Authority for AuthorityState {
             FastPayError::IncorrectTransferAmount
         );
         */
-        match self.accounts.get_mut(&sender) {
+        match self.accounts.get_mut(&object_id) {
             None => fp_bail!(FastPayError::UnknownSenderAccount),
             Some(account) => {
                 if let Some(pending_confirmation) = &account.pending_confirmation {
@@ -130,7 +131,7 @@ impl Authority for AuthorityState {
                         }
                     );
                     // This exact transfer order was already signed. Return the previous value.
-                    return Ok(account.make_account_info(sender));
+                    return Ok(account.make_account_info());
                 }
                 fp_ensure!(
                     account.next_sequence_number == transfer.sequence_number,
@@ -146,7 +147,7 @@ impl Authority for AuthorityState {
                 */ 
                 let signed_order = SignedTransferOrder::new(order, self.name, &self.secret);
                 account.pending_confirmation = Some(signed_order);
-                Ok(account.make_account_info(sender))
+                Ok(account.make_account_info())
             }
         }
     }
@@ -159,7 +160,7 @@ impl Authority for AuthorityState {
         let certificate = confirmation_order.transfer_certificate;
         // Check the certificate and retrieve the transfer data.
         fp_ensure!(
-            self.in_shard(&certificate.value.transfer.sender),
+            self.in_shard(&certificate.value.transfer.object_id),
             FastPayError::WrongShard
         );
         certificate.check(&self.committee)?;
@@ -168,7 +169,7 @@ impl Authority for AuthorityState {
         // First we copy all relevant data from sender.
         let mut sender_object = self
             .accounts
-            .entry(transfer.sender)
+            .entry(transfer.object_id)
             .or_insert_with(ObjectState::new);
         let mut sender_sequence_number = sender_object.next_sequence_number;
         //let mut sender_balance = sender_account.balance;
@@ -181,7 +182,7 @@ impl Authority for AuthorityState {
         }
         if sender_sequence_number > transfer.sequence_number {
             // Transfer was already confirmed.
-            return Ok(sender_object.make_account_info(transfer.sender));
+            return Ok(sender_object.make_account_info());
         }
         //sender_balance = sender_balance.try_sub(transfer.amount.into())?;
         sender_sequence_number = sender_sequence_number.increment()?;
@@ -191,7 +192,7 @@ impl Authority for AuthorityState {
         sender_object.next_sequence_number = sender_sequence_number;
         sender_object.pending_confirmation = None;
         sender_object.confirmed_log.push(certificate.clone());
-        let info = sender_object.make_account_info(transfer.sender);
+        let info = sender_object.make_account_info();
 
 
         /* FastNFT does not update recipients
@@ -297,9 +298,9 @@ impl Authority for AuthorityState {
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, FastPayError> {
-        fp_ensure!(self.in_shard(&request.sender), FastPayError::WrongShard);
-        let account = self.account_state(&request.sender)?;
-        let mut response = account.make_account_info(request.sender);
+        fp_ensure!(self.in_shard(&request.object_id), FastPayError::WrongShard);
+        let account = self.account_state(&request.object_id)?;
+        let mut response = account.make_account_info();
         if let Some(seq) = request.request_sequence_number {
             if let Some(cert) = account.confirmed_log.get(usize::from(seq)) {
                 response.requested_certificate = Some(cert.clone());
@@ -339,10 +340,10 @@ impl ObjectState {
         (self.id, self.next_sequence_number)
     }
 
-    fn make_account_info(&self, sender: FastPayAddress) -> AccountInfoResponse {
+    fn make_account_info(&self) -> AccountInfoResponse {
         AccountInfoResponse {
-            sender,
-            // balance: 0,
+            object_id : self.id,
+            owner: self.owner,
             next_sequence_number: self.next_sequence_number,
             pending_confirmation: self.pending_confirmation.clone(),
             requested_certificate: None,
@@ -396,36 +397,36 @@ impl AuthorityState {
         }
     }
 
-    pub fn in_shard(&self, address: &FastPayAddress) -> bool {
-        self.which_shard(address) == self.shard_id
+    pub fn in_shard(&self, object_id: &ObjectID) -> bool {
+        self.which_shard(object_id) == self.shard_id
     }
 
-    pub fn get_shard(num_shards: u32, address: &FastPayAddress) -> u32 {
-        const LAST_INTEGER_INDEX: usize = std::mem::size_of::<FastPayAddress>() - 4;
-        u32::from_le_bytes(address.0[LAST_INTEGER_INDEX..].try_into().expect("4 bytes"))
+    pub fn get_shard(num_shards: u32, object_id: &ObjectID) -> u32 {
+        const LAST_INTEGER_INDEX: usize = std::mem::size_of::<ObjectID>() - 4;
+        u32::from_le_bytes(object_id[LAST_INTEGER_INDEX..].try_into().expect("4 bytes"))
             % num_shards
     }
 
-    pub fn which_shard(&self, address: &FastPayAddress) -> u32 {
-        Self::get_shard(self.number_of_shards, address)
+    pub fn which_shard(&self, object_id: &ObjectID) -> u32 {
+        Self::get_shard(self.number_of_shards, object_id)
     }
 
     fn account_state(
         &self,
-        address: &FastPayAddress,
+        object_id: &ObjectID,
     ) -> Result<&ObjectState, FastPayError> {
         self.accounts
-            .get(address)
+            .get(object_id)
             .ok_or(FastPayError::UnknownSenderAccount)
     }
 
     pub fn insert_object(&mut self, object: ObjectState) {
         // assert!(address == object.owner);
-        self.accounts.insert(object.owner, object);
+        self.accounts.insert(object.id, object);
     }
 
     #[cfg(test)]
-    pub fn accounts_mut(&mut self) -> &mut BTreeMap<FastPayAddress, ObjectState> {
+    pub fn accounts_mut(&mut self) -> &mut BTreeMap<ObjectID, ObjectState> {
         &mut self.accounts
     }
 }
