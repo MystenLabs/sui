@@ -34,7 +34,7 @@ pub struct AuthorityState {
     /// The signature key of the authority.
     pub secret: KeyPair,
     /// Offchain states of FastPay accounts.
-    pub accounts: BTreeMap<FastPayAddress, ObjectState>,
+    accounts: BTreeMap<FastPayAddress, ObjectState>,
     /// The latest transaction index of the blockchain that the authority has seen.
     pub last_transaction_index: VersionNumber,
     /// The sharding ID of this authority shard. 0 if one shard.
@@ -394,6 +394,11 @@ impl AuthorityState {
         self.accounts
             .get(address)
             .ok_or(FastPayError::UnknownSenderAccount)
+    }
+
+    pub fn insert_object(&mut self, object: ObjectState) {
+        // assert!(address == object.owner);
+        self.accounts.insert(object.owner, object);
     }
 
     #[cfg(test)]

@@ -56,7 +56,7 @@ fn make_shard_server(
             synchronization_log: Vec::new(),
             // received_log: Vec::new(),
         };
-        state.accounts.insert(*address, client);
+        state.insert_object(client);
     }
 
     network::Server::new(

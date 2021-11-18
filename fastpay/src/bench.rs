@@ -139,7 +139,7 @@ impl ClientServerBenchmark {
                 synchronization_log: Vec::new(),
                 // received_log: Vec::new(),
             };
-            states[i].accounts.insert(keypair.0, client);
+            states[i].insert_object(client);
             account_keys.push(keypair);
         }
 
