@@ -1,0 +1,2 @@
+# Best-effort syntax highlighting for Move: just use Rust
+*.move linguist-language=Rust
