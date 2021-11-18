@@ -136,7 +136,7 @@ impl ClientServerBenchmark {
                 next_sequence_number: SequenceNumber::from(0),
                 pending_confirmation: None,
                 confirmed_log: Vec::new(),
-                synchronization_log: Vec::new(),
+                // synchronization_log: Vec::new(),
                 // received_log: Vec::new(),
             };
             states[i].insert_object(client);

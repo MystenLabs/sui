@@ -25,8 +25,12 @@ pub struct ObjectState {
     pub pending_confirmation: Option<SignedTransferOrder>,
     /// All confirmed certificates for this sender.
     pub confirmed_log: Vec<CertifiedTransferOrder>,
+
+    /* Fast NFT implement sync with an L1 as a special Tx on a normal object.
+
     /// All executed Primary synchronization orders for this recipient.
     pub synchronization_log: Vec<PrimarySynchronizationOrder>,
+    */
 }
 
 pub struct AuthorityState {
@@ -38,8 +42,10 @@ pub struct AuthorityState {
     pub secret: KeyPair,
     /// States of fastnft objects
     accounts: BTreeMap<FastPayAddress, ObjectState>,
+
     /// The latest transaction index of the blockchain that the authority has seen.
-    pub last_transaction_index: VersionNumber,
+    // pub last_transaction_index: VersionNumber,
+    
     /// The sharding ID of this authority shard. 0 if one shard.
     pub shard_id: ShardId,
     /// The number of shards. 1 if single shard.
@@ -62,11 +68,16 @@ pub trait Authority {
         order: ConfirmationOrder,
     ) -> Result<AccountInfoResponse, FastPayError>;
 
+    /*
+
     /// Force synchronization to finalize transfers from Primary to FastPay.
+    ///
     fn handle_primary_synchronization_order(
         &mut self,
         order: PrimarySynchronizationOrder,
     ) -> Result<AccountInfoResponse, FastPayError>;
+
+    */
 
     /// Handle information requests for this account.
     fn handle_account_info_request(
@@ -245,6 +256,8 @@ impl Authority for AuthorityState {
     }
     */
 
+    /*
+
     /// Finalize a transfer from Primary.
     fn handle_primary_synchronization_order(
         &mut self,
@@ -254,10 +267,14 @@ impl Authority for AuthorityState {
         let recipient = order.recipient;
         fp_ensure!(self.in_shard(&recipient), FastPayError::WrongShard);
 
+        // TODO: derive object IDs for sync orders.
+
         let recipient_account = self
             .accounts
             .entry(recipient)
             .or_insert_with(ObjectState::new);
+        
+        recipient_account.owner = recipient;
         if order.transaction_index <= self.last_transaction_index {
             // Ignore old transaction index.
             return Ok(recipient_account.make_account_info(recipient));
@@ -274,6 +291,7 @@ impl Authority for AuthorityState {
         self.last_transaction_index = last_transaction_index;
         Ok(recipient_account.make_account_info(recipient))
     }
+    */
 
     fn handle_account_info_request(
         &self,
@@ -306,7 +324,7 @@ impl Default for ObjectState {
             next_sequence_number: SequenceNumber::new(),
             pending_confirmation: None,
             confirmed_log: Vec::new(),
-            synchronization_log: Vec::new(),
+            // synchronization_log: Vec::new(),
             // received_log: Vec::new(),
         }
     }
@@ -341,7 +359,7 @@ impl ObjectState {
             next_sequence_number: SequenceNumber::new(),
             pending_confirmation: None,
             confirmed_log: Vec::new(),
-            synchronization_log: Vec::new(),
+            // synchronization_log: Vec::new(),
             // received_log,
         }
     }
@@ -354,7 +372,7 @@ impl AuthorityState {
             name,
             secret,
             accounts: BTreeMap::new(),
-            last_transaction_index: VersionNumber::new(),
+            // last_transaction_index: VersionNumber::new(),
             shard_id: 0,
             number_of_shards: 1,
         }
@@ -372,7 +390,7 @@ impl AuthorityState {
             name,
             secret,
             accounts: BTreeMap::new(),
-            last_transaction_index: VersionNumber::new(),
+            // last_transaction_index: VersionNumber::new(),
             shard_id,
             number_of_shards,
         }

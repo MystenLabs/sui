@@ -366,6 +366,8 @@ fn test_handle_confirmation_order_ok() {
     */
 }
 
+/*
+
 #[test]
 fn test_handle_primary_synchronization_order_update() {
     let mut state = init_state();
@@ -403,6 +405,8 @@ fn test_handle_primary_synchronization_order_double_spend() {
     // assert_eq!(account.balance, order.amount.into());
     assert_eq!(state.accounts.len(), 1);
 }
+
+*/
 
 #[test]
 fn test_account_state_ok() {
@@ -515,6 +519,8 @@ fn init_certified_transfer_order(
         .unwrap()
 }
 
+/*
+
 #[cfg(test)]
 fn init_primary_synchronization_order(recipient: FastPayAddress) -> PrimarySynchronizationOrder {
     let mut transaction_index = VersionNumber::new();
@@ -525,3 +531,5 @@ fn init_primary_synchronization_order(recipient: FastPayAddress) -> PrimarySynch
         transaction_index,
     }
 }
+
+*/
