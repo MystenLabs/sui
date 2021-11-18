@@ -1,10 +1,10 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 use super::*;
 use crate::common::{
-    certificate, committee, committee_with_base_port, header, headers, keys, listener, votes,
+    certificate, committee, committee_with_base_port, header, headers, keys, listener, temp_dir,
+    votes,
 };
 use futures::future::try_join_all;
-use std::fs;
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]
@@ -26,9 +26,7 @@ async fn process_header() {
     let (tx_parents, _rx_parents) = channel(1);
 
     // Create a new test store.
-    let path = ".db_test_process_header";
-    let _ = fs::remove_dir_all(path);
-    let mut store = Store::new(path).unwrap();
+    let mut store = Store::new(temp_dir()).unwrap();
 
     // Make the vote we expect to receive.
     let expected = Vote::new(&header(), &name, &mut signature_service).await;
@@ -103,9 +101,7 @@ async fn process_header_missing_parent() {
     let (tx_parents, _rx_parents) = channel(1);
 
     // Create a new test store.
-    let path = ".db_test_process_header_missing_parent";
-    let _ = fs::remove_dir_all(path);
-    let mut store = Store::new(path).unwrap();
+    let mut store = Store::new(temp_dir()).unwrap();
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
@@ -163,9 +159,7 @@ async fn process_header_missing_payload() {
     let (tx_parents, _rx_parents) = channel(1);
 
     // Create a new test store.
-    let path = ".db_test_process_header_missing_payload";
-    let _ = fs::remove_dir_all(path);
-    let mut store = Store::new(path).unwrap();
+    let mut store = Store::new(temp_dir()).unwrap();
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
@@ -225,9 +219,7 @@ async fn process_votes() {
     let (tx_parents, _rx_parents) = channel(1);
 
     // Create a new test store.
-    let path = ".db_test_process_vote";
-    let _ = fs::remove_dir_all(path);
-    let store = Store::new(path).unwrap();
+    let store = Store::new(temp_dir()).unwrap();
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
@@ -297,9 +289,7 @@ async fn process_certificates() {
     let (tx_parents, mut rx_parents) = channel(1);
 
     // Create a new test store.
-    let path = ".db_test_process_certificates";
-    let _ = fs::remove_dir_all(path);
-    let mut store = Store::new(path).unwrap();
+    let mut store = Store::new(temp_dir()).unwrap();
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(

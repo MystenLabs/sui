@@ -1,8 +1,7 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 use super::*;
-use crate::common::batch;
+use crate::common::{batch, temp_dir};
 use crate::worker::WorkerMessage;
-use std::fs;
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]
@@ -11,9 +10,7 @@ async fn hash_and_store() {
     let (tx_digest, mut rx_digest) = channel(1);
 
     // Create a new test store.
-    let path = ".db_test_hash_and_store";
-    let _ = fs::remove_dir_all(path);
-    let mut store = Store::new(path).unwrap();
+    let mut store = Store::new(temp_dir()).unwrap();
 
     // Spawn a new `Processor` instance.
     let id = 0;

@@ -26,6 +26,7 @@ network = { path = "../network" }
 
 [dev-dependencies]
 rand = "0.7.3"
+tempfile = "3.2"
 
 [features]
 benchmark = []

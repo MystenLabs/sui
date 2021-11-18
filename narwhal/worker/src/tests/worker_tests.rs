@@ -1,9 +1,10 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 use super::*;
-use crate::common::{batch_digest, committee_with_base_port, keys, listener, transaction};
+use crate::common::{
+    batch_digest, committee_with_base_port, keys, listener, temp_dir, transaction,
+};
 use network::SimpleSender;
 use primary::WorkerPrimaryMessage;
-use std::fs;
 
 #[tokio::test]
 async fn handle_clients_transactions() {
@@ -16,9 +17,7 @@ async fn handle_clients_transactions() {
     };
 
     // Create a new test store.
-    let path = ".db_test_handle_clients_transactions";
-    let _ = fs::remove_dir_all(path);
-    let store = Store::new(path).unwrap();
+    let store = Store::new(temp_dir()).unwrap();
 
     // Spawn a `Worker` instance.
     Worker::spawn(name, id, committee.clone(), parameters, store);
