@@ -9,6 +9,7 @@ use std::{
     collections::{btree_map, BTreeMap, BTreeSet, HashMap},
     convert::TryFrom,
 };
+use std::convert::TryInto;
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -488,12 +489,13 @@ where
     /// Send money to a FastPay or Primary recipient.
     async fn transfer(
         &mut self,
-        amount: Amount,
+        _amount: Amount,
         recipient: Address,
         user_data: UserData,
     ) -> Result<CertifiedTransferOrder, failure::Error> {
         // Trying to overspend may block the account. To prevent this, we compare with
         // the balance as we know it.
+        /*
         let safe_amount = self.get_spendable_amount().await?;
         ensure!(
             amount <= safe_amount,
@@ -501,10 +503,12 @@ where
             amount,
             safe_amount
         );
+        */
         let transfer = Transfer {
+            object_id : self.address.0[0..20].try_into().expect("Sender is object id"),
             sender: self.address,
             recipient,
-            amount,
+            // amount,
             sequence_number: self.next_sequence_number,
             user_data,
         };
@@ -522,10 +526,10 @@ where
         &mut self,
         sent_certificates: Vec<CertifiedTransferOrder>,
     ) -> Result<(), FastPayError> {
-        let mut new_balance = self.balance;
+        // let mut new_balance = self.balance;
         let mut new_next_sequence_number = self.next_sequence_number;
         for new_cert in &sent_certificates {
-            new_balance = new_balance.try_sub(new_cert.value.transfer.amount.into())?;
+            // new_balance = new_balance.try_sub(new_cert.value.transfer.amount.into())?;
             if new_cert.value.transfer.sequence_number >= new_next_sequence_number {
                 new_next_sequence_number = new_cert
                     .value
@@ -535,12 +539,14 @@ where
                     .unwrap_or_else(|_| SequenceNumber::max());
             }
         }
+        /*
         for old_cert in &self.sent_certificates {
             new_balance = new_balance.try_add(old_cert.value.transfer.amount.into())?;
         }
+        */
         // Atomic update
         self.sent_certificates = sent_certificates;
-        self.balance = new_balance;
+        // self.balance = new_balance;
         self.next_sequence_number = new_next_sequence_number;
         // Sanity check
         assert_eq!(
@@ -658,7 +664,7 @@ where
             if let btree_map::Entry::Vacant(entry) =
                 self.received_certificates.entry(transfer.key())
             {
-                self.balance = self.balance.try_add(transfer.amount.into())?;
+                // self.balance = self.balance.try_add(transfer.amount.into())?;
                 entry.insert(certificate);
             }
             Ok(())
@@ -667,15 +673,16 @@ where
 
     fn transfer_to_fastpay_unsafe_unconfirmed(
         &mut self,
-        amount: Amount,
+        _amount: Amount,
         recipient: FastPayAddress,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedTransferOrder, failure::Error> {
         Box::pin(async move {
             let transfer = Transfer {
+                object_id : self.address.0[0..20].try_into().expect("Sender is object id"),
                 sender: self.address,
                 recipient: Address::FastPay(recipient),
-                amount,
+                // amount,
                 sequence_number: self.next_sequence_number,
                 user_data,
             };

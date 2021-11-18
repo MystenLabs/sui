@@ -18,6 +18,9 @@ pub struct ObjectState {
     pub owner: FastPayAddress,
     /// The contents of the Object. Right now just a blob.
     pub contents: Vec<u8>,
+    
+    // These structures will likely be refactored outside the object.
+
     /// Sequence number tracking spending actions.
     pub pending_confirmation: Option<SignedTransferOrder>,
     /// All confirmed certificates for this sender.
@@ -33,7 +36,7 @@ pub struct AuthorityState {
     pub committee: Committee,
     /// The signature key of the authority.
     pub secret: KeyPair,
-    /// Offchain states of FastPay accounts.
+    /// States of fastnft objects
     accounts: BTreeMap<FastPayAddress, ObjectState>,
     /// The latest transaction index of the blockchain that the authority has seen.
     pub last_transaction_index: VersionNumber,
@@ -99,10 +102,12 @@ impl Authority for AuthorityState {
             transfer.sequence_number <= SequenceNumber::max(),
             FastPayError::InvalidSequenceNumber
         );
+        /*
         fp_ensure!(
             transfer.amount > Amount::zero(),
             FastPayError::IncorrectTransferAmount
         );
+        */
         match self.accounts.get_mut(&sender) {
             None => fp_bail!(FastPayError::UnknownSenderAccount),
             Some(account) => {

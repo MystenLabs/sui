@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use std::convert::TryInto;
 
 #[test]
 fn test_handle_transfer_order_bad_signature() {
@@ -23,6 +24,7 @@ fn test_handle_transfer_order_bad_signature() {
         .is_none());
 }
 
+/* Fast nft does not have zero or other balances
 #[test]
 fn test_handle_transfer_order_zero_amount() {
     let (sender, sender_key) = get_key_pair();
@@ -31,8 +33,8 @@ fn test_handle_transfer_order_zero_amount() {
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
 
     // test transfer non-positive amount
-    let mut zero_amount_transfer = transfer_order.transfer;
-    zero_amount_transfer.amount = Amount::zero();
+    let zero_amount_transfer = transfer_order.transfer;
+    // zero_amount_transfer.amount = Amount::zero();
     let zero_amount_transfer_order = TransferOrder::new(zero_amount_transfer, &sender_key);
     assert!(authority_state
         .handle_transfer_order(zero_amount_transfer_order)
@@ -44,6 +46,7 @@ fn test_handle_transfer_order_zero_amount() {
         .pending_confirmation
         .is_none());
 }
+*/
 
 #[test]
 fn test_handle_transfer_order_unknown_sender() {
@@ -477,12 +480,13 @@ fn init_transfer_order(
     sender: FastPayAddress,
     secret: &KeyPair,
     recipient: Address,
-    amount: Amount,
+    _amount: Amount,
 ) -> TransferOrder {
     let transfer = Transfer {
+        object_id : sender.0[0..20].try_into().expect("Sender is also the object id"),
         sender,
         recipient,
-        amount,
+        // amount,
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };

@@ -149,9 +149,10 @@ impl ClientServerBenchmark {
         let mut next_recipient = get_key_pair().0;
         for (pubx, secx) in account_keys.iter() {
             let transfer = Transfer {
+                object_id : pubx.0[0..20].try_into().expect("Sender is object id"),
                 sender: *pubx,
                 recipient: Address::FastPay(next_recipient),
-                amount: Amount::from(50),
+                // amount: Amount::from(50),
                 sequence_number: SequenceNumber::from(0),
                 user_data: UserData::default(),
             };

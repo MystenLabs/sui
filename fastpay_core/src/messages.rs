@@ -37,7 +37,7 @@ pub enum Address {
 pub struct Transfer {
     pub sender: FastPayAddress,
     pub recipient: Address,
-    pub amount: Amount,
+    pub object_id: ObjectID,
     pub sequence_number: SequenceNumber,
     pub user_data: UserData,
 }

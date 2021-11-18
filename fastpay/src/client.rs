@@ -15,6 +15,7 @@ use std::{
     collections::{HashMap, HashSet},
     time::{Duration, Instant},
 };
+use std::convert::TryInto;
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
 
@@ -99,9 +100,10 @@ fn make_benchmark_transfer_orders(
     let mut next_recipient = get_key_pair().0;
     for account in accounts_config.accounts_mut() {
         let transfer = Transfer {
+            object_id : account.address.0[0..20].try_into().expect("Sender is object id"),
             sender: account.address,
             recipient: Address::FastPay(next_recipient),
-            amount: Amount::from(1),
+            // amount: Amount::from(1),
             sequence_number: account.next_sequence_number,
             user_data: UserData::default(),
         };
