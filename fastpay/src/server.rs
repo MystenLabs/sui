@@ -8,9 +8,9 @@ use fastpay_core::{authority::*, base_types::*, committee::Committee};
 
 use futures::future::join_all;
 use log::*;
+use std::convert::TryInto;
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
-use std::convert::TryInto;
 
 #[allow(clippy::too_many_arguments)]
 fn make_shard_server(
@@ -19,7 +19,6 @@ fn make_shard_server(
     committee_config_path: &str,
     initial_accounts_config_path: &str,
     buffer_size: usize,
-    // cross_shard_queue_size: usize,
     shard: u32,
 ) -> network::Server {
     let server_config =
@@ -43,21 +42,21 @@ fn make_shard_server(
     // Load initial states
     for (address, _balance) in &initial_accounts_config.accounts {
         // TODO: fix this total hack
-        let id : ObjectID = address.0[..20].try_into().expect("slice with incorrect length");
+        let id: ObjectID = address.0[..20]
+            .try_into()
+            .expect("slice with incorrect length");
 
         if AuthorityState::get_shard(num_shards, &id) != shard {
             continue;
         }
 
         let client = ObjectState {
-            id, 
+            id,
             contents: Vec::new(),
             owner: address.clone(),
             next_sequence_number: SequenceNumber::from(0),
             pending_confirmation: None,
             confirmed_log: Vec::new(),
-            // synchronization_log: Vec::new(),
-            // received_log: Vec::new(),
         };
         state.insert_object(client);
     }
@@ -68,7 +67,6 @@ fn make_shard_server(
         server_config.authority.base_port,
         state,
         buffer_size,
-        // cross_shard_queue_size,
     )
 }
 
@@ -78,7 +76,6 @@ fn make_servers(
     committee_config_path: &str,
     initial_accounts_config_path: &str,
     buffer_size: usize,
-    // cross_shard_queue_size: usize,
 ) -> Vec<network::Server> {
     let server_config =
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
@@ -185,7 +182,6 @@ fn main() {
                         &committee,
                         &initial_accounts,
                         buffer_size,
-                        // cross_shard_queue_size,
                         shard,
                     );
                     vec![server]
@@ -198,7 +194,6 @@ fn main() {
                         &committee,
                         &initial_accounts,
                         buffer_size,
-                        // cross_shard_queue_size,
                     )
                 }
             };

@@ -9,13 +9,13 @@ use fastpay_core::{authority::*, base_types::*, committee::*, messages::*, seria
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
+use std::convert::TryInto;
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
 use tokio::{runtime::Builder, time};
-use std::convert::TryInto;
 
 use std::thread;
 
@@ -126,19 +126,16 @@ impl ClientServerBenchmark {
         let mut account_keys = Vec::new();
         for _ in 0..self.num_accounts {
             let keypair = get_key_pair();
-            let object_id : ObjectID = keypair.0.0[0..20].try_into().expect("wrong size");
+            let object_id: ObjectID = keypair.0 .0[0..20].try_into().expect("wrong size");
             let i = AuthorityState::get_shard(self.num_shards, &object_id) as usize;
             assert!(states[i].in_shard(&object_id));
             let client = ObjectState {
-                // balance: Balance::from(Amount::from(100)),
                 id: object_id,
                 contents: Vec::new(),
                 owner: FastPayAddress::from(keypair.0.clone()),
                 next_sequence_number: SequenceNumber::from(0),
                 pending_confirmation: None,
                 confirmed_log: Vec::new(),
-                // synchronization_log: Vec::new(),
-                // received_log: Vec::new(),
             };
             states[i].insert_object(client);
             account_keys.push(keypair);
@@ -150,10 +147,9 @@ impl ClientServerBenchmark {
         let mut next_recipient = get_key_pair().0;
         for (pubx, secx) in account_keys.iter() {
             let transfer = Transfer {
-                object_id : pubx.0[0..20].try_into().expect("Sender is object id"),
+                object_id: pubx.0[0..20].try_into().expect("Sender is object id"),
                 sender: *pubx,
                 recipient: Address::FastPay(next_recipient),
-                // amount: Amount::from(50),
                 sequence_number: SequenceNumber::from(0),
                 user_data: UserData::default(),
             };
@@ -193,7 +189,6 @@ impl ClientServerBenchmark {
             self.port,
             state,
             self.buffer_size,
-            // self.cross_shard_queue_size,
         );
         server.spawn().await.unwrap()
     }

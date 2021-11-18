@@ -11,11 +11,11 @@ use fastpay_core::{
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
+use std::convert::TryInto;
 use std::{
     collections::{HashMap, HashSet},
     time::{Duration, Instant},
 };
-use std::convert::TryInto;
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
 
@@ -100,10 +100,11 @@ fn make_benchmark_transfer_orders(
     let mut next_recipient = get_key_pair().0;
     for account in accounts_config.accounts_mut() {
         let transfer = Transfer {
-            object_id : account.address.0[0..20].try_into().expect("Sender is object id"),
+            object_id: account.address.0[0..20]
+                .try_into()
+                .expect("Sender is object id"),
             sender: account.address,
             recipient: Address::FastPay(next_recipient),
-            // amount: Amount::from(1),
             sequence_number: account.next_sequence_number,
             user_data: UserData::default(),
         };
@@ -223,7 +224,9 @@ async fn mass_broadcast_orders(
         let mut sharded_requests = HashMap::new();
         for (address, buf) in &orders {
             // TODO: fix this
-            let id : ObjectID = address.0[0..20].try_into().expect("Hack to get a obj_id from an address");
+            let id: ObjectID = address.0[0..20]
+                .try_into()
+                .expect("Hack to get a obj_id from an address");
             let shard = AuthorityState::get_shard(num_shards, &id);
             sharded_requests
                 .entry(shard)

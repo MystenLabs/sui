@@ -17,10 +17,9 @@ fn test_signed_values() {
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
-        object_id : a1.0[0..20].try_into().expect("Sender is object id"),
+        object_id: a1.0[0..20].try_into().expect("Sender is object id"),
         sender: a1,
         recipient: Address::FastPay(a2),
-        // amount: Amount::from(1),
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
@@ -52,10 +51,9 @@ fn test_certificates() {
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
-        object_id : a1.0[0..20].try_into().expect("Sender is object id"),
+        object_id: a1.0[0..20].try_into().expect("Sender is object id"),
         sender: a1,
         recipient: Address::FastPay(a2),
-        // amount: Amount::from(1),
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };

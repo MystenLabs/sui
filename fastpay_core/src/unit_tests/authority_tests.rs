@@ -8,7 +8,6 @@ use std::convert::TryInto;
 fn test_handle_transfer_order_bad_signature() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
-    // let object_id = [0; 20];
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
     let object_id = transfer_order.transfer.object_id;
@@ -26,34 +25,10 @@ fn test_handle_transfer_order_bad_signature() {
         .is_none());
 }
 
-/* Fast nft does not have zero or other balances
-#[test]
-fn test_handle_transfer_order_zero_amount() {
-    let (sender, sender_key) = get_key_pair();
-    let recipient = Address::FastPay(dbg_addr(2));
-    let mut authority_state = init_state_with_account(sender, Balance::from(5));
-    let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
-
-    // test transfer non-positive amount
-    let zero_amount_transfer = transfer_order.transfer;
-    // zero_amount_transfer.amount = Amount::zero();
-    let zero_amount_transfer_order = TransferOrder::new(zero_amount_transfer, &sender_key);
-    assert!(authority_state
-        .handle_transfer_order(zero_amount_transfer_order)
-        .is_err());
-    assert!(authority_state
-        .accounts
-        .get(&sender)
-        .unwrap()
-        .pending_confirmation
-        .is_none());
-}
-*/
-
 #[test]
 fn test_handle_transfer_order_unknown_sender() {
     let (sender, sender_key) = get_key_pair();
-    let object_id : ObjectID = sender.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = sender.0[0..20].try_into().expect("object id from account");
     let recipient = Address::FastPay(dbg_addr(2));
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
@@ -76,7 +51,7 @@ fn test_handle_transfer_order_unknown_sender() {
 #[test]
 fn test_handle_transfer_order_bad_sequence_number() {
     let (sender, sender_key) = get_key_pair();
-    let object_id : ObjectID = sender.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = sender.0[0..20].try_into().expect("object id from account");
     let recipient = Address::FastPay(dbg_addr(2));
     let authority_state = init_state_with_account(sender, Balance::from(5));
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
@@ -99,25 +74,6 @@ fn test_handle_transfer_order_bad_sequence_number() {
         .pending_confirmation
         .is_none());
 }
-
-/*
-#[test]
-fn test_handle_transfer_order_exceed_balance() {
-    let (sender, sender_key) = get_key_pair();
-    let recipient = Address::FastPay(dbg_addr(2));
-    let mut authority_state = init_state_with_account(sender, Balance::from(5));
-    let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(1000));
-    assert!(authority_state
-        .handle_transfer_order(transfer_order)
-        .is_some());
-    assert!(authority_state
-        .accounts
-        .get(&sender)
-        .unwrap()
-        .pending_confirmation
-        .is_none());
-}
-*/
 
 #[test]
 fn test_handle_transfer_order_ok() {
@@ -175,24 +131,20 @@ fn test_handle_confirmation_order_unknown_sender() {
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
-    // assert!(authority_state.accounts.get(&recipient).is_some());
 }
 
 #[test]
 fn test_handle_confirmation_order_bad_sequence_number() {
     let (sender, sender_key) = get_key_pair();
-    let object_id : ObjectID = sender.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = sender.0[0..20].try_into().expect("object id from account");
     let recipient = dbg_addr(2);
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
     let sender_account = authority_state.accounts.get_mut(&object_id).unwrap();
     sender_account.next_sequence_number = sender_account.next_sequence_number.increment().unwrap();
-    // let old_account = sender_account;
 
-    // let old_balance;
     let old_seq_num;
     {
         let old_account = authority_state.accounts.get_mut(&object_id).unwrap();
-        // old_balance = old_account.balance;
         old_seq_num = old_account.next_sequence_number;
     }
 
@@ -208,7 +160,6 @@ fn test_handle_confirmation_order_bad_sequence_number() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     let new_account = authority_state.accounts.get_mut(&object_id).unwrap();
-    // assert_eq!(old_balance, new_account.balance);
     assert_eq!(old_seq_num, new_account.next_sequence_number);
     assert_eq!(new_account.confirmed_log, Vec::new());
     assert!(authority_state.accounts.get(&dbg_object_id(2)).is_none());
@@ -217,7 +168,7 @@ fn test_handle_confirmation_order_bad_sequence_number() {
 #[test]
 fn test_handle_confirmation_order_exceed_balance() {
     let (sender, sender_key) = get_key_pair();
-    let object_id : ObjectID = sender.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = sender.0[0..20].try_into().expect("object id from account");
     let recipient = dbg_addr(2);
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
 
@@ -232,16 +183,14 @@ fn test_handle_confirmation_order_exceed_balance() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     let new_account = authority_state.accounts.get(&object_id).unwrap();
-    // assert_eq!(Balance::from(-995), new_account.balance);
     assert_eq!(SequenceNumber::from(1), new_account.next_sequence_number);
     assert_eq!(new_account.confirmed_log.len(), 1);
-    //assert!(authority_state.accounts.get(&recipient).is_some());
 }
 
 #[test]
 fn test_handle_confirmation_order_receiver_balance_overflow() {
     let (sender, sender_key) = get_key_pair();
-    let object_id : ObjectID = sender.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = sender.0[0..20].try_into().expect("object id from account");
     let (recipient, _) = get_key_pair();
     let mut authority_state = init_state_with_accounts(vec![
         (sender, Balance::from(1)),
@@ -259,20 +208,17 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     let new_sender_account = authority_state.accounts.get(&object_id).unwrap();
-    // assert_eq!(Balance::from(0), new_sender_account.balance);
     assert_eq!(
         SequenceNumber::from(1),
         new_sender_account.next_sequence_number
     );
     assert_eq!(new_sender_account.confirmed_log.len(), 1);
-    // let new_recipient_account = authority_state.accounts.get(&recipient).unwrap();
-    // assert_eq!(Balance::max(), new_recipient_account.balance);
 }
 
 #[test]
 fn test_handle_confirmation_order_receiver_equal_sender() {
     let (address, key) = get_key_pair();
-    let object_id : ObjectID = address.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = address.0[0..20].try_into().expect("object id from account");
     let mut authority_state = init_state_with_account(address, Balance::from(1));
 
     let certified_transfer_order = init_certified_transfer_order(
@@ -286,41 +232,14 @@ fn test_handle_confirmation_order_receiver_equal_sender() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
     let account = authority_state.accounts.get(&object_id).unwrap();
-    // assert_eq!(Balance::from(1), account.balance);
     assert_eq!(SequenceNumber::from(1), account.next_sequence_number);
     assert_eq!(account.confirmed_log.len(), 1);
 }
 
-/* No such thing in fastnft
-#[test]
-fn test_handle_cross_shard_recipient_commit() {
-    let (sender, sender_key) = get_key_pair();
-    let (recipient, _) = get_key_pair();
-    // Sender has no account on this shard.
-    let mut authority_state = init_state_with_account(recipient, Balance::from(1));
-    let certified_transfer_order = init_certified_transfer_order(
-        sender,
-        &sender_key,
-        Address::FastPay(recipient),
-        Amount::from(10),
-        &authority_state,
-    );
-    /*
-    assert!(authority_state
-        .handle_cross_shard_recipient_commit(certified_transfer_order)
-        .is_ok());
-    */
-    let account = authority_state.accounts.get(&recipient).unwrap();
-    // assert_eq!(Balance::from(11), account.balance);
-    assert_eq!(SequenceNumber::from(0), account.next_sequence_number);
-    assert_eq!(account.confirmed_log.len(), 0);
-}
-*/
-
 #[test]
 fn test_handle_confirmation_order_ok() {
     let (sender, sender_key) = get_key_pair();
-    let object_id : ObjectID = sender.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = sender.0[0..20].try_into().expect("object id from account");
     let recipient = dbg_addr(2);
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
     let certified_transfer_order = init_certified_transfer_order(
@@ -334,10 +253,6 @@ fn test_handle_confirmation_order_ok() {
     let old_account = authority_state.accounts.get_mut(&object_id).unwrap();
     let mut next_sequence_number = old_account.next_sequence_number;
     next_sequence_number = next_sequence_number.increment().unwrap();
-    // let mut remaining_balance = old_account.balance;
-    // remaining_balance = remaining_balance
-    //     .try_sub(certified_transfer_order.value.transfer.amount.into())
-    //     .unwrap();
 
     let info = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
@@ -347,76 +262,14 @@ fn test_handle_confirmation_order_ok() {
     assert_eq!(next_sequence_number, info.next_sequence_number);
     assert_eq!(None, info.pending_confirmation);
     assert_eq!(
-        authority_state.accounts.get(&object_id).unwrap().confirmed_log,
+        authority_state
+            .accounts
+            .get(&object_id)
+            .unwrap()
+            .confirmed_log,
         vec![certified_transfer_order.clone()]
     );
-
-    // let recipient_account = authority_state.accounts.get(&recipient).unwrap();
-    /* assert_eq!(
-        recipient_account.balance,
-        certified_transfer_order.value.transfer.amount.into()
-    ); 
-
-    let info_request = AccountInfoRequest {
-        sender: recipient,
-        request_sequence_number: None,
-        request_received_transfers_excluding_first_nth: Some(0),
-    };
-    let response = authority_state
-        .handle_account_info_request(info_request)
-        .unwrap();
-    assert_eq!(response.requested_received_transfers.len(), 1);
-    assert_eq!(
-        response.requested_received_transfers[0]
-            .value
-            .transfer
-            .amount,
-        Amount::from(5)
-    );
-    */
 }
-
-/*
-
-#[test]
-fn test_handle_primary_synchronization_order_update() {
-    let mut state = init_state();
-    let mut updated_transaction_index = state.last_transaction_index;
-    let address = dbg_addr(1);
-    let order = init_primary_synchronization_order(address);
-
-    assert!(state
-        .handle_primary_synchronization_order(order.clone())
-        .is_ok());
-    updated_transaction_index = updated_transaction_index.increment().unwrap();
-    assert_eq!(state.last_transaction_index, updated_transaction_index);
-    // let account = state.accounts.get(&address).unwrap();
-    // assert_eq!(account.balance, order.amount.into());
-    assert_eq!(state.accounts.len(), 1);
-}
-
-#[test]
-fn test_handle_primary_synchronization_order_double_spend() {
-    let mut state = init_state();
-    let mut updated_transaction_index = state.last_transaction_index;
-    let address = dbg_addr(1);
-    let order = init_primary_synchronization_order(address);
-
-    assert!(state
-        .handle_primary_synchronization_order(order.clone())
-        .is_ok());
-    updated_transaction_index = updated_transaction_index.increment().unwrap();
-    // Replays are ignored.
-    assert!(state
-        .handle_primary_synchronization_order(order.clone())
-        .is_ok());
-    assert_eq!(state.last_transaction_index, updated_transaction_index);
-    // let account = state.accounts.get(&address).unwrap();
-    // assert_eq!(account.balance, order.amount.into());
-    assert_eq!(state.accounts.len(), 1);
-}
-
-*/
 
 #[test]
 fn test_account_state_ok() {
@@ -445,7 +298,12 @@ fn test_get_shards() {
     let mut left = num_shards;
     loop {
         let (address, _) = get_key_pair();
-        let shard = AuthorityState::get_shard(num_shards, &address.0[0..20].try_into().expect("from address get an object id")) as usize;
+        let shard = AuthorityState::get_shard(
+            num_shards,
+            &address.0[0..20]
+                .try_into()
+                .expect("from address get an object id"),
+        ) as usize;
         println!("found {}", shard);
         if !found[shard] {
             found[shard] = true;
@@ -477,7 +335,7 @@ fn init_state_with_accounts<I: IntoIterator<Item = (FastPayAddress, Balance)>>(
 ) -> AuthorityState {
     let mut state = init_state();
     for (address, _balance) in balances {
-        let object_id : ObjectID = address.0[0..20].try_into().expect("Init obj id from key");
+        let object_id: ObjectID = address.0[0..20].try_into().expect("Init obj id from key");
         let account = state
             .accounts
             .entry(object_id)
@@ -501,10 +359,11 @@ fn init_transfer_order(
     _amount: Amount,
 ) -> TransferOrder {
     let transfer = Transfer {
-        object_id : sender.0[0..20].try_into().expect("Sender is also the object id"),
+        object_id: sender.0[0..20]
+            .try_into()
+            .expect("Sender is also the object id"),
         sender,
         recipient,
-        // amount,
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
@@ -532,18 +391,3 @@ fn init_certified_transfer_order(
         .unwrap()
         .unwrap()
 }
-
-/*
-
-#[cfg(test)]
-fn init_primary_synchronization_order(recipient: FastPayAddress) -> PrimarySynchronizationOrder {
-    let mut transaction_index = VersionNumber::new();
-    transaction_index = transaction_index.increment().unwrap();
-    PrimarySynchronizationOrder {
-        recipient,
-        amount: Amount::from(5),
-        transaction_index,
-    }
-}
-
-*/

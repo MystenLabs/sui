@@ -20,17 +20,6 @@ pub struct FundingTransaction {
     // TODO: Authenticated by Primary sender.
 }
 
-/* Fast NFT does not do sync in this way
-
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct PrimarySynchronizationOrder {
-    pub recipient: FastPayAddress,
-    pub amount: Amount,
-    pub transaction_index: VersionNumber,
-}
-
-*/
-
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub enum Address {
     Primary(PrimaryAddress),
@@ -91,16 +80,6 @@ pub struct AccountInfoResponse {
     pub requested_certificate: Option<CertifiedTransferOrder>,
     pub requested_received_transfers: Vec<CertifiedTransferOrder>,
 }
-
-/*
-
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct CrossShardUpdate {
-    pub shard_id: ShardId,
-    pub transfer_certificate: CertifiedTransferOrder,
-}
-
-*/
 
 impl Hash for TransferOrder {
     fn hash<H: Hasher>(&self, state: &mut H) {

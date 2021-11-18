@@ -48,7 +48,6 @@ pub type ObjectID = [u8; 20];
 pub type TxDigest = [u8; 20];
 pub type ObjectRef = (ObjectID, SequenceNumber);
 
-
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;
     let keypair = dalek::Keypair::generate(&mut csprng);
