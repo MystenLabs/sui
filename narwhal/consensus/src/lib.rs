@@ -369,7 +369,17 @@ mod tests {
             for certificate in certificates {
                 Consensus::process_certificate(&committee, gc_depth, &mut state, certificate);
             }
-            // with "optimal" certificates (see `make_optimal_certificates`), we need at most 6 rounds lookbehind
+            // with "optimal" certificates (see `make_optimal_certificates`), and a round-robin between leaders,
+            // we need at most 6 rounds lookbehind: we elect a leader at most at round r-2, and its round is
+            // preceded by one round of history for each prior leader, which contains their latest commit at least.
+            //
+            // -- L1's latest
+            // -- L2's latest
+            // -- L3's latest
+            // -- L4's latest
+            // -- support level 1 (for L4)
+            // -- support level 2 (for L4)
+            //
             assert!(state.dag.len() <= 6, "DAG size: {}", state.dag.len());
         }
     }
