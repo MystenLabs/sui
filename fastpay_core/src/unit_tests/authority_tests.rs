@@ -8,9 +8,10 @@ use std::convert::TryInto;
 fn test_handle_transfer_order_bad_signature() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
-    let object_id = [0; 20];
+    // let object_id = [0; 20];
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
+    let object_id = transfer_order.transfer.object_id;
     let (_unknown_address, unknown_key) = get_key_pair();
     let mut bad_signature_transfer_order = transfer_order.clone();
     bad_signature_transfer_order.signature = Signature::new(&transfer_order.transfer, &unknown_key);
@@ -63,13 +64,13 @@ fn test_handle_transfer_order_unknown_sender() {
     let unknown_sender_transfer_order = TransferOrder::new(unknown_sender_transfer, &unknown_key);
     assert!(authority_state
         .handle_transfer_order(unknown_sender_transfer_order)
-        .is_err());
+        .is_ok());
     assert!(authority_state
         .accounts
         .get(&object_id)
         .unwrap()
         .pending_confirmation
-        .is_none());
+        .is_some());
 }
 
 #[test]
