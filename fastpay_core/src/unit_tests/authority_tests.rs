@@ -39,13 +39,13 @@ fn test_handle_transfer_order_unknown_sender() {
     let unknown_sender_transfer_order = TransferOrder::new(unknown_sender_transfer, &unknown_key);
     assert!(authority_state
         .handle_transfer_order(unknown_sender_transfer_order)
-        .is_ok());
+        .is_err());
     assert!(authority_state
         .accounts
         .get(&object_id)
         .unwrap()
         .pending_confirmation
-        .is_some());
+        .is_none());
 }
 
 #[test]
@@ -130,7 +130,7 @@ fn test_handle_confirmation_order_unknown_sender() {
 
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
-        .is_ok());
+        .is_err());
 }
 
 #[test]
@@ -257,8 +257,8 @@ fn test_handle_confirmation_order_ok() {
     let info = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .unwrap();
-    assert_eq!(sender, info.owner);
-    // assert_eq!(remaining_balance, info.balance);
+    // Key check: the ownership has changed
+    assert_eq!(recipient, info.owner);
     assert_eq!(next_sequence_number, info.next_sequence_number);
     assert_eq!(None, info.pending_confirmation);
     assert_eq!(

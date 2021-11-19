@@ -87,6 +87,12 @@ impl Authority for AuthorityState {
         match self.accounts.get_mut(&object_id) {
             None => fp_bail!(FastPayError::UnknownSenderAccount),
             Some(account) => {
+                // Check the transaction sender is also the object owner
+                fp_ensure!(
+                    order.transfer.sender == account.owner,
+                    FastPayError::IncorrectSigner
+                );
+
                 if let Some(pending_confirmation) = &account.pending_confirmation {
                     fp_ensure!(
                         &pending_confirmation.value.transfer == transfer,
@@ -128,7 +134,15 @@ impl Authority for AuthorityState {
             .accounts
             .entry(transfer.object_id)
             .or_insert_with(ObjectState::new);
+
         let mut sender_sequence_number = sender_object.next_sequence_number;
+
+        // Check and update the copied state : object ID must exist
+        if sender_object.id != transfer.object_id {
+            fp_bail!(FastPayError::MissingEalierConfirmations {
+                current_sequence_number: sender_sequence_number
+            });
+        }
 
         // Check and update the copied state
         if sender_sequence_number < transfer.sequence_number {
@@ -143,6 +157,12 @@ impl Authority for AuthorityState {
         sender_sequence_number = sender_sequence_number.increment()?;
 
         // Commit sender state back to the database (Must never fail!)
+        sender_object.id = transfer.object_id;
+        sender_object.owner = match transfer.recipient {
+            Address::Primary(_) => PublicKeyBytes([0; 32]),
+            Address::FastPay(addr) => addr,
+        };
+
         sender_object.next_sequence_number = sender_sequence_number;
         sender_object.pending_confirmation = None;
         sender_object.confirmed_log.push(certificate.clone());
