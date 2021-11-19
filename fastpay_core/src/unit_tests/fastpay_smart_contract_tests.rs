@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use std::convert::TryInto;
 
 // handle_funding_transaction
 #[test]
@@ -144,9 +143,7 @@ fn init_redeem_transaction(
 ) -> RedeemTransaction {
     let (sender_address, sender_key) = get_key_pair();
     let primary_transfer = Transfer {
-        object_id: sender_address.0[0..20]
-            .try_into()
-            .expect("Sender is object id"),
+        object_id: address_to_object_id_hack(sender_address),
         sender: sender_address,
         recipient: Address::Primary(dbg_addr(2)),
         sequence_number: SequenceNumber::new(),

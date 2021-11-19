@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use std::convert::TryInto;
 
 #[test]
 fn test_handle_transfer_order_bad_signature() {
@@ -28,7 +27,7 @@ fn test_handle_transfer_order_bad_signature() {
 #[test]
 fn test_handle_transfer_order_unknown_sender() {
     let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = sender.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = address_to_object_id_hack(sender);
     let recipient = Address::FastPay(dbg_addr(2));
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
@@ -51,7 +50,7 @@ fn test_handle_transfer_order_unknown_sender() {
 #[test]
 fn test_handle_transfer_order_bad_sequence_number() {
     let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = sender.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = address_to_object_id_hack(sender);
     let recipient = Address::FastPay(dbg_addr(2));
     let authority_state = init_state_with_account(sender, Balance::from(5));
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
@@ -136,7 +135,7 @@ fn test_handle_confirmation_order_unknown_sender() {
 #[test]
 fn test_handle_confirmation_order_bad_sequence_number() {
     let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = sender.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = address_to_object_id_hack(sender);
     let recipient = dbg_addr(2);
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
     let sender_account = authority_state.accounts.get_mut(&object_id).unwrap();
@@ -168,7 +167,7 @@ fn test_handle_confirmation_order_bad_sequence_number() {
 #[test]
 fn test_handle_confirmation_order_exceed_balance() {
     let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = sender.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = address_to_object_id_hack(sender);
     let recipient = dbg_addr(2);
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
 
@@ -190,7 +189,7 @@ fn test_handle_confirmation_order_exceed_balance() {
 #[test]
 fn test_handle_confirmation_order_receiver_balance_overflow() {
     let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = sender.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = address_to_object_id_hack(sender);
     let (recipient, _) = get_key_pair();
     let mut authority_state = init_state_with_accounts(vec![
         (sender, Balance::from(1)),
@@ -218,7 +217,7 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
 #[test]
 fn test_handle_confirmation_order_receiver_equal_sender() {
     let (address, key) = get_key_pair();
-    let object_id: ObjectID = address.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = address_to_object_id_hack(address);
     let mut authority_state = init_state_with_account(address, Balance::from(1));
 
     let certified_transfer_order = init_certified_transfer_order(
@@ -239,7 +238,7 @@ fn test_handle_confirmation_order_receiver_equal_sender() {
 #[test]
 fn test_handle_confirmation_order_ok() {
     let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = sender.0[0..20].try_into().expect("object id from account");
+    let object_id: ObjectID = address_to_object_id_hack(sender);
     let recipient = dbg_addr(2);
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
     let certified_transfer_order = init_certified_transfer_order(
@@ -300,9 +299,7 @@ fn test_get_shards() {
         let (address, _) = get_key_pair();
         let shard = AuthorityState::get_shard(
             num_shards,
-            &address.0[0..20]
-                .try_into()
-                .expect("from address get an object id"),
+            &address_to_object_id_hack(address),
         ) as usize;
         println!("found {}", shard);
         if !found[shard] {
@@ -335,7 +332,7 @@ fn init_state_with_accounts<I: IntoIterator<Item = (FastPayAddress, Balance)>>(
 ) -> AuthorityState {
     let mut state = init_state();
     for (address, _balance) in balances {
-        let object_id: ObjectID = address.0[0..20].try_into().expect("Init obj id from key");
+        let object_id: ObjectID = address_to_object_id_hack(address);
         let account = state
             .accounts
             .entry(object_id)
@@ -359,9 +356,7 @@ fn init_transfer_order(
     _amount: Amount,
 ) -> TransferOrder {
     let transfer = Transfer {
-        object_id: sender.0[0..20]
-            .try_into()
-            .expect("Sender is also the object id"),
+        object_id: address_to_object_id_hack(sender),
         sender,
         recipient,
         sequence_number: SequenceNumber::new(),

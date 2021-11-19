@@ -4,7 +4,6 @@
 
 use super::*;
 use crate::base_types::*;
-use std::convert::TryInto;
 use std::time::Instant;
 
 #[test]
@@ -58,9 +57,7 @@ fn test_order() {
     let (sender_name, sender_key) = get_key_pair();
 
     let transfer = Transfer {
-        object_id: sender_name.0[0..20]
-            .try_into()
-            .expect("Sender is object id"),
+        object_id: address_to_object_id_hack(sender_name),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
         sequence_number: SequenceNumber::new(),
@@ -79,9 +76,7 @@ fn test_order() {
 
     let (sender_name, sender_key) = get_key_pair();
     let transfer2 = Transfer {
-        object_id: sender_name.0[0..20]
-            .try_into()
-            .expect("Sender is object id"),
+        object_id: address_to_object_id_hack(sender_name),
         sender: sender_name,
         recipient: Address::FastPay(dbg_addr(0x20)),
         sequence_number: SequenceNumber::new(),
@@ -103,9 +98,7 @@ fn test_order() {
 fn test_vote() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_id: sender_name.0[0..20]
-            .try_into()
-            .expect("Sender is object id"),
+        object_id: address_to_object_id_hack(sender_name),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
         sequence_number: SequenceNumber::new(),
@@ -130,9 +123,7 @@ fn test_vote() {
 fn test_cert() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_id: sender_name.0[0..20]
-            .try_into()
-            .expect("Sender is object id"),
+        object_id: address_to_object_id_hack(sender_name),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
         sequence_number: SequenceNumber::new(),
@@ -165,9 +156,7 @@ fn test_cert() {
 fn test_info_response() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_id: sender_name.0[0..20]
-            .try_into()
-            .expect("Sender is object id"),
+        object_id: address_to_object_id_hack(sender_name),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
         sequence_number: SequenceNumber::new(),
@@ -239,9 +228,7 @@ fn test_info_response() {
 fn test_time_order() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_id: sender_name.0[0..20]
-            .try_into()
-            .expect("Sender is object id"),
+        object_id: address_to_object_id_hack(sender_name),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
         sequence_number: SequenceNumber::new(),
@@ -274,9 +261,7 @@ fn test_time_order() {
 fn test_time_vote() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_id: sender_name.0[0..20]
-            .try_into()
-            .expect("Sender is object id"),
+        object_id: address_to_object_id_hack(sender_name),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
         sequence_number: SequenceNumber::new(),
@@ -315,9 +300,7 @@ fn test_time_cert() {
     let count = 100;
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_id: sender_name.0[0..20]
-            .try_into()
-            .expect("Sender is object id"),
+        object_id: address_to_object_id_hack(sender_name),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0)),
         sequence_number: SequenceNumber::new(),

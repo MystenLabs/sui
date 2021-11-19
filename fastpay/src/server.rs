@@ -8,7 +8,6 @@ use fastpay_core::{authority::*, base_types::*, committee::Committee};
 
 use futures::future::join_all;
 use log::*;
-use std::convert::TryInto;
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
 
@@ -42,9 +41,7 @@ fn make_shard_server(
     // Load initial states
     for (address, _balance) in &initial_accounts_config.accounts {
         // TODO: fix this total hack
-        let id: ObjectID = address.0[..20]
-            .try_into()
-            .expect("slice with incorrect length");
+        let id: ObjectID = address_to_object_id_hack(*address);
 
         if AuthorityState::get_shard(num_shards, &id) != shard {
             continue;

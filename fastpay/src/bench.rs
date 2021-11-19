@@ -9,7 +9,6 @@ use fastpay_core::{authority::*, base_types::*, committee::*, messages::*, seria
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
-use std::convert::TryInto;
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
@@ -126,7 +125,7 @@ impl ClientServerBenchmark {
         let mut account_keys = Vec::new();
         for _ in 0..self.num_accounts {
             let keypair = get_key_pair();
-            let object_id: ObjectID = keypair.0 .0[0..20].try_into().expect("wrong size");
+            let object_id: ObjectID = address_to_object_id_hack(keypair.0);
             let i = AuthorityState::get_shard(self.num_shards, &object_id) as usize;
             assert!(states[i].in_shard(&object_id));
             let client = ObjectState {
@@ -147,7 +146,7 @@ impl ClientServerBenchmark {
         let mut next_recipient = get_key_pair().0;
         for (pubx, secx) in account_keys.iter() {
             let transfer = Transfer {
-                object_id: pubx.0[0..20].try_into().expect("Sender is object id"),
+                object_id: address_to_object_id_hack(*pubx),
                 sender: *pubx,
                 recipient: Address::FastPay(next_recipient),
                 sequence_number: SequenceNumber::from(0),

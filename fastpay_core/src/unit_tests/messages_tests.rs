@@ -3,7 +3,6 @@
 
 use super::*;
 use std::collections::BTreeMap;
-use std::convert::TryInto;
 
 #[test]
 fn test_signed_values() {
@@ -17,7 +16,7 @@ fn test_signed_values() {
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
-        object_id: a1.0[0..20].try_into().expect("Sender is object id"),
+        object_id: address_to_object_id_hack(a1),
         sender: a1,
         recipient: Address::FastPay(a2),
         sequence_number: SequenceNumber::new(),
@@ -51,7 +50,7 @@ fn test_certificates() {
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
-        object_id: a1.0[0..20].try_into().expect("Sender is object id"),
+        object_id: address_to_object_id_hack(a1),
         sender: a1,
         recipient: Address::FastPay(a2),
         sequence_number: SequenceNumber::new(),
