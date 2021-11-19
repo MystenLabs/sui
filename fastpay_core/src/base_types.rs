@@ -45,7 +45,6 @@ pub type AuthorityName = PublicKeyBytes;
 
 // Define digests and object IDs
 pub type ObjectID = [u8; 20];
-pub type TxDigest = [u8; 20];
 pub type ObjectRef = (ObjectID, SequenceNumber);
 
 pub fn address_to_object_id_hack(address : FastPayAddress ) -> ObjectID {
