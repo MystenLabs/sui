@@ -543,9 +543,7 @@ where
             }
         }
         /*
-        for old_cert in &self.sent_certificates {
-            new_balance = new_balance.try_add(old_cert.value.transfer.amount.into())?;
-        }
+
         */
         // Atomic update
         self.sent_certificates = sent_certificates;

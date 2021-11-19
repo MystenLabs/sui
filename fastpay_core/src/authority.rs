@@ -13,14 +13,15 @@ pub struct ObjectState {
     /// The object identifier
     pub id: ObjectID,
     /// The authenticator that unlocks this object (eg. public key, or other).
-    pub next_sequence_number: SequenceNumber,
-    /// Whether we have signed a transfer for this sequence number already.
     pub owner: FastPayAddress,
+    /// Sequence number tracking spending actions.
+    pub next_sequence_number: SequenceNumber,
     /// The contents of the Object. Right now just a blob.
     pub contents: Vec<u8>,
 
     // These structures will likely be refactored outside the object.
-    /// Sequence number tracking spending actions.
+
+    /// Whether we have signed a transfer for this sequence number already.
     pub pending_confirmation: Option<SignedTransferOrder>,
     /// All confirmed certificates for this sender.
     pub confirmed_log: Vec<CertifiedTransferOrder>,
@@ -129,6 +130,15 @@ impl Authority for AuthorityState {
         certificate.check(&self.committee)?;
         let transfer = certificate.value.transfer.clone();
 
+        // If we have a certificate on the confirmation order it means that the input 
+        // object exists on other honest authorities, but we do not have it. The only 
+        // way this may happen is if we missed some updates.
+        if !self.accounts.contains_key(&transfer.object_id){
+            fp_bail!(FastPayError::MissingEalierConfirmations {
+                current_sequence_number: SequenceNumber::from(0),
+            });
+        }
+
         // First we copy all relevant data from sender.
         let mut sender_object = self
             .accounts
@@ -136,13 +146,6 @@ impl Authority for AuthorityState {
             .or_insert_with(ObjectState::new);
 
         let mut sender_sequence_number = sender_object.next_sequence_number;
-
-        // Check and update the copied state : object ID must exist
-        if sender_object.id != transfer.object_id {
-            fp_bail!(FastPayError::MissingEalierConfirmations {
-                current_sequence_number: sender_sequence_number
-            });
-        }
 
         // Check and update the copied state
         if sender_sequence_number < transfer.sequence_number {
@@ -285,7 +288,6 @@ impl AuthorityState {
     }
 
     pub fn insert_object(&mut self, object: ObjectState) {
-        // assert!(address == object.owner);
         self.accounts.insert(object.id, object);
     }
 
