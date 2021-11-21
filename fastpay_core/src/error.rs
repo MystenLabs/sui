@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[macro_export]
 macro_rules! fp_bail {
     ($e:expr) => {
-        return Err($e);
+        return Err($e)
     };
 }
 
