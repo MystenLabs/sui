@@ -131,7 +131,7 @@ impl ClientServerBenchmark {
             let client = ObjectState {
                 id: object_id,
                 contents: Vec::new(),
-                owner: FastPayAddress::from(keypair.0.clone()),
+                owner: keypair.0,
                 next_sequence_number: SequenceNumber::from(0),
                 pending_confirmation: None,
                 confirmed_log: Vec::new(),

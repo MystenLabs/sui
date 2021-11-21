@@ -47,8 +47,10 @@ pub type AuthorityName = PublicKeyBytes;
 pub type ObjectID = [u8; 20];
 pub type ObjectRef = (ObjectID, SequenceNumber);
 
-pub fn address_to_object_id_hack(address : FastPayAddress ) -> ObjectID {
-    address.0[0..20].try_into().expect("An address is always long enough to extract 20 bytes")
+pub fn address_to_object_id_hack(address: FastPayAddress) -> ObjectID {
+    address.0[0..20]
+        .try_into()
+        .expect("An address is always long enough to extract 20 bytes")
 }
 
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
@@ -92,8 +94,7 @@ pub fn dbg_addr(name: u8) -> FastPayAddress {
 
 #[cfg(test)]
 pub fn dbg_object_id(name: u8) -> ObjectID {
-    let obj_id = [name; 20];
-    obj_id
+    [name; 20]
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]

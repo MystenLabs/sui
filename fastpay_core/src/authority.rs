@@ -20,7 +20,6 @@ pub struct ObjectState {
     pub contents: Vec<u8>,
 
     // These structures will likely be refactored outside the object.
-
     /// Whether we have signed a transfer for this sequence number already.
     pub pending_confirmation: Option<SignedTransferOrder>,
     /// All confirmed certificates for this sender.
@@ -130,10 +129,10 @@ impl Authority for AuthorityState {
         certificate.check(&self.committee)?;
         let transfer = certificate.value.transfer.clone();
 
-        // If we have a certificate on the confirmation order it means that the input 
-        // object exists on other honest authorities, but we do not have it. The only 
+        // If we have a certificate on the confirmation order it means that the input
+        // object exists on other honest authorities, but we do not have it. The only
         // way this may happen is if we missed some updates.
-        if !self.accounts.contains_key(&transfer.object_id){
+        if !self.accounts.contains_key(&transfer.object_id) {
             fp_bail!(FastPayError::MissingEalierConfirmations {
                 current_sequence_number: SequenceNumber::from(0),
             });
@@ -168,7 +167,7 @@ impl Authority for AuthorityState {
 
         sender_object.next_sequence_number = sender_sequence_number;
         sender_object.pending_confirmation = None;
-        sender_object.confirmed_log.push(certificate.clone());
+        sender_object.confirmed_log.push(certificate);
         let info = sender_object.make_account_info();
 
         Ok(info)

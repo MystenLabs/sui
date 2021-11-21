@@ -266,7 +266,7 @@ fn test_handle_confirmation_order_ok() {
             .get(&object_id)
             .unwrap()
             .confirmed_log,
-        vec![certified_transfer_order.clone()]
+        vec![certified_transfer_order]
     );
 }
 
@@ -297,10 +297,8 @@ fn test_get_shards() {
     let mut left = num_shards;
     loop {
         let (address, _) = get_key_pair();
-        let shard = AuthorityState::get_shard(
-            num_shards,
-            &address_to_object_id_hack(address),
-        ) as usize;
+        let shard =
+            AuthorityState::get_shard(num_shards, &address_to_object_id_hack(address)) as usize;
         println!("found {}", shard);
         if !found[shard] {
             found[shard] = true;
