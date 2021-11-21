@@ -33,7 +33,7 @@ pub trait DataStream: Send {
         &'a mut self,
         buffer: &'a [u8],
     ) -> future::BoxFuture<'a, Result<(), std::io::Error>>;
-    fn read_data(&mut self) -> future::BoxFuture<Result<Vec<u8>, std::io::Error>>;
+    fn read_data(&mut self) -> future::BoxFuture<'_, Result<Vec<u8>, std::io::Error>>;
 }
 
 /// A pool of (outgoing) data streams.
@@ -151,7 +151,7 @@ impl DataStream for UdpDataStream {
         })
     }
 
-    fn read_data(&mut self) -> future::BoxFuture<Result<Vec<u8>, std::io::Error>> {
+    fn read_data(&mut self) -> future::BoxFuture<'_, Result<Vec<u8>, std::io::Error>> {
         Box::pin(async move {
             let size = self.socket.recv(&mut self.buffer).await?;
             Ok(self.buffer[..size].into())
@@ -275,7 +275,7 @@ impl DataStream for TcpDataStream {
         Box::pin(Self::tcp_write_data(&mut self.stream, buffer))
     }
 
-    fn read_data(&mut self) -> future::BoxFuture<Result<Vec<u8>, std::io::Error>> {
+    fn read_data(&mut self) -> future::BoxFuture<'_, Result<Vec<u8>, std::io::Error>> {
         Box::pin(Self::tcp_read_data(&mut self.stream, self.max_data_size))
     }
 }

@@ -22,7 +22,7 @@ impl Requester for LocalRequester {
     type Key = &'static str;
     type Value = u32;
 
-    fn query(&mut self, _key: Self::Key) -> future::BoxFuture<Self::Value> {
+    fn query(&mut self, _key: Self::Key) -> future::BoxFuture<'_, Self::Value> {
         Box::pin(future::ready(self.0.fetch_add(1, Ordering::Relaxed)))
     }
 }
