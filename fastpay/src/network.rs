@@ -291,7 +291,7 @@ impl AuthorityClient for Client {
     fn handle_transfer_order(
         &mut self,
         order: TransferOrder,
-    ) -> AsyncResult<AccountInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
             let shard = AuthorityState::get_shard(self.num_shards, &order.transfer.sender);
             self.send_recv_bytes(shard, serialize_transfer_order(&order))
@@ -303,7 +303,7 @@ impl AuthorityClient for Client {
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<AccountInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
             let shard = AuthorityState::get_shard(
                 self.num_shards,
@@ -318,7 +318,7 @@ impl AuthorityClient for Client {
     fn handle_account_info_request(
         &mut self,
         request: AccountInfoRequest,
-    ) -> AsyncResult<AccountInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
             let shard = AuthorityState::get_shard(self.num_shards, &request.sender);
             self.send_recv_bytes(shard, serialize_info_request(&request))

@@ -29,7 +29,7 @@ pub trait Requester {
     type Value: std::fmt::Debug + Send + Clone + 'static;
 
     /// Request the value corresponding to the given key.
-    fn query(&mut self, key: Self::Key) -> future::BoxFuture<Self::Value>;
+    fn query(&mut self, key: Self::Key) -> future::BoxFuture<'_, Self::Value>;
 }
 
 /// Channel for using code to send requests and stop the downloader task.
