@@ -21,19 +21,19 @@ pub trait AuthorityClient {
     fn handle_transfer_order(
         &mut self,
         order: TransferOrder,
-    ) -> AsyncResult<AccountInfoResponse, FastPayError>;
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError>;
 
     /// Confirm a transfer to a FastPay or Primary account.
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<AccountInfoResponse, FastPayError>;
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError>;
 
     /// Handle information requests for this account.
     fn handle_account_info_request(
         &mut self,
         request: AccountInfoRequest,
-    ) -> AsyncResult<AccountInfoResponse, FastPayError>;
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError>;
 }
 
 pub struct ClientState<AuthorityClient> {
@@ -71,7 +71,7 @@ pub trait Client {
         amount: Amount,
         recipient: FastPayAddress,
         user_data: UserData,
-    ) -> AsyncResult<CertifiedTransferOrder, failure::Error>;
+    ) -> AsyncResult<'_, CertifiedTransferOrder, failure::Error>;
 
     /// Send money to a Primary account.
     fn transfer_to_primary(
@@ -79,13 +79,13 @@ pub trait Client {
         amount: Amount,
         recipient: PrimaryAddress,
         user_data: UserData,
-    ) -> AsyncResult<CertifiedTransferOrder, failure::Error>;
+    ) -> AsyncResult<'_, CertifiedTransferOrder, failure::Error>;
 
     /// Receive money from FastPay.
     fn receive_from_fastpay(
         &mut self,
         certificate: CertifiedTransferOrder,
-    ) -> AsyncResult<(), failure::Error>;
+    ) -> AsyncResult<'_, (), failure::Error>;
 
     /// Send money to a FastPay account.
     /// Do not check balance. (This may block the client)
@@ -95,12 +95,12 @@ pub trait Client {
         amount: Amount,
         recipient: FastPayAddress,
         user_data: UserData,
-    ) -> AsyncResult<CertifiedTransferOrder, failure::Error>;
+    ) -> AsyncResult<'_, CertifiedTransferOrder, failure::Error>;
 
     /// Find how much money we can spend.
     /// TODO: Currently, this value only reflects received transfers that were
     /// locally processed by `receive_from_fastpay`.
-    fn get_spendable_amount(&mut self) -> AsyncResult<Amount, failure::Error>;
+    fn get_spendable_amount(&mut self) -> AsyncResult<'_, Amount, failure::Error>;
 }
 
 impl<A> ClientState<A> {
@@ -184,7 +184,7 @@ where
     fn query(
         &mut self,
         sequence_number: SequenceNumber,
-    ) -> AsyncResult<CertifiedTransferOrder, FastPayError> {
+    ) -> AsyncResult<'_, CertifiedTransferOrder, FastPayError> {
         Box::pin(async move {
             let request = AccountInfoRequest {
                 sender: self.sender,
@@ -600,7 +600,7 @@ where
         amount: Amount,
         recipient: FastPayAddress,
         user_data: UserData,
-    ) -> AsyncResult<CertifiedTransferOrder, failure::Error> {
+    ) -> AsyncResult<'_, CertifiedTransferOrder, failure::Error> {
         Box::pin(self.transfer(amount, Address::FastPay(recipient), user_data))
     }
 
@@ -609,11 +609,11 @@ where
         amount: Amount,
         recipient: PrimaryAddress,
         user_data: UserData,
-    ) -> AsyncResult<CertifiedTransferOrder, failure::Error> {
+    ) -> AsyncResult<'_, CertifiedTransferOrder, failure::Error> {
         Box::pin(self.transfer(amount, Address::Primary(recipient), user_data))
     }
 
-    fn get_spendable_amount(&mut self) -> AsyncResult<Amount, failure::Error> {
+    fn get_spendable_amount(&mut self) -> AsyncResult<'_, Amount, failure::Error> {
         Box::pin(async move {
             if let Some(order) = self.pending_transfer.clone() {
                 // Finish executing the previous transfer.
@@ -637,7 +637,7 @@ where
     fn receive_from_fastpay(
         &mut self,
         certificate: CertifiedTransferOrder,
-    ) -> AsyncResult<(), failure::Error> {
+    ) -> AsyncResult<'_, (), failure::Error> {
         Box::pin(async move {
             certificate.check(&self.committee)?;
             let transfer = &certificate.value.transfer;
@@ -670,7 +670,7 @@ where
         amount: Amount,
         recipient: FastPayAddress,
         user_data: UserData,
-    ) -> AsyncResult<CertifiedTransferOrder, failure::Error> {
+    ) -> AsyncResult<'_, CertifiedTransferOrder, failure::Error> {
         Box::pin(async move {
             let transfer = Transfer {
                 sender: self.address,

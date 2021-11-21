@@ -21,7 +21,7 @@ impl AuthorityClient for LocalAuthorityClient {
     fn handle_transfer_order(
         &mut self,
         order: TransferOrder,
-    ) -> AsyncResult<AccountInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move { state.lock().await.handle_transfer_order(order) })
     }
@@ -29,7 +29,7 @@ impl AuthorityClient for LocalAuthorityClient {
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<AccountInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move {
             state
@@ -43,7 +43,7 @@ impl AuthorityClient for LocalAuthorityClient {
     fn handle_account_info_request(
         &mut self,
         request: AccountInfoRequest,
-    ) -> AsyncResult<AccountInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move { state.lock().await.handle_account_info_request(request) })
     }
