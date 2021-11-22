@@ -15,7 +15,7 @@ use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc::{Receiver, Sender};
 
-#[cfg(test)]
+#[cfg(any(test, feature = "benchmark"))]
 #[path = "tests/consensus_tests.rs"]
 pub mod consensus_tests;
 
@@ -23,7 +23,7 @@ pub mod consensus_tests;
 type Dag = HashMap<Round, HashMap<PublicKey, (Digest, Certificate)>>;
 
 /// The state that needs to be persisted for crash-recovery.
-struct State {
+pub struct State {
     /// The last committed round.
     last_committed_round: Round,
     // Keeps the last committed round for each authority. This map is used to clean up the dag and
@@ -35,7 +35,7 @@ struct State {
 }
 
 impl State {
-    fn new(genesis: Vec<Certificate>) -> Self {
+    pub fn new(genesis: Vec<Certificate>) -> Self {
         let genesis = genesis
             .into_iter()
             .map(|x| (x.origin(), (x.digest(), x)))
@@ -147,7 +147,7 @@ impl Consensus {
         }
     }
 
-    fn process_certificate(
+    pub fn process_certificate(
         committee: &Committee,
         gc_depth: Round,
         state: &mut State,
