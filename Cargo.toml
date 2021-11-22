@@ -2,6 +2,7 @@
 members = [
         "fastpay_core",
         "fastpay",
+        "storage"
 ]
 
 [profile.release]
