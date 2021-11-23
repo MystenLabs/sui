@@ -15,8 +15,8 @@ pub mod traits;
 pub use traits::Map;
 //pub mod rocks;
 #[cfg(test)]
-#[path = "tests/storage_tests.rs"]
-pub mod store_tests;
+#[path = "rocks/src/tests/storage_tests.rs"]
+pub mod storage_tests;
 
 pub type StoreError = rocksdb::Error;
 type StoreResult<T> = Result<T, StoreError>;
