@@ -66,6 +66,6 @@ async fn read_notify() {
     });
 
     // Write the missing value and ensure the handle terminates correctly.
-    store.write(key, value).await;
+    stwrite(key, value).await;
     assert!(handle.await.is_ok());
 }
