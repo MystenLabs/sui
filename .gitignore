@@ -1,4 +1,8 @@
+# Rust build directory
 /target
+
+# Move build directory
+build
 
 .DS_Store
 
