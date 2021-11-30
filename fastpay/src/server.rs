@@ -116,7 +116,7 @@ enum ServerCommands {
         #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
         buffer_size: usize,
 
-        /// Number of cross shards messages allowed before blocking the main server loop 
+        /// Number of cross shards messages allowed before blocking the main server loop
         #[structopt(long, default_value = "1000")]
         _cross_shard_queue_size: usize, // TODO: remove this once client is re-factored.
 
