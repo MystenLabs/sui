@@ -1,4 +1,5 @@
 /target
+.pre-commit*
 
 .DS_Store
 
