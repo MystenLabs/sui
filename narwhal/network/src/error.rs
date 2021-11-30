@@ -1,6 +1,5 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-use std::fmt::Debug;
-use std::net::SocketAddr;
+use std::{fmt::Debug, net::SocketAddr};
 use thiserror::Error;
 
 #[derive(Error, Debug)]

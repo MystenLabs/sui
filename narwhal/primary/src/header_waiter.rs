@@ -1,22 +1,31 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-use crate::error::{DagError, DagResult};
-use crate::messages::Header;
-use crate::primary::{PrimaryMessage, PrimaryWorkerMessage, Round};
+use crate::{
+    error::{DagError, DagResult},
+    messages::Header,
+    primary::{PrimaryMessage, PrimaryWorkerMessage, Round},
+};
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{Digest, PublicKey};
-use futures::future::try_join_all;
-use futures::stream::futures_unordered::FuturesUnordered;
-use futures::stream::StreamExt as _;
+use futures::{
+    future::try_join_all,
+    stream::{futures_unordered::FuturesUnordered, StreamExt as _},
+};
 use log::{debug, error};
 use network::SimpleSender;
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::{SystemTime, UNIX_EPOCH},
+};
 use store::Store;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::time::{sleep, Duration, Instant};
+use tokio::{
+    sync::mpsc::{channel, Receiver, Sender},
+    time::{sleep, Duration, Instant},
+};
 
 /// The resolution of the timer that checks whether we received replies to our sync requests, and triggers
 /// new sync requests if we didn't.

@@ -1,13 +1,16 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-use crate::messages::Certificate;
-use crate::primary::PrimaryWorkerMessage;
+use crate::{messages::Certificate, primary::PrimaryWorkerMessage};
 use bytes::Bytes;
 use config::Committee;
 use crypto::PublicKey;
 use network::SimpleSender;
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::{
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+};
 use tokio::sync::mpsc::Receiver;
 
 /// Receives the highest round reached by consensus and update it for all tasks.

@@ -1,9 +1,12 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-use crate::error::{DagError, DagResult};
-use crate::messages::Certificate;
-use futures::future::try_join_all;
-use futures::stream::futures_unordered::FuturesUnordered;
-use futures::stream::StreamExt as _;
+use crate::{
+    error::{DagError, DagResult},
+    messages::Certificate,
+};
+use futures::{
+    future::try_join_all,
+    stream::{futures_unordered::FuturesUnordered, StreamExt as _},
+};
 use log::error;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};

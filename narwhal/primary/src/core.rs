@@ -1,19 +1,24 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-use crate::aggregators::{CertificatesAggregator, VotesAggregator};
-use crate::error::{DagError, DagResult};
-use crate::messages::{Certificate, Header, Vote};
-use crate::primary::{PrimaryMessage, Round};
-use crate::synchronizer::Synchronizer;
+use crate::{
+    aggregators::{CertificatesAggregator, VotesAggregator},
+    error::{DagError, DagResult},
+    messages::{Certificate, Header, Vote},
+    primary::{PrimaryMessage, Round},
+    synchronizer::Synchronizer,
+};
 use async_recursion::async_recursion;
 use bytes::Bytes;
 use config::Committee;
-use crypto::Hash as _;
-use crypto::{Digest, PublicKey, SignatureService};
+use crypto::{Digest, Hash as _, PublicKey, SignatureService};
 use log::{debug, error, warn};
 use network::{CancelHandler, ReliableSender};
-use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+};
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
 

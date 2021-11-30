@@ -2,8 +2,7 @@
 use crate::processor::SerializedBatchMessage;
 use config::{Committee, Stake};
 use crypto::PublicKey;
-use futures::stream::futures_unordered::FuturesUnordered;
-use futures::stream::StreamExt as _;
+use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::CancelHandler;
 use tokio::sync::mpsc::{Receiver, Sender};
 

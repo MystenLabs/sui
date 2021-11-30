@@ -3,16 +3,19 @@ use crate::worker::{Round, WorkerMessage};
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{Digest, PublicKey};
-use futures::stream::futures_unordered::FuturesUnordered;
-use futures::stream::StreamExt as _;
+use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use log::{debug, error};
 use network::SimpleSender;
 use primary::PrimaryWorkerMessage;
-use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::HashMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use store::{Store, StoreError};
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::time::{sleep, Duration, Instant};
+use tokio::{
+    sync::mpsc::{channel, Receiver, Sender},
+    time::{sleep, Duration, Instant},
+};
 
 #[cfg(test)]
 #[path = "tests/synchronizer_tests.rs"]

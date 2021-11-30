@@ -1,14 +1,17 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-use crate::error::{DagError, DagResult};
-use crate::primary::Round;
+use crate::{
+    error::{DagError, DagResult},
+    primary::Round,
+};
 use config::{Committee, WorkerId};
 use crypto::{Digest, Hash, PublicKey, Signature, SignatureService};
-use ed25519_dalek::Digest as _;
-use ed25519_dalek::Sha512;
+use ed25519_dalek::{Digest as _, Sha512};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::convert::TryInto;
-use std::fmt;
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    convert::TryInto,
+    fmt,
+};
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct Header {

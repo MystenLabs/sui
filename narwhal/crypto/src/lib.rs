@@ -7,16 +7,18 @@
 )]
 
 use ed25519_dalek as dalek;
-use ed25519_dalek::ed25519;
-use ed25519_dalek::Signer as _;
-use rand::rngs::OsRng;
-use rand::{CryptoRng, RngCore};
+use ed25519_dalek::{ed25519, Signer as _};
+use rand::{rngs::OsRng, CryptoRng, RngCore};
 use serde::{de, ser, Deserialize, Serialize};
-use std::array::TryFromSliceError;
-use std::convert::{TryFrom, TryInto};
-use std::fmt;
-use tokio::sync::mpsc::{channel, Sender};
-use tokio::sync::oneshot;
+use std::{
+    array::TryFromSliceError,
+    convert::{TryFrom, TryInto},
+    fmt,
+};
+use tokio::sync::{
+    mpsc::{channel, Sender},
+    oneshot,
+};
 
 #[cfg(test)]
 #[path = "tests/crypto_tests.rs"]

@@ -1,7 +1,9 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 use super::*;
-use crate::common::{batch, temp_dir};
-use crate::worker::WorkerMessage;
+use crate::{
+    common::{batch, temp_dir},
+    worker::WorkerMessage,
+};
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]

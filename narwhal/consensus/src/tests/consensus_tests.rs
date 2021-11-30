@@ -3,8 +3,7 @@ use super::*;
 use config::{Authority, PrimaryAddresses};
 use crypto::{generate_keypair, SecretKey};
 use primary::Header;
-use rand::SeedableRng as _;
-use rand::{rngs::StdRng, Rng};
+use rand::{rngs::StdRng, Rng, SeedableRng as _};
 use std::collections::{BTreeSet, VecDeque};
 use tokio::sync::mpsc::channel;
 

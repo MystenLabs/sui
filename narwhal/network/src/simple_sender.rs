@@ -1,16 +1,14 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 use crate::error::NetworkError;
 use bytes::Bytes;
-use futures::sink::SinkExt as _;
-use futures::stream::StreamExt as _;
+use futures::{sink::SinkExt as _, stream::StreamExt as _};
 use log::{info, warn};
-use rand::prelude::SliceRandom as _;
-use rand::rngs::SmallRng;
-use rand::SeedableRng as _;
-use std::collections::HashMap;
-use std::net::SocketAddr;
-use tokio::net::TcpStream;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
+use std::{collections::HashMap, net::SocketAddr};
+use tokio::{
+    net::TcpStream,
+    sync::mpsc::{channel, Receiver, Sender},
+};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 #[cfg(test)]

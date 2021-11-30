@@ -1,7 +1,9 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 use super::*;
-use crate::common::{batch, committee_with_base_port, keys, listener};
-use crate::worker::WorkerMessage;
+use crate::{
+    common::{batch, committee_with_base_port, keys, listener},
+    worker::WorkerMessage,
+};
 use bytes::Bytes;
 use futures::future::try_join_all;
 use network::ReliableSender;

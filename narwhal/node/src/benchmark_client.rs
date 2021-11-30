@@ -1,16 +1,16 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 use anyhow::{Context, Result};
-use bytes::BufMut as _;
-use bytes::BytesMut;
+use bytes::{BufMut as _, BytesMut};
 use clap::{crate_name, crate_version, App, AppSettings};
 use env_logger::Env;
-use futures::future::join_all;
-use futures::sink::SinkExt as _;
+use futures::{future::join_all, sink::SinkExt as _};
 use log::{info, warn};
 use rand::Rng;
 use std::net::SocketAddr;
-use tokio::net::TcpStream;
-use tokio::time::{interval, sleep, Duration, Instant};
+use tokio::{
+    net::TcpStream,
+    time::{interval, sleep, Duration, Instant},
+};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 #[tokio::main]

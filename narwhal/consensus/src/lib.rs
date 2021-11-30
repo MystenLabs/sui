@@ -7,12 +7,13 @@
 )]
 
 use config::{Committee, Stake};
-use crypto::Hash as _;
-use crypto::{Digest, PublicKey};
+use crypto::{Digest, Hash as _, PublicKey};
 use log::{debug, info, log_enabled, warn};
 use primary::{Certificate, Round};
-use std::cmp::max;
-use std::collections::{HashMap, HashSet};
+use std::{
+    cmp::max,
+    collections::{HashMap, HashSet},
+};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 #[cfg(any(test, feature = "benchmark"))]

@@ -1,10 +1,12 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-use crate::batch_maker::{Batch, BatchMaker, Transaction};
-use crate::helper::Helper;
-use crate::primary_connector::PrimaryConnector;
-use crate::processor::{Processor, SerializedBatchMessage};
-use crate::quorum_waiter::QuorumWaiter;
-use crate::synchronizer::Synchronizer;
+use crate::{
+    batch_maker::{Batch, BatchMaker, Transaction},
+    helper::Helper,
+    primary_connector::PrimaryConnector,
+    processor::{Processor, SerializedBatchMessage},
+    quorum_waiter::QuorumWaiter,
+    synchronizer::Synchronizer,
+};
 use async_trait::async_trait;
 use bytes::Bytes;
 use config::{Committee, Parameters, WorkerId};
@@ -14,8 +16,10 @@ use log::{error, info, warn};
 use network::{MessageHandler, Receiver, Writer};
 use primary::PrimaryWorkerMessage;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
-use std::net::{IpAddr, Ipv4Addr};
+use std::{
+    error::Error,
+    net::{IpAddr, Ipv4Addr},
+};
 use store::Store;
 use tokio::sync::mpsc::{channel, Sender};
 

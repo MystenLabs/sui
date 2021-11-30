@@ -1,5 +1,7 @@
-use consensus::consensus_tests::{keys, make_optimal_certificates, mock_committee};
-use consensus::*;
+use consensus::{
+    consensus_tests::{keys, make_optimal_certificates, mock_committee},
+    *,
+};
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };

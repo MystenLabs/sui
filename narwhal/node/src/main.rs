@@ -8,9 +8,7 @@
 
 use anyhow::{Context, Result};
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
-use config::Export as _;
-use config::Import as _;
-use config::{Committee, KeyPair, Parameters, WorkerId};
+use config::{Committee, Export as _, Import as _, KeyPair, Parameters, WorkerId};
 use consensus::Consensus;
 use env_logger::Env;
 use primary::{Certificate, Primary};

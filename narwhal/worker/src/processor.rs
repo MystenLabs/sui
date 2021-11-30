@@ -2,8 +2,7 @@
 use crate::worker::SerializedBatchDigestMessage;
 use config::WorkerId;
 use crypto::Digest;
-use ed25519_dalek::Digest as _;
-use ed25519_dalek::Sha512;
+use ed25519_dalek::{Digest as _, Sha512};
 use primary::WorkerPrimaryMessage;
 use std::convert::TryInto;
 use store::Store;

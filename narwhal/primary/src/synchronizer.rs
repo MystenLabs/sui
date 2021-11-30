@@ -1,10 +1,11 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-use crate::error::DagResult;
-use crate::header_waiter::WaiterMessage;
-use crate::messages::{Certificate, Header};
+use crate::{
+    error::DagResult,
+    header_waiter::WaiterMessage,
+    messages::{Certificate, Header},
+};
 use config::Committee;
-use crypto::Hash as _;
-use crypto::{Digest, PublicKey};
+use crypto::{Digest, Hash as _, PublicKey};
 use std::collections::HashMap;
 use store::Store;
 use tokio::sync::mpsc::Sender;

@@ -1,19 +1,16 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-use crate::batch_maker::{Batch, Transaction};
-use crate::worker::WorkerMessage;
+use crate::{
+    batch_maker::{Batch, Transaction},
+    worker::WorkerMessage,
+};
 use bytes::Bytes;
 use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses};
 use crypto::{generate_keypair, Digest, PublicKey, SecretKey};
-use ed25519_dalek::Digest as _;
-use ed25519_dalek::Sha512;
-use futures::sink::SinkExt as _;
-use futures::stream::StreamExt as _;
-use rand::rngs::StdRng;
-use rand::SeedableRng as _;
-use std::convert::TryInto as _;
-use std::net::SocketAddr;
-use tokio::net::TcpListener;
-use tokio::task::JoinHandle;
+use ed25519_dalek::{Digest as _, Sha512};
+use futures::{sink::SinkExt as _, stream::StreamExt as _};
+use rand::{rngs::StdRng, SeedableRng as _};
+use std::{convert::TryInto as _, net::SocketAddr};
+use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 pub fn temp_dir() -> std::path::PathBuf {

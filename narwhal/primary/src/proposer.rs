@@ -1,14 +1,17 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-use crate::messages::{Certificate, Header};
-use crate::primary::Round;
+use crate::{
+    messages::{Certificate, Header},
+    primary::Round,
+};
 use config::{Committee, WorkerId};
-use crypto::Hash as _;
-use crypto::{Digest, PublicKey, SignatureService};
+use crypto::{Digest, Hash as _, PublicKey, SignatureService};
 use log::debug;
 #[cfg(feature = "benchmark")]
 use log::info;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::time::{sleep, Duration, Instant};
+use tokio::{
+    sync::mpsc::{Receiver, Sender},
+    time::{sleep, Duration, Instant},
+};
 
 #[cfg(test)]
 #[path = "tests/proposer_tests.rs"]

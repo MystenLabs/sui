@@ -2,15 +2,11 @@
 use crate::messages::{Certificate, Header, Vote};
 use bytes::Bytes;
 use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses};
-use crypto::Hash as _;
-use crypto::{generate_keypair, PublicKey, SecretKey, Signature};
-use futures::sink::SinkExt as _;
-use futures::stream::StreamExt as _;
-use rand::rngs::StdRng;
-use rand::SeedableRng as _;
+use crypto::{generate_keypair, Hash as _, PublicKey, SecretKey, Signature};
+use futures::{sink::SinkExt as _, stream::StreamExt as _};
+use rand::{rngs::StdRng, SeedableRng as _};
 use std::net::SocketAddr;
-use tokio::net::TcpListener;
-use tokio::task::JoinHandle;
+use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 impl PartialEq for Header {

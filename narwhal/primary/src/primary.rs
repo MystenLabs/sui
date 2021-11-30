@@ -1,14 +1,16 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
-use crate::certificate_waiter::CertificateWaiter;
-use crate::core::Core;
-use crate::error::DagError;
-use crate::garbage_collector::GarbageCollector;
-use crate::header_waiter::HeaderWaiter;
-use crate::helper::Helper;
-use crate::messages::{Certificate, Header, Vote};
-use crate::payload_receiver::PayloadReceiver;
-use crate::proposer::Proposer;
-use crate::synchronizer::Synchronizer;
+use crate::{
+    certificate_waiter::CertificateWaiter,
+    core::Core,
+    error::DagError,
+    garbage_collector::GarbageCollector,
+    header_waiter::HeaderWaiter,
+    helper::Helper,
+    messages::{Certificate, Header, Vote},
+    payload_receiver::PayloadReceiver,
+    proposer::Proposer,
+    synchronizer::Synchronizer,
+};
 use async_trait::async_trait;
 use bytes::Bytes;
 use config::{Committee, KeyPair, Parameters, WorkerId};
@@ -17,10 +19,11 @@ use futures::sink::SinkExt as _;
 use log::info;
 use network::{MessageHandler, Receiver as NetworkReceiver, Writer};
 use serde::{Deserialize, Serialize};
-use std::error::Error;
-use std::net::{IpAddr, Ipv4Addr};
-use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
+use std::{
+    error::Error,
+    net::{IpAddr, Ipv4Addr},
+    sync::{atomic::AtomicU64, Arc},
+};
 use store::Store;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
