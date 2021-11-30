@@ -74,11 +74,11 @@ fn test_handle_redeem_transaction_ok() {
 
 #[test]
 fn test_handle_redeem_transaction_negative_balance() {
+    // TODO: Fix there is no such thing as negative balance in fastnft so need to test fastnft concept here, or delete.
     let (mut contract_state, name, secret) = init_contract();
     let redeem_transaction =
         init_redeem_transaction(contract_state.committee.clone(), name, secret);
     let funding_transaction = init_funding_transaction();
-    // let too_much_money = Amount::from(1000);
     assert!(contract_state
         .handle_funding_transaction(funding_transaction)
         .is_ok());

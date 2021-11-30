@@ -247,7 +247,6 @@ fn test_initiating_transfer_low_funds() {
     );
 }
 
-/*
 #[test]
 fn test_bidirectional_transfer() {
     let mut rt = Runtime::new().unwrap();
@@ -287,7 +286,7 @@ fn test_bidirectional_transfer() {
     // Our sender already confirmed.
     assert_eq!(
         rt.block_on(client2.get_strong_majority_balance()),
-        Balance::from(3)
+        Balance::from(0)
     );
     assert_eq!(client2.balance, Balance::from(0));
     // Try to confirm again.
@@ -295,9 +294,11 @@ fn test_bidirectional_transfer() {
         .unwrap();
     assert_eq!(
         rt.block_on(client2.get_strong_majority_balance()),
-        Balance::from(3)
+        Balance::from(0)
     );
-    assert_eq!(client2.balance, Balance::from(3));
+    assert_eq!(client2.balance, Balance::from(0));
+
+    /* TODO: Fix client to track objects rather than accounts and test sending back to object to previous sender.
 
     // Send back some money.
     assert_eq!(client2.next_sequence_number, SequenceNumber::from(0));
@@ -317,8 +318,9 @@ fn test_bidirectional_transfer() {
         rt.block_on(client1.get_strong_majority_balance()),
         Balance::from(1)
     );
+
+    */
 }
-*/
 
 #[test]
 fn test_receiving_unconfirmed_transfer() {

@@ -65,6 +65,8 @@ pub struct ClientState<AuthorityClient> {
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
 pub trait Client {
+    // TODO: refactor client interface to handle generic fastnft objects rather than payments / value transfers.
+
     /// Send money to a FastPay account.
     fn transfer_to_fastpay(
         &mut self,
@@ -489,29 +491,17 @@ where
         Ok(sent_certificates)
     }
 
-    /// Send money to a FastPay or Primary recipient.
+    /// Transfers an object to a recipient address.
     async fn transfer(
         &mut self,
-        _amount: Amount,
+        _amount: Amount, /* Not used since we do not have amounts in fastnft. TODO: refactor out */
         recipient: Address,
         user_data: UserData,
     ) -> Result<CertifiedTransferOrder, failure::Error> {
-        // Trying to overspend may block the account. To prevent this, we compare with
-        // the balance as we know it.
-        /*
-        let safe_amount = self.get_spendable_amount().await?;
-        ensure!(
-            amount <= safe_amount,
-            "Requested amount ({:?}) is not backed by sufficient funds ({:?})",
-            amount,
-            safe_amount
-        );
-        */
         let transfer = Transfer {
             object_id: address_to_object_id_hack(self.address),
             sender: self.address,
             recipient,
-            // amount,
             sequence_number: self.next_sequence_number,
             user_data,
         };
@@ -529,10 +519,8 @@ where
         &mut self,
         sent_certificates: Vec<CertifiedTransferOrder>,
     ) -> Result<(), FastPayError> {
-        // let mut new_balance = self.balance;
         let mut new_next_sequence_number = self.next_sequence_number;
         for new_cert in &sent_certificates {
-            // new_balance = new_balance.try_sub(new_cert.value.transfer.amount.into())?;
             if new_cert.value.transfer.sequence_number >= new_next_sequence_number {
                 new_next_sequence_number = new_cert
                     .value
@@ -547,7 +535,6 @@ where
         */
         // Atomic update
         self.sent_certificates = sent_certificates;
-        // self.balance = new_balance;
         self.next_sequence_number = new_next_sequence_number;
         // Sanity check
         assert_eq!(
@@ -581,7 +568,7 @@ where
             .await?;
         assert_eq!(new_sent_certificates.last().unwrap().value, order);
         // Clear `pending_transfer` and update `sent_certificates`,
-        // `balance`, and `next_sequence_number`. (Note that if we were using persistent
+        // and `next_sequence_number`. (Note that if we were using persistent
         // storage, we should ensure update atomicity in the eventuality of a crash.)
         self.pending_transfer = None;
         self.update_sent_certificates(new_sent_certificates)?;
