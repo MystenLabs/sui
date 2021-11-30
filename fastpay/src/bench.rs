@@ -54,9 +54,6 @@ struct ClientServerBenchmark {
     /// Maximum size of datagrams received and sent (bytes)
     #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
-    /// Number of cross shards messages allowed before blocking the main server loop
-    #[structopt(long, default_value = "1")]
-    cross_shard_queue_size: usize,
 }
 
 fn main() {
@@ -125,17 +122,18 @@ impl ClientServerBenchmark {
         let mut account_keys = Vec::new();
         for _ in 0..self.num_accounts {
             let keypair = get_key_pair();
-            let i = AuthorityState::get_shard(self.num_shards, &keypair.0) as usize;
-            assert!(states[i].in_shard(&keypair.0));
-            let client = AccountOffchainState {
-                balance: Balance::from(Amount::from(100)),
+            let object_id: ObjectID = address_to_object_id_hack(keypair.0);
+            let i = AuthorityState::get_shard(self.num_shards, &object_id) as usize;
+            assert!(states[i].in_shard(&object_id));
+            let client = ObjectState {
+                id: object_id,
+                contents: Vec::new(),
+                owner: keypair.0,
                 next_sequence_number: SequenceNumber::from(0),
                 pending_confirmation: None,
                 confirmed_log: Vec::new(),
-                synchronization_log: Vec::new(),
-                received_log: Vec::new(),
             };
-            states[i].accounts.insert(keypair.0, client);
+            states[i].insert_object(client);
             account_keys.push(keypair);
         }
 
@@ -145,15 +143,15 @@ impl ClientServerBenchmark {
         let mut next_recipient = get_key_pair().0;
         for (pubx, secx) in account_keys.iter() {
             let transfer = Transfer {
+                object_id: address_to_object_id_hack(*pubx),
                 sender: *pubx,
                 recipient: Address::FastPay(next_recipient),
-                amount: Amount::from(50),
                 sequence_number: SequenceNumber::from(0),
                 user_data: UserData::default(),
             };
             next_recipient = *pubx;
             let order = TransferOrder::new(transfer.clone(), secx);
-            let shard = AuthorityState::get_shard(self.num_shards, pubx);
+            let shard = AuthorityState::get_shard(self.num_shards, &order.transfer.object_id);
 
             // Serialize order
             let bufx = serialize_transfer_order(&order);
@@ -187,7 +185,6 @@ impl ClientServerBenchmark {
             self.port,
             state,
             self.buffer_size,
-            self.cross_shard_queue_size,
         );
         server.spawn().await.unwrap()
     }

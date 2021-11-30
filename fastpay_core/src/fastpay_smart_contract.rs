@@ -72,10 +72,7 @@ impl FastPaySmartContract for FastPaySmartContractState {
         transaction.transfer_certificate.check(&self.committee)?;
         let order = transaction.transfer_certificate.value;
         let transfer = &order.transfer;
-        ensure!(
-            self.total_balance >= transfer.amount,
-            "The balance on the blockchain cannot be negative",
-        );
+
         let account = self
             .accounts
             .entry(transfer.sender)
@@ -85,8 +82,6 @@ impl FastPaySmartContract for FastPaySmartContractState {
             "Transfer certificates to Primary must have increasing sequence numbers.",
         );
         account.last_redeemed = Some(transfer.sequence_number);
-        self.total_balance = self.total_balance.try_sub(transfer.amount)?;
-        // Transfer Primary coins to order.recipient
 
         Ok(())
     }

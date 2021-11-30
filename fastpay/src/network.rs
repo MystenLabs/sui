@@ -5,7 +5,7 @@ use crate::transport::*;
 use fastpay_core::{authority::*, base_types::*, client::*, error::*, messages::*, serialize::*};
 
 use bytes::Bytes;
-use futures::{channel::mpsc, future::FutureExt, sink::SinkExt, stream::StreamExt};
+use futures::future::FutureExt;
 use log::*;
 use std::io;
 use tokio::time;
@@ -16,7 +16,6 @@ pub struct Server {
     base_port: u32,
     state: AuthorityState,
     buffer_size: usize,
-    cross_shard_queue_size: usize,
     // Stats
     packets_processed: u64,
     user_errors: u64,
@@ -29,7 +28,6 @@ impl Server {
         base_port: u32,
         state: AuthorityState,
         buffer_size: usize,
-        cross_shard_queue_size: usize,
     ) -> Self {
         Self {
             network_protocol,
@@ -37,7 +35,6 @@ impl Server {
             base_port,
             state,
             buffer_size,
-            cross_shard_queue_size,
             packets_processed: 0,
             user_errors: 0,
         }
@@ -49,41 +46,6 @@ impl Server {
 
     pub fn user_errors(&self) -> u64 {
         self.user_errors
-    }
-
-    async fn forward_cross_shard_queries(
-        network_protocol: NetworkProtocol,
-        base_address: String,
-        base_port: u32,
-        this_shard: ShardId,
-        mut receiver: mpsc::Receiver<(Vec<u8>, ShardId)>,
-    ) {
-        let mut pool = network_protocol
-            .make_outgoing_connection_pool()
-            .await
-            .expect("Initialization should not fail");
-
-        let mut queries_sent = 0u64;
-        while let Some((buf, shard)) = receiver.next().await {
-            // Send cross-shard query.
-            let remote_address = format!("{}:{}", base_address, base_port + shard);
-            let status = pool.send_data_to(&buf, &remote_address).await;
-            if let Err(error) = status {
-                error!("Failed to send cross-shard query: {}", error);
-            } else {
-                debug!("Sent cross shard query: {} -> {}", this_shard, shard);
-                queries_sent += 1;
-                if queries_sent % 2000 == 0 {
-                    info!(
-                        "{}:{} (shard {}) has sent {} cross-shard queries",
-                        base_address,
-                        base_port + this_shard,
-                        this_shard,
-                        queries_sent
-                    );
-                }
-            }
-        }
     }
 
     pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
@@ -99,21 +61,9 @@ impl Server {
             self.base_port + self.state.shard_id
         );
 
-        let (cross_shard_sender, cross_shard_receiver) = mpsc::channel(self.cross_shard_queue_size);
-        tokio::spawn(Self::forward_cross_shard_queries(
-            self.network_protocol,
-            self.base_address.clone(),
-            self.base_port,
-            self.state.shard_id,
-            cross_shard_receiver,
-        ));
-
         let buffer_size = self.buffer_size;
         let protocol = self.network_protocol;
-        let state = RunningServerState {
-            server: self,
-            cross_shard_sender,
-        };
+        let state = RunningServerState { server: self };
         // Launch server for the appropriate protocol.
         protocol.spawn_server(&address, state, buffer_size).await
     }
@@ -121,7 +71,6 @@ impl Server {
 
 struct RunningServerState {
     server: Server,
-    cross_shard_sender: mpsc::Sender<(Vec<u8>, ShardId)>,
 }
 
 impl MessageHandler for RunningServerState {
@@ -149,21 +98,7 @@ impl MessageHandler for RunningServerState {
                                 .state
                                 .handle_confirmation_order(confirmation_order)
                             {
-                                Ok((info, send_shard)) => {
-                                    // Send a message to other shard
-                                    if let Some(cross_shard_update) = send_shard {
-                                        let shard = cross_shard_update.shard_id;
-                                        let tmp_out = serialize_cross_shard(&message);
-                                        debug!(
-                                            "Scheduling cross shard query: {} -> {}",
-                                            self.server.state.shard_id, shard
-                                        );
-                                        self.cross_shard_sender
-                                            .send((tmp_out, shard))
-                                            .await
-                                            .expect("internal channel should not fail");
-                                    };
-
+                                Ok(info) => {
                                     // Response
                                     Ok(Some(serialize_info_response(&info)))
                                 }
@@ -175,19 +110,6 @@ impl MessageHandler for RunningServerState {
                             .state
                             .handle_account_info_request(*message)
                             .map(|info| Some(serialize_info_response(&info))),
-                        SerializedMessage::CrossShard(message) => {
-                            match self
-                                .server
-                                .state
-                                .handle_cross_shard_recipient_commit(*message)
-                            {
-                                Ok(_) => Ok(None), // Nothing to reply
-                                Err(error) => {
-                                    error!("Failed to handle cross-shard query: {}", error);
-                                    Ok(None) // Nothing to reply
-                                }
-                            }
-                        }
                         _ => Err(FastPayError::UnexpectedMessage),
                     }
                 }
@@ -293,7 +215,7 @@ impl AuthorityClient for Client {
         order: TransferOrder,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
-            let shard = AuthorityState::get_shard(self.num_shards, &order.transfer.sender);
+            let shard = AuthorityState::get_shard(self.num_shards, &order.transfer.object_id);
             self.send_recv_bytes(shard, serialize_transfer_order(&order))
                 .await
         })
@@ -307,7 +229,7 @@ impl AuthorityClient for Client {
         Box::pin(async move {
             let shard = AuthorityState::get_shard(
                 self.num_shards,
-                &order.transfer_certificate.value.transfer.sender,
+                &order.transfer_certificate.value.transfer.object_id,
             );
             self.send_recv_bytes(shard, serialize_cert(&order.transfer_certificate))
                 .await
@@ -320,7 +242,7 @@ impl AuthorityClient for Client {
         request: AccountInfoRequest,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
-            let shard = AuthorityState::get_shard(self.num_shards, &request.sender);
+            let shard = AuthorityState::get_shard(self.num_shards, &request.object_id);
             self.send_recv_bytes(shard, serialize_info_request(&request))
                 .await
         })

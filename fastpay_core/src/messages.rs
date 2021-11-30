@@ -20,13 +20,6 @@ pub struct FundingTransaction {
     // TODO: Authenticated by Primary sender.
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct PrimarySynchronizationOrder {
-    pub recipient: FastPayAddress,
-    pub amount: Amount,
-    pub transaction_index: VersionNumber,
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub enum Address {
     Primary(PrimaryAddress),
@@ -37,7 +30,7 @@ pub enum Address {
 pub struct Transfer {
     pub sender: FastPayAddress,
     pub recipient: Address,
-    pub amount: Amount,
+    pub object_id: ObjectID,
     pub sequence_number: SequenceNumber,
     pub user_data: UserData,
 }
@@ -73,25 +66,19 @@ pub struct ConfirmationOrder {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
-    pub sender: FastPayAddress,
+    pub object_id: ObjectID,
     pub request_sequence_number: Option<SequenceNumber>,
     pub request_received_transfers_excluding_first_nth: Option<usize>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AccountInfoResponse {
-    pub sender: FastPayAddress,
-    pub balance: Balance,
+    pub object_id: ObjectID,
+    pub owner: FastPayAddress,
     pub next_sequence_number: SequenceNumber,
     pub pending_confirmation: Option<SignedTransferOrder>,
     pub requested_certificate: Option<CertifiedTransferOrder>,
     pub requested_received_transfers: Vec<CertifiedTransferOrder>,
-}
-
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct CrossShardUpdate {
-    pub shard_id: ShardId,
-    pub transfer_certificate: CertifiedTransferOrder,
 }
 
 impl Hash for TransferOrder {
