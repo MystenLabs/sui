@@ -86,7 +86,6 @@ fn make_servers(
             committee_config_path,
             initial_accounts_config_path,
             buffer_size,
-            // cross_shard_queue_size,
             shard,
         ))
     }
@@ -117,9 +116,9 @@ enum ServerCommands {
         #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
         buffer_size: usize,
 
-        /// Number of cross shards messages allowed before blocking the main server loop
+        /// Number of cross shards messages allowed before blocking the main server loop 
         #[structopt(long, default_value = "1000")]
-        _cross_shard_queue_size: usize,
+        _cross_shard_queue_size: usize, // TODO: remove this once client is re-factored.
 
         /// Path to the file containing the public description of all authorities in this FastPay committee
         #[structopt(long)]
@@ -164,7 +163,7 @@ fn main() {
     match options.cmd {
         ServerCommands::Run {
             buffer_size,
-            _cross_shard_queue_size,
+            _cross_shard_queue_size, // TODO: remove this once client is re-factored.
             committee,
             initial_accounts,
             shard,
