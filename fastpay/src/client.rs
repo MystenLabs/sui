@@ -99,9 +99,9 @@ fn make_benchmark_transfer_orders(
     let mut next_recipient = get_key_pair().0;
     for account in accounts_config.accounts_mut() {
         let transfer = Transfer {
+            object_id: address_to_object_id_hack(account.address),
             sender: account.address,
             recipient: Address::FastPay(next_recipient),
-            amount: Amount::from(1),
             sequence_number: account.next_sequence_number,
             user_data: UserData::default(),
         };
@@ -220,7 +220,9 @@ async fn mass_broadcast_orders(
         // Re-index orders by shard for this particular authority client.
         let mut sharded_requests = HashMap::new();
         for (address, buf) in &orders {
-            let shard = AuthorityState::get_shard(num_shards, address);
+            // TODO: fix this
+            let id: ObjectID = address_to_object_id_hack(*address);
+            let shard = AuthorityState::get_shard(num_shards, &id);
             sharded_requests
                 .entry(shard)
                 .or_insert_with(Vec::new)
@@ -502,7 +504,7 @@ fn main() {
                         .iter()
                         .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
                             Some(info) => {
-                                confirmed.insert(info.sender);
+                                confirmed.insert(info.object_id);
                                 acc + 1
                             }
                             None => acc,

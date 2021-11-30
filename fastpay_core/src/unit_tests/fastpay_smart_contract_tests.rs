@@ -53,7 +53,6 @@ fn test_handle_redeem_transaction_ok() {
     assert!(contract_state
         .handle_funding_transaction(funding_transaction)
         .is_ok());
-    let mut old_total_balance = contract_state.total_balance;
 
     assert!(contract_state
         .handle_redeem_transaction(redeem_transaction.clone())
@@ -63,11 +62,7 @@ fn test_handle_redeem_transaction_ok() {
         .value
         .transfer
         .sender;
-    let amount = redeem_transaction
-        .transfer_certificate
-        .value
-        .transfer
-        .amount;
+
     let account = contract_state.accounts.get(&sender).unwrap();
     let sequence_number = redeem_transaction
         .transfer_certificate
@@ -75,38 +70,25 @@ fn test_handle_redeem_transaction_ok() {
         .transfer
         .sequence_number;
     assert_eq!(account.last_redeemed, Some(sequence_number));
-    old_total_balance = old_total_balance.try_sub(amount).unwrap();
-    assert_eq!(contract_state.total_balance, old_total_balance);
 }
 
 #[test]
 fn test_handle_redeem_transaction_negative_balance() {
+    // TODO: Fix there is no such thing as negative balance in fastnft so need to test fastnft concept here, or delete.
     let (mut contract_state, name, secret) = init_contract();
-    let mut redeem_transaction =
+    let redeem_transaction =
         init_redeem_transaction(contract_state.committee.clone(), name, secret);
     let funding_transaction = init_funding_transaction();
-    let too_much_money = Amount::from(1000);
     assert!(contract_state
         .handle_funding_transaction(funding_transaction)
         .is_ok());
     let old_balance = contract_state.total_balance;
 
-    redeem_transaction
-        .transfer_certificate
-        .value
-        .transfer
-        .amount = redeem_transaction
-        .transfer_certificate
-        .value
-        .transfer
-        .amount
-        .try_add(too_much_money)
-        .unwrap();
     assert!(contract_state
         .handle_redeem_transaction(redeem_transaction)
-        .is_err());
+        .is_ok());
     assert_eq!(old_balance, contract_state.total_balance);
-    assert!(contract_state.accounts.is_empty());
+    assert!(!contract_state.accounts.is_empty());
 }
 
 #[test]
@@ -161,9 +143,9 @@ fn init_redeem_transaction(
 ) -> RedeemTransaction {
     let (sender_address, sender_key) = get_key_pair();
     let primary_transfer = Transfer {
+        object_id: address_to_object_id_hack(sender_address),
         sender: sender_address,
         recipient: Address::Primary(dbg_addr(2)),
-        amount: Amount::from(3),
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };

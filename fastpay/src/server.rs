@@ -18,7 +18,6 @@ fn make_shard_server(
     committee_config_path: &str,
     initial_accounts_config_path: &str,
     buffer_size: usize,
-    cross_shard_queue_size: usize,
     shard: u32,
 ) -> network::Server {
     let server_config =
@@ -40,19 +39,23 @@ fn make_shard_server(
     );
 
     // Load initial states
-    for (address, balance) in &initial_accounts_config.accounts {
-        if AuthorityState::get_shard(num_shards, address) != shard {
+    for (address, _balance) in &initial_accounts_config.accounts {
+        // TODO: fix this total hack
+        let id: ObjectID = address_to_object_id_hack(*address);
+
+        if AuthorityState::get_shard(num_shards, &id) != shard {
             continue;
         }
-        let client = AccountOffchainState {
-            balance: *balance,
+
+        let client = ObjectState {
+            id,
+            contents: Vec::new(),
+            owner: *address,
             next_sequence_number: SequenceNumber::from(0),
             pending_confirmation: None,
             confirmed_log: Vec::new(),
-            synchronization_log: Vec::new(),
-            received_log: Vec::new(),
         };
-        state.accounts.insert(*address, client);
+        state.insert_object(client);
     }
 
     network::Server::new(
@@ -61,7 +64,6 @@ fn make_shard_server(
         server_config.authority.base_port,
         state,
         buffer_size,
-        cross_shard_queue_size,
     )
 }
 
@@ -71,7 +73,6 @@ fn make_servers(
     committee_config_path: &str,
     initial_accounts_config_path: &str,
     buffer_size: usize,
-    cross_shard_queue_size: usize,
 ) -> Vec<network::Server> {
     let server_config =
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
@@ -85,7 +86,6 @@ fn make_servers(
             committee_config_path,
             initial_accounts_config_path,
             buffer_size,
-            cross_shard_queue_size,
             shard,
         ))
     }
@@ -118,7 +118,7 @@ enum ServerCommands {
 
         /// Number of cross shards messages allowed before blocking the main server loop
         #[structopt(long, default_value = "1000")]
-        cross_shard_queue_size: usize,
+        _cross_shard_queue_size: usize, // TODO: remove this once client is re-factored.
 
         /// Path to the file containing the public description of all authorities in this FastPay committee
         #[structopt(long)]
@@ -163,7 +163,7 @@ fn main() {
     match options.cmd {
         ServerCommands::Run {
             buffer_size,
-            cross_shard_queue_size,
+            _cross_shard_queue_size, // TODO: remove this once client is re-factored.
             committee,
             initial_accounts,
             shard,
@@ -178,7 +178,6 @@ fn main() {
                         &committee,
                         &initial_accounts,
                         buffer_size,
-                        cross_shard_queue_size,
                         shard,
                     );
                     vec![server]
@@ -191,7 +190,6 @@ fn main() {
                         &committee,
                         &initial_accounts,
                         buffer_size,
-                        cross_shard_queue_size,
                     )
                 }
             };

@@ -43,6 +43,16 @@ pub type PrimaryAddress = PublicKeyBytes;
 pub type FastPayAddress = PublicKeyBytes;
 pub type AuthorityName = PublicKeyBytes;
 
+// Define digests and object IDs
+pub type ObjectID = [u8; 20];
+pub type ObjectRef = (ObjectID, SequenceNumber);
+
+pub fn address_to_object_id_hack(address: FastPayAddress) -> ObjectID {
+    address.0[0..20]
+        .try_into()
+        .expect("An address is always long enough to extract 20 bytes")
+}
+
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;
     let keypair = dalek::Keypair::generate(&mut csprng);
@@ -80,6 +90,11 @@ pub fn decode_address(s: &str) -> Result<PublicKeyBytes, failure::Error> {
 pub fn dbg_addr(name: u8) -> FastPayAddress {
     let addr = [name; dalek::PUBLIC_KEY_LENGTH];
     PublicKeyBytes(addr)
+}
+
+#[cfg(test)]
+pub fn dbg_object_id(name: u8) -> ObjectID {
+    [name; 20]
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]

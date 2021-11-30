@@ -16,7 +16,6 @@ pub enum SerializedMessage {
     Order(Box<TransferOrder>),
     Vote(Box<SignedTransferOrder>),
     Cert(Box<CertifiedTransferOrder>),
-    CrossShard(Box<CertifiedTransferOrder>),
     Error(Box<FastPayError>),
     InfoReq(Box<AccountInfoRequest>),
     InfoResp(Box<AccountInfoResponse>),
@@ -30,7 +29,6 @@ enum ShallowSerializedMessage<'a> {
     Order(&'a TransferOrder),
     Vote(&'a SignedTransferOrder),
     Cert(&'a CertifiedTransferOrder),
-    CrossShard(&'a CertifiedTransferOrder),
     Error(&'a FastPayError),
     InfoReq(&'a AccountInfoRequest),
     InfoResp(&'a AccountInfoResponse),
@@ -96,10 +94,6 @@ pub fn serialize_info_request(value: &AccountInfoRequest) -> Vec<u8> {
 
 pub fn serialize_info_response(value: &AccountInfoResponse) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::InfoResp(value))
-}
-
-pub fn serialize_cross_shard(value: &CertifiedTransferOrder) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::CrossShard(value))
 }
 
 pub fn serialize_vote(value: &SignedTransferOrder) -> Vec<u8> {

@@ -27,6 +27,8 @@ pub enum FastPayError {
     // Signature verification
     #[fail(display = "Signature is not valid: {}", error)]
     InvalidSignature { error: String },
+    #[fail(display = "Value was not signed by the correct sender")]
+    IncorrectSigner,
     #[fail(display = "Value was not signed by a known authority")]
     UnknownSigner,
     // Certificate verification

@@ -16,9 +16,9 @@ fn test_signed_values() {
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
+        object_id: address_to_object_id_hack(a1),
         sender: a1,
         recipient: Address::FastPay(a2),
-        amount: Amount::from(1),
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
@@ -50,9 +50,9 @@ fn test_certificates() {
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
+        object_id: address_to_object_id_hack(a1),
         sender: a1,
         recipient: Address::FastPay(a2),
-        amount: Amount::from(1),
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
