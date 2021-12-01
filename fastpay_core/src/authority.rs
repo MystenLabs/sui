@@ -21,25 +21,29 @@ pub struct ObjectState {
 
     // These structures will likely be refactored outside the object.
     /// Whether we have signed a transfer for this sequence number already.
-    pub pending_confirmation: Option<SignedTransferOrder>,
+    pub pending_confirmation_legacy: Option<SignedTransferOrder>,
     /// All confirmed certificates for this sender.
     pub confirmed_log: Vec<CertifiedTransferOrder>,
 }
 
 pub struct AuthorityState {
+    // Fixed size, static, identity of the authority and shard
     /// The name of this authority.
     pub name: AuthorityName,
     /// Committee of this FastPay instance.
     pub committee: Committee,
     /// The signature key of the authority.
     pub secret: KeyPair,
-    /// States of fastnft objects
-    accounts: BTreeMap<ObjectID, ObjectState>,
-
     /// The sharding ID of this authority shard. 0 if one shard.
     pub shard_id: ShardId,
     /// The number of shards. 1 if single shard.
     pub number_of_shards: u32,
+
+    // The variable length dynamic state of the authority shard
+    /// States of fastnft objects
+    objects: BTreeMap<ObjectID, ObjectState>,
+    /// Order lock map maps object versions to the first next transaction seen
+    order_lock: BTreeMap<(ObjectID, SequenceNumber), Option<SignedTransferOrder>>,
 }
 
 /// Interface provided by each (shard of an) authority.
@@ -84,16 +88,16 @@ impl Authority for AuthorityState {
             FastPayError::InvalidSequenceNumber
         );
 
-        match self.accounts.get_mut(&object_id) {
+        match self.objects.get_mut(&object_id) {
             None => fp_bail!(FastPayError::UnknownSenderAccount),
-            Some(account) => {
+            Some(object) => {
                 // Check the transaction sender is also the object owner
                 fp_ensure!(
-                    order.transfer.sender == account.owner,
+                    order.transfer.sender == object.owner,
                     FastPayError::IncorrectSigner
                 );
 
-                if let Some(pending_confirmation) = &account.pending_confirmation {
+                if let Some(pending_confirmation) = &object.pending_confirmation_legacy {
                     fp_ensure!(
                         &pending_confirmation.value.transfer == transfer,
                         FastPayError::PreviousTransferMustBeConfirmedFirst {
@@ -101,16 +105,21 @@ impl Authority for AuthorityState {
                         }
                     );
                     // This exact transfer order was already signed. Return the previous value.
-                    return Ok(account.make_account_info());
+                    return Ok(object.make_account_info());
                 }
                 fp_ensure!(
-                    account.next_sequence_number == transfer.sequence_number,
+                    object.next_sequence_number == transfer.sequence_number,
                     FastPayError::UnexpectedSequenceNumber
                 );
 
                 let signed_order = SignedTransferOrder::new(order, self.name, &self.secret);
-                account.pending_confirmation = Some(signed_order);
-                Ok(account.make_account_info())
+                object.pending_confirmation_legacy = Some(signed_order.clone());
+                let info = object.make_account_info();
+
+                // Add to the order_lock structure.
+                self.set_order_lock(signed_order)?;
+
+                Ok(info)
             }
         }
     }
@@ -132,7 +141,7 @@ impl Authority for AuthorityState {
         // If we have a certificate on the confirmation order it means that the input
         // object exists on other honest authorities, but we do not have it. The only
         // way this may happen is if we missed some updates.
-        if !self.accounts.contains_key(&transfer.object_id) {
+        if !self.objects.contains_key(&transfer.object_id) {
             fp_bail!(FastPayError::MissingEalierConfirmations {
                 current_sequence_number: SequenceNumber::from(0),
             });
@@ -140,9 +149,9 @@ impl Authority for AuthorityState {
 
         // First we copy all relevant data from sender.
         let mut sender_object = self
-            .accounts
-            .get_mut(&transfer.object_id)
-            .expect("The existence of object_id is already checked.");
+            .objects
+            .entry(transfer.object_id)
+            .or_insert_with(ObjectState::new);
 
         let mut sender_sequence_number = sender_object.next_sequence_number;
 
@@ -166,9 +175,12 @@ impl Authority for AuthorityState {
         };
 
         sender_object.next_sequence_number = sender_sequence_number;
-        sender_object.pending_confirmation = None;
+        sender_object.pending_confirmation_legacy = None;
         sender_object.confirmed_log.push(certificate);
         let info = sender_object.make_account_info();
+
+        // Init the order lock for this object
+        self.init_order_lock(transfer.object_id, sender_sequence_number)?;
 
         Ok(info)
     }
@@ -178,7 +190,7 @@ impl Authority for AuthorityState {
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, FastPayError> {
         fp_ensure!(self.in_shard(&request.object_id), FastPayError::WrongShard);
-        let account = self.account_state(&request.object_id)?;
+        let account = self.object_state(&request.object_id)?;
         let mut response = account.make_account_info();
         if let Some(seq) = request.request_sequence_number {
             if let Some(cert) = account.confirmed_log.get(usize::from(seq)) {
@@ -198,7 +210,7 @@ impl Default for ObjectState {
             contents: Vec::new(),
             owner: PublicKeyBytes([0; 32]),
             next_sequence_number: SequenceNumber::new(),
-            pending_confirmation: None,
+            pending_confirmation_legacy: None,
             confirmed_log: Vec::new(),
         }
     }
@@ -218,7 +230,7 @@ impl ObjectState {
             object_id: self.id,
             owner: self.owner,
             next_sequence_number: self.next_sequence_number,
-            pending_confirmation: self.pending_confirmation.clone(),
+            pending_confirmation: self.pending_confirmation_legacy.clone(),
             requested_certificate: None,
             requested_received_transfers: Vec::new(),
         }
@@ -231,7 +243,7 @@ impl ObjectState {
             owner: PublicKeyBytes([0; 32]),
             contents,
             next_sequence_number: SequenceNumber::new(),
-            pending_confirmation: None,
+            pending_confirmation_legacy: None,
             confirmed_log: Vec::new(),
         }
     }
@@ -243,7 +255,8 @@ impl AuthorityState {
             committee,
             name,
             secret,
-            accounts: BTreeMap::new(),
+            objects: BTreeMap::new(),
+            order_lock: BTreeMap::new(),
             shard_id: 0,
             number_of_shards: 1,
         }
@@ -260,7 +273,8 @@ impl AuthorityState {
             committee,
             name,
             secret,
-            accounts: BTreeMap::new(),
+            objects: BTreeMap::new(),
+            order_lock: BTreeMap::new(),
             shard_id,
             number_of_shards,
         }
@@ -280,18 +294,80 @@ impl AuthorityState {
         Self::get_shard(self.number_of_shards, object_id)
     }
 
-    fn account_state(&self, object_id: &ObjectID) -> Result<&ObjectState, FastPayError> {
-        self.accounts
+    fn object_state(&self, object_id: &ObjectID) -> Result<&ObjectState, FastPayError> {
+        self.objects
             .get(object_id)
             .ok_or(FastPayError::UnknownSenderAccount)
     }
 
     pub fn insert_object(&mut self, object: ObjectState) {
-        self.accounts.insert(object.id, object);
+        self.objects.insert(object.id, object);
     }
 
     #[cfg(test)]
     pub fn accounts_mut(&mut self) -> &mut BTreeMap<ObjectID, ObjectState> {
-        &mut self.accounts
+        &mut self.objects
+    }
+
+    // Helper function to manage order_locks
+
+    /// Initialize an order lock for an object/sequence to None
+    pub fn init_order_lock(
+        &mut self,
+        object_id: ObjectID,
+        seq: SequenceNumber,
+    ) -> Result<(), FastPayError> {
+        if self.order_lock.contains_key(&(object_id, seq)) {
+            return Err(FastPayError::OrderLockExists);
+        }
+
+        self.order_lock.insert((object_id, seq), None);
+        Ok(())
+    }
+
+    /// Set the order lock to a specific transaction
+    pub fn set_order_lock(
+        &mut self,
+        signed_order: SignedTransferOrder,
+    ) -> Result<(), FastPayError> {
+        let object_id = signed_order.value.transfer.object_id;
+        let seq = signed_order.value.transfer.sequence_number;
+
+        // The object / version must exist, and therefore lock initialized.
+        if !self.order_lock.contains_key(&(object_id, seq)) {
+            return Err(FastPayError::OrderLockDoesNotExist);
+        }
+
+        // Note: Safe to unwrap thanks to the contains_key check above.
+        let lock = self.order_lock.get_mut(&(object_id, seq)).unwrap();
+        if let Some(_existing_signed_order) = lock {
+            if _existing_signed_order.value.transfer == signed_order.value.transfer {
+                // For some reason we are re-inserting the same order. Not optimal but correct.
+                return Ok(());
+            } else {
+                // We are trying to set the lock to a different order, this is unsafe.
+                return Err(FastPayError::OrderLockReset);
+            }
+        }
+
+        // The lock is None, so we replace it with the given order.
+        lock.replace(signed_order);
+        Ok(())
+    }
+
+    /// Get a read reference to an object/seq lock
+    pub fn get_order_lock(
+        &self,
+        object_id: ObjectID,
+        seq: SequenceNumber,
+    ) -> Result<&Option<SignedTransferOrder>, FastPayError> {
+        // The object / version must exist, and therefore lock initialized.
+        if !self.order_lock.contains_key(&(object_id, seq)) {
+            return Err(FastPayError::OrderLockDoesNotExist);
+        }
+
+        // Note: Safe to unwrap thanks to the contains_key check above.
+        let lock = self.order_lock.get(&(object_id, seq)).unwrap();
+        Ok(lock)
     }
 }

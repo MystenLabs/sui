@@ -138,6 +138,14 @@ fn fund_account<I: IntoIterator<Item = i128>>(
             .unwrap()
             .accounts_mut()
             .insert(object_id, object);
+
+        client
+            .0
+            .as_ref()
+            .try_lock()
+            .unwrap()
+            .init_order_lock(object_id, 0.into())
+            .unwrap();
     }
 }
 

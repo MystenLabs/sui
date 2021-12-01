@@ -130,7 +130,7 @@ impl ClientServerBenchmark {
                 contents: Vec::new(),
                 owner: keypair.0,
                 next_sequence_number: SequenceNumber::from(0),
-                pending_confirmation: None,
+                pending_confirmation_legacy: None,
                 confirmed_log: Vec::new(),
             };
             states[i].insert_object(client);

@@ -16,11 +16,14 @@ fn test_handle_transfer_order_bad_signature() {
     assert!(authority_state
         .handle_transfer_order(bad_signature_transfer_order)
         .is_err());
+
+    let object = authority_state.objects.get(&object_id).unwrap();
+
+    assert!(object.pending_confirmation_legacy.is_none());
+
     assert!(authority_state
-        .accounts
-        .get(&object_id)
+        .get_order_lock(object.id, object.next_sequence_number)
         .unwrap()
-        .pending_confirmation
         .is_none());
 }
 
@@ -39,11 +42,19 @@ fn test_handle_transfer_order_unknown_sender() {
     assert!(authority_state
         .handle_transfer_order(unknown_sender_transfer_order)
         .is_err());
+
+    let object = authority_state.objects.get(&object_id).unwrap();
+
     assert!(authority_state
-        .accounts
+        .objects
         .get(&object_id)
         .unwrap()
-        .pending_confirmation
+        .pending_confirmation_legacy
+        .is_none());
+
+    assert!(authority_state
+        .get_order_lock(object.id, object.next_sequence_number)
+        .unwrap()
         .is_none());
 }
 
@@ -57,7 +68,7 @@ fn test_handle_transfer_order_bad_sequence_number() {
 
     let mut sequence_number_state = authority_state;
     let sequence_number_state_sender_account =
-        sequence_number_state.accounts.get_mut(&object_id).unwrap();
+        sequence_number_state.objects.get_mut(&object_id).unwrap();
     sequence_number_state_sender_account.next_sequence_number =
         sequence_number_state_sender_account
             .next_sequence_number
@@ -66,11 +77,12 @@ fn test_handle_transfer_order_bad_sequence_number() {
     assert!(sequence_number_state
         .handle_transfer_order(transfer_order)
         .is_err());
+
     assert!(sequence_number_state
-        .accounts
+        .objects
         .get(&object_id)
         .unwrap()
-        .pending_confirmation
+        .pending_confirmation_legacy
         .is_none());
 }
 
@@ -82,19 +94,42 @@ fn test_handle_transfer_order_ok() {
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
     let object_id = transfer_order.transfer.object_id;
 
+    // Check the initial state of the locks
+    assert!(authority_state
+        .get_order_lock(object_id, 0.into())
+        .unwrap()
+        .is_none());
+    assert!(authority_state.get_order_lock(object_id, 1.into()).is_err());
+
     let account_info = authority_state
-        .handle_transfer_order(transfer_order)
+        .handle_transfer_order(transfer_order.clone())
         .unwrap();
     let pending_confirmation = authority_state
-        .accounts
+        .objects
         .get(&object_id)
         .unwrap()
-        .pending_confirmation
+        .pending_confirmation_legacy
         .clone()
         .unwrap();
     assert_eq!(
         account_info.pending_confirmation.unwrap(),
         pending_confirmation
+    );
+
+    // Check the final state of the locks
+    assert!(authority_state
+        .get_order_lock(object_id, 0.into())
+        .unwrap()
+        .is_some());
+    assert_eq!(
+        authority_state
+            .get_order_lock(object_id, 0.into())
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .value
+            .transfer,
+        transfer_order.transfer
     );
 }
 
@@ -138,12 +173,12 @@ fn test_handle_confirmation_order_bad_sequence_number() {
     let object_id: ObjectID = address_to_object_id_hack(sender);
     let recipient = dbg_addr(2);
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
-    let sender_account = authority_state.accounts.get_mut(&object_id).unwrap();
+    let sender_account = authority_state.objects.get_mut(&object_id).unwrap();
     sender_account.next_sequence_number = sender_account.next_sequence_number.increment().unwrap();
 
     let old_seq_num;
     {
-        let old_account = authority_state.accounts.get_mut(&object_id).unwrap();
+        let old_account = authority_state.objects.get_mut(&object_id).unwrap();
         old_seq_num = old_account.next_sequence_number;
     }
 
@@ -158,10 +193,10 @@ fn test_handle_confirmation_order_bad_sequence_number() {
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
-    let new_account = authority_state.accounts.get_mut(&object_id).unwrap();
+    let new_account = authority_state.objects.get_mut(&object_id).unwrap();
     assert_eq!(old_seq_num, new_account.next_sequence_number);
     assert_eq!(new_account.confirmed_log, Vec::new());
-    assert!(authority_state.accounts.get(&dbg_object_id(2)).is_none());
+    assert!(authority_state.objects.get(&dbg_object_id(2)).is_none());
 }
 
 #[test]
@@ -181,7 +216,7 @@ fn test_handle_confirmation_order_exceed_balance() {
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
-    let new_account = authority_state.accounts.get(&object_id).unwrap();
+    let new_account = authority_state.objects.get(&object_id).unwrap();
     assert_eq!(SequenceNumber::from(1), new_account.next_sequence_number);
     assert_eq!(new_account.confirmed_log.len(), 1);
 }
@@ -206,7 +241,7 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
-    let new_sender_account = authority_state.accounts.get(&object_id).unwrap();
+    let new_sender_account = authority_state.objects.get(&object_id).unwrap();
     assert_eq!(
         SequenceNumber::from(1),
         new_sender_account.next_sequence_number
@@ -230,7 +265,7 @@ fn test_handle_confirmation_order_receiver_equal_sender() {
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
-    let account = authority_state.accounts.get(&object_id).unwrap();
+    let account = authority_state.objects.get(&object_id).unwrap();
     assert_eq!(SequenceNumber::from(1), account.next_sequence_number);
     assert_eq!(account.confirmed_log.len(), 1);
 }
@@ -249,7 +284,7 @@ fn test_handle_confirmation_order_ok() {
         &authority_state,
     );
 
-    let old_account = authority_state.accounts.get_mut(&object_id).unwrap();
+    let old_account = authority_state.objects.get_mut(&object_id).unwrap();
     let mut next_sequence_number = old_account.next_sequence_number;
     next_sequence_number = next_sequence_number.increment().unwrap();
 
@@ -262,7 +297,7 @@ fn test_handle_confirmation_order_ok() {
     assert_eq!(None, info.pending_confirmation);
     assert_eq!(
         authority_state
-            .accounts
+            .objects
             .get(&object_id)
             .unwrap()
             .confirmed_log,
@@ -277,8 +312,8 @@ fn test_account_state_ok() {
 
     let authority_state = init_state_with_account(sender, Balance::from(5));
     assert_eq!(
-        authority_state.accounts.get(&object_id).unwrap(),
-        authority_state.account_state(&object_id).unwrap()
+        authority_state.objects.get(&object_id).unwrap(),
+        authority_state.object_state(&object_id).unwrap()
     );
 }
 
@@ -287,7 +322,7 @@ fn test_account_state_unknown_account() {
     let sender = dbg_addr(1);
     let unknown_address = dbg_object_id(99);
     let authority_state = init_state_with_account(sender, Balance::from(5));
-    assert!(authority_state.account_state(&unknown_address).is_err());
+    assert!(authority_state.object_state(&unknown_address).is_err());
 }
 
 #[test]
@@ -332,11 +367,15 @@ fn init_state_with_accounts<I: IntoIterator<Item = (FastPayAddress, Balance)>>(
     for (address, _balance) in balances {
         let object_id: ObjectID = address_to_object_id_hack(address);
         let account = state
-            .accounts
+            .objects
             .entry(object_id)
             .or_insert_with(ObjectState::new);
         account.id = object_id;
         account.owner = address;
+
+        state
+            .init_order_lock(object_id, 0.into())
+            .expect("Error creating lock?");
     }
     state
 }
