@@ -1,0 +1,15 @@
+# Publish fastX stdlib and the test module
+sandbox publish
+
+# Create an S object with value 10 + transfer it to B0B
+run CreateTransferUse create 0xB0B --args 99
+
+# look at the object. note that it has been stored under a freshly created ID 0x4B...
+# we should see that it has value 10 and its owner (B0B) stored in its id field
+sandbox view storage/0x4B655E9C2E18E1E14F7FAEE0FDF81138/resources/0x00000000000000000000000000000002::CreateTransferUse::S.bcs
+
+# transfer the object from B0B to CAB
+run CreateTransferUse transfer 0xB0B --args 0x4B655E9C2E18E1E14F7FAEE0FDF81138 0xCAB
+
+# look at the object again. should be the same except its owner (stored in the id field) has changed
+sandbox view storage/0x4B655E9C2E18E1E14F7FAEE0FDF81138/resources/0x00000000000000000000000000000002::CreateTransferUse::S.bcs

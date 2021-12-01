@@ -2,6 +2,8 @@
 members = [
         "fastpay_core",
         "fastpay",
+        "fastx_programmability/adapter",
+        "fastx_programmability/framework"
 ]
 
 [profile.release]

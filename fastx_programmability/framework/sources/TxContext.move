@@ -5,8 +5,9 @@ module FastX::TxContext {
     use Std::Hash;
     use Std::Vector;
 
-    /// Information about the transaction currently being executed
-    struct TxContext {
+    /// Information about the transaction currently being executed.
+    /// This is a privileged object created by the VM and passed into `main`
+    struct TxContext has drop {
         /// The signer of the current transaction
         // TODO: use vector<Signer> if we want to support multi-agent
         signer: Signer,
@@ -15,6 +16,18 @@ module FastX::TxContext {
         /// Counter recording the number of objects created while executing
         /// this transaction
         objects_created: u64
+    }
+
+    // TODO: temporary hack; as comment above says, this should get passed in
+    // by the VM
+    public fun make_unsafe(
+        signer: signer, inputs_hash: vector<u8>
+    ): TxContext {
+        TxContext {
+            signer: Authenticator::new_signer(signer),
+            inputs_hash,
+            objects_created: 0,
+        }
     }
 
     /// Generate a new primary key

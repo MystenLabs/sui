@@ -1,0 +1,6 @@
+[package]
+name = "create_and_transfer"
+version = "0.0.0"
+
+[dependencies]
+FastX = { local = "../../../../framework/" }
