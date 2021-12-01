@@ -8,6 +8,10 @@ use std::{collections::BTreeMap, convert::TryInto};
 #[path = "unit_tests/authority_tests.rs"]
 mod authority_tests;
 
+// Refactor: eventually a transaction will have a (unique) digest. For the moment we only
+// have transfer transactions so we index them by the object/seq they mutate.
+type TransactionDigest = (ObjectID, SequenceNumber);
+
 #[derive(Eq, PartialEq, Debug)]
 pub struct ObjectState {
     /// The object identifier
@@ -23,7 +27,7 @@ pub struct ObjectState {
     /// Whether we have signed a transfer for this sequence number already.
     pub pending_confirmation_legacy: Option<SignedTransferOrder>,
     /// All confirmed certificates for this sender.
-    pub confirmed_log: Vec<CertifiedTransferOrder>,
+    pub confirmed_log_legacy: Vec<CertifiedTransferOrder>,
 }
 
 pub struct AuthorityState {
@@ -44,6 +48,8 @@ pub struct AuthorityState {
     objects: BTreeMap<ObjectID, ObjectState>,
     /// Order lock map maps object versions to the first next transaction seen
     order_lock: BTreeMap<(ObjectID, SequenceNumber), Option<SignedTransferOrder>>,
+    /// Certificates that have been accepted.
+    pub certificates: BTreeMap<TransactionDigest, CertifiedTransferOrder>,
 }
 
 /// Interface provided by each (shard of an) authority.
@@ -176,8 +182,11 @@ impl Authority for AuthorityState {
 
         sender_object.next_sequence_number = sender_sequence_number;
         sender_object.pending_confirmation_legacy = None;
-        sender_object.confirmed_log.push(certificate);
+        sender_object.confirmed_log_legacy.push(certificate.clone());
         let info = sender_object.make_account_info();
+
+        // Insert into the certificates map
+        self.add_certificate(certificate)?;
 
         // Init the order lock for this object
         self.init_order_lock(transfer.object_id, sender_sequence_number)?;
@@ -193,7 +202,7 @@ impl Authority for AuthorityState {
         let account = self.object_state(&request.object_id)?;
         let mut response = account.make_account_info();
         if let Some(seq) = request.request_sequence_number {
-            if let Some(cert) = account.confirmed_log.get(usize::from(seq)) {
+            if let Some(cert) = account.confirmed_log_legacy.get(usize::from(seq)) {
                 response.requested_certificate = Some(cert.clone());
             } else {
                 fp_bail!(FastPayError::CertificateNotfound)
@@ -211,7 +220,7 @@ impl Default for ObjectState {
             owner: PublicKeyBytes([0; 32]),
             next_sequence_number: SequenceNumber::new(),
             pending_confirmation_legacy: None,
-            confirmed_log: Vec::new(),
+            confirmed_log_legacy: Vec::new(),
         }
     }
 }
@@ -244,7 +253,7 @@ impl ObjectState {
             contents,
             next_sequence_number: SequenceNumber::new(),
             pending_confirmation_legacy: None,
-            confirmed_log: Vec::new(),
+            confirmed_log_legacy: Vec::new(),
         }
     }
 }
@@ -259,6 +268,7 @@ impl AuthorityState {
             order_lock: BTreeMap::new(),
             shard_id: 0,
             number_of_shards: 1,
+            certificates: BTreeMap::new(),
         }
     }
 
@@ -277,6 +287,7 @@ impl AuthorityState {
             order_lock: BTreeMap::new(),
             shard_id,
             number_of_shards,
+            certificates: BTreeMap::new(),
         }
     }
 
@@ -369,5 +380,30 @@ impl AuthorityState {
         // Note: Safe to unwrap thanks to the contains_key check above.
         let lock = self.order_lock.get(&(object_id, seq)).unwrap();
         Ok(lock)
+    }
+
+    // Helper functions to manage certificates
+
+    /// Add a certificate that has been processed
+    pub fn add_certificate(
+        &mut self,
+        certificate: CertifiedTransferOrder,
+    ) -> Result<(), FastPayError> {
+        let transaction_digest: TransactionDigest = (
+            certificate.value.transfer.object_id,
+            certificate.value.transfer.sequence_number,
+        );
+
+        // re-inserting a certificate is not a safety issue since it must certify the same transaction.
+        self.certificates.insert(transaction_digest, certificate);
+        Ok(())
+    }
+
+    /// Read from the DB of certificates
+    pub fn read_certificate(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<&CertifiedTransferOrder>, FastPayError> {
+        Ok(self.certificates.get(digest))
     }
 }

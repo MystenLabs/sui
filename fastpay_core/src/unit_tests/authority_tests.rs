@@ -195,7 +195,7 @@ fn test_handle_confirmation_order_bad_sequence_number() {
         .is_ok());
     let new_account = authority_state.objects.get_mut(&object_id).unwrap();
     assert_eq!(old_seq_num, new_account.next_sequence_number);
-    assert_eq!(new_account.confirmed_log, Vec::new());
+    assert_eq!(new_account.confirmed_log_legacy, Vec::new());
     assert!(authority_state.objects.get(&dbg_object_id(2)).is_none());
 }
 
@@ -218,7 +218,7 @@ fn test_handle_confirmation_order_exceed_balance() {
         .is_ok());
     let new_account = authority_state.objects.get(&object_id).unwrap();
     assert_eq!(SequenceNumber::from(1), new_account.next_sequence_number);
-    assert_eq!(new_account.confirmed_log.len(), 1);
+    assert_eq!(new_account.confirmed_log_legacy.len(), 1);
 }
 
 #[test]
@@ -246,7 +246,7 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
         SequenceNumber::from(1),
         new_sender_account.next_sequence_number
     );
-    assert_eq!(new_sender_account.confirmed_log.len(), 1);
+    assert_eq!(new_sender_account.confirmed_log_legacy.len(), 1);
 }
 
 #[test]
@@ -267,7 +267,7 @@ fn test_handle_confirmation_order_receiver_equal_sender() {
         .is_ok());
     let account = authority_state.objects.get(&object_id).unwrap();
     assert_eq!(SequenceNumber::from(1), account.next_sequence_number);
-    assert_eq!(account.confirmed_log.len(), 1);
+    assert_eq!(account.confirmed_log_legacy.len(), 1);
 }
 
 #[test]
@@ -300,7 +300,7 @@ fn test_handle_confirmation_order_ok() {
             .objects
             .get(&object_id)
             .unwrap()
-            .confirmed_log,
+            .confirmed_log_legacy,
         vec![certified_transfer_order]
     );
 }
