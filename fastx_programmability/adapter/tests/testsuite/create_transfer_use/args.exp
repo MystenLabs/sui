@@ -1,0 +1,21 @@
+Command `sandbox publish`:
+Command `run CreateTransferUse create 0xB0B --args 99`:
+Command `sandbox view storage/0x4B655E9C2E18E1E14F7FAEE0FDF81138/resources/0x00000000000000000000000000000002::CreateTransferUse::S.bcs`:
+key 0x2::CreateTransferUse::S {
+    id: drop store 0x2::ID::ID {
+        id: copy drop store 0x2::ID::IDBytes {
+            bytes: b0b
+        }
+    }
+    f: 99
+}
+Command `run CreateTransferUse transfer 0xB0B --args 0x4B655E9C2E18E1E14F7FAEE0FDF81138 0xCAB`:
+Command `sandbox view storage/0x4B655E9C2E18E1E14F7FAEE0FDF81138/resources/0x00000000000000000000000000000002::CreateTransferUse::S.bcs`:
+key 0x2::CreateTransferUse::S {
+    id: drop store 0x2::ID::ID {
+        id: copy drop store 0x2::ID::IDBytes {
+            bytes: cab
+        }
+    }
+    f: 99
+}
