@@ -224,7 +224,7 @@ impl Authority for AuthorityState {
                 .ok_or(FastPayError::CertificateNotfound)?;
             // Get the cert from the transaction digest
             response.requested_certificate = Some(
-                self.read_certificate(&transaction_digest)?
+                self.read_certificate(transaction_digest)?
                     .ok_or(FastPayError::CertificateNotfound)?
                     .clone(),
             );
