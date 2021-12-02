@@ -141,8 +141,8 @@ impl Authority for AuthorityState {
         // First we copy all relevant data from sender.
         let mut sender_object = self
             .accounts
-            .entry(transfer.object_id)
-            .or_insert_with(ObjectState::new);
+            .get_mut(&transfer.object_id)
+            .expect("The existence of object_id is already checked.");
 
         let mut sender_sequence_number = sender_object.next_sequence_number;
 
