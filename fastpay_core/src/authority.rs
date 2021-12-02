@@ -26,8 +26,6 @@ pub struct ObjectState {
     // These structures will likely be refactored outside the object.
     /// Whether we have signed a transfer for this sequence number already.
     pub pending_confirmation_legacy: Option<SignedTransferOrder>,
-    /// All confirmed certificates for this sender.
-    pub confirmed_log_legacy: Vec<CertifiedTransferOrder>,
 }
 
 pub struct AuthorityState {
@@ -49,7 +47,10 @@ pub struct AuthorityState {
     /// Order lock map maps object versions to the first next transaction seen
     order_lock: BTreeMap<(ObjectID, SequenceNumber), Option<SignedTransferOrder>>,
     /// Certificates that have been accepted.
-    pub certificates: BTreeMap<TransactionDigest, CertifiedTransferOrder>,
+    certificates: BTreeMap<TransactionDigest, CertifiedTransferOrder>,
+    /// An index mapping object IDs to the Transaction Digest that created them.
+    /// This is used by synchronization logic to sync authorities.
+    pub parent_sync: BTreeMap<(ObjectID, SequenceNumber), TransactionDigest>,
 }
 
 /// Interface provided by each (shard of an) authority.
@@ -171,6 +172,7 @@ impl Authority for AuthorityState {
             // Transfer was already confirmed.
             return Ok(sender_object.make_account_info());
         }
+        let old_sequence_number = sender_sequence_number;
         sender_sequence_number = sender_sequence_number.increment()?;
 
         // Commit sender state back to the database (Must never fail!)
@@ -182,11 +184,24 @@ impl Authority for AuthorityState {
 
         sender_object.next_sequence_number = sender_sequence_number;
         sender_object.pending_confirmation_legacy = None;
-        sender_object.confirmed_log_legacy.push(certificate.clone());
         let info = sender_object.make_account_info();
 
         // Insert into the certificates map
+        let transaction_digest: TransactionDigest = (
+            certificate.value.transfer.object_id,
+            certificate.value.transfer.sequence_number,
+        );
         self.add_certificate(certificate)?;
+
+        // Index the certificate by the objects created
+        self.add_parent_cert(
+            transfer.object_id,
+            sender_sequence_number,
+            transaction_digest,
+        );
+
+        // Remove the the old lock if there is one.
+        self.archive_order_lock(transfer.object_id, old_sequence_number)?;
 
         // Init the order lock for this object
         self.init_order_lock(transfer.object_id, sender_sequence_number)?;
@@ -202,11 +217,17 @@ impl Authority for AuthorityState {
         let account = self.object_state(&request.object_id)?;
         let mut response = account.make_account_info();
         if let Some(seq) = request.request_sequence_number {
-            if let Some(cert) = account.confirmed_log_legacy.get(usize::from(seq)) {
-                response.requested_certificate = Some(cert.clone());
-            } else {
-                fp_bail!(FastPayError::CertificateNotfound)
-            }
+            // Get the Transaction Digest that created the object
+            let transaction_digest = self
+                .parent_sync
+                .get(&(request.object_id, seq.increment()?))
+                .ok_or(FastPayError::CertificateNotfound)?;
+            // Get the cert from the transaction digest
+            response.requested_certificate = Some(
+                self.read_certificate(&transaction_digest)?
+                    .ok_or(FastPayError::CertificateNotfound)?
+                    .clone(),
+            );
         }
         Ok(response)
     }
@@ -220,7 +241,6 @@ impl Default for ObjectState {
             owner: PublicKeyBytes([0; 32]),
             next_sequence_number: SequenceNumber::new(),
             pending_confirmation_legacy: None,
-            confirmed_log_legacy: Vec::new(),
         }
     }
 }
@@ -253,7 +273,6 @@ impl ObjectState {
             contents,
             next_sequence_number: SequenceNumber::new(),
             pending_confirmation_legacy: None,
-            confirmed_log_legacy: Vec::new(),
         }
     }
 }
@@ -269,6 +288,7 @@ impl AuthorityState {
             shard_id: 0,
             number_of_shards: 1,
             certificates: BTreeMap::new(),
+            parent_sync: BTreeMap::new(),
         }
     }
 
@@ -288,6 +308,7 @@ impl AuthorityState {
             shard_id,
             number_of_shards,
             certificates: BTreeMap::new(),
+            parent_sync: BTreeMap::new(),
         }
     }
 
@@ -382,6 +403,18 @@ impl AuthorityState {
         Ok(lock)
     }
 
+    /// Signals that the lock is no more needed, and can be archived / deleted.
+    pub fn archive_order_lock(
+        &mut self,
+        object_id: ObjectID,
+        seq: SequenceNumber,
+    ) -> Result<(), FastPayError> {
+        // Note: for the moment just delete the local lock,
+        // here we can log or write to longer term store.
+        self.order_lock.remove(&(object_id, seq));
+        Ok(())
+    }
+
     // Helper functions to manage certificates
 
     /// Add a certificate that has been processed
@@ -405,5 +438,16 @@ impl AuthorityState {
         digest: &TransactionDigest,
     ) -> Result<Option<&CertifiedTransferOrder>, FastPayError> {
         Ok(self.certificates.get(digest))
+    }
+
+    /// Add object parent certificate relationship
+    pub fn add_parent_cert(
+        &mut self,
+        object_id: ObjectID,
+        seq: SequenceNumber,
+        transaction_digest: TransactionDigest,
+    ) {
+        self.parent_sync
+            .insert((object_id, seq), transaction_digest);
     }
 }
