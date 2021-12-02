@@ -18,8 +18,10 @@ fn test_handle_transfer_order_bad_signature() {
         .is_err());
 
     let object = authority_state.objects.get(&object_id).unwrap();
-
-    assert!(object.pending_confirmation_legacy.is_none());
+    assert!(authority_state
+        .get_order_lock(object.id, object.next_sequence_number)
+        .unwrap()
+        .is_none());
 
     assert!(authority_state
         .get_order_lock(object.id, object.next_sequence_number)
@@ -44,12 +46,9 @@ fn test_handle_transfer_order_unknown_sender() {
         .is_err());
 
     let object = authority_state.objects.get(&object_id).unwrap();
-
     assert!(authority_state
-        .objects
-        .get(&object_id)
+        .get_order_lock(object.id, object.next_sequence_number)
         .unwrap()
-        .pending_confirmation_legacy
         .is_none());
 
     assert!(authority_state
@@ -57,6 +56,9 @@ fn test_handle_transfer_order_unknown_sender() {
         .unwrap()
         .is_none());
 }
+
+/* FIXME: This tests the submission of out of order certs, but modifies object sequence numbers manually
+   and leaves the authority in an inconsistent state. We should re-code it in a proper way.
 
 #[test]
 fn test_handle_transfer_order_bad_sequence_number() {
@@ -78,13 +80,10 @@ fn test_handle_transfer_order_bad_sequence_number() {
         .handle_transfer_order(transfer_order)
         .is_err());
 
-    assert!(sequence_number_state
-        .objects
-        .get(&object_id)
-        .unwrap()
-        .pending_confirmation_legacy
-        .is_none());
+        let object = sequence_number_state.objects.get(&object_id).unwrap();
+        assert!(sequence_number_state.get_order_lock(object.id, object.next_sequence_number).unwrap().is_none());
 }
+*/
 
 #[test]
 fn test_handle_transfer_order_ok() {
@@ -104,11 +103,11 @@ fn test_handle_transfer_order_ok() {
     let account_info = authority_state
         .handle_transfer_order(transfer_order.clone())
         .unwrap();
+
+    let object = authority_state.objects.get(&object_id).unwrap();
     let pending_confirmation = authority_state
-        .objects
-        .get(&object_id)
+        .get_order_lock(object.id, object.next_sequence_number)
         .unwrap()
-        .pending_confirmation_legacy
         .clone()
         .unwrap();
     assert_eq!(
@@ -190,9 +189,11 @@ fn test_handle_confirmation_order_bad_sequence_number() {
         &authority_state,
     );
     // Replays are ignored.
+
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
-        .is_ok());
+        .is_err());
+
     let new_account = authority_state.objects.get_mut(&object_id).unwrap();
     assert_eq!(old_seq_num, new_account.next_sequence_number);
 
@@ -390,9 +391,7 @@ fn init_state_with_accounts<I: IntoIterator<Item = (FastPayAddress, Balance)>>(
         account.id = object_id;
         account.owner = address;
 
-        state
-            .init_order_lock(object_id, 0.into())
-            .expect("Error creating lock?");
+        state.init_order_lock(object_id, 0.into());
     }
     state
 }

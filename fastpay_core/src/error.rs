@@ -106,4 +106,6 @@ pub enum FastPayError {
     OrderLockDoesNotExist,
     #[fail(display = "Attempt to reset a set order lock to a different value.")]
     OrderLockReset,
+    #[fail(display = "Could not find the referenced object.")]
+    ObjectNotFound,
 }

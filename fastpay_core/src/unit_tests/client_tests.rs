@@ -144,8 +144,7 @@ fn fund_account<I: IntoIterator<Item = i128>>(
             .as_ref()
             .try_lock()
             .unwrap()
-            .init_order_lock(object_id, 0.into())
-            .unwrap();
+            .init_order_lock(object_id, 0.into());
     }
 }
 
