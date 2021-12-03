@@ -98,4 +98,14 @@ pub enum FastPayError {
     UnexpectedMessage,
     #[fail(display = "Network error while querying service: {:?}.", error)]
     ClientIoError { error: String },
+
+    // Internal state errors
+    #[fail(display = "Attempt to re-initialize an order lock.")]
+    OrderLockExists,
+    #[fail(display = "Attempt to set an non-existing order lock.")]
+    OrderLockDoesNotExist,
+    #[fail(display = "Attempt to reset a set order lock to a different value.")]
+    OrderLockReset,
+    #[fail(display = "Could not find the referenced object.")]
+    ObjectNotFound,
 }
