@@ -17,5 +17,5 @@ For reading/editing Move, your best bet is vscode + this [plugin](https://market
 
 ```
 # Inside the fastx_programmability/framework dir
-move package build
+move package -d build
 ```
