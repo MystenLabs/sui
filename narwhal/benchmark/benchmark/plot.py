@@ -1,5 +1,4 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
-from collections import defaultdict
 from re import findall, search, split
 import matplotlib.pyplot as plt
 import matplotlib.ticker as tick
@@ -54,7 +53,7 @@ class Ploter:
 
     def _natural_keys(self, text):
         def try_cast(text): return int(text) if text.isdigit() else text
-        return [try_cast(c) for c in split('(\d+)', text)]
+        return [try_cast(c) for c in split(r'(\d+)', text)]
 
     def _tps(self, data):
         values = findall(r' TPS: (\d+) \+/- (\d+)', data)
@@ -185,7 +184,7 @@ class Ploter:
                     )
                 )
 
-            for l in params.max_latency:
+            for latency in params.max_latency:
                 tps_files += glob(
                     PathMaker.agg_file(
                         'tps',
@@ -195,7 +194,7 @@ class Ploter:
                         params.collocate,
                         'any',
                         params.tx_size,
-                        max_latency=l
+                        max_latency=latency
                     )
                 )
 

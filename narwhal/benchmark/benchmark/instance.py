@@ -171,7 +171,7 @@ class InstanceManager:
             ids, _ = self._get(['pending', 'running', 'stopping', 'stopped'])
             size = sum(len(x) for x in ids.values())
             if size == 0:
-                Print.heading(f'All instances are shut down')
+                Print.heading('All instances are shut down')
                 return
 
             # Terminate instances.

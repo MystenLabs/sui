@@ -284,11 +284,11 @@ class Bench:
                 host = Committee.ip(address)
                 c = Connection(host, user='ubuntu', connect_kwargs=self.connect)
                 c.get(
-                    PathMaker.client_log_file(i, id), 
+                    PathMaker.client_log_file(i, id),
                     local=PathMaker.client_log_file(i, id)
                 )
                 c.get(
-                    PathMaker.worker_log_file(i, id), 
+                    PathMaker.worker_log_file(i, id),
                     local=PathMaker.worker_log_file(i, id)
                 )
 
@@ -298,7 +298,7 @@ class Bench:
             host = Committee.ip(address)
             c = Connection(host, user='ubuntu', connect_kwargs=self.connect)
             c.get(
-                PathMaker.primary_log_file(i), 
+                PathMaker.primary_log_file(i),
                 local=PathMaker.primary_log_file(i)
             )
 
@@ -357,11 +357,11 @@ class Bench:
                         logger = self._logs(committee_copy, faults)
                         logger.print(PathMaker.result_file(
                             faults,
-                            n, 
+                            n,
                             bench_parameters.workers,
                             bench_parameters.collocate,
-                            r, 
-                            bench_parameters.tx_size, 
+                            r,
+                            bench_parameters.tx_size,
                         ))
                     except (subprocess.SubprocessError, GroupException, ParseError) as e:
                         self.kill(hosts=selected_hosts)

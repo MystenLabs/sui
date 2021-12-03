@@ -7,8 +7,6 @@
 from glob import glob
 from os.path import join
 import os
-from itertools import cycle
-from re import search
 from copy import deepcopy
 from statistics import mean, stdev
 from collections import defaultdict
@@ -234,7 +232,7 @@ class Ploter:
 
     def _natural_keys(self, text):
         def try_cast(text): return int(text) if text.isdigit() else text
-        return [try_cast(c) for c in split('(\d+)', text)]
+        return [try_cast(c) for c in split(r'(\d+)', text)]
 
     def _tps(self, data):
         values = findall(r' TPS: (\d+) \+/- (\d+)', data)
@@ -381,7 +379,7 @@ class Ploter:
 
         self.results = []
         for f in faults:
-            for l in max_latencies:
+            for latency in max_latencies:
                 filename = (
                     f'{system}.'
                     f'tps-'
@@ -391,7 +389,7 @@ class Ploter:
                     f'{collocate}-'
                     f'any-'
                     f'{tx_size}-'
-                    f'{l}.txt'
+                    f'{latency}.txt'
                 )
                 if os.path.isfile(filename):
                     with open(filename, 'r') as file:
