@@ -40,6 +40,22 @@ pub struct AuthorityState {
     // The variable length dynamic state of the authority shard
     /// States of fastnft objects
     objects: BTreeMap<ObjectID, ObjectState>,
+
+    /* Order lock states and invariants
+
+    Each object in `objects` needs to have an entry in `order_locks`
+    that is initially initialized to None. This indicates we have not
+    seen any valid transactions mutating this object. Once we see the
+    first valid transaction the lock is set to Some(SignedOrder). We
+    will never change this lock to a different value of back to None.
+
+    Eventually, a certificate may be seen with a transaction that consumes
+    an object. In that case we can delete the key-value of the lock and
+    archive them. This reduces the amount of memory consumed by locks. It
+    also means that if an object has a lock entry it is 'active' ie transaction
+    may use it as an input. If not, a transaction can be rejected.
+
+    */
     /// Order lock map maps object versions to the first next transaction seen
     order_lock: BTreeMap<(ObjectID, SequenceNumber), Option<SignedTransferOrder>>,
     /// Certificates that have been accepted.
@@ -104,9 +120,7 @@ impl Authority for AuthorityState {
         );
 
         // Check that this is the first, or same as the first order we sign.
-        if let Some(pending_confirmation) =
-            self.get_order_lock(object.id, object.next_sequence_number)?
-        {
+        if let Some(pending_confirmation) = self.get_order_lock(&object.to_object_reference())? {
             fp_ensure!(
                 &pending_confirmation.value.transfer == transfer,
                 FastPayError::PreviousTransferMustBeConfirmedFirst {
@@ -183,20 +197,19 @@ impl Authority for AuthorityState {
         // to memory or persistent storage. Currently this is done in memory
         // through the calls to store being infallible.
 
+        let input_ref = input_object.to_object_reference();
+        let output_ref = output_object.to_object_reference();
+
         // Insert into the certificates map
         let transaction_digest = self.add_certificate(certificate);
 
         // Index the certificate by the objects created
-        self.add_parent_cert(
-            transfer.object_id,
-            output_sequence_number,
-            transaction_digest,
-        );
+        self.add_parent_cert(output_ref, transaction_digest);
 
         // Add new object, init locks and remove old ones
         self.insert_object(output_object);
-        self.archive_order_lock(transfer.object_id, input_sequence_number);
-        self.init_order_lock(transfer.object_id, output_sequence_number);
+        self.archive_order_lock(&input_ref);
+        self.init_order_lock(output_ref);
 
         let info = self.make_object_info(transfer.object_id)?;
         Ok(info)
@@ -324,7 +337,7 @@ impl AuthorityState {
 
     fn make_object_info(&self, object_id: ObjectID) -> Result<AccountInfoResponse, FastPayError> {
         let object = self.object_state(&object_id)?;
-        let lock = self.get_order_lock(object_id, object.next_sequence_number)?;
+        let lock = self.get_order_lock(&object.to_object_reference())?;
 
         Ok(AccountInfoResponse {
             object_id: object.id,
@@ -339,8 +352,8 @@ impl AuthorityState {
     // Helper function to manage order_locks
 
     /// Initialize an order lock for an object/sequence to None
-    pub fn init_order_lock(&mut self, object_id: ObjectID, seq: SequenceNumber) {
-        self.order_lock.entry((object_id, seq)).or_insert(None);
+    pub fn init_order_lock(&mut self, object_ref: ObjectRef) {
+        self.order_lock.entry(object_ref).or_insert(None);
         // If the lock exists, we do not modify it or reset it.
     }
 
@@ -353,12 +366,10 @@ impl AuthorityState {
         let seq = signed_order.value.transfer.sequence_number;
 
         // The object / version must exist, and therefore lock initialized.
-        if !self.order_lock.contains_key(&(object_id, seq)) {
-            return Err(FastPayError::OrderLockDoesNotExist);
-        }
-
-        // Note: Safe to unwrap thanks to the contains_key check above.
-        let lock = self.order_lock.get_mut(&(object_id, seq)).unwrap();
+        let lock = self
+            .order_lock
+            .get_mut(&(object_id, seq))
+            .ok_or(FastPayError::OrderLockDoesNotExist)?;
         if let Some(_existing_signed_order) = lock {
             if _existing_signed_order.value.transfer == signed_order.value.transfer {
                 // For some reason we are re-inserting the same order. Not optimal but correct.
@@ -377,24 +388,19 @@ impl AuthorityState {
     /// Get a read reference to an object/seq lock
     pub fn get_order_lock(
         &self,
-        object_id: ObjectID,
-        seq: SequenceNumber,
+        object_ref: &ObjectRef,
     ) -> Result<&Option<SignedTransferOrder>, FastPayError> {
         // The object / version must exist, and therefore lock initialized.
-        if !self.order_lock.contains_key(&(object_id, seq)) {
-            return Err(FastPayError::OrderLockDoesNotExist);
-        }
-
-        // Note: Safe to unwrap thanks to the contains_key check above.
-        let lock = self.order_lock.get(&(object_id, seq)).unwrap();
-        Ok(lock)
+        self.order_lock
+            .get(object_ref)
+            .ok_or(FastPayError::OrderLockDoesNotExist)
     }
 
     /// Signals that the lock is no more needed, and can be archived / deleted.
-    pub fn archive_order_lock(&mut self, object_id: ObjectID, seq: SequenceNumber) {
+    pub fn archive_order_lock(&mut self, object_ref: &ObjectRef) {
         // Note: for the moment just delete the local lock,
         // here we can log or write to longer term store.
-        self.order_lock.remove(&(object_id, seq));
+        self.order_lock.remove(object_ref);
     }
 
     // Helper functions to manage certificates
@@ -422,11 +428,9 @@ impl AuthorityState {
     /// Add object parent certificate relationship
     pub fn add_parent_cert(
         &mut self,
-        object_id: ObjectID,
-        seq: SequenceNumber,
+        object_ref: ObjectRef,
         transaction_digest: TransactionDigest,
     ) {
-        self.parent_sync
-            .insert((object_id, seq), transaction_digest);
+        self.parent_sync.insert(object_ref, transaction_digest);
     }
 }

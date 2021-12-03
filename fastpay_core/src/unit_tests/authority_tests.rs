@@ -19,12 +19,12 @@ fn test_handle_transfer_order_bad_signature() {
 
     let object = authority_state.objects.get(&object_id).unwrap();
     assert!(authority_state
-        .get_order_lock(object.id, object.next_sequence_number)
+        .get_order_lock(&(object.id, object.next_sequence_number))
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_order_lock(object.id, object.next_sequence_number)
+        .get_order_lock(&(object.id, object.next_sequence_number))
         .unwrap()
         .is_none());
 }
@@ -47,12 +47,12 @@ fn test_handle_transfer_order_unknown_sender() {
 
     let object = authority_state.objects.get(&object_id).unwrap();
     assert!(authority_state
-        .get_order_lock(object.id, object.next_sequence_number)
+        .get_order_lock(&(object.id, object.next_sequence_number))
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_order_lock(object.id, object.next_sequence_number)
+        .get_order_lock(&(object.id, object.next_sequence_number))
         .unwrap()
         .is_none());
 }
@@ -95,10 +95,12 @@ fn test_handle_transfer_order_ok() {
 
     // Check the initial state of the locks
     assert!(authority_state
-        .get_order_lock(object_id, 0.into())
+        .get_order_lock(&(object_id, 0.into()))
         .unwrap()
         .is_none());
-    assert!(authority_state.get_order_lock(object_id, 1.into()).is_err());
+    assert!(authority_state
+        .get_order_lock(&(object_id, 1.into()))
+        .is_err());
 
     let account_info = authority_state
         .handle_transfer_order(transfer_order.clone())
@@ -106,7 +108,7 @@ fn test_handle_transfer_order_ok() {
 
     let object = authority_state.objects.get(&object_id).unwrap();
     let pending_confirmation = authority_state
-        .get_order_lock(object.id, object.next_sequence_number)
+        .get_order_lock(&(object.id, object.next_sequence_number))
         .unwrap()
         .clone()
         .unwrap();
@@ -117,12 +119,12 @@ fn test_handle_transfer_order_ok() {
 
     // Check the final state of the locks
     assert!(authority_state
-        .get_order_lock(object_id, 0.into())
+        .get_order_lock(&(object_id, 0.into()))
         .unwrap()
         .is_some());
     assert_eq!(
         authority_state
-            .get_order_lock(object_id, 0.into())
+            .get_order_lock(&(object_id, 0.into()))
             .unwrap()
             .as_ref()
             .unwrap()
@@ -321,6 +323,15 @@ fn test_handle_confirmation_order_ok() {
         ),
         Some(&certified_transfer_order)
     );
+
+    // Check locks are set and archived correctly
+    assert!(authority_state
+        .get_order_lock(&(object_id, 0.into()))
+        .is_err());
+    assert!(authority_state
+        .get_order_lock(&(object_id, 1.into()))
+        .expect("Exists")
+        .is_none());
 }
 
 #[test]
@@ -391,7 +402,7 @@ fn init_state_with_accounts<I: IntoIterator<Item = (FastPayAddress, Balance)>>(
         account.id = object_id;
         account.owner = address;
 
-        state.init_order_lock(object_id, 0.into());
+        state.init_order_lock((object_id, 0.into()));
     }
     state
 }
