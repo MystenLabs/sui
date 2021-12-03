@@ -52,8 +52,6 @@ fn make_shard_server(
             contents: Vec::new(),
             owner: *address,
             next_sequence_number: SequenceNumber::from(0),
-            pending_confirmation: None,
-            confirmed_log: Vec::new(),
         };
         state.insert_object(client);
     }
