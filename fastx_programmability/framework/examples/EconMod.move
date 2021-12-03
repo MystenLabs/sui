@@ -10,7 +10,7 @@ module Examples::EconMod {
     use FastX::ID::ID;
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
-
+asd
     /// Created by `monster_owner`, a player with a monster that's too strong
     /// for them to slay + transferred to a player who can slay the monster.
     /// The two players split the reward for slaying the monster according to

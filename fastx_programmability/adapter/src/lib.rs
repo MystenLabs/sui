@@ -1,0 +1,36 @@
+// Copyright (c) Mysten Labs
+// SPDX-License-Identifier: Apache-2.0
+
+pub mod adapter;
+mod state_view;
+
+use move_core_types::account_address::AccountAddress;
+
+/// 0x1-- account address where Move stdlib modules are stored
+pub const MOVE_STDLIB_ADDRESS: AccountAddress = AccountAddress::new([
+    0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8,
+]);
+
+/// 0x2-- account address where fastX framework modules are stored
+pub const FASTX_FRAMEWORK_ADDRESS: AccountAddress = AccountAddress::new([
+    0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8,
+]);
+
+/// Extract + return an address from the first `authenticator.length()` bytes of `object`.
+/// Replace theses bytes with `authenticator`.
+/// copy the first authenticator.length() bytes out of `object`, turn them into
+/// an address. and return them. then, replace the first authenicator.length()
+/// bytes of `object` with `authenticator`
+pub(crate) fn swap_authenticator_and_id(
+    authenticator: AccountAddress,
+    object: &mut Vec<u8>,
+) -> AccountAddress {
+    assert!(object.len() > authenticator.len());
+
+    let authenticator_bytes = authenticator.into_bytes();
+    let mut id_bytes = [0u8; AccountAddress::LENGTH];
+
+    id_bytes[..authenticator.len()].clone_from_slice(&object[..authenticator.len()]);
+    object[..authenticator.len()].clone_from_slice(&authenticator_bytes[..authenticator.len()]);
+    AccountAddress::new(id_bytes)
+}

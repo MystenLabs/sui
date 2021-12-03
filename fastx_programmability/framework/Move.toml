@@ -8,9 +8,9 @@ MoveStdlib = { git = "https://github.com/diem/diem.git", subdir="language/move-s
 [addresses]
 Std = "0x1"
 FastX = "0x2"
-Examples = "0x3"
+Examples = "0x2"
 
 [dev-addresses]
 Std = "0x1"
 FastX = "0x2"
-Examples = "0x3"
+Examples = "0x2"
