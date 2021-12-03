@@ -205,6 +205,31 @@ module Examples::Hero {
         }
     }
 
+    // TODO: temporary hack to avoid dealing with Coin<EXAMPLE>
+    public fun create_free_sword(
+        ctx: &mut TxContext,
+    ): Sword {
+        Sword {
+            id: TxContext::new_id(ctx),
+            magic: 0,
+            strength: 0
+        }
+    }
+
+    // TODO: temporary hack to avoid dealing with Coin<Example>
+    public fun acquire_hero(ctx: &mut TxContext) {
+        let sword = create_free_sword(ctx);
+        let hero = create_hero(sword, ctx);
+        Transfer::transfer(hero, TxContext::get_authenticator(ctx))
+    }
+
+    public fun main(signer: signer) {
+        // TODO: thread inputs_hash through from outside
+        let inputs_hash = b"hello there";
+        let ctx = TxContext::make_unsafe(signer, inputs_hash);
+        acquire_hero(&mut ctx)
+    }
+
     /// Anyone can create a hero if they have a sword. All heros start with the
     /// same attributes.
     public fun create_hero(sword: Sword, ctx: &mut TxContext): Hero {
