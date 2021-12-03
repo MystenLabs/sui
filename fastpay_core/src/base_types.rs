@@ -71,8 +71,8 @@ pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
 }
 
 pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
+where
+    S: serde::ser::Serializer,
 {
     serializer.serialize_str(&encode_address(key))
 }
