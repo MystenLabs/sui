@@ -349,7 +349,7 @@ fn test_account_state_ok() {
 fn test_account_state_unknown_account() {
     let sender = dbg_addr(1);
     let unknown_address = dbg_object_id(99);
-    let authority_state = init_state_with_object(sender, [0u8; 20]);
+    let authority_state = init_state_with_object(sender, random_object_id());
     assert!(authority_state.object_state(&unknown_address).is_err());
 }
 

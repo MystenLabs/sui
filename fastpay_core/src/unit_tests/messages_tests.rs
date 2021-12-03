@@ -1,8 +1,9 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::*;
 use std::collections::BTreeMap;
+
+use super::*;
 
 #[test]
 fn test_signed_values() {
@@ -16,7 +17,7 @@ fn test_signed_values() {
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
-        object_id: [3u8;20],
+        object_id: [3u8; 20],
         sender: a1,
         recipient: Address::FastPay(a2),
         sequence_number: SequenceNumber::new(),
