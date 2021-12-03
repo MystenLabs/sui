@@ -5,8 +5,8 @@ use std::convert::{TryFrom, TryInto};
 
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
-use rand::Rng;
 use rand::rngs::OsRng;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::error::FastPayError;
@@ -65,8 +65,8 @@ pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
 }
 
 pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
+where
+    S: serde::ser::Serializer,
 {
     serializer.serialize_str(&encode_address(key))
 }

@@ -236,10 +236,8 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = random_object_id();
     let (recipient, _) = get_key_pair();
-    let mut authority_state = init_state_with_objects(vec![
-        (sender, object_id),
-        (recipient, [0u8; 20]),
-    ]);
+    let mut authority_state =
+        init_state_with_objects(vec![(sender, object_id), (recipient, [0u8; 20])]);
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
@@ -359,9 +357,8 @@ fn test_get_shards() {
     let mut found = vec![false; num_shards as usize];
     let mut left = num_shards;
     loop {
-        let (address, _) = get_key_pair();
-        let shard =
-            AuthorityState::get_shard(num_shards, &address_to_object_id_hack(address)) as usize;
+        let object_id = random_object_id();
+        let shard = AuthorityState::get_shard(num_shards, &object_id) as usize;
         println!("found {}", shard);
         if !found[shard] {
             found[shard] = true;
@@ -388,7 +385,7 @@ fn init_state() -> AuthorityState {
 }
 
 #[cfg(test)]
-fn init_state_with_objects<I: IntoIterator<Item=(FastPayAddress, ObjectID)>>(
+fn init_state_with_objects<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
     objects: I,
 ) -> AuthorityState {
     let mut state = init_state();
