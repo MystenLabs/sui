@@ -10,6 +10,7 @@ fn test_handle_transfer_order_bad_signature() {
     let object_id = get_object_id();
     let mut authority_state = init_state_with_object(sender, object_id);
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
+    let object_id = *transfer_order.object_id();
     let (_unknown_address, unknown_key) = get_key_pair();
     let mut bad_signature_transfer_order = transfer_order.clone();
     bad_signature_transfer_order.signature = Signature::new(&transfer_order.kind, &unknown_key);

@@ -5,10 +5,7 @@ use crate::{base_types::*, committee::Committee, downloader::*, error::FastPayEr
 use failure::{bail, ensure};
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
-use std::{
-    collections::{btree_map, BTreeMap, BTreeSet, HashMap},
-    convert::TryFrom,
-};
+use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -57,7 +54,7 @@ pub struct ClientState<AuthorityClient> {
     received_certificates: BTreeMap<(FastPayAddress, SequenceNumber), CertifiedOrder>,
     /// The known spendable balance (including a possible initial funding, excluding unknown sent
     /// or received certificates).
-    balance: Balance,
+    object_ids: Vec<ObjectID>,
 }
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
@@ -67,7 +64,7 @@ pub trait Client {
     /// Send money to a FastPay account.
     fn transfer_to_fastpay(
         &mut self,
-        amount: Amount,
+        object_id: ObjectID,
         recipient: FastPayAddress,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, failure::Error>;
@@ -75,7 +72,7 @@ pub trait Client {
     /// Send money to a Primary account.
     fn transfer_to_primary(
         &mut self,
-        amount: Amount,
+        object_id: ObjectID,
         recipient: PrimaryAddress,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, failure::Error>;
@@ -93,6 +90,7 @@ pub trait Client {
         &mut self,
         amount: Amount,
         recipient: FastPayAddress,
+        object_id: ObjectID,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, failure::Error>;
 
@@ -112,7 +110,7 @@ impl<A> ClientState<A> {
         next_sequence_number: SequenceNumber,
         sent_certificates: Vec<CertifiedOrder>,
         received_certificates: Vec<CertifiedOrder>,
-        balance: Balance,
+        object_ids: Vec<ObjectID>,
     ) -> Self {
         Self {
             address,
@@ -126,7 +124,7 @@ impl<A> ClientState<A> {
                 .into_iter()
                 .map(|cert| (cert.key(), cert))
                 .collect(),
-            balance,
+            object_ids,
         }
     }
 
@@ -138,8 +136,8 @@ impl<A> ClientState<A> {
         self.next_sequence_number
     }
 
-    pub fn balance(&self) -> Balance {
-        self.balance
+    pub fn object_ids(&self) -> &Vec<ObjectID> {
+        &self.object_ids
     }
 
     pub fn pending_transfer(&self) -> &Option<Order> {
@@ -160,14 +158,21 @@ struct CertificateRequester<A> {
     committee: Committee,
     authority_clients: Vec<A>,
     sender: FastPayAddress,
+    object_id: ObjectID,
 }
 
 impl<A> CertificateRequester<A> {
-    fn new(committee: Committee, authority_clients: Vec<A>, sender: FastPayAddress) -> Self {
+    fn new(
+        committee: Committee,
+        authority_clients: Vec<A>,
+        sender: FastPayAddress,
+        object_id: ObjectID,
+    ) -> Self {
         Self {
             committee,
             authority_clients,
             sender,
+            object_id,
         }
     }
 }
@@ -186,8 +191,7 @@ where
     ) -> AsyncResult<'_, CertifiedOrder, FastPayError> {
         Box::pin(async move {
             let request = AccountInfoRequest {
-                // TODO: fix this
-                object_id: address_to_object_id_hack(self.sender),
+                object_id: self.object_id,
                 request_sequence_number: Some(sequence_number),
                 request_received_transfers_excluding_first_nth: None,
             };
@@ -231,12 +235,14 @@ where
     async fn request_certificate(
         &mut self,
         sender: FastPayAddress,
+        object_id: ObjectID,
         sequence_number: SequenceNumber,
     ) -> Result<CertifiedOrder, FastPayError> {
         CertificateRequester::new(
             self.committee.clone(),
             self.authority_clients.values().cloned().collect(),
             sender,
+            object_id,
         )
         .query(sequence_number)
         .await
@@ -245,13 +251,9 @@ where
     /// Find the highest sequence number that is known to a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_strong_majority_sequence_number(
-        &mut self,
-        sender: FastPayAddress,
-    ) -> SequenceNumber {
+    async fn get_strong_majority_sequence_number(&mut self, object_id: ObjectID) -> SequenceNumber {
         let request = AccountInfoRequest {
-            // TODO: hack fix me
-            object_id: address_to_object_id_hack(sender),
+            object_id,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
@@ -276,10 +278,9 @@ where
     /// Find the highest balance that is backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_strong_majority_balance(&mut self) -> Balance {
+    async fn get_strong_majority_balance(&mut self, object_id: ObjectID) -> Balance {
         let request = AccountInfoRequest {
-            // TODO: fix this
-            object_id: address_to_object_id_hack(self.address),
+            object_id,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
@@ -355,6 +356,7 @@ where
     async fn communicate_transfers(
         &mut self,
         sender: FastPayAddress,
+        object_id: ObjectID,
         known_certificates: Vec<CertifiedOrder>,
         action: CommunicateAction,
     ) -> Result<Vec<CertifiedOrder>, failure::Error> {
@@ -366,6 +368,7 @@ where
             self.committee.clone(),
             self.authority_clients.values().cloned().collect(),
             sender,
+            object_id,
         );
         let (task, mut handle) = Downloader::start(
             requester,
@@ -386,8 +389,7 @@ where
                 Box::pin(async move {
                     // Figure out which certificates this authority is missing.
                     let request = AccountInfoRequest {
-                        // TODO: Fix this
-                        object_id: address_to_object_id_hack(sender),
+                        object_id,
                         request_sequence_number: None,
                         request_received_transfers_excluding_first_nth: None,
                     };
@@ -464,11 +466,18 @@ where
     /// Make sure we have all our certificates with sequence number
     /// in the range 0..self.next_sequence_number
     async fn download_sent_certificates(&self) -> Result<Vec<CertifiedOrder>, FastPayError> {
-        let mut requester = CertificateRequester::new(
-            self.committee.clone(),
-            self.authority_clients.values().cloned().collect(),
-            self.address,
-        );
+        let mut requesters: Vec<CertificateRequester<_>> = self
+            .object_ids
+            .iter()
+            .map(|object_id| {
+                CertificateRequester::new(
+                    self.committee.clone(),
+                    self.authority_clients.values().cloned().collect(),
+                    self.address,
+                    *object_id,
+                )
+            })
+            .collect();
         let known_sequence_numbers: BTreeSet<_> = self
             .sent_certificates
             .iter()
@@ -478,7 +487,19 @@ where
         let mut number = SequenceNumber::from(0);
         while number < self.next_sequence_number {
             if !known_sequence_numbers.contains(&number) {
-                let certificate = requester.query(number).await?;
+                let mut requesters = requesters.iter_mut();
+                // try to retrieve certificate from each shard
+                // TODO: Change CertificateRequester to accept Vec<ObjectID> instead of the loop?
+                let certificate = loop {
+                    let requester = requesters
+                        .next()
+                        .ok_or(FastPayError::CertificateNotfound)
+                        .unwrap();
+                    match requester.query(number).await {
+                        Ok(cert) => break cert,
+                        Err(_) => {}
+                    }
+                };
                 sent_certificates.push(certificate);
             }
             number = number.increment().unwrap_or_else(|_| SequenceNumber::max());
@@ -490,12 +511,12 @@ where
     /// Transfers an object to a recipient address.
     async fn transfer(
         &mut self,
-        _amount: Amount, /* Not used since we do not have amounts in fastnft. TODO: refactor out */
+        object_id: ObjectID,
         recipient: Address,
         user_data: UserData,
     ) -> Result<CertifiedOrder, failure::Error> {
         let transfer = Transfer {
-            object_id: address_to_object_id_hack(self.address),
+            object_id,
             sender: self.address,
             recipient,
             sequence_number: self.next_sequence_number,
@@ -557,6 +578,7 @@ where
         let new_sent_certificates = self
             .communicate_transfers(
                 self.address,
+                *order.object_id(),
                 self.sent_certificates.clone(),
                 CommunicateAction::SendOrder(order.clone()),
             )
@@ -571,6 +593,7 @@ where
         if with_confirmation {
             self.communicate_transfers(
                 self.address,
+                *order.object_id(),
                 self.sent_certificates.clone(),
                 CommunicateAction::SynchronizeNextSequenceNumber(self.next_sequence_number),
             )
@@ -586,20 +609,20 @@ where
 {
     fn transfer_to_fastpay(
         &mut self,
-        amount: Amount,
+        object_id: ObjectID,
         recipient: FastPayAddress,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, failure::Error> {
-        Box::pin(self.transfer(amount, Address::FastPay(recipient), user_data))
+        Box::pin(self.transfer(object_id, Address::FastPay(recipient), user_data))
     }
 
     fn transfer_to_primary(
         &mut self,
-        amount: Amount,
+        object_id: ObjectID,
         recipient: PrimaryAddress,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, failure::Error> {
-        Box::pin(self.transfer(amount, Address::Primary(recipient), user_data))
+        Box::pin(self.transfer(object_id, Address::Primary(recipient), user_data))
     }
 
     fn get_spendable_amount(&mut self) -> AsyncResult<'_, Amount, failure::Error> {
@@ -614,12 +637,12 @@ where
                 let new_sent_certificates = self.download_sent_certificates().await?;
                 self.update_sent_certificates(new_sent_certificates)?;
             }
-            let amount = if self.balance < Balance::zero() {
+            /*            let amount = if self.balance < Balance::zero() {
                 Amount::zero()
             } else {
                 Amount::try_from(self.balance).unwrap_or_else(|_| std::u64::MAX.into())
-            };
-            Ok(amount)
+            };*/
+            Ok(Amount::zero())
         })
     }
 
@@ -637,6 +660,7 @@ where
                     );
                     self.communicate_transfers(
                         transfer.sender,
+                        *certificate.order.object_id(),
                         vec![certificate.clone()],
                         CommunicateAction::SynchronizeNextSequenceNumber(
                             transfer.sequence_number.increment()?,
@@ -663,11 +687,12 @@ where
         &mut self,
         _amount: Amount,
         recipient: FastPayAddress,
+        object_id: ObjectID,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, failure::Error> {
         Box::pin(async move {
             let transfer = Transfer {
-                object_id: address_to_object_id_hack(self.address),
+                object_id,
                 sender: self.address,
                 recipient: Address::FastPay(recipient),
                 // amount,

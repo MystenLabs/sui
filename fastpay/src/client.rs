@@ -84,7 +84,7 @@ fn make_client_state(
         account.next_sequence_number,
         account.sent_certificates.clone(),
         account.received_certificates.clone(),
-        account.balance,
+        account.object_ids.clone(),
     )
 }
 
@@ -92,14 +92,15 @@ fn make_client_state(
 fn make_benchmark_transfer_orders(
     accounts_config: &mut AccountsConfig,
     max_orders: usize,
-) -> (Vec<Order>, Vec<(FastPayAddress, Bytes)>) {
+) -> (Vec<Order>, Vec<(FastPayAddress, ObjectID, Bytes)>) {
     let mut orders = Vec::new();
     let mut serialized_orders = Vec::new();
     // TODO: deterministic sequence of orders to recover from interrupted benchmarks.
     let mut next_recipient = get_key_pair().0;
     for account in accounts_config.accounts_mut() {
+        let object_id = *account.object_ids.first().unwrap();
         let transfer = Transfer {
-            object_id: address_to_object_id_hack(account.address),
+            object_id,
             sender: account.address,
             recipient: Address::FastPay(next_recipient),
             sequence_number: account.next_sequence_number,
@@ -111,7 +112,7 @@ fn make_benchmark_transfer_orders(
         let order = Order::new_transfer(transfer.clone(), &account.key);
         orders.push(order.clone());
         let serialized_order = serialize_order(&order);
-        serialized_orders.push((account.address, serialized_order.into()));
+        serialized_orders.push((account.address, object_id, serialized_order.into()));
         if serialized_orders.len() >= max_orders {
             break;
         }
@@ -123,7 +124,7 @@ fn make_benchmark_transfer_orders(
 fn make_benchmark_certificates_from_orders_and_server_configs(
     orders: Vec<Order>,
     server_config: Vec<&str>,
-) -> Vec<(FastPayAddress, Bytes)> {
+) -> Vec<(FastPayAddress, ObjectID, Bytes)> {
     let mut keys = Vec::new();
     for file in server_config {
         let server_config = AuthorityServerConfig::read(file).expect("Fail to read server config");
@@ -149,7 +150,11 @@ fn make_benchmark_certificates_from_orders_and_server_configs(
             certificate.signatures.push((*pubx, sig));
         }
         let serialized_certificate = serialize_cert(&certificate);
-        serialized_certificates.push((*order.sender(), serialized_certificate.into()));
+        serialized_certificates.push((
+            *order.sender(),
+            *order.object_id(),
+            serialized_certificate.into(),
+        ));
     }
     serialized_certificates
 }
@@ -158,7 +163,7 @@ fn make_benchmark_certificates_from_orders_and_server_configs(
 fn make_benchmark_certificates_from_votes(
     committee_config: &CommitteeConfig,
     votes: Vec<SignedOrder>,
-) -> Vec<(FastPayAddress, Bytes)> {
+) -> Vec<(FastPayAddress, ObjectID, Bytes)> {
     let committee = Committee::new(committee_config.voting_rights());
     let mut aggregators = HashMap::new();
     let mut certificates = Vec::new();
@@ -166,6 +171,7 @@ fn make_benchmark_certificates_from_votes(
     for vote in votes {
         // We aggregate votes indexed by sender.
         let address = *vote.order.sender();
+        let object_id = *vote.order.object_id();
         if done_senders.contains(&address) {
             continue;
         }
@@ -182,7 +188,7 @@ fn make_benchmark_certificates_from_votes(
             Ok(Some(certificate)) => {
                 debug!("Found certificate: {:?}", certificate);
                 let buf = serialize_cert(&certificate);
-                certificates.push((address, buf.into()));
+                certificates.push((address, object_id, buf.into()));
                 done_senders.insert(address);
             }
             Ok(None) => {
@@ -204,7 +210,7 @@ async fn mass_broadcast_orders(
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
     max_in_flight: u64,
-    orders: Vec<(FastPayAddress, Bytes)>,
+    orders: Vec<(FastPayAddress, ObjectID, Bytes)>,
 ) -> Vec<Bytes> {
     let time_start = Instant::now();
     info!("Broadcasting {} {} orders", orders.len(), phase);
@@ -219,10 +225,8 @@ async fn mass_broadcast_orders(
     for (num_shards, client) in authority_clients {
         // Re-index orders by shard for this particular authority client.
         let mut sharded_requests = HashMap::new();
-        for (address, buf) in &orders {
-            // TODO: fix this
-            let id: ObjectID = address_to_object_id_hack(*address);
-            let shard = AuthorityState::get_shard(num_shards, &id);
+        for (_, object_id, buf) in &orders {
+            let shard = AuthorityState::get_shard(num_shards, object_id);
             sharded_requests
                 .entry(shard)
                 .or_insert_with(Vec::new)
@@ -247,9 +251,9 @@ async fn mass_broadcast_orders(
 
 fn mass_update_recipients(
     accounts_config: &mut AccountsConfig,
-    certificates: Vec<(FastPayAddress, Bytes)>,
+    certificates: Vec<(FastPayAddress, ObjectID, Bytes)>,
 ) {
-    for (_sender, buf) in certificates {
+    for (_sender, _object_id, buf) in certificates {
         if let Ok(SerializedMessage::Cert(certificate)) = deserialize_message(&buf[..]) {
             accounts_config.update_for_received_transfer(*certificate);
         }
@@ -321,8 +325,8 @@ enum ClientCommands {
         #[structopt(long)]
         to: String,
 
-        /// Amount to transfer
-        amount: u64,
+        /// Object to transfer, in 20 bytes Hex string
+        object_id: String,
     },
 
     /// Obtain the spendable balance
@@ -352,8 +356,8 @@ enum ClientCommands {
     #[structopt(name = "create_accounts")]
     CreateAccounts {
         /// known initial balance of the account
-        #[structopt(long, default_value = "0")]
-        initial_funding: Balance,
+        #[structopt(long)]
+        initial_objects: Option<Vec<String>>,
 
         /// Number of additional accounts to create
         num: u32,
@@ -376,10 +380,14 @@ fn main() {
         CommitteeConfig::read(committee_config_path).expect("Unable to read committee config file");
 
     match options.cmd {
-        ClientCommands::Transfer { from, to, amount } => {
+        ClientCommands::Transfer {
+            from,
+            to,
+            object_id,
+        } => {
             let sender = decode_address(&from).expect("Failed to decode sender's address");
             let recipient = decode_address(&to).expect("Failed to decode recipient's address");
-            let amount = Amount::from(amount);
+            let object_id = decode_object_id(&object_id).unwrap();
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
@@ -394,7 +402,7 @@ fn main() {
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let cert = client_state
-                    .transfer_to_fastpay(amount, recipient, UserData::default())
+                    .transfer_to_fastpay(object_id, recipient, UserData::default())
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
@@ -527,13 +535,20 @@ fn main() {
         }
 
         ClientCommands::CreateAccounts {
-            initial_funding,
+            initial_objects,
             num,
         } => {
             let num_accounts: u32 = num;
+            let object_ids = match initial_objects {
+                Some(object_ids) => {
+                    object_ids.into_iter().map(|string| decode_object_id(&string).unwrap()).collect()
+                }
+                None => Vec::new()
+            };
+
             for _ in 0..num_accounts {
-                let account = UserAccount::new(initial_funding);
-                println!("{}:{}", encode_address(&account.address), initial_funding);
+                let account = UserAccount::new(object_ids.clone());
+                println!("{}:{:?}", encode_address(&account.address), object_ids);
                 accounts_config.insert(account);
             }
             accounts_config

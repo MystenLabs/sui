@@ -99,19 +99,19 @@ pub struct UserAccount {
     pub address: FastPayAddress,
     pub key: KeyPair,
     pub next_sequence_number: SequenceNumber,
-    pub balance: Balance,
+    pub object_ids: Vec<ObjectID>,
     pub sent_certificates: Vec<CertifiedOrder>,
     pub received_certificates: Vec<CertifiedOrder>,
 }
 
 impl UserAccount {
-    pub fn new(balance: Balance) -> Self {
+    pub fn new(object_ids: Vec<ObjectID>) -> Self {
         let (address, key) = get_key_pair();
         Self {
             address,
             key,
             next_sequence_number: SequenceNumber::new(),
-            balance,
+            object_ids,
             sent_certificates: Vec::new(),
             received_certificates: Vec::new(),
         }
@@ -145,7 +145,7 @@ impl AccountsConfig {
             .get_mut(&state.address())
             .expect("Updated account should already exist");
         account.next_sequence_number = state.next_sequence_number();
-        account.balance = state.balance();
+        account.object_ids = state.object_ids().clone();
         account.sent_certificates = state.sent_certificates().clone();
         account.received_certificates = state.received_certificates().cloned().collect();
     }
@@ -198,7 +198,7 @@ impl AccountsConfig {
 }
 
 pub struct InitialStateConfig {
-    pub accounts: Vec<(FastPayAddress, Balance)>,
+    pub accounts: Vec<(FastPayAddress, ObjectID)>,
 }
 
 impl InitialStateConfig {
@@ -213,7 +213,7 @@ impl InitialStateConfig {
                 failure::bail!("expecting two columns separated with ':'")
             }
             let address = decode_address(elements[0])?;
-            let balance = elements[1].parse()?;
+            let balance = decode_object_id(elements[1])?;
             accounts.push((address, balance));
         }
         Ok(Self { accounts })
@@ -222,8 +222,13 @@ impl InitialStateConfig {
     pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
         let file = OpenOptions::new().create(true).write(true).open(path)?;
         let mut writer = BufWriter::new(file);
-        for (address, balance) in &self.accounts {
-            writeln!(writer, "{}:{}", encode_address(address), balance)?;
+        for (address, object_id) in &self.accounts {
+            writeln!(
+                writer,
+                "{}:{}",
+                encode_address(address),
+                encode_object_id(&object_id)
+            )?;
         }
         Ok(())
     }

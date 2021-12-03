@@ -39,11 +39,8 @@ fn make_shard_server(
     );
 
     // Load initial states
-    for (address, _balance) in &initial_accounts_config.accounts {
-        // TODO: fix this total hack
-        let id: ObjectID = address_to_object_id_hack(*address);
-
-        if AuthorityState::get_shard(num_shards, &id) != shard {
+    for (address, object_id) in &initial_accounts_config.accounts {
+        if AuthorityState::get_shard(num_shards, object_id) != shard {
             continue;
         }
 
