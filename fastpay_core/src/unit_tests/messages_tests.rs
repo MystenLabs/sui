@@ -16,7 +16,7 @@ fn test_signed_values() {
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
-        object_id: address_to_object_id_hack(a1),
+        object_id: [3u8;20],
         sender: a1,
         recipient: Address::FastPay(a2),
         sequence_number: SequenceNumber::new(),

@@ -1,12 +1,13 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::convert::{TryFrom, TryInto};
+
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
-
+use rand::Rng;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
-use std::convert::{TryFrom, TryInto};
 
 use crate::error::FastPayError;
 
@@ -53,6 +54,10 @@ pub fn address_to_object_id_hack(address: FastPayAddress) -> ObjectID {
         .expect("An address is always long enough to extract 20 bytes")
 }
 
+pub fn random_object_id() -> ObjectID {
+    rand::thread_rng().gen::<[u8; 20]>()
+}
+
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;
     let keypair = dalek::Keypair::generate(&mut csprng);
@@ -60,8 +65,8 @@ pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
 }
 
 pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::ser::Serializer,
+    where
+        S: serde::ser::Serializer,
 {
     serializer.serialize_str(&encode_address(key))
 }
