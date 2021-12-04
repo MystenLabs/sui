@@ -50,7 +50,7 @@ pub enum FastPayError {
         display = "Cannot initiate transfer while a transfer order is still pending confirmation: {:?}",
         pending_confirmation
     )]
-    PreviousTransferMustBeConfirmedFirst { pending_confirmation: TransferOrder },
+    PreviousTransferMustBeConfirmedFirst { pending_confirmation: Order },
     #[fail(display = "Transfer order was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransferOrder,
     #[fail(

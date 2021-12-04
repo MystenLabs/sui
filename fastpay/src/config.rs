@@ -5,7 +5,7 @@ use crate::transport::NetworkProtocol;
 use fastpay_core::{
     base_types::*,
     client::ClientState,
-    messages::{Address, CertifiedTransferOrder},
+    messages::{Address, CertifiedOrder, OrderKind},
 };
 
 use serde::{Deserialize, Serialize};
@@ -100,8 +100,8 @@ pub struct UserAccount {
     pub key: KeyPair,
     pub next_sequence_number: SequenceNumber,
     pub balance: Balance,
-    pub sent_certificates: Vec<CertifiedTransferOrder>,
-    pub received_certificates: Vec<CertifiedTransferOrder>,
+    pub sent_certificates: Vec<CertifiedOrder>,
+    pub received_certificates: Vec<CertifiedOrder>,
 }
 
 impl UserAccount {
@@ -150,15 +150,18 @@ impl AccountsConfig {
         account.received_certificates = state.received_certificates().cloned().collect();
     }
 
-    pub fn update_for_received_transfer(&mut self, certificate: CertifiedTransferOrder) {
-        let transfer = &certificate.value.transfer;
-        if let Address::FastPay(recipient) = &transfer.recipient {
-            if let Some(config) = self.accounts.get_mut(recipient) {
-                if let Err(position) = config
-                    .received_certificates
-                    .binary_search_by_key(&certificate.key(), CertifiedTransferOrder::key)
-                {
-                    config.received_certificates.insert(position, certificate)
+    pub fn update_for_received_transfer(&mut self, certificate: CertifiedOrder) {
+        match &certificate.order.kind {
+            OrderKind::Transfer(transfer) => {
+                if let Address::FastPay(recipient) = &transfer.recipient {
+                    if let Some(config) = self.accounts.get_mut(recipient) {
+                        if let Err(position) = config
+                            .received_certificates
+                            .binary_search_by_key(&certificate.key(), CertifiedOrder::key)
+                        {
+                            config.received_certificates.insert(position, certificate)
+                        }
+                    }
                 }
             }
         }

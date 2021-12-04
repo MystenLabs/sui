@@ -13,9 +13,9 @@ mod serialize_tests;
 
 #[derive(Serialize, Deserialize)]
 pub enum SerializedMessage {
-    Order(Box<TransferOrder>),
-    Vote(Box<SignedTransferOrder>),
-    Cert(Box<CertifiedTransferOrder>),
+    Order(Box<Order>),
+    Vote(Box<SignedOrder>),
+    Cert(Box<CertifiedOrder>),
     Error(Box<FastPayError>),
     InfoReq(Box<AccountInfoRequest>),
     InfoResp(Box<AccountInfoResponse>),
@@ -26,9 +26,9 @@ pub enum SerializedMessage {
 // so that the variant tags match.
 #[derive(Serialize)]
 enum ShallowSerializedMessage<'a> {
-    Order(&'a TransferOrder),
-    Vote(&'a SignedTransferOrder),
-    Cert(&'a CertifiedTransferOrder),
+    Order(&'a Order),
+    Vote(&'a SignedOrder),
+    Cert(&'a CertifiedOrder),
     Error(&'a FastPayError),
     InfoReq(&'a AccountInfoRequest),
     InfoResp(&'a AccountInfoResponse),
@@ -56,14 +56,11 @@ pub fn serialize_message(msg: &SerializedMessage) -> Vec<u8> {
     serialize(msg)
 }
 
-pub fn serialize_transfer_order(value: &TransferOrder) -> Vec<u8> {
+pub fn serialize_order(value: &Order) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Order(value))
 }
 
-pub fn serialize_transfer_order_into<W>(
-    writer: W,
-    value: &TransferOrder,
-) -> Result<(), failure::Error>
+pub fn serialize_transfer_order_into<W>(writer: W, value: &Order) -> Result<(), failure::Error>
 where
     W: std::io::Write,
 {
@@ -74,14 +71,11 @@ pub fn serialize_error(value: &FastPayError) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Error(value))
 }
 
-pub fn serialize_cert(value: &CertifiedTransferOrder) -> Vec<u8> {
+pub fn serialize_cert(value: &CertifiedOrder) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Cert(value))
 }
 
-pub fn serialize_cert_into<W>(
-    writer: W,
-    value: &CertifiedTransferOrder,
-) -> Result<(), failure::Error>
+pub fn serialize_cert_into<W>(writer: W, value: &CertifiedOrder) -> Result<(), failure::Error>
 where
     W: std::io::Write,
 {
@@ -96,11 +90,11 @@ pub fn serialize_info_response(value: &AccountInfoResponse) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::InfoResp(value))
 }
 
-pub fn serialize_vote(value: &SignedTransferOrder) -> Vec<u8> {
+pub fn serialize_vote(value: &SignedOrder) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Vote(value))
 }
 
-pub fn serialize_vote_into<W>(writer: W, value: &SignedTransferOrder) -> Result<(), failure::Error>
+pub fn serialize_vote_into<W>(writer: W, value: &SignedOrder) -> Result<(), failure::Error>
 where
     W: std::io::Write,
 {

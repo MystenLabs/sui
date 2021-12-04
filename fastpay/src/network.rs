@@ -87,11 +87,11 @@ impl MessageHandler for RunningServerState {
                         SerializedMessage::Order(message) => self
                             .server
                             .state
-                            .handle_transfer_order(*message)
+                            .handle_order(*message)
                             .map(|info| Some(serialize_info_response(&info))),
                         SerializedMessage::Cert(message) => {
                             let confirmation_order = ConfirmationOrder {
-                                transfer_certificate: message.as_ref().clone(),
+                                certificate: message.as_ref().clone(),
                             };
                             match self
                                 .server
@@ -210,14 +210,10 @@ impl Client {
 
 impl AuthorityClient for Client {
     /// Initiate a new transfer to a FastPay or Primary account.
-    fn handle_transfer_order(
-        &mut self,
-        order: TransferOrder,
-    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
+    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
-            let shard = AuthorityState::get_shard(self.num_shards, &order.transfer.object_id);
-            self.send_recv_bytes(shard, serialize_transfer_order(&order))
-                .await
+            let shard = AuthorityState::get_shard(self.num_shards, order.object_id());
+            self.send_recv_bytes(shard, serialize_order(&order)).await
         })
     }
 
@@ -227,11 +223,9 @@ impl AuthorityClient for Client {
         order: ConfirmationOrder,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
-            let shard = AuthorityState::get_shard(
-                self.num_shards,
-                &order.transfer_certificate.value.transfer.object_id,
-            );
-            self.send_recv_bytes(shard, serialize_cert(&order.transfer_certificate))
+            let shard =
+                AuthorityState::get_shard(self.num_shards, order.certificate.order.object_id());
+            self.send_recv_bytes(shard, serialize_cert(&order.certificate))
                 .await
         })
     }

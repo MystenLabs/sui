@@ -1,6 +1,8 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::TransactionDigest;
+
 use super::{base_types::*, committee::Committee, error::*};
 
 #[cfg(test)]
@@ -35,33 +37,44 @@ pub struct Transfer {
     pub user_data: UserData,
 }
 
-#[derive(Eq, Clone, Debug, Serialize, Deserialize)]
-pub struct TransferOrder {
-    pub transfer: Transfer,
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum OrderKind {
+    /// Initiate an object transfer between addresses
+    Transfer(Transfer),
+    // .. more order types go here
+}
+
+/// An order signed by a client
+// TODO: this should maybe be called ClientSignedOrder + SignedOrder -> AuthoritySignedOrder
+#[derive(Debug, Eq, Clone, Serialize, Deserialize)]
+pub struct Order {
+    pub kind: OrderKind,
     pub signature: Signature,
 }
 
-#[derive(Eq, Clone, Debug, Serialize, Deserialize)]
-pub struct SignedTransferOrder {
-    pub value: TransferOrder,
+/// An order signed by a single authority
+#[derive(Debug, Eq, Clone, Serialize, Deserialize)]
+pub struct SignedOrder {
+    pub order: Order,
     pub authority: AuthorityName,
     pub signature: Signature,
 }
 
+/// An order signed by a quorum of authorities
 #[derive(Eq, Clone, Debug, Serialize, Deserialize)]
-pub struct CertifiedTransferOrder {
-    pub value: TransferOrder,
+pub struct CertifiedOrder {
+    pub order: Order,
     pub signatures: Vec<(AuthorityName, Signature)>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct RedeemTransaction {
-    pub transfer_certificate: CertifiedTransferOrder,
+pub struct ConfirmationOrder {
+    pub certificate: CertifiedOrder,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct ConfirmationOrder {
-    pub transfer_certificate: CertifiedTransferOrder,
+pub struct RedeemTransaction {
+    pub certificate: CertifiedOrder,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -76,39 +89,39 @@ pub struct AccountInfoResponse {
     pub object_id: ObjectID,
     pub owner: FastPayAddress,
     pub next_sequence_number: SequenceNumber,
-    pub pending_confirmation: Option<SignedTransferOrder>,
-    pub requested_certificate: Option<CertifiedTransferOrder>,
-    pub requested_received_transfers: Vec<CertifiedTransferOrder>,
+    pub pending_confirmation: Option<SignedOrder>,
+    pub requested_certificate: Option<CertifiedOrder>,
+    pub requested_received_transfers: Vec<CertifiedOrder>,
 }
 
-impl Hash for TransferOrder {
+impl Hash for Order {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.transfer.hash(state);
+        self.kind.hash(state);
     }
 }
 
-impl PartialEq for TransferOrder {
+impl PartialEq for Order {
     fn eq(&self, other: &Self) -> bool {
-        self.transfer == other.transfer
+        self.kind == other.kind
     }
 }
 
-impl Hash for SignedTransferOrder {
+impl Hash for SignedOrder {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.value.hash(state);
+        self.order.hash(state);
         self.authority.hash(state);
     }
 }
 
-impl PartialEq for SignedTransferOrder {
+impl PartialEq for SignedOrder {
     fn eq(&self, other: &Self) -> bool {
-        self.value == other.value && self.authority == other.authority
+        self.order == other.order && self.authority == other.authority
     }
 }
 
-impl Hash for CertifiedTransferOrder {
+impl Hash for CertifiedOrder {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.value.hash(state);
+        self.order.hash(state);
         self.signatures.len().hash(state);
         for (name, _) in self.signatures.iter() {
             name.hash(state);
@@ -116,9 +129,9 @@ impl Hash for CertifiedTransferOrder {
     }
 }
 
-impl PartialEq for CertifiedTransferOrder {
+impl PartialEq for CertifiedOrder {
     fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
+        self.order == other.order
             && self.signatures.len() == other.signatures.len()
             && self
                 .signatures
@@ -134,26 +147,55 @@ impl Transfer {
     }
 }
 
-impl TransferOrder {
-    pub fn new(transfer: Transfer, secret: &KeyPair) -> Self {
-        let signature = Signature::new(&transfer, secret);
-        Self {
-            transfer,
-            signature,
-        }
+impl Order {
+    pub fn new(kind: OrderKind, secret: &KeyPair) -> Self {
+        let signature = Signature::new(&kind, secret);
+        Order { kind, signature }
+    }
+
+    pub fn new_transfer(transfer: Transfer, secret: &KeyPair) -> Self {
+        Self::new(OrderKind::Transfer(transfer), secret)
     }
 
     pub fn check_signature(&self) -> Result<(), FastPayError> {
-        self.signature.check(&self.transfer, self.transfer.sender)
+        match &self.kind {
+            OrderKind::Transfer(t) => self.signature.check(&self.kind, t.sender),
+        }
+    }
+
+    // TODO: support orders with multiple objects, each with their own sequence number (https://github.com/MystenLabs/fastnft/issues/8)
+    pub fn sequence_number(&self) -> SequenceNumber {
+        match &self.kind {
+            OrderKind::Transfer(t) => t.sequence_number,
+        }
+    }
+
+    // TODO: support orders with multiple objects (https://github.com/MystenLabs/fastnft/issues/8)
+    pub fn object_id(&self) -> &ObjectID {
+        match &self.kind {
+            OrderKind::Transfer(t) => &t.object_id,
+        }
+    }
+
+    pub fn sender(&self) -> &FastPayAddress {
+        match &self.kind {
+            OrderKind::Transfer(t) => &t.sender,
+        }
+    }
+
+    pub fn digest(&self) -> TransactionDigest {
+        match &self.kind {
+            OrderKind::Transfer(t) => (t.object_id, t.sequence_number),
+        }
     }
 }
 
-impl SignedTransferOrder {
+impl SignedOrder {
     /// Use signing key to create a signed object.
-    pub fn new(value: TransferOrder, authority: AuthorityName, secret: &KeyPair) -> Self {
-        let signature = Signature::new(&value.transfer, secret);
+    pub fn new(order: Order, authority: AuthorityName, secret: &KeyPair) -> Self {
+        let signature = Signature::new(&order.kind, secret);
         Self {
-            value,
+            order,
             authority,
             signature,
         }
@@ -161,10 +203,10 @@ impl SignedTransferOrder {
 
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn check(&self, committee: &Committee) -> Result<usize, FastPayError> {
-        self.value.check_signature()?;
+        self.order.check_signature()?;
         let weight = committee.weight(&self.authority);
         fp_ensure!(weight > 0, FastPayError::UnknownSigner);
-        self.signature.check(&self.value.transfer, self.authority)?;
+        self.signature.check(&self.order.kind, self.authority)?;
         Ok(weight)
     }
 }
@@ -173,24 +215,24 @@ pub struct SignatureAggregator<'a> {
     committee: &'a Committee,
     weight: usize,
     used_authorities: HashSet<AuthorityName>,
-    partial: CertifiedTransferOrder,
+    partial: CertifiedOrder,
 }
 
 impl<'a> SignatureAggregator<'a> {
     /// Start aggregating signatures for the given value into a certificate.
-    pub fn try_new(value: TransferOrder, committee: &'a Committee) -> Result<Self, FastPayError> {
-        value.check_signature()?;
-        Ok(Self::new_unsafe(value, committee))
+    pub fn try_new(order: Order, committee: &'a Committee) -> Result<Self, FastPayError> {
+        order.check_signature()?;
+        Ok(Self::new_unsafe(order, committee))
     }
 
     /// Same as try_new but we don't check the order.
-    pub fn new_unsafe(value: TransferOrder, committee: &'a Committee) -> Self {
+    pub fn new_unsafe(order: Order, committee: &'a Committee) -> Self {
         Self {
             committee,
             weight: 0,
             used_authorities: HashSet::new(),
-            partial: CertifiedTransferOrder {
-                value,
+            partial: CertifiedOrder {
+                order,
                 signatures: Vec::new(),
             },
         }
@@ -203,8 +245,8 @@ impl<'a> SignatureAggregator<'a> {
         &mut self,
         authority: AuthorityName,
         signature: Signature,
-    ) -> Result<Option<CertifiedTransferOrder>, FastPayError> {
-        signature.check(&self.partial.value.transfer, authority)?;
+    ) -> Result<Option<CertifiedOrder>, FastPayError> {
+        signature.check(&self.partial.order.kind, authority)?;
         // Check that each authority only appears once.
         fp_ensure!(
             !self.used_authorities.contains(&authority),
@@ -226,10 +268,11 @@ impl<'a> SignatureAggregator<'a> {
     }
 }
 
-impl CertifiedTransferOrder {
+impl CertifiedOrder {
     pub fn key(&self) -> (FastPayAddress, SequenceNumber) {
-        let transfer = &self.value.transfer;
-        transfer.key()
+        match &self.order.kind {
+            OrderKind::Transfer(t) => t.key(),
+        }
     }
 
     /// Verify the certificate.
@@ -253,29 +296,25 @@ impl CertifiedTransferOrder {
             weight >= committee.quorum_threshold(),
             FastPayError::CertificateRequiresQuorum
         );
-        // All what is left is checking signatures!
-        let inner_sig = (self.value.transfer.sender, self.value.signature);
+        // All that is left is checking signatures!
+        let inner_sig = (*self.order.sender(), self.order.signature);
         Signature::verify_batch(
-            &self.value.transfer,
+            &self.order.kind,
             std::iter::once(&inner_sig).chain(&self.signatures),
         )
     }
 }
 
 impl RedeemTransaction {
-    pub fn new(transfer_certificate: CertifiedTransferOrder) -> Self {
-        Self {
-            transfer_certificate,
-        }
+    pub fn new(certificate: CertifiedOrder) -> Self {
+        Self { certificate }
     }
 }
 
 impl ConfirmationOrder {
-    pub fn new(transfer_certificate: CertifiedTransferOrder) -> Self {
-        Self {
-            transfer_certificate,
-        }
+    pub fn new(certificate: CertifiedOrder) -> Self {
+        Self { certificate }
     }
 }
 
-impl BcsSignable for Transfer {}
+impl BcsSignable for OrderKind {}
