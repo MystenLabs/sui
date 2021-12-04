@@ -69,19 +69,18 @@ impl FastPaySmartContract for FastPaySmartContractState {
         &mut self,
         transaction: RedeemTransaction,
     ) -> Result<(), failure::Error> {
-        transaction.transfer_certificate.check(&self.committee)?;
-        let order = transaction.transfer_certificate.value;
-        let transfer = &order.transfer;
+        transaction.certificate.check(&self.committee)?;
+        let order = transaction.certificate.order;
 
         let account = self
             .accounts
-            .entry(transfer.sender)
+            .entry(*order.sender())
             .or_insert_with(AccountOnchainState::new);
         ensure!(
-            account.last_redeemed < Some(transfer.sequence_number),
+            account.last_redeemed < Some(order.sequence_number()),
             "Transfer certificates to Primary must have increasing sequence numbers.",
         );
-        account.last_redeemed = Some(transfer.sequence_number);
+        account.last_redeemed = Some(order.sequence_number());
 
         Ok(())
     }

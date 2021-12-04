@@ -22,19 +22,19 @@ fn test_signed_values() {
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
-    let order = TransferOrder::new(transfer.clone(), &sec1);
-    let bad_order = TransferOrder::new(transfer, &sec2);
+    let order = Order::new_transfer(transfer.clone(), &sec1);
+    let bad_order = Order::new_transfer(transfer, &sec2);
 
-    let v = SignedTransferOrder::new(order.clone(), a1, &sec1);
+    let v = SignedOrder::new(order.clone(), a1, &sec1);
     assert!(v.check(&committee).is_ok());
 
-    let v = SignedTransferOrder::new(order.clone(), a2, &sec2);
+    let v = SignedOrder::new(order.clone(), a2, &sec2);
     assert!(v.check(&committee).is_err());
 
-    let v = SignedTransferOrder::new(order, a3, &sec3);
+    let v = SignedOrder::new(order, a3, &sec3);
     assert!(v.check(&committee).is_err());
 
-    let v = SignedTransferOrder::new(bad_order, a1, &sec1);
+    let v = SignedOrder::new(bad_order, a1, &sec1);
     assert!(v.check(&committee).is_err());
 }
 
@@ -56,12 +56,12 @@ fn test_certificates() {
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
-    let order = TransferOrder::new(transfer.clone(), &sec1);
-    let bad_order = TransferOrder::new(transfer, &sec2);
+    let order = Order::new_transfer(transfer.clone(), &sec1);
+    let bad_order = Order::new_transfer(transfer, &sec2);
 
-    let v1 = SignedTransferOrder::new(order.clone(), a1, &sec1);
-    let v2 = SignedTransferOrder::new(order.clone(), a2, &sec2);
-    let v3 = SignedTransferOrder::new(order.clone(), a3, &sec3);
+    let v1 = SignedOrder::new(order.clone(), a1, &sec1);
+    let v2 = SignedOrder::new(order.clone(), a2, &sec2);
+    let v3 = SignedOrder::new(order.clone(), a3, &sec3);
 
     let mut builder = SignatureAggregator::try_new(order.clone(), &committee).unwrap();
     assert!(builder

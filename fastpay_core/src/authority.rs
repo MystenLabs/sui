@@ -10,7 +10,7 @@ mod authority_tests;
 
 // Refactor: eventually a transaction will have a (unique) digest. For the moment we only
 // have transfer transactions so we index them by the object/seq they mutate.
-type TransactionDigest = (ObjectID, SequenceNumber);
+pub(crate) type TransactionDigest = (ObjectID, SequenceNumber);
 
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct ObjectState {
@@ -57,9 +57,9 @@ pub struct AuthorityState {
 
     */
     /// Order lock map maps object versions to the first next transaction seen
-    order_lock: BTreeMap<(ObjectID, SequenceNumber), Option<SignedTransferOrder>>,
+    order_lock: BTreeMap<(ObjectID, SequenceNumber), Option<SignedOrder>>,
     /// Certificates that have been accepted.
-    certificates: BTreeMap<TransactionDigest, CertifiedTransferOrder>,
+    certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
     /// An index mapping object IDs to the Transaction Digest that created them.
     /// This is used by synchronization logic to sync authorities.
     pub parent_sync: BTreeMap<(ObjectID, SequenceNumber), TransactionDigest>,
@@ -69,11 +69,8 @@ pub struct AuthorityState {
 /// All commands return either the current account info or an error.
 /// Repeating commands produces no changes and returns no error.
 pub trait Authority {
-    /// Initiate a new transfer to a FastPay or Primary account.
-    fn handle_transfer_order(
-        &mut self,
-        order: TransferOrder,
-    ) -> Result<AccountInfoResponse, FastPayError>;
+    /// Initiate a new order to a FastPay or Primary account.
+    fn handle_order(&mut self, order: Order) -> Result<AccountInfoResponse, FastPayError>;
 
     /// Confirm a transfer to a FastPay or Primary account.
     fn handle_confirmation_order(
@@ -90,20 +87,13 @@ pub trait Authority {
 
 impl Authority for AuthorityState {
     /// Initiate a new transfer.
-    fn handle_transfer_order(
-        &mut self,
-        order: TransferOrder,
-    ) -> Result<AccountInfoResponse, FastPayError> {
+    fn handle_order(&mut self, order: Order) -> Result<AccountInfoResponse, FastPayError> {
         // Check the sender's signature and retrieve the transfer data.
-        fp_ensure!(
-            self.in_shard(&order.transfer.object_id),
-            FastPayError::WrongShard
-        );
+        fp_ensure!(self.in_shard(order.object_id()), FastPayError::WrongShard);
         order.check_signature()?;
-        let transfer = &order.transfer;
-        let object_id = transfer.object_id;
+        let object_id = *order.object_id();
         fp_ensure!(
-            transfer.sequence_number <= SequenceNumber::max(),
+            order.sequence_number() <= SequenceNumber::max(),
             FastPayError::InvalidSequenceNumber
         );
 
@@ -115,27 +105,27 @@ impl Authority for AuthorityState {
 
         // Check the transaction sender is also the object owner
         fp_ensure!(
-            order.transfer.sender == object.owner,
+            order.sender() == &object.owner,
             FastPayError::IncorrectSigner
         );
 
         // Check that this is the first, or same as the first order we sign.
         if let Some(pending_confirmation) = self.get_order_lock(&object.to_object_reference())? {
             fp_ensure!(
-                &pending_confirmation.value.transfer == transfer,
+                pending_confirmation.order.kind == order.kind,
                 FastPayError::PreviousTransferMustBeConfirmedFirst {
-                    pending_confirmation: pending_confirmation.value.clone()
+                    pending_confirmation: pending_confirmation.order.clone()
                 }
             );
             // This exact transfer order was already signed. Return the previous value.
             return self.make_object_info(object_id);
         }
         fp_ensure!(
-            object.next_sequence_number == transfer.sequence_number,
+            object.next_sequence_number == order.sequence_number(),
             FastPayError::UnexpectedSequenceNumber
         );
 
-        let signed_order = SignedTransferOrder::new(order, self.name, &self.secret);
+        let signed_order = SignedOrder::new(order, self.name, &self.secret);
 
         // Add to the order_lock structure.
         // Note: Safety requires this be persisted before any client-visible response is generated.
@@ -150,69 +140,70 @@ impl Authority for AuthorityState {
         &mut self,
         confirmation_order: ConfirmationOrder,
     ) -> Result<AccountInfoResponse, FastPayError> {
-        let certificate = confirmation_order.transfer_certificate;
-        // Check the certificate and retrieve the transfer data.
-        fp_ensure!(
-            self.in_shard(&certificate.value.transfer.object_id),
-            FastPayError::WrongShard
-        );
-        certificate.check(&self.committee)?;
-        let transfer = certificate.value.transfer.clone();
+        let certificate = confirmation_order.certificate;
+        match &certificate.order.kind {
+            OrderKind::Transfer(t) => {
+                // Check the certificate and retrieve the transfer data.
+                fp_ensure!(self.in_shard(&t.object_id), FastPayError::WrongShard);
+                certificate.check(&self.committee)?;
+                let transfer = t.clone();
 
-        // If we have a certificate on the confirmation order it means that the input
-        // object exists on other honest authorities, but we do not have it. The only
-        // way this may happen is if we missed some updates.
-        let input_object = self.objects.get(&transfer.object_id).ok_or(
-            FastPayError::MissingEalierConfirmations {
-                current_sequence_number: SequenceNumber::from(0),
-            },
-        )?;
+                // If we have a certificate on the confirmation order it means that the input
+                // object exists on other honest authorities, but we do not have it. The only
+                // way this may happen is if we missed some updates.
+                let input_object = self.objects.get(&transfer.object_id).ok_or(
+                    FastPayError::MissingEalierConfirmations {
+                        current_sequence_number: SequenceNumber::from(0),
+                    },
+                )?;
 
-        let input_sequence_number = input_object.next_sequence_number;
+                let input_sequence_number = input_object.next_sequence_number;
 
-        // Check that the current object is exactly the right version.
-        if input_sequence_number < transfer.sequence_number {
-            fp_bail!(FastPayError::MissingEalierConfirmations {
-                current_sequence_number: input_sequence_number
-            });
+                // Check that the current object is exactly the right version.
+                if input_sequence_number < transfer.sequence_number {
+                    fp_bail!(FastPayError::MissingEalierConfirmations {
+                        current_sequence_number: input_sequence_number
+                    });
+                }
+                if input_sequence_number > transfer.sequence_number {
+                    // Transfer was already confirmed.
+                    return self.make_object_info(transfer.object_id);
+                }
+
+                // Here we implement the semantics of a transfer transaction, by which
+                // the owner changes. Down the line here we do general smart contract
+                // execution.
+
+                let mut output_object = input_object.clone();
+                let output_sequence_number = input_sequence_number.increment()?;
+                output_object.next_sequence_number = output_sequence_number;
+                output_object.owner = match transfer.recipient {
+                    Address::Primary(_) => PublicKeyBytes([0; 32]),
+                    Address::FastPay(addr) => addr,
+                };
+
+                // Note: State is mutated below and should be committed in an atomic way
+                // to memory or persistent storage. Currently this is done in memory
+                // through the calls to store being infallible.
+
+                let input_ref = input_object.to_object_reference();
+                let output_ref = output_object.to_object_reference();
+
+                // Insert into the certificates map
+                let transaction_digest = self.add_certificate(certificate);
+
+                // Index the certificate by the objects created
+                self.add_parent_cert(output_ref, transaction_digest);
+
+                // Add new object, init locks and remove old ones
+                self.insert_object(output_object);
+                self.archive_order_lock(&input_ref);
+                self.init_order_lock(output_ref);
+
+                let info = self.make_object_info(transfer.object_id)?;
+                Ok(info)
+            }
         }
-        if input_sequence_number > transfer.sequence_number {
-            // Transfer was already confirmed.
-            return self.make_object_info(transfer.object_id);
-        }
-
-        // Here we implement the semantics of a transfer transaction, by which
-        // the owner changes. Down the line here we do general smart contract
-        // execution.
-
-        let mut output_object = input_object.clone();
-        let output_sequence_number = input_sequence_number.increment()?;
-        output_object.next_sequence_number = output_sequence_number;
-        output_object.owner = match transfer.recipient {
-            Address::Primary(_) => PublicKeyBytes([0; 32]),
-            Address::FastPay(addr) => addr,
-        };
-
-        // Note: State is mutated below and should be committed in an atomic way
-        // to memory or persistent storage. Currently this is done in memory
-        // through the calls to store being infallible.
-
-        let input_ref = input_object.to_object_reference();
-        let output_ref = output_object.to_object_reference();
-
-        // Insert into the certificates map
-        let transaction_digest = self.add_certificate(certificate);
-
-        // Index the certificate by the objects created
-        self.add_parent_cert(output_ref, transaction_digest);
-
-        // Add new object, init locks and remove old ones
-        self.insert_object(output_object);
-        self.archive_order_lock(&input_ref);
-        self.init_order_lock(output_ref);
-
-        let info = self.make_object_info(transfer.object_id)?;
-        Ok(info)
     }
 
     fn handle_account_info_request(
@@ -259,7 +250,7 @@ impl ObjectState {
     }
 
     #[cfg(test)]
-    pub fn new_with_balance(contents: Vec<u8>, _received_log: Vec<CertifiedTransferOrder>) -> Self {
+    pub fn new_with_balance(contents: Vec<u8>, _received_log: Vec<CertifiedOrder>) -> Self {
         Self {
             id: [0; 20],
             owner: PublicKeyBytes([0; 32]),
@@ -358,12 +349,9 @@ impl AuthorityState {
     }
 
     /// Set the order lock to a specific transaction
-    pub fn set_order_lock(
-        &mut self,
-        signed_order: SignedTransferOrder,
-    ) -> Result<(), FastPayError> {
-        let object_id = signed_order.value.transfer.object_id;
-        let seq = signed_order.value.transfer.sequence_number;
+    pub fn set_order_lock(&mut self, signed_order: SignedOrder) -> Result<(), FastPayError> {
+        let object_id = *signed_order.order.object_id();
+        let seq = signed_order.order.sequence_number();
 
         // The object / version must exist, and therefore lock initialized.
         let lock = self
@@ -371,7 +359,7 @@ impl AuthorityState {
             .get_mut(&(object_id, seq))
             .ok_or(FastPayError::OrderLockDoesNotExist)?;
         if let Some(_existing_signed_order) = lock {
-            if _existing_signed_order.value.transfer == signed_order.value.transfer {
+            if _existing_signed_order.order == signed_order.order {
                 // For some reason we are re-inserting the same order. Not optimal but correct.
                 return Ok(());
             } else {
@@ -389,7 +377,7 @@ impl AuthorityState {
     pub fn get_order_lock(
         &self,
         object_ref: &ObjectRef,
-    ) -> Result<&Option<SignedTransferOrder>, FastPayError> {
+    ) -> Result<&Option<SignedOrder>, FastPayError> {
         // The object / version must exist, and therefore lock initialized.
         self.order_lock
             .get(object_ref)
@@ -406,12 +394,8 @@ impl AuthorityState {
     // Helper functions to manage certificates
 
     /// Add a certificate that has been processed
-    pub fn add_certificate(&mut self, certificate: CertifiedTransferOrder) -> TransactionDigest {
-        let transaction_digest: TransactionDigest = (
-            certificate.value.transfer.object_id,
-            certificate.value.transfer.sequence_number,
-        );
-
+    pub fn add_certificate(&mut self, certificate: CertifiedOrder) -> TransactionDigest {
+        let transaction_digest: TransactionDigest = certificate.order.digest();
         // re-inserting a certificate is not a safety issue since it must certify the same transaction.
         self.certificates.insert(transaction_digest, certificate);
         transaction_digest
@@ -421,7 +405,7 @@ impl AuthorityState {
     pub fn read_certificate(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<&CertifiedTransferOrder>, FastPayError> {
+    ) -> Result<Option<&CertifiedOrder>, FastPayError> {
         Ok(self.certificates.get(digest))
     }
 

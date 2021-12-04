@@ -92,7 +92,7 @@ fn make_client_state(
 fn make_benchmark_transfer_orders(
     accounts_config: &mut AccountsConfig,
     max_orders: usize,
-) -> (Vec<TransferOrder>, Vec<(FastPayAddress, Bytes)>) {
+) -> (Vec<Order>, Vec<(FastPayAddress, Bytes)>) {
     let mut orders = Vec::new();
     let mut serialized_orders = Vec::new();
     // TODO: deterministic sequence of orders to recover from interrupted benchmarks.
@@ -108,9 +108,9 @@ fn make_benchmark_transfer_orders(
         debug!("Preparing transfer order: {:?}", transfer);
         account.next_sequence_number = account.next_sequence_number.increment().unwrap();
         next_recipient = account.address;
-        let order = TransferOrder::new(transfer.clone(), &account.key);
+        let order = Order::new_transfer(transfer.clone(), &account.key);
         orders.push(order.clone());
-        let serialized_order = serialize_transfer_order(&order);
+        let serialized_order = serialize_order(&order);
         serialized_orders.push((account.address, serialized_order.into()));
         if serialized_orders.len() >= max_orders {
             break;
@@ -121,7 +121,7 @@ fn make_benchmark_transfer_orders(
 
 /// Try to make certificates from orders and server configs
 fn make_benchmark_certificates_from_orders_and_server_configs(
-    orders: Vec<TransferOrder>,
+    orders: Vec<Order>,
     server_config: Vec<&str>,
 ) -> Vec<(FastPayAddress, Bytes)> {
     let mut keys = Vec::new();
@@ -139,17 +139,17 @@ fn make_benchmark_certificates_from_orders_and_server_configs(
     );
     let mut serialized_certificates = Vec::new();
     for order in orders {
-        let mut certificate = CertifiedTransferOrder {
-            value: order.clone(),
+        let mut certificate = CertifiedOrder {
+            order: order.clone(),
             signatures: Vec::new(),
         };
         for i in 0..committee.quorum_threshold() {
             let (pubx, secx) = keys.get(i).unwrap();
-            let sig = Signature::new(&certificate.value.transfer, secx);
+            let sig = Signature::new(&certificate.order.kind, secx);
             certificate.signatures.push((*pubx, sig));
         }
         let serialized_certificate = serialize_cert(&certificate);
-        serialized_certificates.push((order.transfer.sender, serialized_certificate.into()));
+        serialized_certificates.push((*order.sender(), serialized_certificate.into()));
     }
     serialized_certificates
 }
@@ -157,7 +157,7 @@ fn make_benchmark_certificates_from_orders_and_server_configs(
 /// Try to aggregate votes into certificates.
 fn make_benchmark_certificates_from_votes(
     committee_config: &CommitteeConfig,
-    votes: Vec<SignedTransferOrder>,
+    votes: Vec<SignedOrder>,
 ) -> Vec<(FastPayAddress, Bytes)> {
     let committee = Committee::new(committee_config.voting_rights());
     let mut aggregators = HashMap::new();
@@ -165,7 +165,7 @@ fn make_benchmark_certificates_from_votes(
     let mut done_senders = HashSet::new();
     for vote in votes {
         // We aggregate votes indexed by sender.
-        let address = vote.value.transfer.sender;
+        let address = *vote.order.sender();
         if done_senders.contains(&address) {
             continue;
         }
@@ -174,7 +174,7 @@ fn make_benchmark_certificates_from_votes(
             encode_address(&address),
             encode_address(&vote.authority)
         );
-        let value = vote.value;
+        let value = vote.order;
         let aggregator = aggregators
             .entry(address)
             .or_insert_with(|| SignatureAggregator::try_new(value, &committee).unwrap());

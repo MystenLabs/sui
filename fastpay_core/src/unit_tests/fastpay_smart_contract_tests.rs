@@ -57,18 +57,10 @@ fn test_handle_redeem_transaction_ok() {
     assert!(contract_state
         .handle_redeem_transaction(redeem_transaction.clone())
         .is_ok());
-    let sender = redeem_transaction
-        .transfer_certificate
-        .value
-        .transfer
-        .sender;
+    let sender = redeem_transaction.certificate.order.sender();
 
-    let account = contract_state.accounts.get(&sender).unwrap();
-    let sequence_number = redeem_transaction
-        .transfer_certificate
-        .value
-        .transfer
-        .sequence_number;
+    let account = contract_state.accounts.get(sender).unwrap();
+    let sequence_number = redeem_transaction.certificate.order.sequence_number();
     assert_eq!(account.last_redeemed, Some(sequence_number));
 }
 
@@ -149,14 +141,12 @@ fn init_redeem_transaction(
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
-    let order = TransferOrder::new(primary_transfer, &sender_key);
-    let vote = SignedTransferOrder::new(order.clone(), name, &secret);
+    let order = Order::new_transfer(primary_transfer, &sender_key);
+    let vote = SignedOrder::new(order.clone(), name, &secret);
     let mut builder = SignatureAggregator::try_new(order, &committee).unwrap();
     let certificate = builder
         .append(vote.authority, vote.signature)
         .unwrap()
         .unwrap();
-    RedeemTransaction {
-        transfer_certificate: certificate,
-    }
+    RedeemTransaction { certificate }
 }

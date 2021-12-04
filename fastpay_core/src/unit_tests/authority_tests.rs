@@ -9,12 +9,12 @@ fn test_handle_transfer_order_bad_signature() {
     let recipient = Address::FastPay(dbg_addr(2));
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
-    let object_id = transfer_order.transfer.object_id;
+    let object_id = *transfer_order.object_id();
     let (_unknown_address, unknown_key) = get_key_pair();
     let mut bad_signature_transfer_order = transfer_order.clone();
-    bad_signature_transfer_order.signature = Signature::new(&transfer_order.transfer, &unknown_key);
+    bad_signature_transfer_order.signature = Signature::new(&transfer_order.kind, &unknown_key);
     assert!(authority_state
-        .handle_transfer_order(bad_signature_transfer_order)
+        .handle_order(bad_signature_transfer_order)
         .is_err());
 
     let object = authority_state.objects.get(&object_id).unwrap();
@@ -32,17 +32,17 @@ fn test_handle_transfer_order_bad_signature() {
 #[test]
 fn test_handle_transfer_order_unknown_sender() {
     let (sender, sender_key) = get_key_pair();
+    let (unknown_address, unknown_key) = get_key_pair();
     let object_id: ObjectID = address_to_object_id_hack(sender);
     let recipient = Address::FastPay(dbg_addr(2));
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
-    let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
-    let (unknown_address, unknown_key) = get_key_pair();
+    let transfer_order =
+        init_transfer_order(unknown_address, &sender_key, recipient, Amount::from(5));
 
-    let mut unknown_sender_transfer = transfer_order.transfer;
-    unknown_sender_transfer.sender = unknown_address;
-    let unknown_sender_transfer_order = TransferOrder::new(unknown_sender_transfer, &unknown_key);
+    let unknown_sender_transfer = transfer_order.kind;
+    let unknown_sender_transfer_order = Order::new(unknown_sender_transfer, &unknown_key);
     assert!(authority_state
-        .handle_transfer_order(unknown_sender_transfer_order)
+        .handle_order(unknown_sender_transfer_order)
         .is_err());
 
     let object = authority_state.objects.get(&object_id).unwrap();
@@ -91,7 +91,7 @@ fn test_handle_transfer_order_ok() {
     let recipient = Address::FastPay(dbg_addr(2));
     let mut authority_state = init_state_with_account(sender, Balance::from(5));
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
-    let object_id = transfer_order.transfer.object_id;
+    let object_id = *transfer_order.object_id();
 
     // Check the initial state of the locks
     assert!(authority_state
@@ -103,7 +103,7 @@ fn test_handle_transfer_order_ok() {
         .is_err());
 
     let account_info = authority_state
-        .handle_transfer_order(transfer_order.clone())
+        .handle_order(transfer_order.clone())
         .unwrap();
 
     let object = authority_state.objects.get(&object_id).unwrap();
@@ -128,9 +128,9 @@ fn test_handle_transfer_order_ok() {
             .unwrap()
             .as_ref()
             .unwrap()
-            .value
-            .transfer,
-        transfer_order.transfer
+            .order
+            .kind,
+        transfer_order.kind
     );
 }
 
@@ -142,11 +142,9 @@ fn test_handle_transfer_order_double_spend() {
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
 
     let signed_order = authority_state
-        .handle_transfer_order(transfer_order.clone())
+        .handle_order(transfer_order.clone())
         .unwrap();
-    let double_spend_signed_order = authority_state
-        .handle_transfer_order(transfer_order)
-        .unwrap();
+    let double_spend_signed_order = authority_state.handle_order(transfer_order).unwrap();
     assert_eq!(signed_order, double_spend_signed_order);
 }
 
@@ -418,7 +416,7 @@ fn init_transfer_order(
     secret: &KeyPair,
     recipient: Address,
     _amount: Amount,
-) -> TransferOrder {
+) -> Order {
     let transfer = Transfer {
         object_id: address_to_object_id_hack(sender),
         sender,
@@ -426,7 +424,7 @@ fn init_transfer_order(
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
-    TransferOrder::new(transfer, secret)
+    Order::new_transfer(transfer, secret)
 }
 
 #[cfg(test)]
@@ -436,9 +434,9 @@ fn init_certified_transfer_order(
     recipient: Address,
     amount: Amount,
     authority_state: &AuthorityState,
-) -> CertifiedTransferOrder {
+) -> CertifiedOrder {
     let transfer_order = init_transfer_order(sender, secret, recipient, amount);
-    let vote = SignedTransferOrder::new(
+    let vote = SignedOrder::new(
         transfer_order.clone(),
         authority_state.name,
         &authority_state.secret,

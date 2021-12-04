@@ -148,21 +148,21 @@ impl ClientServerBenchmark {
                 user_data: UserData::default(),
             };
             next_recipient = *pubx;
-            let order = TransferOrder::new(transfer.clone(), secx);
-            let shard = AuthorityState::get_shard(self.num_shards, &order.transfer.object_id);
+            let order = Order::new_transfer(transfer.clone(), secx);
+            let shard = AuthorityState::get_shard(self.num_shards, order.object_id());
 
             // Serialize order
-            let bufx = serialize_transfer_order(&order);
+            let bufx = serialize_order(&order);
             assert!(!bufx.is_empty());
 
             // Make certificate
-            let mut certificate = CertifiedTransferOrder {
-                value: order,
+            let mut certificate = CertifiedOrder {
+                order,
                 signatures: Vec::new(),
             };
             for i in 0..committee.quorum_threshold() {
                 let (pubx, secx) = keys.get(i).unwrap();
-                let sig = Signature::new(&certificate.value.transfer, secx);
+                let sig = Signature::new(&certificate.order.kind, secx);
                 certificate.signatures.push((*pubx, sig));
             }
 

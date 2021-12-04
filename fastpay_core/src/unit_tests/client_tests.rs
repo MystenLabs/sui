@@ -18,12 +18,9 @@ use tokio::runtime::Runtime;
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
 impl AuthorityClient for LocalAuthorityClient {
-    fn handle_transfer_order(
-        &mut self,
-        order: TransferOrder,
-    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
+    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_transfer_order(order) })
+        Box::pin(async move { state.lock().await.handle_order(order) })
     }
 
     fn handle_confirmation_order(
