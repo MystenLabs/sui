@@ -118,12 +118,11 @@ fn fund_account<I: IntoIterator<Item = i128>>(
     clients: &mut HashMap<AuthorityName, LocalAuthorityClient>,
     address: FastPayAddress,
     balances: I,
-    object_id: ObjectID,
 ) {
     let _balances = balances.into_iter().map(Balance::from);
     for (_, client) in clients.iter_mut() {
         let addr = address;
-        let object_id = object_id;
+        let object_id: ObjectID = address_to_object_id_hack(address);
         let mut object = Object::with_id_for_testing(object_id);
         object.transfer(addr);
 
@@ -164,7 +163,7 @@ fn init_local_client_state_with_bad_authority(
     client
 }
 
-/*#[test]
+#[test]
 fn test_get_strong_majority_balance() {
     let mut rt = Runtime::new().unwrap();
     rt.block_on(async {
@@ -177,7 +176,7 @@ fn test_get_strong_majority_balance() {
         let mut client = init_local_client_state(vec![0, 3, 4]);
         assert_eq!(client.get_strong_majority_balance().await, Balance::from(0));
     });
-}*/
+}
 
 #[test]
 fn test_initiating_valid_transfer() {
@@ -195,7 +194,7 @@ fn test_initiating_valid_transfer() {
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert_eq!(sender.pending_transfer, None);
     assert_eq!(
-        rt.block_on(sender.get_strong_majority_balance(object_id)),
+        rt.block_on(sender.get_strong_majority_balance()),
         Balance::from(0)
     );
     assert_eq!(
@@ -221,7 +220,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert_eq!(sender.pending_transfer, None);
     assert_eq!(
-        rt.block_on(sender.get_strong_majority_balance(object_id)),
+        rt.block_on(sender.get_strong_majority_balance()),
         Balance::from(0)
     );
     assert_eq!(
@@ -278,11 +277,11 @@ fn test_bidirectional_transfer() {
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
     assert_eq!(client1.pending_transfer, None);
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_balance(object_id)),
+        rt.block_on(client1.get_strong_majority_balance()),
         Balance::from(0)
     );
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_sequence_number(object_id)),
+        rt.block_on(client1.get_strong_majority_sequence_number(client1.address)),
         SequenceNumber::from(1)
     );
 
@@ -297,14 +296,14 @@ fn test_bidirectional_transfer() {
     );
     // Our sender already confirmed.
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_balance(object_id)),
+        rt.block_on(client2.get_strong_majority_balance()),
         Balance::from(0)
     );
     // Try to confirm again.
     rt.block_on(client2.receive_from_fastpay(certificate))
         .unwrap();
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_balance(object_id)),
+        rt.block_on(client2.get_strong_majority_balance()),
         Balance::from(0)
     );
 
@@ -355,7 +354,6 @@ fn test_receiving_unconfirmed_transfer() {
         .block_on(client1.transfer_to_fastpay_unsafe_unconfirmed(
             Amount::from(2),
             client2.address,
-            object_id,
             UserData::default(),
         ))
         .unwrap();
@@ -365,18 +363,18 @@ fn test_receiving_unconfirmed_transfer() {
     assert_eq!(client1.pending_transfer, None);
     // ..but not confirmed remotely, hence an unchanged balance and sequence number.
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_balance(object_id)),
+        rt.block_on(client1.get_strong_majority_balance()),
         Balance::from(0)
     );
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_sequence_number(object_id)),
+        rt.block_on(client1.get_strong_majority_sequence_number(client1.address)),
         SequenceNumber::from(0)
     );
     // Let the receiver confirm in last resort.
     rt.block_on(client2.receive_from_fastpay(certificate))
         .unwrap();
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_balance(object_id)),
+        rt.block_on(client2.get_strong_majority_balance()),
         Balance::from(0)
     );
 }
