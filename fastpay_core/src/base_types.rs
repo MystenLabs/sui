@@ -5,6 +5,7 @@ use std::convert::{TryFrom, TryInto};
 
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
+use move_core_types::account_address::AccountAddress;
 use rand::rngs::OsRng;
 #[cfg(test)]
 use rand::Rng;
@@ -45,19 +46,22 @@ pub type PrimaryAddress = PublicKeyBytes;
 pub type FastPayAddress = PublicKeyBytes;
 pub type AuthorityName = PublicKeyBytes;
 
-// Define digests and object IDs
-pub type ObjectID = [u8; 20];
+// Define digests and object IDs. For now, ID's are the same as Move account addresses
+// (16 bytes) for easy compatibility with Move. However, we'll probably want 20+ byte
+// addresses, either by changing Move to allow different address lengths or by decoupling
+// addresses and ID's
+pub type ObjectID = AccountAddress;
 pub type ObjectRef = (ObjectID, SequenceNumber);
 
 pub fn address_to_object_id_hack(address: FastPayAddress) -> ObjectID {
-    address.0[0..20]
+    address.0[0..ObjectID::LENGTH]
         .try_into()
-        .expect("An address is always long enough to extract 20 bytes")
+        .expect("An address is always long enough to extract 16 bytes")
 }
 
 #[cfg(test)]
 pub fn get_object_id() -> ObjectID {
-    rand::thread_rng().gen::<[u8; 20]>()
+    ObjectID::new(rand::thread_rng().gen::<[u8; ObjectID::LENGTH]>())
 }
 
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
@@ -101,7 +105,7 @@ pub fn dbg_addr(name: u8) -> FastPayAddress {
 
 #[cfg(test)]
 pub fn dbg_object_id(name: u8) -> ObjectID {
-    [name; 20]
+    ObjectID::from_bytes([name; ObjectID::LENGTH]).unwrap()
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]

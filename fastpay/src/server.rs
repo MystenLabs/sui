@@ -4,7 +4,7 @@
 #![deny(warnings)]
 
 use fastpay::{config::*, network, transport};
-use fastpay_core::{authority::*, base_types::*, committee::Committee};
+use fastpay_core::{authority::*, base_types::*, committee::Committee, object::Object};
 
 use futures::future::join_all;
 use log::*;
@@ -47,12 +47,8 @@ fn make_shard_server(
             continue;
         }
 
-        let client = ObjectState {
-            id,
-            contents: Vec::new(),
-            owner: *address,
-            next_sequence_number: SequenceNumber::from(0),
-        };
+        let mut client = Object::with_id_for_testing(id);
+        client.transfer(*address);
         state.insert_object(client);
     }
 

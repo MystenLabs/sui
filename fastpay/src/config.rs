@@ -164,6 +164,9 @@ impl AccountsConfig {
                     }
                 }
             }
+            OrderKind::Publish(_) | OrderKind::Call(_) => {
+                unimplemented!("update_for_received_transfer of Call or Publish")
+            }
         }
     }
 

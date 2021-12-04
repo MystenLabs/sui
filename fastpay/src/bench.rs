@@ -4,7 +4,9 @@
 #![deny(warnings)]
 
 use fastpay::{network, transport};
-use fastpay_core::{authority::*, base_types::*, committee::*, messages::*, serialize::*};
+use fastpay_core::{
+    authority::*, base_types::*, committee::*, messages::*, object::Object, serialize::*,
+};
 
 use bytes::Bytes;
 use futures::stream::StreamExt;
@@ -125,12 +127,8 @@ impl ClientServerBenchmark {
             let object_id: ObjectID = address_to_object_id_hack(keypair.0);
             let i = AuthorityState::get_shard(self.num_shards, &object_id) as usize;
             assert!(states[i].in_shard(&object_id));
-            let client = ObjectState {
-                id: object_id,
-                contents: Vec::new(),
-                owner: keypair.0,
-                next_sequence_number: SequenceNumber::from(0),
-            };
+            let mut client = Object::with_id_for_testing(object_id);
+            client.transfer(keypair.0);
             states[i].insert_object(client);
             account_keys.push(keypair);
         }
