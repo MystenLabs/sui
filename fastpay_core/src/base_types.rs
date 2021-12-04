@@ -6,6 +6,7 @@ use std::convert::{TryFrom, TryInto};
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
 use rand::rngs::OsRng;
+#[cfg(test)]
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
