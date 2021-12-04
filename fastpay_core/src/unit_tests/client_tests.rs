@@ -4,8 +4,9 @@
 
 use super::*;
 use crate::{
-    authority::{Authority, AuthorityState, ObjectState},
+    authority::{Authority, AuthorityState},
     base_types::Amount,
+    object::Object,
 };
 use futures::lock::Mutex;
 use std::{
@@ -121,12 +122,8 @@ fn fund_account<I: IntoIterator<Item = i128>>(
     for (_, client) in clients.iter_mut() {
         let addr = address;
         let object_id: ObjectID = address_to_object_id_hack(address);
-        let mut object = ObjectState::new_with_balance(
-            Vec::new(),
-            /* no receive log to justify the balances */ Vec::new(),
-        );
-        object.id = object_id;
-        object.owner = addr;
+        let mut object = Object::with_id_for_testing(object_id);
+        object.transfer(addr);
 
         client
             .0

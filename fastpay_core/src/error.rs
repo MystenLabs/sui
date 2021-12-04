@@ -23,6 +23,8 @@ macro_rules! fp_ensure {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Fail, Hash)]
 /// Custom error type for FastPay.
+
+#[allow(clippy::large_enum_variant)]
 pub enum FastPayError {
     // Signature verification
     #[fail(display = "Signature is not valid: {}", error)]

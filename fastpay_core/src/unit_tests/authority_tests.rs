@@ -19,12 +19,12 @@ fn test_handle_transfer_order_bad_signature() {
 
     let object = authority_state.objects.get(&object_id).unwrap();
     assert!(authority_state
-        .get_order_lock(&(object.id, object.next_sequence_number))
+        .get_order_lock(&object.to_object_reference())
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_order_lock(&(object.id, object.next_sequence_number))
+        .get_order_lock(&object.to_object_reference())
         .unwrap()
         .is_none());
 }
@@ -46,12 +46,12 @@ fn test_handle_transfer_order_unknown_sender() {
 
     let object = authority_state.objects.get(&object_id).unwrap();
     assert!(authority_state
-        .get_order_lock(&(object.id, object.next_sequence_number))
+        .get_order_lock(&object.to_object_reference())
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_order_lock(&(object.id, object.next_sequence_number))
+        .get_order_lock(&object.to_object_reference())
         .unwrap()
         .is_none());
 }
@@ -107,7 +107,7 @@ fn test_handle_transfer_order_ok() {
 
     let object = authority_state.objects.get(&object_id).unwrap();
     let pending_confirmation = authority_state
-        .get_order_lock(&(object.id, object.next_sequence_number))
+        .get_order_lock(&object.to_object_reference())
         .unwrap()
         .clone()
         .unwrap();
@@ -236,7 +236,7 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
     let object_id: ObjectID = get_object_id();
     let (recipient, _) = get_key_pair();
     let mut authority_state =
-        init_state_with_objects(vec![(sender, object_id), (recipient, [0u8; 20])]);
+        init_state_with_objects(vec![(sender, object_id), (recipient, ObjectID::random())]);
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
@@ -392,9 +392,8 @@ fn init_state_with_objects<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
         let account = state
             .objects
             .entry(object_id)
-            .or_insert_with(ObjectState::new);
-        account.id = object_id;
-        account.owner = address;
+            .or_insert_with(|| Object::with_id_for_testing(object_id));
+        account.transfer(address);
 
         state.init_order_lock((object_id, 0.into()));
     }

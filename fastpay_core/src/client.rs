@@ -217,6 +217,7 @@ where
 
 /// Used for communicate_transfers
 #[derive(Clone)]
+#[allow(clippy::large_enum_variant)]
 enum CommunicateAction {
     SendOrder(Order),
     SynchronizeNextSequenceNumber(SequenceNumber),
@@ -650,6 +651,9 @@ where
                         entry.insert(certificate);
                     }
                     Ok(())
+                }
+                OrderKind::Publish(_) | OrderKind::Call(_) => {
+                    unimplemented!("receiving (?) Move call or publish")
                 }
             }
         })
