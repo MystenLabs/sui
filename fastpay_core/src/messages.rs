@@ -9,6 +9,10 @@ use super::{base_types::*, committee::Committee, error::*};
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
 
+use move_core_types::{
+    identifier::Identifier,
+    language_storage::{ModuleId, TypeTag},
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -38,9 +42,33 @@ pub struct Transfer {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct MoveCall {
+    pub sender: FastPayAddress,
+    pub module: ModuleId, // TODO: Could also be ObjectId?
+    pub function: Identifier,
+    pub type_arguments: Vec<TypeTag>,
+    pub gas_payment: ObjectRef,
+    pub object_arguments: Vec<ObjectRef>,
+    pub pure_arguments: Vec<Vec<u8>>,
+    pub gas_budget: u64,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct MoveModulePublish {
+    pub sender: FastPayAddress,
+    pub gas_payment: ObjectRef,
+    // TODO: would like to use CompiledModule here, but this type doesn't implement Hash
+    pub module_bytes: Vec<u8>,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum OrderKind {
     /// Initiate an object transfer between addresses
     Transfer(Transfer),
+    /// Publish a new Move module
+    Publish(MoveModulePublish),
+    /// Call a function in a published Move module
+    Call(MoveCall),
     // .. more order types go here
 }
 
@@ -158,35 +186,53 @@ impl Order {
     }
 
     pub fn check_signature(&self) -> Result<(), FastPayError> {
-        match &self.kind {
-            OrderKind::Transfer(t) => self.signature.check(&self.kind, t.sender),
-        }
+        self.signature.check(&self.kind, *self.sender())
     }
 
     // TODO: support orders with multiple objects, each with their own sequence number (https://github.com/MystenLabs/fastnft/issues/8)
     pub fn sequence_number(&self) -> SequenceNumber {
+        use OrderKind::*;
         match &self.kind {
-            OrderKind::Transfer(t) => t.sequence_number,
+            Transfer(t) => t.sequence_number,
+            Publish(_) => SequenceNumber::new(), // modules are immutable, seq # is always 0
+            Call(c) => {
+                assert!(
+                    c.object_arguments.is_empty(),
+                    "Unimplemented: non-gas object arguments"
+                );
+                c.gas_payment.1
+            }
         }
     }
 
     // TODO: support orders with multiple objects (https://github.com/MystenLabs/fastnft/issues/8)
     pub fn object_id(&self) -> &ObjectID {
+        use OrderKind::*;
         match &self.kind {
-            OrderKind::Transfer(t) => &t.object_id,
+            Transfer(t) => &t.object_id,
+            Publish(_) => unimplemented!("Reading object ID from module"),
+            Call(c) => {
+                assert!(
+                    c.object_arguments.is_empty(),
+                    "Unimplemented: non-gas object arguments"
+                );
+                &c.gas_payment.0
+            }
         }
     }
 
+    // TODO: make sender a field of Order
     pub fn sender(&self) -> &FastPayAddress {
+        use OrderKind::*;
         match &self.kind {
-            OrderKind::Transfer(t) => &t.sender,
+            Transfer(t) => &t.sender,
+            Publish(m) => &m.sender,
+            Call(c) => &c.sender,
         }
     }
 
     pub fn digest(&self) -> TransactionDigest {
-        match &self.kind {
-            OrderKind::Transfer(t) => (t.object_id, t.sequence_number),
-        }
+        (*self.object_id(), self.sequence_number())
     }
 }
 
@@ -270,8 +316,11 @@ impl<'a> SignatureAggregator<'a> {
 
 impl CertifiedOrder {
     pub fn key(&self) -> (FastPayAddress, SequenceNumber) {
+        use OrderKind::*;
         match &self.order.kind {
-            OrderKind::Transfer(t) => t.key(),
+            Transfer(t) => t.key(),
+            Publish(_) => unimplemented!("Deriving key() for Publish"),
+            Call(_) => unimplemented!("Deriving key() for Call"),
         }
     }
 

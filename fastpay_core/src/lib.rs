@@ -18,4 +18,5 @@ pub mod committee;
 pub mod downloader;
 pub mod fastpay_smart_contract;
 pub mod messages;
+pub mod object;
 pub mod serialize;

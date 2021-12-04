@@ -19,6 +19,9 @@ ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 serde-name = "0.1.2"
 structopt = "0.3.21"
 
+move-binary-format = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
+move-core-types = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
+
 [dev-dependencies]
 similar-asserts = { version = "1.1.0" }
 serde-reflection = "0.3.2"
