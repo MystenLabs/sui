@@ -54,7 +54,8 @@ pub fn address_to_object_id_hack(address: FastPayAddress) -> ObjectID {
         .expect("An address is always long enough to extract 20 bytes")
 }
 
-pub fn random_object_id() -> ObjectID {
+#[cfg(test)]
+pub fn get_object_id() -> ObjectID {
     rand::thread_rng().gen::<[u8; 20]>()
 }
 
