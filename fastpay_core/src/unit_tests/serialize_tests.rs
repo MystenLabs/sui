@@ -63,9 +63,9 @@ fn test_order() {
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
-    let transfer_order = TransferOrder::new(transfer, &sender_key);
+    let transfer_order = Order::new_transfer(transfer, &sender_key);
 
-    let buf = serialize_transfer_order(&transfer_order);
+    let buf = serialize_order(&transfer_order);
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
     if let SerializedMessage::Order(o) = result.unwrap() {
@@ -82,9 +82,9 @@ fn test_order() {
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
-    let transfer_order2 = TransferOrder::new(transfer2, &sender_key);
+    let transfer_order2 = Order::new_transfer(transfer2, &sender_key);
 
-    let buf = serialize_transfer_order(&transfer_order2);
+    let buf = serialize_order(&transfer_order2);
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
     if let SerializedMessage::Order(o) = result.unwrap() {
@@ -104,10 +104,10 @@ fn test_vote() {
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
-    let order = TransferOrder::new(transfer, &sender_key);
+    let order = Order::new_transfer(transfer, &sender_key);
 
     let (authority_name, authority_key) = get_key_pair();
-    let vote = SignedTransferOrder::new(order, authority_name, &authority_key);
+    let vote = SignedOrder::new(order, authority_name, &authority_key);
 
     let buf = serialize_vote(&vote);
     let result = deserialize_message(buf.as_slice());
@@ -129,15 +129,15 @@ fn test_cert() {
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
-    let order = TransferOrder::new(transfer, &sender_key);
-    let mut cert = CertifiedTransferOrder {
-        value: order,
+    let order = Order::new_transfer(transfer, &sender_key);
+    let mut cert = CertifiedOrder {
+        order,
         signatures: Vec::new(),
     };
 
     for _ in 0..3 {
         let (authority_name, authority_key) = get_key_pair();
-        let sig = Signature::new(&cert.value.transfer, &authority_key);
+        let sig = Signature::new(&cert.order.kind, &authority_key);
 
         cert.signatures.push((authority_name, sig));
     }
@@ -162,19 +162,19 @@ fn test_info_response() {
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
-    let order = TransferOrder::new(transfer, &sender_key);
+    let order = Order::new_transfer(transfer, &sender_key);
 
     let (auth_name, auth_key) = get_key_pair();
-    let vote = SignedTransferOrder::new(order.clone(), auth_name, &auth_key);
+    let vote = SignedOrder::new(order.clone(), auth_name, &auth_key);
 
-    let mut cert = CertifiedTransferOrder {
-        value: order,
+    let mut cert = CertifiedOrder {
+        order,
         signatures: Vec::new(),
     };
 
     for _ in 0..3 {
         let (authority_name, authority_key) = get_key_pair();
-        let sig = Signature::new(&cert.value.transfer, &authority_key);
+        let sig = Signature::new(&cert.order.kind, &authority_key);
 
         cert.signatures.push((authority_name, sig));
     }
@@ -238,7 +238,7 @@ fn test_time_order() {
     let mut buf = Vec::new();
     let now = Instant::now();
     for _ in 0..100 {
-        let transfer_order = TransferOrder::new(transfer.clone(), &sender_key);
+        let transfer_order = Order::new_transfer(transfer.clone(), &sender_key);
         serialize_transfer_order_into(&mut buf, &transfer_order).unwrap();
     }
     println!("Write Order: {} microsec", now.elapsed().as_micros() / 100);
@@ -267,14 +267,14 @@ fn test_time_vote() {
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
-    let order = TransferOrder::new(transfer, &sender_key);
+    let order = Order::new_transfer(transfer, &sender_key);
 
     let (authority_name, authority_key) = get_key_pair();
 
     let mut buf = Vec::new();
     let now = Instant::now();
     for _ in 0..100 {
-        let vote = SignedTransferOrder::new(order.clone(), authority_name, &authority_key);
+        let vote = SignedOrder::new(order.clone(), authority_name, &authority_key);
         serialize_vote_into(&mut buf, &vote).unwrap();
     }
     println!("Write Vote: {} microsec", now.elapsed().as_micros() / 100);
@@ -284,7 +284,7 @@ fn test_time_vote() {
     for _ in 0..100 {
         if let SerializedMessage::Vote(vote) = deserialize_message(&mut buf2).unwrap() {
             vote.signature
-                .check(&vote.value.transfer, vote.authority)
+                .check(&vote.order.kind, vote.authority)
                 .unwrap();
         }
     }
@@ -306,15 +306,15 @@ fn test_time_cert() {
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
-    let order = TransferOrder::new(transfer, &sender_key);
-    let mut cert = CertifiedTransferOrder {
-        value: order,
+    let order = Order::new_transfer(transfer, &sender_key);
+    let mut cert = CertifiedOrder {
+        order,
         signatures: Vec::new(),
     };
 
     for _ in 0..7 {
         let (authority_name, authority_key) = get_key_pair();
-        let sig = Signature::new(&cert.value.transfer, &authority_key);
+        let sig = Signature::new(&cert.order.kind, &authority_key);
         cert.signatures.push((authority_name, sig));
     }
 
@@ -330,7 +330,7 @@ fn test_time_cert() {
     let mut buf2 = buf.as_slice();
     for _ in 0..count {
         if let SerializedMessage::Cert(cert) = deserialize_message(&mut buf2).unwrap() {
-            Signature::verify_batch(&cert.value.transfer, &cert.signatures).unwrap();
+            Signature::verify_batch(&cert.order.kind, &cert.signatures).unwrap();
         }
     }
     assert!(deserialize_message(buf2).is_err());
