@@ -40,13 +40,6 @@ class PathMaker:
         return f'.db-{i}{worker_id}'
 
     @staticmethod
-    def consensus_db_path(i, j=None):
-        assert isinstance(i, int) and i >= 0
-        assert (isinstance(j, int) and i >= 0) or j is None
-        worker_id = f'-{j}' if j is not None else ''
-        return f'.consensus_db-{i}{worker_id}'
-
-    @staticmethod
     def logs_path():
         return 'logs'
 
