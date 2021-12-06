@@ -638,8 +638,8 @@ where
                     self.communicate_transfers(
                         transfer.sender,
                         vec![certificate.clone()],
-                CommunicateAction::SynchronizeNextSequenceNumber(
-                    transfer.sequence_number.increment()?,
+                        CommunicateAction::SynchronizeNextSequenceNumber(
+                            transfer.sequence_number.increment()?,
                         ),
                     )
                     .await?;
