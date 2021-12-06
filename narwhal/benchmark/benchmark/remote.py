@@ -242,6 +242,7 @@ class Bench:
             cmd = CommandMaker.run_primary(
                 PathMaker.key_file(i),
                 PathMaker.committee_file(),
+                PathMaker.consensus_db_path(i),
                 PathMaker.db_path(i),
                 PathMaker.parameters_file(),
                 debug=debug
