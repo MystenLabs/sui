@@ -2,10 +2,10 @@
 .DS_Store
 .storage_*
 .*storage*
-.db_test*
 .venv/
 .idea/*
 rust/.idea/*
+.consensus_db-*
 .db-*
 
 target/

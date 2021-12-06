@@ -12,11 +12,13 @@ rand = { version = "0.7.3", optional = true}
 crypto = { path = "../crypto" }
 config = { path = "../config" }
 primary = { path = "../primary" }
+store = { path = "../store" }
 
 [dev-dependencies]
 bincode = "1.3"
 criterion = "0.3"
 pprof = { version = "0.6", features = ["criterion", "flamegraph"] }
+tempfile = "3.2"
 
 [features]
 default = ["rand"]

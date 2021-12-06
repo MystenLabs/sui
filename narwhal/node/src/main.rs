@@ -37,6 +37,9 @@ async fn main() -> Result<()> {
                 .args_from_usage("--committee=<FILE> 'The file containing committee information'")
                 .args_from_usage("--parameters=[FILE] 'The file containing the node parameters'")
                 .args_from_usage("--store=<PATH> 'The path where to create the data store'")
+                .args_from_usage(
+                    "--consensus_store=[PATH] 'The path where to create the consensus data store'",
+                )
                 .subcommand(SubCommand::with_name("primary").about("Run a single primary"))
                 .subcommand(
                     SubCommand::with_name("worker")
@@ -76,6 +79,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
     let committee_file = matches.value_of("committee").unwrap();
     let parameters_file = matches.value_of("parameters");
     let store_path = matches.value_of("store").unwrap();
+    let consensus_store_path = matches.value_of("consensus_store");
 
     // Read the committee and node's keypair from file.
     let keypair = KeyPair::import(key_file).context("Failed to load the node's keypair")?;
@@ -113,6 +117,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
             Consensus::spawn(
                 committee,
                 parameters.gc_depth,
+                consensus_store_path.unwrap().to_owned(),
                 /* rx_primary */ rx_new_certificates,
                 /* tx_primary */ tx_feedback,
                 tx_output,
