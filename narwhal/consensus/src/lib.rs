@@ -93,7 +93,7 @@ impl State {
             .map(|x| (x.origin(), (x.digest(), x)))
             .collect::<HashMap<_, _>>();
 
-        let db = Dag::open(db_path, None)?;
+        let db = Dag::open(db_path, None, None)?;
         db.batch()
             .insert_batch(
                 genesis
