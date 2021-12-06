@@ -192,7 +192,7 @@ impl Committee {
         self.authorities
             .get(to)
             .map(|x| x.primary.clone())
-            .ok_or_else(|| ConfigError::NotInCommittee(*to))
+            .ok_or(ConfigError::NotInCommittee(*to))
     }
 
     /// Returns the addresses of all primaries except `myself`.
@@ -210,12 +210,12 @@ impl Committee {
             .iter()
             .find(|(name, _)| name == &to)
             .map(|(_, authority)| authority)
-            .ok_or_else(|| ConfigError::NotInCommittee(*to))?
+            .ok_or(ConfigError::NotInCommittee(*to))?
             .workers
             .iter()
             .find(|(worker_id, _)| worker_id == &id)
             .map(|(_, worker)| worker.clone())
-            .ok_or_else(|| ConfigError::NotInCommittee(*to))
+            .ok_or(ConfigError::NotInCommittee(*to))
     }
 
     /// Returns the addresses of all our workers.
@@ -225,7 +225,7 @@ impl Committee {
             .iter()
             .find(|(name, _)| name == &myself)
             .map(|(_, authority)| authority)
-            .ok_or_else(|| ConfigError::NotInCommittee(*myself))?
+            .ok_or(ConfigError::NotInCommittee(*myself))?
             .workers
             .values()
             .cloned()
