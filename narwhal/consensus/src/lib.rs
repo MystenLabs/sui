@@ -8,6 +8,7 @@
 
 use config::{Committee, Stake};
 use crypto::{Digest, Hash as _, PublicKey};
+use eyre::Result;
 use log::{debug, info, log_enabled, warn};
 use primary::{Certificate, Round};
 use std::{
@@ -38,24 +39,24 @@ pub struct State {
 }
 
 impl State {
-    pub fn new<P: AsRef<Path>>(genesis: Vec<Certificate>, db_path: P) -> Self {
+    pub fn new<P: AsRef<Path>>(genesis: Vec<Certificate>, db_path: P) -> Result<Self> {
         let genesis = genesis
             .into_iter()
             .map(|x| (x.origin(), (x.digest(), x)))
             .collect::<HashMap<_, _>>();
 
-        let db = Dag::open(db_path, None).unwrap();
-        db.insert(&0, &genesis).unwrap();
+        let db = Dag::open(db_path, None)?;
+        db.insert(&0, &genesis)?;
 
-        Self {
+        Ok(Self {
             last_committed_round: 0,
             last_committed: genesis.iter().map(|(x, (_, y))| (*x, y.round())).collect(),
             dag: db,
-        }
+        })
     }
 
     /// Update and clean up internal state base on committed certificates.
-    fn update(&mut self, certificate: &Certificate, gc_depth: Round) {
+    fn update(&mut self, certificate: &Certificate, gc_depth: Round) -> Result<()> {
         self.last_committed
             .entry(certificate.origin())
             .and_modify(|r| *r = max(*r, certificate.round()))
@@ -79,17 +80,15 @@ impl State {
             let remove_empties = self
                 .dag
                 .batch()
-                .delete_batch(empties.into_iter().map(|(k, _)| k))
-                .unwrap();
-            let update_refreshed = remove_empties.insert_batch(refreshed.into_iter()).unwrap();
+                .delete_batch(empties.into_iter().map(|(k, _)| k))?;
+            let update_refreshed = remove_empties.insert_batch(refreshed.into_iter())?;
 
             // We purge all certificates past the gc depth
             let bound = max(self.last_committed_round, gc_depth + 1);
-            let gc = update_refreshed
-                .delete_range(&0, &(bound - gc_depth))
-                .unwrap();
-            let _ = gc.write().unwrap();
+            let gc = update_refreshed.delete_range(&0, &(bound - gc_depth))?;
+            let _ = gc.write()?;
         }
+        Ok(())
     }
 }
 
@@ -139,7 +138,8 @@ impl Consensus {
 
     async fn run(&mut self) {
         // The consensus state (everything else is immutable).
-        let mut state = State::new(self.genesis.clone(), &self.store_path);
+        let mut state =
+            State::new(self.genesis.clone(), &self.store_path).expect("Database creation failed!");
 
         // Listen to incoming certificates.
         while let Some(certificate) = self.rx_primary.recv().await {
@@ -148,7 +148,8 @@ impl Consensus {
                 self.gc_depth,
                 &mut state,
                 certificate,
-            );
+            )
+            .expect("Certificate processing failed! This may be a lost database connection!");
 
             // Output the sequence in the right order.
             for certificate in sequence {
@@ -178,14 +179,14 @@ impl Consensus {
         gc_depth: Round,
         state: &mut State,
         certificate: Certificate,
-    ) -> Vec<Certificate> {
+    ) -> Result<Vec<Certificate>> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
 
         // Add the new certificate to the local storage.
-        let mut map = state.dag.get_or_insert(&round, HashMap::new).unwrap();
+        let mut map = state.dag.get_or_insert(&round, HashMap::new)?;
         map.insert(certificate.origin(), (certificate.digest(), certificate));
-        state.dag.insert(&round, &map).unwrap();
+        state.dag.insert(&round, &map)?;
 
         // Try to order the dag to commit. Start from the highest round for which we have at least
         // 2f+1 certificates. This is because we need them to reveal the common coin.
@@ -193,18 +194,18 @@ impl Consensus {
 
         // We only elect leaders for even round numbers.
         if r % 2 != 0 || r < 4 {
-            return Vec::new();
+            return Ok(Vec::new());
         }
 
         // Get the certificate's digest of the leader of round r-2. If we already ordered this leader,
         // there is nothing to do.
         let leader_round = r - 2;
         if leader_round <= state.last_committed_round {
-            return Vec::new();
+            return Ok(Vec::new());
         }
         let (leader_digest, leader) = match Consensus::leader(committee, leader_round, &state.dag) {
             Some(x) => x,
-            None => return Vec::new(),
+            None => return Ok(Vec::new()),
         };
 
         // Check if the leader has f+1 support from its children (ie. round r-1).
@@ -222,20 +223,20 @@ impl Consensus {
         // a leader block means committing all its dependencies.
         if stake < committee.validity_threshold() {
             debug!("Leader {:?} does not have enough support", leader);
-            return Vec::new();
+            return Ok(Vec::new());
         }
 
         // Get an ordered list of past leaders that are linked to the current leader.
         debug!("Leader {:?} has enough support", leader);
         let mut sequence = Vec::new();
-        for leader in Consensus::order_leaders(committee, &leader, state)
+        for leader in Consensus::order_leaders(committee, &leader, state)?
             .iter()
             .rev()
         {
             // Starting from the oldest leader, flatten the sub-dag referenced by the leader.
             for x in Consensus::order_dag(gc_depth, leader, state) {
                 // Update and clean up internal state.
-                state.update(&x, gc_depth);
+                state.update(&x, gc_depth)?;
 
                 // Add the certificate to the sequence.
                 sequence.push(x);
@@ -249,7 +250,7 @@ impl Consensus {
             }
         }
 
-        sequence
+        Ok(sequence)
     }
 
     /// Returns the certificate (and the certificate's digest) originated by the leader of the
@@ -279,7 +280,7 @@ impl Consensus {
         committee: &Committee,
         leader: &Certificate,
         state: &State,
-    ) -> Vec<Certificate> {
+    ) -> Result<Vec<Certificate>> {
         let mut to_commit = vec![leader.clone()];
         let mut leader = leader.clone();
         for r in (state.last_committed_round + 2..leader.round())
@@ -293,21 +294,20 @@ impl Consensus {
             };
 
             // Check whether there is a path between the last two leaders.
-            if Consensus::linked(&leader, &prev_leader, &state.dag) {
+            if Consensus::linked(&leader, &prev_leader, &state.dag)? {
                 to_commit.push(prev_leader.clone());
                 leader = prev_leader;
             }
         }
-        to_commit
+        Ok(to_commit)
     }
 
     /// Checks if there is a path between two leaders.
-    fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
+    fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> Result<bool> {
         let mut parents = vec![leader.clone()];
         for r in (prev_leader.round()..leader.round()).rev() {
             parents = dag
-                .get(&(r))
-                .unwrap()
+                .get(&(r))?
                 .expect("We should have the whole history by now")
                 .values()
                 .filter(|(digest, _)| parents.iter().any(|x| x.header.parents.contains(digest)))
@@ -315,7 +315,7 @@ impl Consensus {
                 .cloned()
                 .collect();
         }
-        parents.contains(&prev_leader)
+        Ok(parents.contains(prev_leader))
     }
 
     /// Flatten the dag referenced by the input certificate. This is a classic depth-first search (pre-order):
@@ -394,9 +394,11 @@ mod tests {
         let (certificates, _next_parents) = make_optimal_certificates(1, rounds, &genesis, &keys);
         let committee = mock_committee(&keys);
 
-        let mut state = State::new(Certificate::genesis(&mock_committee(&keys[..])), temp_dir());
+        let mut state = State::new(Certificate::genesis(&mock_committee(&keys[..])), temp_dir())
+            .expect("Failed creating Consensus DB");
         for certificate in certificates {
-            Consensus::process_certificate(&committee, gc_depth, &mut state, certificate);
+            Consensus::process_certificate(&committee, gc_depth, &mut state, certificate)
+                .expect("Failed processing certificate");
         }
         // with "optimal" certificates (see `make_optimal_certificates`), and a round-robin between leaders,
         // we need at most 6 rounds lookbehind: we elect a leader at most at round r-2, and its round is
@@ -429,9 +431,11 @@ mod tests {
         let (certificates, _next_parents) = make_certificates(1, rounds, &genesis, &keys, 0.333);
         let committee = mock_committee(&keys);
 
-        let mut state = State::new(Certificate::genesis(&mock_committee(&keys[..])), temp_dir());
+        let mut state = State::new(Certificate::genesis(&mock_committee(&keys[..])), temp_dir())
+            .expect("Failed creating consensus DB");
         for certificate in certificates {
-            Consensus::process_certificate(&committee, gc_depth, &mut state, certificate);
+            Consensus::process_certificate(&committee, gc_depth, &mut state, certificate)
+                .expect("Failed processing certificate!");
         }
         // with "less optimal" certificates (see `make_certificates`), we should keep at most gc_depth rounds lookbehind
         let n = state.dag.keys().count();

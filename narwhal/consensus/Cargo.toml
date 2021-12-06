@@ -11,6 +11,8 @@ log = "0.4.14"
 rand = { version = "0.7.3", optional = true}
 crypto = { path = "../crypto" }
 config = { path = "../config" }
+eyre = "0.6.5"
+
 primary = { path = "../primary" }
 store = { path = "../store" }
 
