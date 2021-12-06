@@ -29,10 +29,7 @@ pub fn process_certificates(c: &mut Criterion) {
         let (certificates, _next_parents) = make_optimal_certificates(1, rounds, &genesis, &keys);
         let committee = mock_committee(&keys);
 
-        let temp_dir = tempfile::tempdir().expect("Failed to open temporary directory");
-        let mut state =
-            consensus::State::new(Certificate::genesis(&mock_committee(&keys[..])), temp_dir)
-                .unwrap();
+        let mut state = consensus::State::new(Certificate::genesis(&mock_committee(&keys[..])));
 
         let data_size: usize = certificates
             .iter()

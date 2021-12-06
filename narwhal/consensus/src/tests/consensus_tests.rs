@@ -117,15 +117,6 @@ pub fn make_certificates(
 async fn commit_one() {
     // Make certificates for rounds 1 to 4.
     let keys: Vec<_> = keys().into_iter().map(|(x, _)| x).collect();
-
-    // this should remain in scope for the test's duration
-    let temp_dir = tempfile::tempdir().expect("Failed to open temporary directory");
-    let consensus_db_path = temp_dir
-        .into_path()
-        .join(".consensus_db_test_commit_one")
-        .display()
-        .to_string();
-
     let genesis = Certificate::genesis(&mock_committee(&keys[..]))
         .iter()
         .map(|x| x.digest())
@@ -143,7 +134,6 @@ async fn commit_one() {
     Consensus::spawn(
         mock_committee(&keys[..]),
         /* gc_depth */ 50,
-        consensus_db_path,
         rx_waiter,
         tx_primary,
         tx_output,
@@ -175,14 +165,6 @@ async fn dead_node() {
     keys.sort(); // Ensure we don't remove one of the leaders.
     let _ = keys.pop().unwrap();
 
-    // this should remain in scope for the test's duration
-    let temp_dir = tempfile::tempdir().expect("Failed to open temporary directory");
-    let consensus_db_path = temp_dir
-        .into_path()
-        .join(".consensus_db_test_dead_node")
-        .display()
-        .to_string();
-
     let genesis = Certificate::genesis(&mock_committee(&keys[..]))
         .iter()
         .map(|x| x.digest())
@@ -197,7 +179,6 @@ async fn dead_node() {
     Consensus::spawn(
         mock_committee(&keys[..]),
         /* gc_depth */ 50,
-        consensus_db_path,
         rx_waiter,
         tx_primary,
         tx_output,
@@ -227,14 +208,6 @@ async fn dead_node() {
 async fn not_enough_support() {
     let mut keys: Vec<_> = keys().into_iter().map(|(x, _)| x).collect();
     keys.sort();
-
-    // this should remain in scope for the test's duration
-    let temp_dir = tempfile::tempdir().expect("Failed to open temporary directory");
-    let consensus_db_path = temp_dir
-        .into_path()
-        .join(".consensus_db_test_not_enough_support")
-        .display()
-        .to_string();
 
     let genesis = Certificate::genesis(&mock_committee(&keys[..]))
         .iter()
@@ -294,7 +267,6 @@ async fn not_enough_support() {
     Consensus::spawn(
         mock_committee(&keys[..]),
         /* gc_depth */ 50,
-        consensus_db_path,
         rx_waiter,
         tx_primary,
         tx_output,
@@ -331,14 +303,6 @@ async fn missing_leader() {
     let mut keys: Vec<_> = keys().into_iter().map(|(x, _)| x).collect();
     keys.sort();
 
-    // this should remain in scope for the test's duration
-    let temp_dir = tempfile::tempdir().expect("Failed to open temporary directory");
-    let consensus_db_path = temp_dir
-        .into_path()
-        .join(".consensus_db_test_missing_leader")
-        .display()
-        .to_string();
-
     let genesis = Certificate::genesis(&mock_committee(&keys[..]))
         .iter()
         .map(|x| x.digest())
@@ -366,7 +330,6 @@ async fn missing_leader() {
     Consensus::spawn(
         mock_committee(&keys[..]),
         /* gc_depth */ 50,
-        consensus_db_path,
         rx_waiter,
         tx_primary,
         tx_output,
