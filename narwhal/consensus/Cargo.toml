@@ -14,6 +14,8 @@ config = { path = "../config" }
 eyre = "0.6.5"
 serde = "1.0"
 arrayvec = { version = "0.7", features = ["serde"]}
+rocksdb = "0.17.0"
+
 
 primary = { path = "../primary" }
 store = { path = "../store" }

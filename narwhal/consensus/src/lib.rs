@@ -19,19 +19,22 @@ use std::{
     convert::TryInto,
     path::Path,
 };
-use store::{rocks::DBMap, Map};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 #[cfg(any(test, feature = "benchmark"))]
 #[path = "tests/consensus_tests.rs"]
 pub mod consensus_tests;
 
+mod persistent_dag;
+
+use persistent_dag::PersistentDag;
+
 /// A concatenated Round + Pubkey key for "flattened" database use.
 ///
 /// This offers efficient serialization of a (Round, Pubkey) tuple.
 ///
 #[repr(transparent)]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 struct KeyAtRound(ArrayVec<u8, 40>);
 
 impl KeyAtRound {
@@ -42,6 +45,7 @@ impl KeyAtRound {
         KeyAtRound(vec)
     }
 
+    #[allow(dead_code)]
     fn end_of_round(r: Round) -> Self {
         let mut vec: ArrayVec<u8, 40> = ArrayVec::new();
         vec.try_extend_from_slice(&r.to_be_bytes()[..]).unwrap();
@@ -71,9 +75,6 @@ impl From<&KeyAtRound> for (Round, PublicKey) {
     }
 }
 
-/// The representation of the DAG in memory.
-type Dag = DBMap<KeyAtRound, (Digest, Certificate)>;
-
 /// The state that needs to be persisted for crash-recovery.
 pub struct State {
     /// The last committed round.
@@ -83,7 +84,7 @@ pub struct State {
     last_committed: HashMap<PublicKey, Round>,
     /// Keeps the latest committed certificate (and its parents) for every authority. Anything older
     /// must be regularly cleaned up through the function `update`.
-    dag: Dag,
+    dag: persistent_dag::PersistentDag,
 }
 
 impl State {
@@ -93,15 +94,13 @@ impl State {
             .map(|x| (x.origin(), (x.digest(), x)))
             .collect::<HashMap<_, _>>();
 
-        let db = Dag::open(db_path, None, None)?;
-        db.batch()
-            .insert_batch(
-                genesis
-                    .clone()
-                    .into_iter()
-                    .map(|(key, val)| (KeyAtRound::from(&(0, key)), val)),
-            )?
-            .write()?;
+        let mut db = PersistentDag::open(db_path, None, None)?;
+        db.insert_batch(
+            genesis
+                .clone()
+                .into_iter()
+                .map(|(key, val)| (KeyAtRound::from(&(0, key)), val)),
+        )?;
 
         Ok(Self {
             last_committed_round: 0,
@@ -122,21 +121,24 @@ impl State {
 
         // We purge all certificates past the gc bound
         let bound = max(self.last_committed_round, gc_depth + 1);
-        self.dag
-            .batch()
-            .delete_range(
-                &KeyAtRound::start_of_round(0),
-                &KeyAtRound::start_of_round(bound - gc_depth),
-            )?
-            .write()?;
+        self.dag.delete_range(
+            &KeyAtRound::start_of_round(0),
+            &KeyAtRound::start_of_round(bound - gc_depth),
+        )?;
 
         // We purge all certificates for name prior to its last committed round
-        let to_purge = self.dag.keys().filter(|kar| {
-            let (round, name) = kar.into();
-            round < self.last_committed[&name]
-        });
+        #[allow(clippy::needless_collect)] // false positive
+        let to_purge: Vec<KeyAtRound> = self
+            .dag
+            .keys()
+            .filter(|kar| {
+                let (round, name): (Round, PublicKey) = (*kar).into();
+                round < self.last_committed[&name]
+            })
+            .cloned()
+            .collect();
 
-        self.dag.batch().delete_batch(to_purge)?.write()
+        self.dag.delete_batch(to_purge.into_iter())
     }
 }
 
@@ -258,17 +260,13 @@ impl Consensus {
         };
 
         // Check if the leader has f+1 support from its children (ie. round r-1).
-        let mut stake_iter = state.dag.iter();
-        stake_iter.skip_to(&KeyAtRound::start_of_round(r - 1))?;
-        let stake: Stake = stake_iter
-            .take_while(|(kar, _)| kar.round() == r - 1)
-            .flat_map(|(_, (_, x))| {
-                if x.header.parents.contains(&leader_digest) {
-                    Some(committee.stake(&x.origin()))
-                } else {
-                    None
-                }
+        let stake: Stake = state
+            .dag
+            .iter()
+            .filter(|(kar, (_, x))| {
+                kar.round() == r - 1 && x.header.parents.contains(&leader_digest)
             })
+            .map(|(_, (_, x))| committee.stake(&x.origin()))
             .sum();
 
         // If it is the case, we can commit the leader. But first, we need to recursively go back to
@@ -308,7 +306,11 @@ impl Consensus {
 
     /// Returns the certificate (and the certificate's digest) originated by the leader of the
     /// specified round (if any).
-    fn leader(committee: &Committee, round: Round, dag: &Dag) -> Option<(Digest, Certificate)> {
+    fn leader(
+        committee: &Committee,
+        round: Round,
+        dag: &PersistentDag,
+    ) -> Option<(Digest, Certificate)> {
         // TODO: We should elect the leader of round r-2 using the common coin revealed at round r.
         // At this stage, we are guaranteed to have 2f+1 certificates from round r (which is enough to
         // compute the coin). We currently just use round-robin.
@@ -323,8 +325,7 @@ impl Consensus {
         let leader = keys[coin as usize % committee.size()];
 
         // Return its certificate and the certificate's digest.
-        dag.get(&KeyAtRound::from(&(round, leader)))
-            .expect("Leader from known round has no certificate,  argument error")
+        dag.get(&KeyAtRound::from(&(round, leader))).cloned()
     }
 
     /// Order the past leaders that we didn't already commit.
@@ -346,7 +347,7 @@ impl Consensus {
             };
 
             // Check whether there is a path between the last two leaders.
-            if Consensus::linked(&leader, &prev_leader, &state.dag)? {
+            if Consensus::linked(&leader, &prev_leader, &state.dag) {
                 to_commit.push(prev_leader.clone());
                 leader = prev_leader;
             }
@@ -355,29 +356,27 @@ impl Consensus {
     }
 
     /// Checks if there is a path between two leaders.
-    fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> Result<bool> {
-        let mut parents = vec![leader.clone()];
-        let mut siblings: Vec<Certificate> = Vec::new();
-        let mut round = leader.round();
-
-        let mut state_iter = dag.iter();
-        state_iter.skip_to(&KeyAtRound::end_of_round(leader.round()))?;
-
-        for (kar, (digest, certificate)) in state_iter.rev() {
-            if kar.round() < prev_leader.round() {
-                break;
-            }
-            if kar.round() < round {
-                parents = siblings;
-                siblings = Vec::new();
-                round = kar.round();
-            }
-            if parents.iter().any(|x| x.header.parents.contains(&digest)) {
-                siblings.push(certificate)
+    fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &PersistentDag) -> bool {
+        let mut certs_by_round: HashMap<Round, Vec<(Digest, Certificate)>> = HashMap::new();
+        for (k, v) in dag.iter() {
+            let r = k.round();
+            if r >= prev_leader.round() && r <= leader.round() {
+                let certs = certs_by_round.entry(r).or_insert_with(Vec::new);
+                certs.push(v.clone());
             }
         }
 
-        Ok(parents.contains(prev_leader))
+        let mut parents = vec![leader];
+        for r in (prev_leader.round()..leader.round()).rev() {
+            parents = certs_by_round
+                .get(&(r))
+                .expect("We should have the whole history by now")
+                .iter()
+                .filter(|(digest, _)| parents.iter().any(|x| x.header.parents.contains(digest)))
+                .map(|(_, certificate)| certificate)
+                .collect();
+        }
+        parents.contains(&prev_leader)
     }
 
     /// Flatten the dag referenced by the input certificate. This is a classic depth-first search (pre-order):
@@ -387,17 +386,17 @@ impl Consensus {
         let mut ordered = Vec::new();
         let mut already_ordered = HashSet::new();
 
-        let mut buffer = vec![leader.clone()];
+        let mut buffer = vec![leader];
         while let Some(x) = buffer.pop() {
             debug!("Sequencing {:?}", x);
             ordered.push(x.clone());
 
-            let mut state_iter = state.dag.iter();
-            state_iter.skip_to(&KeyAtRound::start_of_round(x.round() - 1))?;
-
-            let parent_certs = state_iter
-                .take_while(|(kar, _)| kar.round() == x.round() - 1)
-                .filter(|(_, (d, _))| x.header.parents.contains(d))
+            let parent_certs = state
+                .dag
+                .iter()
+                .filter(|(kar, (d, _))| {
+                    kar.round() == x.round() - 1 && x.header.parents.contains(d)
+                })
                 .map(|(_, cert)| cert)
                 .collect::<Vec<_>>();
 
