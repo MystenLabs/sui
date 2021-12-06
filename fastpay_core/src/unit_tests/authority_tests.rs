@@ -36,8 +36,7 @@ fn test_handle_transfer_order_unknown_sender() {
     let object_id: ObjectID = get_object_id();
     let recipient = Address::FastPay(dbg_addr(2));
     let mut authority_state = init_state_with_object(sender, object_id);
-    let transfer_order =
-        init_transfer_order(unknown_address, &sender_key, recipient, object_id);
+    let transfer_order = init_transfer_order(unknown_address, &sender_key, recipient, object_id);
 
     let unknown_sender_transfer = transfer_order.kind;
     let unknown_sender_transfer_order = Order::new(unknown_sender_transfer, &unknown_key);
