@@ -14,6 +14,7 @@ smallvec = "1.6.1"
 # move-binary-format = { path = "../../../diem/language/move-binary-format" }
 # move-core-types = { path = "../../../diem/language/move-core/types" }
 # move-lang = { path = "../../../diem/language/move-lang" }
+# move-package = { path = "../../../diem/language/move-package" }
 # move-stdlib = { path = "../../../diem/language/move-stdlib" }
 # move-vm-runtime = { path = "../../../diem/language/move-vm/runtime" }
 # move-vm-types = { path = "../../../diem/language/move-vm/types" }
@@ -21,6 +22,7 @@ smallvec = "1.6.1"
 move-binary-format = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
 move-core-types = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
 move-lang = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
+move-package = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
 move-stdlib = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
 move-vm-runtime = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
 move-vm-types = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
