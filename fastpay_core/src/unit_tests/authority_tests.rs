@@ -7,9 +7,9 @@ use super::*;
 fn test_handle_transfer_order_bad_signature() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
-    let mut authority_state = init_state_with_account(sender, Balance::from(5));
-    let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
-    let object_id = *transfer_order.object_id();
+    let object_id = get_object_id();
+    let mut authority_state = init_state_with_object(sender, object_id);
+    let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
     let (_unknown_address, unknown_key) = get_key_pair();
     let mut bad_signature_transfer_order = transfer_order.clone();
     bad_signature_transfer_order.signature = Signature::new(&transfer_order.kind, &unknown_key);
@@ -33,11 +33,10 @@ fn test_handle_transfer_order_bad_signature() {
 fn test_handle_transfer_order_unknown_sender() {
     let (sender, sender_key) = get_key_pair();
     let (unknown_address, unknown_key) = get_key_pair();
-    let object_id: ObjectID = address_to_object_id_hack(sender);
+    let object_id: ObjectID = get_object_id();
     let recipient = Address::FastPay(dbg_addr(2));
-    let mut authority_state = init_state_with_account(sender, Balance::from(5));
-    let transfer_order =
-        init_transfer_order(unknown_address, &sender_key, recipient, Amount::from(5));
+    let mut authority_state = init_state_with_object(sender, object_id);
+    let transfer_order = init_transfer_order(unknown_address, &sender_key, recipient, object_id);
 
     let unknown_sender_transfer = transfer_order.kind;
     let unknown_sender_transfer_order = Order::new(unknown_sender_transfer, &unknown_key);
@@ -63,10 +62,10 @@ fn test_handle_transfer_order_unknown_sender() {
 #[test]
 fn test_handle_transfer_order_bad_sequence_number() {
     let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = address_to_object_id_hack(sender);
+    let object_id: ObjectID = random_object_id();
     let recipient = Address::FastPay(dbg_addr(2));
-    let authority_state = init_state_with_account(sender, Balance::from(5));
-    let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
+    let authority_state = init_state_with_object(sender, object_id);
+    let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
     let mut sequence_number_state = authority_state;
     let sequence_number_state_sender_account =
@@ -89,9 +88,9 @@ fn test_handle_transfer_order_bad_sequence_number() {
 fn test_handle_transfer_order_ok() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
-    let mut authority_state = init_state_with_account(sender, Balance::from(5));
-    let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
-    let object_id = *transfer_order.object_id();
+    let object_id = get_object_id();
+    let mut authority_state = init_state_with_object(sender, object_id);
+    let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
     // Check the initial state of the locks
     assert!(authority_state
@@ -138,8 +137,9 @@ fn test_handle_transfer_order_ok() {
 fn test_handle_transfer_order_double_spend() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
-    let mut authority_state = init_state_with_account(sender, Balance::from(5));
-    let transfer_order = init_transfer_order(sender, &sender_key, recipient, Amount::from(5));
+    let object_id = get_object_id();
+    let mut authority_state = init_state_with_object(sender, object_id);
+    let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
     let signed_order = authority_state
         .handle_order(transfer_order.clone())
@@ -157,7 +157,7 @@ fn test_handle_confirmation_order_unknown_sender() {
         sender,
         &sender_key,
         Address::FastPay(recipient),
-        Amount::from(5),
+        get_object_id(),
         &authority_state,
     );
 
@@ -169,9 +169,9 @@ fn test_handle_confirmation_order_unknown_sender() {
 #[test]
 fn test_handle_confirmation_order_bad_sequence_number() {
     let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = address_to_object_id_hack(sender);
+    let object_id: ObjectID = get_object_id();
     let recipient = dbg_addr(2);
-    let mut authority_state = init_state_with_account(sender, Balance::from(5));
+    let mut authority_state = init_state_with_object(sender, object_id);
     let sender_account = authority_state.objects.get_mut(&object_id).unwrap();
     sender_account.next_sequence_number = sender_account.next_sequence_number.increment().unwrap();
 
@@ -185,7 +185,7 @@ fn test_handle_confirmation_order_bad_sequence_number() {
         sender,
         &sender_key,
         Address::FastPay(recipient),
-        Amount::from(5),
+        object_id,
         &authority_state,
     );
     // Replays are ignored.
@@ -208,15 +208,15 @@ fn test_handle_confirmation_order_bad_sequence_number() {
 #[test]
 fn test_handle_confirmation_order_exceed_balance() {
     let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = address_to_object_id_hack(sender);
+    let object_id: ObjectID = get_object_id();
     let recipient = dbg_addr(2);
-    let mut authority_state = init_state_with_account(sender, Balance::from(5));
+    let mut authority_state = init_state_with_object(sender, object_id);
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
         Address::FastPay(recipient),
-        Amount::from(1000),
+        object_id,
         &authority_state,
     );
     assert!(authority_state
@@ -233,18 +233,16 @@ fn test_handle_confirmation_order_exceed_balance() {
 #[test]
 fn test_handle_confirmation_order_receiver_balance_overflow() {
     let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = address_to_object_id_hack(sender);
+    let object_id: ObjectID = get_object_id();
     let (recipient, _) = get_key_pair();
-    let mut authority_state = init_state_with_accounts(vec![
-        (sender, Balance::from(1)),
-        (recipient, Balance::max()),
-    ]);
+    let mut authority_state =
+        init_state_with_objects(vec![(sender, object_id), (recipient, [0u8; 20])]);
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
         Address::FastPay(recipient),
-        Amount::from(1),
+        object_id,
         &authority_state,
     );
     assert!(authority_state
@@ -265,14 +263,14 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
 #[test]
 fn test_handle_confirmation_order_receiver_equal_sender() {
     let (address, key) = get_key_pair();
-    let object_id: ObjectID = address_to_object_id_hack(address);
-    let mut authority_state = init_state_with_account(address, Balance::from(1));
+    let object_id: ObjectID = get_object_id();
+    let mut authority_state = init_state_with_object(address, object_id);
 
     let certified_transfer_order = init_certified_transfer_order(
         address,
         &key,
         Address::FastPay(address),
-        Amount::from(10),
+        object_id,
         &authority_state,
     );
     assert!(authority_state
@@ -290,14 +288,14 @@ fn test_handle_confirmation_order_receiver_equal_sender() {
 #[test]
 fn test_handle_confirmation_order_ok() {
     let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = address_to_object_id_hack(sender);
     let recipient = dbg_addr(2);
-    let mut authority_state = init_state_with_account(sender, Balance::from(5));
+    let object_id = get_object_id();
+    let mut authority_state = init_state_with_object(sender, object_id);
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
         Address::FastPay(recipient),
-        Amount::from(5),
+        object_id,
         &authority_state,
     );
 
@@ -337,7 +335,7 @@ fn test_account_state_ok() {
     let sender = dbg_addr(1);
     let object_id = dbg_object_id(1);
 
-    let authority_state = init_state_with_account(sender, Balance::from(5));
+    let authority_state = init_state_with_object(sender, object_id);
     assert_eq!(
         authority_state.objects.get(&object_id).unwrap(),
         authority_state.object_state(&object_id).unwrap()
@@ -348,7 +346,7 @@ fn test_account_state_ok() {
 fn test_account_state_unknown_account() {
     let sender = dbg_addr(1);
     let unknown_address = dbg_object_id(99);
-    let authority_state = init_state_with_account(sender, Balance::from(5));
+    let authority_state = init_state_with_object(sender, get_object_id());
     assert!(authority_state.object_state(&unknown_address).is_err());
 }
 
@@ -358,9 +356,8 @@ fn test_get_shards() {
     let mut found = vec![false; num_shards as usize];
     let mut left = num_shards;
     loop {
-        let (address, _) = get_key_pair();
-        let shard =
-            AuthorityState::get_shard(num_shards, &address_to_object_id_hack(address)) as usize;
+        let object_id = get_object_id();
+        let shard = AuthorityState::get_shard(num_shards, &object_id) as usize;
         println!("found {}", shard);
         if !found[shard] {
             found[shard] = true;
@@ -387,12 +384,11 @@ fn init_state() -> AuthorityState {
 }
 
 #[cfg(test)]
-fn init_state_with_accounts<I: IntoIterator<Item = (FastPayAddress, Balance)>>(
-    balances: I,
+fn init_state_with_objects<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
+    objects: I,
 ) -> AuthorityState {
     let mut state = init_state();
-    for (address, _balance) in balances {
-        let object_id: ObjectID = address_to_object_id_hack(address);
+    for (address, object_id) in objects {
         let account = state
             .objects
             .entry(object_id)
@@ -406,8 +402,8 @@ fn init_state_with_accounts<I: IntoIterator<Item = (FastPayAddress, Balance)>>(
 }
 
 #[cfg(test)]
-fn init_state_with_account(address: FastPayAddress, balance: Balance) -> AuthorityState {
-    init_state_with_accounts(std::iter::once((address, balance)))
+fn init_state_with_object(address: FastPayAddress, object: ObjectID) -> AuthorityState {
+    init_state_with_objects(std::iter::once((address, object)))
 }
 
 #[cfg(test)]
@@ -415,10 +411,10 @@ fn init_transfer_order(
     sender: FastPayAddress,
     secret: &KeyPair,
     recipient: Address,
-    _amount: Amount,
+    object_id: ObjectID,
 ) -> Order {
     let transfer = Transfer {
-        object_id: address_to_object_id_hack(sender),
+        object_id,
         sender,
         recipient,
         sequence_number: SequenceNumber::new(),
@@ -432,10 +428,10 @@ fn init_certified_transfer_order(
     sender: FastPayAddress,
     secret: &KeyPair,
     recipient: Address,
-    amount: Amount,
+    object_id: ObjectID,
     authority_state: &AuthorityState,
 ) -> CertifiedOrder {
-    let transfer_order = init_transfer_order(sender, secret, recipient, amount);
+    let transfer_order = init_transfer_order(sender, secret, recipient, object_id);
     let vote = SignedOrder::new(
         transfer_order.clone(),
         authority_state.name,
