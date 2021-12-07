@@ -6,6 +6,7 @@ use crate::common::{
 };
 use network::SimpleSender;
 use primary::WorkerPrimaryMessage;
+use store::rocks;
 
 #[tokio::test]
 async fn handle_clients_transactions() {
@@ -18,7 +19,10 @@ async fn handle_clients_transactions() {
     };
 
     // Create a new test store.
-    let store = Store::new(temp_dir()).unwrap();
+    let db =
+        rocks::DBMap::<Digest, SerializedBatchMessage>::open(temp_dir(), None, Some("batches"))
+            .unwrap();
+    let store = Store::new(db);
 
     // Spawn a `Worker` instance.
     Worker::spawn(name, id, committee.clone(), parameters, store);

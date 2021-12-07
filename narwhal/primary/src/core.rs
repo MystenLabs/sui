@@ -32,8 +32,10 @@ pub struct Core {
     name: PublicKey,
     /// The committee information.
     committee: Committee,
-    /// The persistent storage.
-    store: Store,
+    /// The persistent storage keyed to headers.
+    header_store: Store<Digest, Header>,
+    /// The persistent storage keyed to certificates.
+    certificate_store: Store<Digest, Certificate>,
     /// Handles synchronization with other nodes and our workers.
     synchronizer: Synchronizer,
     /// Service to sign headers.
@@ -79,7 +81,8 @@ impl Core {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        store: Store,
+        header_store: Store<Digest, Header>,
+        certificate_store: Store<Digest, Certificate>,
         synchronizer: Synchronizer,
         signature_service: SignatureService,
         consensus_round: Arc<AtomicU64>,
@@ -95,7 +98,8 @@ impl Core {
             Self {
                 name,
                 committee,
-                store,
+                header_store,
+                certificate_store,
                 synchronizer,
                 signature_service,
                 consensus_round,
@@ -184,8 +188,9 @@ impl Core {
         }
 
         // Store the header.
-        let bytes = bincode::serialize(header).expect("Failed to serialize header");
-        self.store.write(header.id.to_vec(), bytes).await;
+        self.header_store
+            .write(header.id.clone(), header.clone())
+            .await;
 
         // Check if we can vote for this header.
         if self
@@ -281,8 +286,9 @@ impl Core {
         }
 
         // Store the certificate.
-        let bytes = bincode::serialize(&certificate).expect("Failed to serialize certificate");
-        self.store.write(certificate.digest().to_vec(), bytes).await;
+        self.certificate_store
+            .write(certificate.digest(), certificate.clone())
+            .await;
 
         // Check if we have enough certificates to enter a new dag round and propose a header.
         if let Some(parents) = self

@@ -4,6 +4,7 @@ use crate::{
     error::{DagError, DagResult},
     messages::Certificate,
 };
+use crypto::Digest;
 use futures::{
     future::try_join_all,
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
@@ -16,7 +17,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 /// for further processing.
 pub struct CertificateWaiter {
     /// The persistent storage.
-    store: Store,
+    store: Store<Digest, Certificate>,
     /// Receives sync commands from the `Synchronizer`.
     rx_synchronizer: Receiver<Certificate>,
     /// Loops back to the core certificates for which we got all parents.
@@ -25,7 +26,7 @@ pub struct CertificateWaiter {
 
 impl CertificateWaiter {
     pub fn spawn(
-        store: Store,
+        store: Store<Digest, Certificate>,
         rx_synchronizer: Receiver<Certificate>,
         tx_core: Sender<Certificate>,
     ) {
@@ -43,12 +44,13 @@ impl CertificateWaiter {
     /// Helper function. It waits for particular data to become available in the storage
     /// and then delivers the specified header.
     async fn waiter(
-        mut missing: Vec<(Vec<u8>, Store)>,
+        // TODO: this signature is just here to avoid thinking about lifetimes, fix it
+        mut missing: Vec<(Digest, Store<Digest, Certificate>)>,
         deliver: Certificate,
     ) -> DagResult<Certificate> {
         let waiting: Vec<_> = missing
             .iter_mut()
-            .map(|(x, y)| y.notify_read(x.to_vec()))
+            .map(|(x, y)| y.notify_read(x.clone()))
             .collect();
 
         try_join_all(waiting)
@@ -70,7 +72,7 @@ impl CertificateWaiter {
                         .parents
                         .iter()
                         .cloned()
-                        .map(|x| (x.to_vec(), self.store.clone()))
+                        .map(|x| (x, self.store.clone()))
                         .collect();
                     let fut = Self::waiter(wait_for, certificate);
                     waiting.push(fut);

@@ -8,6 +8,8 @@ use network::SimpleSender;
 use store::Store;
 use tokio::sync::mpsc::Receiver;
 
+use crate::processor::SerializedBatchMessage;
+
 #[cfg(test)]
 #[path = "tests/helper_tests.rs"]
 pub mod helper_tests;
@@ -19,7 +21,7 @@ pub struct Helper {
     /// The committee information.
     committee: Committee,
     /// The persistent storage.
-    store: Store,
+    store: Store<Digest, SerializedBatchMessage>,
     /// Input channel to receive batch requests.
     rx_request: Receiver<(Vec<Digest>, PublicKey)>,
     /// A network sender to send the batches to the other workers.
@@ -30,7 +32,7 @@ impl Helper {
     pub fn spawn(
         id: WorkerId,
         committee: Committee,
-        store: Store,
+        store: Store<Digest, SerializedBatchMessage>,
         rx_request: Receiver<(Vec<Digest>, PublicKey)>,
     ) {
         tokio::spawn(async move {
@@ -61,7 +63,7 @@ impl Helper {
 
             // Reply to the request (the best we can).
             for digest in digests {
-                match self.store.read(digest.to_vec()).await {
+                match self.store.read(digest).await {
                     Ok(Some(data)) => self.network.send(address, Bytes::from(data)).await,
                     Ok(None) => (),
                     Err(e) => error!("{}", e),

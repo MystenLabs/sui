@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::common::{batch_digest, committee_with_base_port, keys, listener, temp_dir};
+use store::rocks;
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]
@@ -14,7 +15,10 @@ async fn synchronize() {
     let committee = committee_with_base_port(9_000);
 
     // Create a new test store.
-    let store = Store::new(temp_dir()).unwrap();
+    let db =
+        rocks::DBMap::<Digest, SerializedBatchMessage>::open(temp_dir(), None, Some("batches"))
+            .unwrap();
+    let store = Store::new(db);
 
     // Spawn a `Synchronizer` instance.
     Synchronizer::spawn(

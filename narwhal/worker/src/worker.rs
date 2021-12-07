@@ -55,7 +55,7 @@ pub struct Worker {
     /// The configuration parameters.
     parameters: Parameters,
     /// The persistent storage.
-    store: Store,
+    store: Store<Digest, SerializedBatchMessage>,
 }
 
 impl Worker {
@@ -66,7 +66,7 @@ impl Worker {
         id: WorkerId,
         committee: Committee,
         parameters: Parameters,
-        store: Store,
+        store: Store<Digest, SerializedBatchMessage>,
     ) {
         // Define a worker instance.
         let worker = Self {

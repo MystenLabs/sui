@@ -5,6 +5,7 @@ use crate::{
     common::{batch, temp_dir},
     worker::WorkerMessage,
 };
+use store::rocks;
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]
@@ -13,7 +14,10 @@ async fn hash_and_store() {
     let (tx_digest, mut rx_digest) = channel(1);
 
     // Create a new test store.
-    let mut store = Store::new(temp_dir()).unwrap();
+    let db =
+        rocks::DBMap::<Digest, SerializedBatchMessage>::open(temp_dir(), None, Some("batches"))
+            .unwrap();
+    let store = Store::new(db);
 
     // Spawn a new `Processor` instance.
     let id = 0;
@@ -41,7 +45,7 @@ async fn hash_and_store() {
     assert_eq!(output, expected);
 
     // Ensure the `Processor` correctly stored the batch.
-    let stored_batch = store.read(digest.to_vec()).await.unwrap();
+    let stored_batch = store.read(digest).await.unwrap();
     assert!(stored_batch.is_some(), "The batch is not in the store");
     assert_eq!(stored_batch.unwrap(), serialized);
 }

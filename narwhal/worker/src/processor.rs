@@ -24,7 +24,7 @@ impl Processor {
         // Our worker's id.
         id: WorkerId,
         // The persistent storage.
-        mut store: Store,
+        store: Store<Digest, SerializedBatchMessage>,
         // Input channel to receive batches.
         mut rx_batch: Receiver<SerializedBatchMessage>,
         // Output channel to send out batches' digests.
@@ -38,7 +38,7 @@ impl Processor {
                 let digest = Digest(Sha512::digest(&batch).as_slice()[..32].try_into().unwrap());
 
                 // Store the batch.
-                store.write(digest.to_vec(), batch).await;
+                store.write(digest.clone(), batch).await;
 
                 // Deliver the batch's digest.
                 let message = match own_digest {

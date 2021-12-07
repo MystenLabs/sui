@@ -4,6 +4,7 @@ use super::*;
 use crate::common::{
     batch_digest, committee_with_base_port, keys, listener, serialized_batch, temp_dir,
 };
+use store::rocks;
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]
@@ -14,12 +15,13 @@ async fn batch_reply() {
     let committee = committee_with_base_port(8_000);
 
     // Create a new test store.
-    let mut store = Store::new(temp_dir()).unwrap();
+    let db =
+        rocks::DBMap::<Digest, SerializedBatchMessage>::open(temp_dir(), None, Some("batches"))
+            .unwrap();
+    let store = Store::new(db);
 
     // Add a batch to the store.
-    store
-        .write(batch_digest().to_vec(), serialized_batch())
-        .await;
+    store.write(batch_digest(), serialized_batch()).await;
 
     // Spawn an `Helper` instance.
     Helper::spawn(id, committee.clone(), store, rx_request);

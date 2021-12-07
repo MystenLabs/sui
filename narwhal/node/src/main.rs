@@ -11,9 +11,10 @@ use anyhow::{Context, Result};
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Export as _, Import as _, KeyPair, Parameters, WorkerId};
 use consensus::Consensus;
+use crypto::Digest;
 use env_logger::Env;
-use primary::{Certificate, Primary};
-use store::Store;
+use primary::{Certificate, Header, Primary};
+use store::{rocks, Store};
 use tokio::sync::mpsc::{channel, Receiver};
 use worker::Worker;
 
@@ -92,7 +93,28 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
     };
 
     // Make the data store.
-    let store = Store::new(store_path).context("Failed to create a store")?;
+    let rocksdb = rocks::open_cf(
+        store_path,
+        None,
+        &["headers", "certificates", "payload", "batches"],
+    )
+    .expect("Failed creating database");
+    let header_store = Store::new(
+        rocks::DBMap::<Digest, Header>::reopen(&rocksdb, Some("headers"))
+            .expect("Failed keying headers database"),
+    );
+    let certificate_store = Store::new(
+        rocks::DBMap::<Digest, Certificate>::reopen(&rocksdb, Some("certificates"))
+            .expect("Failed keying certificates database"),
+    );
+    let payload_store = Store::new(
+        rocks::DBMap::<(Digest, u32), u8>::reopen(&rocksdb, Some("payload"))
+            .expect("Failed keying payload database"),
+    );
+    let batch_store = Store::new(
+        rocks::DBMap::<Digest, Vec<u8>>::reopen(&rocksdb, Some("batches"))
+            .expect("Failed keying batch message database"),
+    );
 
     // Channels the sequence of certificates.
     let (tx_output, rx_output) = channel(CHANNEL_CAPACITY);
@@ -107,7 +129,9 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
                 keypair,
                 committee.clone(),
                 parameters.clone(),
-                store,
+                header_store,
+                certificate_store,
+                payload_store,
                 /* tx_consensus */ tx_new_certificates,
                 /* rx_consensus */ rx_feedback,
             );
@@ -127,7 +151,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
                 .unwrap()
                 .parse::<WorkerId>()
                 .context("The worker id must be a positive integer")?;
-            Worker::spawn(keypair.name, id, committee, parameters, store);
+            Worker::spawn(keypair.name, id, committee, parameters, batch_store);
         }
         _ => unreachable!(),
     }

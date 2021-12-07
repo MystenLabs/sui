@@ -1,6 +1,9 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
-use crate::worker::{Round, WorkerMessage};
+use crate::{
+    processor::SerializedBatchMessage,
+    worker::{Round, WorkerMessage},
+};
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{Digest, PublicKey};
@@ -34,7 +37,7 @@ pub struct Synchronizer {
     /// The committee information.
     committee: Committee,
     // The persistent storage.
-    store: Store,
+    store: Store<Digest, SerializedBatchMessage>,
     /// The depth of the garbage collection.
     gc_depth: Round,
     /// The delay to wait before re-trying to send sync requests.
@@ -60,7 +63,7 @@ impl Synchronizer {
         name: PublicKey,
         id: WorkerId,
         committee: Committee,
-        store: Store,
+        store: Store<Digest, SerializedBatchMessage>,
         gc_depth: Round,
         sync_retry_delay: u64,
         sync_retry_nodes: usize,
@@ -89,12 +92,12 @@ impl Synchronizer {
     /// and then delivers its digest.
     async fn waiter(
         missing: Digest,
-        mut store: Store,
+        store: Store<Digest, SerializedBatchMessage>,
         deliver: Digest,
         mut handler: Receiver<()>,
     ) -> Result<Option<Digest>, StoreError> {
         tokio::select! {
-            result = store.notify_read(missing.to_vec()) => {
+            result = store.notify_read(missing) => {
                 result.map(|_| Some(deliver))
             }
             _ = handler.recv() => Ok(None),
@@ -126,7 +129,7 @@ impl Synchronizer {
                             }
 
                             // Check if we received the batch in the meantime.
-                            match self.store.read(digest.to_vec()).await {
+                            match self.store.read(digest.clone()).await {
                                 Ok(None) => {
                                     missing.push(digest.clone());
                                     debug!("Requesting sync for batch {}", digest);

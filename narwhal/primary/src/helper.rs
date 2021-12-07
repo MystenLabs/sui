@@ -1,6 +1,6 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
-use crate::primary::PrimaryMessage;
+use crate::{primary::PrimaryMessage, Certificate};
 use bytes::Bytes;
 use config::Committee;
 use crypto::{Digest, PublicKey};
@@ -14,7 +14,7 @@ pub struct Helper {
     /// The committee information.
     committee: Committee,
     /// The persistent storage.
-    store: Store,
+    store: Store<Digest, Certificate>,
     /// Input channel to receive certificates requests.
     rx_primaries: Receiver<(Vec<Digest>, PublicKey)>,
     /// A network sender to reply to the sync requests.
@@ -24,7 +24,7 @@ pub struct Helper {
 impl Helper {
     pub fn spawn(
         committee: Committee,
-        store: Store,
+        store: Store<Digest, Certificate>,
         rx_primaries: Receiver<(Vec<Digest>, PublicKey)>,
     ) {
         tokio::spawn(async move {
@@ -54,11 +54,9 @@ impl Helper {
 
             // Reply to the request (the best we can).
             for digest in digests {
-                match self.store.read(digest.to_vec()).await {
-                    Ok(Some(data)) => {
+                match self.store.read(digest).await {
+                    Ok(Some(certificate)) => {
                         // TODO: Remove this deserialization-serialization in the critical path.
-                        let certificate = bincode::deserialize(&data)
-                            .expect("Failed to deserialize our own certificate");
                         let bytes = bincode::serialize(&PrimaryMessage::Certificate(certificate))
                             .expect("Failed to serialize our own certificate");
                         self.network.send(address, Bytes::from(bytes)).await;

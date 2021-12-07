@@ -6,6 +6,7 @@ use crate::common::{
     votes,
 };
 use futures::future::try_join_all;
+use store::rocks;
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]
@@ -27,7 +28,20 @@ async fn process_header() {
     let (tx_parents, _rx_parents) = channel(1);
 
     // Create a new test store.
-    let mut store = Store::new(temp_dir()).unwrap();
+    let rocksdb = rocks::open_cf(temp_dir(), None, &["headers", "certificates", "payload"])
+        .expect("Failed creating database");
+    let header_store = Store::new(
+        rocks::DBMap::<Digest, Header>::reopen(&rocksdb, Some("headers"))
+            .expect("Failed keying headers database"),
+    );
+    let certificate_store = Store::new(
+        rocks::DBMap::<Digest, Certificate>::reopen(&rocksdb, Some("certificates"))
+            .expect("Failed keying certificates database"),
+    );
+    let payload_store = Store::new(
+        rocks::DBMap::<(Digest, u32), u8>::reopen(&rocksdb, Some("payload"))
+            .expect("Failed keying payload database"),
+    );
 
     // Make the vote we expect to receive.
     let expected = Vote::new(&header(), &name, &mut signature_service).await;
@@ -43,7 +57,8 @@ async fn process_header() {
     let synchronizer = Synchronizer::new(
         name,
         &committee,
-        store.clone(),
+        certificate_store.clone(),
+        payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
         /* tx_certificate_waiter */ tx_sync_certificates,
     );
@@ -52,7 +67,8 @@ async fn process_header() {
     Core::spawn(
         name,
         committee,
-        store.clone(),
+        header_store.clone(),
+        certificate_store.clone(),
         synchronizer,
         signature_service,
         /* consensus_round */ Arc::new(AtomicU64::new(0)),
@@ -79,11 +95,7 @@ async fn process_header() {
     }
 
     // Ensure the header is correctly stored.
-    let stored = store
-        .read(header().id.to_vec())
-        .await
-        .unwrap()
-        .map(|x| bincode::deserialize(&x).unwrap());
+    let stored = header_store.read(header().id).await.unwrap();
     assert_eq!(stored, Some(header()));
 }
 
@@ -102,13 +114,27 @@ async fn process_header_missing_parent() {
     let (tx_parents, _rx_parents) = channel(1);
 
     // Create a new test store.
-    let mut store = Store::new(temp_dir()).unwrap();
+    let rocksdb = rocks::open_cf(temp_dir(), None, &["headers", "certificates", "payload"])
+        .expect("Failed creating database");
+    let header_store = Store::new(
+        rocks::DBMap::<Digest, Header>::reopen(&rocksdb, Some("headers"))
+            .expect("Failed keying headers database"),
+    );
+    let certificate_store = Store::new(
+        rocks::DBMap::<Digest, Certificate>::reopen(&rocksdb, Some("certificates"))
+            .expect("Failed keying certificates database"),
+    );
+    let payload_store = Store::new(
+        rocks::DBMap::<(Digest, u32), u8>::reopen(&rocksdb, Some("payload"))
+            .expect("Failed keying payload database"),
+    );
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
         name,
         &committee(),
-        store.clone(),
+        certificate_store.clone(),
+        payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
         /* tx_certificate_waiter */ tx_sync_certificates,
     );
@@ -117,7 +143,8 @@ async fn process_header_missing_parent() {
     Core::spawn(
         name,
         committee(),
-        store.clone(),
+        header_store.clone(),
+        certificate_store.clone(),
         synchronizer,
         signature_service,
         /* consensus_round */ Arc::new(AtomicU64::new(0)),
@@ -142,7 +169,7 @@ async fn process_header_missing_parent() {
         .unwrap();
 
     // Ensure the header is not stored.
-    assert!(store.read(id.to_vec()).await.unwrap().is_none());
+    assert!(header_store.read(id).await.unwrap().is_none());
 }
 
 #[tokio::test]
@@ -160,13 +187,27 @@ async fn process_header_missing_payload() {
     let (tx_parents, _rx_parents) = channel(1);
 
     // Create a new test store.
-    let mut store = Store::new(temp_dir()).unwrap();
+    let rocksdb = rocks::open_cf(temp_dir(), None, &["headers", "certificates", "payload"])
+        .expect("Failed creating database");
+    let header_store = Store::new(
+        rocks::DBMap::<Digest, Header>::reopen(&rocksdb, Some("headers"))
+            .expect("Failed keying headers database"),
+    );
+    let certificate_store = Store::new(
+        rocks::DBMap::<Digest, Certificate>::reopen(&rocksdb, Some("certificates"))
+            .expect("Failed keying certificates database"),
+    );
+    let payload_store = Store::new(
+        rocks::DBMap::<(Digest, u32), u8>::reopen(&rocksdb, Some("payload"))
+            .expect("Failed keying payload database"),
+    );
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
         name,
         &committee(),
-        store.clone(),
+        certificate_store.clone(),
+        payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
         /* tx_certificate_waiter */ tx_sync_certificates,
     );
@@ -175,7 +216,8 @@ async fn process_header_missing_payload() {
     Core::spawn(
         name,
         committee(),
-        store.clone(),
+        header_store.clone(),
+        certificate_store.clone(),
         synchronizer,
         signature_service,
         /* consensus_round */ Arc::new(AtomicU64::new(0)),
@@ -200,7 +242,7 @@ async fn process_header_missing_payload() {
         .unwrap();
 
     // Ensure the header is not stored.
-    assert!(store.read(id.to_vec()).await.unwrap().is_none());
+    assert!(header_store.read(id).await.unwrap().is_none());
 }
 
 #[tokio::test]
@@ -220,13 +262,27 @@ async fn process_votes() {
     let (tx_parents, _rx_parents) = channel(1);
 
     // Create a new test store.
-    let store = Store::new(temp_dir()).unwrap();
+    let rocksdb = rocks::open_cf(temp_dir(), None, &["headers", "certificates", "payload"])
+        .expect("Failed creating database");
+    let header_store = Store::new(
+        rocks::DBMap::<Digest, Header>::reopen(&rocksdb, Some("headers"))
+            .expect("Failed keying headers database"),
+    );
+    let certificate_store = Store::new(
+        rocks::DBMap::<Digest, Certificate>::reopen(&rocksdb, Some("certificates"))
+            .expect("Failed keying certificates database"),
+    );
+    let payload_store = Store::new(
+        rocks::DBMap::<(Digest, u32), u8>::reopen(&rocksdb, Some("payload"))
+            .expect("Failed keying payload database"),
+    );
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
         name,
         &committee,
-        store.clone(),
+        certificate_store.clone(),
+        payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
         /* tx_certificate_waiter */ tx_sync_certificates,
     );
@@ -235,7 +291,8 @@ async fn process_votes() {
     Core::spawn(
         name,
         committee.clone(),
-        store.clone(),
+        header_store.clone(),
+        certificate_store.clone(),
         synchronizer,
         signature_service,
         /* consensus_round */ Arc::new(AtomicU64::new(0)),
@@ -290,13 +347,27 @@ async fn process_certificates() {
     let (tx_parents, mut rx_parents) = channel(1);
 
     // Create a new test store.
-    let mut store = Store::new(temp_dir()).unwrap();
+    let rocksdb = rocks::open_cf(temp_dir(), None, &["headers", "certificates", "payload"])
+        .expect("Failed creating database");
+    let header_store = Store::new(
+        rocks::DBMap::<Digest, Header>::reopen(&rocksdb, Some("headers"))
+            .expect("Failed keying headers database"),
+    );
+    let certificate_store = Store::new(
+        rocks::DBMap::<Digest, Certificate>::reopen(&rocksdb, Some("certificates"))
+            .expect("Failed keying certificates database"),
+    );
+    let payload_store = Store::new(
+        rocks::DBMap::<(Digest, u32), u8>::reopen(&rocksdb, Some("payload"))
+            .expect("Failed keying payload database"),
+    );
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
         name,
         &committee(),
-        store.clone(),
+        certificate_store.clone(),
+        payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
         /* tx_certificate_waiter */ tx_sync_certificates,
     );
@@ -305,7 +376,8 @@ async fn process_certificates() {
     Core::spawn(
         name,
         committee(),
-        store.clone(),
+        header_store.clone(),
+        certificate_store.clone(),
         synchronizer,
         signature_service,
         /* consensus_round */ Arc::new(AtomicU64::new(0)),
@@ -341,8 +413,7 @@ async fn process_certificates() {
 
     // Ensure the certificates are stored.
     for x in &certificates {
-        let stored = store.read(x.digest().to_vec()).await.unwrap();
-        let serialized = bincode::serialize(x).unwrap();
-        assert_eq!(stored, Some(serialized));
+        let stored = certificate_store.read(x.digest()).await.unwrap();
+        assert_eq!(stored, Some(x.clone()));
     }
 }

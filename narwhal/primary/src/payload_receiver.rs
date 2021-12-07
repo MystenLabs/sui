@@ -9,13 +9,13 @@ use tokio::sync::mpsc::Receiver;
 /// headers (ie. make sure we have their payload).
 pub struct PayloadReceiver {
     /// The persistent storage.
-    store: Store,
+    store: Store<(Digest, u32), u8>,
     /// Receives batches' digests from the network.
-    rx_workers: Receiver<(Digest, WorkerId)>,
+    rx_workers: Receiver<(Digest, u32)>,
 }
 
 impl PayloadReceiver {
-    pub fn spawn(store: Store, rx_workers: Receiver<(Digest, WorkerId)>) {
+    pub fn spawn(store: Store<(Digest, u32), u8>, rx_workers: Receiver<(Digest, WorkerId)>) {
         tokio::spawn(async move {
             Self { store, rx_workers }.run().await;
         });
@@ -23,8 +23,7 @@ impl PayloadReceiver {
 
     async fn run(&mut self) {
         while let Some((digest, worker_id)) = self.rx_workers.recv().await {
-            let key = [digest.as_ref(), &worker_id.to_le_bytes()].concat();
-            self.store.write(key.to_vec(), Vec::default()).await;
+            self.store.write((digest, worker_id), 0u8).await;
         }
     }
 }

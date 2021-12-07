@@ -17,7 +17,8 @@ pub struct Synchronizer {
     /// The public key of this primary.
     name: PublicKey,
     /// The persistent storage.
-    store: Store,
+    certificate_store: Store<Digest, Certificate>,
+    payload_store: Store<(Digest, u32), u8>,
     /// Send commands to the `HeaderWaiter`.
     tx_header_waiter: Sender<WaiterMessage>,
     /// Send commands to the `CertificateWaiter`.
@@ -30,13 +31,15 @@ impl Synchronizer {
     pub fn new(
         name: PublicKey,
         committee: &Committee,
-        store: Store,
+        certificate_store: Store<Digest, Certificate>,
+        payload_store: Store<(Digest, u32), u8>,
         tx_header_waiter: Sender<WaiterMessage>,
         tx_certificate_waiter: Sender<Certificate>,
     ) -> Self {
         Self {
             name,
-            store,
+            certificate_store,
+            payload_store,
             tx_header_waiter,
             tx_certificate_waiter,
             genesis: Certificate::genesis(committee)
@@ -68,8 +71,12 @@ impl Synchronizer {
             //      4. The last good node will never be able to sync as it will keep sending its sync requests
             //         to workers #1 (rather than workers #0). Also, clients will never be able to retrieve batch
             //         X as they will be querying worker #1.
-            let key = [digest.as_ref(), &worker_id.to_le_bytes()].concat();
-            if self.store.read(key).await?.is_none() {
+            if self
+                .payload_store
+                .read((digest.clone(), *worker_id))
+                .await?
+                .is_none()
+            {
                 missing.insert(digest.clone(), *worker_id);
             }
         }
@@ -102,8 +109,8 @@ impl Synchronizer {
                 continue;
             }
 
-            match self.store.read(digest.to_vec()).await? {
-                Some(certificate) => parents.push(bincode::deserialize(&certificate)?),
+            match self.certificate_store.read(digest.clone()).await? {
+                Some(certificate) => parents.push(certificate),
                 None => missing.push(digest.clone()),
             };
         }
@@ -127,7 +134,7 @@ impl Synchronizer {
                 continue;
             }
 
-            if self.store.read(digest.to_vec()).await?.is_none() {
+            if self.certificate_store.read(digest.clone()).await?.is_none() {
                 self.tx_certificate_waiter
                     .send(certificate.clone())
                     .await

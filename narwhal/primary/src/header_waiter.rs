@@ -9,11 +9,12 @@ use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{Digest, PublicKey};
 use futures::{
-    future::try_join_all,
+    future::{try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
 };
 use log::{debug, error};
 use network::SimpleSender;
+use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::HashMap,
     sync::{
@@ -45,8 +46,10 @@ pub struct HeaderWaiter {
     name: PublicKey,
     /// The committee information.
     committee: Committee,
-    /// The persistent storage.
-    store: Store,
+    /// The persistent storage for headers.
+    header_store: Store<Digest, Header>,
+    /// The persistent storage for payload markers from workers.
+    payload_store: Store<(Digest, u32), u8>,
     /// The current consensus round (used for cleanup).
     consensus_round: Arc<AtomicU64>,
     /// The depth of the garbage collector.
@@ -79,7 +82,8 @@ impl HeaderWaiter {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        store: Store,
+        header_store: Store<Digest, Header>,
+        payload_store: Store<(Digest, u32), u8>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
         sync_retry_delay: u64,
@@ -91,7 +95,8 @@ impl HeaderWaiter {
             Self {
                 name,
                 committee,
-                store,
+                header_store,
+                payload_store,
                 consensus_round,
                 gc_depth,
                 sync_retry_delay,
@@ -110,15 +115,17 @@ impl HeaderWaiter {
 
     /// Helper function. It waits for particular data to become available in the storage
     /// and then delivers the specified header.
-    async fn waiter(
-        mut missing: Vec<(Vec<u8>, Store)>,
+    async fn waiter<T, V>(
+        missing: Vec<T>,
+        store: Store<T, V>,
         deliver: Header,
         mut handler: Receiver<()>,
-    ) -> DagResult<Option<Header>> {
-        let waiting: Vec<_> = missing
-            .iter_mut()
-            .map(|(x, y)| y.notify_read(x.to_vec()))
-            .collect();
+    ) -> DagResult<Option<Header>>
+    where
+        T: Serialize + DeserializeOwned + Send + Clone,
+        V: Serialize + DeserializeOwned + Send,
+    {
+        let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
         tokio::select! {
             result = try_join_all(waiting) => {
                 result.map(|_| Some(deliver)).map_err(DagError::from)
@@ -129,7 +136,7 @@ impl HeaderWaiter {
 
     /// Main loop listening to the `Synchronizer` messages.
     async fn run(&mut self) {
-        let mut waiting = FuturesUnordered::new();
+        let mut waiting: FuturesUnordered<BoxFuture<'_, _>> = FuturesUnordered::new();
 
         let timer = sleep(Duration::from_millis(TIMER_RESOLUTION));
         tokio::pin!(timer);
@@ -152,16 +159,12 @@ impl HeaderWaiter {
                             // Add the header to the waiter pool. The waiter will return it to when all
                             // its parents are in the store.
                             let wait_for = missing
-                                .iter()
-                                .map(|(digest, worker_id)| {
-                                    let key = [digest.as_ref(), &worker_id.to_le_bytes()].concat();
-                                    (key.to_vec(), self.store.clone())
-                                })
+                                .iter().map(|(x, y)| (x.clone(), *y))
                                 .collect();
                             let (tx_cancel, rx_cancel) = channel(1);
                             self.pending.insert(header_id, (round, tx_cancel));
-                            let fut = Self::waiter(wait_for, header, rx_cancel);
-                            waiting.push(fut);
+                            let fut = Self::waiter(wait_for, self.payload_store.clone(), header, rx_cancel);
+                            waiting.push(Box::pin(fut));
 
                             // Ensure we didn't already send a sync request for these parents.
                             let mut requires_sync = HashMap::new();
@@ -196,15 +199,11 @@ impl HeaderWaiter {
 
                             // Add the header to the waiter pool. The waiter will return it to us
                             // when all its parents are in the store.
-                            let wait_for = missing
-                                .iter()
-                                .cloned()
-                                .map(|x| (x.to_vec(), self.store.clone()))
-                                .collect();
+                            let wait_for = missing.clone();
                             let (tx_cancel, rx_cancel) = channel(1);
                             self.pending.insert(header_id, (round, tx_cancel));
-                            let fut = Self::waiter(wait_for, header, rx_cancel);
-                            waiting.push(fut);
+                            let fut = Self::waiter(wait_for, self.header_store.clone(), header, rx_cancel);
+                            waiting.push(Box::pin(fut));
 
                             // Ensure we didn't already sent a sync request for these parents.
                             // Optimistically send the sync request to the node that created the certificate.

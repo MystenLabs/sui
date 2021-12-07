@@ -65,11 +65,14 @@ pub struct Primary;
 impl Primary {
     const INADDR_ANY: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         keypair: KeyPair,
         committee: Committee,
         parameters: Parameters,
-        store: Store,
+        header_store: Store<Digest, Header>,
+        certificate_store: Store<Digest, Certificate>,
+        payload_store: Store<(Digest, u32), u8>,
         tx_consensus: Sender<Certificate>,
         rx_consensus: Receiver<Certificate>,
     ) {
@@ -137,7 +140,8 @@ impl Primary {
         let synchronizer = Synchronizer::new(
             name,
             &committee,
-            store.clone(),
+            certificate_store.clone(),
+            payload_store.clone(),
             /* tx_header_waiter */ tx_sync_headers,
             /* tx_certificate_waiter */ tx_sync_certificates,
         );
@@ -149,7 +153,8 @@ impl Primary {
         Core::spawn(
             name,
             committee.clone(),
-            store.clone(),
+            header_store.clone(),
+            certificate_store.clone(),
             synchronizer,
             signature_service.clone(),
             consensus_round.clone(),
@@ -166,7 +171,10 @@ impl Primary {
         GarbageCollector::spawn(&name, &committee, consensus_round.clone(), rx_consensus);
 
         // Receives batch digests from other workers. They are only used to validate headers.
-        PayloadReceiver::spawn(store.clone(), /* rx_workers */ rx_others_digests);
+        PayloadReceiver::spawn(
+            payload_store.clone(),
+            /* rx_workers */ rx_others_digests,
+        );
 
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
         // batch digests, it commands the `HeaderWaiter` to synchronizer with other nodes, wait for their reply, and
@@ -174,7 +182,8 @@ impl Primary {
         HeaderWaiter::spawn(
             name,
             committee.clone(),
-            store.clone(),
+            header_store,
+            payload_store,
             consensus_round,
             parameters.gc_depth,
             parameters.sync_retry_delay,
@@ -186,7 +195,7 @@ impl Primary {
         // The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the
         // `Core` for further processing.
         CertificateWaiter::spawn(
-            store.clone(),
+            certificate_store.clone(),
             /* rx_synchronizer */ rx_sync_certificates,
             /* tx_core */ tx_certificates_loopback,
         );
@@ -205,7 +214,7 @@ impl Primary {
         );
 
         // The `Helper` is dedicated to reply to certificates requests from other primaries.
-        Helper::spawn(committee.clone(), store, rx_cert_requests);
+        Helper::spawn(committee.clone(), certificate_store, rx_cert_requests);
 
         // NOTE: This log entry is used to compute performance.
         info!(
