@@ -27,6 +27,7 @@ move-cli = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8
 move-vm-runtime = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
 
 fastx-framework = { path = "../framework" }
+fastx-verifier = { path = "../verifier" }
 
 [dev-dependencies]
 datatest-stable = "0.1.1"
