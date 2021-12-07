@@ -7,7 +7,11 @@ use crate::{
 };
 use anyhow::Result;
 use fastx_framework::natives;
-use move_binary_format::errors::VMError;
+use fastx_verifier::verifier;
+use move_binary_format::{
+    errors::{Location, PartialVMError, VMError, VMResult},
+    file_format::CompiledModule,
+};
 
 use move_cli::sandbox::utils::get_gas_status;
 use move_core_types::{
@@ -18,6 +22,7 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
     transaction_argument::{convert_txn_args, TransactionArgument},
+    vm_status::StatusCode,
 };
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunction};
 use sha3::{Digest, Sha3_256};
@@ -58,6 +63,11 @@ impl FastXAdapter {
         args.push(TransactionArgument::U8Vector(inputs_hash.to_vec()));
         let script_args = convert_txn_args(&args);
         let module_id = ModuleId::new(FASTX_FRAMEWORK_ADDRESS, module);
+        if let Err(error) = verify_module(&module_id, &self.state_view) {
+            // TODO: use CLI's error explanation features here
+            println!("Fail: {}", error);
+            return Ok(());
+        }
         let natives = natives::all_natives(MOVE_STDLIB_ADDRESS, FASTX_FRAMEWORK_ADDRESS);
         match execute_function(
             &module_id,
@@ -201,4 +211,29 @@ pub fn execute_function<Resolver: MoveResolver>(
             gas_used,
         })
     }
+}
+
+// Load, deserialize, and check the module with the fastx bytecode verifier, without linking
+fn verify_module<Resolver: MoveResolver>(id: &ModuleId, resolver: &Resolver) -> VMResult<()> {
+    let module_bytes = match resolver.get_module(id) {
+        Ok(Some(bytes)) => bytes,
+        _ => {
+            return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
+                .with_message(format!("Cannot find {:?} in data cache", id))
+                .finish(Location::Undefined))
+        }
+    };
+
+    // for bytes obtained from the data store, they should always deserialize and verify.
+    // It is an invariant violation if they don't.
+    let module = CompiledModule::deserialize(&module_bytes).map_err(|err| {
+        let msg = format!("Deserialization error: {:?}", err);
+        PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
+            .with_message(msg)
+            .finish(Location::Module(id.clone()))
+    })?;
+
+    // bytecode verifier checks that can be performed with the module itself
+    verifier::verify_module(&module)?;
+    Ok(())
 }

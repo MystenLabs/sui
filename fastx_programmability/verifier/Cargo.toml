@@ -1,0 +1,14 @@
+[package]
+name = "fastx-verifier"
+version = "0.1.0"
+edition = "2018"
+authors = ["Mysten Labs <eng@mystenlabs.com>"]
+description = "Move framework for fastX platform"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+## uncomment for debugging with local copy of diem repo
+# move-binary-format = { path = "../../../diem/language/move-binary-format" }
+
+move-binary-format = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
