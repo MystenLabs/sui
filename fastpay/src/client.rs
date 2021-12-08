@@ -540,10 +540,12 @@ fn main() {
         } => {
             let num_accounts: u32 = num;
             let object_ids = match initial_objects {
-                Some(object_ids) => {
-                    object_ids.into_iter().map(|string| ObjectID::from_hex_literal(&string).unwrap()).collect()
-                }
-                None => Vec::new()
+                Some(object_ids) => object_ids
+                    .into_iter()
+                    .map(|string| ObjectID::from_hex_literal(&string).unwrap())
+                    .collect(),
+
+                None => Vec::new(),
             };
 
             for _ in 0..num_accounts {
