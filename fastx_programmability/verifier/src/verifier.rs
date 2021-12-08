@@ -3,19 +3,11 @@
 
 //! This module contains the public APIs supported by the bytecode verifier.
 
-use move_binary_format::{
-    errors::VMResult,
-    file_format::{CompiledModule, CompiledScript},
-};
+use move_binary_format::{errors::VMResult, file_format::CompiledModule};
 
 use crate::dummy_verifier;
 
 /// Helper for a "canonical" verification of a module.
 pub fn verify_module(module: &CompiledModule) -> VMResult<()> {
     dummy_verifier::verify_module(module)
-}
-
-/// Helper for a "canonical" verification of a script.
-pub fn verify_script(script: &CompiledScript) -> VMResult<()> {
-    dummy_verifier::verify_script(script)
 }
