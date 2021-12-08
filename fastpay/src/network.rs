@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::transport::*;
-use fastpay_core::{authority::*, base_types::*, client::*, error::*, messages::*, serialize::*};
+use fastpay_core::{authority::*, client::*};
+use fastx_types::{base_types::*, error::*, messages::*, serialize::*};
 
 use bytes::Bytes;
 use futures::future::FutureExt;

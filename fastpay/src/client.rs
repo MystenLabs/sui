@@ -4,9 +4,8 @@
 #![deny(warnings)]
 
 use fastpay::{config::*, network, transport};
-use fastpay_core::{
-    authority::*, base_types::*, client::*, committee::Committee, messages::*, serialize::*,
-};
+use fastpay_core::{authority::*, client::*};
+use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
 
 use bytes::Bytes;
 use futures::stream::StreamExt;

@@ -4,7 +4,8 @@
 #![deny(warnings)]
 
 use fastpay::{config::*, network, transport};
-use fastpay_core::{authority::*, base_types::*, committee::Committee, object::Object};
+use fastpay_core::authority::*;
+use fastx_types::{base_types::*, committee::Committee, object::Object};
 
 use futures::future::join_all;
 use log::*;

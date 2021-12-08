@@ -3,12 +3,10 @@
 
 #![deny(warnings)]
 
-use fastpay::{network, transport};
-use fastpay_core::{
-    authority::*, base_types::*, committee::*, messages::*, object::Object, serialize::*,
-};
-
 use bytes::Bytes;
+use fastpay::{network, transport};
+use fastpay_core::authority::*;
+use fastx_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use futures::stream::StreamExt;
 use log::*;
 use std::{

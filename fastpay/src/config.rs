@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::transport::NetworkProtocol;
-use fastpay_core::{
+use fastpay_core::client::ClientState;
+use fastx_types::{
     base_types::*,
-    client::ClientState,
     messages::{Address, CertifiedOrder, OrderKind},
 };
 
