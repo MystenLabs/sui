@@ -1,8 +1,11 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::*, committee::Committee, downloader::*, error::FastPayError, messages::*};
+use crate::downloader::*;
 use failure::{bail, ensure};
+use fastx_types::{
+    base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
+};
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
 use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};

@@ -6,8 +6,8 @@ use crate::{
     MOVE_STDLIB_ADDRESS,
 };
 use anyhow::Result;
-use fastpay_core::error::{FastPayError, FastPayResult};
 use fastx_framework::natives;
+use fastx_types::error::{FastPayError, FastPayResult};
 use fastx_verifier::verifier;
 use move_binary_format::{errors::VMError, file_format::CompiledModule};
 

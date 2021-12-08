@@ -1,4 +1,4 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 #![warn(
     future_incompatible,
@@ -8,7 +8,11 @@
 )]
 #![deny(warnings)]
 
-pub mod authority;
-pub mod client;
-pub mod downloader;
-pub mod fastpay_smart_contract;
+#[macro_use]
+pub mod error;
+
+pub mod base_types;
+pub mod committee;
+pub mod messages;
+pub mod object;
+pub mod serialize;

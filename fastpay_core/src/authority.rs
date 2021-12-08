@@ -1,8 +1,9 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    base_types::*, committee::Committee, error::FastPayError, messages::*, object::Object,
+use fastx_types::{
+    base_types::*, committee::Committee, error::FastPayError, fp_bail, fp_ensure, messages::*,
+    object::Object,
 };
 use std::{collections::BTreeMap, convert::TryInto};
 

@@ -3,11 +3,8 @@
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
 use super::*;
-use crate::{
-    authority::{Authority, AuthorityState},
-    base_types::Amount,
-    object::Object,
-};
+use crate::authority::{Authority, AuthorityState};
+use fastx_types::{base_types::Amount, object::Object};
 use futures::lock::Mutex;
 use std::{
     collections::{BTreeMap, HashMap},

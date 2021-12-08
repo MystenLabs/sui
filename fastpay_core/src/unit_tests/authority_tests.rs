@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+#[cfg(test)]
+use fastx_types::base_types::dbg_addr;
 
 #[test]
 fn test_handle_transfer_order_bad_signature() {

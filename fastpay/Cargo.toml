@@ -20,6 +20,7 @@ tempfile = "3.2.0"
 tokio = { version = "0.2.22", features = ["full"] }
 
 fastpay_core = { path = "../fastpay_core" }
+fastx-types = { path = "../fastx_types" }
 
 [[bin]]
 name = "client"
