@@ -213,8 +213,8 @@ impl InitialStateConfig {
                 failure::bail!("expecting two columns separated with ':'")
             }
             let address = decode_address(elements[0])?;
-            let balance = ObjectID::from_hex_literal(elements[1])?;
-            accounts.push((address, balance));
+            let object_id = ObjectID::from_hex_literal(elements[1])?;
+            accounts.push((address, object_id));
         }
         Ok(Self { accounts })
     }

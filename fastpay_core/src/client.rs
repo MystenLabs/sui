@@ -52,8 +52,7 @@ pub struct ClientState<AuthorityClient> {
     /// Known received certificates, indexed by sender and sequence number.
     /// TODO: API to search and download yet unknown `received_certificates`.
     received_certificates: BTreeMap<(FastPayAddress, SequenceNumber), CertifiedOrder>,
-    /// The known spendable balance (including a possible initial funding, excluding unknown sent
-    /// or received certificates).
+    /// The known objects owned by the client.
     object_ids: Vec<ObjectID>,
 }
 
