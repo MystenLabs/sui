@@ -488,8 +488,8 @@ where
         while number < self.next_sequence_number {
             if !known_sequence_numbers.contains(&number) {
                 let mut requesters = requesters.iter_mut();
-                // try to retrieve certificate from each shard
-                // TODO: Change CertificateRequester to accept Vec<ObjectID> instead of the loop?
+                // Because we don't know which object is associated to which sequence number, so we try to query each authority with the sequence number until we have a hit.
+                // TODO: Rethink how we store sequence number, maybe the client should hold a map of sequence number to object id, or each object should have their own sequence number.
                 let certificate = loop {
                     let requester = requesters
                         .next()
