@@ -6,12 +6,10 @@ use crate::{
     MOVE_STDLIB_ADDRESS,
 };
 use anyhow::Result;
+use fastpay_core::error::FastPayError;
 use fastx_framework::natives;
 use fastx_verifier::verifier;
-use move_binary_format::{
-    errors::{Location, PartialVMError, VMError, VMResult},
-    file_format::CompiledModule,
-};
+use move_binary_format::{errors::VMError, file_format::CompiledModule};
 
 use move_cli::sandbox::utils::get_gas_status;
 use move_core_types::{
@@ -22,7 +20,6 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
     transaction_argument::{convert_txn_args, TransactionArgument},
-    vm_status::StatusCode,
 };
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunction};
 use sha3::{Digest, Sha3_256};
@@ -214,26 +211,35 @@ pub fn execute_function<Resolver: MoveResolver>(
 }
 
 // Load, deserialize, and check the module with the fastx bytecode verifier, without linking
-fn verify_module<Resolver: MoveResolver>(id: &ModuleId, resolver: &Resolver) -> VMResult<()> {
+fn verify_module<Resolver: MoveResolver>(
+    id: &ModuleId,
+    resolver: &Resolver,
+) -> Result<(), FastPayError> {
     let module_bytes = match resolver.get_module(id) {
         Ok(Some(bytes)) => bytes,
-        _ => {
-            return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!("Cannot find {:?} in data cache", id))
-                .finish(Location::Undefined))
+        Ok(None) => {
+            return Err(FastPayError::ModuleLoadFailure {
+                error: format!("Resolver returned None for module {}", &id),
+            })
+        }
+        Err(err) => {
+            return Err(FastPayError::ModuleLoadFailure {
+                error: format!("Resolver failed to load module {}: {:?}", &id, err),
+            })
         }
     };
 
     // for bytes obtained from the data store, they should always deserialize and verify.
     // It is an invariant violation if they don't.
     let module = CompiledModule::deserialize(&module_bytes).map_err(|err| {
-        let msg = format!("Deserialization error: {:?}", err);
-        PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
-            .with_message(msg)
-            .finish(Location::Module(id.clone()))
+        FastPayError::ModuleLoadFailure {
+            error: err.to_string(),
+        }
     })?;
 
     // bytecode verifier checks that can be performed with the module itself
-    verifier::verify_module(&module)?;
+    verifier::verify_module(&module).map_err(|err| FastPayError::ModuleVerificationFailure {
+        error: err.to_string(),
+    })?;
     Ok(())
 }
