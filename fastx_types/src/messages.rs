@@ -232,6 +232,12 @@ impl Order {
         }
     }
 
+    /// Return the set of input objects for this order
+    /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
+    pub fn input_objects(&self) -> Vec<ObjectRef> {
+        vec![(*self.object_id(), self.sequence_number())]
+    }
+
     // TODO: support orders with multiple objects (https://github.com/MystenLabs/fastnft/issues/8)
     pub fn object_id(&self) -> &ObjectID {
         use OrderKind::*;

@@ -93,46 +93,55 @@ impl Authority for AuthorityState {
         // Check the sender's signature and retrieve the transfer data.
         fp_ensure!(self.in_shard(order.object_id()), FastPayError::WrongShard);
         order.check_signature()?;
-        let object_id = *order.object_id();
-        fp_ensure!(
-            order.sequence_number() <= SequenceNumber::max(),
-            FastPayError::InvalidSequenceNumber
-        );
 
-        // Get a ref to the object concerned by the transaction
-        let object = self
-            .objects
-            .get(&object_id)
-            .ok_or(FastPayError::ObjectNotFound)?;
+        // We first do all the checks that can be done in parallel with read only access to
+        // the object database and lock database.
+        let input_objects = order.input_objects();
+        for object_ref in &input_objects {
+            let (object_id, sequence_number) = object_ref;
 
-        // Check the transaction sender is also the object owner
-        fp_ensure!(
-            order.sender() == &object.owner,
-            FastPayError::IncorrectSigner
-        );
-
-        // Check that this is the first, or same as the first order we sign.
-        if let Some(pending_confirmation) = self.get_order_lock(&object.to_object_reference())? {
             fp_ensure!(
-                pending_confirmation.order.kind == order.kind,
-                FastPayError::PreviousTransferMustBeConfirmedFirst {
-                    pending_confirmation: pending_confirmation.order.clone()
-                }
+                *sequence_number <= SequenceNumber::max(),
+                FastPayError::InvalidSequenceNumber
             );
-            // This exact transfer order was already signed. Return the previous value.
-            return self.make_object_info(object_id);
+
+            // Get a ref to the object concerned by the transaction
+            let object = self
+                .objects
+                .get(object_id)
+                .ok_or(FastPayError::ObjectNotFound)?;
+
+            // Check that the seq number is the same
+            fp_ensure!(
+                object.next_sequence_number == order.sequence_number(),
+                FastPayError::UnexpectedSequenceNumber
+            );
+
+            // Check the transaction sender is also the object owner
+            fp_ensure!(
+                order.sender() == &object.owner,
+                FastPayError::IncorrectSigner
+            );
+
+            // Check that this is the first, or same as the first order we sign.
+            if let Some(pending_confirmation) = self.get_order_lock(object_ref)? {
+                fp_ensure!(
+                    pending_confirmation.order.kind == order.kind,
+                    FastPayError::PreviousTransferMustBeConfirmedFirst {
+                        pending_confirmation: pending_confirmation.order.clone()
+                    }
+                );
+                // This exact transfer order was already signed. Return the previous value.
+                return self.make_object_info(*object_id);
+            }
         }
-        fp_ensure!(
-            object.next_sequence_number == order.sequence_number(),
-            FastPayError::UnexpectedSequenceNumber
-        );
 
         // TODO(https://github.com/MystenLabs/fastnft/issues/45): check that c.gas_payment exists + that its value is > gas_budget
 
+        let object_id = *order.object_id();
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
 
-        // Add to the order_lock structure.
-        // Note: Safety requires this be persisted before any client-visible response is generated.
+        // This is the critical section that requires a write lock on the lock DB.
         self.set_order_lock(signed_order)?;
 
         let info = self.make_object_info(object_id)?;
@@ -347,26 +356,37 @@ impl AuthorityState {
 
     /// Set the order lock to a specific transaction
     pub fn set_order_lock(&mut self, signed_order: SignedOrder) -> Result<(), FastPayError> {
-        let object_id = *signed_order.order.object_id();
-        let seq = signed_order.order.sequence_number();
+        // This is the only function that writes as part of the handle_order flow
+        // and the only that therefore needs an exclusive write lock on the lock
+        // database. Inconsistent / delayed reads of the lock database do not result in safety
+        // violations since at the end this function also re-checks that the lock
+        // is not set and returns an Err if it is.
+        //
+        // Note that the writes are not atomic: we may actually set locks for a
+        // few objects before returning an Err as a result of trying to overwrite one.
+        // This is a liveness issue for equivocating clients and therefore not an issue
+        // we are trying to resolve.
 
-        // The object / version must exist, and therefore lock initialized.
-        let lock = self
-            .order_lock
-            .get_mut(&(object_id, seq))
-            .ok_or(FastPayError::OrderLockDoesNotExist)?;
-        if let Some(_existing_signed_order) = lock {
-            if _existing_signed_order.order == signed_order.order {
-                // For some reason we are re-inserting the same order. Not optimal but correct.
-                return Ok(());
-            } else {
-                // We are trying to set the lock to a different order, this is unsafe.
-                return Err(FastPayError::OrderLockReset);
+        let input_objects = signed_order.order.input_objects();
+        for (object_id, seq) in input_objects {
+            // The object / version must exist, and therefore lock initialized.
+            let lock = self
+                .order_lock
+                .get_mut(&(object_id, seq))
+                .ok_or(FastPayError::OrderLockDoesNotExist)?;
+            if let Some(_existing_signed_order) = lock {
+                if _existing_signed_order.order == signed_order.order {
+                    // For some reason we are re-inserting the same order. Not optimal but correct.
+                    continue;
+                } else {
+                    // We are trying to set the lock to a different order, this is unsafe.
+                    return Err(FastPayError::OrderLockReset);
+                }
             }
-        }
 
-        // The lock is None, so we replace it with the given order.
-        lock.replace(signed_order);
+            // The lock is None, so we replace it with the given order.
+            lock.replace(signed_order.clone());
+        }
         Ok(())
     }
 
