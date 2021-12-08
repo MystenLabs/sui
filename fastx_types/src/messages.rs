@@ -183,6 +183,31 @@ impl Order {
         Order { kind, signature }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_move_call(
+        sender: FastPayAddress,
+        module: ModuleId, // TODO: Could also be ObjectId?
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        gas_payment: ObjectRef,
+        object_arguments: Vec<ObjectRef>,
+        pure_arguments: Vec<Vec<u8>>,
+        gas_budget: u64,
+        secret: &KeyPair,
+    ) -> Self {
+        let kind = OrderKind::Call(MoveCall {
+            sender,
+            module,
+            function,
+            type_arguments,
+            gas_payment,
+            object_arguments,
+            pure_arguments,
+            gas_budget,
+        });
+        Self::new(kind, secret)
+    }
+
     pub fn new_transfer(transfer: Transfer, secret: &KeyPair) -> Self {
         Self::new(OrderKind::Transfer(transfer), secret)
     }

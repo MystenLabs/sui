@@ -113,6 +113,10 @@ pub enum FastPayError {
     OrderLockReset,
     #[error("Could not find the referenced object.")]
     ObjectNotFound,
+    #[error("Object ID did not have the expected type")]
+    BadObjectType { error: String },
+    #[error("Move Execution failed")]
+    MoveExecutionFailure,
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;

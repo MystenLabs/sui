@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use fastx_adapter::adapter::FastXAdapter;
+
+use fastx_adapter::state_view::FastXStateView;
 use fastx_framework::{natives, FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS};
 
 use move_cli::{Command, Move};
@@ -65,18 +66,11 @@ fn main() -> Result<()> {
     use FastXCommand::*;
     match args.cmd {
         MoveCommand(cmd) => move_cli::run_cli(natives, &error_descriptions, &args.move_args, &cmd),
-        Run {
-            module,
-            function,
-            sender,
-            args,
-            type_args,
-            gas_budget,
-        } => {
+        Run { .. } => {
             // TODO: take build_dir and storage_dir as CLI inputs
-            let mut adapter = FastXAdapter::create("build", "storage")?;
-            adapter.execute_local(module, function, sender, args, type_args, gas_budget)?;
-            Ok(())
+            let _state_view = FastXStateView::create("build", "storage")?;
+            //adapter.execute_local(module, function, sender, args, type_args, gas_budget)?;
+            unimplemented!("Fixme: local adapter")
         }
     }
 }

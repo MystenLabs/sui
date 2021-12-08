@@ -4,6 +4,9 @@
 use super::*;
 #[cfg(test)]
 use fastx_types::base_types::dbg_addr;
+use move_core_types::ident_str;
+#[cfg(test)]
+use move_core_types::language_storage::ModuleId;
 
 #[test]
 fn test_handle_transfer_order_bad_signature() {
@@ -137,6 +140,52 @@ fn test_handle_transfer_order_ok() {
 }
 
 #[test]
+fn test_handle_move_order_bad() {
+    let (sender, sender_key) = get_key_pair();
+    // create a dummy gas payment object. ok for now because we don't check gas
+    let gas_payment_object_id = ObjectID::random();
+    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
+    let gas_payment_object_ref = gas_payment_object.to_object_reference();
+    // create a dummy module. execution will fail when we try to read it
+    let dummy_module_object_id = ObjectID::random();
+    let dummy_module_object = Object::with_id_owner_for_testing(dummy_module_object_id, sender);
+
+    let mut authority_state =
+        init_state_with_objects(vec![gas_payment_object, dummy_module_object]);
+
+    let module_id = ModuleId::new(dummy_module_object_id, ident_str!("Module").to_owned());
+    let function = ident_str!("function_name").to_owned();
+    let order = Order::new_move_call(
+        sender,
+        module_id,
+        function,
+        Vec::new(),
+        gas_payment_object_ref,
+        Vec::new(),
+        Vec::new(),
+        1000,
+        &sender_key,
+    );
+
+    // Make the initial request
+    let response = authority_state.handle_order(order.clone()).unwrap();
+    let vote = response.pending_confirmation.unwrap();
+
+    // Collect signatures from a quorum of authorities
+    let mut builder = SignatureAggregator::try_new(order, &authority_state.committee).unwrap();
+    let certificate = builder
+        .append(vote.authority, vote.signature)
+        .unwrap()
+        .unwrap();
+    // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
+    // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
+    match authority_state.handle_confirmation_order(ConfirmationOrder::new(certificate)) {
+        Err(FastPayError::MoveExecutionFailure) => (),
+        r => panic!("Unexpected result {:?}", r),
+    }
+}
+
+#[test]
 fn test_handle_transfer_order_double_spend() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
@@ -239,7 +288,7 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
     let object_id: ObjectID = ObjectID::random();
     let (recipient, _) = get_key_pair();
     let mut authority_state =
-        init_state_with_objects(vec![(sender, object_id), (recipient, ObjectID::random())]);
+        init_state_with_ids(vec![(sender, object_id), (recipient, ObjectID::random())]);
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
@@ -387,7 +436,7 @@ fn init_state() -> AuthorityState {
 }
 
 #[cfg(test)]
-fn init_state_with_objects<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
+fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
     objects: I,
 ) -> AuthorityState {
     let mut state = init_state();
@@ -403,9 +452,19 @@ fn init_state_with_objects<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
     state
 }
 
+fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
+    let mut state = init_state();
+    for o in objects {
+        let obj_ref = o.to_object_reference();
+        state.objects.insert(o.id(), o);
+        state.init_order_lock(obj_ref);
+    }
+    state
+}
+
 #[cfg(test)]
 fn init_state_with_object(address: FastPayAddress, object: ObjectID) -> AuthorityState {
-    init_state_with_objects(std::iter::once((address, object)))
+    init_state_with_ids(std::iter::once((address, object)))
 }
 
 #[cfg(test)]

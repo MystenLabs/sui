@@ -1,10 +1,14 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{state_view::FastXStateView, swap_authenticator_and_id};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use fastx_framework::{natives, FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS};
-use fastx_types::error::{FastPayError, FastPayResult};
+use fastx_types::{
+    base_types::{FastPayAddress, ObjectRef, SequenceNumber},
+    error::{FastPayError, FastPayResult},
+    object::Object,
+    storage::Storage,
+};
 use fastx_verifier::verifier;
 use move_binary_format::{errors::VMError, file_format::CompiledModule};
 
@@ -15,119 +19,110 @@ use move_core_types::{
     gas_schedule::GasAlgebra,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
-    resolver::MoveResolver,
+    resolver::{ModuleResolver, MoveResolver, ResourceResolver},
     transaction_argument::{convert_txn_args, TransactionArgument},
 };
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunction};
-use sha3::{Digest, Sha3_256};
+use std::fmt::Debug;
 
-pub struct FastXAdapter {
-    state_view: FastXStateView,
+/// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
+/// Execution will read from/write to the store in `state_view`.
+/// If `gas_budget` is None, runtime metering is disabled and execution may diverge.
+#[allow(clippy::too_many_arguments)]
+pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
+    state_view: &mut S,
+    module: &ModuleId,
+    function: &Identifier,
+    sender: AccountAddress,
+    object_args: Vec<ObjectRef>,
+    mut pure_args: Vec<Vec<u8>>,
+    type_args: Vec<TypeTag>,
+    gas_budget: Option<u64>,
+) -> Result<()> {
+    let obj_ids: Vec<TransactionArgument> = object_args
+        .iter()
+        .map(|o| TransactionArgument::Address(o.0))
+        .collect();
+    let mut args = convert_txn_args(&obj_ids);
+    args.append(&mut pure_args);
+
+    if let Err(error) = verify_module(module, state_view) {
+        // TODO: execute should return Result<(), FastPayError>
+        bail!("Verification error: {:?}", error)
+    }
+    let natives = natives::all_natives(MOVE_STDLIB_ADDRESS, FASTX_FRAMEWORK_ADDRESS);
+    match execute_function(
+        module,
+        function,
+        type_args,
+        vec![sender],
+        pure_args,
+        gas_budget,
+        state_view,
+        natives,
+    )? {
+        ExecutionResult::Success {
+            change_set,
+            events,
+            gas_used: _,
+        } => {
+            // process change set. important to do this before processing events because it's where deletions happen
+            for (addr, addr_changes) in change_set.into_inner() {
+                for (struct_tag, bytes_opt) in addr_changes.into_resources() {
+                    match bytes_opt {
+                        Some(bytes) => {
+                            // object mutated during execution
+                            // TODO (https://github.com/MystenLabs/fastnft/issues/30):
+                            // eventually, a mutation will only happen to an objects passed as a &mut input to the `main`, so we'll know
+                            // its old sequence number. for now, we fake it.
+                            let sequence_number = SequenceNumber::new();
+                            let owner = FastPayAddress::from_move_address_hack(&sender);
+                            let object =
+                                Object::new_move(struct_tag, bytes, owner, sequence_number);
+                            state_view.write_object(object);
+                        }
+                        None => state_view.delete_object(&addr),
+                    }
+                }
+            }
+            // process events
+            for e in events {
+                if is_transfer_event(&e) {
+                    let (guid, _seq_num, type_, event_bytes) = e;
+                    match type_ {
+                        TypeTag::Struct(s_type) => {
+                            // special transfer event. process by saving object under given authenticator
+                            let transferred_obj = event_bytes;
+                            let recipient = AccountAddress::from_bytes(guid)?;
+                            // TODO (https://github.com/MystenLabs/fastnft/issues/30):
+                            // eventually , a transfer will only happen to an objects passed as an owned input to the `main` (in which
+                            // case we'll know its old sequence number), *or* it will be be freshly created (in which case its sequence #
+                            // will be zero)
+                            let sequence_number = SequenceNumber::new();
+                            let owner = FastPayAddress::from_move_address_hack(&recipient);
+                            let object =
+                                Object::new_move(s_type, transferred_obj, owner, sequence_number);
+                            state_view.write_object(object);
+                        }
+                        _ => unreachable!("Only structs can be transferred"),
+                    }
+                } else {
+                    // the fastX framework doesn't support user-generated events yet, so shouldn't hit this
+                    unimplemented!("Processing user events")
+                }
+            }
+        }
+        ExecutionResult::Fail { error, gas_used: _ } => {
+            bail!("Fail: {}", error)
+        }
+    }
+    Ok(())
 }
 
-impl FastXAdapter {
-    pub fn create(build_dir: &str, storage_dir: &str) -> Result<Self> {
-        let state_view = FastXStateView::create(build_dir, storage_dir)?;
-        Ok(FastXAdapter { state_view })
-    }
-
-    /// Endpoint for local execution--no signature checking etc. is performed, and the result is saved on disk
-    // TODO: implement a wrapper of this with tx prologue + epilogue, bytecode verifier passes, etc.
-    pub fn execute_local(
-        &mut self,
-        module: Identifier,
-        function: Identifier,
-        sender: AccountAddress,
-        mut args: Vec<TransactionArgument>,
-        type_args: Vec<TypeTag>,
-        gas_budget: Option<u64>,
-    ) -> Result<()> {
-        // calculate `inputs_hash` based on address arguments. each address is the identifier of an object accessed by `function`
-        let mut hash_arg = Vec::new();
-        for arg in &args {
-            if let TransactionArgument::Address(a) = arg {
-                hash_arg.append(&mut a.to_vec())
-            }
-        }
-        // TODO: we should assert this eventually. but it makes testing difficult
-        // because of bootstrapping--the initial state contains no objects :)
-        //assert!(!hash_arg.is_empty(), "Need at least one object ID as input");
-        let inputs_hash = Sha3_256::digest(&hash_arg);
-        // assume that by convention, `inputs_hash` is the last argument
-        args.push(TransactionArgument::U8Vector(inputs_hash.to_vec()));
-        let script_args = convert_txn_args(&args);
-        let module_id = ModuleId::new(FASTX_FRAMEWORK_ADDRESS, module);
-        if let Err(error) = verify_module(&module_id, &self.state_view) {
-            // TODO: use CLI's error explanation features here
-            println!("Fail: {}", error);
-            return Ok(());
-        }
-        let natives = natives::all_natives(MOVE_STDLIB_ADDRESS, FASTX_FRAMEWORK_ADDRESS);
-        match execute_function(
-            &module_id,
-            &function,
-            type_args,
-            vec![sender],
-            script_args,
-            gas_budget,
-            &self.state_view,
-            natives,
-        )? {
-            ExecutionResult::Success {
-                change_set,
-                events,
-                gas_used: _,
-            } => {
-                // process change set. important to do this before processing events because it's where deletions happen
-                for (addr, addr_changes) in change_set.into_inner() {
-                    for (struct_tag, bytes_opt) in addr_changes.into_resources() {
-                        match bytes_opt {
-                            Some(bytes) => self
-                                .state_view
-                                .inner
-                                .save_resource(addr, struct_tag, &bytes)?,
-                            None => self.state_view.inner.delete_resource(addr, struct_tag)?,
-                        }
-                    }
-                }
-                // TODO: use CLI's explain_change_set here?
-                // process events
-                for e in events {
-                    if Self::is_transfer_event(&e) {
-                        let (guid, _seq_num, type_, event_bytes) = e;
-                        match type_ {
-                            TypeTag::Struct(s_type) => {
-                                // special transfer event. process by saving object under given authenticator
-                                let mut transferred_obj = event_bytes;
-                                let recipient = AccountAddress::from_bytes(guid)?;
-                                // hack: extract the ID from the object and use it as the address the object is saved under
-                                // replace the id with the object's new owner `recipient`
-                                let id = swap_authenticator_and_id(recipient, &mut transferred_obj);
-                                self.state_view
-                                    .inner
-                                    .save_resource(id, s_type, &transferred_obj)?
-                            }
-                            _ => unreachable!("Only structs can be transferred"),
-                        }
-                    } else {
-                        // the fastX framework doesn't support user-generated events yet, so shouldn't hit this
-                        unimplemented!("Processing user events")
-                    }
-                }
-            }
-            ExecutionResult::Fail { error, gas_used: _ } => {
-                // TODO: use CLI's error explanation features here
-                println!("Fail: {}", error)
-            }
-        }
-        Ok(())
-    }
-
-    /// Check if this is a special event type emitted when there is a transfer between fastX addresses
-    pub fn is_transfer_event(e: &Event) -> bool {
-        // TODO: hack that leverages implementation of Transfer::transfer_internal native function
-        !e.0.is_empty()
-    }
+/// Check if this is a special event type emitted when there is a transfer between fastX addresses
+pub fn is_transfer_event(e: &Event) -> bool {
+    // TODO: hack that leverages implementation of Transfer::transfer_internal native function
+    !e.0.is_empty()
 }
 
 // TODO: Code below here probably wants to move into the VM or elsewhere in
@@ -195,7 +190,6 @@ pub fn execute_function<Resolver: MoveResolver>(
         None => 0,
     };
     if let Err(error) = res {
-        println!("Failure: {}", error);
         Ok(ExecutionResult::Fail { error, gas_used })
     } else {
         let (change_set, events) = session.finish().map_err(|e| e.into_vm_status())?;

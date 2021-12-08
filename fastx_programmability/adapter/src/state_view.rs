@@ -14,7 +14,7 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 
-pub(crate) struct FastXStateView {
+pub struct FastXStateView {
     pub inner: OnDiskStateView,
 }
 

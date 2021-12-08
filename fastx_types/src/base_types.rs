@@ -24,7 +24,7 @@ pub struct Balance(i128);
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
-pub struct SequenceNumber(u64);
+pub struct SequenceNumber(pub u64);
 
 pub type ShardId = u32;
 pub type VersionNumber = SequenceNumber;
@@ -37,6 +37,23 @@ pub struct KeyPair(dalek::Keypair);
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
+
+impl PublicKeyBytes {
+    /// Truncate a public key so it fits into a Move account address
+    // TODO(https://github.com/MystenLabs/fastnft/issues/44): eliminate once we extend size of `AccountAddress`
+    pub fn to_address_hack(&self) -> AccountAddress {
+        AccountAddress::try_from(&self.0[0..AccountAddress::LENGTH]).unwrap()
+    }
+
+    /// Extend an account address into a public key by adding zeros
+    // TODO(https://github.com/MystenLabs/fastnft/issues/44): eliminate once we extend size of `AccountAddress`.
+    pub fn from_move_address_hack(address: &AccountAddress) -> PublicKeyBytes {
+        let mut fastpay_addr = [0u8; dalek::PUBLIC_KEY_LENGTH];
+        let addr_bytes = address.to_vec();
+        fastpay_addr[..addr_bytes.len()].clone_from_slice(&addr_bytes[..]);
+        PublicKeyBytes(fastpay_addr)
+    }
+}
 
 pub type PrimaryAddress = PublicKeyBytes;
 pub type FastPayAddress = PublicKeyBytes;
