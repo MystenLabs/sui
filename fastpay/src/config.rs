@@ -202,7 +202,7 @@ pub struct InitialStateConfig {
 }
 
 impl InitialStateConfig {
-    pub fn read(path: &str) -> Result<Self, failure::Error> {
+    pub fn read(path: &str) -> Result<Self, anyhow::Error> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         let mut accounts = Vec::new();
@@ -210,7 +210,7 @@ impl InitialStateConfig {
             let line = line?;
             let elements = line.split(':').collect::<Vec<_>>();
             if elements.len() != 2 {
-                failure::bail!("expecting two columns separated with ':'")
+                anyhow::bail!("expecting two columns separated with ':'")
             }
             let address = decode_address(elements[0])?;
             let object_id = ObjectID::from_hex_literal(elements[1])?;

@@ -4,7 +4,7 @@
 use super::messages::*;
 use crate::error::*;
 
-use failure::format_err;
+use anyhow::format_err;
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
@@ -34,7 +34,7 @@ enum ShallowSerializedMessage<'a> {
     InfoResp(&'a AccountInfoResponse),
 }
 
-fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), failure::Error>
+fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), anyhow::Error>
 where
     W: std::io::Write,
     T: Serialize,
@@ -60,7 +60,7 @@ pub fn serialize_order(value: &Order) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Order(value))
 }
 
-pub fn serialize_transfer_order_into<W>(writer: W, value: &Order) -> Result<(), failure::Error>
+pub fn serialize_transfer_order_into<W>(writer: W, value: &Order) -> Result<(), anyhow::Error>
 where
     W: std::io::Write,
 {
@@ -75,7 +75,7 @@ pub fn serialize_cert(value: &CertifiedOrder) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Cert(value))
 }
 
-pub fn serialize_cert_into<W>(writer: W, value: &CertifiedOrder) -> Result<(), failure::Error>
+pub fn serialize_cert_into<W>(writer: W, value: &CertifiedOrder) -> Result<(), anyhow::Error>
 where
     W: std::io::Write,
 {
@@ -94,14 +94,14 @@ pub fn serialize_vote(value: &SignedOrder) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Vote(value))
 }
 
-pub fn serialize_vote_into<W>(writer: W, value: &SignedOrder) -> Result<(), failure::Error>
+pub fn serialize_vote_into<W>(writer: W, value: &SignedOrder) -> Result<(), anyhow::Error>
 where
     W: std::io::Write,
 {
     serialize_into(writer, &ShallowSerializedMessage::Vote(value))
 }
 
-pub fn deserialize_message<R>(reader: R) -> Result<SerializedMessage, failure::Error>
+pub fn deserialize_message<R>(reader: R) -> Result<SerializedMessage, anyhow::Error>
 where
     R: std::io::Read,
 {
