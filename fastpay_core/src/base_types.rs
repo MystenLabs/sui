@@ -49,12 +49,6 @@ pub type AuthorityName = PublicKeyBytes;
 pub type ObjectID = AccountAddress;
 pub type ObjectRef = (ObjectID, SequenceNumber);
 
-pub fn address_to_object_id_hack(address: FastPayAddress) -> ObjectID {
-    address.0[0..ObjectID::LENGTH]
-        .try_into()
-        .expect("An address is always long enough to extract 16 bytes")
-}
-
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;
     let keypair = dalek::Keypair::generate(&mut csprng);

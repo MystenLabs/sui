@@ -124,7 +124,7 @@ impl ClientServerBenchmark {
         let mut account_keys = Vec::new();
         for _ in 0..self.num_accounts {
             let keypair = get_key_pair();
-            let object_id: ObjectID = address_to_object_id_hack(keypair.0);
+            let object_id: ObjectID = ObjectID::random();
             let i = AuthorityState::get_shard(self.num_shards, &object_id) as usize;
             assert!(states[i].in_shard(&object_id));
             let mut client = Object::with_id_for_testing(object_id);
