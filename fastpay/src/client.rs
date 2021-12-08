@@ -387,7 +387,7 @@ fn main() {
         } => {
             let sender = decode_address(&from).expect("Failed to decode sender's address");
             let recipient = decode_address(&to).expect("Failed to decode recipient's address");
-            let object_id = decode_object_id(&object_id).unwrap();
+            let object_id = ObjectID::from_hex_literal(&object_id).unwrap();
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
@@ -541,7 +541,7 @@ fn main() {
             let num_accounts: u32 = num;
             let object_ids = match initial_objects {
                 Some(object_ids) => {
-                    object_ids.into_iter().map(|string| decode_object_id(&string).unwrap()).collect()
+                    object_ids.into_iter().map(|string| ObjectID::from_hex_literal(&string).unwrap()).collect()
                 }
                 None => Vec::new()
             };

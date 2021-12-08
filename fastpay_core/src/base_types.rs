@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::error::FastPayError;
 use std::convert::{TryFrom, TryInto};
-use std::num::ParseIntError;
 
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
@@ -11,7 +10,6 @@ use rand::rngs::OsRng;
 #[cfg(test)]
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::fmt::Write;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -95,25 +93,6 @@ pub fn decode_address(s: &str) -> Result<PublicKeyBytes, failure::Error> {
     let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
     address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
     Ok(PublicKeyBytes(address))
-}
-
-pub fn decode_object_id(s: &str) -> Result<ObjectID, ParseIntError> {
-    let parsed: Result<Vec<u8>, ParseIntError> = (0..s.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
-        .collect();
-    parsed.map(|vec| {
-        let result: ObjectID = vec.try_into().unwrap();
-        result
-    })
-}
-
-pub fn encode_object_id(object_id: &ObjectID) -> String {
-    let mut s = String::with_capacity(object_id.len() * 2);
-    for &b in object_id {
-        write!(&mut s, "{:02x}", b).unwrap();
-    }
-    s
 }
 
 #[cfg(test)]
