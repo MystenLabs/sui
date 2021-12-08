@@ -16,3 +16,4 @@ pub mod committee;
 pub mod messages;
 pub mod object;
 pub mod serialize;
+pub mod storage;

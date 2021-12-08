@@ -555,8 +555,8 @@ where
         self.next_sequence_number = new_next_sequence_number;
         // Sanity check
         assert_eq!(
-            self.sent_certificates.len(),
-            self.next_sequence_number.into()
+            self.sent_certificates.len() as u64,
+            self.next_sequence_number.0
         );
         Ok(())
     }

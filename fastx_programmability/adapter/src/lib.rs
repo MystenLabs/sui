@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod adapter;
-mod state_view;
+pub mod state_view;
 
 use move_core_types::account_address::AccountAddress;
 

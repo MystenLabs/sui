@@ -1,9 +1,20 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastx_adapter::adapter;
 use fastx_types::{
-    base_types::*, committee::Committee, error::FastPayError, fp_bail, fp_ensure, messages::*,
-    object::Object,
+    base_types::*,
+    committee::Committee,
+    error::FastPayError,
+    fp_bail, fp_ensure,
+    messages::*,
+    object::{Data, Object},
+    storage::Storage,
+};
+use move_core_types::{
+    account_address::AccountAddress,
+    language_storage::{ModuleId, StructTag},
+    resolver::{ModuleResolver, ResourceResolver},
 };
 use std::{collections::BTreeMap, convert::TryInto};
 
@@ -116,6 +127,8 @@ impl Authority for AuthorityState {
             FastPayError::UnexpectedSequenceNumber
         );
 
+        // TODO(https://github.com/MystenLabs/fastnft/issues/45): check that c.gas_payment exists + that its value is > gas_budget
+
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
 
         // Add to the order_lock structure.
@@ -169,6 +182,9 @@ impl Authority for AuthorityState {
         let output_sequence_number = input_sequence_number.increment()?;
         output_object.next_sequence_number = output_sequence_number;
 
+        let input_ref = input_object.to_object_reference();
+        let output_ref = output_object.to_object_reference();
+
         // Order-specific logic
         match &order.kind {
             OrderKind::Transfer(t) => {
@@ -177,17 +193,31 @@ impl Authority for AuthorityState {
                     Address::FastPay(addr) => addr,
                 });
             }
-            OrderKind::Publish(_) | OrderKind::Call(_) => {
-                unimplemented!("invoke the FastX adapter to publish or call modules")
+            OrderKind::Call(c) => {
+                let sender = c.sender.to_address_hack();
+                // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
+                // TODO(https://github.com/MystenLabs/fastnft/issues/30): read value of c.object_arguments +
+                // pass objects directly to the VM instead of passing ObjectRef's
+                adapter::execute(
+                    self,
+                    &c.module,
+                    &c.function,
+                    sender,
+                    c.object_arguments.clone(),
+                    c.pure_arguments.clone(),
+                    c.type_arguments.clone(),
+                    Some(c.gas_budget),
+                )
+                .map_err(|_| FastPayError::MoveExecutionFailure)?;
+            }
+            OrderKind::Publish(_) => {
+                unimplemented!("invoke the FastX adapter to publish modules")
             }
         }
 
         // Note: State is mutated below and should be committed in an atomic way
         // to memory or persistent storage. Currently this is done in memory
         // through the calls to store being infallible.
-
-        let input_ref = input_object.to_object_reference();
-        let output_ref = output_object.to_object_reference();
 
         // Insert into the certificates map
         let transaction_digest = self.add_certificate(certificate);
@@ -383,5 +413,65 @@ impl AuthorityState {
         transaction_digest: TransactionDigest,
     ) {
         self.parent_sync.insert(object_ref, transaction_digest);
+    }
+}
+
+impl Storage for AuthorityState {
+    fn read_object(&self, id: &ObjectID) -> Option<Object> {
+        self.objects.get(id).cloned()
+    }
+
+    // TODO: buffer changes to storage + flush buffer after commit()
+    fn write_object(&mut self, object: Object) {
+        self.insert_object(object)
+    }
+
+    // TODO: buffer changes to storage + flush buffer after commit()
+    fn delete_object(&mut self, id: &ObjectID) {
+        self.objects.remove(id);
+    }
+}
+
+impl ModuleResolver for AuthorityState {
+    type Error = FastPayError;
+    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        match self.objects.get(module_id.address()) {
+            Some(o) => match &o.data {
+                Data::Module(c) => {
+                    let mut bytes = Vec::new();
+                    c.serialize(&mut bytes).expect("Invariant violation: serialization of well-formed module should never fail");
+                    Ok(Some(bytes))
+                }
+                _ => Err(FastPayError::BadObjectType {
+                    error: "Expected module object".to_string(),
+                }),
+            },
+            None => Ok(None),
+        }
+    }
+}
+
+impl ResourceResolver for AuthorityState {
+    type Error = FastPayError;
+
+    fn get_resource(
+        &self,
+        address: &AccountAddress,
+        struct_tag: &StructTag,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        match self.objects.get(address) {
+            Some(o) => match &o.data {
+                Data::Move(m) => {
+                    assert!(struct_tag == &m.type_, "Invariant violation: ill-typed object in storage or bad object resquest from caller\
+");
+                    Ok(Some(m.contents.clone()))
+                }
+                other => unimplemented!(
+                    "Bad object lookup: expected Move object, but got {:?}",
+                    other
+                ),
+            },
+            _ => Ok(None),
+        }
     }
 }
