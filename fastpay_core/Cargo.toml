@@ -6,6 +6,7 @@ publish = false
 edition = "2018"
 
 [dependencies]
+anyhow = "1.0"
 failure = "0.1.8"
 futures = "0.3.5"
 rand = "0.7.3"
