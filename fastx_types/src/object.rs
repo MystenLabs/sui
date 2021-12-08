@@ -44,6 +44,20 @@ pub struct Object {
 }
 
 impl Object {
+    /// Create a new Move object
+    pub fn new_move(
+        type_: StructTag,
+        contents: Vec<u8>,
+        owner: FastPayAddress,
+        next_sequence_number: SequenceNumber,
+    ) -> Self {
+        Object {
+            data: Data::Move(MoveObject { type_, contents }),
+            owner,
+            next_sequence_number,
+        }
+    }
+
     pub fn to_object_reference(&self) -> ObjectRef {
         (self.id(), self.next_sequence_number)
     }
@@ -68,12 +82,9 @@ impl Object {
         self.owner = new_owner;
     }
 
-    // TODO: this should be test-only, but it's still used in bench and server
-    pub fn with_id_for_testing(id: ObjectID) -> Self {
-        use crate::base_types::PublicKeyBytes;
+    pub fn with_id_owner_for_testing(id: ObjectID, owner: FastPayAddress) -> Self {
         use move_core_types::identifier::Identifier;
 
-        let owner = PublicKeyBytes([0; 32]);
         let module = Identifier::new("Test").unwrap();
         let name = Identifier::new("Struct").unwrap();
         let type_params = Vec::new();
@@ -92,5 +103,13 @@ impl Object {
             data,
             next_sequence_number,
         }
+    }
+
+    // TODO: this should be test-only, but it's still used in bench and server
+    pub fn with_id_for_testing(id: ObjectID) -> Self {
+        use crate::base_types::PublicKeyBytes;
+
+        let owner = PublicKeyBytes([0; 32]);
+        Self::with_id_owner_for_testing(id, owner)
     }
 }
