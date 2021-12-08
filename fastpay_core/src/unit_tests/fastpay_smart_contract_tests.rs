@@ -135,7 +135,7 @@ fn init_redeem_transaction(
 ) -> RedeemTransaction {
     let (sender_address, sender_key) = get_key_pair();
     let primary_transfer = Transfer {
-        object_id: get_object_id(),
+        object_id: ObjectID::random(),
         sender: sender_address,
         recipient: Address::Primary(dbg_addr(2)),
         sequence_number: SequenceNumber::new(),

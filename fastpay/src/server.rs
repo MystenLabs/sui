@@ -44,7 +44,7 @@ fn make_shard_server(
             continue;
         }
 
-        let mut client = Object::with_id_for_testing(id);
+        let mut client = Object::with_id_for_testing(*object_id);
         client.transfer(*address);
         state.insert_object(client);
     }

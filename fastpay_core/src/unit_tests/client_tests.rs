@@ -147,7 +147,7 @@ fn fund_account<I: IntoIterator<Item = i128>>(
 #[cfg(test)]
 fn init_local_client_state(balances: Vec<i128>) -> ClientState<LocalAuthorityClient> {
     let (mut authority_clients, committee) = init_local_authorities(balances.len());
-    let object_id = get_object_id();
+    let object_id = ObjectID::random();
     let client = make_client(authority_clients.clone(), committee, vec![object_id]);
     fund_account(&mut authority_clients, client.address, balances, object_id);
     client
@@ -158,7 +158,7 @@ fn init_local_client_state_with_bad_authority(
     balances: Vec<i128>,
 ) -> ClientState<LocalAuthorityClient> {
     let (mut authority_clients, committee) = init_local_authorities_bad_1(balances.len());
-    let object_id = get_object_id();
+    let object_id = ObjectID::random();
     let client = make_client(authority_clients.clone(), committee, vec![object_id]);
     fund_account(&mut authority_clients, client.address, balances, object_id);
     client
@@ -256,7 +256,7 @@ fn test_initiating_transfer_low_funds() {
 fn test_bidirectional_transfer() {
     let mut rt = Runtime::new().unwrap();
     let (mut authority_clients, committee) = init_local_authorities(4);
-    let object_id = get_object_id();
+    let object_id = ObjectID::random();
     let mut client1 = make_client(
         authority_clients.clone(),
         committee.clone(),
@@ -336,7 +336,7 @@ fn test_bidirectional_transfer() {
 fn test_receiving_unconfirmed_transfer() {
     let mut rt = Runtime::new().unwrap();
     let (mut authority_clients, committee) = init_local_authorities(4);
-    let object_id = get_object_id();
+    let object_id = ObjectID::random();
     let mut client1 = make_client(
         authority_clients.clone(),
         committee.clone(),

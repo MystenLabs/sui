@@ -7,8 +7,6 @@ use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
 use move_core_types::account_address::AccountAddress;
 use rand::rngs::OsRng;
-#[cfg(test)]
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
@@ -55,11 +53,6 @@ pub fn address_to_object_id_hack(address: FastPayAddress) -> ObjectID {
     address.0[0..ObjectID::LENGTH]
         .try_into()
         .expect("An address is always long enough to extract 16 bytes")
-}
-
-#[cfg(test)]
-pub fn get_object_id() -> ObjectID {
-    ObjectID::new(rand::thread_rng().gen::<[u8; ObjectID::LENGTH]>())
 }
 
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {

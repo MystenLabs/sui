@@ -495,9 +495,8 @@ where
                         .next()
                         .ok_or(FastPayError::CertificateNotfound)
                         .unwrap();
-                    match requester.query(number).await {
-                        Ok(cert) => break cert,
-                        Err(_) => {}
+                    if let Ok(cert) = requester.query(number).await {
+                        break cert;
                     }
                 };
                 sent_certificates.push(certificate);
