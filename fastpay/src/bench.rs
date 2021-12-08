@@ -121,25 +121,25 @@ impl ClientServerBenchmark {
         }
 
         // Seed user accounts.
-        let mut account_keys = Vec::new();
+        let mut account_objects = Vec::new();
         for _ in 0..self.num_accounts {
             let keypair = get_key_pair();
-            let object_id: ObjectID = address_to_object_id_hack(keypair.0);
+            let object_id: ObjectID = ObjectID::random();
             let i = AuthorityState::get_shard(self.num_shards, &object_id) as usize;
             assert!(states[i].in_shard(&object_id));
             let mut client = Object::with_id_for_testing(object_id);
             client.transfer(keypair.0);
             states[i].insert_object(client);
-            account_keys.push(keypair);
+            account_objects.push((keypair.0, object_id, keypair.1));
         }
 
         info!("Preparing transactions.");
         // Make one transaction per account (transfer order + confirmation).
         let mut orders: Vec<(u32, Bytes)> = Vec::new();
         let mut next_recipient = get_key_pair().0;
-        for (pubx, secx) in account_keys.iter() {
+        for (pubx, object_id, secx) in account_objects.iter() {
             let transfer = Transfer {
-                object_id: address_to_object_id_hack(*pubx),
+                object_id: *object_id,
                 sender: *pubx,
                 recipient: Address::FastPay(next_recipient),
                 sequence_number: SequenceNumber::from(0),

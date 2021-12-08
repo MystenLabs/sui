@@ -1,17 +1,13 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
-
+use crate::error::FastPayError;
 use std::convert::{TryFrom, TryInto};
 
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Signer, Verifier};
 use move_core_types::account_address::AccountAddress;
 use rand::rngs::OsRng;
-#[cfg(test)]
-use rand::Rng;
 use serde::{Deserialize, Serialize};
-
-use crate::error::FastPayError;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -52,17 +48,6 @@ pub type AuthorityName = PublicKeyBytes;
 // addresses and ID's
 pub type ObjectID = AccountAddress;
 pub type ObjectRef = (ObjectID, SequenceNumber);
-
-pub fn address_to_object_id_hack(address: FastPayAddress) -> ObjectID {
-    address.0[0..ObjectID::LENGTH]
-        .try_into()
-        .expect("An address is always long enough to extract 16 bytes")
-}
-
-#[cfg(test)]
-pub fn get_object_id() -> ObjectID {
-    ObjectID::new(rand::thread_rng().gen::<[u8; ObjectID::LENGTH]>())
-}
 
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;
