@@ -21,6 +21,7 @@ macro_rules! fp_ensure {
         }
     };
 }
+pub(crate) use fp_ensure;
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 /// Custom error type for FastPay.
