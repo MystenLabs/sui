@@ -223,12 +223,7 @@ impl InitialStateConfig {
         let file = OpenOptions::new().create(true).write(true).open(path)?;
         let mut writer = BufWriter::new(file);
         for (address, object_id) in &self.accounts {
-            writeln!(
-                writer,
-                "{}:{}",
-                encode_address(address),
-                object_id.to_string(),
-            )?;
+            writeln!(writer, "{}:{}", encode_address(address), object_id,)?;
         }
         Ok(())
     }
