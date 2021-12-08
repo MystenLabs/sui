@@ -6,8 +6,10 @@ use crate::{
     MOVE_STDLIB_ADDRESS,
 };
 use anyhow::Result;
+use fastpay_core::error::{FastPayError, FastPayResult};
 use fastx_framework::natives;
-use move_binary_format::errors::VMError;
+use fastx_verifier::verifier;
+use move_binary_format::{errors::VMError, file_format::CompiledModule};
 
 use move_cli::sandbox::utils::get_gas_status;
 use move_core_types::{
@@ -58,6 +60,11 @@ impl FastXAdapter {
         args.push(TransactionArgument::U8Vector(inputs_hash.to_vec()));
         let script_args = convert_txn_args(&args);
         let module_id = ModuleId::new(FASTX_FRAMEWORK_ADDRESS, module);
+        if let Err(error) = verify_module(&module_id, &self.state_view) {
+            // TODO: use CLI's error explanation features here
+            println!("Fail: {}", error);
+            return Ok(());
+        }
         let natives = natives::all_natives(MOVE_STDLIB_ADDRESS, FASTX_FRAMEWORK_ADDRESS);
         match execute_function(
             &module_id,
@@ -201,4 +208,35 @@ pub fn execute_function<Resolver: MoveResolver>(
             gas_used,
         })
     }
+}
+
+// Load, deserialize, and check the module with the fastx bytecode verifier, without linking
+fn verify_module<Resolver: MoveResolver>(id: &ModuleId, resolver: &Resolver) -> FastPayResult {
+    let module_bytes = match resolver.get_module(id) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => {
+            return Err(FastPayError::ModuleLoadFailure {
+                error: format!("Resolver returned None for module {}", &id),
+            })
+        }
+        Err(err) => {
+            return Err(FastPayError::ModuleLoadFailure {
+                error: format!("Resolver failed to load module {}: {:?}", &id, err),
+            })
+        }
+    };
+
+    // for bytes obtained from the data store, they should always deserialize and verify.
+    // It is an invariant violation if they don't.
+    let module = CompiledModule::deserialize(&module_bytes).map_err(|err| {
+        FastPayError::ModuleLoadFailure {
+            error: err.to_string(),
+        }
+    })?;
+
+    // bytecode verifier checks that can be performed with the module itself
+    verifier::verify_module(&module).map_err(|err| FastPayError::ModuleVerificationFailure {
+        error: err.to_string(),
+    })?;
+    Ok(())
 }
