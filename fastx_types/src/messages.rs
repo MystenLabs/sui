@@ -1,8 +1,6 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::TransactionDigest;
-
 use super::{base_types::*, committee::Committee, error::*};
 
 #[cfg(test)]
@@ -18,6 +16,10 @@ use std::{
     collections::HashSet,
     hash::{Hash, Hasher},
 };
+
+// Refactor: eventually a transaction will have a (unique) digest. For the moment we only
+// have transfer transactions so we index them by the object/seq they mutate.
+pub(crate) type TransactionDigest = (ObjectID, SequenceNumber);
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct FundingTransaction {

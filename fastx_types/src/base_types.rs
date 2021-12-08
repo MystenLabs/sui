@@ -82,13 +82,11 @@ pub fn decode_address(s: &str) -> Result<PublicKeyBytes, failure::Error> {
     Ok(PublicKeyBytes(address))
 }
 
-#[cfg(test)]
 pub fn dbg_addr(name: u8) -> FastPayAddress {
     let addr = [name; dalek::PUBLIC_KEY_LENGTH];
     PublicKeyBytes(addr)
 }
 
-#[cfg(test)]
 pub fn dbg_object_id(name: u8) -> ObjectID {
     ObjectID::from_bytes([name; ObjectID::LENGTH]).unwrap()
 }

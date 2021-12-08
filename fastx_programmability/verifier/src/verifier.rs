@@ -3,7 +3,7 @@
 
 //! This module contains the public APIs supported by the bytecode verifier.
 
-use fastpay_core::error::FastPayResult;
+use fastx_types::error::FastPayResult;
 use move_binary_format::file_format::CompiledModule;
 
 use crate::dummy_verifier;

@@ -1,8 +1,8 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{base_types::*, committee::Committee, messages::*};
 use failure::ensure;
+use fastx_types::{base_types::*, committee::Committee, messages::*};
 use std::collections::BTreeMap;
 
 #[cfg(test)]
