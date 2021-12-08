@@ -101,6 +101,12 @@ pub enum FastPayError {
     #[fail(display = "Network error while querying service: {:?}.", error)]
     ClientIoError { error: String },
 
+    // Move related errors
+    #[fail(display = "Failed to load the Move module, reason: {:?}.", error)]
+    ModuleLoadFailure { error: String },
+    #[fail(display = "Failed to verify the Move module, reason: {:?}.", error)]
+    ModuleVerificationFailure { error: String },
+
     // Internal state errors
     #[fail(display = "Attempt to re-initialize an order lock.")]
     OrderLockExists,
@@ -111,3 +117,5 @@ pub enum FastPayError {
     #[fail(display = "Could not find the referenced object.")]
     ObjectNotFound,
 }
+
+pub type FastPayResult<T = ()> = Result<T, FastPayError>;
