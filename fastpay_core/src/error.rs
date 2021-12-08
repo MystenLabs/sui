@@ -115,3 +115,5 @@ pub enum FastPayError {
     #[fail(display = "Could not find the referenced object.")]
     ObjectNotFound,
 }
+
+pub type FastPayResult<T = ()> = Result<T, FastPayError>;

@@ -6,7 +6,7 @@ use crate::{
     MOVE_STDLIB_ADDRESS,
 };
 use anyhow::Result;
-use fastpay_core::error::FastPayError;
+use fastpay_core::error::{FastPayError, FastPayResult};
 use fastx_framework::natives;
 use fastx_verifier::verifier;
 use move_binary_format::{errors::VMError, file_format::CompiledModule};
@@ -211,10 +211,7 @@ pub fn execute_function<Resolver: MoveResolver>(
 }
 
 // Load, deserialize, and check the module with the fastx bytecode verifier, without linking
-fn verify_module<Resolver: MoveResolver>(
-    id: &ModuleId,
-    resolver: &Resolver,
-) -> Result<(), FastPayError> {
+fn verify_module<Resolver: MoveResolver>(id: &ModuleId, resolver: &Resolver) -> FastPayResult {
     let module_bytes = match resolver.get_module(id) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {
