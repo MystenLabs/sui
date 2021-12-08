@@ -92,7 +92,7 @@ fn make_client_state(
 fn make_benchmark_transfer_orders(
     accounts_config: &mut AccountsConfig,
     max_orders: usize,
-) -> (Vec<Order>, Vec<(FastPayAddress, ObjectID, Bytes)>) {
+) -> (Vec<Order>, Vec<(ObjectID, Bytes)>) {
     let mut orders = Vec::new();
     let mut serialized_orders = Vec::new();
     // TODO: deterministic sequence of orders to recover from interrupted benchmarks.
@@ -112,7 +112,7 @@ fn make_benchmark_transfer_orders(
         let order = Order::new_transfer(transfer.clone(), &account.key);
         orders.push(order.clone());
         let serialized_order = serialize_order(&order);
-        serialized_orders.push((account.address, object_id, serialized_order.into()));
+        serialized_orders.push((object_id, serialized_order.into()));
         if serialized_orders.len() >= max_orders {
             break;
         }
@@ -124,7 +124,7 @@ fn make_benchmark_transfer_orders(
 fn make_benchmark_certificates_from_orders_and_server_configs(
     orders: Vec<Order>,
     server_config: Vec<&str>,
-) -> Vec<(FastPayAddress, ObjectID, Bytes)> {
+) -> Vec<(ObjectID, Bytes)> {
     let mut keys = Vec::new();
     for file in server_config {
         let server_config = AuthorityServerConfig::read(file).expect("Fail to read server config");
@@ -150,11 +150,7 @@ fn make_benchmark_certificates_from_orders_and_server_configs(
             certificate.signatures.push((*pubx, sig));
         }
         let serialized_certificate = serialize_cert(&certificate);
-        serialized_certificates.push((
-            *order.sender(),
-            *order.object_id(),
-            serialized_certificate.into(),
-        ));
+        serialized_certificates.push((*order.object_id(), serialized_certificate.into()));
     }
     serialized_certificates
 }
@@ -163,7 +159,7 @@ fn make_benchmark_certificates_from_orders_and_server_configs(
 fn make_benchmark_certificates_from_votes(
     committee_config: &CommitteeConfig,
     votes: Vec<SignedOrder>,
-) -> Vec<(FastPayAddress, ObjectID, Bytes)> {
+) -> Vec<(ObjectID, Bytes)> {
     let committee = Committee::new(committee_config.voting_rights());
     let mut aggregators = HashMap::new();
     let mut certificates = Vec::new();
@@ -188,7 +184,7 @@ fn make_benchmark_certificates_from_votes(
             Ok(Some(certificate)) => {
                 debug!("Found certificate: {:?}", certificate);
                 let buf = serialize_cert(&certificate);
-                certificates.push((address, object_id, buf.into()));
+                certificates.push((object_id, buf.into()));
                 done_senders.insert(address);
             }
             Ok(None) => {
@@ -210,7 +206,7 @@ async fn mass_broadcast_orders(
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
     max_in_flight: u64,
-    orders: Vec<(FastPayAddress, ObjectID, Bytes)>,
+    orders: Vec<(ObjectID, Bytes)>,
 ) -> Vec<Bytes> {
     let time_start = Instant::now();
     info!("Broadcasting {} {} orders", orders.len(), phase);
@@ -225,7 +221,7 @@ async fn mass_broadcast_orders(
     for (num_shards, client) in authority_clients {
         // Re-index orders by shard for this particular authority client.
         let mut sharded_requests = HashMap::new();
-        for (_, object_id, buf) in &orders {
+        for (object_id, buf) in &orders {
             let shard = AuthorityState::get_shard(num_shards, object_id);
             sharded_requests
                 .entry(shard)
@@ -251,9 +247,9 @@ async fn mass_broadcast_orders(
 
 fn mass_update_recipients(
     accounts_config: &mut AccountsConfig,
-    certificates: Vec<(FastPayAddress, ObjectID, Bytes)>,
+    certificates: Vec<(ObjectID, Bytes)>,
 ) {
-    for (_sender, _object_id, buf) in certificates {
+    for (_object_id, buf) in certificates {
         if let Ok(SerializedMessage::Cert(certificate)) = deserialize_message(&buf[..]) {
             accounts_config.update_for_received_transfer(*certificate);
         }
