@@ -1,6 +1,18 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::account_address::AccountAddress;
+
+/// 0x1-- account address where Move stdlib modules are stored
+pub const MOVE_STDLIB_ADDRESS: AccountAddress = AccountAddress::new([
+    0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8,
+]);
+
+/// 0x2-- account address where fastX framework modules are stored
+pub const FASTX_FRAMEWORK_ADDRESS: AccountAddress = AccountAddress::new([
+    0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8,
+]);
+
 pub mod natives;
 
 #[test]

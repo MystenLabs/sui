@@ -4,3 +4,9 @@
 pub mod verifier;
 
 mod struct_with_key_verifier;
+
+use fastx_types::error::FastPayError;
+
+fn verification_failure(error: String) -> FastPayError {
+    FastPayError::ModuleVerificationFailure { error }
+}
