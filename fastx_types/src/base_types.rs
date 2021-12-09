@@ -75,7 +75,7 @@ pub fn encode_address(key: &PublicKeyBytes) -> String {
     base64::encode(&key.0[..])
 }
 
-pub fn decode_address(s: &str) -> Result<PublicKeyBytes, failure::Error> {
+pub fn decode_address(s: &str) -> Result<PublicKeyBytes, anyhow::Error> {
     let value = base64::decode(s)?;
     let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
     address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
