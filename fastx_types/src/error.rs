@@ -1,8 +1,9 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use thiserror::Error;
+
 use crate::{base_types::*, messages::*};
-use failure::Fail;
 use serde::{Deserialize, Serialize};
 
 #[macro_export]
@@ -21,100 +22,95 @@ macro_rules! fp_ensure {
     };
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Fail, Hash)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 /// Custom error type for FastPay.
 
 #[allow(clippy::large_enum_variant)]
 pub enum FastPayError {
     // Signature verification
-    #[fail(display = "Signature is not valid: {}", error)]
+    #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
-    #[fail(display = "Value was not signed by the correct sender")]
+    #[error("Value was not signed by the correct sender")]
     IncorrectSigner,
-    #[fail(display = "Value was not signed by a known authority")]
+    #[error("Value was not signed by a known authority")]
     UnknownSigner,
     // Certificate verification
-    #[fail(display = "Signatures in a certificate must form a quorum")]
+    #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     // Transfer processing
-    #[fail(display = "Transfers must have positive amount")]
+    #[error("Transfers must have positive amount")]
     IncorrectTransferAmount,
-    #[fail(
-        display = "The given sequence number must match the next expected sequence number of the account"
+    #[error(
+        "The given sequence number must match the next expected sequence number of the account"
     )]
     UnexpectedSequenceNumber,
-    #[fail(
-        display = "The transferred amount must be not exceed the current account balance: {:?}",
-        current_balance
+    #[error(
+         "The transferred amount must be not exceed the current account balance: {current_balance:?}"
     )]
     InsufficientFunding { current_balance: Balance },
-    #[fail(
-        display = "Cannot initiate transfer while a transfer order is still pending confirmation: {:?}",
-        pending_confirmation
+    #[error(
+          "Cannot initiate transfer while a transfer order is still pending confirmation: {pending_confirmation:?}"
     )]
     PreviousTransferMustBeConfirmedFirst { pending_confirmation: Order },
-    #[fail(display = "Transfer order was processed but no signature was produced by authority")]
+    #[error("Transfer order was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransferOrder,
-    #[fail(
-        display = "An invalid answer was returned by the authority while requesting a certificate"
-    )]
+    #[error("An invalid answer was returned by the authority while requesting a certificate")]
     ErrorWhileRequestingCertificate,
-    #[fail(
-        display = "Cannot confirm a transfer while previous transfer orders are still pending confirmation: {:?}",
-        current_sequence_number
+    #[error(
+         "Cannot confirm a transfer while previous transfer orders are still pending confirmation: {current_sequence_number:?}"
     )]
     MissingEalierConfirmations {
         current_sequence_number: VersionNumber,
     },
     // Synchronization validation
-    #[fail(display = "Transaction index must increase by one")]
+    #[error("Transaction index must increase by one")]
     UnexpectedTransactionIndex,
     // Account access
-    #[fail(display = "No certificate for this account and sequence number")]
+    #[error("No certificate for this account and sequence number")]
     CertificateNotfound,
-    #[fail(display = "Unknown sender's account")]
+    #[error("Unknown sender's account")]
     UnknownSenderAccount,
-    #[fail(display = "Signatures in a certificate must be from different authorities.")]
+    #[error("Signatures in a certificate must be from different authorities.")]
     CertificateAuthorityReuse,
-    #[fail(display = "Sequence numbers above the maximal value are not usable for transfers.")]
+    #[error("Sequence numbers above the maximal value are not usable for transfers.")]
     InvalidSequenceNumber,
-    #[fail(display = "Sequence number overflow.")]
+    #[error("Sequence number overflow.")]
     SequenceOverflow,
-    #[fail(display = "Sequence number underflow.")]
+    #[error("Sequence number underflow.")]
     SequenceUnderflow,
-    #[fail(display = "Amount overflow.")]
+    #[error("Amount overflow.")]
     AmountOverflow,
-    #[fail(display = "Amount underflow.")]
+    #[error("Amount underflow.")]
     AmountUnderflow,
-    #[fail(display = "Account balance overflow.")]
+    #[error("Account balance overflow.")]
     BalanceOverflow,
-    #[fail(display = "Account balance underflow.")]
+    #[error("Account balance underflow.")]
     BalanceUnderflow,
-    #[fail(display = "Wrong shard used.")]
+    #[error("Wrong shard used.")]
     WrongShard,
-    #[fail(display = "Invalid cross shard update.")]
+    #[error("Invalid cross shard update.")]
     InvalidCrossShardUpdate,
-    #[fail(display = "Cannot deserialize.")]
+    #[error("Cannot deserialize.")]
     InvalidDecoding,
-    #[fail(display = "Unexpected message.")]
+    #[error("Unexpected message.")]
     UnexpectedMessage,
-    #[fail(display = "Network error while querying service: {:?}.", error)]
+    #[error("Network error while querying service: {:?}.", error)]
     ClientIoError { error: String },
 
     // Move related errors
-    #[fail(display = "Failed to load the Move module, reason: {:?}.", error)]
+    #[error("Failed to load the Move module, reason: {error:?}.")]
     ModuleLoadFailure { error: String },
-    #[fail(display = "Failed to verify the Move module, reason: {:?}.", error)]
+    #[error("Failed to verify the Move module, reason: {error:?}.")]
     ModuleVerificationFailure { error: String },
 
     // Internal state errors
-    #[fail(display = "Attempt to re-initialize an order lock.")]
+    #[error("Attempt to re-initialize an order lock.")]
     OrderLockExists,
-    #[fail(display = "Attempt to set an non-existing order lock.")]
+    #[error("Attempt to set an non-existing order lock.")]
     OrderLockDoesNotExist,
-    #[fail(display = "Attempt to reset a set order lock to a different value.")]
+    #[error("Attempt to reset a set order lock to a different value.")]
     OrderLockReset,
-    #[fail(display = "Could not find the referenced object.")]
+    #[error("Could not find the referenced object.")]
     ObjectNotFound,
 }
 

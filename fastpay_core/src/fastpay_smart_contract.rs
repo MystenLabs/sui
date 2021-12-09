@@ -1,7 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use failure::ensure;
+use anyhow::ensure;
 use fastx_types::{base_types::*, committee::Committee, messages::*};
 use std::collections::BTreeMap;
 
@@ -36,13 +36,13 @@ pub trait FastPaySmartContract {
     fn handle_funding_transaction(
         &mut self,
         transaction: FundingTransaction,
-    ) -> Result<(), failure::Error>;
+    ) -> Result<(), anyhow::Error>;
 
     /// Finalize a transfer from FastPay to Primary.
     fn handle_redeem_transaction(
         &mut self,
         transaction: RedeemTransaction,
-    ) -> Result<(), failure::Error>;
+    ) -> Result<(), anyhow::Error>;
 }
 
 impl FastPaySmartContract for FastPaySmartContractState {
@@ -50,7 +50,7 @@ impl FastPaySmartContract for FastPaySmartContractState {
     fn handle_funding_transaction(
         &mut self,
         transaction: FundingTransaction,
-    ) -> Result<(), failure::Error> {
+    ) -> Result<(), anyhow::Error> {
         // TODO: Authentication by Primary sender
         let amount = transaction.primary_coins;
         ensure!(
@@ -68,7 +68,7 @@ impl FastPaySmartContract for FastPaySmartContractState {
     fn handle_redeem_transaction(
         &mut self,
         transaction: RedeemTransaction,
-    ) -> Result<(), failure::Error> {
+    ) -> Result<(), anyhow::Error> {
         transaction.certificate.check(&self.committee)?;
         let order = transaction.certificate.order;
 

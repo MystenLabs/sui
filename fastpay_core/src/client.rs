@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::downloader::*;
-use failure::{bail, ensure};
+use anyhow::{bail, ensure};
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
@@ -69,7 +69,7 @@ pub trait Client {
         object_id: ObjectID,
         recipient: FastPayAddress,
         user_data: UserData,
-    ) -> AsyncResult<'_, CertifiedOrder, failure::Error>;
+    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
     /// Send money to a Primary account.
     fn transfer_to_primary(
@@ -77,13 +77,13 @@ pub trait Client {
         object_id: ObjectID,
         recipient: PrimaryAddress,
         user_data: UserData,
-    ) -> AsyncResult<'_, CertifiedOrder, failure::Error>;
+    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
     /// Receive money from FastPay.
     fn receive_from_fastpay(
         &mut self,
         certificate: CertifiedOrder,
-    ) -> AsyncResult<'_, (), failure::Error>;
+    ) -> AsyncResult<'_, (), anyhow::Error>;
 
     /// Send money to a FastPay account.
     /// Do not check balance. (This may block the client)
@@ -94,12 +94,12 @@ pub trait Client {
         recipient: FastPayAddress,
         object_id: ObjectID,
         user_data: UserData,
-    ) -> AsyncResult<'_, CertifiedOrder, failure::Error>;
+    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
     /// Find how much money we can spend.
     /// TODO: Currently, this value only reflects received transfers that were
     /// locally processed by `receive_from_fastpay`.
-    fn get_spendable_amount(&mut self) -> AsyncResult<'_, Amount, failure::Error>;
+    fn get_spendable_amount(&mut self) -> AsyncResult<'_, Amount, anyhow::Error>;
 }
 
 impl<A> ClientState<A> {
@@ -308,7 +308,7 @@ where
     async fn communicate_with_quorum<'a, V, F>(
         &'a mut self,
         execute: F,
-    ) -> Result<Vec<V>, failure::Error>
+    ) -> Result<Vec<V>, anyhow::Error>
     where
         F: Fn(AuthorityName, &'a mut A) -> AsyncResult<'a, V, FastPayError> + Clone,
     {
@@ -361,7 +361,7 @@ where
         object_id: ObjectID,
         known_certificates: Vec<CertifiedOrder>,
         action: CommunicateAction,
-    ) -> Result<Vec<CertifiedOrder>, failure::Error> {
+    ) -> Result<Vec<CertifiedOrder>, anyhow::Error> {
         let target_sequence_number = match &action {
             CommunicateAction::SendOrder(order) => order.sequence_number(),
             CommunicateAction::SynchronizeNextSequenceNumber(seq) => *seq,
@@ -515,7 +515,7 @@ where
         object_id: ObjectID,
         recipient: Address,
         user_data: UserData,
-    ) -> Result<CertifiedOrder, failure::Error> {
+    ) -> Result<CertifiedOrder, anyhow::Error> {
         let transfer = Transfer {
             object_id,
             sender: self.address,
@@ -566,7 +566,7 @@ where
         &mut self,
         order: Order,
         with_confirmation: bool,
-    ) -> Result<CertifiedOrder, failure::Error> {
+    ) -> Result<CertifiedOrder, anyhow::Error> {
         ensure!(
             self.pending_transfer == None || self.pending_transfer.as_ref() == Some(&order),
             "Client state has a different pending transfer",
@@ -613,7 +613,7 @@ where
         object_id: ObjectID,
         recipient: FastPayAddress,
         user_data: UserData,
-    ) -> AsyncResult<'_, CertifiedOrder, failure::Error> {
+    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
         Box::pin(self.transfer(object_id, Address::FastPay(recipient), user_data))
     }
 
@@ -622,11 +622,11 @@ where
         object_id: ObjectID,
         recipient: PrimaryAddress,
         user_data: UserData,
-    ) -> AsyncResult<'_, CertifiedOrder, failure::Error> {
+    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
         Box::pin(self.transfer(object_id, Address::Primary(recipient), user_data))
     }
 
-    fn get_spendable_amount(&mut self) -> AsyncResult<'_, Amount, failure::Error> {
+    fn get_spendable_amount(&mut self) -> AsyncResult<'_, Amount, anyhow::Error> {
         Box::pin(async move {
             if let Some(order) = self.pending_transfer.clone() {
                 // Finish executing the previous transfer.
@@ -650,7 +650,7 @@ where
     fn receive_from_fastpay(
         &mut self,
         certificate: CertifiedOrder,
-    ) -> AsyncResult<'_, (), failure::Error> {
+    ) -> AsyncResult<'_, (), anyhow::Error> {
         Box::pin(async move {
             certificate.check(&self.committee)?;
             match &certificate.order.kind {
@@ -690,7 +690,7 @@ where
         recipient: FastPayAddress,
         object_id: ObjectID,
         user_data: UserData,
-    ) -> AsyncResult<'_, CertifiedOrder, failure::Error> {
+    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
         Box::pin(async move {
             let transfer = Transfer {
                 object_id,
