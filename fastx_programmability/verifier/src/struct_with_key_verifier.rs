@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-use fastpay_core::{
-    error::{FastPayError, FastPayResult},
-    fp_ensure,
-};
+use crate::verification_failure;
+use fastx_framework::FASTX_FRAMEWORK_ADDRESS;
+use fastx_types::{error::FastPayResult, fp_ensure};
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
@@ -24,36 +23,65 @@ fn verify_key_structs(module: &CompiledModule) -> FastPayResult {
             continue;
         }
         let name = view.identifier_at(handle.name);
+        // Check that a struct with key ability must not have drop ability.
+        // A struct with key ability represents a fastx object.
+        // We want to ensure that fastx objects cannot be arbitrarily dropped.
+        // For example, *x = new_object shouldn't work for a key object x.
         fp_ensure!(
             !handle.abilities.has_drop(),
-            FastPayError::ModuleVerificationFailure {
-                error: format!("Struct {} cannot have both key and drop abilities", name)
-            }
+            verification_failure(format!(
+                "Struct {} cannot have both key and drop abilities",
+                name
+            ))
         );
 
-        let id_error = FastPayError::ModuleVerificationFailure {
-            error: format!(
-                "First field of struct {} must be 'id' with type 'ID' since it has 'key' ability",
-                name
-            ),
-        };
+        // Check that the first field of the struct must be named "id".
         let first_field = match def.field(0) {
             Some(field) => field,
-            None => return Err(id_error),
+            None => {
+                return Err(verification_failure(format!(
+                    "First field of struct {} must be 'id', no field found",
+                    name
+                )))
+            }
         };
+        let first_field_name = view.identifier_at(first_field.name).as_str();
         fp_ensure!(
-            view.identifier_at(first_field.name).as_str() == "id",
-            id_error
+            first_field_name == "id",
+            verification_failure(format!(
+                "First field of struct {} must be 'id', {} found",
+                name, first_field_name
+            ))
         );
-        let id_field_type = match first_field.signature.0 {
+        // Check that the "id" field must have a struct type.
+        let id_field_type = &first_field.signature.0;
+        let id_field_type = match id_field_type {
             SignatureToken::Struct(struct_type) => struct_type,
-            _ => return Err(id_error),
+            _ => {
+                return Err(verification_failure(format!(
+                    "First field of struct {} must be of ID type, {:?} type found",
+                    name, id_field_type
+                )))
+            }
         };
+        // Chech that the struct type for "id" field must be FASTX_FRAMEWORK_ADDRESS::ID::ID.
+        let id_type_struct = module.struct_handle_at(*id_field_type);
+        let id_type_struct_name = view.identifier_at(id_type_struct.name).as_str();
+        let id_type_module = module.module_handle_at(id_type_struct.module);
+        let id_type_module_address = module.address_identifier_at(id_type_module.address);
+        let id_type_module_name = module.identifier_at(id_type_module.name).to_string();
         fp_ensure!(
-            view.identifier_at(module.struct_handle_at(id_field_type).name)
-                .as_str()
-                == "ID",
-            id_error
+            id_type_struct_name == "ID"
+                && id_type_module_address == &FASTX_FRAMEWORK_ADDRESS
+                && id_type_module_name == "ID",
+            verification_failure(format!(
+                "First field of struct {} must be of type {}::ID::ID, {}::{}::{} type found",
+                name,
+                FASTX_FRAMEWORK_ADDRESS,
+                id_type_module_address,
+                id_type_module_name,
+                id_type_struct_name
+            ))
         );
     }
     Ok(())

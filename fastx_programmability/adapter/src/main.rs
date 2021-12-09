@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use fastx_adapter::{adapter::FastXAdapter, FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS};
-use fastx_framework::natives;
+use fastx_adapter::adapter::FastXAdapter;
+use fastx_framework::{natives, FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS};
 
 use move_cli::{Command, Move};
 use move_core_types::{
