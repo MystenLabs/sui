@@ -4,6 +4,7 @@
 
 # Move build directory
 build
+storage/
 
 .DS_Store
 
