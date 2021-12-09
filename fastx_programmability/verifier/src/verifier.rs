@@ -6,9 +6,9 @@
 use fastx_types::error::FastPayResult;
 use move_binary_format::file_format::CompiledModule;
 
-use crate::dummy_verifier;
+use crate::struct_with_key_verifier;
 
 /// Helper for a "canonical" verification of a module.
 pub fn verify_module(module: &CompiledModule) -> FastPayResult {
-    dummy_verifier::verify_module(module)
+    struct_with_key_verifier::verify_module(module)
 }
