@@ -160,62 +160,68 @@ impl Authority for AuthorityState {
         fp_ensure!(self.in_shard(&object_id), FastPayError::WrongShard);
         certificate.check(&self.committee)?;
 
-        // If we have a certificate on the confirmation order it means that the input
-        // object exists on other honest authorities, but we do not have it. The only
-        // way this may happen is if we missed some updates.
-        let input_object =
-            self.objects
-                .get(&object_id)
-                .ok_or(FastPayError::MissingEalierConfirmations {
+        let mut inputs = vec![];
+        for (input_object_id, input_seq) in order.input_objects() {
+            // If we have a certificate on the confirmation order it means that the input
+            // object exists on other honest authorities, but we do not have it. The only
+            // way this may happen is if we missed some updates.
+            let input_object = self.objects.get(&input_object_id).ok_or(
+                FastPayError::MissingEalierConfirmations {
                     current_sequence_number: SequenceNumber::from(0),
-                })?;
+                },
+            )?;
 
-        let input_sequence_number = input_object.next_sequence_number;
+            let input_sequence_number = input_object.next_sequence_number;
 
-        // Check that the current object is exactly the right version.
-        if input_sequence_number < order.sequence_number() {
-            fp_bail!(FastPayError::MissingEalierConfirmations {
-                current_sequence_number: input_sequence_number
-            });
-        }
-        if input_sequence_number > order.sequence_number() {
-            // Transfer was already confirmed.
-            return self.make_object_info(object_id);
+            // Check that the current object is exactly the right version.
+            if input_sequence_number < input_seq {
+                fp_bail!(FastPayError::MissingEalierConfirmations {
+                    current_sequence_number: input_sequence_number
+                });
+            }
+            if input_sequence_number > input_seq {
+                // Transfer was already confirmed.
+                return self.make_object_info(object_id);
+            }
+
+            inputs.push(input_object);
         }
 
         // Here we implement the semantics of a transfer transaction, by which
         // the owner changes. Down the line here we do general smart contract
         // execution.
-
-        let mut output_object = input_object.clone();
-        let output_sequence_number = input_sequence_number.increment()?;
-        output_object.next_sequence_number = output_sequence_number;
-
-        let input_ref = input_object.to_object_reference();
-        let output_ref = output_object.to_object_reference();
+        let mut outputs = vec![];
 
         // Order-specific logic
+        //
+        // TODO: think very carefully what to do in case we throw an Err here.
         match &order.kind {
             OrderKind::Transfer(t) => {
+                let mut output_object = inputs[0].clone();
+                output_object.next_sequence_number =
+                    output_object.next_sequence_number.increment()?;
+
                 output_object.transfer(match t.recipient {
                     Address::Primary(_) => PublicKeyBytes([0; 32]),
                     Address::FastPay(addr) => addr,
                 });
+                outputs.push(output_object);
             }
-            OrderKind::Call(c) => {
-                let sender = c.sender.to_address_hack();
+            OrderKind::Call(_c) => {
+                let sender = _c.sender.to_address_hack();
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
                 // TODO(https://github.com/MystenLabs/fastnft/issues/30): read value of c.object_arguments +
                 // pass objects directly to the VM instead of passing ObjectRef's
+
                 adapter::execute(
                     self,
-                    &c.module,
-                    &c.function,
+                    &_c.module,
+                    &_c.function,
                     sender,
-                    c.object_arguments.clone(),
-                    c.pure_arguments.clone(),
-                    c.type_arguments.clone(),
-                    Some(c.gas_budget),
+                    _c.object_arguments.clone(),
+                    _c.pure_arguments.clone(),
+                    _c.type_arguments.clone(),
+                    Some(_c.gas_budget),
                 )
                 .map_err(|_| FastPayError::MoveExecutionFailure)?;
             }
@@ -228,16 +234,24 @@ impl Authority for AuthorityState {
         // to memory or persistent storage. Currently this is done in memory
         // through the calls to store being infallible.
 
+        for input_ref in order.input_objects() {
+            self.archive_order_lock(&input_ref);
+        }
+
         // Insert into the certificates map
         let transaction_digest = self.add_certificate(certificate);
 
-        // Index the certificate by the objects created
-        self.add_parent_cert(output_ref, transaction_digest);
+        // Insert each output object into the stores, index and make locks for it.
+        for output_object in outputs {
+            let output_ref = output_object.to_object_reference();
 
-        // Add new object, init locks and remove old ones
-        self.insert_object(output_object);
-        self.archive_order_lock(&input_ref);
-        self.init_order_lock(output_ref);
+            // Index the certificate by the objects created
+            self.add_parent_cert(output_ref, transaction_digest);
+
+            // Add new object, init locks and remove old ones
+            self.insert_object(output_object);
+            self.init_order_lock(output_ref);
+        }
 
         let info = self.make_object_info(object_id)?;
         Ok(info)
