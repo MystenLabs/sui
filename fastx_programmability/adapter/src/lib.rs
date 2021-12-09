@@ -6,16 +6,6 @@ mod state_view;
 
 use move_core_types::account_address::AccountAddress;
 
-/// 0x1-- account address where Move stdlib modules are stored
-pub const MOVE_STDLIB_ADDRESS: AccountAddress = AccountAddress::new([
-    0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 1u8,
-]);
-
-/// 0x2-- account address where fastX framework modules are stored
-pub const FASTX_FRAMEWORK_ADDRESS: AccountAddress = AccountAddress::new([
-    0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8,
-]);
-
 /// Extract + return an address from the first `authenticator.length()` bytes of `object`.
 /// Replace theses bytes with `authenticator`.
 /// copy the first authenticator.length() bytes out of `object`, turn them into

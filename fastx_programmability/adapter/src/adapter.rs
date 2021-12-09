@@ -1,12 +1,9 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    state_view::FastXStateView, swap_authenticator_and_id, FASTX_FRAMEWORK_ADDRESS,
-    MOVE_STDLIB_ADDRESS,
-};
+use crate::{state_view::FastXStateView, swap_authenticator_and_id};
 use anyhow::Result;
-use fastx_framework::natives;
+use fastx_framework::{natives, FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS};
 use fastx_types::error::{FastPayError, FastPayResult};
 use fastx_verifier::verifier;
 use move_binary_format::{errors::VMError, file_format::CompiledModule};
