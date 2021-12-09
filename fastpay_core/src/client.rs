@@ -90,7 +90,6 @@ pub trait Client {
     /// Do not confirm the transaction.
     fn transfer_to_fastpay_unsafe_unconfirmed(
         &mut self,
-        amount: Amount,
         recipient: FastPayAddress,
         object_id: ObjectID,
         user_data: UserData,
@@ -686,7 +685,6 @@ where
 
     fn transfer_to_fastpay_unsafe_unconfirmed(
         &mut self,
-        _amount: Amount,
         recipient: FastPayAddress,
         object_id: ObjectID,
         user_data: UserData,
