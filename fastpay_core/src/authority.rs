@@ -388,8 +388,8 @@ impl AuthorityState {
                 .order_lock
                 .get_mut(&(object_id, seq))
                 .ok_or(FastPayError::OrderLockDoesNotExist)?;
-            if let Some(_existing_signed_order) = lock {
-                if _existing_signed_order.order == signed_order.order {
+            if let Some(existing_signed_order) = lock {
+                if existing_signed_order.order == signed_order.order {
                     // For some reason we are re-inserting the same order. Not optimal but correct.
                     continue;
                 } else {
