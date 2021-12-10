@@ -4,6 +4,7 @@ use crate::{
     error::DagResult,
     header_waiter::WaiterMessage,
     messages::{Certificate, Header},
+    primary::PayloadToken,
 };
 use config::{Committee, WorkerId};
 use crypto::{Digest, Hash as _, PublicKey};
@@ -18,7 +19,7 @@ pub struct Synchronizer {
     name: PublicKey,
     /// The persistent storage.
     certificate_store: Store<Digest, Certificate>,
-    payload_store: Store<(Digest, WorkerId), u8>,
+    payload_store: Store<(Digest, WorkerId), PayloadToken>,
     /// Send commands to the `HeaderWaiter`.
     tx_header_waiter: Sender<WaiterMessage>,
     /// Send commands to the `CertificateWaiter`.
@@ -32,7 +33,7 @@ impl Synchronizer {
         name: PublicKey,
         committee: &Committee,
         certificate_store: Store<Digest, Certificate>,
-        payload_store: Store<(Digest, WorkerId), u8>,
+        payload_store: Store<(Digest, WorkerId), PayloadToken>,
         tx_header_waiter: Sender<WaiterMessage>,
         tx_certificate_waiter: Sender<Certificate>,
     ) -> Self {

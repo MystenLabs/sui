@@ -60,6 +60,9 @@ pub enum WorkerPrimaryMessage {
     OthersBatch(Digest, WorkerId),
 }
 
+// A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
+pub type PayloadToken = u8;
+
 pub struct Primary;
 
 impl Primary {
@@ -72,7 +75,7 @@ impl Primary {
         parameters: Parameters,
         header_store: Store<Digest, Header>,
         certificate_store: Store<Digest, Certificate>,
-        payload_store: Store<(Digest, WorkerId), u8>,
+        payload_store: Store<(Digest, WorkerId), PayloadToken>,
         tx_consensus: Sender<Certificate>,
         rx_consensus: Receiver<Certificate>,
     ) {

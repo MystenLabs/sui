@@ -5,17 +5,22 @@ use crypto::Digest;
 use store::Store;
 use tokio::sync::mpsc::Receiver;
 
+use crate::primary::PayloadToken;
+
 /// Receives batches' digests of other authorities. These are only needed to verify incoming
 /// headers (ie. make sure we have their payload).
 pub struct PayloadReceiver {
     /// The persistent storage.
-    store: Store<(Digest, WorkerId), u8>,
+    store: Store<(Digest, WorkerId), PayloadToken>,
     /// Receives batches' digests from the network.
     rx_workers: Receiver<(Digest, WorkerId)>,
 }
 
 impl PayloadReceiver {
-    pub fn spawn(store: Store<(Digest, WorkerId), u8>, rx_workers: Receiver<(Digest, WorkerId)>) {
+    pub fn spawn(
+        store: Store<(Digest, WorkerId), PayloadToken>,
+        rx_workers: Receiver<(Digest, WorkerId)>,
+    ) {
         tokio::spawn(async move {
             Self { store, rx_workers }.run().await;
         });

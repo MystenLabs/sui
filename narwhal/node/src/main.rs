@@ -13,7 +13,7 @@ use config::{Committee, Export as _, Import as _, KeyPair, Parameters, WorkerId}
 use consensus::Consensus;
 use crypto::Digest;
 use env_logger::Env;
-use primary::{Certificate, Header, Primary};
+use primary::{Certificate, Header, PayloadToken, Primary};
 use store::{rocks, Store};
 use tokio::sync::mpsc::{channel, Receiver};
 use worker::Worker;
@@ -108,7 +108,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
             .expect("Failed keying certificates database"),
     );
     let payload_store = Store::new(
-        rocks::DBMap::<(Digest, WorkerId), u8>::reopen(&rocksdb, Some("payload"))
+        rocks::DBMap::<(Digest, WorkerId), PayloadToken>::reopen(&rocksdb, Some("payload"))
             .expect("Failed keying payload database"),
     );
     let batch_store = Store::new(

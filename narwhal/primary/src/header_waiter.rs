@@ -3,7 +3,7 @@
 use crate::{
     error::{DagError, DagResult},
     messages::Header,
-    primary::{PrimaryMessage, PrimaryWorkerMessage, Round},
+    primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage, Round},
 };
 use bytes::Bytes;
 use config::{Committee, WorkerId};
@@ -49,7 +49,7 @@ pub struct HeaderWaiter {
     /// The persistent storage for headers.
     header_store: Store<Digest, Header>,
     /// The persistent storage for payload markers from workers.
-    payload_store: Store<(Digest, WorkerId), u8>,
+    payload_store: Store<(Digest, WorkerId), PayloadToken>,
     /// The current consensus round (used for cleanup).
     consensus_round: Arc<AtomicU64>,
     /// The depth of the garbage collector.
@@ -83,7 +83,7 @@ impl HeaderWaiter {
         name: PublicKey,
         committee: Committee,
         header_store: Store<Digest, Header>,
-        payload_store: Store<(Digest, WorkerId), u8>,
+        payload_store: Store<(Digest, WorkerId), PayloadToken>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
         sync_retry_delay: u64,

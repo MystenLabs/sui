@@ -27,5 +27,5 @@ mod common;
 
 pub use crate::{
     messages::{Certificate, Header},
-    primary::{Primary, PrimaryWorkerMessage, Round, WorkerPrimaryMessage},
+    primary::{PayloadToken, Primary, PrimaryWorkerMessage, Round, WorkerPrimaryMessage},
 };
