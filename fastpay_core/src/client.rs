@@ -6,7 +6,6 @@ use anyhow::{bail, ensure};
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
-use futures::stream::FuturesUnordered;
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
 use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
@@ -260,7 +259,7 @@ where
             request_received_transfers_excluding_first_nth: None,
         };
         let mut authority_clients = self.authority_clients.clone();
-        let numbers: FuturesUnordered<_> = authority_clients
+        let numbers: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
             .map(|(name, client)| {
                 let fut = client.handle_account_info_request(request.clone());
@@ -319,7 +318,7 @@ where
     {
         let committee = &self.committee;
         let authority_clients = &mut self.authority_clients;
-        let mut responses: FuturesUnordered<_> = authority_clients
+        let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
             .map(|(name, client)| {
                 let execute = execute.clone();
