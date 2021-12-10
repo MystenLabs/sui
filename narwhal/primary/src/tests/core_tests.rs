@@ -5,6 +5,7 @@ use crate::common::{
     certificate, committee, committee_with_base_port, header, headers, keys, listener, temp_dir,
     votes,
 };
+use config::WorkerId;
 use futures::future::try_join_all;
 use store::rocks;
 use tokio::sync::mpsc::channel;
@@ -39,7 +40,7 @@ async fn process_header() {
             .expect("Failed keying certificates database"),
     );
     let payload_store = Store::new(
-        rocks::DBMap::<(Digest, u32), u8>::reopen(&rocksdb, Some("payload"))
+        rocks::DBMap::<(Digest, WorkerId), u8>::reopen(&rocksdb, Some("payload"))
             .expect("Failed keying payload database"),
     );
 
@@ -125,7 +126,7 @@ async fn process_header_missing_parent() {
             .expect("Failed keying certificates database"),
     );
     let payload_store = Store::new(
-        rocks::DBMap::<(Digest, u32), u8>::reopen(&rocksdb, Some("payload"))
+        rocks::DBMap::<(Digest, WorkerId), u8>::reopen(&rocksdb, Some("payload"))
             .expect("Failed keying payload database"),
     );
 
@@ -198,7 +199,7 @@ async fn process_header_missing_payload() {
             .expect("Failed keying certificates database"),
     );
     let payload_store = Store::new(
-        rocks::DBMap::<(Digest, u32), u8>::reopen(&rocksdb, Some("payload"))
+        rocks::DBMap::<(Digest, WorkerId), u8>::reopen(&rocksdb, Some("payload"))
             .expect("Failed keying payload database"),
     );
 
@@ -273,7 +274,7 @@ async fn process_votes() {
             .expect("Failed keying certificates database"),
     );
     let payload_store = Store::new(
-        rocks::DBMap::<(Digest, u32), u8>::reopen(&rocksdb, Some("payload"))
+        rocks::DBMap::<(Digest, WorkerId), u8>::reopen(&rocksdb, Some("payload"))
             .expect("Failed keying payload database"),
     );
 
@@ -358,7 +359,7 @@ async fn process_certificates() {
             .expect("Failed keying certificates database"),
     );
     let payload_store = Store::new(
-        rocks::DBMap::<(Digest, u32), u8>::reopen(&rocksdb, Some("payload"))
+        rocks::DBMap::<(Digest, WorkerId), u8>::reopen(&rocksdb, Some("payload"))
             .expect("Failed keying payload database"),
     );
 

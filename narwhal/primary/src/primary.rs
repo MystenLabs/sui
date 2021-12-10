@@ -72,7 +72,7 @@ impl Primary {
         parameters: Parameters,
         header_store: Store<Digest, Header>,
         certificate_store: Store<Digest, Certificate>,
-        payload_store: Store<(Digest, u32), u8>,
+        payload_store: Store<(Digest, WorkerId), u8>,
         tx_consensus: Sender<Certificate>,
         rx_consensus: Receiver<Certificate>,
     ) {

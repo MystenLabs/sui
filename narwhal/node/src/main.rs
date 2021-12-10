@@ -108,7 +108,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
             .expect("Failed keying certificates database"),
     );
     let payload_store = Store::new(
-        rocks::DBMap::<(Digest, u32), u8>::reopen(&rocksdb, Some("payload"))
+        rocks::DBMap::<(Digest, WorkerId), u8>::reopen(&rocksdb, Some("payload"))
             .expect("Failed keying payload database"),
     );
     let batch_store = Store::new(
