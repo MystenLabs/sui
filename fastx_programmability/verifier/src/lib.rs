@@ -3,6 +3,7 @@
 
 pub mod verifier;
 
+mod global_storage_access_verifier;
 mod struct_with_key_verifier;
 
 use fastx_types::error::FastPayError;
