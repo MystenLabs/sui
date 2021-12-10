@@ -6,6 +6,7 @@ use anyhow::{bail, ensure};
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
+use futures::stream::FuturesUnordered;
 use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
 use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
@@ -258,7 +259,7 @@ where
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
-        let numbers: futures::stream::FuturesUnordered<_> = self
+        let numbers: FuturesUnordered<_> = self
             .authority_clients
             .iter_mut()
             .map(|(name, client)| {
@@ -276,31 +277,40 @@ where
         )
     }
 
-    /// Find the highest balance that is backed by a quorum of authorities.
+    /// Return true if the ownership of the object is backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_strong_majority_balance(&mut self, object_id: ObjectID) -> Balance {
+    async fn object_ownership_have_quorum(&mut self, object_id: ObjectID) -> bool {
         let request = AccountInfoRequest {
             object_id,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
-        let numbers: futures::stream::FuturesUnordered<_> = self
+        let address = self.address;
+        let numbers: FuturesUnordered<_> = self
             .authority_clients
             .iter_mut()
             .map(|(name, client)| {
                 let fut = client.handle_account_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(_info) => Some((*name, Balance::from(0))),
-                        _ => None,
+                        Ok(info) => {
+                            if info.owner == address {
+                                Some((*name, Some(info.object_id)))
+                            } else {
+                                Some((*name, None))
+                            }
+                        }
+                        _ => Some((*name, None)),
                     }
                 }
             })
             .collect();
-        self.committee.get_strong_majority_lower_bound(
-            numbers.filter_map(|x| async move { x }).collect().await,
-        )
+        self.committee
+            .get_strong_majority_lower_bound(
+                numbers.filter_map(|x| async move { x }).collect().await,
+            )
+            .is_some()
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.
@@ -313,7 +323,7 @@ where
     {
         let committee = &self.committee;
         let authority_clients = &mut self.authority_clients;
-        let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
+        let mut responses: FuturesUnordered<_> = authority_clients
             .iter_mut()
             .map(|(name, client)| {
                 let execute = execute.clone();

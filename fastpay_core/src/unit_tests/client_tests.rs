@@ -167,20 +167,43 @@ fn init_local_client_state_with_bad_authority(
     client
 }
 
-/*#[test]
-fn test_get_strong_majority_balance() {
+#[test]
+fn test_object_ownership_have_quorum() {
     let mut rt = Runtime::new().unwrap();
     rt.block_on(async {
-        let mut client = init_local_client_state(vec![3, 4, 4, 4]);
-        assert_eq!(client.get_strong_majority_balance().await, Balance::from(0));
+        let object_id_1 = ObjectID::random();
+        let object_id_2 = ObjectID::random();
+        let authority_objects = vec![
+            vec![object_id_1],
+            vec![object_id_1, object_id_2],
+            vec![object_id_1, object_id_2],
+            vec![object_id_1, object_id_2],
+        ];
+        let mut client = init_local_client_state(authority_objects);
+        assert_eq!(client.object_ownership_have_quorum(object_id_1).await, true);
+        assert_eq!(client.object_ownership_have_quorum(object_id_2).await, true);
 
-        let mut client = init_local_client_state(vec![0, 3, 4, 4]);
-        assert_eq!(client.get_strong_majority_balance().await, Balance::from(0));
-
-        let mut client = init_local_client_state(vec![0, 3, 4]);
-        assert_eq!(client.get_strong_majority_balance().await, Balance::from(0));
+        let object_id_1 = ObjectID::random();
+        let object_id_2 = ObjectID::random();
+        let object_id_3 = ObjectID::random();
+        let authority_objects = vec![
+            vec![object_id_1],
+            vec![object_id_2, object_id_3],
+            vec![object_id_3, object_id_2],
+            vec![object_id_3],
+        ];
+        let mut client = init_local_client_state(authority_objects);
+        assert_eq!(
+            client.object_ownership_have_quorum(object_id_1).await,
+            false
+        );
+        assert_eq!(
+            client.object_ownership_have_quorum(object_id_2).await,
+            false
+        );
+        assert_eq!(client.object_ownership_have_quorum(object_id_3).await, true);
     });
-}*/
+}
 
 #[test]
 fn test_initiating_valid_transfer() {
@@ -196,6 +219,14 @@ fn test_initiating_valid_transfer() {
     ];
 
     let mut sender = init_local_client_state(authority_objects);
+    assert_eq!(
+        rt.block_on(sender.object_ownership_have_quorum(object_id_1)),
+        true
+    );
+    assert_eq!(
+        rt.block_on(sender.object_ownership_have_quorum(object_id_2)),
+        true
+    );
     let certificate = rt
         .block_on(sender.transfer_to_fastpay(
             object_id_1,
@@ -206,14 +237,18 @@ fn test_initiating_valid_transfer() {
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert_eq!(sender.pending_transfer, None);
     assert_eq!(
-        rt.block_on(sender.get_strong_majority_balance(object_id_1)),
-        Balance::from(0)
+        rt.block_on(sender.object_ownership_have_quorum(object_id_1)),
+        false
+    );
+    assert_eq!(
+        rt.block_on(sender.object_ownership_have_quorum(object_id_2)),
+        true
     );
     assert_eq!(
         rt.block_on(sender.request_certificate(
             sender.address,
             object_id_1,
-            SequenceNumber::from(0)
+            SequenceNumber::from(0),
         ))
         .unwrap(),
         certificate
@@ -242,8 +277,8 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert_eq!(sender.pending_transfer, None);
     assert_eq!(
-        rt.block_on(sender.get_strong_majority_balance(object_id)),
-        Balance::from(0)
+        rt.block_on(sender.object_ownership_have_quorum(object_id)),
+        false
     );
     assert_eq!(
         rt.block_on(sender.request_certificate(sender.address, object_id, SequenceNumber::from(0)))
@@ -266,14 +301,18 @@ fn test_initiating_transfer_low_funds() {
     ];
     let mut sender = init_local_client_state(authority_objects);
     assert!(rt
-        .block_on(sender.transfer_to_fastpay(object_id_1, recipient, UserData::default(),))
-        .is_ok());
+        .block_on(sender.transfer_to_fastpay(object_id_2, recipient, UserData::default()))
+        .is_err());
     // Trying to overspend does not block an account.
-    assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
+    assert_eq!(sender.next_sequence_number, SequenceNumber::from(0));
     // assert_eq!(sender.pending_transfer, None);
     assert_eq!(
-        rt.block_on(sender.get_strong_majority_balance(object_id_1)),
-        Balance::from(0)
+        rt.block_on(sender.object_ownership_have_quorum(object_id_1)),
+        true,
+    );
+    assert_eq!(
+        rt.block_on(sender.object_ownership_have_quorum(object_id_2)),
+        false
     );
 }
 
@@ -296,6 +335,14 @@ fn test_bidirectional_transfer() {
         client1.address,
         authority_objects,
     );
+    assert_eq!(
+        rt.block_on(client1.object_ownership_have_quorum(object_id)),
+        true
+    );
+    assert_eq!(
+        rt.block_on(client2.object_ownership_have_quorum(object_id)),
+        false
+    );
     // Update client1's local balance accordingly.
 
     let certificate = rt
@@ -305,8 +352,12 @@ fn test_bidirectional_transfer() {
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
     assert_eq!(client1.pending_transfer, None);
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_balance(object_id)),
-        Balance::from(0)
+        rt.block_on(client1.object_ownership_have_quorum(object_id)),
+        false
+    );
+    assert_eq!(
+        rt.block_on(client2.object_ownership_have_quorum(object_id)),
+        true
     );
     assert_eq!(
         rt.block_on(client1.get_strong_majority_sequence_number(object_id)),
@@ -323,16 +374,12 @@ fn test_bidirectional_transfer() {
         certificate
     );
     // Our sender already confirmed.
-    assert_eq!(
-        rt.block_on(client2.get_strong_majority_balance(object_id)),
-        Balance::from(0)
-    );
     // Try to confirm again.
     rt.block_on(client2.receive_from_fastpay(certificate))
         .unwrap();
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_balance(object_id)),
-        Balance::from(0)
+        rt.block_on(client2.object_ownership_have_quorum(object_id)),
+        true,
     );
 
     /* TODO: Fix client to track objects rather than accounts and test sending back to object to previous sender.
@@ -394,8 +441,8 @@ fn test_receiving_unconfirmed_transfer() {
     assert_eq!(client1.pending_transfer, None);
     // ..but not confirmed remotely, hence an unchanged balance and sequence number.
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_balance(object_id)),
-        Balance::from(0)
+        rt.block_on(client1.object_ownership_have_quorum(object_id)),
+        true,
     );
     assert_eq!(
         rt.block_on(client1.get_strong_majority_sequence_number(object_id)),
@@ -405,8 +452,8 @@ fn test_receiving_unconfirmed_transfer() {
     rt.block_on(client2.receive_from_fastpay(certificate))
         .unwrap();
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_balance(object_id)),
-        Balance::from(0)
+        rt.block_on(client2.object_ownership_have_quorum(object_id)),
+        true
     );
 }
 
