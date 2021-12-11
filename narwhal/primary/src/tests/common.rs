@@ -1,4 +1,5 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
+// SPDX-License-Identifier: Apache-2.0
 use crate::messages::{Certificate, Header, Vote};
 use bytes::Bytes;
 use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses};

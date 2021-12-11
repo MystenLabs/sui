@@ -1,4 +1,5 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
+// SPDX-License-Identifier: Apache-2.0
 use anyhow::{Context, Result};
 use bytes::{BufMut as _, BytesMut};
 use clap::{crate_name, crate_version, App, AppSettings};

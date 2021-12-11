@@ -1,4 +1,5 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
+// SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{Digest, PublicKey};

@@ -1,4 +1,5 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
+// SPDX-License-Identifier: Apache-2.0
 use crate::{
     batch_maker::{Batch, BatchMaker, Transaction},
     helper::Helper,

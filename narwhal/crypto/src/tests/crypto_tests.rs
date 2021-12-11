@@ -1,4 +1,5 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
+// SPDX-License-Identifier: Apache-2.0
 use super::*;
 use ed25519_dalek::{Digest as _, Sha512};
 use rand::{rngs::StdRng, SeedableRng as _};

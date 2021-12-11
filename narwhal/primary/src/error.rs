@@ -1,4 +1,5 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
+// SPDX-License-Identifier: Apache-2.0
 use crate::primary::Round;
 use crypto::{CryptoError, Digest, PublicKey};
 use store::StoreError;

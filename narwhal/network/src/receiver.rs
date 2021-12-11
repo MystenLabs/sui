@@ -1,4 +1,5 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
+// SPDX-License-Identifier: Apache-2.0
 use crate::error::NetworkError;
 use async_trait::async_trait;
 use bytes::Bytes;

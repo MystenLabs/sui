@@ -1,3 +1,5 @@
+// Copyright(C) 2021, Mysten Labs
+// SPDX-License-Identifier: Apache-2.0
 use consensus::{
     consensus_tests::{keys, make_optimal_certificates, mock_committee},
     *,
