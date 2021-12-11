@@ -28,7 +28,7 @@ The content of our [settings.json](https://github.com/asonnino/narwhal/blob/mast
     "port": 5000,
     "repo": {
         "name": "narwhal",
-        "url": "https://github.com/facebookresearch/narwhal",
+        "url": "https://github.com/mystenlabs/narwhal",
         "branch": "master"
     },
     "instances": {
