@@ -167,8 +167,8 @@ impl PartialEq for CertifiedOrder {
 }
 
 impl Transfer {
-    pub fn key(&self) -> (FastPayAddress, SequenceNumber) {
-        (self.sender, self.sequence_number)
+    pub fn key(&self) -> ObjectRef {
+        (self.object_id, self.sequence_number)
     }
 }
 
@@ -372,7 +372,7 @@ impl<'a> SignatureAggregator<'a> {
 }
 
 impl CertifiedOrder {
-    pub fn key(&self) -> (FastPayAddress, SequenceNumber) {
+    pub fn key(&self) -> ObjectRef {
         use OrderKind::*;
         match &self.order.kind {
             Transfer(t) => t.key(),
