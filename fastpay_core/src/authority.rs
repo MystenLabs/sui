@@ -97,6 +97,13 @@ impl Authority for AuthorityState {
         // We first do all the checks that can be done in parallel with read only access to
         // the object database and lock database.
         let input_objects = order.input_objects();
+
+        // Ensure at least one object is input to be mutated.
+        fp_ensure!(
+            !input_objects.is_empty(),
+            FastPayError::InsufficientObjectNumber
+        );
+
         for object_ref in &input_objects {
             let (object_id, sequence_number) = object_ref;
 
@@ -113,7 +120,7 @@ impl Authority for AuthorityState {
 
             // Check that the seq number is the same
             fp_ensure!(
-                object.next_sequence_number == order.sequence_number(),
+                object.next_sequence_number == *sequence_number,
                 FastPayError::UnexpectedSequenceNumber
             );
 
@@ -137,6 +144,8 @@ impl Authority for AuthorityState {
         }
 
         // TODO(https://github.com/MystenLabs/fastnft/issues/45): check that c.gas_payment exists + that its value is > gas_budget
+        // Note: the above code already checks that the gas object exists because it is included in the
+        //       input_objects() list. So need to check it contains some gas.
 
         let object_id = *order.object_id();
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
@@ -207,21 +216,22 @@ impl Authority for AuthorityState {
                 });
                 outputs.push(output_object);
             }
-            OrderKind::Call(_c) => {
-                let sender = _c.sender.to_address_hack();
+            OrderKind::Call(c) => {
+                let sender = c.sender.to_address_hack();
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
                 // TODO(https://github.com/MystenLabs/fastnft/issues/30): read value of c.object_arguments +
                 // pass objects directly to the VM instead of passing ObjectRef's
+                // Note: They are inlcuded in the 'inputs' list of objects.
 
                 adapter::execute(
                     self,
-                    &_c.module,
-                    &_c.function,
+                    &c.module,
+                    &c.function,
                     sender,
-                    _c.object_arguments.clone(),
-                    _c.pure_arguments.clone(),
-                    _c.type_arguments.clone(),
-                    Some(_c.gas_budget),
+                    c.object_arguments.clone(),
+                    c.pure_arguments.clone(),
+                    c.type_arguments.clone(),
+                    Some(c.gas_budget),
                 )
                 .map_err(|_| FastPayError::MoveExecutionFailure)?;
             }

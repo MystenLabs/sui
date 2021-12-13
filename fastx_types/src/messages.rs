@@ -235,7 +235,21 @@ impl Order {
     /// Return the set of input objects for this order
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
     pub fn input_objects(&self) -> Vec<ObjectRef> {
-        vec![(*self.object_id(), self.sequence_number())]
+        match &self.kind {
+            OrderKind::Transfer(t) => {
+                vec![(t.object_id, t.sequence_number)]
+            }
+            OrderKind::Call(c) => {
+                let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
+                call_inputs.push(c.gas_payment);
+                call_inputs.push((*c.module.address(), 0.into()));
+                call_inputs.extend(c.object_arguments.clone());
+                call_inputs
+            }
+            OrderKind::Publish(_) => {
+                unimplemented!("invoke the FastX adapter to publish modules")
+            }
+        }
     }
 
     // TODO: support orders with multiple objects (https://github.com/MystenLabs/fastnft/issues/8)
@@ -264,6 +278,7 @@ impl Order {
         }
     }
 
+    // TODO: derive a real cryptographic hash of the transaction here.
     pub fn digest(&self) -> TransactionDigest {
         (*self.object_id(), self.sequence_number())
     }
