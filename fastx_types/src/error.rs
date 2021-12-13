@@ -117,6 +117,8 @@ pub enum FastPayError {
     BadObjectType { error: String },
     #[error("Move Execution failed")]
     MoveExecutionFailure,
+    #[error("Insufficent input objects")]
+    InsufficientObjectNumber,
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;

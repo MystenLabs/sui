@@ -93,46 +93,64 @@ impl Authority for AuthorityState {
         // Check the sender's signature and retrieve the transfer data.
         fp_ensure!(self.in_shard(order.object_id()), FastPayError::WrongShard);
         order.check_signature()?;
-        let object_id = *order.object_id();
+
+        // We first do all the checks that can be done in parallel with read only access to
+        // the object database and lock database.
+        let input_objects = order.input_objects();
+
+        // Ensure at least one object is input to be mutated.
         fp_ensure!(
-            order.sequence_number() <= SequenceNumber::max(),
-            FastPayError::InvalidSequenceNumber
+            !input_objects.is_empty(),
+            FastPayError::InsufficientObjectNumber
         );
 
-        // Get a ref to the object concerned by the transaction
-        let object = self
-            .objects
-            .get(&object_id)
-            .ok_or(FastPayError::ObjectNotFound)?;
+        for object_ref in &input_objects {
+            let (object_id, sequence_number) = object_ref;
 
-        // Check the transaction sender is also the object owner
-        fp_ensure!(
-            order.sender() == &object.owner,
-            FastPayError::IncorrectSigner
-        );
-
-        // Check that this is the first, or same as the first order we sign.
-        if let Some(pending_confirmation) = self.get_order_lock(&object.to_object_reference())? {
             fp_ensure!(
-                pending_confirmation.order.kind == order.kind,
-                FastPayError::PreviousTransferMustBeConfirmedFirst {
-                    pending_confirmation: pending_confirmation.order.clone()
-                }
+                *sequence_number <= SequenceNumber::max(),
+                FastPayError::InvalidSequenceNumber
             );
-            // This exact transfer order was already signed. Return the previous value.
-            return self.make_object_info(object_id);
+
+            // Get a ref to the object concerned by the transaction
+            let object = self
+                .objects
+                .get(object_id)
+                .ok_or(FastPayError::ObjectNotFound)?;
+
+            // Check that the seq number is the same
+            fp_ensure!(
+                object.next_sequence_number == *sequence_number,
+                FastPayError::UnexpectedSequenceNumber
+            );
+
+            // Check the transaction sender is also the object owner
+            fp_ensure!(
+                order.sender() == &object.owner,
+                FastPayError::IncorrectSigner
+            );
+
+            // Check that this is the first, or same as the first order we sign.
+            if let Some(pending_confirmation) = self.get_order_lock(object_ref)? {
+                fp_ensure!(
+                    pending_confirmation.order.kind == order.kind,
+                    FastPayError::PreviousTransferMustBeConfirmedFirst {
+                        pending_confirmation: pending_confirmation.order.clone()
+                    }
+                );
+                // This exact transfer order was already signed. Return the previous value.
+                return self.make_object_info(*object_id);
+            }
         }
-        fp_ensure!(
-            object.next_sequence_number == order.sequence_number(),
-            FastPayError::UnexpectedSequenceNumber
-        );
 
         // TODO(https://github.com/MystenLabs/fastnft/issues/45): check that c.gas_payment exists + that its value is > gas_budget
+        // Note: the above code already checks that the gas object exists because it is included in the
+        //       input_objects() list. So need to check it contains some gas.
 
+        let object_id = *order.object_id();
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
 
-        // Add to the order_lock structure.
-        // Note: Safety requires this be persisted before any client-visible response is generated.
+        // This is the critical section that requires a write lock on the lock DB.
         self.set_order_lock(signed_order)?;
 
         let info = self.make_object_info(object_id)?;
@@ -151,53 +169,60 @@ impl Authority for AuthorityState {
         fp_ensure!(self.in_shard(&object_id), FastPayError::WrongShard);
         certificate.check(&self.committee)?;
 
-        // If we have a certificate on the confirmation order it means that the input
-        // object exists on other honest authorities, but we do not have it. The only
-        // way this may happen is if we missed some updates.
-        let input_object =
-            self.objects
-                .get(&object_id)
-                .ok_or(FastPayError::MissingEalierConfirmations {
+        let mut inputs = vec![];
+        for (input_object_id, input_seq) in order.input_objects() {
+            // If we have a certificate on the confirmation order it means that the input
+            // object exists on other honest authorities, but we do not have it. The only
+            // way this may happen is if we missed some updates.
+            let input_object = self.objects.get(&input_object_id).ok_or(
+                FastPayError::MissingEalierConfirmations {
                     current_sequence_number: SequenceNumber::from(0),
-                })?;
+                },
+            )?;
 
-        let input_sequence_number = input_object.next_sequence_number;
+            let input_sequence_number = input_object.next_sequence_number;
 
-        // Check that the current object is exactly the right version.
-        if input_sequence_number < order.sequence_number() {
-            fp_bail!(FastPayError::MissingEalierConfirmations {
-                current_sequence_number: input_sequence_number
-            });
-        }
-        if input_sequence_number > order.sequence_number() {
-            // Transfer was already confirmed.
-            return self.make_object_info(object_id);
+            // Check that the current object is exactly the right version.
+            if input_sequence_number < input_seq {
+                fp_bail!(FastPayError::MissingEalierConfirmations {
+                    current_sequence_number: input_sequence_number
+                });
+            }
+            if input_sequence_number > input_seq {
+                // Transfer was already confirmed.
+                return self.make_object_info(object_id);
+            }
+
+            inputs.push(input_object);
         }
 
         // Here we implement the semantics of a transfer transaction, by which
         // the owner changes. Down the line here we do general smart contract
         // execution.
-
-        let mut output_object = input_object.clone();
-        let output_sequence_number = input_sequence_number.increment()?;
-        output_object.next_sequence_number = output_sequence_number;
-
-        let input_ref = input_object.to_object_reference();
-        let output_ref = output_object.to_object_reference();
+        let mut outputs = vec![];
 
         // Order-specific logic
+        //
+        // TODO: think very carefully what to do in case we throw an Err here.
         match &order.kind {
             OrderKind::Transfer(t) => {
+                let mut output_object = inputs[0].clone();
+                output_object.next_sequence_number =
+                    output_object.next_sequence_number.increment()?;
+
                 output_object.transfer(match t.recipient {
                     Address::Primary(_) => PublicKeyBytes([0; 32]),
                     Address::FastPay(addr) => addr,
                 });
+                outputs.push(output_object);
             }
             OrderKind::Call(c) => {
                 let sender = c.sender.to_address_hack();
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
                 // TODO(https://github.com/MystenLabs/fastnft/issues/30): read value of c.object_arguments +
                 // pass objects directly to the VM instead of passing ObjectRef's
+                // Note: They are inlcuded in the 'inputs' list of objects.
+
                 adapter::execute(
                     self,
                     &c.module,
@@ -219,16 +244,24 @@ impl Authority for AuthorityState {
         // to memory or persistent storage. Currently this is done in memory
         // through the calls to store being infallible.
 
+        for input_ref in order.input_objects() {
+            self.archive_order_lock(&input_ref);
+        }
+
         // Insert into the certificates map
         let transaction_digest = self.add_certificate(certificate);
 
-        // Index the certificate by the objects created
-        self.add_parent_cert(output_ref, transaction_digest);
+        // Insert each output object into the stores, index and make locks for it.
+        for output_object in outputs {
+            let output_ref = output_object.to_object_reference();
 
-        // Add new object, init locks and remove old ones
-        self.insert_object(output_object);
-        self.archive_order_lock(&input_ref);
-        self.init_order_lock(output_ref);
+            // Index the certificate by the objects created
+            self.add_parent_cert(output_ref, transaction_digest);
+
+            // Add new object, init locks and remove old ones
+            self.insert_object(output_object);
+            self.init_order_lock(output_ref);
+        }
 
         let info = self.make_object_info(object_id)?;
         Ok(info)
@@ -347,26 +380,37 @@ impl AuthorityState {
 
     /// Set the order lock to a specific transaction
     pub fn set_order_lock(&mut self, signed_order: SignedOrder) -> Result<(), FastPayError> {
-        let object_id = *signed_order.order.object_id();
-        let seq = signed_order.order.sequence_number();
+        // This is the only function that writes as part of the handle_order flow
+        // and the only that therefore needs an exclusive write lock on the lock
+        // database. Inconsistent / delayed reads of the lock database do not result in safety
+        // violations since at the end this function also re-checks that the lock
+        // is not set and returns an Err if it is.
+        //
+        // Note that the writes are not atomic: we may actually set locks for a
+        // few objects before returning an Err as a result of trying to overwrite one.
+        // This is a liveness issue for equivocating clients and therefore not an issue
+        // we are trying to resolve.
 
-        // The object / version must exist, and therefore lock initialized.
-        let lock = self
-            .order_lock
-            .get_mut(&(object_id, seq))
-            .ok_or(FastPayError::OrderLockDoesNotExist)?;
-        if let Some(_existing_signed_order) = lock {
-            if _existing_signed_order.order == signed_order.order {
-                // For some reason we are re-inserting the same order. Not optimal but correct.
-                return Ok(());
-            } else {
-                // We are trying to set the lock to a different order, this is unsafe.
-                return Err(FastPayError::OrderLockReset);
+        let input_objects = signed_order.order.input_objects();
+        for (object_id, seq) in input_objects {
+            // The object / version must exist, and therefore lock initialized.
+            let lock = self
+                .order_lock
+                .get_mut(&(object_id, seq))
+                .ok_or(FastPayError::OrderLockDoesNotExist)?;
+            if let Some(existing_signed_order) = lock {
+                if existing_signed_order.order == signed_order.order {
+                    // For some reason we are re-inserting the same order. Not optimal but correct.
+                    continue;
+                } else {
+                    // We are trying to set the lock to a different order, this is unsafe.
+                    return Err(FastPayError::OrderLockReset);
+                }
             }
-        }
 
-        // The lock is None, so we replace it with the given order.
-        lock.replace(signed_order);
+            // The lock is None, so we replace it with the given order.
+            lock.replace(signed_order.clone());
+        }
         Ok(())
     }
 
