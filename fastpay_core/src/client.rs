@@ -301,11 +301,9 @@ where
                 }
             })
             .collect();
-        self.committee
-            .get_strong_majority_lower_bound(
-                numbers.filter_map(|x| async move { x }).collect().await,
-            )
-            .is_some()
+        self.committee.get_strong_majority_lower_bound(
+            numbers.filter_map(|x| async move { x }).collect().await,
+        )
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.
