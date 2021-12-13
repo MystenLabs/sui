@@ -279,7 +279,10 @@ where
     /// Return true if the ownership of the object is backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn object_ownership_have_quorum(&mut self, object_id: ObjectID) -> bool {
+    async fn object_ownership_have_quorum(
+        &mut self,
+        object_id: ObjectID,
+    ) -> Option<SequenceNumber> {
         let request = AccountInfoRequest {
             object_id,
             request_sequence_number: None,
@@ -295,21 +298,19 @@ where
                     match fut.await {
                         Ok(info) => {
                             if info.owner == address {
-                                Some((*name, Some(info.object_id)))
+                                Some((*name, Some(info.next_sequence_number)))
                             } else {
-                                Some((*name, None))
+                                None
                             }
                         }
-                        _ => Some((*name, None)),
+                        _ => None,
                     }
                 }
             })
             .collect();
-        self.committee
-            .get_strong_majority_lower_bound(
-                numbers.filter_map(|x| async move { x }).collect().await,
-            )
-            .is_some()
+        self.committee.get_strong_majority_lower_bound(
+            numbers.filter_map(|x| async move { x }).collect().await,
+        )
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.

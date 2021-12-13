@@ -180,8 +180,14 @@ fn test_object_ownership_have_quorum() {
             vec![object_id_1, object_id_2],
         ];
         let mut client = init_local_client_state(authority_objects);
-        assert_eq!(client.object_ownership_have_quorum(object_id_1).await, true);
-        assert_eq!(client.object_ownership_have_quorum(object_id_2).await, true);
+        assert_eq!(
+            client.object_ownership_have_quorum(object_id_1).await,
+            Some(SequenceNumber::from(0))
+        );
+        assert_eq!(
+            client.object_ownership_have_quorum(object_id_2).await,
+            Some(SequenceNumber::from(0))
+        );
 
         let object_id_1 = ObjectID::random();
         let object_id_2 = ObjectID::random();
@@ -193,15 +199,12 @@ fn test_object_ownership_have_quorum() {
             vec![object_id_3],
         ];
         let mut client = init_local_client_state(authority_objects);
+        assert_eq!(client.object_ownership_have_quorum(object_id_1).await, None);
+        assert_eq!(client.object_ownership_have_quorum(object_id_2).await, None);
         assert_eq!(
-            client.object_ownership_have_quorum(object_id_1).await,
-            false
+            client.object_ownership_have_quorum(object_id_3).await,
+            Some(SequenceNumber::from(0))
         );
-        assert_eq!(
-            client.object_ownership_have_quorum(object_id_2).await,
-            false
-        );
-        assert_eq!(client.object_ownership_have_quorum(object_id_3).await, true);
     });
 }
 
@@ -221,11 +224,11 @@ fn test_initiating_valid_transfer() {
     let mut sender = init_local_client_state(authority_objects);
     assert_eq!(
         rt.block_on(sender.object_ownership_have_quorum(object_id_1)),
-        true
+        Some(SequenceNumber::from(0))
     );
     assert_eq!(
         rt.block_on(sender.object_ownership_have_quorum(object_id_2)),
-        true
+        Some(SequenceNumber::from(0))
     );
     let certificate = rt
         .block_on(sender.transfer_to_fastpay(
@@ -238,11 +241,11 @@ fn test_initiating_valid_transfer() {
     assert_eq!(sender.pending_transfer, None);
     assert_eq!(
         rt.block_on(sender.object_ownership_have_quorum(object_id_1)),
-        false
+        None
     );
     assert_eq!(
         rt.block_on(sender.object_ownership_have_quorum(object_id_2)),
-        true
+        Some(SequenceNumber::from(0))
     );
     assert_eq!(
         rt.block_on(sender.request_certificate(
@@ -278,7 +281,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     assert_eq!(sender.pending_transfer, None);
     assert_eq!(
         rt.block_on(sender.object_ownership_have_quorum(object_id)),
-        false
+        None
     );
     assert_eq!(
         rt.block_on(sender.request_certificate(sender.address, object_id, SequenceNumber::from(0)))
@@ -308,11 +311,11 @@ fn test_initiating_transfer_low_funds() {
     // assert_eq!(sender.pending_transfer, None);
     assert_eq!(
         rt.block_on(sender.object_ownership_have_quorum(object_id_1)),
-        true,
+        Some(SequenceNumber::from(0)),
     );
     assert_eq!(
         rt.block_on(sender.object_ownership_have_quorum(object_id_2)),
-        false
+        None
     );
 }
 
@@ -337,11 +340,11 @@ fn test_bidirectional_transfer() {
     );
     assert_eq!(
         rt.block_on(client1.object_ownership_have_quorum(object_id)),
-        true
+        Some(SequenceNumber::from(0))
     );
     assert_eq!(
         rt.block_on(client2.object_ownership_have_quorum(object_id)),
-        false
+        None
     );
     // Update client1's local balance accordingly.
 
@@ -353,11 +356,11 @@ fn test_bidirectional_transfer() {
     assert_eq!(client1.pending_transfer, None);
     assert_eq!(
         rt.block_on(client1.object_ownership_have_quorum(object_id)),
-        false
+        None
     );
     assert_eq!(
         rt.block_on(client2.object_ownership_have_quorum(object_id)),
-        true
+        Some(SequenceNumber::from(1))
     );
     assert_eq!(
         rt.block_on(client1.get_strong_majority_sequence_number(object_id)),
@@ -379,7 +382,7 @@ fn test_bidirectional_transfer() {
         .unwrap();
     assert_eq!(
         rt.block_on(client2.object_ownership_have_quorum(object_id)),
-        true,
+        Some(SequenceNumber::from(1)),
     );
 
     /* TODO: Fix client to track objects rather than accounts and test sending back to object to previous sender.
@@ -442,7 +445,7 @@ fn test_receiving_unconfirmed_transfer() {
     // ..but not confirmed remotely, hence an unchanged balance and sequence number.
     assert_eq!(
         rt.block_on(client1.object_ownership_have_quorum(object_id)),
-        true,
+        Some(SequenceNumber::from(0)),
     );
     assert_eq!(
         rt.block_on(client1.get_strong_majority_sequence_number(object_id)),
@@ -453,7 +456,7 @@ fn test_receiving_unconfirmed_transfer() {
         .unwrap();
     assert_eq!(
         rt.block_on(client2.object_ownership_have_quorum(object_id)),
-        true
+        Some(SequenceNumber::from(1))
     );
 }
 
