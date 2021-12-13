@@ -9,7 +9,6 @@ use fastx_types::{
 };
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::{
     collections::BTreeMap,
     fs::{self, File, OpenOptions},
@@ -99,7 +98,7 @@ pub struct UserAccount {
     )]
     pub address: FastPayAddress,
     pub key: KeyPair,
-    pub object_ids: HashMap<ObjectID, SequenceNumber>,
+    pub object_ids: BTreeMap<ObjectID, SequenceNumber>,
     pub sent_certificates: Vec<CertifiedOrder>,
     pub received_certificates: Vec<CertifiedOrder>,
 }

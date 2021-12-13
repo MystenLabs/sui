@@ -104,7 +104,7 @@ fn make_client(
         authority_clients,
         Vec::new(),
         Vec::new(),
-        HashMap::new(),
+        BTreeMap::new(),
     )
 }
 

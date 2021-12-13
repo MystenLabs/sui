@@ -53,7 +53,7 @@ pub struct ClientState<AuthorityClient> {
     /// TODO: API to search and download yet unknown `received_certificates`.
     received_certificates: BTreeMap<ObjectRef, CertifiedOrder>,
     /// The known objects with it's sequence number owned by the client.
-    object_ids: HashMap<ObjectID, SequenceNumber>,
+    object_ids: BTreeMap<ObjectID, SequenceNumber>,
 }
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
@@ -110,7 +110,7 @@ impl<A> ClientState<A> {
         authority_clients: HashMap<AuthorityName, A>,
         sent_certificates: Vec<CertifiedOrder>,
         received_certificates: Vec<CertifiedOrder>,
-        object_ids: HashMap<ObjectID, SequenceNumber>,
+        object_ids: BTreeMap<ObjectID, SequenceNumber>,
     ) -> Self {
         Self {
             address,
@@ -135,7 +135,7 @@ impl<A> ClientState<A> {
         self.object_ids[&object_id]
     }
 
-    pub fn object_ids(&self) -> &HashMap<ObjectID, SequenceNumber> {
+    pub fn object_ids(&self) -> &BTreeMap<ObjectID, SequenceNumber> {
         &self.object_ids
     }
 
