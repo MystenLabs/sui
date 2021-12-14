@@ -164,6 +164,7 @@ impl HeaderWaiter {
                             let (tx_cancel, rx_cancel) = channel(1);
                             self.pending.insert(header_id, (round, tx_cancel));
                             let fut = Self::waiter(wait_for, self.payload_store.clone(), header, rx_cancel);
+                            // pointer-size allocation, bounded by the # of blocks (may eventually go away, see rust RFC #1909)
                             waiting.push(Box::pin(fut));
 
                             // Ensure we didn't already send a sync request for these parents.
@@ -203,6 +204,7 @@ impl HeaderWaiter {
                             let (tx_cancel, rx_cancel) = channel(1);
                             self.pending.insert(header_id, (round, tx_cancel));
                             let fut = Self::waiter(wait_for, self.header_store.clone(), header, rx_cancel);
+                            // pointer-size allocation, bounded by the # of blocks (may eventually go away, see rust RFC #1909)
                             waiting.push(Box::pin(fut));
 
                             // Ensure we didn't already sent a sync request for these parents.
