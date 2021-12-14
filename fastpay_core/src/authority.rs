@@ -16,7 +16,7 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
-use std::{collections::BTreeMap, convert::TryInto};
+use std::{collections::BTreeMap, convert::TryInto, sync::Arc, sync::Mutex};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -37,7 +37,7 @@ pub struct AuthorityState {
 
     // The variable length dynamic state of the authority shard
     /// States of fastnft objects
-    objects: BTreeMap<ObjectID, Object>,
+    objects: Arc<Mutex<BTreeMap<ObjectID, Object>>>,
 
     /* Order lock states and invariants
 
@@ -60,7 +60,7 @@ pub struct AuthorityState {
     certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
     /// An index mapping object IDs to the Transaction Digest that created them.
     /// This is used by synchronization logic to sync authorities.
-    pub parent_sync: BTreeMap<(ObjectID, SequenceNumber), TransactionDigest>,
+    parent_sync: BTreeMap<(ObjectID, SequenceNumber), TransactionDigest>,
 }
 
 /// Interface provided by each (shard of an) authority.
@@ -110,9 +110,8 @@ impl Authority for AuthorityState {
 
             // Get a ref to the object concerned by the transaction
             let object = self
-                .objects
-                .get(object_id)
-                .ok_or(FastPayError::ObjectNotFound)?;
+                .object_state(object_id)
+                .map_err(|_| FastPayError::ObjectNotFound)?;
 
             // Check that the seq number is the same
             fp_ensure!(
@@ -170,11 +169,11 @@ impl Authority for AuthorityState {
             // If we have a certificate on the confirmation order it means that the input
             // object exists on other honest authorities, but we do not have it. The only
             // way this may happen is if we missed some updates.
-            let input_object = self.objects.get(&input_object_id).ok_or(
+            let input_object = self.object_state(&input_object_id).map_err(|_| {
                 FastPayError::MissingEalierConfirmations {
                     current_sequence_number: SequenceNumber::from(0),
-                },
-            )?;
+                }
+            })?;
 
             let input_sequence_number = input_object.next_sequence_number;
 
@@ -205,6 +204,8 @@ impl Authority for AuthorityState {
         let transaction_digest = self.add_certificate(certificate);
         let mut tx_ctx = TxContext::new(transaction_digest);
 
+        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
+
         // Order-specific logic
         //
         // TODO: think very carefully what to do in case we throw an Err here.
@@ -225,9 +226,11 @@ impl Authority for AuthorityState {
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
                 // TODO(https://github.com/MystenLabs/fastnft/issues/30): read value of c.object_arguments +
                 // pass objects directly to the VM instead of passing ObjectRef's
-                // Note: They are included in the 'inputs' list of objects.
+                // Note: They are inlcuded in the 'inputs' list of objects.
+
+                
                 adapter::execute(
-                    self,
+                    &mut temporary_store,
                     &c.module,
                     &c.function,
                     sender,
@@ -243,7 +246,7 @@ impl Authority for AuthorityState {
             OrderKind::Publish(m) => {
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
                 let sender = m.sender.to_address_hack();
-                match adapter::publish(self, m.modules, &sender, &mut tx_ctx) {
+                match adapter::publish(&mut temporary_store, m.modules, &sender, &mut tx_ctx) {
                     Ok(outputs) => {
                         // TODO: AccountInfoResponse should return all object ID outputs. but for now it only returns one, so use this hack
                         object_id = outputs[0].id();
@@ -308,7 +311,7 @@ impl AuthorityState {
             committee,
             name,
             secret,
-            objects: BTreeMap::new(),
+            objects: Arc::new(Mutex::new(BTreeMap::new())),
             order_lock: BTreeMap::new(),
             shard_id: 0,
             number_of_shards: 1,
@@ -328,7 +331,7 @@ impl AuthorityState {
             committee,
             name,
             secret,
-            objects: BTreeMap::new(),
+            objects: Arc::new(Mutex::new(BTreeMap::new())),
             order_lock: BTreeMap::new(),
             shard_id,
             number_of_shards,
@@ -351,19 +354,22 @@ impl AuthorityState {
         Self::get_shard(self.number_of_shards, object_id)
     }
 
-    fn object_state(&self, object_id: &ObjectID) -> Result<&Object, FastPayError> {
+    fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
         self.objects
+            .lock()
+            .unwrap()
             .get(object_id)
+            .cloned()
             .ok_or(FastPayError::UnknownSenderAccount)
     }
 
-    pub fn insert_object(&mut self, object: Object) {
-        self.objects.insert(object.id(), object);
+    pub fn insert_object(&self, object: Object) {
+        self.objects.lock().unwrap().insert(object.id(), object);
     }
 
     #[cfg(test)]
-    pub fn accounts_mut(&mut self) -> &mut BTreeMap<ObjectID, Object> {
-        &mut self.objects
+    pub fn accounts_mut(&self) -> &Arc<Mutex<BTreeMap<ObjectID, Object>>> {
+        &self.objects
     }
 
     /// Make an information summary of an object to help clients
@@ -472,26 +478,65 @@ impl AuthorityState {
     }
 }
 
-impl Storage for AuthorityState {
+pub struct AuthorityTemporaryStore<'a> {
+    pub authority_state: &'a AuthorityState,
+    pub objects: BTreeMap<ObjectID, Object>,
+    pub written: Vec<ObjectRef>,
+    pub deleted: Vec<ObjectRef>,
+}
+
+impl<'a> AuthorityTemporaryStore<'a> {
+    pub fn new(
+        authority_state: &'a AuthorityState,
+        _input_objects: &'_ [Object],
+    ) -> AuthorityTemporaryStore<'a> {
+        AuthorityTemporaryStore {
+            authority_state,
+            objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
+            written: Vec::new(),
+            deleted: Vec::new(),
+        }
+    }
+}
+
+impl<'a> Storage for AuthorityTemporaryStore<'a> {
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
-        self.objects.get(id).cloned()
+        match self.objects.get(id) {
+            Some(x) => Some(x.clone()),
+            None => self
+                .authority_state
+                .objects
+                .lock()
+                .unwrap()
+                .get(id)
+                .cloned(),
+        }
     }
 
     // TODO: buffer changes to storage + flush buffer after commit()
     fn write_object(&mut self, object: Object) {
-        self.insert_object(object)
+        self.written.push(object.to_object_reference());
+        self.objects.insert(object.id(), object);
     }
 
     // TODO: buffer changes to storage + flush buffer after commit()
     fn delete_object(&mut self, id: &ObjectID) {
-        self.objects.remove(id);
+        if let Some(removed) = self.objects.remove(id) {
+            self.deleted.push(removed.to_object_reference());
+        }
     }
 }
 
-impl ModuleResolver for AuthorityState {
+impl<'a> ModuleResolver for AuthorityTemporaryStore<'a> {
     type Error = FastPayError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.objects.get(module_id.address()) {
+        match self
+            .authority_state
+            .objects
+            .lock()
+            .unwrap()
+            .get(module_id.address())
+        {
             Some(o) => match &o.data {
                 Data::Module(c) => {
                     let mut bytes = Vec::new();
@@ -507,7 +552,7 @@ impl ModuleResolver for AuthorityState {
     }
 }
 
-impl ResourceResolver for AuthorityState {
+impl<'a> ResourceResolver for AuthorityTemporaryStore<'a> {
     type Error = FastPayError;
 
     fn get_resource(
@@ -515,7 +560,7 @@ impl ResourceResolver for AuthorityState {
         address: &AccountAddress,
         struct_tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.objects.get(address) {
+        match self.authority_state.objects.lock().unwrap().get(address) {
             Some(o) => match &o.data {
                 Data::Move(m) => {
                     assert!(struct_tag == &m.type_, "Invariant violation: ill-typed object in storage or bad object resquest from caller\

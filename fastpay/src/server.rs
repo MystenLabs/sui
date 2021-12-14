@@ -31,7 +31,7 @@ fn make_shard_server(
     let committee = Committee::new(committee_config.voting_rights());
     let num_shards = server_config.authority.num_shards;
 
-    let mut state = AuthorityState::new_shard(
+    let state = AuthorityState::new_shard(
         committee,
         server_config.authority.address,
         server_config.key.copy(),

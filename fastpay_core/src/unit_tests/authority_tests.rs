@@ -24,7 +24,7 @@ fn test_handle_transfer_order_bad_signature() {
         .handle_order(bad_signature_transfer_order)
         .is_err());
 
-    let object = authority_state.objects.get(&object_id).unwrap();
+    let object = authority_state.object_state(&object_id).unwrap();
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
         .unwrap()
@@ -51,7 +51,7 @@ fn test_handle_transfer_order_unknown_sender() {
         .handle_order(unknown_sender_transfer_order)
         .is_err());
 
-    let object = authority_state.objects.get(&object_id).unwrap();
+    let object = authority_state.object_state(&object_id).unwrap();
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
         .unwrap()
@@ -112,7 +112,7 @@ fn test_handle_transfer_order_ok() {
         .handle_order(transfer_order.clone())
         .unwrap();
 
-    let object = authority_state.objects.get(&object_id).unwrap();
+    let object = authority_state.object_state(&object_id).unwrap();
     let pending_confirmation = authority_state
         .get_order_lock(&object.to_object_reference())
         .unwrap()
@@ -260,12 +260,18 @@ fn test_handle_confirmation_order_bad_sequence_number() {
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
     let mut authority_state = init_state_with_object(sender, object_id);
-    let sender_account = authority_state.objects.get_mut(&object_id).unwrap();
-    sender_account.next_sequence_number = sender_account.next_sequence_number.increment().unwrap();
+
+    {
+        let mut lock = authority_state.objects.lock().unwrap();
+        let sender_account = lock.get_mut(&object_id).unwrap();
+        sender_account.next_sequence_number =
+            sender_account.next_sequence_number.increment().unwrap();
+    }
 
     let old_seq_num;
     {
-        let old_account = authority_state.objects.get_mut(&object_id).unwrap();
+        let mut lock = authority_state.objects.lock().unwrap();
+        let old_account = lock.get_mut(&object_id).unwrap();
         old_seq_num = old_account.next_sequence_number;
     }
 
@@ -282,7 +288,7 @@ fn test_handle_confirmation_order_bad_sequence_number() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_err());
 
-    let new_account = authority_state.objects.get_mut(&object_id).unwrap();
+    let new_account = authority_state.object_state(&object_id).unwrap();
     assert_eq!(old_seq_num, new_account.next_sequence_number);
 
     assert!(authority_state
@@ -290,7 +296,12 @@ fn test_handle_confirmation_order_bad_sequence_number() {
         .get(&(object_id, new_account.next_sequence_number))
         .is_none());
 
-    assert!(authority_state.objects.get(&dbg_object_id(2)).is_none());
+    assert!(authority_state
+        .objects
+        .lock()
+        .unwrap()
+        .get(&dbg_object_id(2))
+        .is_none());
 }
 
 #[test]
@@ -310,7 +321,7 @@ fn test_handle_confirmation_order_exceed_balance() {
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
-    let new_account = authority_state.objects.get(&object_id).unwrap();
+    let new_account = authority_state.object_state(&object_id).unwrap();
     assert_eq!(SequenceNumber::from(1), new_account.next_sequence_number);
     assert!(authority_state
         .parent_sync
@@ -336,7 +347,7 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
-    let new_sender_account = authority_state.objects.get(&object_id).unwrap();
+    let new_sender_account = authority_state.object_state(&object_id).unwrap();
     assert_eq!(
         SequenceNumber::from(1),
         new_sender_account.next_sequence_number
@@ -364,7 +375,7 @@ fn test_handle_confirmation_order_receiver_equal_sender() {
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .is_ok());
-    let account = authority_state.objects.get(&object_id).unwrap();
+    let account = authority_state.object_state(&object_id).unwrap();
     assert_eq!(SequenceNumber::from(1), account.next_sequence_number);
 
     assert!(authority_state
@@ -387,7 +398,7 @@ fn test_handle_confirmation_order_ok() {
         &authority_state,
     );
 
-    let old_account = authority_state.objects.get_mut(&object_id).unwrap();
+    let old_account = authority_state.object_state(&object_id).unwrap();
     let mut next_sequence_number = old_account.next_sequence_number;
     next_sequence_number = next_sequence_number.increment().unwrap();
 
@@ -424,10 +435,7 @@ fn test_account_state_ok() {
     let object_id = dbg_object_id(1);
 
     let authority_state = init_state_with_object(sender, object_id);
-    assert_eq!(
-        authority_state.objects.get(&object_id).unwrap(),
-        authority_state.object_state(&object_id).unwrap()
-    );
+    authority_state.object_state(&object_id).unwrap();
 }
 
 #[test]
@@ -477,12 +485,13 @@ fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
 ) -> AuthorityState {
     let mut state = init_state();
     for (address, object_id) in objects {
-        let account = state
-            .objects
-            .entry(object_id)
-            .or_insert_with(|| Object::with_id_for_testing(object_id));
-        account.transfer(address);
-
+        {
+            let mut unlocked_db = state.objects.lock().unwrap();
+            let account = unlocked_db
+                .entry(object_id)
+                .or_insert_with(|| Object::with_id_for_testing(object_id));
+            account.transfer(address);
+        } // drop lock
         state.init_order_lock((object_id, 0.into()));
     }
     state
@@ -492,7 +501,7 @@ fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> Author
     let mut state = init_state();
     for o in objects {
         let obj_ref = o.to_object_reference();
-        state.objects.insert(o.id(), o);
+        state.objects.lock().unwrap().insert(o.id(), o);
         state.init_order_lock(obj_ref);
     }
     state
