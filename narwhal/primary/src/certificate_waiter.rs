@@ -45,13 +45,11 @@ impl CertificateWaiter {
     /// and then delivers the specified header.
     async fn waiter(
         // TODO: this signature is just here to avoid thinking about lifetimes, fix it
-        mut missing: Vec<(Digest, Store<Digest, Certificate>)>,
+        missing: Vec<Digest>,
+        store: &Store<Digest, Certificate>,
         deliver: Certificate,
     ) -> DagResult<Certificate> {
-        let waiting: Vec<_> = missing
-            .iter_mut()
-            .map(|(x, y)| y.notify_read(x.clone()))
-            .collect();
+        let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
 
         try_join_all(waiting)
             .await
@@ -70,11 +68,9 @@ impl CertificateWaiter {
                     let wait_for = certificate
                         .header
                         .parents
-                        .iter()
-                        .cloned()
-                        .map(|x| (x, self.store.clone()))
+                        .iter().cloned()
                         .collect();
-                    let fut = Self::waiter(wait_for, certificate);
+                    let fut = Self::waiter(wait_for, &self.store, certificate);
                     waiting.push(fut);
                 }
                 Some(result) = waiting.next() => match result {
