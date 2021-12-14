@@ -11,7 +11,6 @@ use async_recursion::async_recursion;
 use bytes::Bytes;
 use config::Committee;
 use crypto::{Digest, Hash as _, PublicKey, SignatureService};
-use log::{debug, error, warn};
 use network::{CancelHandler, ReliableSender};
 use std::{
     collections::{HashMap, HashSet},
@@ -22,6 +21,7 @@ use std::{
 };
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
+use tracing::{debug, error, warn};
 
 #[cfg(test)]
 #[path = "tests/core_tests.rs"]

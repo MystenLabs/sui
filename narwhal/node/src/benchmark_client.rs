@@ -3,9 +3,7 @@
 use anyhow::{Context, Result};
 use bytes::{BufMut as _, BytesMut};
 use clap::{crate_name, crate_version, App, AppSettings};
-use env_logger::Env;
 use futures::{future::join_all, sink::SinkExt as _};
-use log::{info, warn};
 use rand::Rng;
 use std::net::SocketAddr;
 use tokio::{
@@ -13,6 +11,8 @@ use tokio::{
     time::{interval, sleep, Duration, Instant},
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tracing::{info, subscriber::set_global_default, warn};
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -26,9 +26,21 @@ async fn main() -> Result<()> {
         .setting(AppSettings::ArgRequiredElseHelp)
         .get_matches();
 
-    env_logger::Builder::from_env(Env::default().default_filter_or("info"))
-        .format_timestamp_millis()
-        .init();
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "benchmark")] {
+            let timer = tracing_subscriber::fmt::time::ChronoUtc::rfc3339();
+            let subscriber_builder = tracing_subscriber::fmt::Subscriber::builder()
+                                     .with_env_filter(env_filter)
+                                     .with_timer(timer).with_ansi(false);
+        } else {
+            let subscriber_builder = tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
+        }
+    }
+    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
+
+    set_global_default(subscriber).expect("Failed to set subscriber");
 
     let target = matches
         .value_of("ADDR")

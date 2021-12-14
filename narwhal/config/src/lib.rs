@@ -8,7 +8,6 @@
 )]
 
 use crypto::{generate_production_keypair, PublicKey, SecretKey};
-use log::info;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
@@ -17,6 +16,7 @@ use std::{
     net::SocketAddr,
 };
 use thiserror::Error;
+use tracing::info;
 
 #[derive(Error, Debug)]
 pub enum ConfigError {
@@ -106,7 +106,7 @@ impl Default for Parameters {
 impl Import for Parameters {}
 
 impl Parameters {
-    pub fn log(&self) {
+    pub fn tracing(&self) {
         info!("Header size set to {} B", self.header_size);
         info!("Max header delay set to {} ms", self.max_header_delay);
         info!("Garbage collection depth set to {} rounds", self.gc_depth);

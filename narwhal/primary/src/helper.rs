@@ -4,10 +4,10 @@ use crate::{primary::PrimaryMessage, Certificate};
 use bytes::Bytes;
 use config::Committee;
 use crypto::{Digest, PublicKey};
-use log::{error, warn};
 use network::SimpleSender;
 use store::Store;
 use tokio::sync::mpsc::Receiver;
+use tracing::{error, warn};
 
 /// A task dedicated to help other authorities by replying to their certificates requests.
 pub struct Helper {

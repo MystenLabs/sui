@@ -3,7 +3,6 @@
 use crate::error::NetworkError;
 use bytes::Bytes;
 use futures::{sink::SinkExt as _, stream::StreamExt as _};
-use log::{info, warn};
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
 use std::{
     cmp::min,
@@ -20,6 +19,7 @@ use tokio::{
     time::{sleep, Duration},
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tracing::{info, warn};
 
 #[cfg(test)]
 #[path = "tests/reliable_sender_tests.rs"]
@@ -159,7 +159,8 @@ impl Connection {
                     warn!("{}", error);
                 }
                 Err(e) => {
-                    warn!("{}", NetworkError::FailedToConnect(self.address, retry, e));
+                    let err = NetworkError::FailedToConnect(self.address, retry, e);
+                    warn!("{}", err);
                     let timer = sleep(Duration::from_millis(delay));
                     tokio::pin!(timer);
 

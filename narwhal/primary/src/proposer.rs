@@ -6,13 +6,13 @@ use crate::{
 };
 use config::{Committee, WorkerId};
 use crypto::{Digest, Hash as _, PublicKey, SignatureService};
-use log::debug;
-#[cfg(feature = "benchmark")]
-use log::info;
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::{sleep, Duration, Instant},
 };
+use tracing::debug;
+#[cfg(feature = "benchmark")]
+use tracing::info;
 
 #[cfg(test)]
 #[path = "tests/proposer_tests.rs"]

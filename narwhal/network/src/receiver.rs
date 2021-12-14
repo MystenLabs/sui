@@ -4,10 +4,10 @@ use crate::error::NetworkError;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::stream::{SplitSink, StreamExt as _};
-use log::{debug, info, warn};
 use std::{error::Error, net::SocketAddr};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tracing::{debug, info, warn};
 
 #[cfg(test)]
 #[path = "tests/receiver_tests.rs"]
@@ -53,7 +53,8 @@ impl<Handler: MessageHandler> Receiver<Handler> {
             let (socket, peer) = match listener.accept().await {
                 Ok(value) => value,
                 Err(e) => {
-                    warn!("{}", NetworkError::FailedToListen(e));
+                    let err = NetworkError::FailedToListen(e);
+                    warn!("{}", err);
                     continue;
                 }
             };

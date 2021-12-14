@@ -17,7 +17,6 @@ use bytes::Bytes;
 use config::{Committee, KeyPair, Parameters, WorkerId};
 use crypto::{Digest, PublicKey, SignatureService};
 use futures::sink::SinkExt as _;
-use log::info;
 use network::{MessageHandler, Receiver as NetworkReceiver, Writer};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -27,6 +26,7 @@ use std::{
 };
 use store::Store;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tracing::info;
 
 /// The default channel capacity for each channel of the primary.
 pub const CHANNEL_CAPACITY: usize = 1_000;
@@ -91,7 +91,7 @@ impl Primary {
         let (tx_cert_requests, rx_cert_requests) = channel(CHANNEL_CAPACITY);
 
         // Write the parameters to the logs.
-        parameters.log();
+        parameters.tracing();
 
         // Parse the public and secret key of this authority.
         let name = keypair.name;

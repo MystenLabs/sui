@@ -12,7 +12,6 @@ use futures::{
     future::{try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
 };
-use log::{debug, error};
 use network::SimpleSender;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -28,6 +27,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{sleep, Duration, Instant},
 };
+use tracing::{debug, error};
 
 /// The resolution of the timer that checks whether we received replies to our sync requests, and triggers
 /// new sync requests if we didn't.

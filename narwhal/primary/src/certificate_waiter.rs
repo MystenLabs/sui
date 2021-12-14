@@ -9,9 +9,9 @@ use futures::{
     future::try_join_all,
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
 };
-use log::error;
 use store::Store;
 use tokio::sync::mpsc::{Receiver, Sender};
+use tracing::error;
 
 /// Waits to receive all the ancestors of a certificate before looping it back to the `Core`
 /// for further processing.

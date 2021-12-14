@@ -7,11 +7,11 @@ edition = "2018"
 
 [dependencies]
 tokio = { version = "1.5.0", features = ["sync"] }
-log = "0.4.14"
 rand = { version = "0.7.3", optional = true}
 crypto = { path = "../crypto" }
 config = { path = "../config" }
 primary = { path = "../primary" }
+tracing = "0.1"
 
 [dev-dependencies]
 bincode = "1.3"

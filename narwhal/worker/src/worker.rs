@@ -13,7 +13,6 @@ use bytes::Bytes;
 use config::{Committee, Parameters, WorkerId};
 use crypto::{Digest, PublicKey};
 use futures::sink::SinkExt as _;
-use log::{error, info, warn};
 use network::{MessageHandler, Receiver, Writer};
 use primary::PrimaryWorkerMessage;
 use serde::{Deserialize, Serialize};
@@ -23,6 +22,7 @@ use std::{
 };
 use store::Store;
 use tokio::sync::mpsc::{channel, Sender};
+use tracing::{error, info, warn};
 
 #[cfg(test)]
 #[path = "tests/worker_tests.rs"]

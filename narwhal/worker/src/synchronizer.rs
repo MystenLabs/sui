@@ -8,7 +8,6 @@ use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{Digest, PublicKey};
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use log::{debug, error};
 use network::SimpleSender;
 use primary::PrimaryWorkerMessage;
 use std::{
@@ -20,6 +19,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{sleep, Duration, Instant},
 };
+use tracing::{debug, error};
 
 #[cfg(test)]
 #[path = "tests/synchronizer_tests.rs"]

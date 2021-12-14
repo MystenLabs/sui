@@ -3,7 +3,6 @@
 use crate::error::NetworkError;
 use bytes::Bytes;
 use futures::{sink::SinkExt as _, stream::StreamExt as _};
-use log::{info, warn};
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
 use std::{collections::HashMap, net::SocketAddr};
 use tokio::{
@@ -11,6 +10,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tracing::{info, warn};
 
 #[cfg(test)]
 #[path = "tests/simple_sender_tests.rs"]
@@ -105,10 +105,8 @@ impl Connection {
         let (mut writer, mut reader) = match TcpStream::connect(self.address).await {
             Ok(stream) => Framed::new(stream, LengthDelimitedCodec::new()).split(),
             Err(e) => {
-                warn!(
-                    "{}",
-                    NetworkError::FailedToConnect(self.address, /* retry */ 0, e)
-                );
+                let err = NetworkError::FailedToConnect(self.address, /* retry */ 0, e);
+                warn!("{}", err);
                 return;
             }
         };
@@ -120,7 +118,8 @@ impl Connection {
             tokio::select! {
                 Some(data) = self.receiver.recv() => {
                     if let Err(e) = writer.send(data).await {
-                        warn!("{}", NetworkError::FailedToSendMessage(self.address, e));
+                        let err = NetworkError::FailedToSendMessage(self.address, e);
+                        warn!("{}", err);
                         return;
                     }
                 },

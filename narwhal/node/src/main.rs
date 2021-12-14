@@ -12,10 +12,11 @@ use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Export as _, Import as _, KeyPair, Parameters, WorkerId};
 use consensus::Consensus;
 use crypto::Digest;
-use env_logger::Env;
 use primary::{Certificate, Header, PayloadToken, Primary};
 use store::{rocks, Store};
 use tokio::sync::mpsc::{channel, Receiver};
+use tracing::subscriber::set_global_default;
+use tracing_subscriber::EnvFilter;
 use worker::Worker;
 
 /// The default channel capacity.
@@ -50,17 +51,30 @@ async fn main() -> Result<()> {
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .get_matches();
 
-    let log_level = match matches.occurrences_of("v") {
+    let tracing_level = match matches.occurrences_of("v") {
         0 => "error",
         1 => "warn",
         2 => "info",
         3 => "debug",
         _ => "trace",
     };
-    let mut logger = env_logger::Builder::from_env(Env::default().default_filter_or(log_level));
-    #[cfg(feature = "benchmark")]
-    logger.format_timestamp_millis();
-    logger.init();
+
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(tracing_level));
+
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "benchmark")] {
+            let timer = tracing_subscriber::fmt::time::ChronoUtc::rfc3339();
+            let subscriber_builder = tracing_subscriber::fmt::Subscriber::builder()
+                                     .with_env_filter(env_filter)
+                                     .with_timer(timer).with_ansi(false);
+        } else {
+            let subscriber_builder = tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
+        }
+    }
+    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
+
+    set_global_default(subscriber).expect("Failed to set subscriber");
 
     match matches.subcommand() {
         ("generate_keys", Some(sub_matches)) => KeyPair::new()

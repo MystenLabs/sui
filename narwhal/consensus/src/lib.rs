@@ -9,13 +9,13 @@
 
 use config::{Committee, Stake};
 use crypto::{Digest, Hash as _, PublicKey};
-use log::{debug, info, log_enabled, warn};
 use primary::{Certificate, Round};
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
 };
 use tokio::sync::mpsc::{Receiver, Sender};
+use tracing::{debug, info, warn};
 
 #[cfg(any(test, feature = "benchmark"))]
 #[path = "tests/consensus_tests.rs"]
@@ -222,10 +222,10 @@ impl Consensus {
         }
 
         // Log the latest committed round of every authority (for debug).
-        if log_enabled!(log::Level::Debug) {
-            for (name, round) in &state.last_committed {
-                debug!("Latest commit of {}: Round {}", name, round);
-            }
+        // Performance note: if tracing at the debug log level is disabled, this is cheap, see
+        // https://github.com/tokio-rs/tracing/pull/326
+        for (name, round) in &state.last_committed {
+            debug!("Latest commit of {}: Round {}", name, round);
         }
 
         sequence
