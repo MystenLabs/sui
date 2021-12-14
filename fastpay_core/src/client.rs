@@ -562,8 +562,8 @@ where
         sent_certificates.append(&mut received_certs);
 
         assert_eq!(
-            self.sent_certificates.len(),
-            usize::from(self.next_sequence_number)
+            sent_certificates.len(),
+            usize::from(self.next_sequence_number(object_id))
         );
         Ok(())
     }

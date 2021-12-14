@@ -406,7 +406,7 @@ fn test_bidirectional_transfer() {
     // Confirm client2 lose ownership of the object.
     assert_eq!(
         rt.block_on(client2.object_ownership_have_quorum(object_id)),
-        false
+        None
     );
     assert_eq!(
         rt.block_on(client2.get_strong_majority_sequence_number(object_id)),
@@ -415,7 +415,7 @@ fn test_bidirectional_transfer() {
     // Confirm client1 acquired ownership of the object.
     assert_eq!(
         rt.block_on(client1.object_ownership_have_quorum(object_id)),
-        true
+        Some(SequenceNumber::from(2))
     );
 
     // Should fail if Client 2 double spend the object
