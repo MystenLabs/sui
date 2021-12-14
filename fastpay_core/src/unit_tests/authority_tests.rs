@@ -4,6 +4,7 @@
 use super::*;
 #[cfg(test)]
 use fastx_types::base_types::dbg_addr;
+use move_binary_format::file_format;
 use move_core_types::ident_str;
 #[cfg(test)]
 use move_core_types::language_storage::ModuleId;
@@ -139,6 +140,51 @@ fn test_handle_transfer_order_ok() {
     );
 }
 
+fn send_and_confirm_order(
+    authority: &mut AuthorityState,
+    order: Order,
+) -> Result<AccountInfoResponse, FastPayError> {
+    // Make the initial request
+    let response = authority.handle_order(order.clone()).unwrap();
+    let vote = response.pending_confirmation.unwrap();
+
+    // Collect signatures from a quorum of authorities
+    let mut builder = SignatureAggregator::try_new(order, &authority.committee).unwrap();
+    let certificate = builder
+        .append(vote.authority, vote.signature)
+        .unwrap()
+        .unwrap();
+    // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
+    // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
+    authority.handle_confirmation_order(ConfirmationOrder::new(certificate))
+}
+
+#[test]
+fn test_publish_module_ok() {
+    let (sender, sender_key) = get_key_pair();
+    // create a dummy gas payment object. ok for now because we don't check gas
+    let gas_payment_object_id = ObjectID::random();
+    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
+    let gas_payment_object_ref = gas_payment_object.to_object_reference();
+    let mut authority = init_state_with_objects(vec![gas_payment_object]);
+
+    let mut module = file_format::empty_module();
+    module.address_identifiers[0] = sender.to_address_hack();
+    let mut module_bytes = Vec::new();
+    module.serialize(&mut module_bytes).unwrap();
+    let order = Order::new_module(
+        sender,
+        gas_payment_object_ref,
+        vec![module_bytes],
+        &sender_key,
+    );
+    let module_object_id = TxContext::new(order.digest()).fresh_id();
+    let response = send_and_confirm_order(&mut authority, order).unwrap();
+    // check that the module actually got published
+    assert!(response.object_id == module_object_id);
+    // TODO: eventually, `response` should return a vector of ID's created + we should check non-emptiness of this vector
+}
+
 #[test]
 fn test_handle_move_order_bad() {
     let (sender, sender_key) = get_key_pair();
@@ -167,19 +213,9 @@ fn test_handle_move_order_bad() {
         &sender_key,
     );
 
-    // Make the initial request
-    let response = authority_state.handle_order(order.clone()).unwrap();
-    let vote = response.pending_confirmation.unwrap();
-
-    // Collect signatures from a quorum of authorities
-    let mut builder = SignatureAggregator::try_new(order, &authority_state.committee).unwrap();
-    let certificate = builder
-        .append(vote.authority, vote.signature)
-        .unwrap()
-        .unwrap();
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    match authority_state.handle_confirmation_order(ConfirmationOrder::new(certificate)) {
+    match send_and_confirm_order(&mut authority_state, order) {
         Err(FastPayError::MoveExecutionFailure) => (),
         r => panic!("Unexpected result {:?}", r),
     }

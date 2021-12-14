@@ -17,10 +17,6 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-// Refactor: eventually a transaction will have a (unique) digest. For the moment we only
-// have transfer transactions so we index them by the object/seq they mutate.
-pub(crate) type TransactionDigest = (ObjectID, SequenceNumber);
-
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct FundingTransaction {
     pub recipient: FastPayAddress,
@@ -59,8 +55,7 @@ pub struct MoveCall {
 pub struct MoveModulePublish {
     pub sender: FastPayAddress,
     pub gas_payment: ObjectRef,
-    // TODO: would like to use CompiledModule here, but this type doesn't implement Hash
-    pub module_bytes: Vec<u8>,
+    pub modules: Vec<Vec<u8>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -208,6 +203,20 @@ impl Order {
         Self::new(kind, secret)
     }
 
+    pub fn new_module(
+        sender: FastPayAddress,
+        gas_payment: ObjectRef,
+        modules: Vec<Vec<u8>>,
+        secret: &KeyPair,
+    ) -> Self {
+        let kind = OrderKind::Publish(MoveModulePublish {
+            sender,
+            gas_payment,
+            modules,
+        });
+        Self::new(kind, secret)
+    }
+
     pub fn new_transfer(transfer: Transfer, secret: &KeyPair) -> Self {
         Self::new(OrderKind::Transfer(transfer), secret)
     }
@@ -246,8 +255,8 @@ impl Order {
                 call_inputs.extend(c.object_arguments.clone());
                 call_inputs
             }
-            OrderKind::Publish(_) => {
-                unimplemented!("invoke the FastX adapter to publish modules")
+            OrderKind::Publish(m) => {
+                vec![m.gas_payment]
             }
         }
     }
@@ -257,7 +266,7 @@ impl Order {
         use OrderKind::*;
         match &self.kind {
             Transfer(t) => &t.object_id,
-            Publish(_) => unimplemented!("Reading object ID from module"),
+            Publish(m) => &m.gas_payment.0,
             Call(c) => {
                 assert!(
                     c.object_arguments.is_empty(),
@@ -280,7 +289,7 @@ impl Order {
 
     // TODO: derive a real cryptographic hash of the transaction here.
     pub fn digest(&self) -> TransactionDigest {
-        (*self.object_id(), self.sequence_number())
+        TransactionDigest::new(*self.object_id(), self.sequence_number())
     }
 }
 

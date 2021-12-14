@@ -58,6 +58,18 @@ impl Object {
         }
     }
 
+    pub fn new_module(
+        m: CompiledModule,
+        owner: FastPayAddress,
+        next_sequence_number: SequenceNumber,
+    ) -> Self {
+        Object {
+            data: Data::Module(m),
+            owner,
+            next_sequence_number,
+        }
+    }
+
     pub fn to_object_reference(&self) -> ObjectRef {
         (self.id(), self.next_sequence_number)
     }
