@@ -4,7 +4,7 @@
 use anyhow::{bail, Result};
 use fastx_framework::{natives, FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS};
 use fastx_types::{
-    base_types::{FastPayAddress, ObjectRef, SequenceNumber},
+    base_types::{FastPayAddress, ObjectRef, SequenceNumber, TxContext},
     error::{FastPayError, FastPayResult},
     object::Object,
     storage::Storage,
@@ -22,7 +22,7 @@ use move_core_types::{
     resolver::{ModuleResolver, MoveResolver, ResourceResolver},
     transaction_argument::{convert_txn_args, TransactionArgument},
 };
-use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunction};
+use move_vm_runtime::move_vm::MoveVM;
 use std::fmt::Debug;
 
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
@@ -50,7 +50,6 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         // TODO: execute should return Result<(), FastPayError>
         bail!("Verification error: {:?}", error)
     }
-    let natives = natives::all_natives(MOVE_STDLIB_ADDRESS, FASTX_FRAMEWORK_ADDRESS);
     match execute_function(
         module,
         function,
@@ -59,7 +58,6 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         pure_args,
         gas_budget,
         state_view,
-        natives,
     )? {
         ExecutionResult::Success {
             change_set,
@@ -119,6 +117,73 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     Ok(())
 }
 
+pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
+    state_view: &mut S,
+    module_bytes: Vec<Vec<u8>>,
+    sender: &AccountAddress,
+    ctx: &mut TxContext,
+) -> Result<Vec<Object>, FastPayError> {
+    if module_bytes.is_empty() {
+        return Err(FastPayError::ModulePublishFailure {
+            error: "Publishing empty list of modules".to_string(),
+        });
+    }
+
+    let mut modules = module_bytes
+        .iter()
+        .map(|b| {
+            CompiledModule::deserialize(b).map_err(|e| FastPayError::ModuleDeserializationFailure {
+                error: e.to_string(),
+            })
+        })
+        .collect::<FastPayResult<Vec<CompiledModule>>>()?;
+
+    // Use the Move VM's publish API to run the Move bytecode verifier and linker.
+    // It is important to do this before running the FastX verifier, since the fastX
+    // verifier may assume well-formedness conditions enforced by the Move verifier hold
+    // TODO(https://github.com/MystenLabs/fastnft/issues/57):
+    // it would be more efficient to call the linker/verifier directly instead of
+    // creating a VM. It will also save us from serializing/deserializing the modules twice
+    let vm = create_vm();
+    let mut session = vm.new_session(state_view);
+    let mut gas_status = get_gas_status(None).expect("Cannot fail when called with None");
+    session
+        .publish_module_bundle(module_bytes, *sender, &mut gas_status)
+        .map_err(|e| FastPayError::ModulePublishFailure {
+            error: e.to_string(),
+        })?;
+
+    // Run FastX bytecode verifier
+    for module in &modules {
+        verifier::verify_module(module)?
+    }
+
+    // derive fresh ID's for each module and mutate its self address to the ID.
+    // this ensures that each module can be uniquely identified/retrieved by its self address
+    // TODO: do this *before* passing the modules to the verifier. Right now, we can't because
+    // `publish_module_bundle` insists that the tx sender is equal to the module's self_address()
+    for module in modules.iter_mut() {
+        let fresh_id = ctx.fresh_id();
+        // TODO(https://github.com/MystenLabs/fastnft/issues/56):
+        // add a FastX bytecode verifier pass to ensure that no bytecodes reference `module.address_identifiers[0]`
+        // otherwise, code like `if (x == old_self_address)` could sneakily change to `if (x == fresh_id)` after the mutation below
+        module.address_identifiers[0] = fresh_id;
+        assert!(module.self_id().address() == &fresh_id);
+    }
+
+    // Create and return module objects
+    Ok(modules
+        .into_iter()
+        .map(|m| {
+            Object::new_module(
+                m,
+                FastPayAddress::from_move_address_hack(sender),
+                SequenceNumber::new(),
+            )
+        })
+        .collect())
+}
+
 /// Check if this is a special event type emitted when there is a transfer between fastX addresses
 pub fn is_transfer_event(e: &Event) -> bool {
     // TODO: hack that leverages implementation of Transfer::transfer_internal native function
@@ -147,6 +212,11 @@ pub enum ExecutionResult {
     Fail { error: VMError, gas_used: u64 },
 }
 
+fn create_vm() -> MoveVM {
+    let natives = natives::all_natives(MOVE_STDLIB_ADDRESS, FASTX_FRAMEWORK_ADDRESS);
+    MoveVM::new(natives).expect("VM creation only fails if natives are invalid")
+}
+
 /// Execute the function named `script_function` in `module` with the given
 /// `type_args`, `signer_addresses`, and `args` as input.
 /// Execute the function according to the given `gas_budget`. If this budget
@@ -162,9 +232,8 @@ pub fn execute_function<Resolver: MoveResolver>(
     mut args: Vec<Vec<u8>>,
     gas_budget: Option<u64>,
     resolver: &Resolver,
-    natives: impl IntoIterator<Item = (AccountAddress, Identifier, Identifier, NativeFunction)>,
 ) -> Result<ExecutionResult> {
-    let vm = MoveVM::new(natives).unwrap();
+    let vm = create_vm();
     let mut gas_status = get_gas_status(gas_budget)?;
     let mut session = vm.new_session(resolver);
     // prepend signers to args
