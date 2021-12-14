@@ -4,10 +4,11 @@ use crate::error::FastPayError;
 use std::convert::{TryFrom, TryInto};
 
 use ed25519_dalek as dalek;
-use ed25519_dalek::{Signer, Verifier};
+use ed25519_dalek::{Digest, Signer, Verifier};
 use move_core_types::account_address::AccountAddress;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use sha3::Sha3_256;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -65,6 +66,50 @@ pub type AuthorityName = PublicKeyBytes;
 // addresses and ID's
 pub type ObjectID = AccountAddress;
 pub type ObjectRef = (ObjectID, SequenceNumber);
+
+// TODO(https://github.com/MystenLabs/fastnft/issues/65): eventually a transaction will have a (unique) digest. For the moment we only
+// have transfer transactions so we index them by the object/seq they mutate.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct TransactionDigest((ObjectID, SequenceNumber));
+
+#[derive(Debug)]
+pub struct TxContext {
+    /// Digest of the current transaction
+    digest: TransactionDigest,
+    /// Number of `ObjectID`'s generated during execution of the current transaction
+    ids_created: u64,
+}
+
+impl TxContext {
+    pub fn new(digest: TransactionDigest) -> Self {
+        Self {
+            digest,
+            ids_created: 0,
+        }
+    }
+
+    /// Derive a globally unique object ID by hashing self.digest | self.ids_created
+    pub fn fresh_id(&mut self) -> ObjectID {
+        // TODO(https://github.com/MystenLabs/fastnft/issues/58):
+        // audit ID derivation: do we want/need domain separation, different hash function, truncation ...
+        let hash_arg = &mut self.digest.0 .0.to_vec();
+        hash_arg.append(&mut self.digest.0 .1 .0.to_le_bytes().to_vec());
+        hash_arg.append(&mut self.ids_created.to_le_bytes().to_vec());
+        let hash = Sha3_256::digest(hash_arg.as_slice());
+        // truncate into an ObjectID.
+        let id = AccountAddress::try_from(&hash[0..AccountAddress::LENGTH]).unwrap();
+
+        self.ids_created += 1;
+
+        id
+    }
+}
+
+impl TransactionDigest {
+    pub fn new(id: ObjectID, seq: SequenceNumber) -> Self {
+        Self((id, seq))
+    }
+}
 
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;

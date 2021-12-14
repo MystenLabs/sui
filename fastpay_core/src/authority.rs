@@ -22,10 +22,6 @@ use std::{collections::BTreeMap, convert::TryInto};
 #[path = "unit_tests/authority_tests.rs"]
 mod authority_tests;
 
-// Refactor: eventually a transaction will have a (unique) digest. For the moment we only
-// have transfer transactions so we index them by the object/seq they mutate.
-pub(crate) type TransactionDigest = (ObjectID, SequenceNumber);
-
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority and shard
     /// The name of this authority.
@@ -163,8 +159,8 @@ impl Authority for AuthorityState {
         confirmation_order: ConfirmationOrder,
     ) -> Result<AccountInfoResponse, FastPayError> {
         let certificate = confirmation_order.certificate;
-        let order = &certificate.order;
-        let object_id = *order.object_id();
+        let order = certificate.order.clone();
+        let mut object_id = *order.object_id();
         // Check the certificate and retrieve the transfer data.
         fp_ensure!(self.in_shard(&object_id), FastPayError::WrongShard);
         certificate.check(&self.committee)?;
@@ -193,18 +189,26 @@ impl Authority for AuthorityState {
                 return self.make_object_info(object_id);
             }
 
-            inputs.push(input_object);
+            inputs.push(input_object.clone());
         }
 
         // Here we implement the semantics of a transfer transaction, by which
         // the owner changes. Down the line here we do general smart contract
         // execution.
-        let mut outputs = vec![];
+        let input_object_refs = order.input_objects();
+
+        // Note: State is mutated below and should be committed in an atomic way
+        // to memory or persistent storage. Currently this is done in memory
+        // through the calls to store being infallible.
+
+        // Insert into the certificates map
+        let transaction_digest = self.add_certificate(certificate);
+        let mut tx_ctx = TxContext::new(transaction_digest);
 
         // Order-specific logic
         //
         // TODO: think very carefully what to do in case we throw an Err here.
-        match &order.kind {
+        let outputs = match order.kind {
             OrderKind::Transfer(t) => {
                 let mut output_object = inputs[0].clone();
                 output_object.next_sequence_number =
@@ -214,15 +218,14 @@ impl Authority for AuthorityState {
                     Address::Primary(_) => PublicKeyBytes([0; 32]),
                     Address::FastPay(addr) => addr,
                 });
-                outputs.push(output_object);
+                vec![output_object]
             }
             OrderKind::Call(c) => {
                 let sender = c.sender.to_address_hack();
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
                 // TODO(https://github.com/MystenLabs/fastnft/issues/30): read value of c.object_arguments +
                 // pass objects directly to the VM instead of passing ObjectRef's
-                // Note: They are inlcuded in the 'inputs' list of objects.
-
+                // Note: They are included in the 'inputs' list of objects.
                 adapter::execute(
                     self,
                     &c.module,
@@ -234,22 +237,30 @@ impl Authority for AuthorityState {
                     Some(c.gas_budget),
                 )
                 .map_err(|_| FastPayError::MoveExecutionFailure)?;
+                // TODO: return output objects here
+                Vec::new()
             }
-            OrderKind::Publish(_) => {
-                unimplemented!("invoke the FastX adapter to publish modules")
+            OrderKind::Publish(m) => {
+                // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
+                let sender = m.sender.to_address_hack();
+                match adapter::publish(self, m.modules, &sender, &mut tx_ctx) {
+                    Ok(outputs) => {
+                        // TODO: AccountInfoResponse should return all object ID outputs. but for now it only returns one, so use this hack
+                        object_id = outputs[0].id();
+
+                        outputs
+                    }
+                    Err(_e) => {
+                        // TODO: return this error to the client
+                        Vec::new()
+                    }
+                }
             }
-        }
+        };
 
-        // Note: State is mutated below and should be committed in an atomic way
-        // to memory or persistent storage. Currently this is done in memory
-        // through the calls to store being infallible.
-
-        for input_ref in order.input_objects() {
+        for input_ref in input_object_refs {
             self.archive_order_lock(&input_ref);
         }
-
-        // Insert into the certificates map
-        let transaction_digest = self.add_certificate(certificate);
 
         // Insert each output object into the stores, index and make locks for it.
         for output_object in outputs {
@@ -260,6 +271,7 @@ impl Authority for AuthorityState {
 
             // Add new object, init locks and remove old ones
             self.insert_object(output_object);
+            // TODO: no need to init order locks for immutable outputs
             self.init_order_lock(output_ref);
         }
 

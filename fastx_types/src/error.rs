@@ -103,6 +103,10 @@ pub enum FastPayError {
     ModuleLoadFailure { error: String },
     #[error("Failed to verify the Move module, reason: {error:?}.")]
     ModuleVerificationFailure { error: String },
+    #[error("Failed to verify the Move module, reason: {error:?}.")]
+    ModuleDeserializationFailure { error: String },
+    #[error("Failed to publish the Move module(s), reason: {error:?}.")]
+    ModulePublishFailure { error: String },
 
     // Internal state errors
     #[error("Attempt to re-initialize an order lock.")]
