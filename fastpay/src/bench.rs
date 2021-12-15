@@ -127,6 +127,7 @@ impl ClientServerBenchmark {
             assert!(states[i].in_shard(&object_id));
             let mut client = Object::with_id_for_testing(object_id);
             client.transfer(keypair.0);
+            states[i].init_order_lock(client.to_object_reference());
             states[i].insert_object(client);
             account_objects.push((keypair.0, object_id, keypair.1));
         }
