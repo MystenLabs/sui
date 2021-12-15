@@ -249,7 +249,7 @@ impl Authority for AuthorityState {
         };
 
         // Extract the new state from the execution
-        let (objects, active_inputs, written, _deleted) = temporary_store.extract();
+        let (objects, active_inputs, written, _deleted) = temporary_store.into_inner();
 
         // Note: State is mutated below and should be committed in an atomic way
         // to memory or persistent storage. Currently this is done in memory
@@ -474,7 +474,7 @@ pub struct AuthorityTemporaryStore<'a> {
     pub objects: BTreeMap<ObjectID, Object>,
     pub active_inputs: Vec<ObjectRef>, // Inputs that are not read only
     pub written: Vec<ObjectRef>,       // Objects written
-    pub deleted: Vec<ObjectRef>,       // Objects activelly deleted
+    pub deleted: Vec<ObjectRef>,       // Objects actively deleted
 }
 
 impl<'a> AuthorityTemporaryStore<'a> {
@@ -495,7 +495,7 @@ impl<'a> AuthorityTemporaryStore<'a> {
         }
     }
 
-    pub fn extract(
+    pub fn into_inner(
         self,
     ) -> (
         BTreeMap<ObjectID, Object>,
@@ -530,8 +530,9 @@ impl<'a> Storage for AuthorityTemporaryStore<'a> {
     fn write_object(&mut self, object: Object) {
         // Check it is not read-only
         if object.is_read_only() {
-            // TODO: should we throw an error here?
-            return;
+            // This is an internal invariant violation. Move only allows us to
+            // mutate objects if they are &mut so they cannot be read-only.
+            panic!("Internal invariant violation: Mutating a read-only object.")
         }
         self.written.push(object.to_object_reference());
         self.objects.insert(object.id(), object);
@@ -541,8 +542,9 @@ impl<'a> Storage for AuthorityTemporaryStore<'a> {
         // Check it is not read-only
         if let Some(object) = self.read_object(id) {
             if object.is_read_only() {
-                // TODO: should we throw an error here?
-                return;
+                // This is an internal invariant violation. Move only allows us to
+                // mutate objects if they are &mut so they cannot be read-only.
+                panic!("Internal invariant violation: Deleting a read-only object.")
             }
         }
 
@@ -586,19 +588,29 @@ impl<'a> ResourceResolver for AuthorityTemporaryStore<'a> {
         address: &AccountAddress,
         struct_tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.authority_state.objects.lock().unwrap().get(address) {
-            Some(o) => match &o.data {
-                Data::Move(m) => {
-                    assert!(struct_tag == &m.type_, "Invariant violation: ill-typed object in storage or bad object resquest from caller\
-");
-                    Ok(Some(m.contents.clone()))
+        let object = match self.read_object(address) {
+            Some(x) => x,
+            None => match self.authority_state.objects.lock().unwrap().get(address) {
+                None => return Ok(None),
+                Some(x) => {
+                    if !x.is_read_only() {
+                        fp_bail!(FastPayError::ExecutionInvariantViolation);
+                    }
+                    x.clone()
                 }
-                other => unimplemented!(
-                    "Bad object lookup: expected Move object, but got {:?}",
-                    other
-                ),
             },
-            _ => Ok(None),
+        };
+
+        match &object.data {
+            Data::Move(m) => {
+                assert!(struct_tag == &m.type_, "Invariant violation: ill-typed object in storage or bad object resquest from caller\
+");
+                Ok(Some(m.contents.clone()))
+            }
+            other => unimplemented!(
+                "Bad object lookup: expected Move object, but got {:?}",
+                other
+            ),
         }
     }
 }

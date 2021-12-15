@@ -123,6 +123,8 @@ pub enum FastPayError {
     MoveExecutionFailure,
     #[error("Insufficent input objects")]
     InsufficientObjectNumber,
+    #[error("Execution invariant violated")]
+    ExecutionInvariantViolation,
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;
