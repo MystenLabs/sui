@@ -252,14 +252,14 @@ where
     /// Find the highest sequence number that is known to a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_strong_majority_sequence_number(&mut self, object_id: ObjectID) -> SequenceNumber {
+    async fn get_strong_majority_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
         let request = AccountInfoRequest {
             object_id,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
-        let numbers: futures::stream::FuturesUnordered<_> = self
-            .authority_clients
+        let mut authority_clients = self.authority_clients.clone();
+        let numbers: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
             .map(|(name, client)| {
                 let fut = client.handle_account_info_request(request.clone());
@@ -279,30 +279,23 @@ where
     /// Return true if the ownership of the object is backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn object_ownership_have_quorum(
-        &mut self,
+    async fn get_strong_majority_owner(
+        &self,
         object_id: ObjectID,
-    ) -> Option<SequenceNumber> {
+    ) -> Option<(FastPayAddress, SequenceNumber)> {
         let request = AccountInfoRequest {
             object_id,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
-        let address = self.address;
-        let numbers: futures::stream::FuturesUnordered<_> = self
-            .authority_clients
+        let mut authority_clients = self.authority_clients.clone();
+        let numbers: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
             .map(|(name, client)| {
                 let fut = client.handle_account_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => {
-                            if info.owner == address {
-                                Some((*name, Some(info.next_sequence_number)))
-                            } else {
-                                None
-                            }
-                        }
+                        Ok(info) => Some((*name, Some((info.owner, info.next_sequence_number)))),
                         _ => None,
                     }
                 }
