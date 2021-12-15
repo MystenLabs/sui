@@ -1,0 +1,70 @@
+name: Benchmark
+
+on:
+  push:
+     branches: [ main, extensions ]
+
+env:
+  CARGO_TERM_COLOR: always
+  # Disable incremental compilation.
+  #
+  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
+  # as it lets the compiler avoid recompiling code that hasn't changed. However,
+  # on CI, we're not making small edits; we're almost always building the entire
+  # project from scratch. Thus, incremental compilation on CI actually
+  # introduces *additional* overhead to support making future builds
+  # faster...but no future builds will ever occur in any given CI environment.
+  #
+  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
+  # for details.
+  CARGO_INCREMENTAL: 0
+  # Allow more retries for network requests in cargo (downloading crates) and
+  # rustup (installing toolchains). This should help to reduce flaky CI failures
+  # from transient network timeouts or other issues.
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  # Don't emit giant backtraces in the CI logs.
+  RUST_BACKTRACE: short
+
+jobs:
+  bench:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install minimal rust stable
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - uses: Swatinem/rust-cache@v1
+    - uses: actions-rs/install@v0.1
+      with:
+        crate: huniq
+        version: latest
+    - name: prepare artifact directory
+      run: |
+        mkdir -p artifacts
+        echo '# Bench results' > artifacts/bench_results.txt
+    - name: compile benchmark
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --release
+    - name: run benchmark
+      run: |
+        set -o pipefail
+        cargo run --release --bin bench 2>&1 | huniq | tee -a artifacts/bench_results.txt
+    - name: retrieve benchmark results
+      id: get-comment-body
+      run: |
+        body=$(cat artifacts/bench_results.txt)
+        body="${body//$'\n'/'%0A'}"
+        body="${body//$'\r'/'%0D'}"
+        echo ::set-output name=body::$body
+    - name: Create commit comment
+      uses: peter-evans/commit-comment@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        body: ${{ steps.get-comment-body.outputs.body }}
