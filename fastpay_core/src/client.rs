@@ -276,7 +276,7 @@ where
         )
     }
 
-    /// Return true if the ownership of the object is backed by a quorum of authorities.
+    /// Return owner address and sequence number of an object backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
     async fn get_strong_majority_owner(
