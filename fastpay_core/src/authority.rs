@@ -93,6 +93,7 @@ impl Authority for AuthorityState {
         // We first do all the checks that can be done in parallel with read only access to
         // the object database and lock database.
         let input_objects = order.input_objects();
+        let mut mutable_objects = Vec::with_capacity(input_objects.len());
 
         // Ensure at least one object is input to be mutated.
         fp_ensure!(
@@ -100,24 +101,32 @@ impl Authority for AuthorityState {
             FastPayError::InsufficientObjectNumber
         );
 
-        for object_ref in &input_objects {
+        for object_ref in input_objects {
             let (object_id, sequence_number) = object_ref;
 
             fp_ensure!(
-                *sequence_number <= SequenceNumber::max(),
+                sequence_number <= SequenceNumber::max(),
                 FastPayError::InvalidSequenceNumber
             );
 
             // Get a ref to the object concerned by the transaction
             let object = self
-                .object_state(object_id)
+                .object_state(&object_id)
                 .map_err(|_| FastPayError::ObjectNotFound)?;
 
             // Check that the seq number is the same
             fp_ensure!(
-                object.next_sequence_number == *sequence_number,
+                object.next_sequence_number == sequence_number,
                 FastPayError::UnexpectedSequenceNumber
             );
+
+            // If this is an immutable object, we do no more checks
+            // and check no locks.
+            if object.is_read_only() {
+                continue;
+            }
+
+            // Additional checks for mutable objects
 
             // Check the transaction sender is also the object owner
             fp_ensure!(
@@ -126,7 +135,7 @@ impl Authority for AuthorityState {
             );
 
             // Check that this is the first, or same as the first order we sign.
-            if let Some(pending_confirmation) = self.get_order_lock(object_ref)? {
+            if let Some(pending_confirmation) = self.get_order_lock(&object_ref)? {
                 fp_ensure!(
                     pending_confirmation.order.kind == order.kind,
                     FastPayError::PreviousTransferMustBeConfirmedFirst {
@@ -134,8 +143,10 @@ impl Authority for AuthorityState {
                     }
                 );
                 // This exact transfer order was already signed. Return the previous value.
-                return self.make_object_info(*object_id);
+                return self.make_object_info(object_id);
             }
+
+            mutable_objects.push((object_id, sequence_number));
         }
 
         // TODO(https://github.com/MystenLabs/fastnft/issues/45): check that c.gas_payment exists + that its value is > gas_budget
@@ -146,7 +157,7 @@ impl Authority for AuthorityState {
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
 
         // This is the critical section that requires a write lock on the lock DB.
-        self.set_order_lock(signed_order)?;
+        self.set_order_lock(&mutable_objects, signed_order)?;
 
         let info = self.make_object_info(object_id)?;
         Ok(info)
@@ -218,9 +229,6 @@ impl Authority for AuthorityState {
             OrderKind::Call(c) => {
                 let sender = c.sender.to_address_hack();
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
-                // TODO(https://github.com/MystenLabs/fastnft/issues/30): read value of c.object_arguments +
-                // pass objects directly to the VM instead of passing ObjectRef's
-                // Note: They are inlcuded in the 'inputs' list of objects.
                 adapter::execute(
                     &mut temporary_store,
                     &c.module,
@@ -249,7 +257,7 @@ impl Authority for AuthorityState {
         };
 
         // Extract the new state from the execution
-        let (objects, active_inputs, written, _deleted) = temporary_store.into_inner();
+        let (mut objects, active_inputs, written, _deleted) = temporary_store.into_inner();
 
         // Note: State is mutated below and should be committed in an atomic way
         // to memory or persistent storage. Currently this is done in memory
@@ -265,8 +273,16 @@ impl Authority for AuthorityState {
             self.add_parent_cert(output_ref, transaction_digest);
 
             // Add new object, init locks and remove old ones
-            self.insert_object(objects[&output_ref.0].clone());
-            self.init_order_lock(output_ref);
+            let object = objects
+                .remove(&output_ref.0)
+                .expect("By temporary_authority_store invarient object exists.");
+
+            if !object.is_read_only() {
+                // Only objects that can be mutated have locks.
+                self.init_order_lock(output_ref);
+            }
+
+            self.insert_object(object);
         }
 
         let info = self.make_object_info(object_id)?;
@@ -388,7 +404,11 @@ impl AuthorityState {
     }
 
     /// Set the order lock to a specific transaction
-    pub fn set_order_lock(&mut self, signed_order: SignedOrder) -> Result<(), FastPayError> {
+    pub fn set_order_lock(
+        &mut self,
+        mutable_input_objects: &[ObjectRef],
+        signed_order: SignedOrder,
+    ) -> Result<(), FastPayError> {
         // This is the only function that writes as part of the handle_order flow
         // and the only that therefore needs an exclusive write lock on the lock
         // database. Inconsistent / delayed reads of the lock database do not result in safety
@@ -400,12 +420,11 @@ impl AuthorityState {
         // This is a liveness issue for equivocating clients and therefore not an issue
         // we are trying to resolve.
 
-        let input_objects = signed_order.order.input_objects();
-        for (object_id, seq) in input_objects {
+        for obj_ref in mutable_input_objects {
             // The object / version must exist, and therefore lock initialized.
             let lock = self
                 .order_lock
-                .get_mut(&(object_id, seq))
+                .get_mut(obj_ref)
                 .ok_or(FastPayError::OrderLockDoesNotExist)?;
             if let Some(existing_signed_order) = lock {
                 if existing_signed_order.order == signed_order.order {
