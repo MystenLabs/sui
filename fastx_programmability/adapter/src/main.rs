@@ -3,13 +3,15 @@
 
 use anyhow::Result;
 
-use fastx_adapter::state_view::FastXStateView;
+use fastx_adapter::{state_view::FastXStateView, adapter::execute};
 use fastx_framework::{natives, FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS};
 
+use move_binary_format::views::ViewInternals;
 use move_cli::{Command, Move};
 use move_core_types::{
     account_address::AccountAddress, errmap::ErrorMapping, identifier::Identifier,
     language_storage::TypeTag, parser, transaction_argument::TransactionArgument,
+    language_storage::ModuleId,
 };
 
 use structopt::StructOpt;
@@ -32,12 +34,18 @@ pub enum FastXCommand {
     // ... extra commands available only in fastX added below
     #[structopt(name = "run")]
     Run {
+        // Path to build directory
+        #[structopt(name = "build_dir")]
+        build_dir: String,
+        // Path to storage directory
+        #[structopt(name = "storage_dir")]
+        storage_dir: String,
         /// Path to module bytecode stored on disk
         // TODO: We hardcode the module address to the fastX stdlib address for now, but will fix this
         #[structopt(name = "module")]
-        module: Identifier,
+        module: ModuleId,
         /// Name of function in that module to call
-        #[structopt(name = "name", parse(try_from_str = Identifier::new))]
+        #[structopt(name = "function", parse(try_from_str = Identifier::new))]
         function: Identifier,
         /// Sender of the transaction
         #[structopt(name = "sender", parse(try_from_str = AccountAddress::from_hex_literal))]
@@ -66,10 +74,10 @@ fn main() -> Result<()> {
     use FastXCommand::*;
     match args.cmd {
         MoveCommand(cmd) => move_cli::run_cli(natives, &error_descriptions, &args.move_args, &cmd),
-        Run { .. } => {
-            // TODO: take build_dir and storage_dir as CLI inputs
-            let _state_view = FastXStateView::create("build", "storage")?;
-            //adapter.execute_local(module, function, sender, args, type_args, gas_budget)?;
+        Run { build_dir, storage_dir, module, function, sender,
+                args, type_args, gas_budget } => {
+            let mut _state_view = FastXStateView::create(&build_dir, &storage_dir)?;
+            execute(&mut _state_view, &module, &function, sender, object_args, pure_args, type_args, gas_budget);
             unimplemented!("Fixme: local adapter")
         }
     }

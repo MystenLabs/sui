@@ -14,14 +14,22 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 
+use fastx_types::{
+    base_types::*,
+    object::Object,
+    storage::Storage,
+};
+use std::{collections::BTreeMap};
+
 pub struct FastXStateView {
     pub inner: OnDiskStateView,
+    objects: BTreeMap<ObjectID, Object>,
 }
 
 impl FastXStateView {
     pub fn create(build_dir: &str, storage_dir: &str) -> Result<Self> {
         let state_view = OnDiskStateView::create(build_dir, storage_dir)?;
-        Ok(Self { inner: state_view })
+        Ok(Self { inner: state_view, objects: BTreeMap::new() })
     }
 }
 
@@ -62,5 +70,21 @@ impl GetModule for FastXStateView {
 
     fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<CompiledModule>, Self::Error> {
         self.inner.get_module_by_id(id)
+    }
+}
+
+// Use basic in-mem for now
+// TODO: extend for persistence
+impl Storage for FastXStateView {
+    fn read_object(&self, id: &ObjectID) -> Option<Object> {
+        self.objects.get(id).cloned()
+    }
+
+    fn write_object(&mut self, object: Object) {
+        self.objects.insert(object.id(), object);
+    }
+
+    fn delete_object(&mut self, id: &ObjectID) {
+        self.objects.remove(id);
     }
 }
