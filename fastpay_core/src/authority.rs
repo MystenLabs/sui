@@ -191,11 +191,6 @@ impl Authority for AuthorityState {
             inputs.push(input_object.clone());
         }
 
-        // Here we implement the semantics of a transfer transaction, by which
-        // the owner changes. Down the line here we do general smart contract
-        // execution.
-        let input_object_refs = order.input_objects();
-
         // Note: State is mutated below and should be committed in an atomic way
         // to memory or persistent storage. Currently this is done in memory
         // through the calls to store being infallible.
@@ -204,12 +199,11 @@ impl Authority for AuthorityState {
         let transaction_digest = self.add_certificate(certificate);
         let mut tx_ctx = TxContext::new(transaction_digest);
 
-        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
-
         // Order-specific logic
         //
         // TODO: think very carefully what to do in case we throw an Err here.
-        let outputs = match order.kind {
+        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
+        match order.kind {
             OrderKind::Transfer(t) => {
                 let mut output_object = inputs[0].clone();
                 output_object.next_sequence_number =
@@ -219,7 +213,7 @@ impl Authority for AuthorityState {
                     Address::Primary(_) => PublicKeyBytes([0; 32]),
                     Address::FastPay(addr) => addr,
                 });
-                vec![output_object]
+                temporary_store.write_object(output_object);
             }
             OrderKind::Call(c) => {
                 let sender = c.sender.to_address_hack();
@@ -227,8 +221,6 @@ impl Authority for AuthorityState {
                 // TODO(https://github.com/MystenLabs/fastnft/issues/30): read value of c.object_arguments +
                 // pass objects directly to the VM instead of passing ObjectRef's
                 // Note: They are inlcuded in the 'inputs' list of objects.
-
-                
                 adapter::execute(
                     &mut temporary_store,
                     &c.module,
@@ -240,8 +232,6 @@ impl Authority for AuthorityState {
                     Some(c.gas_budget),
                 )
                 .map_err(|_| FastPayError::MoveExecutionFailure)?;
-                // TODO: return output objects here
-                Vec::new()
             }
             OrderKind::Publish(m) => {
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
@@ -250,31 +240,32 @@ impl Authority for AuthorityState {
                     Ok(outputs) => {
                         // TODO: AccountInfoResponse should return all object ID outputs. but for now it only returns one, so use this hack
                         object_id = outputs[0].id();
-
-                        outputs
                     }
                     Err(_e) => {
                         // TODO: return this error to the client
-                        Vec::new()
                     }
                 }
             }
         };
 
-        for input_ref in input_object_refs {
+        // Extract the new state from the execution
+        let (objects, active_inputs, written, _deleted) = temporary_store.extract();
+
+        // Note: State is mutated below and should be committed in an atomic way
+        // to memory or persistent storage. Currently this is done in memory
+        // through the calls to store being infallible.
+
+        for input_ref in active_inputs {
             self.archive_order_lock(&input_ref);
         }
 
         // Insert each output object into the stores, index and make locks for it.
-        for output_object in outputs {
-            let output_ref = output_object.to_object_reference();
-
+        for output_ref in written {
             // Index the certificate by the objects created
             self.add_parent_cert(output_ref, transaction_digest);
 
             // Add new object, init locks and remove old ones
-            self.insert_object(output_object);
-            // TODO: no need to init order locks for immutable outputs
+            self.insert_object(objects[&output_ref.0].clone());
             self.init_order_lock(output_ref);
         }
 
@@ -481,8 +472,9 @@ impl AuthorityState {
 pub struct AuthorityTemporaryStore<'a> {
     pub authority_state: &'a AuthorityState,
     pub objects: BTreeMap<ObjectID, Object>,
-    pub written: Vec<ObjectRef>,
-    pub deleted: Vec<ObjectRef>,
+    pub active_inputs: Vec<ObjectRef>, // Inputs that are not read only
+    pub written: Vec<ObjectRef>,       // Objects written
+    pub deleted: Vec<ObjectRef>,       // Objects activelly deleted
 }
 
 impl<'a> AuthorityTemporaryStore<'a> {
@@ -493,9 +485,25 @@ impl<'a> AuthorityTemporaryStore<'a> {
         AuthorityTemporaryStore {
             authority_state,
             objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
+            active_inputs: _input_objects
+                .iter()
+                .filter(|v| !v.is_read_only())
+                .map(|v| v.to_object_reference())
+                .collect(),
             written: Vec::new(),
             deleted: Vec::new(),
         }
+    }
+
+    pub fn extract(
+        self,
+    ) -> (
+        BTreeMap<ObjectID, Object>,
+        Vec<ObjectRef>,
+        Vec<ObjectRef>,
+        Vec<ObjectRef>,
+    ) {
+        (self.objects, self.active_inputs, self.written, self.deleted)
     }
 }
 
@@ -513,14 +521,26 @@ impl<'a> Storage for AuthorityTemporaryStore<'a> {
         }
     }
 
-    // TODO: buffer changes to storage + flush buffer after commit()
     fn write_object(&mut self, object: Object) {
+        // Check it is not read-only
+        if object.is_read_only() {
+            // TODO: should we throw an error here?
+            return;
+        }
         self.written.push(object.to_object_reference());
         self.objects.insert(object.id(), object);
     }
 
-    // TODO: buffer changes to storage + flush buffer after commit()
     fn delete_object(&mut self, id: &ObjectID) {
+        // Check it is not read-only
+        if let Some(object) = self.read_object(id) {
+            if object.is_read_only() {
+                // TODO: should we throw an error here?
+                return;
+            }
+        }
+
+        // If it exists remove it
         if let Some(removed) = self.objects.remove(id) {
             self.deleted.push(removed.to_object_reference());
         }
