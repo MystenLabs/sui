@@ -521,6 +521,12 @@ impl<'a> Storage for AuthorityTemporaryStore<'a> {
         }
     }
 
+    /*
+        Invariant: A key assumption of the write-delete logic
+        is that an entry is not both added and deleted by the
+        caller.
+    */
+
     fn write_object(&mut self, object: Object) {
         // Check it is not read-only
         if object.is_read_only() {

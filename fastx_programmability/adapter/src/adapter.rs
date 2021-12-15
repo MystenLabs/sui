@@ -70,10 +70,13 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
                     match bytes_opt {
                         Some(bytes) => {
                             // object mutated during execution
-                            // TODO (https://github.com/MystenLabs/fastnft/issues/30):
-                            // eventually, a mutation will only happen to an objects passed as a &mut input to the `main`, so we'll know
-                            // its old sequence number. for now, we fake it.
-                            let sequence_number = SequenceNumber::new();
+                            let sequence_number = state_view
+                                .read_object(&addr)
+                                .ok_or(FastPayError::ObjectNotFound)?
+                                .next_sequence_number
+                                .increment()
+                                .map_err(|_| FastPayError::InvalidSequenceNumber)?;
+
                             let owner = FastPayAddress::from_move_address_hack(&sender);
                             let object =
                                 Object::new_move(struct_tag, bytes, owner, sequence_number);
@@ -92,14 +95,18 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
                             // special transfer event. process by saving object under given authenticator
                             let transferred_obj = event_bytes;
                             let recipient = AccountAddress::from_bytes(guid)?;
-                            // TODO (https://github.com/MystenLabs/fastnft/issues/30):
-                            // eventually , a transfer will only happen to an objects passed as an owned input to the `main` (in which
-                            // case we'll know its old sequence number), *or* it will be be freshly created (in which case its sequence #
-                            // will be zero)
                             let sequence_number = SequenceNumber::new();
                             let owner = FastPayAddress::from_move_address_hack(&recipient);
-                            let object =
+                            let mut object =
                                 Object::new_move(s_type, transferred_obj, owner, sequence_number);
+
+                            // If object exists, find new sequence number
+                            if let Some(old_object) = state_view.read_object(&object.id()) {
+                                let sequence_number =
+                                    old_object.next_sequence_number.increment()?;
+                                object.next_sequence_number = sequence_number;
+                            }
+
                             state_view.write_object(object);
                         }
                         _ => unreachable!("Only structs can be transferred"),
