@@ -37,6 +37,13 @@ pub struct AuthorityState {
 
     // The variable length dynamic state of the authority shard
     /// States of fastnft objects
+    ///
+    /// This is the placeholder data representation for the actual database
+    /// of objects that we will eventually have in a persistent store. Since
+    /// this database will have to be used by many refs of the authority, and
+    /// others it should be useable as a &ref for both reads and writes/deletes.
+    /// Right now we do this through placing it in an Arc/Mutex, but eventually
+    /// we will architect this to ensure perf.
     objects: Arc<Mutex<BTreeMap<ObjectID, Object>>>,
 
     /* Order lock states and invariants
@@ -275,7 +282,7 @@ impl Authority for AuthorityState {
             // Add new object, init locks and remove old ones
             let object = objects
                 .remove(&output_ref.0)
-                .expect("By temporary_authority_store invarient object exists.");
+                .expect("By temporary_authority_store invariant object exists.");
 
             if !object.is_read_only() {
                 // Only objects that can be mutated have locks.
@@ -489,11 +496,11 @@ impl AuthorityState {
 }
 
 pub struct AuthorityTemporaryStore<'a> {
-    pub authority_state: &'a AuthorityState,
-    pub objects: BTreeMap<ObjectID, Object>,
-    pub active_inputs: Vec<ObjectRef>, // Inputs that are not read only
-    pub written: Vec<ObjectRef>,       // Objects written
-    pub deleted: Vec<ObjectRef>,       // Objects actively deleted
+    authority_state: &'a AuthorityState,
+    objects: BTreeMap<ObjectID, Object>,
+    active_inputs: Vec<ObjectRef>, // Inputs that are not read only
+    written: Vec<ObjectRef>,       // Objects written
+    deleted: Vec<ObjectRef>,       // Objects actively deleted
 }
 
 impl<'a> AuthorityTemporaryStore<'a> {
@@ -522,6 +529,38 @@ impl<'a> AuthorityTemporaryStore<'a> {
         Vec<ObjectRef>,
         Vec<ObjectRef>,
     ) {
+        #[cfg(test)]
+        {
+            // Check a number of invariants. A correct vm calling the struct should ensure these
+            // but to help with testing and refactoring we check again here.
+            for (i, write_ref) in self.written.iter().enumerate() {
+                for (j, write_ref2) in self.written.iter().enumerate() {
+                    if i != j && write_ref == write_ref2 {
+                        panic!("Invariant violation: duplicate writing.");
+                    }
+                }
+
+                for del_ref in &self.deleted {
+                    if write_ref == del_ref {
+                        panic!("Invariant violation: both writing and deleting same object.");
+                    }
+                }
+            }
+
+            for (k, del_ref) in self.deleted.iter().enumerate() {
+                for (l, del_ref2) in self.deleted.iter().enumerate() {
+                    if k != l && del_ref == del_ref2 {
+                        panic!("Invariant violation: duplicate deletion.");
+                    }
+                }
+            }
+
+            assert!(
+                self.active_inputs.len() == self.written.len() + self.deleted.len(),
+                "All mutable objects must be written or deleted."
+            )
+        }
+
         (self.objects, self.active_inputs, self.written, self.deleted)
     }
 }
@@ -548,17 +587,20 @@ impl<'a> Storage for AuthorityTemporaryStore<'a> {
 
     fn write_object(&mut self, object: Object) {
         // Check it is not read-only
+        #[cfg(test)] // Movevm should ensure this
         if object.is_read_only() {
             // This is an internal invariant violation. Move only allows us to
             // mutate objects if they are &mut so they cannot be read-only.
             panic!("Internal invariant violation: Mutating a read-only object.")
         }
+
         self.written.push(object.to_object_reference());
         self.objects.insert(object.id(), object);
     }
 
     fn delete_object(&mut self, id: &ObjectID) {
         // Check it is not read-only
+        #[cfg(test)] // Movevm should ensure this
         if let Some(object) = self.read_object(id) {
             if object.is_read_only() {
                 // This is an internal invariant violation. Move only allows us to
@@ -570,6 +612,8 @@ impl<'a> Storage for AuthorityTemporaryStore<'a> {
         // If it exists remove it
         if let Some(removed) = self.objects.remove(id) {
             self.deleted.push(removed.to_object_reference());
+        } else {
+            panic!("Internal invariant: object must exist to be deleted.")
         }
     }
 }
@@ -622,7 +666,7 @@ impl<'a> ResourceResolver for AuthorityTemporaryStore<'a> {
 
         match &object.data {
             Data::Move(m) => {
-                assert!(struct_tag == &m.type_, "Invariant violation: ill-typed object in storage or bad object resquest from caller\
+                assert!(struct_tag == &m.type_, "Invariant violation: ill-typed object in storage or bad object request from caller\
 ");
                 Ok(Some(m.contents.clone()))
             }
