@@ -254,7 +254,7 @@ impl Authority for AuthorityState {
                 match adapter::publish(&mut temporary_store, m.modules, &sender, &mut tx_ctx) {
                     Ok(outputs) => {
                         // TODO: AccountInfoResponse should return all object ID outputs. but for now it only returns one, so use this hack
-                        object_id = outputs[0].id();
+                        object_id = outputs[0].0;
                     }
                     Err(_e) => {
                         // TODO: return this error to the client
@@ -390,7 +390,9 @@ impl AuthorityState {
 
     fn make_object_info(&self, object_id: ObjectID) -> Result<AccountInfoResponse, FastPayError> {
         let object = self.object_state(&object_id)?;
-        let lock = self.get_order_lock(&object.to_object_reference())?;
+        let lock = self
+            .get_order_lock(&object.to_object_reference())
+            .or(Ok(&None))?;
 
         Ok(AccountInfoResponse {
             object_id: object.id(),
@@ -433,6 +435,7 @@ impl AuthorityState {
                 .order_lock
                 .get_mut(obj_ref)
                 .ok_or(FastPayError::OrderLockDoesNotExist)?;
+
             if let Some(existing_signed_order) = lock {
                 if existing_signed_order.order == signed_order.order {
                     // For some reason we are re-inserting the same order. Not optimal but correct.
@@ -556,7 +559,7 @@ impl<'a> AuthorityTemporaryStore<'a> {
             }
 
             assert!(
-                self.active_inputs.len() == self.written.len() + self.deleted.len(),
+                self.active_inputs.len() <= self.written.len() + self.deleted.len(),
                 "All mutable objects must be written or deleted."
             )
         }
@@ -588,10 +591,12 @@ impl<'a> Storage for AuthorityTemporaryStore<'a> {
     fn write_object(&mut self, object: Object) {
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
-        if object.is_read_only() {
-            // This is an internal invariant violation. Move only allows us to
-            // mutate objects if they are &mut so they cannot be read-only.
-            panic!("Internal invariant violation: Mutating a read-only object.")
+        if let Some(existing_object) = self.read_object(&object.id()) {
+            if existing_object.is_read_only() {
+                // This is an internal invariant violation. Move only allows us to
+                // mutate objects if they are &mut so they cannot be read-only.
+                panic!("Internal invariant violation: Mutating a read-only object.")
+            }
         }
 
         self.written.push(object.to_object_reference());

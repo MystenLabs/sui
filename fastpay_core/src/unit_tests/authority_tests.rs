@@ -256,18 +256,17 @@ fn test_handle_confirmation_order_unknown_sender() {
 
 #[test]
 fn test_handle_confirmation_order_bad_sequence_number() {
+    // TODO: refactor this test to be less magic:
+    // * Create an explicit state within an authority, by passing objects.
+    // * Create an explicit transfer, and execute it.
+    // * Then try to execute it again.
+
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
     let mut authority_state = init_state_with_object(sender, object_id);
 
-    {
-        let mut lock = authority_state.objects.lock().unwrap();
-        let sender_account = lock.get_mut(&object_id).unwrap();
-        sender_account.next_sequence_number =
-            sender_account.next_sequence_number.increment().unwrap();
-    }
-
+    // Record the old sequence number
     let old_seq_num;
     {
         let mut lock = authority_state.objects.lock().unwrap();
@@ -282,20 +281,29 @@ fn test_handle_confirmation_order_bad_sequence_number() {
         object_id,
         &authority_state,
     );
-    // Replays are ignored.
 
+    // Increment the sequence number
+    {
+        let mut lock = authority_state.objects.lock().unwrap();
+        let sender_object = lock.get_mut(&object_id).unwrap();
+        sender_object.next_sequence_number =
+            sender_object.next_sequence_number.increment().unwrap();
+    }
+
+    // Explanation: providing an old cert that has already need applied
+    //              returns a Ok(_) with info about the new object states.
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
-        .is_err());
+        .is_ok());
 
+    // Check that the new object is the one recorded.
     let new_account = authority_state.object_state(&object_id).unwrap();
-    assert_eq!(old_seq_num, new_account.next_sequence_number);
+    assert_eq!(
+        old_seq_num.increment().unwrap(),
+        new_account.next_sequence_number
+    );
 
-    assert!(authority_state
-        .parent_sync
-        .get(&(object_id, new_account.next_sequence_number))
-        .is_none());
-
+    // No recipient object was created.
     assert!(authority_state
         .objects
         .lock()

@@ -129,7 +129,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     module_bytes: Vec<Vec<u8>>,
     sender: &AccountAddress,
     ctx: &mut TxContext,
-) -> Result<Vec<Object>, FastPayError> {
+) -> Result<Vec<ObjectRef>, FastPayError> {
     if module_bytes.is_empty() {
         return Err(FastPayError::ModulePublishFailure {
             error: "Publishing empty list of modules".to_string(),
@@ -179,16 +179,18 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     }
 
     // Create and return module objects
-    Ok(modules
-        .into_iter()
-        .map(|m| {
-            Object::new_module(
-                m,
-                FastPayAddress::from_move_address_hack(sender),
-                SequenceNumber::new(),
-            )
-        })
-        .collect())
+    let mut written_refs = Vec::with_capacity(modules.len());
+    for m in modules {
+        let new_module = Object::new_module(
+            m,
+            FastPayAddress::from_move_address_hack(sender),
+            SequenceNumber::new(),
+        );
+        written_refs.push(new_module.to_object_reference());
+        state_view.write_object(new_module);
+    }
+
+    Ok(written_refs)
 }
 
 /// Check if this is a special event type emitted when there is a transfer between fastX addresses
