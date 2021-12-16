@@ -28,7 +28,7 @@ pub trait AuthorityClient {
 
     /// Handle information requests for this account.
     fn handle_account_info_request(
-        &mut self,
+        &self,
         request: AccountInfoRequest,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError>;
 }
@@ -288,9 +288,9 @@ where
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
-        let mut authority_clients = self.authority_clients.clone();
+        let authority_clients = self.authority_clients.clone();
         let numbers: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter_mut()
+            .iter()
             .map(|(name, client)| {
                 let fut = client.handle_account_info_request(request.clone());
                 async move {

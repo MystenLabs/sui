@@ -30,7 +30,7 @@ impl AuthorityClient for LocalAuthorityClient {
     }
 
     fn handle_account_info_request(
-        &mut self,
+        &self,
         request: AccountInfoRequest,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
@@ -115,14 +115,10 @@ fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
     address: FastPayAddress,
     object_ids: I,
 ) {
-    let mut object_ids = object_ids.into_iter();
-    for client in clients.clone() {
-        let addr = address;
-        let object_ids: Vec<ObjectID> = object_ids.next().unwrap_or(Vec::new());
-
+    for (client, object_ids) in clients.into_iter().zip(object_ids.into_iter()) {
         for object_id in object_ids {
             let mut object = Object::with_id_for_testing(object_id);
-            object.transfer(addr);
+            object.transfer(address);
             client
                 .0
                 .as_ref()

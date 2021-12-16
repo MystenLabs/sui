@@ -214,7 +214,7 @@ impl ClientServerBenchmark {
             info!("Received {} responses.", responses.len(),);
         } else {
             // Use actual client core
-            let mut client = network::Client::new(
+            let client = network::Client::new(
                 self.protocol,
                 self.host.clone(),
                 self.port,
