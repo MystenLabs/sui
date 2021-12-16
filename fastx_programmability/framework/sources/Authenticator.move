@@ -1,8 +1,6 @@
 module FastX::Authenticator {
     use Std::Signer;
 
-    friend FastX::ID;
-
     /// Authenticator for an end-user (e.g., a public key)
     // TODO: ideally, we would use the Move `address`` type here,
     // but Move forces `address`'s to be 16 bytes
@@ -55,5 +53,7 @@ module FastX::Authenticator {
     }
 
     /// Manufacture an address from these bytes
-    public(friend) native fun bytes_to_address(bytes: vector<u8>): address;
+    // TODO(): bring this back
+    //public(friend) native fun bytes_to_address(bytes: vector<u8>): address;
+    public native fun bytes_to_address(bytes: vector<u8>): address;
 }

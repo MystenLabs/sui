@@ -4,7 +4,8 @@
 use anyhow::Result;
 
 use fastx_adapter::state_view::FastXStateView;
-use fastx_framework::{natives, FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS};
+use fastx_framework::natives;
+use fastx_types::{FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS};
 
 use move_cli::{Command, Move};
 use move_core_types::{

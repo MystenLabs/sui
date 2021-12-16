@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::genesis;
 #[cfg(test)]
 use fastx_types::base_types::dbg_addr;
-use move_binary_format::file_format;
+use move_binary_format::{
+    file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
+    CompiledModule,
+};
 use move_core_types::ident_str;
 #[cfg(test)]
 use move_core_types::language_storage::ModuleId;
@@ -159,8 +163,61 @@ fn send_and_confirm_order(
     authority.handle_confirmation_order(ConfirmationOrder::new(certificate))
 }
 
+/// Create a `CompiledModule` that depends on `m`
+fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
+    let mut dependent_module = file_format::empty_module();
+    dependent_module
+        .identifiers
+        .push(m.self_id().name().to_owned());
+    dependent_module
+        .address_identifiers
+        .push(*m.self_id().address());
+    dependent_module.module_handles.push(ModuleHandle {
+        address: AddressIdentifierIndex((dependent_module.address_identifiers.len() - 1) as u16),
+        name: IdentifierIndex((dependent_module.identifiers.len() - 1) as u16),
+    });
+    dependent_module
+}
+
+// Test that publishing a module that depends on an existing one works
 #[test]
-fn test_publish_module_ok() {
+fn test_publish_dependent_module_ok() {
+    let (sender, sender_key) = get_key_pair();
+    // create a dummy gas payment object. ok for now because we don't check gas
+    let gas_payment_object_id = ObjectID::random();
+    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
+    let gas_payment_object_ref = gas_payment_object.to_object_reference();
+    // create a genesis state that contains the gas object and genesis modules
+    let mut genesis_module_objects = genesis::create_genesis_module_objects().unwrap();
+    let genesis_module = match &genesis_module_objects[0].data {
+        Data::Module(m) => m,
+        _ => unreachable!(),
+    };
+    // create a module that depends on a genesis module
+    let dependent_module = make_dependent_module(genesis_module);
+    let dependent_module_bytes = {
+        let mut bytes = Vec::new();
+        dependent_module.serialize(&mut bytes).unwrap();
+        bytes
+    };
+    genesis_module_objects.push(gas_payment_object);
+    let mut authority = init_state_with_objects(genesis_module_objects);
+
+    let order = Order::new_module(
+        sender,
+        gas_payment_object_ref,
+        vec![dependent_module_bytes],
+        &sender_key,
+    );
+    let dependent_module_id = TxContext::new(order.digest()).fresh_id();
+    let response = send_and_confirm_order(&mut authority, order).unwrap();
+    // check that the dependent module got published
+    assert!(response.object_id == dependent_module_id);
+}
+
+// Test that publishing a module with no dependencies works
+#[test]
+fn test_publish_module_no_dependencies_ok() {
     let (sender, sender_key) = get_key_pair();
     // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
@@ -168,8 +225,7 @@ fn test_publish_module_ok() {
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     let mut authority = init_state_with_objects(vec![gas_payment_object]);
 
-    let mut module = file_format::empty_module();
-    module.address_identifiers[0] = sender.to_address_hack();
+    let module = file_format::empty_module();
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
     let order = Order::new_module(
@@ -178,11 +234,10 @@ fn test_publish_module_ok() {
         vec![module_bytes],
         &sender_key,
     );
-    let module_object_id = TxContext::new(order.digest()).fresh_id();
+    let module_id = TxContext::new(order.digest()).fresh_id();
     let response = send_and_confirm_order(&mut authority, order).unwrap();
     // check that the module actually got published
-    assert!(response.object_id == module_object_id);
-    // TODO: eventually, `response` should return a vector of ID's created + we should check non-emptiness of this vector
+    assert!(response.object_id == module_id);
 }
 
 #[test]
