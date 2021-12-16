@@ -1,4 +1,4 @@
-use fastx_framework::FASTX_FRAMEWORK_ADDRESS;
+use fastx_types::FASTX_FRAMEWORK_ADDRESS;
 use fastx_verifier::id_leak_verifier::verify_module;
 use move_binary_format::file_format::*;
 use move_core_types::identifier::Identifier;

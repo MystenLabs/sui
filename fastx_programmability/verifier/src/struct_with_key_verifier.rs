@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::verification_failure;
-use fastx_framework::FASTX_FRAMEWORK_ADDRESS;
-use fastx_types::{error::FastPayResult, fp_ensure};
+use fastx_types::{error::FastPayResult, fp_ensure, FASTX_FRAMEWORK_ADDRESS};
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,

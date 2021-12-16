@@ -109,6 +109,15 @@ impl TransactionDigest {
     pub fn new(id: ObjectID, seq: SequenceNumber) -> Self {
         Self((id, seq))
     }
+
+    /// Get the mock digest of the genesis transaction
+    /// TODO(https://github.com/MystenLabs/fastnft/issues/65): we can pick anything here    
+    pub fn genesis() -> Self {
+        Self::new(
+            ObjectID::new([0u8; ObjectID::LENGTH]),
+            SequenceNumber::new(),
+        )
+    }
 }
 
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {

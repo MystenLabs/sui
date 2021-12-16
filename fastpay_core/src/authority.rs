@@ -249,24 +249,24 @@ impl Authority for AuthorityState {
                 .map_err(|_| FastPayError::MoveExecutionFailure)?;
             }
             OrderKind::Publish(m) => {
+                // Fake the gas payment
+                let mut gas_object = temporary_store
+                    .read_object(&object_id)
+                    .expect("Checked existence at start of function.");
+                gas_object.next_sequence_number = gas_object.next_sequence_number.increment()?;
+                temporary_store.write_object(gas_object);
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
                 let sender = m.sender.to_address_hack();
                 match adapter::publish(&mut temporary_store, m.modules, &sender, &mut tx_ctx) {
                     Ok(outputs) => {
-                        // Fake the gas payment
-                        let mut gas_object = temporary_store
-                            .read_object(&object_id)
-                            .expect("Checked existance at start of function.");
-                        gas_object.next_sequence_number =
-                            gas_object.next_sequence_number.increment()?;
-                        temporary_store.write_object(gas_object);
-
                         // TODO: AccountInfoResponse should return all object ID outputs.
                         // but for now it only returns one, so use this hack
                         object_id = outputs[0].0;
                     }
                     Err(_e) => {
+                        println!("failure during publishing: {:?}", _e);
                         // TODO: return this error to the client
+                        object_id = m.gas_payment.0;
                     }
                 }
             }
