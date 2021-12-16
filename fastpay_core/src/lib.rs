@@ -12,3 +12,4 @@ pub mod authority;
 pub mod client;
 pub mod downloader;
 pub mod fastpay_smart_contract;
+pub mod genesis;

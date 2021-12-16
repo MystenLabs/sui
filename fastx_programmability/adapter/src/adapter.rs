@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{bail, Result};
-use fastx_framework::{natives, FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS};
+use fastx_framework::natives;
 use fastx_types::{
     base_types::{FastPayAddress, ObjectRef, SequenceNumber, TxContext},
     error::{FastPayError, FastPayResult},
     object::Object,
     storage::Storage,
+    FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS,
 };
 use fastx_verifier::verifier;
 use move_binary_format::{errors::VMError, file_format::CompiledModule};
@@ -23,7 +24,9 @@ use move_core_types::{
     transaction_argument::{convert_txn_args, TransactionArgument},
 };
 use move_vm_runtime::move_vm::MoveVM;
-use std::fmt::Debug;
+use std::{collections::BTreeMap, fmt::Debug};
+
+use crate::bytecode_rewriter::ModuleHandleRewriter;
 
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
 /// Execution will read from/write to the store in `state_view`.
@@ -144,53 +147,65 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             })
         })
         .collect::<FastPayResult<Vec<CompiledModule>>>()?;
-
-    // Use the Move VM's publish API to run the Move bytecode verifier and linker.
-    // It is important to do this before running the FastX verifier, since the fastX
-    // verifier may assume well-formedness conditions enforced by the Move verifier hold
-    // TODO(https://github.com/MystenLabs/fastnft/issues/57):
-    // it would be more efficient to call the linker/verifier directly instead of
-    // creating a VM. It will also save us from serializing/deserializing the modules twice
-    let vm = create_vm();
-    let mut session = vm.new_session(state_view);
-    let mut gas_status = get_gas_status(None).expect("Cannot fail when called with None");
-    session
-        .publish_module_bundle(module_bytes, *sender, &mut gas_status)
-        .map_err(|e| FastPayError::ModulePublishFailure {
-            error: e.to_string(),
-        })?;
-
-    // Run FastX bytecode verifier
-    for module in &modules {
-        verifier::verify_module(module)?
-    }
-
-    // derive fresh ID's for each module and mutate its self address to the ID.
-    // this ensures that each module can be uniquely identified/retrieved by its self address
-    // TODO: do this *before* passing the modules to the verifier. Right now, we can't because
-    // `publish_module_bundle` insists that the tx sender is equal to the module's self_address()
-    for module in modules.iter_mut() {
-        let fresh_id = ctx.fresh_id();
-        // TODO(https://github.com/MystenLabs/fastnft/issues/56):
-        // add a FastX bytecode verifier pass to ensure that no bytecodes reference `module.address_identifiers[0]`
-        // otherwise, code like `if (x == old_self_address)` could sneakily change to `if (x == fresh_id)` after the mutation below
-        module.address_identifiers[0] = fresh_id;
-        assert!(module.self_id().address() == &fresh_id);
-    }
-
-    // Create and return module objects
+    generate_module_ids(&mut modules, ctx)?;
+    // verify and link modules, wrap them in objects, write them to the store
     let mut written_refs = Vec::with_capacity(modules.len());
-    for m in modules {
-        let new_module = Object::new_module(
-            m,
+    for module in modules {
+        // It is important to do this before running the FastX verifier, since the fastX
+        // verifier may assume well-formedness conditions enforced by the Move verifier hold
+        move_bytecode_verifier::verify_module(&module).map_err(|e| {
+            FastPayError::ModuleVerificationFailure {
+                error: e.to_string(),
+            }
+        })?;
+        // Run FastX bytecode verifier
+        verifier::verify_module(&module)?;
+
+        // TODO(https://github.com/MystenLabs/fastnft/issues/69):
+        // run Move linker using state_view. it currently can only be called through the VM's publish or publish_module_bundle API's,
+        // but we can't use those because they require module.self_address() == sender, which is not true for FastX modules
+        let _ = state_view;
+
+        // Create module objects and write them to the store
+        let module_object = Object::new_module(
+            module,
             FastPayAddress::from_move_address_hack(sender),
             SequenceNumber::new(),
         );
-        written_refs.push(new_module.to_object_reference());
-        state_view.write_object(new_module);
+        written_refs.push(module_object.to_object_reference());
+        state_view.write_object(module_object);
     }
 
     Ok(written_refs)
+}
+
+/// Use `ctx` to generate fresh ID's for each module in `modules`.
+/// Mutate each module's self ID to the appropriate fresh ID and update its module handle tables
+/// to reflect the new ID's of its dependencies
+pub fn generate_module_ids(
+    modules: &mut Vec<CompiledModule>,
+    ctx: &mut TxContext,
+) -> Result<(), FastPayError> {
+    let mut sub_map = BTreeMap::new();
+    for module in modules.iter() {
+        // derive a fresh ID's for each module and mutate its self address to the ID.
+        // this ensures that the  module can be uniquely identified/retrieved by its self address
+        let old_module_id = module.self_id();
+        let fresh_object_id = ctx.fresh_id();
+        let new_module_id = ModuleId::new(fresh_object_id, old_module_id.name().to_owned());
+        if sub_map.insert(old_module_id, new_module_id).is_some() {
+            return Err(FastPayError::ModulePublishFailure {
+                error: "Publishing two modules with the same ID".to_string(),
+            });
+        }
+    }
+    // Safe to unwrap because we checked for duplicate domain entries above, and range entries are fresh ID's
+    let rewriter = ModuleHandleRewriter::new(sub_map).unwrap();
+    for module in modules.iter_mut() {
+        // rewrite module handles to reflect freshly generated ID's
+        rewriter.sub_module_ids(module);
+    }
+    Ok(())
 }
 
 /// Check if this is a special event type emitted when there is a transfer between fastX addresses

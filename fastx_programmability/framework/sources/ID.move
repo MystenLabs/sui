@@ -2,7 +2,8 @@
 module FastX::ID {
     use FastX::Authenticator;
 
-    friend FastX::TxContext;
+    // TODO(): bring this back
+    //friend FastX::TxContext;
 
     /// Globally unique identifier of an object. This is a privileged type
     /// that can only be derived from a `TxContext`
@@ -17,7 +18,9 @@ module FastX::ID {
     }
 
     /// Create a new ID. Only callable by TxContext
-    public(friend) fun new(bytes: vector<u8>): ID {
+    // TODO (): bring this back
+    //public(friend) fun new(bytes: vector<u8>): ID {
+    public fun new(bytes: vector<u8>): ID {
         ID { id: IDBytes { bytes: Authenticator::bytes_to_address(bytes) } }
     }
 
