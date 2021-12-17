@@ -114,17 +114,19 @@ fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
     client: &mut ClientState<LocalAuthorityClient>,
     object_ids: I,
 ) {
-    for (client, object_ids) in clients.into_iter().zip(object_ids.into_iter()) {
+    for (authority, object_ids) in authorities.into_iter().zip(object_ids.into_iter()) {
         for object_id in object_ids {
             let mut object = Object::with_id_for_testing(object_id);
-            object.transfer(address);
-            let mut client_ref = client.0.as_ref().try_lock().unwrap();
+            object.transfer(client.address);
+            let mut client_ref = authority.0.as_ref().try_lock().unwrap();
             client_ref
                 .accounts_mut()
                 .lock()
                 .unwrap()
                 .insert(object_id, object);
             client_ref.init_order_lock((object_id, 0.into()));
+
+            client.object_ids.insert(object_id, SequenceNumber::new());
         }
     }
 }
