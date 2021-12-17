@@ -12,7 +12,7 @@ use tokio::{
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::{info, subscriber::set_global_default, warn};
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::filter::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -30,7 +30,7 @@ async fn main() -> Result<()> {
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "benchmark")] {
-            let timer = tracing_subscriber::fmt::time::ChronoUtc::rfc3339();
+            let timer = tracing_subscriber::fmt::time::UtcTime::rfc_3339();
             let subscriber_builder = tracing_subscriber::fmt::Subscriber::builder()
                                      .with_env_filter(env_filter)
                                      .with_timer(timer).with_ansi(false);

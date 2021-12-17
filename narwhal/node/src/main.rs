@@ -16,7 +16,7 @@ use primary::{Certificate, Header, PayloadToken, Primary};
 use store::{rocks, Store};
 use tokio::sync::mpsc::{channel, Receiver};
 use tracing::subscriber::set_global_default;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::filter::EnvFilter;
 use worker::Worker;
 
 /// The default channel capacity.
@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "benchmark")] {
-            let timer = tracing_subscriber::fmt::time::ChronoUtc::rfc3339();
+            let timer = tracing_subscriber::fmt::time::UtcTime::rfc_3339();
             let subscriber_builder = tracing_subscriber::fmt::Subscriber::builder()
                                      .with_env_filter(env_filter)
                                      .with_timer(timer).with_ansi(false);

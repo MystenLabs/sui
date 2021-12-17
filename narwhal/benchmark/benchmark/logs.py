@@ -1,5 +1,6 @@
 # Copyright(C) Facebook, Inc. and its affiliates.
 from datetime import datetime
+from dateutil import parser
 from glob import glob
 from logging import exception
 from multiprocessing import Pool
@@ -154,7 +155,7 @@ class LogParser:
         return sizes, samples, ip
 
     def _to_posix(self, string):
-        x = datetime.fromisoformat(string)
+        x = parser.isoparse(string)
         return datetime.timestamp(x)
 
     def _consensus_throughput(self):
