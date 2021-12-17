@@ -542,7 +542,10 @@ impl<'a> AuthorityTemporaryStore<'a> {
         Vec<ObjectRef>,
         Vec<ObjectRef>,
     ) {
-        self.check_invariants();
+        #[cfg(debug_assertions)]
+        {
+            self.check_invariants();
+        }
         (self.objects, self.active_inputs, self.written, self.deleted)
     }
 
