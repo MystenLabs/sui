@@ -122,6 +122,7 @@ fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
             let mut client_ref = client.0.as_ref().try_lock().unwrap();
             client_ref.accounts_mut().insert(object_id, object);
             client_ref.init_order_lock((object_id, 0.into()));
+        }
     }
 }
 
