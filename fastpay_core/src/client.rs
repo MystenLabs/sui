@@ -543,7 +543,8 @@ where
         self.sent_certificates = sent_certificates;
         self.object_ids.insert(object_id, new_next_sequence_number);
         // Sanity check
-
+        // Some certificates of the object will be from received_certs if the object is originated from other sender.
+        // TODO: Maybe we should store certificates in one place sorted by object_ref instead of sent/received?
         let mut sent_certificates: Vec<CertifiedOrder> = self
             .sent_certificates
             .clone()
