@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::authority::{Authority, AuthorityState};
-use fastx_types::{base_types::Amount, object::Object};
+use fastx_types::object::Object;
 use futures::lock::Mutex;
 use std::{
     collections::{BTreeMap, HashMap},
@@ -30,7 +30,7 @@ impl AuthorityClient for LocalAuthorityClient {
     }
 
     fn handle_account_info_request(
-        &mut self,
+        &self,
         request: AccountInfoRequest,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
@@ -95,7 +95,6 @@ fn init_local_authorities_bad_1(
 fn make_client(
     authority_clients: HashMap<AuthorityName, LocalAuthorityClient>,
     committee: Committee,
-    object_ids: Vec<ObjectID>,
 ) -> ClientState<LocalAuthorityClient> {
     let (address, secret) = get_key_pair();
     ClientState::new(
@@ -106,85 +105,119 @@ fn make_client(
         SequenceNumber::new(),
         Vec::new(),
         Vec::new(),
-        object_ids,
+        Vec::new(),
     )
 }
 
 #[cfg(test)]
-fn fund_account<I: IntoIterator<Item = i128>>(
-    clients: &mut HashMap<AuthorityName, LocalAuthorityClient>,
+fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
+    clients: Vec<&LocalAuthorityClient>,
     address: FastPayAddress,
-    balances: I,
-    object_id: ObjectID,
+    object_ids: I,
 ) {
-    let _balances = balances.into_iter().map(Balance::from);
-    for (_, client) in clients.iter_mut() {
-        let addr = address;
-        let object_id = object_id;
-        let mut object = Object::with_id_for_testing(object_id);
-        object.transfer(addr);
-
-        client
-            .0
-            .as_ref()
-            .try_lock()
-            .unwrap()
-            .accounts_mut()
-            .insert(object_id, object);
-
-        client
-            .0
-            .as_ref()
-            .try_lock()
-            .unwrap()
-            .init_order_lock((object_id, 0.into()));
+    for (client, object_ids) in clients.into_iter().zip(object_ids.into_iter()) {
+        for object_id in object_ids {
+            let mut object = Object::with_id_for_testing(object_id);
+            object.transfer(address);
+            let mut client_ref = client.0.as_ref().try_lock().unwrap();
+            client_ref.accounts_mut().insert(object_id, object);
+            client_ref.init_order_lock((object_id, 0.into()));
+        }
     }
 }
 
 #[cfg(test)]
-fn init_local_client_state(balances: Vec<i128>) -> ClientState<LocalAuthorityClient> {
-    let (mut authority_clients, committee) = init_local_authorities(balances.len());
-    let object_id = ObjectID::random();
-    let client = make_client(authority_clients.clone(), committee, vec![object_id]);
-    fund_account(&mut authority_clients, client.address, balances, object_id);
+fn init_local_client_state(object_ids: Vec<Vec<ObjectID>>) -> ClientState<LocalAuthorityClient> {
+    let (authority_clients, committee) = init_local_authorities(object_ids.len());
+    let client = make_client(authority_clients.clone(), committee);
+    fund_account(
+        authority_clients.values().collect(),
+        client.address,
+        object_ids,
+    );
     client
 }
 
 #[cfg(test)]
 fn init_local_client_state_with_bad_authority(
-    balances: Vec<i128>,
+    object_ids: Vec<Vec<ObjectID>>,
 ) -> ClientState<LocalAuthorityClient> {
-    let (mut authority_clients, committee) = init_local_authorities_bad_1(balances.len());
-    let object_id = ObjectID::random();
-    let client = make_client(authority_clients.clone(), committee, vec![object_id]);
-    fund_account(&mut authority_clients, client.address, balances, object_id);
+    let (authority_clients, committee) = init_local_authorities_bad_1(object_ids.len());
+    let client = make_client(authority_clients.clone(), committee);
+    fund_account(
+        authority_clients.values().collect(),
+        client.address,
+        object_ids,
+    );
     client
 }
 
-/*#[test]
-fn test_get_strong_majority_balance() {
+#[test]
+fn test_get_strong_majority_owner() {
     let mut rt = Runtime::new().unwrap();
     rt.block_on(async {
-        let mut client = init_local_client_state(vec![3, 4, 4, 4]);
-        assert_eq!(client.get_strong_majority_balance().await, Balance::from(0));
+        let object_id_1 = ObjectID::random();
+        let object_id_2 = ObjectID::random();
+        let authority_objects = vec![
+            vec![object_id_1],
+            vec![object_id_1, object_id_2],
+            vec![object_id_1, object_id_2],
+            vec![object_id_1, object_id_2],
+        ];
+        let client = init_local_client_state(authority_objects);
+        assert_eq!(
+            client.get_strong_majority_owner(object_id_1).await,
+            Some((client.address, SequenceNumber::from(0)))
+        );
+        assert_eq!(
+            client.get_strong_majority_owner(object_id_2).await,
+            Some((client.address, SequenceNumber::from(0)))
+        );
 
-        let mut client = init_local_client_state(vec![0, 3, 4, 4]);
-        assert_eq!(client.get_strong_majority_balance().await, Balance::from(0));
-
-        let mut client = init_local_client_state(vec![0, 3, 4]);
-        assert_eq!(client.get_strong_majority_balance().await, Balance::from(0));
+        let object_id_1 = ObjectID::random();
+        let object_id_2 = ObjectID::random();
+        let object_id_3 = ObjectID::random();
+        let authority_objects = vec![
+            vec![object_id_1],
+            vec![object_id_2, object_id_3],
+            vec![object_id_3, object_id_2],
+            vec![object_id_3],
+        ];
+        let client = init_local_client_state(authority_objects);
+        assert_eq!(client.get_strong_majority_owner(object_id_1).await, None);
+        assert_eq!(client.get_strong_majority_owner(object_id_2).await, None);
+        assert_eq!(
+            client.get_strong_majority_owner(object_id_3).await,
+            Some((client.address, SequenceNumber::from(0)))
+        );
     });
-}*/
+}
 
 #[test]
 fn test_initiating_valid_transfer() {
     let mut rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
-    let mut sender = init_local_client_state(vec![2, 4, 4, 4]);
-    let object_id = *sender.object_ids.first().unwrap();
+    let object_id_1 = ObjectID::random();
+    let object_id_2 = ObjectID::random();
+    let authority_objects = vec![
+        vec![object_id_1],
+        vec![object_id_1, object_id_2],
+        vec![object_id_1, object_id_2],
+        vec![object_id_1, object_id_2],
+    ];
+
+    let mut sender = init_local_client_state(authority_objects);
+    assert_eq!(
+        rt.block_on(sender.get_strong_majority_owner(object_id_1)),
+        Some((sender.address, SequenceNumber::from(0)))
+    );
+    assert_eq!(
+        rt.block_on(sender.get_strong_majority_owner(object_id_2)),
+        Some((sender.address, SequenceNumber::from(0)))
+    );
     let certificate = rt
         .block_on(sender.transfer_to_fastpay(
-            object_id,
+            object_id_1,
             recipient,
             UserData(Some(*b"hello...........hello...........")),
         ))
@@ -192,12 +225,20 @@ fn test_initiating_valid_transfer() {
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert_eq!(sender.pending_transfer, None);
     assert_eq!(
-        rt.block_on(sender.get_strong_majority_balance(object_id)),
-        Balance::from(0)
+        rt.block_on(sender.get_strong_majority_owner(object_id_1)),
+        Some((recipient, SequenceNumber::from(1)))
     );
     assert_eq!(
-        rt.block_on(sender.request_certificate(sender.address, object_id, SequenceNumber::from(0)))
-            .unwrap(),
+        rt.block_on(sender.get_strong_majority_owner(object_id_2)),
+        Some((sender.address, SequenceNumber::from(0)))
+    );
+    assert_eq!(
+        rt.block_on(sender.request_certificate(
+            sender.address,
+            object_id_1,
+            SequenceNumber::from(0),
+        ))
+        .unwrap(),
         certificate
     );
 }
@@ -206,8 +247,14 @@ fn test_initiating_valid_transfer() {
 fn test_initiating_valid_transfer_despite_bad_authority() {
     let mut rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
-    let mut sender = init_local_client_state_with_bad_authority(vec![4, 4, 4, 4]);
-    let object_id = *sender.object_ids.first().unwrap();
+    let object_id = ObjectID::random();
+    let authority_objects = vec![
+        vec![object_id],
+        vec![object_id],
+        vec![object_id],
+        vec![object_id],
+    ];
+    let mut sender = init_local_client_state_with_bad_authority(authority_objects);
     let certificate = rt
         .block_on(sender.transfer_to_fastpay(
             object_id,
@@ -218,8 +265,8 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
     assert_eq!(sender.pending_transfer, None);
     assert_eq!(
-        rt.block_on(sender.get_strong_majority_balance(object_id)),
-        Balance::from(0)
+        rt.block_on(sender.get_strong_majority_owner(object_id)),
+        Some((recipient, SequenceNumber::from(1)))
     );
     assert_eq!(
         rt.block_on(sender.request_certificate(sender.address, object_id, SequenceNumber::from(0)))
@@ -232,39 +279,57 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
 fn test_initiating_transfer_low_funds() {
     let mut rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
-    let mut sender = init_local_client_state(vec![2, 2, 4, 4]);
+    let object_id_1 = ObjectID::random();
+    let object_id_2 = ObjectID::random();
+    let authority_objects = vec![
+        vec![object_id_1],
+        vec![object_id_1],
+        vec![object_id_1, object_id_2],
+        vec![object_id_1, object_id_2],
+    ];
+    let mut sender = init_local_client_state(authority_objects);
     assert!(rt
-        .block_on(sender.transfer_to_fastpay(
-            *sender.object_ids.first().unwrap(),
-            recipient,
-            UserData::default()
-        ))
-        .is_ok());
+        .block_on(sender.transfer_to_fastpay(object_id_2, recipient, UserData::default()))
+        .is_err());
     // Trying to overspend does not block an account.
-    assert_eq!(sender.next_sequence_number, SequenceNumber::from(1));
+    assert_eq!(sender.next_sequence_number, SequenceNumber::from(0));
     // assert_eq!(sender.pending_transfer, None);
     assert_eq!(
-        rt.block_on(sender.get_strong_majority_balance(*sender.object_ids.first().unwrap())),
-        Balance::from(0)
+        rt.block_on(sender.get_strong_majority_owner(object_id_1)),
+        Some((sender.address, SequenceNumber::from(0))),
+    );
+    assert_eq!(
+        rt.block_on(sender.get_strong_majority_owner(object_id_2)),
+        None,
     );
 }
 
 #[test]
 fn test_bidirectional_transfer() {
     let mut rt = Runtime::new().unwrap();
-    let (mut authority_clients, committee) = init_local_authorities(4);
+    let (authority_clients, committee) = init_local_authorities(4);
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let mut client2 = make_client(authority_clients.clone(), committee);
+
     let object_id = ObjectID::random();
-    let mut client1 = make_client(
-        authority_clients.clone(),
-        committee.clone(),
+    let authority_objects = vec![
         vec![object_id],
-    );
-    let mut client2 = make_client(authority_clients.clone(), committee, Vec::new());
+        vec![object_id],
+        vec![object_id],
+        vec![object_id],
+    ];
     fund_account(
-        &mut authority_clients,
+        authority_clients.values().collect(),
         client1.address,
-        vec![2, 3, 4, 4],
-        object_id,
+        authority_objects,
+    );
+    assert_eq!(
+        rt.block_on(client1.get_strong_majority_owner(object_id)),
+        Some((client1.address, SequenceNumber::from(0)))
+    );
+    assert_eq!(
+        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        Some((client1.address, SequenceNumber::from(0)))
     );
     // Update client1's local balance accordingly.
 
@@ -275,8 +340,12 @@ fn test_bidirectional_transfer() {
     assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
     assert_eq!(client1.pending_transfer, None);
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_balance(object_id)),
-        Balance::from(0)
+        rt.block_on(client1.get_strong_majority_owner(object_id)),
+        Some((client2.address, SequenceNumber::from(1)))
+    );
+    assert_eq!(
+        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        Some((client2.address, SequenceNumber::from(1)))
     );
     assert_eq!(
         rt.block_on(client1.get_strong_majority_sequence_number(object_id)),
@@ -293,16 +362,12 @@ fn test_bidirectional_transfer() {
         certificate
     );
     // Our sender already confirmed.
-    assert_eq!(
-        rt.block_on(client2.get_strong_majority_balance(object_id)),
-        Balance::from(0)
-    );
     // Try to confirm again.
     rt.block_on(client2.receive_from_fastpay(certificate))
         .unwrap();
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_balance(object_id)),
-        Balance::from(0)
+        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        Some((client2.address, SequenceNumber::from(1)))
     );
 
     /* TODO: Fix client to track objects rather than accounts and test sending back to object to previous sender.
@@ -332,25 +397,27 @@ fn test_bidirectional_transfer() {
 #[test]
 fn test_receiving_unconfirmed_transfer() {
     let mut rt = Runtime::new().unwrap();
-    let (mut authority_clients, committee) = init_local_authorities(4);
+    let (authority_clients, committee) = init_local_authorities(4);
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let mut client2 = make_client(authority_clients.clone(), committee);
+
     let object_id = ObjectID::random();
-    let mut client1 = make_client(
-        authority_clients.clone(),
-        committee.clone(),
+    let authority_objects = vec![
         vec![object_id],
-    );
-    let mut client2 = make_client(authority_clients.clone(), committee, Vec::new());
+        vec![object_id],
+        vec![object_id],
+        vec![object_id],
+    ];
+
     fund_account(
-        &mut authority_clients,
+        authority_clients.values().collect(),
         client1.address,
-        vec![2, 3, 4, 4],
-        object_id,
+        authority_objects,
     );
     // not updating client1.balance
 
     let certificate = rt
         .block_on(client1.transfer_to_fastpay_unsafe_unconfirmed(
-            Amount::from(2),
             client2.address,
             object_id,
             UserData::default(),
@@ -362,8 +429,8 @@ fn test_receiving_unconfirmed_transfer() {
     assert_eq!(client1.pending_transfer, None);
     // ..but not confirmed remotely, hence an unchanged balance and sequence number.
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_balance(object_id)),
-        Balance::from(0)
+        rt.block_on(client1.get_strong_majority_owner(object_id)),
+        Some((client1.address, SequenceNumber::from(0)))
     );
     assert_eq!(
         rt.block_on(client1.get_strong_majority_sequence_number(object_id)),
@@ -373,8 +440,8 @@ fn test_receiving_unconfirmed_transfer() {
     rt.block_on(client2.receive_from_fastpay(certificate))
         .unwrap();
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_balance(object_id)),
-        Balance::from(0)
+        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        Some((client2.address, SequenceNumber::from(1)))
     );
 }
 
