@@ -253,7 +253,16 @@ impl Authority for AuthorityState {
                 let sender = m.sender.to_address_hack();
                 match adapter::publish(&mut temporary_store, m.modules, &sender, &mut tx_ctx) {
                     Ok(outputs) => {
-                        // TODO: AccountInfoResponse should return all object ID outputs. but for now it only returns one, so use this hack
+                        // Fake the gas payment
+                        let mut gas_object = temporary_store
+                            .read_object(&object_id)
+                            .expect("Checked existance at start of function.");
+                        gas_object.next_sequence_number =
+                            gas_object.next_sequence_number.increment()?;
+                        temporary_store.write_object(gas_object);
+
+                        // TODO: AccountInfoResponse should return all object ID outputs.
+                        // but for now it only returns one, so use this hack
                         object_id = outputs[0].0;
                     }
                     Err(_e) => {
@@ -524,6 +533,7 @@ impl<'a> AuthorityTemporaryStore<'a> {
         }
     }
 
+    /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
     pub fn into_inner(
         self,
     ) -> (
@@ -532,39 +542,55 @@ impl<'a> AuthorityTemporaryStore<'a> {
         Vec<ObjectRef>,
         Vec<ObjectRef>,
     ) {
-        #[cfg(test)]
-        {
-            // Check a number of invariants. A correct vm calling the struct should ensure these
-            // but to help with testing and refactoring we check again here.
-            for (i, write_ref) in self.written.iter().enumerate() {
-                for (j, write_ref2) in self.written.iter().enumerate() {
-                    if i != j && write_ref == write_ref2 {
-                        panic!("Invariant violation: duplicate writing.");
-                    }
-                }
-
-                for del_ref in &self.deleted {
-                    if write_ref == del_ref {
-                        panic!("Invariant violation: both writing and deleting same object.");
-                    }
-                }
-            }
-
-            for (k, del_ref) in self.deleted.iter().enumerate() {
-                for (l, del_ref2) in self.deleted.iter().enumerate() {
-                    if k != l && del_ref == del_ref2 {
-                        panic!("Invariant violation: duplicate deletion.");
-                    }
-                }
-            }
-
-            assert!(
-                self.active_inputs.len() <= self.written.len() + self.deleted.len(),
-                "All mutable objects must be written or deleted."
-            )
-        }
-
+        self.check_invariants();
         (self.objects, self.active_inputs, self.written, self.deleted)
+    }
+
+    /// An internal check of the invariants (will only fire in debug)
+    fn check_invariants(&self) {
+        // Check uniqueness in the 'written' set
+        debug_assert!(
+            {
+                use std::collections::HashSet;
+                let mut used = HashSet::new();
+                self.written.iter().all(move |elt| used.insert(elt.0))
+            },
+            "Duplicate object reference in self.written."
+        );
+
+        // Check uniqueness in the 'deleted' set
+        debug_assert!(
+            {
+                use std::collections::HashSet;
+                let mut used = HashSet::new();
+                self.deleted.iter().all(move |elt| used.insert(elt.0))
+            },
+            "Duplicate object reference in self.deleted."
+        );
+
+        // Check not both deleted and written
+        debug_assert!(
+            {
+                use std::collections::HashSet;
+                let mut used = HashSet::new();
+                self.written.iter().all(|elt| used.insert(elt.0));
+                self.deleted.iter().all(move |elt| used.insert(elt.0))
+            },
+            "Object both written and deleted."
+        );
+
+        // Check all mutable inputs are either written or deleted
+        debug_assert!(
+            {
+                use std::collections::HashSet;
+                let mut used = HashSet::new();
+                self.written.iter().all(|elt| used.insert(elt.0));
+                self.deleted.iter().all(|elt| used.insert(elt.0));
+
+                self.active_inputs.iter().all(|elt| !used.insert(elt.0))
+            },
+            "Mutable input neither written nor deleted."
+        );
     }
 }
 
