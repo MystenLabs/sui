@@ -16,7 +16,7 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
-use std::{collections::BTreeMap, convert::TryInto};
+use std::{collections::BTreeMap, convert::TryInto, sync::Arc, sync::Mutex};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -37,7 +37,14 @@ pub struct AuthorityState {
 
     // The variable length dynamic state of the authority shard
     /// States of fastnft objects
-    objects: BTreeMap<ObjectID, Object>,
+    ///
+    /// This is the placeholder data representation for the actual database
+    /// of objects that we will eventually have in a persistent store. Since
+    /// this database will have to be used by many refs of the authority, and
+    /// others it should be useable as a &ref for both reads and writes/deletes.
+    /// Right now we do this through placing it in an Arc/Mutex, but eventually
+    /// we will architect this to ensure perf.
+    objects: Arc<Mutex<BTreeMap<ObjectID, Object>>>,
 
     /* Order lock states and invariants
 
@@ -60,7 +67,7 @@ pub struct AuthorityState {
     certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
     /// An index mapping object IDs to the Transaction Digest that created them.
     /// This is used by synchronization logic to sync authorities.
-    pub parent_sync: BTreeMap<(ObjectID, SequenceNumber), TransactionDigest>,
+    parent_sync: BTreeMap<(ObjectID, SequenceNumber), TransactionDigest>,
 }
 
 /// Interface provided by each (shard of an) authority.
@@ -93,6 +100,7 @@ impl Authority for AuthorityState {
         // We first do all the checks that can be done in parallel with read only access to
         // the object database and lock database.
         let input_objects = order.input_objects();
+        let mut mutable_objects = Vec::with_capacity(input_objects.len());
 
         // Ensure at least one object is input to be mutated.
         fp_ensure!(
@@ -100,25 +108,32 @@ impl Authority for AuthorityState {
             FastPayError::InsufficientObjectNumber
         );
 
-        for object_ref in &input_objects {
+        for object_ref in input_objects {
             let (object_id, sequence_number) = object_ref;
 
             fp_ensure!(
-                *sequence_number <= SequenceNumber::max(),
+                sequence_number <= SequenceNumber::max(),
                 FastPayError::InvalidSequenceNumber
             );
 
             // Get a ref to the object concerned by the transaction
             let object = self
-                .objects
-                .get(object_id)
-                .ok_or(FastPayError::ObjectNotFound)?;
+                .object_state(&object_id)
+                .map_err(|_| FastPayError::ObjectNotFound)?;
 
             // Check that the seq number is the same
             fp_ensure!(
-                object.next_sequence_number == *sequence_number,
+                object.next_sequence_number == sequence_number,
                 FastPayError::UnexpectedSequenceNumber
             );
+
+            // If this is an immutable object, we do no more checks
+            // and check no locks.
+            if object.is_read_only() {
+                continue;
+            }
+
+            // Additional checks for mutable objects
 
             // Check the transaction sender is also the object owner
             fp_ensure!(
@@ -127,7 +142,7 @@ impl Authority for AuthorityState {
             );
 
             // Check that this is the first, or same as the first order we sign.
-            if let Some(pending_confirmation) = self.get_order_lock(object_ref)? {
+            if let Some(pending_confirmation) = self.get_order_lock(&object_ref)? {
                 fp_ensure!(
                     pending_confirmation.order.kind == order.kind,
                     FastPayError::PreviousTransferMustBeConfirmedFirst {
@@ -135,8 +150,10 @@ impl Authority for AuthorityState {
                     }
                 );
                 // This exact transfer order was already signed. Return the previous value.
-                return self.make_object_info(*object_id);
+                return self.make_object_info(object_id);
             }
+
+            mutable_objects.push((object_id, sequence_number));
         }
 
         // TODO(https://github.com/MystenLabs/fastnft/issues/45): check that c.gas_payment exists + that its value is > gas_budget
@@ -147,7 +164,7 @@ impl Authority for AuthorityState {
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
 
         // This is the critical section that requires a write lock on the lock DB.
-        self.set_order_lock(signed_order)?;
+        self.set_order_lock(&mutable_objects, signed_order)?;
 
         let info = self.make_object_info(object_id)?;
         Ok(info)
@@ -170,11 +187,11 @@ impl Authority for AuthorityState {
             // If we have a certificate on the confirmation order it means that the input
             // object exists on other honest authorities, but we do not have it. The only
             // way this may happen is if we missed some updates.
-            let input_object = self.objects.get(&input_object_id).ok_or(
+            let input_object = self.object_state(&input_object_id).map_err(|_| {
                 FastPayError::MissingEalierConfirmations {
                     current_sequence_number: SequenceNumber::from(0),
-                },
-            )?;
+                }
+            })?;
 
             let input_sequence_number = input_object.next_sequence_number;
 
@@ -192,11 +209,6 @@ impl Authority for AuthorityState {
             inputs.push(input_object.clone());
         }
 
-        // Here we implement the semantics of a transfer transaction, by which
-        // the owner changes. Down the line here we do general smart contract
-        // execution.
-        let input_object_refs = order.input_objects();
-
         // Note: State is mutated below and should be committed in an atomic way
         // to memory or persistent storage. Currently this is done in memory
         // through the calls to store being infallible.
@@ -208,7 +220,8 @@ impl Authority for AuthorityState {
         // Order-specific logic
         //
         // TODO: think very carefully what to do in case we throw an Err here.
-        let outputs = match order.kind {
+        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
+        match order.kind {
             OrderKind::Transfer(t) => {
                 let mut output_object = inputs[0].clone();
                 output_object.next_sequence_number =
@@ -218,16 +231,13 @@ impl Authority for AuthorityState {
                     Address::Primary(_) => PublicKeyBytes([0; 32]),
                     Address::FastPay(addr) => addr,
                 });
-                vec![output_object]
+                temporary_store.write_object(output_object);
             }
             OrderKind::Call(c) => {
                 let sender = c.sender.to_address_hack();
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
-                // TODO(https://github.com/MystenLabs/fastnft/issues/30): read value of c.object_arguments +
-                // pass objects directly to the VM instead of passing ObjectRef's
-                // Note: They are included in the 'inputs' list of objects.
                 adapter::execute(
-                    self,
+                    &mut temporary_store,
                     &c.module,
                     &c.function,
                     sender,
@@ -237,42 +247,58 @@ impl Authority for AuthorityState {
                     Some(c.gas_budget),
                 )
                 .map_err(|_| FastPayError::MoveExecutionFailure)?;
-                // TODO: return output objects here
-                Vec::new()
             }
             OrderKind::Publish(m) => {
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
                 let sender = m.sender.to_address_hack();
-                match adapter::publish(self, m.modules, &sender, &mut tx_ctx) {
+                match adapter::publish(&mut temporary_store, m.modules, &sender, &mut tx_ctx) {
                     Ok(outputs) => {
-                        // TODO: AccountInfoResponse should return all object ID outputs. but for now it only returns one, so use this hack
-                        object_id = outputs[0].id();
+                        // Fake the gas payment
+                        let mut gas_object = temporary_store
+                            .read_object(&object_id)
+                            .expect("Checked existance at start of function.");
+                        gas_object.next_sequence_number =
+                            gas_object.next_sequence_number.increment()?;
+                        temporary_store.write_object(gas_object);
 
-                        outputs
+                        // TODO: AccountInfoResponse should return all object ID outputs.
+                        // but for now it only returns one, so use this hack
+                        object_id = outputs[0].0;
                     }
                     Err(_e) => {
                         // TODO: return this error to the client
-                        Vec::new()
                     }
                 }
             }
         };
 
-        for input_ref in input_object_refs {
+        // Extract the new state from the execution
+        let (mut objects, active_inputs, written, _deleted) = temporary_store.into_inner();
+
+        // Note: State is mutated below and should be committed in an atomic way
+        // to memory or persistent storage. Currently this is done in memory
+        // through the calls to store being infallible.
+
+        for input_ref in active_inputs {
             self.archive_order_lock(&input_ref);
         }
 
         // Insert each output object into the stores, index and make locks for it.
-        for output_object in outputs {
-            let output_ref = output_object.to_object_reference();
-
+        for output_ref in written {
             // Index the certificate by the objects created
             self.add_parent_cert(output_ref, transaction_digest);
 
             // Add new object, init locks and remove old ones
-            self.insert_object(output_object);
-            // TODO: no need to init order locks for immutable outputs
-            self.init_order_lock(output_ref);
+            let object = objects
+                .remove(&output_ref.0)
+                .expect("By temporary_authority_store invariant object exists.");
+
+            if !object.is_read_only() {
+                // Only objects that can be mutated have locks.
+                self.init_order_lock(output_ref);
+            }
+
+            self.insert_object(object);
         }
 
         let info = self.make_object_info(object_id)?;
@@ -308,7 +334,7 @@ impl AuthorityState {
             committee,
             name,
             secret,
-            objects: BTreeMap::new(),
+            objects: Arc::new(Mutex::new(BTreeMap::new())),
             order_lock: BTreeMap::new(),
             shard_id: 0,
             number_of_shards: 1,
@@ -328,7 +354,7 @@ impl AuthorityState {
             committee,
             name,
             secret,
-            objects: BTreeMap::new(),
+            objects: Arc::new(Mutex::new(BTreeMap::new())),
             order_lock: BTreeMap::new(),
             shard_id,
             number_of_shards,
@@ -351,26 +377,31 @@ impl AuthorityState {
         Self::get_shard(self.number_of_shards, object_id)
     }
 
-    fn object_state(&self, object_id: &ObjectID) -> Result<&Object, FastPayError> {
+    fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
         self.objects
+            .lock()
+            .unwrap()
             .get(object_id)
+            .cloned()
             .ok_or(FastPayError::UnknownSenderAccount)
     }
 
-    pub fn insert_object(&mut self, object: Object) {
-        self.objects.insert(object.id(), object);
+    pub fn insert_object(&self, object: Object) {
+        self.objects.lock().unwrap().insert(object.id(), object);
     }
 
     #[cfg(test)]
-    pub fn accounts_mut(&mut self) -> &mut BTreeMap<ObjectID, Object> {
-        &mut self.objects
+    pub fn accounts_mut(&self) -> &Arc<Mutex<BTreeMap<ObjectID, Object>>> {
+        &self.objects
     }
 
     /// Make an information summary of an object to help clients
 
     fn make_object_info(&self, object_id: ObjectID) -> Result<AccountInfoResponse, FastPayError> {
         let object = self.object_state(&object_id)?;
-        let lock = self.get_order_lock(&object.to_object_reference())?;
+        let lock = self
+            .get_order_lock(&object.to_object_reference())
+            .or(Ok(&None))?;
 
         Ok(AccountInfoResponse {
             object_id: object.id(),
@@ -391,7 +422,11 @@ impl AuthorityState {
     }
 
     /// Set the order lock to a specific transaction
-    pub fn set_order_lock(&mut self, signed_order: SignedOrder) -> Result<(), FastPayError> {
+    pub fn set_order_lock(
+        &mut self,
+        mutable_input_objects: &[ObjectRef],
+        signed_order: SignedOrder,
+    ) -> Result<(), FastPayError> {
         // This is the only function that writes as part of the handle_order flow
         // and the only that therefore needs an exclusive write lock on the lock
         // database. Inconsistent / delayed reads of the lock database do not result in safety
@@ -403,13 +438,13 @@ impl AuthorityState {
         // This is a liveness issue for equivocating clients and therefore not an issue
         // we are trying to resolve.
 
-        let input_objects = signed_order.order.input_objects();
-        for (object_id, seq) in input_objects {
+        for obj_ref in mutable_input_objects {
             // The object / version must exist, and therefore lock initialized.
             let lock = self
                 .order_lock
-                .get_mut(&(object_id, seq))
+                .get_mut(obj_ref)
                 .ok_or(FastPayError::OrderLockDoesNotExist)?;
+
             if let Some(existing_signed_order) = lock {
                 if existing_signed_order.order == signed_order.order {
                     // For some reason we are re-inserting the same order. Not optimal but correct.
@@ -472,26 +507,161 @@ impl AuthorityState {
     }
 }
 
-impl Storage for AuthorityState {
-    fn read_object(&self, id: &ObjectID) -> Option<Object> {
-        self.objects.get(id).cloned()
+pub struct AuthorityTemporaryStore<'a> {
+    authority_state: &'a AuthorityState,
+    objects: BTreeMap<ObjectID, Object>,
+    active_inputs: Vec<ObjectRef>, // Inputs that are not read only
+    written: Vec<ObjectRef>,       // Objects written
+    deleted: Vec<ObjectRef>,       // Objects actively deleted
+}
+
+impl<'a> AuthorityTemporaryStore<'a> {
+    pub fn new(
+        authority_state: &'a AuthorityState,
+        _input_objects: &'_ [Object],
+    ) -> AuthorityTemporaryStore<'a> {
+        AuthorityTemporaryStore {
+            authority_state,
+            objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
+            active_inputs: _input_objects
+                .iter()
+                .filter(|v| !v.is_read_only())
+                .map(|v| v.to_object_reference())
+                .collect(),
+            written: Vec::new(),
+            deleted: Vec::new(),
+        }
     }
 
-    // TODO: buffer changes to storage + flush buffer after commit()
-    fn write_object(&mut self, object: Object) {
-        self.insert_object(object)
+    /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
+    pub fn into_inner(
+        self,
+    ) -> (
+        BTreeMap<ObjectID, Object>,
+        Vec<ObjectRef>,
+        Vec<ObjectRef>,
+        Vec<ObjectRef>,
+    ) {
+        #[cfg(debug_assertions)]
+        {
+            self.check_invariants();
+        }
+        (self.objects, self.active_inputs, self.written, self.deleted)
     }
 
-    // TODO: buffer changes to storage + flush buffer after commit()
-    fn delete_object(&mut self, id: &ObjectID) {
-        self.objects.remove(id);
+    /// An internal check of the invariants (will only fire in debug)
+    fn check_invariants(&self) {
+        // Check uniqueness in the 'written' set
+        debug_assert!(
+            {
+                use std::collections::HashSet;
+                let mut used = HashSet::new();
+                self.written.iter().all(move |elt| used.insert(elt.0))
+            },
+            "Duplicate object reference in self.written."
+        );
+
+        // Check uniqueness in the 'deleted' set
+        debug_assert!(
+            {
+                use std::collections::HashSet;
+                let mut used = HashSet::new();
+                self.deleted.iter().all(move |elt| used.insert(elt.0))
+            },
+            "Duplicate object reference in self.deleted."
+        );
+
+        // Check not both deleted and written
+        debug_assert!(
+            {
+                use std::collections::HashSet;
+                let mut used = HashSet::new();
+                self.written.iter().all(|elt| used.insert(elt.0));
+                self.deleted.iter().all(move |elt| used.insert(elt.0))
+            },
+            "Object both written and deleted."
+        );
+
+        // Check all mutable inputs are either written or deleted
+        debug_assert!(
+            {
+                use std::collections::HashSet;
+                let mut used = HashSet::new();
+                self.written.iter().all(|elt| used.insert(elt.0));
+                self.deleted.iter().all(|elt| used.insert(elt.0));
+
+                self.active_inputs.iter().all(|elt| !used.insert(elt.0))
+            },
+            "Mutable input neither written nor deleted."
+        );
     }
 }
 
-impl ModuleResolver for AuthorityState {
+impl<'a> Storage for AuthorityTemporaryStore<'a> {
+    fn read_object(&self, id: &ObjectID) -> Option<Object> {
+        match self.objects.get(id) {
+            Some(x) => Some(x.clone()),
+            None => self
+                .authority_state
+                .objects
+                .lock()
+                .unwrap()
+                .get(id)
+                .cloned(),
+        }
+    }
+
+    /*
+        Invariant: A key assumption of the write-delete logic
+        is that an entry is not both added and deleted by the
+        caller.
+    */
+
+    fn write_object(&mut self, object: Object) {
+        // Check it is not read-only
+        #[cfg(test)] // Movevm should ensure this
+        if let Some(existing_object) = self.read_object(&object.id()) {
+            if existing_object.is_read_only() {
+                // This is an internal invariant violation. Move only allows us to
+                // mutate objects if they are &mut so they cannot be read-only.
+                panic!("Internal invariant violation: Mutating a read-only object.")
+            }
+        }
+
+        self.written.push(object.to_object_reference());
+        self.objects.insert(object.id(), object);
+    }
+
+    fn delete_object(&mut self, id: &ObjectID) {
+        // Check it is not read-only
+        #[cfg(test)] // Movevm should ensure this
+        if let Some(object) = self.read_object(id) {
+            if object.is_read_only() {
+                // This is an internal invariant violation. Move only allows us to
+                // mutate objects if they are &mut so they cannot be read-only.
+                panic!("Internal invariant violation: Deleting a read-only object.")
+            }
+        }
+
+        // If it exists remove it
+        if let Some(removed) = self.objects.remove(id) {
+            self.deleted.push(removed.to_object_reference());
+        } else {
+            panic!("Internal invariant: object must exist to be deleted.")
+        }
+    }
+}
+
+impl<'a> ModuleResolver for AuthorityTemporaryStore<'a> {
     type Error = FastPayError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.objects.get(module_id.address()) {
+        match self
+            .authority_state
+            .objects
+            .lock()
+            .unwrap()
+            .get(module_id.address())
+        {
             Some(o) => match &o.data {
                 Data::Module(c) => {
                     let mut bytes = Vec::new();
@@ -507,7 +677,7 @@ impl ModuleResolver for AuthorityState {
     }
 }
 
-impl ResourceResolver for AuthorityState {
+impl<'a> ResourceResolver for AuthorityTemporaryStore<'a> {
     type Error = FastPayError;
 
     fn get_resource(
@@ -515,19 +685,29 @@ impl ResourceResolver for AuthorityState {
         address: &AccountAddress,
         struct_tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.objects.get(address) {
-            Some(o) => match &o.data {
-                Data::Move(m) => {
-                    assert!(struct_tag == &m.type_, "Invariant violation: ill-typed object in storage or bad object resquest from caller\
-");
-                    Ok(Some(m.contents.clone()))
+        let object = match self.read_object(address) {
+            Some(x) => x,
+            None => match self.authority_state.objects.lock().unwrap().get(address) {
+                None => return Ok(None),
+                Some(x) => {
+                    if !x.is_read_only() {
+                        fp_bail!(FastPayError::ExecutionInvariantViolation);
+                    }
+                    x.clone()
                 }
-                other => unimplemented!(
-                    "Bad object lookup: expected Move object, but got {:?}",
-                    other
-                ),
             },
-            _ => Ok(None),
+        };
+
+        match &object.data {
+            Data::Move(m) => {
+                assert!(struct_tag == &m.type_, "Invariant violation: ill-typed object in storage or bad object request from caller\
+");
+                Ok(Some(m.contents.clone()))
+            }
+            other => unimplemented!(
+                "Bad object lookup: expected Move object, but got {:?}",
+                other
+            ),
         }
     }
 }
