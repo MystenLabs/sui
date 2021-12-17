@@ -172,7 +172,7 @@ impl Client {
     }
 
     async fn send_recv_bytes_internal(
-        &mut self,
+        &self,
         shard: ShardId,
         buf: Vec<u8>,
     ) -> Result<Vec<u8>, io::Error> {
@@ -188,7 +188,7 @@ impl Client {
     }
 
     pub async fn send_recv_bytes(
-        &mut self,
+        &self,
         shard: ShardId,
         buf: Vec<u8>,
     ) -> Result<AccountInfoResponse, FastPayError> {
@@ -233,7 +233,7 @@ impl AuthorityClient for Client {
 
     /// Handle information requests for this account.
     fn handle_account_info_request(
-        &mut self,
+        &self,
         request: AccountInfoRequest,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {

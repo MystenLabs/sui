@@ -28,7 +28,7 @@ pub trait AuthorityClient {
 
     /// Handle information requests for this account.
     fn handle_account_info_request(
-        &mut self,
+        &self,
         request: AccountInfoRequest,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError>;
 }
@@ -90,7 +90,6 @@ pub trait Client {
     /// Do not confirm the transaction.
     fn transfer_to_fastpay_unsafe_unconfirmed(
         &mut self,
-        amount: Amount,
         recipient: FastPayAddress,
         object_id: ObjectID,
         user_data: UserData,
@@ -253,14 +252,14 @@ where
     /// Find the highest sequence number that is known to a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_strong_majority_sequence_number(&mut self, object_id: ObjectID) -> SequenceNumber {
+    async fn get_strong_majority_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
         let request = AccountInfoRequest {
             object_id,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
-        let numbers: futures::stream::FuturesUnordered<_> = self
-            .authority_clients
+        let mut authority_clients = self.authority_clients.clone();
+        let numbers: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
             .map(|(name, client)| {
                 let fut = client.handle_account_info_request(request.clone());
@@ -277,23 +276,26 @@ where
         )
     }
 
-    /// Find the highest balance that is backed by a quorum of authorities.
+    /// Return owner address and sequence number of an object backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_strong_majority_balance(&mut self, object_id: ObjectID) -> Balance {
+    async fn get_strong_majority_owner(
+        &self,
+        object_id: ObjectID,
+    ) -> Option<(FastPayAddress, SequenceNumber)> {
         let request = AccountInfoRequest {
             object_id,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
-        let numbers: futures::stream::FuturesUnordered<_> = self
-            .authority_clients
-            .iter_mut()
+        let authority_clients = self.authority_clients.clone();
+        let numbers: futures::stream::FuturesUnordered<_> = authority_clients
+            .iter()
             .map(|(name, client)| {
                 let fut = client.handle_account_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(_info) => Some((*name, Balance::from(0))),
+                        Ok(info) => Some((*name, Some((info.owner, info.next_sequence_number)))),
                         _ => None,
                     }
                 }
@@ -686,7 +688,6 @@ where
 
     fn transfer_to_fastpay_unsafe_unconfirmed(
         &mut self,
-        _amount: Amount,
         recipient: FastPayAddress,
         object_id: ObjectID,
         user_data: UserData,
