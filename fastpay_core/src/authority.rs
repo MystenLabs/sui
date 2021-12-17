@@ -550,6 +550,7 @@ impl<'a> AuthorityTemporaryStore<'a> {
     }
 
     /// An internal check of the invariants (will only fire in debug)
+    #[cfg(debug_assertions)]
     fn check_invariants(&self) {
         // Check uniqueness in the 'written' set
         debug_assert!(
