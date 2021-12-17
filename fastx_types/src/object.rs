@@ -70,6 +70,10 @@ impl Object {
         }
     }
 
+    pub fn is_read_only(&self) -> bool {
+        self.data.is_read_only()
+    }
+
     pub fn to_object_reference(&self) -> ObjectRef {
         (self.id(), self.next_sequence_number)
     }
