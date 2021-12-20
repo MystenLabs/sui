@@ -23,7 +23,7 @@ pub fn bytes_to_address(
     debug_assert!(args.len() == 1);
 
     let addr_bytes = pop_arg!(args, Vec<u8>);
-    assert!(addr_bytes.len() == 32);
+    assert!(addr_bytes.len() >= 16);
     // truncate the ID to 16 bytes
     // TODO: truncation not secure. we'll either need to support longer account addresses in Move or do this a different way
     // TODO: fix unwrap

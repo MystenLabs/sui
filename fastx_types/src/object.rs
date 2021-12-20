@@ -14,6 +14,16 @@ pub struct MoveObject {
     pub contents: Vec<u8>,
 }
 
+impl MoveObject {
+    pub fn new(type_: StructTag, contents: Vec<u8>) -> Self {
+        Self { type_, contents }
+    }
+
+    pub fn id(&self) -> ObjectID {
+        AccountAddress::try_from(&self.contents[0..16]).unwrap()
+    }
+}
+
 #[derive(Eq, PartialEq, Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Data {
@@ -32,6 +42,14 @@ impl Data {
             Module { .. } => true,
         }
     }
+
+    pub fn as_module(&self) -> Option<CompiledModule> {
+        use Data::*;
+        match self {
+            Move(_) => None,
+            Module(bytes) => CompiledModule::deserialize(bytes).ok(),
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Debug, Clone)]
@@ -46,13 +64,12 @@ pub struct Object {
 impl Object {
     /// Create a new Move object
     pub fn new_move(
-        type_: StructTag,
-        contents: Vec<u8>,
+        o: MoveObject,
         owner: FastPayAddress,
         next_sequence_number: SequenceNumber,
     ) -> Self {
         Object {
-            data: Data::Move(MoveObject { type_, contents }),
+            data: Data::Move(o),
             owner,
             next_sequence_number,
         }
@@ -84,7 +101,7 @@ impl Object {
         use Data::*;
 
         match &self.data {
-            Move(v) => AccountAddress::try_from(&v.contents[0..16]).unwrap(), //unimplemented!("parse ID from bytes"), // TODO: parse from v
+            Move(v) => v.id(),
             Module(m) => {
                 // TODO: extract ID by peeking into the bytes instead of deserializing
                 *CompiledModule::deserialize(m).unwrap().self_id().address()

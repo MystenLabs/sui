@@ -3,6 +3,7 @@
 
 pub mod adapter;
 pub mod bytecode_rewriter;
+pub mod genesis;
 pub mod state_view;
 
 use move_core_types::account_address::AccountAddress;
