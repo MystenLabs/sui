@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::genesis;
+use bcs;
+use fastx_adapter::genesis;
 #[cfg(test)]
 use fastx_types::base_types::dbg_addr;
 use move_binary_format::{
@@ -10,8 +11,6 @@ use move_binary_format::{
     CompiledModule,
 };
 use move_core_types::ident_str;
-#[cfg(test)]
-use move_core_types::language_storage::ModuleId;
 
 #[test]
 fn test_handle_transfer_order_bad_signature() {
@@ -188,7 +187,8 @@ fn test_publish_dependent_module_ok() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let mut genesis_module_objects = genesis::create_genesis_module_objects().unwrap();
+    let genesis = genesis::GENESIS.lock().unwrap();
+    let mut genesis_module_objects = genesis.objects.clone();
     let genesis_module = match &genesis_module_objects[0].data {
         Data::Module(m) => CompiledModule::deserialize(m).unwrap(),
         _ => unreachable!(),
@@ -241,39 +241,58 @@ fn test_publish_module_no_dependencies_ok() {
 }
 
 #[test]
-fn test_handle_move_order_bad() {
+fn test_handle_move_order() {
     let (sender, sender_key) = get_key_pair();
     // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
-    // create a dummy module. execution will fail when we try to read it
-    let dummy_module_object_id = ObjectID::random();
-    let dummy_module_object = Object::with_id_owner_for_testing(dummy_module_object_id, sender);
+    // find the function Object::create and call it to create a new object
+    let genesis = genesis::GENESIS.lock().unwrap();
+    let mut genesis_module_objects = genesis.objects.clone();
+    let module_object_ref = genesis_module_objects
+        .iter()
+        .find_map(|o| match o.data.as_module() {
+            Some(m) => {
+                if m.self_id().name() == ident_str!("ObjectBasics") {
+                    Some((*m.self_id().address(), SequenceNumber::new()))
+                } else {
+                    None
+                }
+            }
+            None => None,
+        })
+        .unwrap();
 
-    let mut authority_state =
-        init_state_with_objects(vec![gas_payment_object, dummy_module_object]);
+    genesis_module_objects.push(gas_payment_object);
+    let mut authority_state = init_state_with_objects(genesis_module_objects);
+    authority_state.native_functions = genesis.native_functions.clone();
 
-    let module_id = ModuleId::new(dummy_module_object_id, ident_str!("Module").to_owned());
-    let function = ident_str!("function_name").to_owned();
+    let function = ident_str!("create").to_owned();
     let order = Order::new_move_call(
         sender,
-        module_id,
+        module_object_ref,
         function,
         Vec::new(),
         gas_payment_object_ref,
         Vec::new(),
-        Vec::new(),
+        vec![
+            16u64.to_le_bytes().to_vec(),
+            bcs::to_bytes(&sender.to_address_hack().to_vec()).unwrap(),
+        ],
         1000,
         &sender_key,
     );
-
-    // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
-    // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    match send_and_confirm_order(&mut authority_state, order) {
-        Err(FastPayError::MoveExecutionFailure) => (),
-        r => panic!("Unexpected result {:?}", r),
-    }
+    let res = send_and_confirm_order(&mut authority_state, order).unwrap();
+    let created_object_id = res.object_id;
+    // check that order actually created an object with the expected ID, owner, sequence number
+    let created_obj = authority_state.object_state(&created_object_id).unwrap();
+    assert_eq!(
+        created_obj.owner.to_address_hack(),
+        sender.to_address_hack()
+    );
+    assert_eq!(created_obj.id(), created_object_id);
+    assert_eq!(created_obj.next_sequence_number, SequenceNumber::new());
 }
 
 #[test]
