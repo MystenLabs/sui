@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        toolchain: [stable, nightly]
+        toolchain: [stable]
         os: [ubuntu]
     steps:
       - uses: actions/checkout@v2
@@ -58,11 +58,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Install minimal nightly with clippy
+      - name: Install minimal stable with clippy
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: stable
           components: clippy
           override: true
       - uses: Swatinem/rust-cache@v1
@@ -77,11 +77,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Install minimal nightly with rustfmt
+      - name: Install minimal stable with rustfmt
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: stable
           components: rustfmt
           override: true
       - uses: Swatinem/rust-cache@v1
