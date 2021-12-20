@@ -105,23 +105,23 @@ impl ModuleHandleRewriter {
     /// Returns an error if the domain of `sub_map` contains a `ModuleID` without a corresponding handle in `m`
     pub fn sub_module_ids(&self, m: &mut CompiledModule) -> Result<()> {
         let mut handle_index_sub_map = BTreeMap::new();
-        let friends_to_sub = m
+        let (old_ids_for_friends, friends_to_sub): (HashSet<ModuleId>, Vec<(usize, &ModuleId)>) = m
             .friend_decls
             .iter()
             .enumerate()
             .filter_map(|(idx, h)| {
-                let old_id = &m.module_id_for_handle(h);
-                self.sub_map.get(old_id).map(|new_id| (idx, new_id))
+                let old_id = m.module_id_for_handle(h);
+                self.sub_map
+                    .get(&old_id)
+                    .map(|new_id| (old_id, (idx, new_id)))
             })
-            .collect::<Vec<(usize, &ModuleId)>>();
+            .unzip();
 
         for (old_id, new_id) in self.sub_map.iter() {
             let old_handle_index = match Self::get_module_handle(old_id, m) {
                 Some(idx) => idx,
                 None => {
-                    if friends_to_sub.iter().any(|(friend_handle_idx, _)| {
-                        &m.module_id_for_handle(&m.friend_decls[*friend_handle_idx]) == old_id
-                    }) {
+                    if old_ids_for_friends.contains(old_id) {
                         // old_id is in the friends table; we will sub for it later
                         continue;
                     } else {
