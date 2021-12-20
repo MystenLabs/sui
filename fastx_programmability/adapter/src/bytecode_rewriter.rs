@@ -142,7 +142,8 @@ impl ModuleHandleRewriter {
         }
         // maps are always the same size unless there is a friend-only sub
         debug_assert!(
-            (old_ids_for_friends.is_empty() && handle_index_sub_map.len() == self.sub_map.len()) || handle_index_sub_map.len() <= self.sub_map.len()
+            (old_ids_for_friends.is_empty() && handle_index_sub_map.len() == self.sub_map.len())
+                || handle_index_sub_map.len() <= self.sub_map.len()
         );
 
         // handle_index_sub_map is ready. walk through the bytecode, find everywhere a handle index in the
