@@ -158,6 +158,7 @@ pub struct Signature(dalek::Signature);
 
 impl KeyPair {
     /// Avoid implementing `clone` on secret keys to prevent mistakes.
+    #[must_use]
     pub fn copy(&self) -> KeyPair {
         KeyPair(dalek::Keypair {
             secret: dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),
