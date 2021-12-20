@@ -5,12 +5,9 @@ import argparse
 import os
 import re
 
-CURRENT_REV = "661a2d1367a64a02027e4ed8f4b18f0a37cfaa17"
 ROOT = os.path.join(os.path.dirname(__file__), "../")
 PATTERN = re.compile(
-    '(\s*)(.+) = {{ git = "https://github.com/diem/diem", rev="{}" }}(\s*)'.format(
-        CURRENT_REV
-    )
+    '(\s*)(.+) = { git = "https://github.com/.+/diem", (?:rev|branch)=".+" }(\s*)'
 )
 
 
@@ -21,13 +18,17 @@ def parse_args():
         description="""
     Automatically manage the dependency path to Diem repository.
     Command "local" switches the dependency from git to local path.
-    Command "upgrade" upgrades the git revision.
+    Command "upgrade" upgrades the git revision. A repository can be
+    specified if we want to use a fork instead of upstream.
+    A revision or a branch also needs to be specified.
     """,
     )
-    local = subparser.add_parser("local")
-    remote = subparser.add_parser("remote")
+    subparser.add_parser("local")
     upgrade = subparser.add_parser("upgrade")
-    upgrade.add_argument("--rev", type=str, required=True)
+    upgrade.add_argument("--repo", required=False, default="diem")
+    upgrade_group = upgrade.add_mutually_exclusive_group(required=True)
+    upgrade_group.add_argument("--rev")
+    upgrade_group.add_argument("--branch")
     return parser.parse_args()
 
 
@@ -76,13 +77,23 @@ def switch_to_local():
     scan_files(ROOT, process_line)
 
 
-def upgrade_revision(rev):
+def upgrade_revision(repo, rev, branch):
+    assert (args.rev is None) != (args.branch is None)
     def process_line(line, _):
-        return line.replace(CURRENT_REV, rev)
+        m = PATTERN.match(line)
+        if m:
+            prefix = m.group(1)
+            name = m.group(2)
+            postfix = m.group(3)
+            return '{}{} = {{ git = "https://github.com/{}/diem", {}="{}" }}{}'.format(
+                prefix, name, repo,
+                "branch" if branch else "rev",
+                branch if branch else rev,
+                postfix
+            )
+        return line
 
     scan_files(ROOT, process_line)
-    # Also patch the script itself with the new revision.
-    scan_file(__file__, process_line)
 
 
 args = parse_args()
@@ -90,4 +101,4 @@ if args.command == "local":
     switch_to_local()
 else:
     assert args.command == "upgrade"
-    upgrade_revision(args.rev)
+    upgrade_revision(args.repo, args.rev, args.branch)
