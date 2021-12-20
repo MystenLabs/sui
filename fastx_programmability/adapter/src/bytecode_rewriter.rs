@@ -10,7 +10,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 #[cfg(test)]
 #[path = "unit_tests/bytecode_rewriter_tests.rs"]
@@ -19,7 +19,7 @@ mod bytecode_rewriter_tests;
 /// A bytecode rewriting tool for substituting module handles
 #[derive(Debug)]
 pub struct ModuleHandleRewriter {
-    /// For each k -> v pair, an instruction to subsitute v for k
+    /// For each k -> v pair, an instruction to replace k by v
     /// Domain and range of the map are disjoint
     sub_map: BTreeMap<ModuleId, ModuleId>,
 }
@@ -101,7 +101,7 @@ impl ModuleHandleRewriter {
         })
     }
 
-    /// Apply the module ID substituion in `self.sub_map` to `m`.
+    /// Apply the module ID substitution in `self.sub_map` to `m`.
     /// Returns an error if the domain of `sub_map` contains a `ModuleID` without a corresponding handle in `m`
     pub fn sub_module_ids(&self, m: &mut CompiledModule) -> Result<()> {
         let mut handle_index_sub_map = BTreeMap::new();
@@ -141,9 +141,8 @@ impl ModuleHandleRewriter {
             )
         }
         // maps are always the same size unless there is a friend-only sub
-        debug_assert!(handle_index_sub_map.len() <= self.sub_map.len());
         debug_assert!(
-            !friends_to_sub.is_empty() || handle_index_sub_map.len() == self.sub_map.len()
+            (old_ids_for_friends.is_empty() && handle_index_sub_map.len() == self.sub_map.len()) || handle_index_sub_map.len() <= self.sub_map.len()
         );
 
         // handle_index_sub_map is ready. walk through the bytecode, find everywhere a handle index in the
