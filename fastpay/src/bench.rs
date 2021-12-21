@@ -244,7 +244,7 @@ impl ClientServerBenchmark {
 
         let time_total = time_start.elapsed().as_micros();
         warn!(
-            "Total time: {}ms, items: {}, tx/sec: {}",
+            "Total time: {}us, items: {}, tx/sec: {}",
             time_total,
             items_number,
             1_000_000.0 * (items_number as f64) / (time_total as f64)
