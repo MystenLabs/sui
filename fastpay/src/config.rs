@@ -98,8 +98,7 @@ pub struct UserAccount {
     )]
     pub address: FastPayAddress,
     pub key: KeyPair,
-    pub next_sequence_number: SequenceNumber,
-    pub object_ids: Vec<ObjectID>,
+    pub object_ids: BTreeMap<ObjectID, SequenceNumber>,
     pub sent_certificates: Vec<CertifiedOrder>,
     pub received_certificates: Vec<CertifiedOrder>,
 }
@@ -110,8 +109,10 @@ impl UserAccount {
         Self {
             address,
             key,
-            next_sequence_number: SequenceNumber::new(),
-            object_ids,
+            object_ids: object_ids
+                .into_iter()
+                .map(|object_id| (object_id, SequenceNumber::new()))
+                .collect(),
             sent_certificates: Vec::new(),
             received_certificates: Vec::new(),
         }
@@ -144,7 +145,6 @@ impl AccountsConfig {
             .accounts
             .get_mut(&state.address())
             .expect("Updated account should already exist");
-        account.next_sequence_number = state.next_sequence_number();
         account.object_ids = state.object_ids().clone();
         account.sent_certificates = state.sent_certificates().clone();
         account.received_certificates = state.received_certificates().cloned().collect();

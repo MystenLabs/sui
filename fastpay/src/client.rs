@@ -80,7 +80,6 @@ fn make_client_state(
         account.key.copy(),
         committee,
         authority_clients,
-        account.next_sequence_number,
         account.sent_certificates.clone(),
         account.received_certificates.clone(),
         account.object_ids.clone(),
@@ -97,16 +96,19 @@ fn make_benchmark_transfer_orders(
     // TODO: deterministic sequence of orders to recover from interrupted benchmarks.
     let mut next_recipient = get_key_pair().0;
     for account in accounts_config.accounts_mut() {
-        let object_id = *account.object_ids.first().unwrap();
+        let object_id = account.object_ids.clone().into_keys().next().unwrap();
         let transfer = Transfer {
             object_id,
             sender: account.address,
             recipient: Address::FastPay(next_recipient),
-            sequence_number: account.next_sequence_number,
+            sequence_number: account.object_ids[&object_id],
             user_data: UserData::default(),
         };
         debug!("Preparing transfer order: {:?}", transfer);
-        account.next_sequence_number = account.next_sequence_number.increment().unwrap();
+        account.object_ids.insert(
+            object_id,
+            account.object_ids[&object_id].increment().unwrap(),
+        );
         next_recipient = account.address;
         let order = Order::new_transfer(transfer.clone(), &account.key);
         orders.push(order.clone());
@@ -430,7 +432,7 @@ fn main() {
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
-                let mut client_state = make_client_state(
+                let client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
                     user_address,
@@ -440,10 +442,8 @@ fn main() {
                 );
                 info!("Starting balance query");
                 let time_start = Instant::now();
-                let amount = client_state.get_spendable_amount().await.unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Balance confirmed after {} us", time_total);
-                println!("{:?}", amount);
                 accounts_config.update_from_state(&client_state);
                 accounts_config
                     .write(accounts_config_path)
