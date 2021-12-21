@@ -483,6 +483,7 @@ where
                 object_id,
             );
 
+            // TODO: it's inefficient to loop through sequence numbers to retrieve missing cert, rethink this logic when we change certificate storage in client.
             let mut number = SequenceNumber::from(0);
             while number < next_sequence_number {
                 if !known_sequence_numbers.contains(&number) {
@@ -723,11 +724,6 @@ where
                 let new_sent_certificates = self.download_sent_certificates().await?;
                 self.update_sent_certificates(new_sent_certificates, object_id)?;
             }
-            /*            let amount = if self.balance < Balance::zero() {
-                Amount::zero()
-            } else {
-                Amount::try_from(self.balance).unwrap_or_else(|_| std::u64::MAX.into())
-            };*/
             Ok(Amount::zero())
         })
     }
