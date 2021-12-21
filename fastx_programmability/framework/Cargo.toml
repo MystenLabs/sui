@@ -10,10 +10,9 @@ publish = false
 [dependencies]
 smallvec = "1.6.1"
 
-move-binary-format = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
-move-core-types = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
-move-lang = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
-move-package = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
-move-stdlib = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
-move-vm-runtime = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
-move-vm-types = { git = "https://github.com/diem/diem", rev="661a2d1367a64a02027e4ed8f4b18f0a37cfaa17" }
+move-binary-format = { git = "https://github.com/diem/diem", rev="5572eae5e35407f10316b473f95cb155a5e8d40b" }
+move-core-types = { git = "https://github.com/diem/diem", rev="5572eae5e35407f10316b473f95cb155a5e8d40b" }
+move-package = { git = "https://github.com/diem/diem", rev="5572eae5e35407f10316b473f95cb155a5e8d40b" }
+move-stdlib = { git = "https://github.com/diem/diem", rev="5572eae5e35407f10316b473f95cb155a5e8d40b" }
+move-vm-runtime = { git = "https://github.com/diem/diem", rev="5572eae5e35407f10316b473f95cb155a5e8d40b" }
+move-vm-types = { git = "https://github.com/diem/diem", rev="5572eae5e35407f10316b473f95cb155a5e8d40b" }
