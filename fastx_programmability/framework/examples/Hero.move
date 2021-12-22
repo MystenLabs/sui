@@ -163,14 +163,7 @@ module Examples::Hero {
     /// Add `new_sword` to the hero's inventory and return the old sword
     /// (if any)
     public fun equip_sword(hero: &mut Hero, new_sword: Sword): Option<Sword> {
-        // TODO: we should add a Option::swap_opt(&mut Option<T>, T): Option<T>
-        // that does this to the Move stdlib
-        if (Option::is_some(&hero.sword)) {
-            Option::some(Option::swap(&mut hero.sword, new_sword))
-        } else {
-            Option::fill(&mut hero.sword, new_sword);
-            Option::none<Sword>()
-        }
+        Option::swap_or_fill(&mut hero.sword, new_sword)
     }
 
     /// Disarm the hero by returning their sword.
