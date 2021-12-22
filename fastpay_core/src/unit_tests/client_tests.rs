@@ -3,7 +3,7 @@
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
 use super::*;
-use crate::authority::{Authority, AuthorityState};
+use crate::authority::AuthorityState;
 use fastx_types::object::Object;
 use futures::lock::Mutex;
 use std::{

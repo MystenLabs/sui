@@ -82,26 +82,11 @@ pub struct AuthorityState {
 /// Interface provided by each (shard of an) authority.
 /// All commands return either the current account info or an error.
 /// Repeating commands produces no changes and returns no error.
-pub trait Authority {
-    /// Initiate a new order to a FastPay or Primary account.
-    fn handle_order(&mut self, order: Order) -> Result<AccountInfoResponse, FastPayError>;
 
-    /// Confirm a transfer to a FastPay or Primary account.
-    fn handle_confirmation_order(
-        &mut self,
-        order: ConfirmationOrder,
-    ) -> Result<AccountInfoResponse, FastPayError>;
-
-    /// Handle information requests for this account.
-    fn handle_account_info_request(
-        &self,
-        request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, FastPayError>;
-}
-
-impl Authority for AuthorityState {
+impl AuthorityState {
+    
     /// Initiate a new transfer.
-    fn handle_order(&mut self, order: Order) -> Result<AccountInfoResponse, FastPayError> {
+    pub fn handle_order(&mut self, order: Order) -> Result<AccountInfoResponse, FastPayError> {
         // Check the sender's signature and retrieve the transfer data.
         fp_ensure!(self.in_shard(order.object_id()), FastPayError::WrongShard);
         order.check_signature()?;
@@ -175,7 +160,7 @@ impl Authority for AuthorityState {
     }
 
     /// Confirm a transfer.
-    fn handle_confirmation_order(
+    pub fn handle_confirmation_order(
         &mut self,
         confirmation_order: ConfirmationOrder,
     ) -> Result<AccountInfoResponse, FastPayError> {
@@ -327,7 +312,7 @@ impl Authority for AuthorityState {
         Ok(info)
     }
 
-    fn handle_account_info_request(
+    pub fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, FastPayError> {
