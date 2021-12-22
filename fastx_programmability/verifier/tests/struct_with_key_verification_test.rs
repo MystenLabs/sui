@@ -1,5 +1,5 @@
 use fastx_framework::FASTX_FRAMEWORK_ADDRESS;
-use fastx_verifier::verifier::verify_module;
+use fastx_verifier::struct_with_key_verifier::verify_module;
 use move_binary_format::file_format::*;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 

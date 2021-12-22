@@ -401,7 +401,7 @@ impl AuthorityState {
         let object = self.object_state(&object_id)?;
         let lock = self
             .get_order_lock(&object.to_object_reference())
-            .or(Ok(&None))?;
+            .or::<FastPayError>(Ok(&None))?;
 
         Ok(AccountInfoResponse {
             object_id: object.id(),

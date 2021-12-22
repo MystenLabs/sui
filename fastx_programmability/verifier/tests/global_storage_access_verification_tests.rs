@@ -1,4 +1,4 @@
-use fastx_verifier::verifier::verify_module;
+use fastx_verifier::global_storage_access_verifier::verify_module;
 use move_binary_format::file_format::*;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 
