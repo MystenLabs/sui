@@ -12,8 +12,8 @@ use move_binary_format::{
 };
 use move_core_types::ident_str;
 
-#[test]
-fn test_handle_transfer_order_bad_signature() {
+#[tokio::test]
+async fn test_handle_transfer_order_bad_signature() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
@@ -25,7 +25,7 @@ fn test_handle_transfer_order_bad_signature() {
     bad_signature_transfer_order.signature = Signature::new(&transfer_order.kind, &unknown_key);
     assert!(authority_state
         .handle_order(bad_signature_transfer_order)
-        .is_err());
+        .await.is_err());
 
     let object = authority_state.object_state(&object_id).unwrap();
     assert!(authority_state
@@ -39,8 +39,8 @@ fn test_handle_transfer_order_bad_signature() {
         .is_none());
 }
 
-#[test]
-fn test_handle_transfer_order_unknown_sender() {
+#[tokio::test]
+async fn test_handle_transfer_order_unknown_sender() {
     let (sender, sender_key) = get_key_pair();
     let (unknown_address, unknown_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
@@ -51,7 +51,7 @@ fn test_handle_transfer_order_unknown_sender() {
     let unknown_sender_transfer = transfer_order.kind;
     let unknown_sender_transfer_order = Order::new(unknown_sender_transfer, &unknown_key);
     assert!(authority_state
-        .handle_order(unknown_sender_transfer_order)
+        .handle_order(unknown_sender_transfer_order).await
         .is_err());
 
     let object = authority_state.object_state(&object_id).unwrap();
@@ -94,8 +94,8 @@ fn test_handle_transfer_order_bad_sequence_number() {
 }
 */
 
-#[test]
-fn test_handle_transfer_order_ok() {
+#[tokio::test]
+async fn test_handle_transfer_order_ok() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
@@ -112,7 +112,7 @@ fn test_handle_transfer_order_ok() {
         .is_err());
 
     let account_info = authority_state
-        .handle_order(transfer_order.clone())
+        .handle_order(transfer_order.clone()).await
         .unwrap();
 
     let object = authority_state.object_state(&object_id).unwrap();
@@ -143,12 +143,12 @@ fn test_handle_transfer_order_ok() {
     );
 }
 
-fn send_and_confirm_order(
+async fn send_and_confirm_order(
     authority: &mut AuthorityState,
     order: Order,
 ) -> Result<AccountInfoResponse, FastPayError> {
     // Make the initial request
-    let response = authority.handle_order(order.clone()).unwrap();
+    let response = authority.handle_order(order.clone()).await.unwrap();
     let vote = response.pending_confirmation.unwrap();
 
     // Collect signatures from a quorum of authorities
@@ -179,8 +179,8 @@ fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
 }
 
 // Test that publishing a module that depends on an existing one works
-#[test]
-fn test_publish_dependent_module_ok() {
+#[tokio::test]
+async fn test_publish_dependent_module_ok() {
     let (sender, sender_key) = get_key_pair();
     // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
@@ -210,14 +210,14 @@ fn test_publish_dependent_module_ok() {
         &sender_key,
     );
     let dependent_module_id = TxContext::new(order.digest()).fresh_id();
-    let response = send_and_confirm_order(&mut authority, order).unwrap();
+    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
     // check that the dependent module got published
     assert!(response.object_id == dependent_module_id);
 }
 
 // Test that publishing a module with no dependencies works
-#[test]
-fn test_publish_module_no_dependencies_ok() {
+#[tokio::test]
+async fn test_publish_module_no_dependencies_ok() {
     let (sender, sender_key) = get_key_pair();
     // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
@@ -234,14 +234,14 @@ fn test_publish_module_no_dependencies_ok() {
         vec![module_bytes],
         &sender_key,
     );
-    let module_id = TxContext::new(order.digest()).fresh_id();
-    let response = send_and_confirm_order(&mut authority, order).unwrap();
+    let module_object_id = TxContext::new(order.digest()).fresh_id();
+    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
     // check that the module actually got published
-    assert!(response.object_id == module_id);
+    assert!(response.object_id == module_object_id);
 }
 
-#[test]
-fn test_handle_move_order() {
+#[tokio::test]
+async fn test_handle_move_order() {
     let (sender, sender_key) = get_key_pair();
     // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
@@ -283,7 +283,7 @@ fn test_handle_move_order() {
         1000,
         &sender_key,
     );
-    let res = send_and_confirm_order(&mut authority_state, order).unwrap();
+    let res = send_and_confirm_order(&mut authority_state, order).await.unwrap();
     let created_object_id = res.object_id;
     // check that order actually created an object with the expected ID, owner, sequence number
     let created_obj = authority_state.object_state(&created_object_id).unwrap();
@@ -295,8 +295,8 @@ fn test_handle_move_order() {
     assert_eq!(created_obj.next_sequence_number, SequenceNumber::new());
 }
 
-#[test]
-fn test_handle_transfer_order_double_spend() {
+#[tokio::test]
+async fn test_handle_transfer_order_double_spend() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
@@ -304,9 +304,9 @@ fn test_handle_transfer_order_double_spend() {
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
     let signed_order = authority_state
-        .handle_order(transfer_order.clone())
+        .handle_order(transfer_order.clone()).await
         .unwrap();
-    let double_spend_signed_order = authority_state.handle_order(transfer_order).unwrap();
+    let double_spend_signed_order = authority_state.handle_order(transfer_order).await.unwrap();
     assert_eq!(signed_order, double_spend_signed_order);
 }
 

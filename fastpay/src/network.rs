@@ -88,7 +88,7 @@ impl MessageHandler for RunningServerState {
                         SerializedMessage::Order(message) => self
                             .server
                             .state
-                            .handle_order(*message)
+                            .handle_order(*message).await
                             .map(|info| Some(serialize_info_response(&info))),
                         SerializedMessage::Cert(message) => {
                             let confirmation_order = ConfirmationOrder {

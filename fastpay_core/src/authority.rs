@@ -86,8 +86,8 @@ pub struct AuthorityState {
 impl AuthorityState {
 
     /// Initiate a new transfer.
-    pub fn handle_order(&mut self, order: Order) -> Result<AccountInfoResponse, FastPayError> {
-        
+    pub async fn handle_order(&mut self, order: Order) -> Result<AccountInfoResponse, FastPayError> {
+
         // Check the sender's signature and retrieve the transfer data.
         fp_ensure!(self.in_shard(order.object_id()), FastPayError::WrongShard);
         order.check_signature()?;
