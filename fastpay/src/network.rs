@@ -97,7 +97,7 @@ impl MessageHandler for RunningServerState {
                             match self
                                 .server
                                 .state
-                                .handle_confirmation_order(confirmation_order)
+                                .handle_confirmation_order(confirmation_order).await
                             {
                                 Ok(info) => {
                                     // Response

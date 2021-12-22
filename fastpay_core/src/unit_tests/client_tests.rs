@@ -26,7 +26,7 @@ impl AuthorityClient for LocalAuthorityClient {
         order: ConfirmationOrder,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_confirmation_order(order) })
+        Box::pin(async move { state.lock().await.handle_confirmation_order(order).await })
     }
 
     fn handle_account_info_request(

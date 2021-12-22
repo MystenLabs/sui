@@ -161,7 +161,7 @@ impl AuthorityState {
     }
 
     /// Confirm a transfer.
-    pub fn handle_confirmation_order(
+    pub async fn handle_confirmation_order(
         &mut self,
         confirmation_order: ConfirmationOrder,
     ) -> Result<AccountInfoResponse, FastPayError> {

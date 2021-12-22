@@ -159,7 +159,7 @@ async fn send_and_confirm_order(
         .unwrap();
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    authority.handle_confirmation_order(ConfirmationOrder::new(certificate))
+    authority.handle_confirmation_order(ConfirmationOrder::new(certificate)).await
 }
 
 /// Create a `CompiledModule` that depends on `m`
@@ -310,8 +310,8 @@ async fn test_handle_transfer_order_double_spend() {
     assert_eq!(signed_order, double_spend_signed_order);
 }
 
-#[test]
-fn test_handle_confirmation_order_unknown_sender() {
+#[tokio::test]
+async fn test_handle_confirmation_order_unknown_sender() {
     let recipient = dbg_addr(2);
     let (sender, sender_key) = get_key_pair();
     let mut authority_state = init_state();
@@ -324,12 +324,12 @@ fn test_handle_confirmation_order_unknown_sender() {
     );
 
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order)).await
         .is_err());
 }
 
-#[test]
-fn test_handle_confirmation_order_bad_sequence_number() {
+#[tokio::test]
+async fn test_handle_confirmation_order_bad_sequence_number() {
     // TODO: refactor this test to be less magic:
     // * Create an explicit state within an authority, by passing objects.
     // * Create an explicit transfer, and execute it.
@@ -367,7 +367,7 @@ fn test_handle_confirmation_order_bad_sequence_number() {
     // Explanation: providing an old cert that has already need applied
     //              returns a Ok(_) with info about the new object states.
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order)).await
         .is_ok());
 
     // Check that the new object is the one recorded.
@@ -386,8 +386,8 @@ fn test_handle_confirmation_order_bad_sequence_number() {
         .is_none());
 }
 
-#[test]
-fn test_handle_confirmation_order_exceed_balance() {
+#[tokio::test]
+async fn test_handle_confirmation_order_exceed_balance() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
@@ -401,7 +401,7 @@ fn test_handle_confirmation_order_exceed_balance() {
         &authority_state,
     );
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order)).await
         .is_ok());
     let new_account = authority_state.object_state(&object_id).unwrap();
     assert_eq!(SequenceNumber::from(1), new_account.next_sequence_number);
@@ -411,8 +411,8 @@ fn test_handle_confirmation_order_exceed_balance() {
         .is_some());
 }
 
-#[test]
-fn test_handle_confirmation_order_receiver_balance_overflow() {
+#[tokio::test]
+async fn test_handle_confirmation_order_receiver_balance_overflow() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let (recipient, _) = get_key_pair();
@@ -427,7 +427,7 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
         &authority_state,
     );
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order)).await
         .is_ok());
     let new_sender_account = authority_state.object_state(&object_id).unwrap();
     assert_eq!(
@@ -441,8 +441,8 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
         .is_some());
 }
 
-#[test]
-fn test_handle_confirmation_order_receiver_equal_sender() {
+#[tokio::test]
+async fn test_handle_confirmation_order_receiver_equal_sender() {
     let (address, key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let mut authority_state = init_state_with_object(address, object_id);
@@ -455,7 +455,7 @@ fn test_handle_confirmation_order_receiver_equal_sender() {
         &authority_state,
     );
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order)).await
         .is_ok());
     let account = authority_state.object_state(&object_id).unwrap();
     assert_eq!(SequenceNumber::from(1), account.next_sequence_number);
@@ -466,8 +466,8 @@ fn test_handle_confirmation_order_receiver_equal_sender() {
         .is_some());
 }
 
-#[test]
-fn test_handle_confirmation_order_ok() {
+#[tokio::test]
+async fn test_handle_confirmation_order_ok() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -485,7 +485,7 @@ fn test_handle_confirmation_order_ok() {
     next_sequence_number = next_sequence_number.increment().unwrap();
 
     let info = authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone())).await
         .unwrap();
     // Key check: the ownership has changed
     assert_eq!(recipient, info.owner);
