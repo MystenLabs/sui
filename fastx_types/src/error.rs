@@ -4,6 +4,7 @@
 use thiserror::Error;
 
 use crate::{base_types::*, messages::*};
+use move_binary_format::errors::PartialVMError;
 use serde::{Deserialize, Serialize};
 
 #[macro_export]
@@ -128,3 +129,11 @@ pub enum FastPayError {
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;
+
+impl std::convert::From<PartialVMError> for FastPayError {
+    fn from(error: PartialVMError) -> Self {
+        FastPayError::ModuleVerificationFailure {
+            error: error.to_string(),
+        }
+    }
+}
