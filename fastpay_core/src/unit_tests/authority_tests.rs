@@ -190,11 +190,11 @@ fn test_publish_dependent_module_ok() {
     // create a genesis state that contains the gas object and genesis modules
     let mut genesis_module_objects = genesis::create_genesis_module_objects().unwrap();
     let genesis_module = match &genesis_module_objects[0].data {
-        Data::Module(m) => m,
+        Data::Module(m) => CompiledModule::deserialize(m).unwrap(),
         _ => unreachable!(),
     };
     // create a module that depends on a genesis module
-    let dependent_module = make_dependent_module(genesis_module);
+    let dependent_module = make_dependent_module(&genesis_module);
     let dependent_module_bytes = {
         let mut bytes = Vec::new();
         dependent_module.serialize(&mut bytes).unwrap();

@@ -19,8 +19,8 @@ pub struct MoveObject {
 pub enum Data {
     /// An object whose governing logic lives in a published Move module
     Move(MoveObject),
-    /// A published Move module
-    Module(CompiledModule),
+    /// Raw bytes that deserialize to a published Move module
+    Module(Vec<u8>),
     // ... FastX "native" types go here
 }
 
@@ -29,7 +29,7 @@ impl Data {
         use Data::*;
         match self {
             Move(_) => false,
-            Module(_) => true,
+            Module { .. } => true,
         }
     }
 }
@@ -63,8 +63,10 @@ impl Object {
         owner: FastPayAddress,
         next_sequence_number: SequenceNumber,
     ) -> Self {
+        let mut bytes = Vec::new();
+        m.serialize(&mut bytes).unwrap();
         Object {
-            data: Data::Module(m),
+            data: Data::Module(bytes),
             owner,
             next_sequence_number,
         }
@@ -83,7 +85,10 @@ impl Object {
 
         match &self.data {
             Move(v) => AccountAddress::try_from(&v.contents[0..16]).unwrap(), //unimplemented!("parse ID from bytes"), // TODO: parse from v
-            Module(m) => *m.self_id().address(),
+            Module(m) => {
+                // TODO: extract ID by peeking into the bytes instead of deserializing
+                *CompiledModule::deserialize(m).unwrap().self_id().address()
+            }
         }
     }
 
