@@ -34,7 +34,13 @@ impl AuthorityClient for LocalAuthorityClient {
         request: AccountInfoRequest,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_account_info_request(request) })
+        Box::pin(async move {
+            state
+                .lock()
+                .await
+                .handle_account_info_request(request)
+                .await
+        })
     }
 }
 

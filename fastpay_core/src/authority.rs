@@ -68,12 +68,12 @@ pub struct AuthorityState {
 
     */
     /// Order lock map maps object versions to the first next transaction seen
-    order_lock: BTreeMap<(ObjectID, SequenceNumber), Option<SignedOrder>>,
+    order_lock: BTreeMap<ObjectRef, Option<SignedOrder>>,
     /// Certificates that have been accepted.
     certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
     /// An index mapping object IDs to the Transaction Digest that created them.
     /// This is used by synchronization logic to sync authorities.
-    parent_sync: BTreeMap<(ObjectID, SequenceNumber), TransactionDigest>,
+    parent_sync: BTreeMap<ObjectRef, TransactionDigest>,
 
     /// Move native functions that are available to invoke
     native_functions: NativeFunctionTable,
@@ -84,10 +84,11 @@ pub struct AuthorityState {
 /// Repeating commands produces no changes and returns no error.
 
 impl AuthorityState {
-
     /// Initiate a new transfer.
-    pub async fn handle_order(&mut self, order: Order) -> Result<AccountInfoResponse, FastPayError> {
-
+    pub async fn handle_order(
+        &mut self,
+        order: Order,
+    ) -> Result<AccountInfoResponse, FastPayError> {
         // Check the sender's signature and retrieve the transfer data.
         fp_ensure!(self.in_shard(order.object_id()), FastPayError::WrongShard);
         order.check_signature()?;
@@ -121,6 +122,7 @@ impl AuthorityState {
             //      it's a bit wasteful to copy the entire object.
             let object = self
                 .object_state(&object_id)
+                .await
                 .map_err(|_| FastPayError::ObjectNotFound)?;
 
             // Check that the seq number is the same
@@ -156,7 +158,7 @@ impl AuthorityState {
         // This is the critical section that requires a write lock on the lock DB.
         self.set_order_lock(&mutable_objects, signed_order)?;
 
-        let info = self.make_object_info(object_id)?;
+        let info = self.make_object_info(object_id).await?;
         Ok(info)
     }
 
@@ -177,7 +179,7 @@ impl AuthorityState {
             // If we have a certificate on the confirmation order it means that the input
             // object exists on other honest authorities, but we do not have it. The only
             // way this may happen is if we missed some updates.
-            let input_object = self.object_state(&input_object_id).map_err(|_| {
+            let input_object = self.object_state(&input_object_id).await.map_err(|_| {
                 FastPayError::MissingEalierConfirmations {
                     current_sequence_number: SequenceNumber::from(0),
                 }
@@ -193,7 +195,7 @@ impl AuthorityState {
             }
             if input_sequence_number > input_seq {
                 // Transfer was already confirmed.
-                return self.make_object_info(object_id);
+                return self.make_object_info(object_id).await;
             }
 
             inputs.push(input_object.clone());
@@ -309,16 +311,16 @@ impl AuthorityState {
             self.insert_object(object);
         }
 
-        let info = self.make_object_info(object_id)?;
+        let info = self.make_object_info(object_id).await?;
         Ok(info)
     }
 
-    pub fn handle_account_info_request(
+    pub async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, FastPayError> {
         fp_ensure!(self.in_shard(&request.object_id), FastPayError::WrongShard);
-        let mut response = self.make_object_info(request.object_id)?;
+        let mut response = self.make_object_info(request.object_id).await?;
         if let Some(seq) = request.request_sequence_number {
             // Get the Transaction Digest that created the object
             let transaction_digest = self
@@ -387,7 +389,7 @@ impl AuthorityState {
         Self::get_shard(self.number_of_shards, object_id)
     }
 
-    pub fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
+    async fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
         self.objects
             .lock()
             .unwrap()
@@ -407,8 +409,11 @@ impl AuthorityState {
 
     /// Make an information summary of an object to help clients
 
-    fn make_object_info(&self, object_id: ObjectID) -> Result<AccountInfoResponse, FastPayError> {
-        let object = self.object_state(&object_id)?;
+    async fn make_object_info(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<AccountInfoResponse, FastPayError> {
+        let object = self.object_state(&object_id).await?;
         let lock = self
             .get_order_lock(&object.to_object_reference())
             .or::<FastPayError>(Ok(&None))?;

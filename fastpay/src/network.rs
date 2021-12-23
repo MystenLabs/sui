@@ -88,7 +88,8 @@ impl MessageHandler for RunningServerState {
                         SerializedMessage::Order(message) => self
                             .server
                             .state
-                            .handle_order(*message).await
+                            .handle_order(*message)
+                            .await
                             .map(|info| Some(serialize_info_response(&info))),
                         SerializedMessage::Cert(message) => {
                             let confirmation_order = ConfirmationOrder {
@@ -97,7 +98,8 @@ impl MessageHandler for RunningServerState {
                             match self
                                 .server
                                 .state
-                                .handle_confirmation_order(confirmation_order).await
+                                .handle_confirmation_order(confirmation_order)
+                                .await
                             {
                                 Ok(info) => {
                                     // Response
@@ -110,6 +112,7 @@ impl MessageHandler for RunningServerState {
                             .server
                             .state
                             .handle_account_info_request(*message)
+                            .await
                             .map(|info| Some(serialize_info_response(&info))),
                         _ => Err(FastPayError::UnexpectedMessage),
                     }

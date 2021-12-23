@@ -25,9 +25,10 @@ async fn test_handle_transfer_order_bad_signature() {
     bad_signature_transfer_order.signature = Signature::new(&transfer_order.kind, &unknown_key);
     assert!(authority_state
         .handle_order(bad_signature_transfer_order)
-        .await.is_err());
+        .await
+        .is_err());
 
-    let object = authority_state.object_state(&object_id).unwrap();
+    let object = authority_state.object_state(&object_id).await.unwrap();
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
         .unwrap()
@@ -51,10 +52,11 @@ async fn test_handle_transfer_order_unknown_sender() {
     let unknown_sender_transfer = transfer_order.kind;
     let unknown_sender_transfer_order = Order::new(unknown_sender_transfer, &unknown_key);
     assert!(authority_state
-        .handle_order(unknown_sender_transfer_order).await
+        .handle_order(unknown_sender_transfer_order)
+        .await
         .is_err());
 
-    let object = authority_state.object_state(&object_id).unwrap();
+    let object = authority_state.object_state(&object_id).await.unwrap();
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
         .unwrap()
@@ -112,10 +114,11 @@ async fn test_handle_transfer_order_ok() {
         .is_err());
 
     let account_info = authority_state
-        .handle_order(transfer_order.clone()).await
+        .handle_order(transfer_order.clone())
+        .await
         .unwrap();
 
-    let object = authority_state.object_state(&object_id).unwrap();
+    let object = authority_state.object_state(&object_id).await.unwrap();
     let pending_confirmation = authority_state
         .get_order_lock(&object.to_object_reference())
         .unwrap()
@@ -159,7 +162,9 @@ async fn send_and_confirm_order(
         .unwrap();
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    authority.handle_confirmation_order(ConfirmationOrder::new(certificate)).await
+    authority
+        .handle_confirmation_order(ConfirmationOrder::new(certificate))
+        .await
 }
 
 /// Create a `CompiledModule` that depends on `m`
@@ -286,7 +291,7 @@ async fn test_handle_move_order() {
     let res = send_and_confirm_order(&mut authority_state, order).await.unwrap();
     let created_object_id = res.object_id;
     // check that order actually created an object with the expected ID, owner, sequence number
-    let created_obj = authority_state.object_state(&created_object_id).unwrap();
+    let created_obj = authority_state.object_state(&created_object_id).await.unwrap();
     assert_eq!(
         created_obj.owner.to_address_hack(),
         sender.to_address_hack()
@@ -304,7 +309,8 @@ async fn test_handle_transfer_order_double_spend() {
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
     let signed_order = authority_state
-        .handle_order(transfer_order.clone()).await
+        .handle_order(transfer_order.clone())
+        .await
         .unwrap();
     let double_spend_signed_order = authority_state.handle_order(transfer_order).await.unwrap();
     assert_eq!(signed_order, double_spend_signed_order);
@@ -324,7 +330,8 @@ async fn test_handle_confirmation_order_unknown_sender() {
     );
 
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order)).await
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .await
         .is_err());
 }
 
@@ -367,11 +374,12 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
     // Explanation: providing an old cert that has already need applied
     //              returns a Ok(_) with info about the new object states.
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order)).await
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .await
         .is_ok());
 
     // Check that the new object is the one recorded.
-    let new_account = authority_state.object_state(&object_id).unwrap();
+    let new_account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(
         old_seq_num.increment().unwrap(),
         new_account.next_sequence_number
@@ -401,9 +409,10 @@ async fn test_handle_confirmation_order_exceed_balance() {
         &authority_state,
     );
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order)).await
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .await
         .is_ok());
-    let new_account = authority_state.object_state(&object_id).unwrap();
+    let new_account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(SequenceNumber::from(1), new_account.next_sequence_number);
     assert!(authority_state
         .parent_sync
@@ -427,9 +436,10 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
         &authority_state,
     );
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order)).await
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .await
         .is_ok());
-    let new_sender_account = authority_state.object_state(&object_id).unwrap();
+    let new_sender_account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(
         SequenceNumber::from(1),
         new_sender_account.next_sequence_number
@@ -455,9 +465,10 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
         &authority_state,
     );
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order)).await
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .await
         .is_ok());
-    let account = authority_state.object_state(&object_id).unwrap();
+    let account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(SequenceNumber::from(1), account.next_sequence_number);
 
     assert!(authority_state
@@ -480,12 +491,13 @@ async fn test_handle_confirmation_order_ok() {
         &authority_state,
     );
 
-    let old_account = authority_state.object_state(&object_id).unwrap();
+    let old_account = authority_state.object_state(&object_id).await.unwrap();
     let mut next_sequence_number = old_account.next_sequence_number;
     next_sequence_number = next_sequence_number.increment().unwrap();
 
     let info = authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone())).await
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .await
         .unwrap();
     // Key check: the ownership has changed
     assert_eq!(recipient, info.owner);
@@ -511,21 +523,24 @@ async fn test_handle_confirmation_order_ok() {
         .is_none());
 }
 
-#[test]
-fn test_account_state_ok() {
+#[tokio::test]
+async fn test_account_state_ok() {
     let sender = dbg_addr(1);
     let object_id = dbg_object_id(1);
 
     let authority_state = init_state_with_object(sender, object_id);
-    authority_state.object_state(&object_id).unwrap();
+    authority_state.object_state(&object_id).await.unwrap();
 }
 
-#[test]
-fn test_account_state_unknown_account() {
+#[tokio::test]
+async fn test_account_state_unknown_account() {
     let sender = dbg_addr(1);
     let unknown_address = dbg_object_id(99);
     let authority_state = init_state_with_object(sender, ObjectID::random());
-    assert!(authority_state.object_state(&unknown_address).is_err());
+    assert!(authority_state
+        .object_state(&unknown_address)
+        .await
+        .is_err());
 }
 
 #[test]
