@@ -1,20 +1,20 @@
 use super::*;
 
-pub struct AuthorityTemporaryStore<'a> {
-    authority_state: &'a AuthorityState,
+pub struct AuthorityTemporaryStore {
+    object_store: Arc<Mutex<BTreeMap<ObjectID, Object>>>,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
     pub written: Vec<ObjectRef>,       // Objects written
     deleted: Vec<ObjectRef>,       // Objects actively deleted
 }
 
-impl<'a> AuthorityTemporaryStore<'a> {
+impl AuthorityTemporaryStore {
     pub fn new(
-        authority_state: &'a AuthorityState,
+        authority_state: &AuthorityState,
         _input_objects: &'_ [Object],
-    ) -> AuthorityTemporaryStore<'a> {
+    ) -> AuthorityTemporaryStore {
         AuthorityTemporaryStore {
-            authority_state,
+            object_store: authority_state.objects.clone(),
             objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
             active_inputs: _input_objects
                 .iter()
@@ -91,17 +91,11 @@ impl<'a> AuthorityTemporaryStore<'a> {
     }
 }
 
-impl<'a> Storage for AuthorityTemporaryStore<'a> {
+impl Storage for AuthorityTemporaryStore {
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
         match self.objects.get(id) {
             Some(x) => Some(x.clone()),
-            None => self
-                .authority_state
-                .objects
-                .lock()
-                .unwrap()
-                .get(id)
-                .cloned(),
+            None => self.object_store.lock().unwrap().get(id).cloned(),
         }
     }
 
@@ -146,16 +140,10 @@ impl<'a> Storage for AuthorityTemporaryStore<'a> {
     }
 }
 
-impl<'a> ModuleResolver for AuthorityTemporaryStore<'a> {
+impl ModuleResolver for AuthorityTemporaryStore {
     type Error = FastPayError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self
-            .authority_state
-            .objects
-            .lock()
-            .unwrap()
-            .get(module_id.address())
-        {
+        match self.object_store.lock().unwrap().get(module_id.address()) {
             Some(o) => match &o.data {
                 Data::Module(c) => Ok(Some(c.clone())),
                 _ => Err(FastPayError::BadObjectType {
@@ -167,7 +155,7 @@ impl<'a> ModuleResolver for AuthorityTemporaryStore<'a> {
     }
 }
 
-impl<'a> ResourceResolver for AuthorityTemporaryStore<'a> {
+impl ResourceResolver for AuthorityTemporaryStore {
     type Error = FastPayError;
 
     fn get_resource(
@@ -177,7 +165,7 @@ impl<'a> ResourceResolver for AuthorityTemporaryStore<'a> {
     ) -> Result<Option<Vec<u8>>, Self::Error> {
         let object = match self.read_object(address) {
             Some(x) => x,
-            None => match self.authority_state.objects.lock().unwrap().get(address) {
+            None => match self.object_store.lock().unwrap().get(address) {
                 None => return Ok(None),
                 Some(x) => {
                     if !x.is_read_only() {

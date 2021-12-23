@@ -285,40 +285,10 @@ impl AuthorityState {
             }
         };
 
-        // Extract the new state from the execution
-        let (mut objects, active_inputs, written, _deleted) = temporary_store.into_inner();
-
         // Note: State is mutated below and should be committed in an atomic way
         // to memory or persistent storage. Currently this is done in memory
         // through the calls to store being infallible.
-
-        self.add_certificate(certificate);
-
-        for input_ref in active_inputs {
-            self.archive_order_lock(&input_ref)?;
-        }
-
-        for deleted_ref in _deleted {
-            self.remove_object(&deleted_ref);
-        }
-
-        // Insert each output object into the stores, index and make locks for it.
-        for output_ref in written {
-            // Index the certificate by the objects created
-            self.add_parent_cert(output_ref, transaction_digest);
-
-            // Add new object, init locks and remove old ones
-            let object = objects
-                .remove(&output_ref.0)
-                .expect("By temporary_authority_store invariant object exists.");
-
-            if !object.is_read_only() {
-                // Only objects that can be mutated have locks.
-                self.init_order_lock(output_ref);
-            }
-
-            self.insert_object(object);
-        }
+        self.update_state(temporary_store, certificate).await?;
 
         let info = self.make_object_info(object_id).await?;
         Ok(info)
@@ -411,10 +381,6 @@ impl AuthorityState {
         self.objects.lock().unwrap().insert(object.id(), object);
     }
 
-    pub fn remove_object(&self, object_ref: &ObjectRef) {
-        self.objects.lock().unwrap().remove(&object_ref.0);
-    }
-
     #[cfg(test)]
     pub fn accounts_mut(&self) -> &Arc<Mutex<BTreeMap<ObjectID, Object>>> {
         &self.objects
@@ -490,6 +456,49 @@ impl AuthorityState {
         Ok(())
     }
 
+    async fn update_state(
+        &mut self,
+        temporary_store: AuthorityTemporaryStore,
+        certificate: CertifiedOrder,
+    ) -> Result<(), FastPayError> {
+        // Extract the new state from the execution
+        let (mut objects, active_inputs, written, _deleted) = temporary_store.into_inner();
+
+        // Archive the old lock.
+        for input_ref in active_inputs {
+            let old_lock = self.order_lock.remove(&input_ref);
+            fp_ensure!(old_lock.is_some(), FastPayError::OrderLockDoesNotExist);
+        }
+
+        // Store the certificate indexed by transaction digest
+        let transaction_digest: TransactionDigest = certificate.order.digest();
+        self.certificates.insert(transaction_digest, certificate);
+
+        for deleted_ref in _deleted {
+            // Remove the object
+            self.objects.lock().unwrap().remove(&deleted_ref.0);
+        }
+
+        // Insert each output object into the stores, index and make locks for it.
+        for output_ref in written {
+            // Index the certificate by the objects created
+            self.parent_sync.insert(output_ref, transaction_digest);
+
+            // Add new object, init locks and remove old ones
+            let object = objects
+                .remove(&output_ref.0)
+                .expect("By temporary_authority_store invariant object exists.");
+
+            if !object.is_read_only() {
+                // Only objects that can be mutated have locks.
+                self.init_order_lock(output_ref);
+            }
+
+            self.insert_object(object);
+        }
+        Ok(())
+    }
+
     /// Get a read reference to an object/seq lock
     pub async fn get_order_lock(
         &self,
@@ -501,24 +510,7 @@ impl AuthorityState {
             .ok_or(FastPayError::OrderLockDoesNotExist)
     }
 
-    /// Signals that the lock is no more needed, and can be archived / deleted.
-    pub fn archive_order_lock(&mut self, object_ref: &ObjectRef) -> Result<(), FastPayError> {
-        // Note: for the moment just delete the local lock,
-        // here we can log or write to longer term store.
-        let old_lock = self.order_lock.remove(object_ref);
-        fp_ensure!(old_lock.is_some(), FastPayError::OrderLockDoesNotExist);
-        Ok(())
-    }
-
     // Helper functions to manage certificates
-
-    /// Add a certificate that has been processed
-    pub fn add_certificate(&mut self, certificate: CertifiedOrder) -> TransactionDigest {
-        let transaction_digest: TransactionDigest = certificate.order.digest();
-        // re-inserting a certificate is not a safety issue since it must certify the same transaction.
-        self.certificates.insert(transaction_digest, certificate);
-        transaction_digest
-    }
 
     /// Read from the DB of certificates
     pub fn read_certificate(
@@ -527,13 +519,31 @@ impl AuthorityState {
     ) -> Result<Option<&CertifiedOrder>, FastPayError> {
         Ok(self.certificates.get(digest))
     }
+}
 
-    /// Add object parent certificate relationship
-    pub fn add_parent_cert(
-        &mut self,
-        object_ref: ObjectRef,
-        transaction_digest: TransactionDigest,
-    ) {
-        self.parent_sync.insert(object_ref, transaction_digest);
+pub struct AuthorityStore {
+    pub objects: DBMap<ObjectID, Object>,
+    pub order_lock: DBMap<ObjectRef, Option<SignedOrder>>,
+    pub certificates: DBMap<TransactionDigest, CertifiedOrder>,
+    pub parent_sync: DBMap<ObjectRef, TransactionDigest>,
+}
+
+use std::path::Path;
+use store::rocks::{open_cf, DBMap};
+
+impl AuthorityStore {
+    pub fn open<P: AsRef<Path>>(path: P) -> AuthorityStore {
+        let db = open_cf(
+            &path,
+            None,
+            &["objects", "order_lock", "certificates", "parent_sync"],
+        )
+        .expect("Cannot open DB.");
+        AuthorityStore {
+            objects: DBMap::reopen(&db, Some("objects")).expect("Cannot open CF."),
+            order_lock: DBMap::reopen(&db, Some("order_lock")).expect("Cannot open CF."),
+            certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
+            parent_sync: DBMap::reopen(&db, Some("parent_sync")).expect("Cannot open CF."),
+        }
     }
 }
