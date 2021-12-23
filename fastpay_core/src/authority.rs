@@ -28,6 +28,9 @@ use std::{
 #[path = "unit_tests/authority_tests.rs"]
 mod authority_tests;
 
+mod temporary_store;
+use temporary_store::AuthorityTemporaryStore;
+
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority and shard
     /// The name of this authority.
@@ -156,7 +159,7 @@ impl AuthorityState {
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
 
         // This is the critical section that requires a write lock on the lock DB.
-        self.set_order_lock(&mutable_objects, signed_order)?;
+        self.set_order_lock(&mutable_objects, signed_order).await?;
 
         let info = self.make_object_info(object_id).await?;
         Ok(info)
@@ -206,7 +209,7 @@ impl AuthorityState {
         // through the calls to store being infallible.
 
         // Insert into the certificates map
-        let transaction_digest = self.add_certificate(certificate);
+        let transaction_digest = certificate.order.digest();
         let mut tx_ctx = TxContext::new(transaction_digest);
 
         // Order-specific logic
@@ -289,8 +292,14 @@ impl AuthorityState {
         // to memory or persistent storage. Currently this is done in memory
         // through the calls to store being infallible.
 
+        self.add_certificate(certificate);
+
         for input_ref in active_inputs {
-            self.archive_order_lock(&input_ref);
+            self.archive_order_lock(&input_ref)?;
+        }
+
+        for deleted_ref in _deleted {
+            self.remove_object(&deleted_ref);
         }
 
         // Insert each output object into the stores, index and make locks for it.
@@ -402,6 +411,10 @@ impl AuthorityState {
         self.objects.lock().unwrap().insert(object.id(), object);
     }
 
+    pub fn remove_object(&self, object_ref: &ObjectRef) {
+        self.objects.lock().unwrap().remove(&object_ref.0);
+    }
+
     #[cfg(test)]
     pub fn accounts_mut(&self) -> &Arc<Mutex<BTreeMap<ObjectID, Object>>> {
         &self.objects
@@ -416,6 +429,7 @@ impl AuthorityState {
         let object = self.object_state(&object_id).await?;
         let lock = self
             .get_order_lock(&object.to_object_reference())
+            .await
             .or::<FastPayError>(Ok(&None))?;
 
         Ok(AccountInfoResponse {
@@ -437,7 +451,7 @@ impl AuthorityState {
     }
 
     /// Set the order lock to a specific transaction
-    pub fn set_order_lock(
+    pub async fn set_order_lock(
         &mut self,
         mutable_input_objects: &[ObjectRef],
         signed_order: SignedOrder,
@@ -477,7 +491,7 @@ impl AuthorityState {
     }
 
     /// Get a read reference to an object/seq lock
-    pub fn get_order_lock(
+    pub async fn get_order_lock(
         &self,
         object_ref: &ObjectRef,
     ) -> Result<&Option<SignedOrder>, FastPayError> {
@@ -488,10 +502,12 @@ impl AuthorityState {
     }
 
     /// Signals that the lock is no more needed, and can be archived / deleted.
-    pub fn archive_order_lock(&mut self, object_ref: &ObjectRef) {
+    pub fn archive_order_lock(&mut self, object_ref: &ObjectRef) -> Result<(), FastPayError> {
         // Note: for the moment just delete the local lock,
         // here we can log or write to longer term store.
-        self.order_lock.remove(object_ref);
+        let old_lock = self.order_lock.remove(object_ref);
+        fp_ensure!(old_lock.is_some(), FastPayError::OrderLockDoesNotExist);
+        Ok(())
     }
 
     // Helper functions to manage certificates
@@ -519,207 +535,5 @@ impl AuthorityState {
         transaction_digest: TransactionDigest,
     ) {
         self.parent_sync.insert(object_ref, transaction_digest);
-    }
-}
-
-pub struct AuthorityTemporaryStore<'a> {
-    authority_state: &'a AuthorityState,
-    objects: BTreeMap<ObjectID, Object>,
-    active_inputs: Vec<ObjectRef>, // Inputs that are not read only
-    written: Vec<ObjectRef>,       // Objects written
-    deleted: Vec<ObjectRef>,       // Objects actively deleted
-}
-
-impl<'a> AuthorityTemporaryStore<'a> {
-    pub fn new(
-        authority_state: &'a AuthorityState,
-        _input_objects: &'_ [Object],
-    ) -> AuthorityTemporaryStore<'a> {
-        AuthorityTemporaryStore {
-            authority_state,
-            objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
-            active_inputs: _input_objects
-                .iter()
-                .filter(|v| !v.is_read_only())
-                .map(|v| v.to_object_reference())
-                .collect(),
-            written: Vec::new(),
-            deleted: Vec::new(),
-        }
-    }
-
-    /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
-    pub fn into_inner(
-        self,
-    ) -> (
-        BTreeMap<ObjectID, Object>,
-        Vec<ObjectRef>,
-        Vec<ObjectRef>,
-        Vec<ObjectRef>,
-    ) {
-        #[cfg(debug_assertions)]
-        {
-            self.check_invariants();
-        }
-        (self.objects, self.active_inputs, self.written, self.deleted)
-    }
-
-    /// An internal check of the invariants (will only fire in debug)
-    #[cfg(debug_assertions)]
-    fn check_invariants(&self) {
-        // Check uniqueness in the 'written' set
-        debug_assert!(
-            {
-                use std::collections::HashSet;
-                let mut used = HashSet::new();
-                self.written.iter().all(move |elt| used.insert(elt.0))
-            },
-            "Duplicate object reference in self.written."
-        );
-
-        // Check uniqueness in the 'deleted' set
-        debug_assert!(
-            {
-                use std::collections::HashSet;
-                let mut used = HashSet::new();
-                self.deleted.iter().all(move |elt| used.insert(elt.0))
-            },
-            "Duplicate object reference in self.deleted."
-        );
-
-        // Check not both deleted and written
-        debug_assert!(
-            {
-                use std::collections::HashSet;
-                let mut used = HashSet::new();
-                self.written.iter().all(|elt| used.insert(elt.0));
-                self.deleted.iter().all(move |elt| used.insert(elt.0))
-            },
-            "Object both written and deleted."
-        );
-
-        // Check all mutable inputs are either written or deleted
-        debug_assert!(
-            {
-                use std::collections::HashSet;
-                let mut used = HashSet::new();
-                self.written.iter().all(|elt| used.insert(elt.0));
-                self.deleted.iter().all(|elt| used.insert(elt.0));
-
-                self.active_inputs.iter().all(|elt| !used.insert(elt.0))
-            },
-            "Mutable input neither written nor deleted."
-        );
-    }
-}
-
-impl<'a> Storage for AuthorityTemporaryStore<'a> {
-    fn read_object(&self, id: &ObjectID) -> Option<Object> {
-        match self.objects.get(id) {
-            Some(x) => Some(x.clone()),
-            None => self
-                .authority_state
-                .objects
-                .lock()
-                .unwrap()
-                .get(id)
-                .cloned(),
-        }
-    }
-
-    /*
-        Invariant: A key assumption of the write-delete logic
-        is that an entry is not both added and deleted by the
-        caller.
-    */
-
-    fn write_object(&mut self, object: Object) {
-        // Check it is not read-only
-        #[cfg(test)] // Movevm should ensure this
-        if let Some(existing_object) = self.read_object(&object.id()) {
-            if existing_object.is_read_only() {
-                // This is an internal invariant violation. Move only allows us to
-                // mutate objects if they are &mut so they cannot be read-only.
-                panic!("Internal invariant violation: Mutating a read-only object.")
-            }
-        }
-
-        self.written.push(object.to_object_reference());
-        self.objects.insert(object.id(), object);
-    }
-
-    fn delete_object(&mut self, id: &ObjectID) {
-        // Check it is not read-only
-        #[cfg(test)] // Movevm should ensure this
-        if let Some(object) = self.read_object(id) {
-            if object.is_read_only() {
-                // This is an internal invariant violation. Move only allows us to
-                // mutate objects if they are &mut so they cannot be read-only.
-                panic!("Internal invariant violation: Deleting a read-only object.")
-            }
-        }
-
-        // If it exists remove it
-        if let Some(removed) = self.objects.remove(id) {
-            self.deleted.push(removed.to_object_reference());
-        } else {
-            panic!("Internal invariant: object must exist to be deleted.")
-        }
-    }
-}
-
-impl<'a> ModuleResolver for AuthorityTemporaryStore<'a> {
-    type Error = FastPayError;
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self
-            .authority_state
-            .objects
-            .lock()
-            .unwrap()
-            .get(module_id.address())
-        {
-            Some(o) => match &o.data {
-                Data::Module(c) => Ok(Some(c.clone())),
-                _ => Err(FastPayError::BadObjectType {
-                    error: "Expected module object".to_string(),
-                }),
-            },
-            None => Ok(None),
-        }
-    }
-}
-
-impl<'a> ResourceResolver for AuthorityTemporaryStore<'a> {
-    type Error = FastPayError;
-
-    fn get_resource(
-        &self,
-        address: &AccountAddress,
-        struct_tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let object = match self.read_object(address) {
-            Some(x) => x,
-            None => match self.authority_state.objects.lock().unwrap().get(address) {
-                None => return Ok(None),
-                Some(x) => {
-                    if !x.is_read_only() {
-                        fp_bail!(FastPayError::ExecutionInvariantViolation);
-                    }
-                    x.clone()
-                }
-            },
-        };
-
-        match &object.data {
-            Data::Move(m) => {
-                assert!(struct_tag == &m.type_, "Invariant violation: ill-typed object in storage or bad object request from caller\
-");
-                Ok(Some(m.contents.clone()))
-            }
-            other => unimplemented!(
-                "Bad object lookup: expected Move object, but got {:?}",
-                other
-            ),
-        }
     }
 }

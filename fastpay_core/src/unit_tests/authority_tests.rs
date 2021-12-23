@@ -31,11 +31,13 @@ async fn test_handle_transfer_order_bad_signature() {
     let object = authority_state.object_state(&object_id).await.unwrap();
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
+        .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
+        .await
         .unwrap()
         .is_none());
 }
@@ -59,11 +61,13 @@ async fn test_handle_transfer_order_unknown_sender() {
     let object = authority_state.object_state(&object_id).await.unwrap();
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
+        .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
+        .await
         .unwrap()
         .is_none());
 }
@@ -107,10 +111,12 @@ async fn test_handle_transfer_order_ok() {
     // Check the initial state of the locks
     assert!(authority_state
         .get_order_lock(&(object_id, 0.into()))
+        .await
         .unwrap()
         .is_none());
     assert!(authority_state
         .get_order_lock(&(object_id, 1.into()))
+        .await
         .is_err());
 
     let account_info = authority_state
@@ -121,6 +127,7 @@ async fn test_handle_transfer_order_ok() {
     let object = authority_state.object_state(&object_id).await.unwrap();
     let pending_confirmation = authority_state
         .get_order_lock(&object.to_object_reference())
+        .await
         .unwrap()
         .clone()
         .unwrap();
@@ -132,11 +139,13 @@ async fn test_handle_transfer_order_ok() {
     // Check the final state of the locks
     assert!(authority_state
         .get_order_lock(&(object_id, 0.into()))
+        .await
         .unwrap()
         .is_some());
     assert_eq!(
         authority_state
             .get_order_lock(&(object_id, 0.into()))
+            .await
             .unwrap()
             .as_ref()
             .unwrap()
@@ -516,9 +525,11 @@ async fn test_handle_confirmation_order_ok() {
     // Check locks are set and archived correctly
     assert!(authority_state
         .get_order_lock(&(object_id, 0.into()))
+        .await
         .is_err());
     assert!(authority_state
         .get_order_lock(&(object_id, 1.into()))
+        .await
         .expect("Exists")
         .is_none());
 }
