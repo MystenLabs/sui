@@ -31,7 +31,7 @@ fn make_shard_server(
     let committee = Committee::new(committee_config.voting_rights());
     let num_shards = server_config.authority.num_shards;
 
-    let state = AuthorityState::new_shard(
+    let mut state = AuthorityState::new_shard(
         committee,
         server_config.authority.address,
         server_config.key.copy(),
@@ -40,14 +40,17 @@ fn make_shard_server(
     );
 
     // Load initial states
-    for (address, object_id) in &initial_accounts_config.accounts {
-        if AuthorityState::get_shard(num_shards, object_id) != shard {
-            continue;
-        }
+    for (address, object_ids) in &initial_accounts_config.accounts {
+        for object_id in object_ids {
+            if AuthorityState::get_shard(num_shards, object_id) != shard {
+                continue;
+            }
 
-        let mut client = Object::with_id_for_testing(*object_id);
-        client.transfer(*address);
-        state.insert_object(client);
+            let mut client = Object::with_id_for_testing(*object_id);
+            client.transfer(*address);
+            state.init_order_lock(client.to_object_reference());
+            state.insert_object(client);
+        }
     }
 
     network::Server::new(
