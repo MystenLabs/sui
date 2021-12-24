@@ -217,15 +217,18 @@ impl InitialStateConfig {
 
             let mut obj_ids_text = elements[1].chars();
             // Pop for open and closed brackets
-            obj_ids_text.next(); obj_ids_text.next_back();
+            obj_ids_text.next();
+            obj_ids_text.next_back();
 
             // Return to string
             let obj_ids_text: String = obj_ids_text.collect();
 
             let obj_ids = obj_ids_text
-                                .split(", ").into_iter().map(|s| String::from("0x") + s) 
-                                .map(|s| ObjectID::from_hex_literal(&s).unwrap())
-                                .collect::<Vec<_>>();
+                .split(", ")
+                .into_iter()
+                .map(|s| String::from("0x") + s)
+                .map(|s| ObjectID::from_hex_literal(&s).unwrap())
+                .collect::<Vec<_>>();
 
             accounts.push((address, obj_ids));
         }

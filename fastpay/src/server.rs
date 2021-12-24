@@ -46,10 +46,11 @@ fn make_shard_server(
                 continue;
             }
 
-            let mut client = Object::with_id_for_testing(*object_id);
-            client.transfer(*address);
-            state.init_order_lock(client.to_object_reference());
-            state.insert_object(client);
+            let mut object = Object::with_id_owner_for_testing(*object_id, *address);
+
+            object.transfer(*address);
+            state.init_order_lock(object.to_object_reference());
+            state.insert_object(object);
         }
     }
 

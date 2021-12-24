@@ -10,14 +10,14 @@ use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
+use rand::Rng;
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Write,
     time::{Duration, Instant},
-    fmt::Write
 };
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
-use rand::Rng;
 
 fn make_authority_clients(
     committee_config: &CommitteeConfig,
@@ -202,12 +202,12 @@ fn make_benchmark_certificates_from_votes(
 }
 
 /// Create randomly sized vectors (between 1 and 10 items) with random object IDs
-fn create_random_object_ids() -> Vec<ObjectID>{
+fn create_random_object_ids() -> Vec<ObjectID> {
     let mut rng = rand::thread_rng();
     let num_ids: u8 = rng.gen();
 
     let mut object_ids = Vec::new();
-    for _ in 0..num_ids%9 + 1{
+    for _ in 0..num_ids % 9 + 1 {
         object_ids.push(ObjectID::random());
     }
     object_ids
@@ -363,7 +363,7 @@ enum ClientCommands {
         server_configs: Option<Vec<String>>,
     },
 
-    /// Create new user accounts with randomly generated object IDs 
+    /// Create new user accounts with randomly generated object IDs
     #[structopt(name = "create_accounts")]
     CreateAccounts {
         /// Number of additional accounts to create
@@ -546,10 +546,7 @@ fn main() {
             });
         }
 
-        ClientCommands::CreateAccounts {
-            num,
-        } => {
-
+        ClientCommands::CreateAccounts { num } => {
             let num_accounts: u32 = num;
             for _ in 0..num_accounts {
                 let obj_ids = create_random_object_ids();
