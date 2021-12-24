@@ -13,9 +13,11 @@ use log::*;
 use std::{
     collections::{HashMap, HashSet},
     time::{Duration, Instant},
+    fmt::Write
 };
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
+use rand::Rng;
 
 fn make_authority_clients(
     committee_config: &CommitteeConfig,
@@ -199,6 +201,18 @@ fn make_benchmark_certificates_from_votes(
     certificates
 }
 
+/// Create randomly sized vectors (between 1 and 10 items) with random object IDs
+fn create_random_object_ids() -> Vec<ObjectID>{
+    let mut rng = rand::thread_rng();
+    let num_ids: u8 = rng.gen();
+
+    let mut object_ids = Vec::new();
+    for _ in 0..num_ids%9 + 1{
+        object_ids.push(ObjectID::random());
+    }
+    object_ids
+}
+
 /// Broadcast a bulk of requests to each authority.
 async fn mass_broadcast_orders(
     phase: &'static str,
@@ -304,7 +318,7 @@ struct ClientOpt {
     #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
 
-    /// Subcommands. Acceptable values are transfer, query_balance, benchmark, and create_accounts.
+    /// Subcommands. Acceptable values are transfer, query_objects, benchmark, and create_accounts.
     #[structopt(subcommand)]
     cmd: ClientCommands,
 }
@@ -326,9 +340,9 @@ enum ClientCommands {
         object_id: String,
     },
 
-    /// Obtain the spendable balance
-    #[structopt(name = "query_balance")]
-    QueryBalance {
+    /// Obtain the Object Info
+    #[structopt(name = "query_objects")]
+    QueryObjects {
         /// Address of the account
         address: String,
     },
@@ -349,13 +363,9 @@ enum ClientCommands {
         server_configs: Option<Vec<String>>,
     },
 
-    /// Create new user accounts and print the public keys
+    /// Create new user accounts with randomly generated object IDs 
     #[structopt(name = "create_accounts")]
     CreateAccounts {
-        /// known initial balance of the account
-        #[structopt(long)]
-        initial_objects: Option<Vec<String>>,
-
         /// Number of additional accounts to create
         num: u32,
     },
@@ -427,7 +437,7 @@ fn main() {
             });
         }
 
-        ClientCommands::QueryBalance { address } => {
+        ClientCommands::QueryObjects { address } => {
             let user_address = decode_address(&address).expect("Failed to decode address");
 
             let mut rt = Runtime::new().unwrap();
@@ -440,10 +450,17 @@ fn main() {
                     send_timeout,
                     recv_timeout,
                 );
-                info!("Starting balance query");
+                info!("Starting object query");
                 let time_start = Instant::now();
+                let objects_ids = client_state.object_ids();
                 let time_total = time_start.elapsed().as_micros();
-                info!("Balance confirmed after {} us", time_total);
+                info!("ObjectIds confirmed after {} us", time_total);
+
+                let mut obj_ids_text = String::new();
+                for (obj_id, seq_num) in objects_ids {
+                    write!(obj_ids_text, "\n0x{}: {:?}", obj_id, seq_num).unwrap();
+                }
+                info!("Object Info:{}", obj_ids_text);
                 accounts_config.update_from_state(&client_state);
                 accounts_config
                     .write(accounts_config_path)
@@ -530,22 +547,14 @@ fn main() {
         }
 
         ClientCommands::CreateAccounts {
-            initial_objects,
             num,
         } => {
+
             let num_accounts: u32 = num;
-            let object_ids = match initial_objects {
-                Some(object_ids) => object_ids
-                    .into_iter()
-                    .map(|string| ObjectID::from_hex_literal(&string).unwrap())
-                    .collect(),
-
-                None => Vec::new(),
-            };
-
             for _ in 0..num_accounts {
-                let account = UserAccount::new(object_ids.clone());
-                println!("{}:{:?}", encode_address(&account.address), object_ids);
+                let obj_ids = create_random_object_ids();
+                let account = UserAccount::new(obj_ids.clone());
+                println!("{}:{:?}", encode_address(&account.address), obj_ids);
                 accounts_config.insert(account);
             }
             accounts_config

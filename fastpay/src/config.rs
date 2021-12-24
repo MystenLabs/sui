@@ -198,7 +198,7 @@ impl AccountsConfig {
 }
 
 pub struct InitialStateConfig {
-    pub accounts: Vec<(FastPayAddress, ObjectID)>,
+    pub accounts: Vec<(FastPayAddress, Vec<ObjectID>)>,
 }
 
 impl InitialStateConfig {
@@ -210,21 +210,34 @@ impl InitialStateConfig {
             let line = line?;
             let elements = line.split(':').collect::<Vec<_>>();
             if elements.len() != 2 {
+                // format -> address:[objectId1, objectId2...]
                 anyhow::bail!("expecting two columns separated with ':'")
             }
             let address = decode_address(elements[0])?;
-            let object_id = ObjectID::from_hex_literal(elements[1])?;
-            accounts.push((address, object_id));
+
+            let mut obj_ids_text = elements[1].chars();
+            // Pop for open and closed brackets
+            obj_ids_text.next(); obj_ids_text.next_back();
+
+            // Return to string
+            let obj_ids_text: String = obj_ids_text.collect();
+
+            let obj_ids = obj_ids_text
+                                .split(", ").into_iter().map(|s| String::from("0x") + s) 
+                                .map(|s| ObjectID::from_hex_literal(&s).unwrap())
+                                .collect::<Vec<_>>();
+
+            accounts.push((address, obj_ids));
         }
         Ok(Self { accounts })
     }
 
-    pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new().create(true).write(true).open(path)?;
-        let mut writer = BufWriter::new(file);
-        for (address, object_id) in &self.accounts {
-            writeln!(writer, "{}:{}", encode_address(address), object_id,)?;
-        }
-        Ok(())
-    }
+    // pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
+    //     let file = OpenOptions::new().create(true).write(true).open(path)?;
+    //     let mut writer = BufWriter::new(file);
+    //     for (address, object_id) in &self.accounts {
+    //         writeln!(writer, "{}:{}", encode_address(address), object_id,)?;
+    //     }
+    //     Ok(())
+    // }
 }
