@@ -136,6 +136,8 @@ pub enum FastPayError {
     InsufficientObjectNumber,
     #[error("Execution invariant violated")]
     ExecutionInvariantViolation,
+    #[error("Storage error")]
+    StorageError,
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;
