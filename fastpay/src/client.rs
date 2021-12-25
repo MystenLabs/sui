@@ -454,7 +454,7 @@ fn main() {
                 let mut chars = tmp.chars();
                 // Remove `=` symbol at the end
                 chars.next_back();
-                write!(addr_text, "{}\n", chars.as_str()).unwrap();
+                writeln!(addr_text, "{}", chars.as_str()).unwrap();
             }
             print!("{}", addr_text);
         }

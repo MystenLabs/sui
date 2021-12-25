@@ -231,3 +231,9 @@ impl InitialStateConfig {
         Ok(())
     }
 }
+
+impl Default for InitialStateConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
