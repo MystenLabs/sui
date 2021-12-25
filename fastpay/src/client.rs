@@ -340,6 +340,10 @@ enum ClientCommands {
         object_id: String,
     },
 
+    /// Obtain the Account Addresses
+    #[structopt(name = "query_accounts_addrs")]
+    QueryAccountAddresses {},
+
     /// Obtain the Object Info
     #[structopt(name = "query_objects")]
     QueryObjects {
@@ -368,6 +372,10 @@ enum ClientCommands {
     CreateAccounts {
         /// Number of additional accounts to create
         num: u32,
+
+        /// Initial state config file path
+        #[structopt(name = "init-state-cfg")]
+        initial_state_config_path: String,
     },
 }
 
@@ -437,6 +445,20 @@ fn main() {
             });
         }
 
+        ClientCommands::QueryAccountAddresses {} => {
+            let mut addr_text: String = String::new();
+
+            for addr in accounts_config.addresses() {
+                let mut tmp = String::new();
+                write!(&mut tmp, "{:?}", addr).unwrap();
+                let mut chars = tmp.chars();
+                // Remove `=` symbol at the end
+                chars.next_back();
+                write!(addr_text, "{}\n", chars.as_str()).unwrap();
+            }
+            print!("{}", addr_text);
+        }
+
         ClientCommands::QueryObjects { address } => {
             let user_address = decode_address(&address).expect("Failed to decode address");
 
@@ -456,11 +478,11 @@ fn main() {
                 let time_total = time_start.elapsed().as_micros();
                 info!("ObjectIds confirmed after {} us", time_total);
 
-                let mut obj_ids_text = String::new();
                 for (obj_id, seq_num) in objects_ids {
-                    write!(obj_ids_text, "\n0x{}: {:?}", obj_id, seq_num).unwrap();
+                    let mut obj_ids_text = String::new();
+                    write!(obj_ids_text, "0x{}: {:?}", obj_id, seq_num).unwrap();
+                    println!("{}", obj_ids_text);
                 }
-                info!("Object Info:{}", obj_ids_text);
                 accounts_config.update_from_state(&client_state);
                 accounts_config
                     .write(accounts_config_path)
@@ -546,14 +568,28 @@ fn main() {
             });
         }
 
-        ClientCommands::CreateAccounts { num } => {
+        ClientCommands::CreateAccounts {
+            num,
+            initial_state_config_path,
+        } => {
             let num_accounts: u32 = num;
+            let mut init_state_cfg: InitialStateConfig = InitialStateConfig::new();
+
             for _ in 0..num_accounts {
                 let obj_ids = create_random_object_ids();
                 let account = UserAccount::new(obj_ids.clone());
+
+                init_state_cfg.config.push(InitialStateConfigEntry {
+                    address: account.address,
+                    object_ids: obj_ids.clone(),
+                });
+
                 println!("{}:{:?}", encode_address(&account.address), obj_ids);
                 accounts_config.insert(account);
             }
+            init_state_cfg
+                .write(initial_state_config_path.as_str())
+                .expect("Unable to write to initial state config file");
             accounts_config
                 .write(accounts_config_path)
                 .expect("Unable to write user accounts");

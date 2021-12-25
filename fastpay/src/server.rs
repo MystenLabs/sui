@@ -40,9 +40,11 @@ fn make_shard_server(
     );
 
     // Load initial states
-    for (address, object_ids) in &initial_accounts_config.accounts {
-        for object_id in object_ids {
-            if AuthorityState::get_shard(num_shards, object_id) != shard {
+    for initial_state_cfg_entry in &initial_accounts_config.config {
+        let address = &initial_state_cfg_entry.address;
+
+        for object_id in &initial_state_cfg_entry.object_ids {
+            if AuthorityState::get_shard(num_shards, &object_id) != shard {
                 continue;
             }
 
