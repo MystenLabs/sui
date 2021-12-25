@@ -500,7 +500,7 @@ fn main() {
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
-                warn!("Starting benchmark phase 1 (transfer orders)");
+                info!("Starting benchmark phase 1 (transfer orders)");
                 let (orders, serialize_orders) =
                     make_benchmark_transfer_orders(&mut accounts_config, max_orders);
                 let responses = mass_broadcast_orders(
@@ -519,15 +519,15 @@ fn main() {
                         deserialize_response(&buf[..]).and_then(|info| info.pending_confirmation)
                     })
                     .collect();
-                warn!("Received {} valid votes.", votes.len());
+                info!("Received {} valid votes.", votes.len());
 
-                warn!("Starting benchmark phase 2 (confirmation orders)");
+                info!("Starting benchmark phase 2 (confirmation orders)");
                 let certificates = if let Some(files) = server_configs {
                     warn!("Using server configs provided by --server-configs");
                     let files = files.iter().map(AsRef::as_ref).collect();
                     make_benchmark_certificates_from_orders_and_server_configs(orders, files)
                 } else {
-                    warn!("Using committee config");
+                    info!("Using committee config");
                     make_benchmark_certificates_from_votes(&committee_config, votes)
                 };
                 let responses = mass_broadcast_orders(
@@ -551,13 +551,13 @@ fn main() {
                             }
                             None => acc,
                         });
-                warn!(
+                info!(
                     "Received {} valid confirmations for {} transfers.",
                     num_valid,
                     confirmed.len()
                 );
 
-                warn!("Updating local state of user accounts");
+                info!("Updating local state of user accounts");
                 // Make sure that the local balances are accurate so that future
                 // balance checks of the non-mass client pass.
                 mass_update_recipients(&mut accounts_config, certificates);
