@@ -48,9 +48,8 @@ fn make_shard_server(
                 continue;
             }
 
-            let mut object = Object::with_id_owner_for_testing(*object_id, *address);
+            let object = Object::with_id_owner_for_testing(*object_id, *address);
 
-            object.transfer(*address);
             state.init_order_lock(object.to_object_reference());
             state.insert_object(object);
         }
