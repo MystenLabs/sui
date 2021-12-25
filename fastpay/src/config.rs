@@ -11,9 +11,10 @@ use fastx_types::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
-    fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, BufWriter, Write},
+    fs::{self, read_to_string, File, OpenOptions},
+    io::{BufReader, BufWriter, Write},
 };
+use toml;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthorityConfig {
@@ -140,6 +141,10 @@ impl AccountsConfig {
         self.accounts.values_mut()
     }
 
+    pub fn addresses(&mut self) -> impl Iterator<Item = &FastPayAddress> {
+        self.accounts.keys()
+    }
+
     pub fn update_from_state<A>(&mut self, state: &ClientState<A>) {
         let account = self
             .accounts
@@ -197,50 +202,32 @@ impl AccountsConfig {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct InitialStateConfigEntry {
+    pub address: FastPayAddress,
+    pub object_ids: Vec<ObjectID>,
+}
+#[derive(Serialize, Deserialize)]
 pub struct InitialStateConfig {
-    pub accounts: Vec<(FastPayAddress, Vec<ObjectID>)>,
+    pub config: Vec<InitialStateConfigEntry>,
 }
 
 impl InitialStateConfig {
-    pub fn read(path: &str) -> Result<Self, anyhow::Error> {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let mut accounts = Vec::new();
-        for line in reader.lines() {
-            let line = line?;
-            let elements = line.split(':').collect::<Vec<_>>();
-            if elements.len() != 2 {
-                // format -> address:[objectId1, objectId2...]
-                anyhow::bail!("expecting two columns separated with ':'")
-            }
-            let address = decode_address(elements[0])?;
-
-            let mut obj_ids_text = elements[1].chars();
-            // Pop for open and closed brackets
-            obj_ids_text.next();
-            obj_ids_text.next_back();
-
-            // Return to string
-            let obj_ids_text: String = obj_ids_text.collect();
-
-            let obj_ids = obj_ids_text
-                .split(", ")
-                .into_iter()
-                .map(|s| String::from("0x") + s)
-                .map(|s| ObjectID::from_hex_literal(&s).unwrap())
-                .collect::<Vec<_>>();
-
-            accounts.push((address, obj_ids));
-        }
-        Ok(Self { accounts })
+    pub fn new() -> Self {
+        Self { config: Vec::new() }
     }
 
-    // pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-    //     let file = OpenOptions::new().create(true).write(true).open(path)?;
-    //     let mut writer = BufWriter::new(file);
-    //     for (address, object_id) in &self.accounts {
-    //         writeln!(writer, "{}:{}", encode_address(address), object_id,)?;
-    //     }
-    //     Ok(())
-    // }
+    pub fn read(path: &str) -> Result<Self, anyhow::Error> {
+        let raw_data: String = read_to_string(path)?.parse()?;
+
+        let config_entries: InitialStateConfig = toml::from_str(&raw_data).unwrap();
+        Ok(config_entries)
+    }
+
+    pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
+        let config = toml::to_string(self).unwrap();
+
+        fs::write(path, config).expect("Unable to write to initial config file");
+        Ok(())
+    }
 }

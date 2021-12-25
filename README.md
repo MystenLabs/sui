@@ -16,7 +16,7 @@ FastPay allows a set of distributed authorities, some of which are Byzantine, to
 ```bash
 cargo build --release
 cd target/release
-rm -f *.json *.txt
+rm -f *.json *.toml
 
 # Create configuration files for 4 authorities with 4 shards each.
 # * Private server states are stored in `server*.json`.
@@ -28,28 +28,33 @@ done
 
 # Create configuration files for 1000 user accounts.
 # * Private account states are stored in one local wallet `accounts.json`.
-# * `initial_accounts.txt` is used to mint the corresponding initially randomly generated (for now) objects at startup on the server side.
-./client --committee committee.json --accounts accounts.json create_accounts 1000 >> initial_accounts.txt
-
+# * `initial_accounts.toml` is used to mint the corresponding initially randomly generated (for now) objects at startup on the server side.
+./client --committee committee.json --accounts accounts.json create_accounts 1000 initial_accounts.toml
 # Start servers
 for I in 1 2 3 4
 do
     for J in $(seq 0 3)
     do
-        ./server --server server"$I".json run --shard "$J" --initial-accounts initial_accounts.txt --committee committee.json &
+        ./server --server server"$I".json run --shard "$J" --initial-accounts initial_accounts.toml --committee committee.json &
     done
  done
+ 
+# Query account addresses
+./client --committee committee.json --accounts accounts.json query_accounts_addrs
 
 # Query (locally cached) object info for first and last user account
-ACCOUNT1="`head -n 1 initial_accounts.txt | awk -F: '{ print $1 }'`"
-ACCOUNT2="`tail -n -1 initial_accounts.txt | awk -F: '{ print $1 }'`"
+ACCOUNT1=`./client --committee committee.json --accounts accounts.json query_accounts_addrs | head -n 1`
+ACCOUNT2=`./client --committee committee.json --accounts accounts.json query_accounts_addrs | tail -n -1`
 ./client --committee committee.json --accounts accounts.json query_objects "$ACCOUNT1"
 ./client --committee committee.json --accounts accounts.json query_objects "$ACCOUNT2"
 
-# Transfer Object by OvjectID
-./client --committee committee.json --accounts accounts.json transfer {ObjectID} --from "$ACCOUNT1" --to "$ACCOUNT2"
+# Get the first ObjectId for Account1
+ACCOUNT1_OBJECT1=`./client --committee committee.json --accounts accounts.json query_objects "$ACCOUNT1" | head -n 1 |  awk -F: '{ print $1 }'`
 
-# Query balances again
+# Transfer object by ObjectID
+./client --committee committee.json --accounts accounts.json transfer "$ACCOUNT1_OBJECT1" --from "$ACCOUNT1" --to "$ACCOUNT2"
+
+# Query objects again again
 ./client --committee committee.json --accounts accounts.json query_objects "$ACCOUNT1"
 ./client --committee committee.json --accounts accounts.json query_objects "$ACCOUNT2"
 
