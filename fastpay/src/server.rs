@@ -44,7 +44,7 @@ fn make_shard_server(
         let address = &initial_state_cfg_entry.address;
 
         for object_id in &initial_state_cfg_entry.object_ids {
-            if AuthorityState::get_shard(num_shards, &object_id) != shard {
+            if AuthorityState::get_shard(num_shards, object_id) != shard {
                 continue;
             }
 
