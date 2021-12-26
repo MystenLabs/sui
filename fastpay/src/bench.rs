@@ -167,7 +167,6 @@ impl ClientServerBenchmark {
             assert!(!bufx2.is_empty());
 
             orders.push((shard, bufx2.into()));
-            orders.push((shard, bufx.into()));
         }
 
         (states, orders)
