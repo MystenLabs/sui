@@ -1,41 +1,28 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-mod module_builder;
+mod common;
 
+pub use common::module_builder::*;
 use fastx_verifier::id_leak_verifier::verify_module;
-pub use module_builder::module_builder::ModuleBuilder;
 use move_binary_format::file_format::*;
 
-const ID_STRUCT: StructHandleIndex = StructHandleIndex(0);
-const FOO_STRUCT: StructHandleIndex = StructHandleIndex(1);
-const FOO_DEF: StructDefinitionIndex = StructDefinitionIndex(1);
-
-fn make_module_with_default_struct() -> ModuleBuilder {
+fn make_module_with_default_struct() -> (ModuleBuilder, StructInfo, StructInfo) {
     /*
-    We are creating FASTX_FRAMEWORK_ADDRESS::ID module that looks like this:
-    struct ID has store, drop {
-    }
+    Creating a module with a default struct Foo:
 
     struct Foo has key {
         id: FASTX_FRAMEWORK_ADDRESS::ID::ID
     }
     */
-    let mut module = ModuleBuilder::default();
-    module.add_struct(
-        module.get_self_index(),
-        "ID",
-        AbilitySet::EMPTY | Ability::Store | Ability::Drop,
-        vec![],
-    );
-    let id_field = module.create_field("id", SignatureToken::Struct(ID_STRUCT));
-    module.add_struct(
+    let (mut module, id_struct) = ModuleBuilder::default();
+    let foo_struct = module.add_struct(
         module.get_self_index(),
         "Foo",
         AbilitySet::EMPTY | Ability::Key,
-        vec![id_field],
+        vec![("id", SignatureToken::Struct(id_struct.handle))],
     );
-    module
+    (module, id_struct, foo_struct)
 }
 
 #[test]
@@ -46,18 +33,18 @@ fn id_leak_through_direct_return() {
         return id;
     }
     */
-    let mut module = make_module_with_default_struct();
-    let (_, func_def) = module.add_function(
+    let (mut module, id_struct, foo_struct) = make_module_with_default_struct();
+    let func = module.add_function(
         module.get_self_index(),
         "foo",
-        vec![SignatureToken::Struct(FOO_STRUCT)],
-        vec![SignatureToken::Struct(ID_STRUCT)],
+        vec![SignatureToken::Struct(foo_struct.handle)],
+        vec![SignatureToken::Struct(id_struct.handle)],
     );
     module.set_bytecode(
-        func_def,
+        func.def,
         vec![
             Bytecode::MoveLoc(0),
-            Bytecode::Unpack(FOO_DEF),
+            Bytecode::Unpack(foo_struct.def),
             Bytecode::Ret,
         ],
     );
@@ -77,19 +64,19 @@ fn id_leak_through_indirect_return() {
         return r;
     }
     */
-    let mut module = make_module_with_default_struct();
-    let (_, func_def) = module.add_function(
+    let (mut module, _, foo_struct) = make_module_with_default_struct();
+    let func = module.add_function(
         module.get_self_index(),
         "foo",
-        vec![SignatureToken::Struct(FOO_STRUCT)],
-        vec![SignatureToken::Struct(FOO_STRUCT)],
+        vec![SignatureToken::Struct(foo_struct.handle)],
+        vec![SignatureToken::Struct(foo_struct.handle)],
     );
     module.set_bytecode(
-        func_def,
+        func.def,
         vec![
             Bytecode::MoveLoc(0),
-            Bytecode::Unpack(FOO_DEF),
-            Bytecode::Pack(FOO_DEF),
+            Bytecode::Unpack(foo_struct.def),
+            Bytecode::Pack(foo_struct.def),
             Bytecode::Ret,
         ],
     );
@@ -108,21 +95,21 @@ fn id_leak_through_reference() {
         *ref = id;
     }
     */
-    let mut module = make_module_with_default_struct();
-    let (_, func_def) = module.add_function(
+    let (mut module, id_struct, foo_struct) = make_module_with_default_struct();
+    let func = module.add_function(
         module.get_self_index(),
         "foo",
         vec![
-            SignatureToken::Struct(FOO_STRUCT),
-            SignatureToken::MutableReference(Box::new(SignatureToken::Struct(ID_STRUCT))),
+            SignatureToken::Struct(foo_struct.handle),
+            SignatureToken::MutableReference(Box::new(SignatureToken::Struct(id_struct.handle))),
         ],
         vec![],
     );
     module.set_bytecode(
-        func_def,
+        func.def,
         vec![
             Bytecode::MoveLoc(0),
-            Bytecode::Unpack(FOO_DEF),
+            Bytecode::Unpack(foo_struct.def),
             Bytecode::MoveLoc(1),
             Bytecode::WriteRef,
             Bytecode::Ret,
@@ -145,25 +132,25 @@ fn id_direct_leak_through_call() {
         transfer(id);
     }
     */
-    let mut module = make_module_with_default_struct();
-    let (transfer, _) = module.add_function(
+    let (mut module, id_struct, foo_struct) = make_module_with_default_struct();
+    let transfer_func = module.add_function(
         module.get_self_index(),
         "transfer",
-        vec![SignatureToken::Struct(ID_STRUCT)],
+        vec![SignatureToken::Struct(id_struct.handle)],
         vec![],
     );
-    let (_, func_def) = module.add_function(
+    let foo_func = module.add_function(
         module.get_self_index(),
         "foo",
-        vec![SignatureToken::Struct(FOO_STRUCT)],
+        vec![SignatureToken::Struct(foo_struct.handle)],
         vec![],
     );
     module.set_bytecode(
-        func_def,
+        foo_func.def,
         vec![
             Bytecode::MoveLoc(0),
-            Bytecode::Unpack(FOO_DEF),
-            Bytecode::Call(transfer),
+            Bytecode::Unpack(foo_struct.def),
+            Bytecode::Call(transfer_func.handle),
         ],
     );
     let result = verify_module(module.get_module());
@@ -184,26 +171,26 @@ fn id_indirect_leak_through_call() {
         transfer(newf);
     }
     */
-    let mut module = make_module_with_default_struct();
-    let (transfer, _) = module.add_function(
+    let (mut module, id_struct, foo_struct) = make_module_with_default_struct();
+    let transfer_func = module.add_function(
         module.get_self_index(),
         "transfer",
-        vec![SignatureToken::Struct(ID_STRUCT)],
+        vec![SignatureToken::Struct(id_struct.handle)],
         vec![],
     );
-    let (_, func_def) = module.add_function(
+    let foo_func = module.add_function(
         module.get_self_index(),
         "foo",
-        vec![SignatureToken::Struct(FOO_STRUCT)],
+        vec![SignatureToken::Struct(foo_struct.handle)],
         vec![],
     );
     module.set_bytecode(
-        func_def,
+        foo_func.def,
         vec![
             Bytecode::MoveLoc(0),
-            Bytecode::Unpack(FOO_DEF),
-            Bytecode::Pack(FOO_DEF),
-            Bytecode::Call(transfer),
+            Bytecode::Unpack(foo_struct.def),
+            Bytecode::Pack(foo_struct.def),
+            Bytecode::Call(transfer_func.handle),
         ],
     );
     let result = verify_module(module.get_module());

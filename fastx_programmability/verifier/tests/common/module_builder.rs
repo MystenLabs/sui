@@ -9,6 +9,17 @@ pub struct ModuleBuilder {
     module: CompiledModule,
 }
 
+pub struct StructInfo {
+    pub handle: StructHandleIndex,
+    pub def: StructDefinitionIndex,
+    pub fields: Vec<FieldHandleIndex>,
+}
+
+pub struct FuncInfo {
+    pub handle: FunctionHandleIndex,
+    pub def: FunctionDefinitionIndex,
+}
+
 impl ModuleBuilder {
     pub fn new(address: AccountAddress, name: &str) -> Self {
         Self {
@@ -38,8 +49,17 @@ impl ModuleBuilder {
         }
     }
 
-    pub fn default() -> Self {
-        Self::new(FASTX_FRAMEWORK_ADDRESS, "ID")
+    /// Creates the "ID" module in framework address, along with the "ID" struct.
+    /// Both the module and the ID struct information are returned.
+    pub fn default() -> (Self, StructInfo) {
+        let mut module = Self::new(FASTX_FRAMEWORK_ADDRESS, "ID");
+        let id = module.add_struct(
+            module.get_self_index(),
+            "ID",
+            AbilitySet::EMPTY | Ability::Store | Ability::Drop,
+            vec![],
+        );
+        (module, id)
     }
 
     pub fn get_module(&self) -> &CompiledModule {
@@ -56,7 +76,7 @@ impl ModuleBuilder {
         name: &str,
         parameters: Vec<SignatureToken>,
         ret: Vec<SignatureToken>,
-    ) -> (FunctionHandleIndex, FunctionDefinitionIndex) {
+    ) -> FuncInfo {
         let new_handle = FunctionHandle {
             module: module_idx,
             name: self.add_identifier(name),
@@ -76,10 +96,10 @@ impl ModuleBuilder {
             }),
         };
         self.module.function_defs.push(new_def);
-        (
-            handle_idx,
-            FunctionDefinitionIndex((self.module.function_defs.len() - 1) as u16),
-        )
+        FuncInfo {
+            handle: handle_idx,
+            def: FunctionDefinitionIndex((self.module.function_defs.len() - 1) as u16),
+        }
     }
 
     pub fn add_struct(
@@ -87,8 +107,8 @@ impl ModuleBuilder {
         module_index: ModuleHandleIndex,
         name: &str,
         abilities: AbilitySet,
-        fields: Vec<FieldDefinition>,
-    ) -> (StructHandleIndex, StructDefinitionIndex) {
+        fields: Vec<(&str, SignatureToken)>,
+    ) -> StructInfo {
         let new_handle = StructHandle {
             module: module_index,
             name: self.add_identifier(name),
@@ -97,15 +117,28 @@ impl ModuleBuilder {
         };
         let handle_idx = StructHandleIndex(self.module.struct_handles.len() as u16);
         self.module.struct_handles.push(new_handle);
+
+        let field_len = fields.len();
+        let field_defs = fields
+            .into_iter()
+            .map(|(name, ty)| self.create_field(name, ty))
+            .collect();
         let new_def = StructDefinition {
             struct_handle: handle_idx,
-            field_information: StructFieldInformation::Declared(fields),
+            field_information: StructFieldInformation::Declared(field_defs),
         };
+        let def_idx = StructDefinitionIndex(self.module.struct_defs.len() as u16);
         self.module.struct_defs.push(new_def);
-        (
-            handle_idx,
-            StructDefinitionIndex((self.module.struct_defs.len() - 1) as u16),
-        )
+
+        let field_handles = (0..field_len)
+            .map(|idx| self.add_field_handle(def_idx, idx as u16))
+            .collect();
+
+        StructInfo {
+            handle: handle_idx,
+            def: def_idx,
+            fields: field_handles,
+        }
     }
 
     pub fn add_module(&mut self, address: AccountAddress, name: &str) -> ModuleHandleIndex {
@@ -117,7 +150,7 @@ impl ModuleBuilder {
         ModuleHandleIndex((self.module.module_handles.len() - 1) as u16)
     }
 
-    pub fn create_field(&mut self, name: &str, ty: SignatureToken) -> FieldDefinition {
+    fn create_field(&mut self, name: &str, ty: SignatureToken) -> FieldDefinition {
         let id = self.add_identifier(name);
         FieldDefinition {
             name: id,
@@ -132,6 +165,31 @@ impl ModuleBuilder {
             .unwrap()
             .code;
         *code = bytecode;
+    }
+
+    pub fn add_field_instantiation(
+        &mut self,
+        handle: FieldHandleIndex,
+        type_params: Vec<SignatureToken>,
+    ) -> FieldInstantiationIndex {
+        let type_parameters = self.add_signature(type_params);
+        self.module.field_instantiations.push(FieldInstantiation {
+            handle,
+            type_parameters,
+        });
+        FieldInstantiationIndex((self.module.field_instantiations.len() - 1) as u16)
+    }
+
+    fn add_field_handle(
+        &mut self,
+        struct_def: StructDefinitionIndex,
+        field: u16,
+    ) -> FieldHandleIndex {
+        self.module.field_handles.push(FieldHandle {
+            owner: struct_def,
+            field,
+        });
+        FieldHandleIndex((self.module.field_handles.len() - 1) as u16)
     }
 
     fn add_identifier(&mut self, id: &str) -> IdentifierIndex {
