@@ -35,23 +35,24 @@ pub struct UserData(pub Option<[u8; 32]>);
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 pub struct KeyPair(dalek::Keypair);
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
+#[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
+pub struct PublicKeyBytes([u8; dalek::PUBLIC_KEY_LENGTH]);
 
 impl PublicKeyBytes {
-    /// Truncate a public key so it fits into a Move account address
-    // TODO(https://github.com/MystenLabs/fastnft/issues/44): eliminate once we extend size of `AccountAddress`
-    pub fn to_address_hack(&self) -> AccountAddress {
-        AccountAddress::try_from(&self.0[0..AccountAddress::LENGTH]).unwrap()
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.0.to_vec()
     }
+}
 
-    /// Extend an account address into a public key by adding zeros
-    // TODO(https://github.com/MystenLabs/fastnft/issues/44): eliminate once we extend size of `AccountAddress`.
-    pub fn from_move_address_hack(address: &AccountAddress) -> PublicKeyBytes {
-        let mut fastpay_addr = [0u8; dalek::PUBLIC_KEY_LENGTH];
-        let addr_bytes = address.to_vec();
-        fastpay_addr[..addr_bytes.len()].clone_from_slice(&addr_bytes[..]);
-        PublicKeyBytes(fastpay_addr)
+// TODO(https://github.com/MystenLabs/fastnft/issues/101): more robust key validation
+impl TryFrom<&[u8]> for PublicKeyBytes {
+    type Error = FastPayError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, FastPayError> {
+        let arr: [u8; dalek::PUBLIC_KEY_LENGTH] = bytes
+            .try_into()
+            .map_err(|_| FastPayError::InvalidAuthenticator)?;
+        Ok(Self(arr))
     }
 }
 
@@ -105,10 +106,10 @@ impl TxContext {
 
     // TODO(https://github.com/MystenLabs/fastnft/issues/89): temporary hack for Move compatibility
     pub fn to_bcs_bytes_hack(&self) -> Vec<u8> {
-        let sender = self.digest.0 .0;
+        let sender = FastPayAddress::default();
         let inputs_hash = self.digest.0 .0.to_vec();
         let obj = TxContextForMove {
-            sender,
+            sender: sender.to_vec(),
             inputs_hash,
             ids_created: self.ids_created,
         };
@@ -123,7 +124,7 @@ impl TxContext {
 
 #[derive(Serialize)]
 struct TxContextForMove {
-    sender: AccountAddress,
+    sender: Vec<u8>,
     inputs_hash: Vec<u8>,
     ids_created: u64,
 }

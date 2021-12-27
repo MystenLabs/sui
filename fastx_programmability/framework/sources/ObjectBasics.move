@@ -1,6 +1,6 @@
 /// Test CTURD object basics (create, transfer, update, read, delete)
 module FastX::ObjectBasics {
-    use FastX::Authenticator;
+    use FastX::Address;
     use FastX::ID::ID;
     use FastX::TxContext::{Self, TxContext};
     use FastX::Transfer;
@@ -11,11 +11,14 @@ module FastX::ObjectBasics {
     }
 
     public fun create(value: u64, recipient: vector<u8>, ctx: TxContext) {
-        Transfer::transfer(Object { id: TxContext::new_id(&mut ctx), value }, Authenticator::new(recipient))
+        Transfer::transfer(
+            Object { id: TxContext::new_id(&mut ctx), value },
+            Address::new(recipient)
+        )
     }
 
     public fun transfer(o: Object, recipient: vector<u8>, _ctx: TxContext) {
-        Transfer::transfer(o, Authenticator::new(recipient))
+        Transfer::transfer(o, Address::new(recipient))
     }
 
     // test that reading o2 and updating o1 works

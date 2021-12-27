@@ -7,7 +7,7 @@
 /// anyone is free to create a mod like this.
 module Examples::HeroMod {
     use Examples::Hero::{Self, Hero};
-    use FastX::Authenticator::Authenticator;
+    use FastX::Address::Address;
     use FastX::ID::ID;
     use FastX::Coin::{Self, Coin, TreasuryCap };
     use FastX::Transfer;
@@ -64,7 +64,7 @@ module Examples::HeroMod {
                 token_supply_max,
                 monster_max,
             },
-            TxContext::get_authenticator(ctx)
+            TxContext::get_signer_address(ctx)
         )
     }
 
@@ -92,7 +92,7 @@ module Examples::HeroMod {
     public fun create_monster(
         admin: &mut SeaScapeAdmin,
         reward_amount: u64,
-        recipient: Authenticator,
+        recipient: Address,
         ctx: &mut TxContext
     ) {
         let current_coin_supply = Coin::total_supply(&admin.treasury_cap);
@@ -114,7 +114,7 @@ module Examples::HeroMod {
 
     /// Send `monster` to `recipient`
     public fun transfer_monster(
-        monster: SeaMonster, recipient: Authenticator
+        monster: SeaMonster, recipient: Address
     ) {
         Transfer::transfer(monster, recipient)
     }

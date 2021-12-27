@@ -18,6 +18,6 @@ module FastX::Immutable {
     public fun create<T: store>(data: T, ctx: &mut TxContext) {
         let id = TxContext::new_id(ctx);
         let obj = Immutable { id, data };
-        Transfer::transfer(obj, TxContext::get_authenticator(ctx))
+        Transfer::transfer(obj, TxContext::get_signer_address(ctx))
     }
 }

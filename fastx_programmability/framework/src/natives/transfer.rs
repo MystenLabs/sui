@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::{account_address::AccountAddress, gas_schedule::GasAlgebra};
+use move_core_types::gas_schedule::GasAlgebra;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     gas_schedule::NativeCostIndex,
@@ -30,7 +30,7 @@ pub fn transfer_internal(
     debug_assert!(args.len() == 2);
 
     let ty = ty_args.pop().unwrap();
-    let recipient = pop_arg!(args, AccountAddress);
+    let recipient = pop_arg!(args, Vec<u8>);
     let transferred_obj = args.pop_back().unwrap();
 
     // Charge by size of transferred object
@@ -40,7 +40,7 @@ pub fn transfer_internal(
         transferred_obj.size().get() as usize,
     );
     let seq_num = 0;
-    if !context.save_event(recipient.to_vec(), seq_num, ty, transferred_obj)? {
+    if !context.save_event(recipient, seq_num, ty, transferred_obj)? {
         return Ok(NativeResult::err(cost, 0));
     }
 

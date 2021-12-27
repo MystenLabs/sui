@@ -1,5 +1,5 @@
 module FastX::Transfer {
-    use FastX::Authenticator::{Self, Authenticator};
+    use FastX::Address::{Self, Address};
     //use FastX::ID::IDBytes;
 
     /// Transfers are implemented by emitting a
@@ -8,9 +8,9 @@ module FastX::Transfer {
     struct TransferEvent<T: key> {
         /// The object to be transferred
         obj: T,
-        /// Authenticator the object will be
+        /// Address the object will be
         /// transferred to.
-        recipient: Authenticator,
+        recipient: Address,
     }
 
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the
@@ -19,12 +19,12 @@ module FastX::Transfer {
     // TODO: add bytecode verifier pass to ensure that `T` is a struct declared
     // in the calling module. This will allow modules to define custom transfer
     // logic for their structs that cannot be subverted by other modules
-    public fun transfer<T: key>(obj: T, recipient: Authenticator) {
+    public fun transfer<T: key>(obj: T, recipient: Address) {
         // TODO: emit event
-        transfer_internal(obj, Authenticator::into_bytes(recipient))
+        transfer_internal(obj, Address::into_bytes(recipient))
     }
 
-    native fun transfer_internal<T: key>(obj: T, recipient: address);
+    native fun transfer_internal<T: key>(obj: T, recipient: vector<u8>);
 
     /*/// Transfer ownership of `obj` to another object `id`. Afterward, `obj`
     /// can only be used in a transaction that also includes the object with
