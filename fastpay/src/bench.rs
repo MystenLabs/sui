@@ -148,10 +148,6 @@ impl ClientServerBenchmark {
             let order = Order::new_transfer(transfer.clone(), secx);
             let shard = AuthorityState::get_shard(self.num_shards, order.object_id());
 
-            // Serialize order
-            let bufx = serialize_order(&order);
-            assert!(!bufx.is_empty());
-
             // Make certificate
             let mut certificate = CertifiedOrder {
                 order,
@@ -186,7 +182,7 @@ impl ClientServerBenchmark {
     async fn launch_client(&self, mut orders: Vec<(u32, Bytes)>) {
         time::delay_for(Duration::from_millis(1000)).await;
 
-        let items_number = orders.len() / 2;
+        let items_number = orders.len();
         let time_start = Instant::now();
 
         let max_in_flight = (self.max_in_flight / self.num_shards as usize) as usize;
