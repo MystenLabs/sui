@@ -191,7 +191,7 @@ impl AuthorityState {
                     output_object.next_sequence_number.increment()?;
 
                 output_object.transfer(match t.recipient {
-                    Address::Primary(_) => PublicKeyBytes([0; 32]),
+                    Address::Primary(_) => FastPayAddress::default(),
                     Address::FastPay(addr) => addr,
                 });
                 temporary_store.write_object(output_object);
@@ -238,8 +238,7 @@ impl AuthorityState {
                 gas_object.next_sequence_number = gas_object.next_sequence_number.increment()?;
                 temporary_store.write_object(gas_object);
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
-                let sender = m.sender.to_address_hack();
-                match adapter::publish(&mut temporary_store, m.modules, &sender, &mut tx_ctx) {
+                match adapter::publish(&mut temporary_store, m.modules, m.sender, &mut tx_ctx) {
                     Ok(outputs) => {
                         // TODO(https://github.com/MystenLabs/fastnft/issues/63): AccountInfoResponse should return all object ID outputs.
                         // but for now it only returns one, so use this hack

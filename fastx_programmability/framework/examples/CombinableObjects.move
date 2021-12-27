@@ -2,7 +2,7 @@
 /// new objects
 module Examples::CombinableObjects {
     use Examples::TrustedCoin::EXAMPLE;
-    use FastX::Authenticator::{Self, Authenticator};
+    use FastX::Address::{Self, Address};
     use FastX::Coin::{Self, Coin};
     use FastX::ID::ID;
     use FastX::Transfer;
@@ -53,7 +53,7 @@ module Examples::CombinableObjects {
         Sandwich { id: TxContext::new_id(ctx) }
     }
 
-    fun admin(): Authenticator {
-        Authenticator::new(GROCERY)
+    fun admin(): Address {
+        Address::new(GROCERY)
     }
 }

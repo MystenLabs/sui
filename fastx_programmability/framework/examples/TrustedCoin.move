@@ -17,6 +17,6 @@ module Examples::TrustedCoin {
         // Get a treasury cap for the coin and give it to the transaction
         // sender
         let treasury_cap = Coin::create_currency<EXAMPLE>(EXAMPLE{}, ctx);
-        Transfer::transfer(treasury_cap, TxContext::get_authenticator(ctx))
+        Transfer::transfer(treasury_cap, TxContext::get_signer_address(ctx))
     }
 }

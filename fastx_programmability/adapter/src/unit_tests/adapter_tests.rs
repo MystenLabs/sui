@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{adapter, genesis};
-use fastx_types::storage::Storage;
+use fastx_types::{base_types, storage::Storage};
+use move_core_types::account_address::AccountAddress;
 use std::mem;
 
 use super::*;
@@ -120,8 +121,8 @@ impl ResourceResolver for InMemoryStorage {
 /// Exercise test functions that create, transfer, read, update, and delete objects
 #[test]
 fn test_object_basics() {
-    let addr1 = AccountAddress::from_hex_literal("0x1").unwrap();
-    let addr2 = AccountAddress::from_hex_literal("0x2").unwrap();
+    let addr1 = base_types::get_key_pair().0;
+    let addr2 = base_types::get_key_pair().0;
 
     let genesis = genesis::GENESIS.lock().unwrap();
     let native_functions = genesis.native_functions.clone();
@@ -155,7 +156,10 @@ fn test_object_basics() {
     // ObjectBasics::create expects integer value and recipient address
     let pure_args = vec![
         10u64.to_le_bytes().to_vec(),
+        //bcs::to_bytes(&old_addr1.to_vec()).unwrap(),
         bcs::to_bytes(&addr1.to_vec()).unwrap(),
+        //MoveValue::vector_u8(addr1.to_vec()).simple_serialize().unwrap(),
+        //        transaction_argument::convert_txn_args(&vec![TransactionArgument::U8Vector(addr1.to_vec())]).pop().unwrap(),
     ];
     call(
         &mut storage,
@@ -178,7 +182,7 @@ fn test_object_basics() {
     storage.flush();
     let mut obj1 = storage.read_object(&id1).unwrap();
     let mut obj1_seq = SequenceNumber::new();
-    assert_eq!(obj1.owner.to_address_hack(), addr1);
+    assert_eq!(obj1.owner, addr1);
     assert_eq!(obj1.next_sequence_number, obj1_seq);
 
     // 2. Transfer obj1 to addr2
@@ -197,7 +201,7 @@ fn test_object_basics() {
     assert!(storage.deleted().is_empty());
     storage.flush();
     let transferred_obj = storage.read_object(&id1).unwrap();
-    assert_eq!(transferred_obj.owner.to_address_hack(), addr2);
+    assert_eq!(transferred_obj.owner, addr2);
     obj1_seq = obj1_seq.increment().unwrap();
     assert_eq!(transferred_obj.next_sequence_number, obj1_seq);
     assert_eq!(obj1.data, transferred_obj.data);
@@ -237,7 +241,7 @@ fn test_object_basics() {
     assert!(storage.deleted().is_empty());
     storage.flush();
     let updated_obj = storage.read_object(&id1).unwrap();
-    assert_eq!(updated_obj.owner.to_address_hack(), addr2);
+    assert_eq!(updated_obj.owner, addr2);
     obj1_seq = obj1_seq.increment().unwrap();
     assert_eq!(updated_obj.next_sequence_number, obj1_seq);
     assert_ne!(obj1.data, updated_obj.data);

@@ -21,7 +21,6 @@ use move_binary_format::{
 
 use move_cli::sandbox::utils::get_gas_status;
 use move_core_types::{
-    account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
     resolver::{ModuleResolver, ResourceResolver},
@@ -29,7 +28,7 @@ use move_core_types::{
 use move_vm_runtime::{
     move_vm::MoveVM, native_functions::NativeFunctionTable, session::ExecutionResult,
 };
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{borrow::Borrow, collections::BTreeMap, convert::TryFrom, fmt::Debug};
 
 #[cfg(test)]
 #[path = "unit_tests/adapter_tests.rs"]
@@ -107,7 +106,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
     module_bytes: Vec<Vec<u8>>,
-    sender: &AccountAddress,
+    sender: FastPayAddress,
     ctx: &mut TxContext,
 ) -> Result<Vec<ObjectRef>, FastPayError> {
     if module_bytes.is_empty() {
@@ -144,11 +143,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         let _ = state_view;
 
         // Create module objects and write them to the store
-        let module_object = Object::new_module(
-            module,
-            FastPayAddress::from_move_address_hack(sender),
-            SequenceNumber::new(),
-        );
+        let module_object = Object::new_module(module, sender, SequenceNumber::new());
         written_refs.push(module_object.to_object_reference());
         state_view.write_object(module_object);
     }
@@ -219,15 +214,13 @@ fn process_successful_execution<
     // TODO(https://github.com/MystenLabs/fastnft/issues/96): implement freeze and immutable objects
     for e in events {
         if is_transfer_event(&e) {
-            let (guid, _seq_num, type_, event_bytes) = e;
+            let (recipient_bytes, _seq_num, type_, event_bytes) = e;
             match type_ {
                 TypeTag::Struct(s_type) => {
                     // special transfer event. process by saving object under given authenticator
                     let contents = event_bytes;
-                    let recipient = FastPayAddress::from_move_address_hack(
-                        &AccountAddress::from_bytes(guid)
-                            .expect("Unwrap safe due to enforcement in native function"),
-                    );
+                    // unwrap safe due to size enforcement in Move code for `Authenticator`
+                    let recipient = FastPayAddress::try_from(recipient_bytes.borrow()).unwrap();
                     let move_obj = MoveObject::new(s_type, contents);
                     let id = move_obj.id();
                     // If object exists, find new sequence number

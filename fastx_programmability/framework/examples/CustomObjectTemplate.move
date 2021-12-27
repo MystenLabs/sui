@@ -1,6 +1,6 @@
 /// An example of a custom object with comments explaining the relevant bits
 module Examples::CustomObjectTemplate {
-    use FastX::Authenticator::{Self, Authenticator};
+    use FastX::Address::{Self, Address};
     use FastX::ID::ID;
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
@@ -44,7 +44,7 @@ module Examples::CustomObjectTemplate {
 
     /// Example of transferring an object to a a new owner. A struct can only
     /// be transferred by the module that declares it.
-    public fun transfer(o: Object, recipient: Authenticator) {
+    public fun transfer(o: Object, recipient: Address) {
         assert!(some_conditional_logic(), 0);
         Transfer::transfer(o, recipient)
     }
@@ -94,9 +94,9 @@ module Examples::CustomObjectTemplate {
     ) {
         let v = read_field(to_read);
         write_field(to_write, v + int_input);
-        transfer(to_consume, Authenticator::new(bytes_input));
+        transfer(to_consume, Address::new(bytes_input));
         // demonstrate creating a new object for the sender
-        let sender = TxContext::get_authenticator(ctx);
+        let sender = TxContext::get_signer_address(ctx);
         Transfer::transfer(create(ctx), sender)
     }
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-mod authenticator;
+mod id;
 mod transfer;
 
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
@@ -12,11 +12,7 @@ pub fn all_natives(
     fastx_framework_addr: AccountAddress,
 ) -> NativeFunctionTable {
     const FASTX_NATIVES: &[(&str, &str, NativeFunction)] = &[
-        (
-            "Authenticator",
-            "bytes_to_address",
-            authenticator::bytes_to_address,
-        ),
+        ("ID", "bytes_to_address", id::bytes_to_address),
         ("Transfer", "transfer_internal", transfer::transfer_internal),
     ];
     FASTX_NATIVES
