@@ -34,16 +34,16 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "9555")]
     port: u32,
     /// Size of the FastPay committee
-    #[structopt(long, default_value = "10")]
+    #[structopt(name = "committee-size", long, default_value = "10")]
     committee_size: usize,
     /// Number of shards per FastPay authority
-    #[structopt(long, default_value = "15")]
+    #[structopt(name = "num-shards", long, default_value = "15")]
     num_shards: u32,
     /// Maximum number of requests in flight (0 for blocking client)
     #[structopt(long, default_value = "1000")]
     max_in_flight: usize,
     /// Number of accounts and transactions used in the benchmark
-    #[structopt(long, default_value = "40000")]
+    #[structopt(name = "num-accounts", long, default_value = "40000")]
     num_accounts: usize,
     /// Timeout for sending queries (us)
     #[structopt(long, default_value = "4000000")]
@@ -105,12 +105,12 @@ impl ClientServerBenchmark {
         };
 
         // Pick an authority and create one state per shard.
-        let (public_auth0, secret_auth0) = keys.pop().unwrap();
+        let (public_auth0, secret_auth0) = &keys[0];
         let mut states = Vec::new();
         for i in 0..self.num_shards {
             let state = AuthorityState::new_shard(
                 committee.clone(),
-                public_auth0,
+                *public_auth0,
                 secret_auth0.copy(),
                 i as u32,
                 self.num_shards,
