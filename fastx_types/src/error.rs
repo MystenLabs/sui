@@ -91,6 +91,12 @@ pub enum FastPayError {
     BalanceOverflow,
     #[error("Account balance underflow.")]
     BalanceUnderflow,
+    #[error("Wrong shard used.")]
+    WrongShard,
+    #[error("Invalid cross shard update.")]
+    InvalidCrossShardUpdate,
+    #[error("Invalid authenticator")]
+    InvalidAuthenticator,
     #[error("Cannot deserialize.")]
     InvalidDecoding,
     #[error("Unexpected message.")]

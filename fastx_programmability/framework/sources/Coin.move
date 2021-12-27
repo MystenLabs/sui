@@ -1,5 +1,5 @@
 module FastX::Coin {
-    use FastX::Authenticator::Authenticator;
+    use FastX::Address::Address;
     use FastX::ID::ID;
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
@@ -27,7 +27,7 @@ module FastX::Coin {
     // === Functionality for Coin<T> holders ===
 
     /// Send `c` to `recipient`
-    public fun transfer<T>(c: Coin<T>, recipient: Authenticator) {
+    public fun transfer<T>(c: Coin<T>, recipient: Address) {
         Transfer::transfer(c, recipient)
     }
 
@@ -114,7 +114,7 @@ module FastX::Coin {
     }
 
     /// Give away the treasury cap to `recipient`
-    public fun transfer_cap<T>(c: TreasuryCap<T>, recipient: Authenticator) {
+    public fun transfer_cap<T>(c: TreasuryCap<T>, recipient: Address) {
         Transfer::transfer(c, recipient)
     }
 }

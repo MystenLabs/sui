@@ -5,7 +5,7 @@ use crate::adapter;
 use anyhow::Result;
 use fastx_framework::{self};
 use fastx_types::{
-    base_types::{PublicKeyBytes, SequenceNumber, TransactionDigest, TxContext},
+    base_types::{FastPayAddress, SequenceNumber, TransactionDigest, TxContext},
     object::Object,
     FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS,
 };
@@ -47,7 +47,7 @@ fn create_genesis_module_objects() -> Result<Genesis> {
             native.1 = new_id.name().to_owned();
         }
     }
-
+    let owner = FastPayAddress::default();
     let objects = modules
         .into_iter()
         .map(|m| {
@@ -65,11 +65,7 @@ fn create_genesis_module_objects() -> Result<Genesis> {
                         == TX_CONTEXT_STRUCT_NAME
                 );
             }
-            Object::new_module(
-                m,
-                PublicKeyBytes::from_move_address_hack(&FASTX_FRAMEWORK_ADDRESS),
-                SequenceNumber::new(),
-            )
+            Object::new_module(m, owner, SequenceNumber::new())
         })
         .collect();
     Ok(Genesis {

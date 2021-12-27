@@ -1,6 +1,6 @@
 module FastX::TxContext {
     use FastX::ID::{Self, ID};
-    use FastX::Authenticator::{Self, Authenticator, Signer};
+    use FastX::Address::{Self, Address, Signer};
     use Std::BCS;
     use Std::Hash;
     use Std::Vector;
@@ -16,18 +16,6 @@ module FastX::TxContext {
         /// Counter recording the number of objects created while executing
         /// this transaction
         objects_created: u64
-    }
-
-    // TODO: temporary hack; as comment above says, this should get passed in
-    // by the VM
-    public fun make_unsafe(
-        signer: signer, inputs_hash: vector<u8>
-    ): TxContext {
-        TxContext {
-            signer: Authenticator::new_signer(signer),
-            inputs_hash,
-            objects_created: 0,
-        }
     }
 
     /// Generate a new primary key
@@ -46,9 +34,9 @@ module FastX::TxContext {
         &self.signer
     }
 
-    /// Return the authenticator of the user that signed the current
+    /// Return the address of the user that signed the current
     /// transaction
-    public fun get_authenticator(self: &TxContext): Authenticator {
-        *Authenticator::get(&self.signer)
+    public fun get_signer_address(self: &TxContext): Address {
+        *Address::get(&self.signer)
     }
 }

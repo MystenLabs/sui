@@ -132,7 +132,6 @@ async fn test_handle_transfer_order_ok() {
         .get_order_lock(&object.to_object_reference())
         .await
         .unwrap()
-        .clone()
         .unwrap();
     assert_eq!(
         account_info.pending_confirmation.unwrap(),
@@ -295,7 +294,7 @@ async fn test_handle_move_order() {
         Vec::new(),
         vec![
             16u64.to_le_bytes().to_vec(),
-            bcs::to_bytes(&sender.to_address_hack().to_vec()).unwrap(),
+            bcs::to_bytes(&sender.to_vec()).unwrap(),
         ],
         1000,
         &sender_key,
@@ -309,10 +308,7 @@ async fn test_handle_move_order() {
         .object_state(&created_object_id)
         .await
         .unwrap();
-    assert_eq!(
-        created_obj.owner.to_address_hack(),
-        sender.to_address_hack()
-    );
+    assert_eq!(created_obj.owner, sender,);
     assert_eq!(created_obj.id(), created_object_id);
     assert_eq!(created_obj.next_sequence_number, SequenceNumber::new());
 }
@@ -522,8 +518,7 @@ async fn test_handle_confirmation_order_ok() {
             let refx = authority_state
                 .parent(&(object_id, info.next_sequence_number))
                 .await
-                .unwrap()
-                .clone();
+                .unwrap();
             authority_state.read_certificate(&refx).await.unwrap()
         },
         Some(certified_transfer_order)

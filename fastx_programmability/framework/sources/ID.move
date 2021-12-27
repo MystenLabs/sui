@@ -1,7 +1,5 @@
 /// FastX object identifiers
 module FastX::ID {
-    use FastX::Authenticator;
-
     // TODO(): bring this back
     //friend FastX::TxContext;
 
@@ -21,12 +19,12 @@ module FastX::ID {
     // TODO (): bring this back
     //public(friend) fun new(bytes: vector<u8>): ID {
     public fun new(bytes: vector<u8>): ID {
-        ID { id: IDBytes { bytes: Authenticator::bytes_to_address(bytes) } }
+        ID { id: IDBytes { bytes: bytes_to_address(bytes) } }
     }
 
     /// Create a new ID bytes for comparison with existing ID's
     public fun new_bytes(bytes: vector<u8>): IDBytes {
-        IDBytes { bytes: Authenticator::bytes_to_address(bytes) }
+        IDBytes { bytes: bytes_to_address(bytes) }
     }
 
     /// Get the underyling `IDBytes` of `id`
@@ -52,4 +50,6 @@ module FastX::ID {
         // TODO: implement native function for this.
         abort(0)
     }
+
+    public native fun bytes_to_address(bytes: vector<u8>): address;
 }

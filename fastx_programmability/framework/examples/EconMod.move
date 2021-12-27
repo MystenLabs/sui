@@ -5,7 +5,7 @@
 module Examples::EconMod {
     use Examples::HeroMod::{Self, SeaMonster, RUM};
     use Examples::Hero::Hero;
-    use FastX::Authenticator::Authenticator;
+    use FastX::Address::Address;
     use FastX::Coin::{Self, Coin};
     use FastX::ID::ID;
     use FastX::Transfer;
@@ -20,7 +20,7 @@ module Examples::EconMod {
         /// Monster to be slay by the owner of this object
         monster: SeaMonster,
         /// Identity of the user that originally owned the monster
-        monster_owner: Authenticator,
+        monster_owner: Address,
         /// Number of tokens that will go to the helper. The owner will get
         /// the `monster` reward - `helper_reward` tokens
         helper_reward: u64,
@@ -35,7 +35,7 @@ module Examples::EconMod {
     public fun create(
         monster: SeaMonster,
         helper_reward: u64,
-        helper: Authenticator,
+        helper: Address,
         ctx: &mut TxContext,
     ) {
         // make sure the advertised reward is not too large + that the owner
@@ -48,7 +48,7 @@ module Examples::EconMod {
             HelpMeSlayThisMonster {
                 id: TxContext::new_id(ctx),
                 monster,
-                monster_owner: TxContext::get_authenticator(ctx),
+                monster_owner: TxContext::get_signer_address(ctx),
                 helper_reward
             },
             helper

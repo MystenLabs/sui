@@ -2,7 +2,7 @@
 /// associated logic.
 module Examples::Hero {
     use Examples::TrustedCoin::EXAMPLE;
-    use FastX::Authenticator::{Self, Authenticator};
+    use FastX::Address::{Self, Address};
     use FastX::Coin::{Self, Coin};
     use FastX::ID::ID;
     use FastX::Math;
@@ -56,7 +56,7 @@ module Examples::Hero {
         potions_created: u64
     }
 
-    /// Authenticator of the admin account that receives payment for swords
+    /// Address of the admin account that receives payment for swords
     const ADMIN: vector<u8> = b"some_authenticator_here";
     /// Upper bound on player's HP
     const MAX_HP: u64 = 1000;
@@ -84,7 +84,7 @@ module Examples::Hero {
     fun init(ctx: &mut TxContext) {
         let admin = admin();
         // ensure this is being initialized by the expected admin authenticator
-        assert!(&TxContext::get_authenticator(ctx) == &admin, ENOT_ADMIN);
+        assert!(&TxContext::get_signer_address(ctx) == &admin, ENOT_ADMIN);
         Transfer::transfer(
             GameAdmin {
                 id: TxContext::new_id(ctx),
@@ -213,14 +213,7 @@ module Examples::Hero {
     public fun acquire_hero(ctx: &mut TxContext) {
         let sword = create_free_sword(ctx);
         let hero = create_hero(sword, ctx);
-        Transfer::transfer(hero, TxContext::get_authenticator(ctx))
-    }
-
-    public fun main(signer: signer) {
-        // TODO: thread inputs_hash through from outside
-        let inputs_hash = b"hello there";
-        let ctx = TxContext::make_unsafe(signer, inputs_hash);
-        acquire_hero(&mut ctx)
+        Transfer::transfer(hero, TxContext::get_signer_address(ctx))
     }
 
     /// Anyone can create a hero if they have a sword. All heros start with the
@@ -237,7 +230,7 @@ module Examples::Hero {
     /// Admin can create a potion with the given `potency` for `recipient`
     public fun send_potion(
         potency: u64,
-        player: Authenticator,
+        player: Address,
         admin: &mut GameAdmin,
         ctx: &mut TxContext
     ) {
@@ -253,7 +246,7 @@ module Examples::Hero {
     public fun send_boar(
         hp: u64,
         strength: u64,
-        player: Authenticator,
+        player: Address,
         admin: &mut GameAdmin,
         ctx: &mut TxContext
     ) {
@@ -265,8 +258,8 @@ module Examples::Hero {
         )
     }
 
-    fun admin(): Authenticator {
-        Authenticator::new(ADMIN)
+    fun admin(): Address {
+        Address::new(ADMIN)
     }
 
 }

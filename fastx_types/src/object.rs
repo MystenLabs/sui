@@ -146,9 +146,7 @@ impl Object {
 
     // TODO: this should be test-only, but it's still used in bench and server
     pub fn with_id_for_testing(id: ObjectID) -> Self {
-        use crate::base_types::PublicKeyBytes;
-
-        let owner = PublicKeyBytes([0; 32]);
+        let owner = FastPayAddress::default();
         Self::with_id_owner_for_testing(id, owner)
     }
 }
