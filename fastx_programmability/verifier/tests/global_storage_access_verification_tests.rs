@@ -1,16 +1,16 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-mod module_builder;
+mod common;
 
+pub use common::module_builder::ModuleBuilder;
 use fastx_verifier::global_storage_access_verifier::verify_module;
-pub use module_builder::module_builder::ModuleBuilder;
 use move_binary_format::file_format::*;
 
 #[test]
 fn function_with_global_access_bytecode() {
-    let mut module = ModuleBuilder::default();
-    let (_, func_def) = module.add_function(module.get_self_index(), "foo", vec![], vec![]);
+    let (mut module, _) = ModuleBuilder::default();
+    let func = module.add_function(module.get_self_index(), "foo", vec![], vec![]);
     assert!(verify_module(module.get_module()).is_ok());
 
     // All the bytecode that could access global storage.
@@ -32,7 +32,7 @@ fn function_with_global_access_bytecode() {
         Bytecode::ImmBorrowField(FieldHandleIndex(0)),
         Bytecode::Call(FunctionHandleIndex(0)),
     ]);
-    module.set_bytecode(func_def, code);
+    module.set_bytecode(func.def, code);
     assert!(verify_module(module.get_module())
         .unwrap_err()
         .to_string()
