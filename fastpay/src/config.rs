@@ -26,6 +26,7 @@ pub struct AuthorityConfig {
     pub host: String,
     pub base_port: u32,
     pub num_shards: u32,
+    pub database_path : String,
 }
 
 impl AuthorityConfig {

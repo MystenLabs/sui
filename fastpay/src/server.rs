@@ -143,6 +143,10 @@ enum ServerCommands {
         /// Number of shards for this authority
         #[structopt(long)]
         shards: u32,
+
+        /// Sets the public name of the host
+        #[structopt(long)]
+        database_path: String,
     },
 }
 
@@ -210,6 +214,7 @@ fn main() {
             host,
             port,
             shards,
+            database_path,
         } => {
             let (address, key) = get_key_pair();
             let authority = AuthorityConfig {
@@ -218,6 +223,7 @@ fn main() {
                 host,
                 base_port: port,
                 num_shards: shards,
+                database_path,
             };
             let server = AuthorityServerConfig { authority, key };
             server

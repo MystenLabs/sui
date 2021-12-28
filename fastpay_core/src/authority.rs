@@ -522,10 +522,10 @@ impl AuthorityState {
 }
 
 pub struct AuthorityStore {
-    pub objects: DBMap<ObjectID, Object>,
-    pub order_lock: DBMap<ObjectRef, Option<SignedOrder>>,
-    pub certificates: DBMap<TransactionDigest, CertifiedOrder>,
-    pub parent_sync: DBMap<ObjectRef, TransactionDigest>,
+    objects: DBMap<ObjectID, Object>,
+    order_lock: DBMap<ObjectRef, Option<SignedOrder>>,
+    certificates: DBMap<TransactionDigest, CertifiedOrder>,
+    parent_sync: DBMap<ObjectRef, TransactionDigest>,
 }
 
 use std::path::Path;
