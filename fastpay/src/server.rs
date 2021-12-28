@@ -68,7 +68,7 @@ struct ServerOpt {
 
 #[derive(StructOpt)]
 enum ServerCommands {
-    /// Runs a service for each shard of the FastPay authority")
+    /// Runs the FastPay authority")
     #[structopt(name = "run")]
     Run {
         /// Maximum size of datagrams received and sent (bytes)
@@ -96,7 +96,7 @@ enum ServerCommands {
         #[structopt(long)]
         host: String,
 
-        /// Sets the base port, i.e. the port on which the server listens for the first shard
+        /// Sets the port
         #[structopt(long)]
         port: u32,
 

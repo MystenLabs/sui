@@ -270,7 +270,7 @@ impl MassClient {
         }
     }
 
-    async fn run_shard(&self, requests: Vec<Bytes>) -> Result<Vec<Bytes>, io::Error> {
+    async fn run_core(&self, requests: Vec<Bytes>) -> Result<Vec<Bytes>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port);
         let mut stream = self
             .network_protocol
@@ -324,15 +324,15 @@ impl MassClient {
         }
     }
 
-    /// Spin off one task for each shard based on this authority client.
-    pub fn run<I>(&self, sharded_requests: I) -> impl futures::stream::Stream<Item = Vec<Bytes>>
+    /// Spin off one task on this authority client.
+    pub fn run<I>(&self, requests: I) -> impl futures::stream::Stream<Item = Vec<Bytes>>
     where
         I: IntoIterator<Item = Bytes>,
     {
         let handles = futures::stream::FuturesUnordered::new();
 
             let client = self.clone();
-            let requests : Vec<_> =  sharded_requests.into_iter().collect();
+            let requests : Vec<_> =  requests.into_iter().collect();
             handles.push(
                 tokio::spawn(async move {
                     info!(
@@ -342,7 +342,7 @@ impl MassClient {
                         client.base_port,
                     );
                     let responses = client
-                        .run_shard(requests)
+                        .run_core(requests)
                         .await
                         .unwrap_or_else(|_| Vec::new());
                     info!(
