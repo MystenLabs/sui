@@ -20,6 +20,7 @@ use tokio::sync::{
     mpsc::{channel, Sender},
     oneshot,
 };
+use zeroize::Zeroize;
 
 #[cfg(test)]
 #[path = "tests/crypto_tests.rs"]
@@ -132,6 +133,8 @@ impl AsRef<[u8]> for PublicKey {
 }
 
 /// Represents a secret key (in bytes).
+#[derive(Zeroize)]
+#[zeroize(drop)]
 pub struct SecretKey([u8; 64]);
 
 impl SecretKey {
@@ -165,12 +168,6 @@ impl<'de> Deserialize<'de> for SecretKey {
         let s = String::deserialize(deserializer)?;
         let value = Self::decode_base64(&s).map_err(|e| de::Error::custom(e.to_string()))?;
         Ok(value)
-    }
-}
-
-impl Drop for SecretKey {
-    fn drop(&mut self) {
-        self.0.iter_mut().for_each(|x| *x = 0);
     }
 }
 
