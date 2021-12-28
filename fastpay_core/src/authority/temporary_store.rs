@@ -1,7 +1,7 @@
 use super::*;
 
 pub struct AuthorityTemporaryStore {
-    object_store: Arc<Mutex<BTreeMap<ObjectID, Object>>>,
+    object_store: Arc<Mutex<AuthorityStore>>,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
     pub written: Vec<ObjectRef>,       // Objects written
@@ -14,7 +14,7 @@ impl AuthorityTemporaryStore {
         _input_objects: &'_ [Object],
     ) -> AuthorityTemporaryStore {
         AuthorityTemporaryStore {
-            object_store: authority_state.objects.clone(),
+            object_store: authority_state._database.clone(),
             objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
             active_inputs: _input_objects
                 .iter()
@@ -95,7 +95,10 @@ impl Storage for AuthorityTemporaryStore {
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
         match self.objects.get(id) {
             Some(x) => Some(x.clone()),
-            None => self.object_store.lock().unwrap().get(id).cloned(),
+            None => {
+                let object = self.object_store.lock().unwrap().object_state(&id);
+                Some(object.expect("TODO: catch error here"))
+            }
         }
     }
 
@@ -143,7 +146,7 @@ impl Storage for AuthorityTemporaryStore {
 impl ModuleResolver for AuthorityTemporaryStore {
     type Error = FastPayError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.object_store.lock().unwrap().get(module_id.address()) {
+        match self.read_object(module_id.address()) {
             Some(o) => match &o.data {
                 Data::Module(c) => Ok(Some(c.clone())),
                 _ => Err(FastPayError::BadObjectType {
@@ -165,7 +168,7 @@ impl ResourceResolver for AuthorityTemporaryStore {
     ) -> Result<Option<Vec<u8>>, Self::Error> {
         let object = match self.read_object(address) {
             Some(x) => x,
-            None => match self.object_store.lock().unwrap().get(address) {
+            None => match self.read_object(address) {
                 None => return Ok(None),
                 Some(x) => {
                     if !x.is_read_only() {

@@ -12,6 +12,9 @@ use move_binary_format::{
 };
 use move_core_types::ident_str;
 
+use std::env;
+use std::fs;
+
 #[tokio::test]
 async fn test_handle_transfer_order_bad_signature() {
     let (sender, sender_key) = get_key_pair();
@@ -420,7 +423,9 @@ async fn test_handle_confirmation_order_exceed_balance() {
         .is_ok());
     let new_account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(SequenceNumber::from(1), new_account.next_sequence_number);
-    assert!(authority_state.parent(&(object_id, new_account.next_sequence_number)).await
+    assert!(authority_state
+        .parent(&(object_id, new_account.next_sequence_number))
+        .await
         .is_some());
 }
 
@@ -449,7 +454,9 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
         new_sender_account.next_sequence_number
     );
 
-    assert!(authority_state.parent(&(object_id, new_sender_account.next_sequence_number)).await
+    assert!(authority_state
+        .parent(&(object_id, new_sender_account.next_sequence_number))
+        .await
         .is_some());
 }
 
@@ -473,7 +480,9 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
     let account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(SequenceNumber::from(1), account.next_sequence_number);
 
-    assert!(authority_state.parent(&(object_id, account.next_sequence_number)).await
+    assert!(authority_state
+        .parent(&(object_id, account.next_sequence_number))
+        .await
         .is_some());
 }
 
@@ -505,10 +514,14 @@ async fn test_handle_confirmation_order_ok() {
     assert_eq!(None, info.pending_confirmation);
     assert_eq!(
         {
-        let refx = authority_state.parent(&(object_id, info.next_sequence_number)).await.unwrap().clone();
-        authority_state.certificates.get(&refx)
-    },
-        Some(&certified_transfer_order)
+            let refx = authority_state
+                .parent(&(object_id, info.next_sequence_number))
+                .await
+                .unwrap()
+                .clone();
+            authority_state.read_certificate(&refx).await.unwrap()
+        },
+        Some(certified_transfer_order)
     );
 
     // Check locks are set and archived correctly
@@ -555,8 +568,7 @@ fn init_state() -> AuthorityState {
     );
     let committee = Committee::new(authorities);
 
-    use std::env;
-    use std::fs;
+    // Create a random directory to store the DB
     let dir = env::temp_dir();
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&path).unwrap();

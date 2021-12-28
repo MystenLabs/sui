@@ -14,6 +14,8 @@ use structopt::StructOpt;
 use tokio::runtime::Runtime;
 use tokio::{runtime::Builder, time};
 
+use std::env;
+use std::fs;
 use std::thread;
 
 #[derive(Debug, Clone, StructOpt)]
@@ -101,8 +103,7 @@ impl ClientServerBenchmark {
         // Pick an authority and create state.
         let (public_auth0, secret_auth0) = keys.pop().unwrap();
 
-        use std::env;
-        use std::fs;
+        // Create a random directory to store the DB
         let dir = env::temp_dir();
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
