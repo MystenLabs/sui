@@ -311,8 +311,12 @@ impl MassClient {
     {
         let handles = futures::stream::FuturesUnordered::new();
 
-        let client = self.clone();
-        let requests: Vec<_> = requests.into_iter().collect();
+        
+        let outer_requests: Vec<_> = requests.into_iter().collect();
+        let size = outer_requests.len() / 8;
+        for chunk in outer_requests[..].chunks(size) {
+            let requests : Vec<_> = chunk.iter().cloned().collect();
+            let client = self.clone();
         handles.push(
             tokio::spawn(async move {
                 info!(
@@ -331,6 +335,7 @@ impl MassClient {
             })
             .then(|x| async { x.unwrap_or_else(|_| Vec::new()) }),
         );
+    }
 
         handles
     }
