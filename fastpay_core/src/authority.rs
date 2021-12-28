@@ -306,7 +306,7 @@ impl AuthorityState {
                 .ok_or(FastPayError::CertificateNotfound)?;
             // Get the cert from the transaction digest
             response.requested_certificate = Some(
-                self.read_certificate(transaction_digest)?
+                self.read_certificate(transaction_digest).await?
                     .ok_or(FastPayError::CertificateNotfound)?
                     .clone(),
             );
@@ -475,13 +475,23 @@ impl AuthorityState {
     // Helper functions to manage certificates
 
     /// Read from the DB of certificates
-    pub fn read_certificate(
+    pub async fn read_certificate(
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<&CertifiedOrder>, FastPayError> {
         Ok(self.certificates.get(digest))
     }
+
+    pub async fn parent(&mut self, object_ref : &ObjectRef) -> Option<&TransactionDigest> {
+        self
+        .parent_sync
+        .get(&object_ref)
+    }
 }
+
+use std::path::Path;
+use store::rocks::{open_cf, DBMap};
+use store::traits::Map;
 
 pub struct AuthorityStore {
     objects: DBMap<ObjectID, Object>,
@@ -489,10 +499,6 @@ pub struct AuthorityStore {
     certificates: DBMap<TransactionDigest, CertifiedOrder>,
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
 }
-
-use std::path::Path;
-use store::rocks::{open_cf, DBMap};
-use store::traits::Map;
 
 impl AuthorityStore {
     pub fn open<P: AsRef<Path>>(path: P) -> AuthorityStore {
