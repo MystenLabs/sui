@@ -6,17 +6,17 @@ authors = ["Alberto Sonnino <asonnino@fb.com>"]
 edition = "2018"
 
 [dependencies]
-tokio = { version = "1.5.0", features = ["sync"] }
+tokio = { version = "1.15.0", features = ["sync"] }
 rand = { version = "0.7.3", optional = true}
 crypto = { path = "../crypto" }
 config = { path = "../config" }
 primary = { path = "../primary" }
-tracing = "0.1"
+tracing = "0.1.29"
 
 [dev-dependencies]
-bincode = "1.3"
-criterion = "0.3"
-pprof = { version = "0.6", features = ["criterion", "flamegraph"] }
+bincode = "1.3.3"
+criterion = "0.3.5"
+pprof = { version = "0.6.2", features = ["criterion", "flamegraph"] }
 
 [features]
 default = ["rand"]

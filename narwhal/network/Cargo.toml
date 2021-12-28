@@ -7,14 +7,14 @@ edition = "2018"
 publish = false
 
 [dependencies]
-tokio = { version = "1.5.0", features = ["rt", "net", "sync", "macros", "time"] }
-tokio-util = { version = "0.6.6", features = ["codec"] }
-thiserror = "1.0.24"
-bytes = "1.0.1"
-futures = "0.3.14"
+tokio = { version = "1.15.0", features = ["rt", "net", "sync", "macros", "time"] }
+tokio-util = { version = "0.6.9", features = ["codec"] }
+thiserror = "1.0.30"
+bytes = "1.1.0"
+futures = "0.3.19"
 rand = { version = "0.7.3", features = ["small_rng"] }
-async-trait = "0.1.50"
-tracing = { version = "0.1", features = ["log"] }
+async-trait = "0.1.52"
+tracing = { version = "0.1.29", features = ["log"] }
 
 
 [dev-dependencies]
