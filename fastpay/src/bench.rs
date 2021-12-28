@@ -22,7 +22,7 @@ use std::thread;
 )]
 struct ClientServerBenchmark {
     /// Choose a network protocol between Udp and Tcp
-    #[structopt(long, default_value = "udp")]
+    #[structopt(long, default_value = "tcp")]
     protocol: transport::NetworkProtocol,
     /// Hostname
     #[structopt(long, default_value = "127.0.0.1")]
@@ -34,10 +34,10 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "10")]
     committee_size: usize,
     /// Maximum number of requests in flight (0 for blocking client)
-    #[structopt(long, default_value = "1000")]
+    #[structopt(long, default_value = "100")]
     max_in_flight: usize,
     /// Number of accounts and transactions used in the benchmark
-    #[structopt(long, default_value = "40000")]
+    #[structopt(long, default_value = "10")]
     num_accounts: usize,
     /// Timeout for sending queries (us)
     #[structopt(long, default_value = "4000000")]
@@ -108,8 +108,8 @@ impl ClientServerBenchmark {
             let keypair = get_key_pair();
             let object_id: ObjectID = ObjectID::random();
 
-            let mut client = Object::with_id_for_testing(object_id);
-            client.transfer(keypair.0);
+            let client = Object::with_id_owner_for_testing(object_id, keypair.0);
+            assert!(client.next_sequence_number == SequenceNumber::from(0));
             state.init_order_lock(client.to_object_reference());
             state.insert_object(client);
             account_objects.push((keypair.0, object_id, keypair.1));
@@ -128,11 +128,11 @@ impl ClientServerBenchmark {
                 user_data: UserData::default(),
             };
             next_recipient = *pubx;
-            let order = Order::new_transfer(transfer.clone(), secx);
+            let order = Order::new_transfer(transfer, secx);
 
             // Serialize order
-            let bufx = serialize_order(&order);
-            assert!(!bufx.is_empty());
+            let serialized_order = serialize_order(&order);
+            assert!(!serialized_order.is_empty());
 
             // Make certificate
             let mut certificate = CertifiedOrder {
@@ -145,11 +145,12 @@ impl ClientServerBenchmark {
                 certificate.signatures.push((*pubx, sig));
             }
 
-            let bufx2 = serialize_cert(&certificate);
-            assert!(!bufx2.is_empty());
+            let serialized_certificate = serialize_cert(&certificate);
+            assert!(!serialized_certificate.is_empty());
 
-            orders.push(bufx2.into());
-            orders.push(bufx.into());
+            orders.push(serialized_order.into());
+            orders.push(serialized_certificate.into());
+
         }
 
         (state, orders)
@@ -172,7 +173,7 @@ impl ClientServerBenchmark {
         let items_number = orders.len() / 2;
         let time_start = Instant::now();
 
-        let max_in_flight = (self.max_in_flight as usize) as usize;
+        let max_in_flight = self.max_in_flight as usize;
         info!("Set max_in_flight to {}", max_in_flight);
 
         info!("Sending requests.");

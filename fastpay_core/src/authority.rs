@@ -125,7 +125,11 @@ impl AuthorityState {
             // Check that the seq number is the same
             fp_ensure!(
                 object.next_sequence_number == sequence_number,
-                FastPayError::UnexpectedSequenceNumber
+                FastPayError::UnexpectedSequenceNumber{
+                    object_id, 
+                    expected_sequence: object.next_sequence_number, 
+                    received_sequence: sequence_number
+                }
             );
 
             // If this is an immutable object, we do no more checks
