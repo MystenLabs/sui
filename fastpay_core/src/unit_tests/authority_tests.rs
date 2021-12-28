@@ -554,25 +554,6 @@ async fn test_account_state_unknown_account() {
         .is_err());
 }
 
-#[test]
-fn test_get_shards() {
-    let num_shards = 16u32;
-    let mut found = vec![false; num_shards as usize];
-    let mut left = num_shards;
-    loop {
-        let object_id = ObjectID::random();
-        let shard = AuthorityState::get_shard(num_shards, &object_id) as usize;
-        println!("found {}", shard);
-        if !found[shard] {
-            found[shard] = true;
-            left -= 1;
-            if left == 0 {
-                break;
-            }
-        }
-    }
-}
-
 // helpers
 
 #[cfg(test)]

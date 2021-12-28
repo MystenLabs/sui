@@ -19,7 +19,6 @@ use move_core_types::{
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
     collections::{BTreeMap, HashSet},
-    convert::TryInto,
     sync::Arc,
     sync::Mutex,
 };
@@ -39,10 +38,6 @@ pub struct AuthorityState {
     pub committee: Committee,
     /// The signature key of the authority.
     pub secret: KeyPair,
-    /// The sharding ID of this authority shard. 0 if one shard.
-    pub shard_id: ShardId,
-    /// The number of shards. 1 if single shard.
-    pub number_of_shards: u32,
 
     // The variable length dynamic state of the authority shard
     /// States of fastnft objects
@@ -93,7 +88,6 @@ impl AuthorityState {
         order: Order,
     ) -> Result<AccountInfoResponse, FastPayError> {
         // Check the sender's signature and retrieve the transfer data.
-        fp_ensure!(self.in_shard(order.object_id()), FastPayError::WrongShard);
         order.check_signature()?;
 
         // We first do all the checks that can be done in parallel with read only access to
@@ -174,7 +168,6 @@ impl AuthorityState {
         let order = certificate.order.clone();
         let mut object_id = *order.object_id();
         // Check the certificate and retrieve the transfer data.
-        fp_ensure!(self.in_shard(&object_id), FastPayError::WrongShard);
         certificate.check(&self.committee)?;
 
         let mut inputs = vec![];
@@ -298,7 +291,6 @@ impl AuthorityState {
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, FastPayError> {
-        fp_ensure!(self.in_shard(&request.object_id), FastPayError::WrongShard);
         let mut response = self.make_object_info(request.object_id).await?;
         if let Some(seq) = request.request_sequence_number {
             // Get the Transaction Digest that created the object
@@ -325,47 +317,10 @@ impl AuthorityState {
             secret,
             objects: Arc::new(Mutex::new(BTreeMap::new())),
             order_lock: BTreeMap::new(),
-            shard_id: 0,
-            number_of_shards: 1,
             certificates: BTreeMap::new(),
             parent_sync: BTreeMap::new(),
             native_functions: NativeFunctionTable::new(),
         }
-    }
-
-    pub fn new_shard(
-        committee: Committee,
-        name: AuthorityName,
-        secret: KeyPair,
-        shard_id: u32,
-        number_of_shards: u32,
-    ) -> Self {
-        AuthorityState {
-            committee,
-            name,
-            secret,
-            objects: Arc::new(Mutex::new(BTreeMap::new())),
-            order_lock: BTreeMap::new(),
-            shard_id,
-            number_of_shards,
-            certificates: BTreeMap::new(),
-            parent_sync: BTreeMap::new(),
-            native_functions: NativeFunctionTable::new(),
-        }
-    }
-
-    pub fn in_shard(&self, object_id: &ObjectID) -> bool {
-        self.which_shard(object_id) == self.shard_id
-    }
-
-    pub fn get_shard(num_shards: u32, object_id: &ObjectID) -> u32 {
-        const LAST_INTEGER_INDEX: usize = std::mem::size_of::<ObjectID>() - 4;
-        u32::from_le_bytes(object_id[LAST_INTEGER_INDEX..].try_into().expect("4 bytes"))
-            % num_shards
-    }
-
-    pub fn which_shard(&self, object_id: &ObjectID) -> u32 {
-        Self::get_shard(self.number_of_shards, object_id)
     }
 
     async fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {

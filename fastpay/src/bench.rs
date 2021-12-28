@@ -10,7 +10,6 @@ use fastx_types::{base_types::*, committee::*, messages::*, object::Object, seri
 use futures::stream::StreamExt;
 use log::*;
 use std::{
-    collections::HashMap,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
@@ -36,9 +35,6 @@ struct ClientServerBenchmark {
     /// Size of the FastPay committee
     #[structopt(long, default_value = "10")]
     committee_size: usize,
-    /// Number of shards per FastPay authority
-    #[structopt(long, default_value = "15")]
-    num_shards: u32,
     /// Maximum number of requests in flight (0 for blocking client)
     #[structopt(long, default_value = "1000")]
     max_in_flight: usize,
@@ -60,10 +56,10 @@ fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let benchmark = ClientServerBenchmark::from_args();
 
-    let (states, orders) = benchmark.make_structures();
+    let (state, orders) = benchmark.make_structures();
 
     // Start the servers on the thread pool
-    for state in states {
+
         // Make special single-core runtime for each server
         let b = benchmark.clone();
         thread::spawn(move || {
@@ -81,7 +77,7 @@ fn main() {
                 }
             });
         });
-    }
+
 
     let mut runtime = Builder::new()
         .enable_all()
@@ -93,7 +89,7 @@ fn main() {
 }
 
 impl ClientServerBenchmark {
-    fn make_structures(&self) -> (Vec<AuthorityState>, Vec<(u32, Bytes)>) {
+    fn make_structures(&self) -> (AuthorityState, Vec<Bytes>) {
         info!("Preparing accounts.");
         let mut keys = Vec::new();
         for _ in 0..self.committee_size {
@@ -106,35 +102,29 @@ impl ClientServerBenchmark {
 
         // Pick an authority and create one state per shard.
         let (public_auth0, secret_auth0) = keys.pop().unwrap();
-        let mut states = Vec::new();
-        for i in 0..self.num_shards {
-            let state = AuthorityState::new_shard(
+
+            let mut state = AuthorityState::new(
                 committee.clone(),
                 public_auth0,
                 secret_auth0.copy(),
-                i as u32,
-                self.num_shards,
             );
-            states.push(state);
-        }
 
         // Seed user accounts.
         let mut account_objects = Vec::new();
         for _ in 0..self.num_accounts {
             let keypair = get_key_pair();
             let object_id: ObjectID = ObjectID::random();
-            let i = AuthorityState::get_shard(self.num_shards, &object_id) as usize;
-            assert!(states[i].in_shard(&object_id));
+
             let mut client = Object::with_id_for_testing(object_id);
             client.transfer(keypair.0);
-            states[i].init_order_lock(client.to_object_reference());
-            states[i].insert_object(client);
+            state.init_order_lock(client.to_object_reference());
+            state.insert_object(client);
             account_objects.push((keypair.0, object_id, keypair.1));
         }
 
         info!("Preparing transactions.");
         // Make one transaction per account (transfer order + confirmation).
-        let mut orders: Vec<(u32, Bytes)> = Vec::new();
+        let mut orders: Vec<Bytes> = Vec::new();
         let mut next_recipient = get_key_pair().0;
         for (pubx, object_id, secx) in account_objects.iter() {
             let transfer = Transfer {
@@ -146,7 +136,6 @@ impl ClientServerBenchmark {
             };
             next_recipient = *pubx;
             let order = Order::new_transfer(transfer.clone(), secx);
-            let shard = AuthorityState::get_shard(self.num_shards, order.object_id());
 
             // Serialize order
             let bufx = serialize_order(&order);
@@ -166,11 +155,11 @@ impl ClientServerBenchmark {
             let bufx2 = serialize_cert(&certificate);
             assert!(!bufx2.is_empty());
 
-            orders.push((shard, bufx2.into()));
-            orders.push((shard, bufx.into()));
+            orders.push(bufx2.into());
+            orders.push(bufx.into());
         }
 
-        (states, orders)
+        (state, orders)
     }
 
     async fn spawn_server(&self, state: AuthorityState) -> transport::SpawnedServer {
@@ -184,14 +173,14 @@ impl ClientServerBenchmark {
         server.spawn().await.unwrap()
     }
 
-    async fn launch_client(&self, mut orders: Vec<(u32, Bytes)>) {
+    async fn launch_client(&self, mut orders: Vec<Bytes>) {
         time::delay_for(Duration::from_millis(1000)).await;
 
         let items_number = orders.len() / 2;
         let time_start = Instant::now();
 
-        let max_in_flight = (self.max_in_flight / self.num_shards as usize) as usize;
-        info!("Set max_in_flight per shard to {}", max_in_flight);
+        let max_in_flight = (self.max_in_flight as usize) as usize;
+        info!("Set max_in_flight to {}", max_in_flight);
 
         info!("Sending requests.");
         if self.max_in_flight > 0 {
@@ -204,14 +193,8 @@ impl ClientServerBenchmark {
                 Duration::from_micros(self.recv_timeout_us),
                 max_in_flight as u64,
             );
-            let mut sharded_requests = HashMap::new();
-            for (shard, buf) in orders.iter().rev() {
-                sharded_requests
-                    .entry(*shard)
-                    .or_insert_with(Vec::new)
-                    .push(buf.clone());
-            }
-            let responses = mass_client.run(sharded_requests).concat().await;
+
+            let responses = mass_client.run(orders).concat().await;
             info!("Received {} responses.", responses.len(),);
         } else {
             // Use actual client core
@@ -219,7 +202,6 @@ impl ClientServerBenchmark {
                 self.protocol,
                 self.host.clone(),
                 self.port,
-                self.num_shards,
                 self.buffer_size,
                 Duration::from_micros(self.send_timeout_us),
                 Duration::from_micros(self.recv_timeout_us),
@@ -229,8 +211,8 @@ impl ClientServerBenchmark {
                 if orders.len() % 1000 == 0 {
                     info!("Process message {}...", orders.len());
                 }
-                let (shard, order) = orders.pop().unwrap();
-                let status = client.send_recv_bytes(shard, order.to_vec()).await;
+                let order = orders.pop().unwrap();
+                let status = client.send_recv_bytes(order.to_vec()).await;
                 match status {
                     Ok(info) => {
                         debug!("Query response: {:?}", info);

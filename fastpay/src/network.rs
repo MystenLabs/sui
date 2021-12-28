@@ -3,7 +3,7 @@
 
 use crate::transport::*;
 use fastpay_core::{authority::*, client::*};
-use fastx_types::{base_types::*, error::*, messages::*, serialize::*};
+use fastx_types::{ error::*, messages::*, serialize::*};
 
 use bytes::Bytes;
 use futures::future::FutureExt;
@@ -54,12 +54,12 @@ impl Server {
             "Listening to {} traffic on {}:{}",
             self.network_protocol,
             self.base_address,
-            self.base_port + self.state.shard_id
+            self.base_port
         );
         let address = format!(
             "{}:{}",
             self.base_address,
-            self.base_port + self.state.shard_id
+            self.base_port
         );
 
         let buffer_size = self.buffer_size;
@@ -122,10 +122,9 @@ impl MessageHandler for RunningServerState {
             self.server.packets_processed += 1;
             if self.server.packets_processed % 5000 == 0 {
                 info!(
-                    "{}:{} (shard {}) has processed {} packets",
+                    "{}:{} has processed {} packets",
                     self.server.base_address,
-                    self.server.base_port + self.server.state.shard_id,
-                    self.server.state.shard_id,
+                    self.server.base_port,
                     self.server.packets_processed
                 );
             }
@@ -147,7 +146,6 @@ pub struct Client {
     network_protocol: NetworkProtocol,
     base_address: String,
     base_port: u32,
-    num_shards: u32,
     buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
@@ -158,7 +156,6 @@ impl Client {
         network_protocol: NetworkProtocol,
         base_address: String,
         base_port: u32,
-        num_shards: u32,
         buffer_size: usize,
         send_timeout: std::time::Duration,
         recv_timeout: std::time::Duration,
@@ -167,7 +164,6 @@ impl Client {
             network_protocol,
             base_address,
             base_port,
-            num_shards,
             buffer_size,
             send_timeout,
             recv_timeout,
@@ -176,10 +172,9 @@ impl Client {
 
     async fn send_recv_bytes_internal(
         &self,
-        shard: ShardId,
         buf: Vec<u8>,
     ) -> Result<Vec<u8>, io::Error> {
-        let address = format!("{}:{}", self.base_address, self.base_port + shard);
+        let address = format!("{}:{}", self.base_address, self.base_port);
         let mut stream = self
             .network_protocol
             .connect(address, self.buffer_size)
@@ -192,10 +187,9 @@ impl Client {
 
     pub async fn send_recv_bytes(
         &self,
-        shard: ShardId,
         buf: Vec<u8>,
     ) -> Result<AccountInfoResponse, FastPayError> {
-        match self.send_recv_bytes_internal(shard, buf).await {
+        match self.send_recv_bytes_internal(buf).await {
             Err(error) => Err(FastPayError::ClientIoError {
                 error: format!("{}", error),
             }),
@@ -216,8 +210,7 @@ impl AuthorityClient for Client {
     /// Initiate a new transfer to a FastPay or Primary account.
     fn handle_order(&mut self, order: Order) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
-            let shard = AuthorityState::get_shard(self.num_shards, order.object_id());
-            self.send_recv_bytes(shard, serialize_order(&order)).await
+            self.send_recv_bytes(serialize_order(&order)).await
         })
     }
 
@@ -227,9 +220,8 @@ impl AuthorityClient for Client {
         order: ConfirmationOrder,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
-            let shard =
-                AuthorityState::get_shard(self.num_shards, order.certificate.order.object_id());
-            self.send_recv_bytes(shard, serialize_cert(&order.certificate))
+
+            self.send_recv_bytes(serialize_cert(&order.certificate))
                 .await
         })
     }
@@ -240,8 +232,7 @@ impl AuthorityClient for Client {
         request: AccountInfoRequest,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
-            let shard = AuthorityState::get_shard(self.num_shards, &request.object_id);
-            self.send_recv_bytes(shard, serialize_info_request(&request))
+            self.send_recv_bytes(serialize_info_request(&request))
                 .await
         })
     }
@@ -279,8 +270,8 @@ impl MassClient {
         }
     }
 
-    async fn run_shard(&self, shard: u32, requests: Vec<Bytes>) -> Result<Vec<Bytes>, io::Error> {
-        let address = format!("{}:{}", self.base_address, self.base_port + shard);
+    async fn run_shard(&self, requests: Vec<Bytes>) -> Result<Vec<Bytes>, io::Error> {
+        let address = format!("{}:{}", self.base_address, self.base_port);
         let mut stream = self
             .network_protocol
             .connect(address, self.buffer_size)
@@ -336,36 +327,35 @@ impl MassClient {
     /// Spin off one task for each shard based on this authority client.
     pub fn run<I>(&self, sharded_requests: I) -> impl futures::stream::Stream<Item = Vec<Bytes>>
     where
-        I: IntoIterator<Item = (ShardId, Vec<Bytes>)>,
+        I: IntoIterator<Item = Bytes>,
     {
         let handles = futures::stream::FuturesUnordered::new();
-        for (shard, requests) in sharded_requests {
+
             let client = self.clone();
+            let requests : Vec<_> =  sharded_requests.into_iter().collect();
             handles.push(
                 tokio::spawn(async move {
                     info!(
-                        "Sending {} requests to {}:{} (shard {})",
+                        "Sending {} requests to {}:{}",
                         client.network_protocol,
                         client.base_address,
-                        client.base_port + shard,
-                        shard
+                        client.base_port,
                     );
                     let responses = client
-                        .run_shard(shard, requests)
+                        .run_shard(requests)
                         .await
                         .unwrap_or_else(|_| Vec::new());
                     info!(
-                        "Done sending {} requests to {}:{} (shard {})",
+                        "Done sending {} requests to {}:{}",
                         client.network_protocol,
                         client.base_address,
-                        client.base_port + shard,
-                        shard
+                        client.base_port,
                     );
                     responses
                 })
                 .then(|x| async { x.unwrap_or_else(|_| Vec::new()) }),
             );
-        }
+
         handles
     }
 }
