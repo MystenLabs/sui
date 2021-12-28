@@ -27,6 +27,12 @@ use zeroize::Zeroize;
 #[path = "tests/crypto_tests.rs"]
 pub mod crypto_tests;
 
+#[cfg(test)]
+#[path = "tests/arrays_tests.rs"]
+pub mod arrays_tests;
+
+mod arrays_serde;
+
 pub type CryptoError = ed25519::Error;
 
 /// Represents a hash digest (32 bytes).
@@ -185,30 +191,18 @@ where
 }
 
 /// Represents an ed25519 signature.
-#[derive(Serialize, Deserialize, Clone, Default, Debug)]
-pub struct Signature {
-    part1: [u8; 32],
-    part2: [u8; 32],
-}
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Signature(#[serde(with = "arrays_serde")] [u8; 64]);
 
 impl Signature {
     pub fn new(digest: &Digest, secret: &SecretKey) -> Self {
         let keypair = dalek::Keypair::from_bytes(&secret.0).expect("Unable to load secret key");
         let sig = keypair.sign(&digest.0).to_bytes();
-        let part1 = sig[..32].try_into().expect("Unexpected signature length");
-        let part2 = sig[32..64].try_into().expect("Unexpected signature length");
-        Signature { part1, part2 }
-    }
-
-    fn flatten(&self) -> [u8; 64] {
-        [self.part1, self.part2]
-            .concat()
-            .try_into()
-            .expect("Unexpected signature length")
+        Signature(sig)
     }
 
     pub fn verify(&self, digest: &Digest, public_key: &PublicKey) -> Result<(), CryptoError> {
-        let signature = ed25519::signature::Signature::from_bytes(&self.flatten())?;
+        let signature = ed25519::signature::Signature::from_bytes(&self.0)?;
         let key = dalek::PublicKey::from_bytes(&public_key.0)?;
         key.verify_strict(&digest.0, &signature)
     }
@@ -222,10 +216,16 @@ impl Signature {
         let mut keys: Vec<dalek::PublicKey> = Vec::new();
         for (key, sig) in votes.into_iter() {
             messages.push(&digest.0[..]);
-            signatures.push(ed25519::signature::Signature::from_bytes(&sig.flatten())?);
+            signatures.push(ed25519::signature::Signature::from_bytes(&sig.0)?);
             keys.push(dalek::PublicKey::from_bytes(&key.0)?);
         }
         dalek::verify_batch(&messages[..], &signatures[..], &keys[..])
+    }
+}
+
+impl Default for Signature {
+    fn default() -> Self {
+        Signature([0u8; 64])
     }
 }
 
