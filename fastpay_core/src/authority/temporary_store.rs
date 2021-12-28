@@ -97,7 +97,11 @@ impl Storage for AuthorityTemporaryStore {
             Some(x) => Some(x.clone()),
             None => {
                 let object = self.object_store.lock().unwrap().object_state(&id);
-                Some(object.expect("TODO: catch error here"))
+                match object {
+                    Ok(o) => Some(o),
+                    Err(FastPayError::UnknownSenderAccount) => None,
+                    _ => panic!("Cound not read object")
+                }
             }
         }
     }

@@ -137,7 +137,7 @@ async fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
         for object_id in object_ids {
             let mut object = Object::with_id_for_testing(object_id);
             object.transfer(client.address);
-            let mut client_ref = authority.0.as_ref().try_lock().unwrap();
+            let client_ref = authority.0.as_ref().try_lock().unwrap();
 
             client_ref.insert_object(object).await;
             client_ref.init_order_lock((object_id, 0.into())).await;

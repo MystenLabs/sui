@@ -108,7 +108,7 @@ impl ClientServerBenchmark {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let mut state =
+        let state =
             AuthorityState::new(committee.clone(), public_auth0, secret_auth0.copy(), path);
 
         // Seed user accounts.

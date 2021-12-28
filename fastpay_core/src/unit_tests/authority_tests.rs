@@ -20,7 +20,7 @@ async fn test_handle_transfer_order_bad_signature() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
-    let mut authority_state = init_state_with_object(sender, object_id).await;
+    let authority_state = init_state_with_object(sender, object_id).await;
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
     let object_id = *transfer_order.object_id();
     let (_unknown_address, unknown_key) = get_key_pair();
@@ -51,7 +51,7 @@ async fn test_handle_transfer_order_unknown_sender() {
     let (unknown_address, unknown_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = Address::FastPay(dbg_addr(2));
-    let mut authority_state = init_state_with_object(sender, object_id).await;
+    let authority_state = init_state_with_object(sender, object_id).await;
     let transfer_order = init_transfer_order(unknown_address, &sender_key, recipient, object_id);
 
     let unknown_sender_transfer = transfer_order.kind;
@@ -108,7 +108,7 @@ async fn test_handle_transfer_order_ok() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
-    let mut authority_state = init_state_with_object(sender, object_id).await;
+    let authority_state = init_state_with_object(sender, object_id).await;
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
     // Check the initial state of the locks
@@ -317,7 +317,7 @@ async fn test_handle_transfer_order_double_spend() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
-    let mut authority_state = init_state_with_object(sender, object_id).await;
+    let authority_state = init_state_with_object(sender, object_id).await;
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
     let signed_order = authority_state
@@ -332,7 +332,7 @@ async fn test_handle_transfer_order_double_spend() {
 async fn test_handle_confirmation_order_unknown_sender() {
     let recipient = dbg_addr(2);
     let (sender, sender_key) = get_key_pair();
-    let mut authority_state = init_state();
+    let authority_state = init_state();
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
@@ -357,7 +357,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
-    let mut authority_state = init_state_with_object(sender, object_id).await;
+    let authority_state = init_state_with_object(sender, object_id).await;
 
     // Record the old sequence number
     let old_seq_num;
@@ -408,7 +408,7 @@ async fn test_handle_confirmation_order_exceed_balance() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
-    let mut authority_state = init_state_with_object(sender, object_id).await;
+    let authority_state = init_state_with_object(sender, object_id).await;
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
@@ -434,7 +434,7 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let (recipient, _) = get_key_pair();
-    let mut authority_state =
+    let authority_state =
         init_state_with_ids(vec![(sender, object_id), (recipient, ObjectID::random())]).await;
 
     let certified_transfer_order = init_certified_transfer_order(
@@ -464,7 +464,7 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
 async fn test_handle_confirmation_order_receiver_equal_sender() {
     let (address, key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
-    let mut authority_state = init_state_with_object(address, object_id).await;
+    let authority_state = init_state_with_object(address, object_id).await;
 
     let certified_transfer_order = init_certified_transfer_order(
         address,
@@ -491,7 +491,7 @@ async fn test_handle_confirmation_order_ok() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
-    let mut authority_state = init_state_with_object(sender, object_id).await;
+    let authority_state = init_state_with_object(sender, object_id).await;
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
@@ -580,7 +580,7 @@ fn init_state() -> AuthorityState {
 async fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
     objects: I,
 ) -> AuthorityState {
-    let mut state = init_state();
+    let state = init_state();
     for (address, object_id) in objects {
         let mut obj = Object::with_id_for_testing(object_id);
         obj.transfer(address);
@@ -591,7 +591,7 @@ async fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>
 }
 
 async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
-    let mut state = init_state();
+    let state = init_state();
 
     for o in objects {
         let obj_ref = o.to_object_reference();

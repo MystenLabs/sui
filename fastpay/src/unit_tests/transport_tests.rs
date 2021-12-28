@@ -27,7 +27,7 @@ impl TestService {
 
 impl MessageHandler for TestService {
     fn handle_message<'a>(
-        &'a mut self,
+        &'a self,
         buffer: &'a [u8],
     ) -> future::BoxFuture<'a, Option<Vec<u8>>> {
         self.counter.fetch_add(buffer.len(), Ordering::Relaxed);

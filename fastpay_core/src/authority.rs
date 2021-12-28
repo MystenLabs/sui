@@ -90,7 +90,7 @@ pub struct AuthorityState {
 impl AuthorityState {
     /// Initiate a new transfer.
     pub async fn handle_order(
-        &mut self,
+        &self,
         order: Order,
     ) -> Result<AccountInfoResponse, FastPayError> {
         // Check the sender's signature and retrieve the transfer data.
@@ -171,7 +171,7 @@ impl AuthorityState {
 
     /// Confirm a transfer.
     pub async fn handle_confirmation_order(
-        &mut self,
+        &self,
         confirmation_order: ConfirmationOrder,
     ) -> Result<AccountInfoResponse, FastPayError> {
         let certificate = confirmation_order.certificate;
@@ -374,7 +374,7 @@ impl AuthorityState {
     // Helper function to manage order_locks
 
     /// Initialize an order lock for an object/sequence to None
-    pub async fn init_order_lock(&mut self, object_ref: ObjectRef) {
+    pub async fn init_order_lock(&self, object_ref: ObjectRef) {
         self._database
             .lock()
             .unwrap()
@@ -385,7 +385,7 @@ impl AuthorityState {
 
     /// Set the order lock to a specific transaction
     pub async fn set_order_lock(
-        &mut self,
+        &self,
         mutable_input_objects: &[ObjectRef],
         signed_order: SignedOrder,
     ) -> Result<(), FastPayError> {
@@ -396,7 +396,7 @@ impl AuthorityState {
     }
 
     async fn update_state(
-        &mut self,
+        &self,
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedOrder,
     ) -> Result<(), FastPayError> {

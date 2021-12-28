@@ -47,7 +47,7 @@ pub trait DataStreamPool: Send {
 
 /// The handler required to create a service.
 pub trait MessageHandler {
-    fn handle_message<'a>(&'a mut self, buffer: &'a [u8])
+    fn handle_message<'a>(&'a self, buffer: &'a [u8])
         -> future::BoxFuture<'a, Option<Vec<u8>>>;
 }
 
@@ -104,7 +104,7 @@ impl NetworkProtocol {
         buffer_size: usize,
     ) -> Result<SpawnedServer, std::io::Error>
     where
-        S: MessageHandler + Send + 'static,
+        S: MessageHandler + Send + Sync + 'static,
     {
         let (complete, receiver) = futures::channel::oneshot::channel();
         let handle = match self {
@@ -188,7 +188,7 @@ impl DataStreamPool for UdpDataStreamPool {
 impl NetworkProtocol {
     async fn run_udp_server<S>(
         mut socket: UdpSocket,
-        mut state: S,
+        state: S,
         mut exit_future: futures::channel::oneshot::Receiver<()>,
         buffer_size: usize,
     ) -> Result<(), std::io::Error>
@@ -329,9 +329,9 @@ impl NetworkProtocol {
         buffer_size: usize,
     ) -> Result<(), std::io::Error>
     where
-        S: MessageHandler + Send + 'static,
+        S: MessageHandler + Send + Sync + 'static,
     {
-        let guarded_state = Arc::new(futures::lock::Mutex::new(state));
+        let guarded_state = Arc::new(Box::new(state));
         loop {
             let (mut socket, _) =
                 match future::select(exit_future, Box::pin(listener.accept())).await {
@@ -359,7 +359,7 @@ impl NetworkProtocol {
                     };
 
                     if let Some(reply) =
-                        guarded_state.lock().await.handle_message(&buffer[..]).await
+                        guarded_state.handle_message(&buffer[..]).await
                     {
                         let status = TcpDataStream::tcp_write_data(&mut socket, &reply[..]).await;
                         if let Err(error) = status {

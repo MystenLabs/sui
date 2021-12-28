@@ -70,7 +70,7 @@ struct RunningServerState {
 
 impl MessageHandler for RunningServerState {
     fn handle_message<'a>(
-        &'a mut self,
+        &'a self,
         buffer: &'a [u8],
     ) -> futures::future::BoxFuture<'a, Option<Vec<u8>>> {
         Box::pin(async move {
@@ -113,7 +113,7 @@ impl MessageHandler for RunningServerState {
                 }
             };
 
-            self.server.packets_processed += 1;
+            // self.server.packets_processed += 1;
             if self.server.packets_processed % 5000 == 0 {
                 info!(
                     "{}:{} has processed {} packets",
@@ -125,7 +125,7 @@ impl MessageHandler for RunningServerState {
                 Ok(x) => x,
                 Err(error) => {
                     warn!("User query failed: {}", error);
-                    self.server.user_errors += 1;
+                    // self.server.user_errors += 1;
                     Some(serialize_error(&error))
                 }
             }
