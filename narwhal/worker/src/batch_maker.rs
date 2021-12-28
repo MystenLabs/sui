@@ -123,7 +123,7 @@ impl BatchMaker {
         #[cfg(feature = "benchmark")]
         {
             // NOTE: This is one extra hash that is only needed to print the following log entries.
-            let digest = Digest(
+            let digest = Digest::new(
                 Sha512::digest(&serialized).as_slice()[..32]
                     .try_into()
                     .unwrap(),

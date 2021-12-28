@@ -54,7 +54,7 @@ async fn propose_payload() {
     );
 
     // Send enough digests for the header payload.
-    let digest = Digest(name.0);
+    let digest = Digest::new(name.0);
     let worker_id = 0;
     tx_our_digests
         .send((digest.clone(), worker_id))

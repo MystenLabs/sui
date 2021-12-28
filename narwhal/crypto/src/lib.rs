@@ -29,9 +29,13 @@ pub type CryptoError = ed25519::Error;
 
 /// Represents a hash digest (32 bytes).
 #[derive(Hash, PartialEq, Default, Eq, Clone, Deserialize, Serialize, Ord, PartialOrd)]
-pub struct Digest(pub [u8; 32]);
+pub struct Digest([u8; 32]);
 
 impl Digest {
+    pub fn new(val: [u8; 32]) -> Self {
+        Digest(val)
+    }
+
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }

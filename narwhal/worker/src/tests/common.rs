@@ -105,7 +105,7 @@ pub fn serialized_batch() -> Vec<u8> {
 
 // Fixture
 pub fn batch_digest() -> Digest {
-    Digest(
+    Digest::new(
         Sha512::digest(&serialized_batch()).as_slice()[..32]
             .try_into()
             .unwrap(),

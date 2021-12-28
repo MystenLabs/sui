@@ -83,7 +83,7 @@ impl Hash for Header {
         for x in &self.parents {
             hasher.update(x);
         }
-        Digest(hasher.finalize().as_slice()[..32].try_into().unwrap())
+        Digest::new(hasher.finalize().as_slice()[..32].try_into().unwrap())
     }
 }
 
@@ -152,7 +152,7 @@ impl Hash for Vote {
         hasher.update(&self.id);
         hasher.update(self.round.to_le_bytes());
         hasher.update(&self.origin);
-        Digest(hasher.finalize().as_slice()[..32].try_into().unwrap())
+        Digest::new(hasher.finalize().as_slice()[..32].try_into().unwrap())
     }
 }
 
@@ -233,7 +233,7 @@ impl Hash for Certificate {
         hasher.update(&self.header.id);
         hasher.update(self.round().to_le_bytes());
         hasher.update(&self.origin());
-        Digest(hasher.finalize().as_slice()[..32].try_into().unwrap())
+        Digest::new(hasher.finalize().as_slice()[..32].try_into().unwrap())
     }
 }
 
