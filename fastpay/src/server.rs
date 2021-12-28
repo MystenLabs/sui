@@ -43,11 +43,11 @@ fn make_shard_server(
     for initial_state_cfg_entry in &initial_accounts_config.config {
         let address = &initial_state_cfg_entry.address;
 
-        for object_id in &initial_state_cfg_entry.object_ids {
-            if AuthorityState::get_shard(num_shards, object_id) != shard {
-                continue;
-            }
-
+        for object_id in initial_state_cfg_entry
+            .object_ids
+            .iter()
+            .filter(|oid| AuthorityState::get_shard(num_shards, oid) == shard)
+        {
             let object = Object::with_id_owner_for_testing(*object_id, *address);
 
             state.init_order_lock(object.to_object_reference());

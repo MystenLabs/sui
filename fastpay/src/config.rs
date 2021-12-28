@@ -14,7 +14,6 @@ use std::{
     fs::{self, read_to_string, File, OpenOptions},
     io::{BufReader, BufWriter, Write},
 };
-use toml;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthorityConfig {
@@ -220,8 +219,7 @@ impl InitialStateConfig {
     pub fn read(path: &str) -> Result<Self, anyhow::Error> {
         let raw_data: String = read_to_string(path)?.parse()?;
 
-        let config_entries: InitialStateConfig = toml::from_str(&raw_data).unwrap();
-        Ok(config_entries)
+        Ok(toml::from_str(&raw_data)?)
     }
 
     pub fn write(&self, path: &str) -> Result<(), std::io::Error> {

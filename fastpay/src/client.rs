@@ -451,10 +451,12 @@ fn main() {
             for addr in accounts_config.addresses() {
                 let mut tmp = String::new();
                 write!(&mut tmp, "{:?}", addr).unwrap();
-                let mut chars = tmp.chars();
                 // Remove `=` symbol at the end
-                chars.next_back();
-                writeln!(addr_text, "{}", chars.as_str()).unwrap();
+                tmp = match tmp.strip_suffix('=') {
+                    Some(x) => x.to_string(),
+                    None => tmp,
+                };
+                writeln!(addr_text, "{}", tmp).unwrap();
             }
             print!("{}", addr_text);
         }
@@ -479,9 +481,7 @@ fn main() {
                 info!("ObjectIds confirmed after {} us", time_total);
 
                 for (obj_id, seq_num) in objects_ids {
-                    let mut obj_ids_text = String::new();
-                    write!(obj_ids_text, "0x{}: {:?}", obj_id, seq_num).unwrap();
-                    println!("{}", obj_ids_text);
+                    println!("{:#x}: {:?}", obj_id, seq_num);
                 }
                 accounts_config.update_from_state(&client_state);
                 accounts_config
