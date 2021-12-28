@@ -31,7 +31,7 @@ mod temporary_store;
 use temporary_store::AuthorityTemporaryStore;
 
 pub struct AuthorityState {
-    // Fixed size, static, identity of the authority and shard
+    // Fixed size, static, identity of the authority
     /// The name of this authority.
     pub name: AuthorityName,
     /// Committee of this FastPay instance.
@@ -39,7 +39,7 @@ pub struct AuthorityState {
     /// The signature key of the authority.
     pub secret: KeyPair,
 
-    // The variable length dynamic state of the authority shard
+    // The variable length dynamic state of the authority
     /// States of fastnft objects
     ///
     /// This is the placeholder data representation for the actual database
@@ -77,7 +77,7 @@ pub struct AuthorityState {
     native_functions: NativeFunctionTable,
 }
 
-/// Interface provided by each (shard of an) authority.
+/// Interface provided by each authority.
 /// All commands return either the current account info or an error.
 /// Repeating commands produces no changes and returns no error.
 
@@ -614,11 +614,12 @@ impl AuthorityStore {
 
         // Store the certificate indexed by transaction digest
         let transaction_digest: TransactionDigest = certificate.order.digest();
-        write_batch = write_batch.insert_batch(
-            &self.certificates,
-            [(transaction_digest, certificate)].iter().cloned())
+        write_batch = write_batch
+            .insert_batch(
+                &self.certificates,
+                [(transaction_digest, certificate)].iter().cloned(),
+            )
             .map_err(|_| FastPayError::StorageError)?;
-        
 
         for deleted_ref in _deleted {
             // Remove the object
@@ -630,11 +631,12 @@ impl AuthorityStore {
         // Insert each output object into the stores, index and make locks for it.
         for output_ref in written {
             // Index the certificate by the objects created
-            write_batch = write_batch.insert_batch(
-                &self.parent_sync,
-                [(output_ref, transaction_digest)].iter().cloned())
+            write_batch = write_batch
+                .insert_batch(
+                    &self.parent_sync,
+                    [(output_ref, transaction_digest)].iter().cloned(),
+                )
                 .map_err(|_| FastPayError::StorageError)?;
-            
 
             // Add new object, init locks and remove old ones
             let object = objects
@@ -643,16 +645,14 @@ impl AuthorityStore {
 
             if !object.is_read_only() {
                 // Only objects that can be mutated have locks.
-                write_batch = write_batch.insert_batch(
-                    &self.order_lock,
-                    [(output_ref, None)].iter().cloned())
+                write_batch = write_batch
+                    .insert_batch(&self.order_lock, [(output_ref, None)].iter().cloned())
                     .map_err(|_| FastPayError::StorageError)?;
             }
 
             // Write the new object
-            write_batch = write_batch.insert_batch(
-                &self.objects,
-                [(output_ref.0, object)].iter().cloned())
+            write_batch = write_batch
+                .insert_batch(&self.objects, [(output_ref.0, object)].iter().cloned())
                 .map_err(|_| FastPayError::StorageError)?;
         }
 

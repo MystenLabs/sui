@@ -3,7 +3,7 @@
 
 use crate::transport::*;
 use fastpay_core::{authority::*, client::*};
-use fastx_types::{ error::*, messages::*, serialize::*};
+use fastx_types::{error::*, messages::*, serialize::*};
 
 use bytes::Bytes;
 use futures::future::FutureExt;
@@ -52,15 +52,9 @@ impl Server {
     pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
         info!(
             "Listening to {} traffic on {}:{}",
-            self.network_protocol,
-            self.base_address,
-            self.base_port
+            self.network_protocol, self.base_address, self.base_port
         );
-        let address = format!(
-            "{}:{}",
-            self.base_address,
-            self.base_port
-        );
+        let address = format!("{}:{}", self.base_address, self.base_port);
 
         let buffer_size = self.buffer_size;
         let protocol = self.network_protocol;
@@ -123,9 +117,7 @@ impl MessageHandler for RunningServerState {
             if self.server.packets_processed % 5000 == 0 {
                 info!(
                     "{}:{} has processed {} packets",
-                    self.server.base_address,
-                    self.server.base_port,
-                    self.server.packets_processed
+                    self.server.base_address, self.server.base_port, self.server.packets_processed
                 );
             }
 
@@ -170,10 +162,7 @@ impl Client {
         }
     }
 
-    async fn send_recv_bytes_internal(
-        &self,
-        buf: Vec<u8>,
-    ) -> Result<Vec<u8>, io::Error> {
+    async fn send_recv_bytes_internal(&self, buf: Vec<u8>) -> Result<Vec<u8>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port);
         let mut stream = self
             .network_protocol
@@ -185,10 +174,7 @@ impl Client {
         time::timeout(self.recv_timeout, stream.read_data()).await?
     }
 
-    pub async fn send_recv_bytes(
-        &self,
-        buf: Vec<u8>,
-    ) -> Result<AccountInfoResponse, FastPayError> {
+    pub async fn send_recv_bytes(&self, buf: Vec<u8>) -> Result<AccountInfoResponse, FastPayError> {
         match self.send_recv_bytes_internal(buf).await {
             Err(error) => Err(FastPayError::ClientIoError {
                 error: format!("{}", error),
@@ -209,9 +195,7 @@ impl Client {
 impl AuthorityClient for Client {
     /// Initiate a new transfer to a FastPay or Primary account.
     fn handle_order(&mut self, order: Order) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
-        Box::pin(async move {
-            self.send_recv_bytes(serialize_order(&order)).await
-        })
+        Box::pin(async move { self.send_recv_bytes(serialize_order(&order)).await })
     }
 
     /// Confirm a transfer to a FastPay or Primary account.
@@ -220,7 +204,6 @@ impl AuthorityClient for Client {
         order: ConfirmationOrder,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         Box::pin(async move {
-
             self.send_recv_bytes(serialize_cert(&order.certificate))
                 .await
         })
@@ -231,10 +214,7 @@ impl AuthorityClient for Client {
         &self,
         request: AccountInfoRequest,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
-        Box::pin(async move {
-            self.send_recv_bytes(serialize_info_request(&request))
-                .await
-        })
+        Box::pin(async move { self.send_recv_bytes(serialize_info_request(&request)).await })
     }
 }
 
@@ -331,30 +311,26 @@ impl MassClient {
     {
         let handles = futures::stream::FuturesUnordered::new();
 
-            let client = self.clone();
-            let requests : Vec<_> =  requests.into_iter().collect();
-            handles.push(
-                tokio::spawn(async move {
-                    info!(
-                        "Sending {} requests to {}:{}",
-                        client.network_protocol,
-                        client.base_address,
-                        client.base_port,
-                    );
-                    let responses = client
-                        .run_core(requests)
-                        .await
-                        .unwrap_or_else(|_| Vec::new());
-                    info!(
-                        "Done sending {} requests to {}:{}",
-                        client.network_protocol,
-                        client.base_address,
-                        client.base_port,
-                    );
-                    responses
-                })
-                .then(|x| async { x.unwrap_or_else(|_| Vec::new()) }),
-            );
+        let client = self.clone();
+        let requests: Vec<_> = requests.into_iter().collect();
+        handles.push(
+            tokio::spawn(async move {
+                info!(
+                    "Sending {} requests to {}:{}",
+                    client.network_protocol, client.base_address, client.base_port,
+                );
+                let responses = client
+                    .run_core(requests)
+                    .await
+                    .unwrap_or_else(|_| Vec::new());
+                info!(
+                    "Done sending {} requests to {}:{}",
+                    client.network_protocol, client.base_address, client.base_port,
+                );
+                responses
+            })
+            .then(|x| async { x.unwrap_or_else(|_| Vec::new()) }),
+        );
 
         handles
     }

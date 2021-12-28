@@ -9,9 +9,7 @@ use fastpay_core::authority::*;
 use fastx_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use futures::stream::StreamExt;
 use log::*;
-use std::{
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use tokio::{runtime::Builder, time};
 
@@ -60,24 +58,23 @@ fn main() {
 
     // Start the servers on the thread pool
 
-        // Make special single-core runtime for each server
-        let b = benchmark.clone();
-        thread::spawn(move || {
-            let mut runtime = Builder::new()
-                .enable_all()
-                .basic_scheduler()
-                .thread_stack_size(15 * 1024 * 1024)
-                .build()
-                .unwrap();
+    // Make special single-core runtime for each server
+    let b = benchmark.clone();
+    thread::spawn(move || {
+        let mut runtime = Builder::new()
+            .enable_all()
+            .basic_scheduler()
+            .thread_stack_size(15 * 1024 * 1024)
+            .build()
+            .unwrap();
 
-            runtime.block_on(async move {
-                let server = b.spawn_server(state).await;
-                if let Err(err) = server.join().await {
-                    error!("Server ended with an error: {}", err);
-                }
-            });
+        runtime.block_on(async move {
+            let server = b.spawn_server(state).await;
+            if let Err(err) = server.join().await {
+                error!("Server ended with an error: {}", err);
+            }
         });
-
+    });
 
     let mut runtime = Builder::new()
         .enable_all()
@@ -100,14 +97,10 @@ impl ClientServerBenchmark {
             total_votes: self.committee_size,
         };
 
-        // Pick an authority and create one state per shard.
+        // Pick an authority and create state.
         let (public_auth0, secret_auth0) = keys.pop().unwrap();
 
-            let mut state = AuthorityState::new(
-                committee.clone(),
-                public_auth0,
-                secret_auth0.copy(),
-            );
+        let mut state = AuthorityState::new(committee.clone(), public_auth0, secret_auth0.copy());
 
         // Seed user accounts.
         let mut account_objects = Vec::new();

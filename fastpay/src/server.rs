@@ -82,7 +82,6 @@ enum ServerCommands {
         /// Path to the file describing the initial user accounts
         #[structopt(long)]
         initial_accounts: String,
-
     },
 
     /// Generate a new server configuration and output its public description
@@ -120,31 +119,30 @@ fn main() {
         } => {
             // Run the server
 
-                    let server = make_server(
-                        "0.0.0.0", // Allow local IP address to be different from the public one.
-                        server_config_path,
-                        &committee,
-                        &initial_accounts,
-                        buffer_size,
-                    );
-
+            let server = make_server(
+                "0.0.0.0", // Allow local IP address to be different from the public one.
+                server_config_path,
+                &committee,
+                &initial_accounts,
+                buffer_size,
+            );
 
             let mut rt = Runtime::new().unwrap();
             let mut handles = Vec::new();
 
-                handles.push(async move {
-                    let spawned_server = match server.spawn().await {
-                        Ok(server) => server,
-                        Err(err) => {
-                            error!("Failed to start server: {}", err);
-                            return;
-                        }
-                    };
-                    if let Err(err) = spawned_server.join().await {
-                        error!("Server ended with an error: {}", err);
+            handles.push(async move {
+                let spawned_server = match server.spawn().await {
+                    Ok(server) => server,
+                    Err(err) => {
+                        error!("Failed to start server: {}", err);
+                        return;
                     }
-                });
-            
+                };
+                if let Err(err) = spawned_server.join().await {
+                    error!("Server ended with an error: {}", err);
+                }
+            });
+
             rt.block_on(join_all(handles));
         }
 

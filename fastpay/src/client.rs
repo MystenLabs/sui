@@ -4,7 +4,7 @@
 #![deny(warnings)]
 
 use fastpay::{config::*, network, transport};
-use fastpay_core::{client::*};
+use fastpay_core::client::*;
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
 
 use bytes::Bytes;
@@ -222,8 +222,7 @@ async fn mass_broadcast_orders(
         // Re-index orders by shard for this particular authority client.
         let mut sharded_requests = Vec::new();
         for (_object_id, buf) in &orders {
-            sharded_requests
-                .push(buf.clone());
+            sharded_requests.push(buf.clone());
         }
         streams.push(client.run(sharded_requests));
     }
