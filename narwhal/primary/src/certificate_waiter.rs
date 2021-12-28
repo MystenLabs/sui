@@ -44,7 +44,6 @@ impl CertificateWaiter {
     /// Helper function. It waits for particular data to become available in the storage
     /// and then delivers the specified header.
     async fn waiter(
-        // TODO: this signature is just here to avoid thinking about lifetimes, fix it
         missing: Vec<Digest>,
         store: &Store<Digest, Certificate>,
         deliver: Certificate,
