@@ -40,7 +40,7 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "1000")]
     max_in_flight: usize,
     /// Number of accounts and transactions used in the benchmark
-    #[structopt(long, default_value = "10000")]
+    #[structopt(long, default_value = "100000")]
     num_accounts: usize,
     /// Timeout for sending queries (us)
     #[structopt(long, default_value = "4000000")]

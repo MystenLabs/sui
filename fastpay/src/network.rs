@@ -114,12 +114,14 @@ impl MessageHandler for RunningServerState {
             };
 
             // self.server.packets_processed += 1;
+            /*
             if self.server.packets_processed % 5000 == 0 {
                 info!(
                     "{}:{} has processed {} packets",
                     self.server.base_address, self.server.base_port, self.server.packets_processed
                 );
             }
+            */
 
             match reply {
                 Ok(x) => x,
