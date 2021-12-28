@@ -45,7 +45,11 @@ pub enum FastPayError {
     #[error(
         "The given sequence ({received_sequence:?}) number must match the next expected sequence ({expected_sequence:?}) number of the account"
     )]
-    UnexpectedSequenceNumber {object_id : ObjectID, expected_sequence: SequenceNumber, received_sequence: SequenceNumber},
+    UnexpectedSequenceNumber {
+        object_id: ObjectID,
+        expected_sequence: SequenceNumber,
+        received_sequence: SequenceNumber,
+    },
     #[error(
          "The transferred amount must be not exceed the current account balance: {current_balance:?}"
     )]

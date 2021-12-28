@@ -11,6 +11,7 @@ use futures::stream::StreamExt;
 use log::*;
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
+use tokio::runtime::Runtime;
 use tokio::{runtime::Builder, time};
 
 use std::thread;
@@ -34,10 +35,10 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "10")]
     committee_size: usize,
     /// Maximum number of requests in flight (0 for blocking client)
-    #[structopt(long, default_value = "100")]
+    #[structopt(long, default_value = "1000")]
     max_in_flight: usize,
     /// Number of accounts and transactions used in the benchmark
-    #[structopt(long, default_value = "10")]
+    #[structopt(long, default_value = "10000")]
     num_accounts: usize,
     /// Timeout for sending queries (us)
     #[structopt(long, default_value = "4000000")]
@@ -46,7 +47,7 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "4000000")]
     recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
-    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
+    #[structopt(long, default_value = "4000000")]
     buffer_size: usize,
 }
 
@@ -63,7 +64,7 @@ fn main() {
     thread::spawn(move || {
         let mut runtime = Builder::new()
             .enable_all()
-            .basic_scheduler()
+            .threaded_scheduler()
             .thread_stack_size(15 * 1024 * 1024)
             .build()
             .unwrap();
@@ -100,20 +101,30 @@ impl ClientServerBenchmark {
         // Pick an authority and create state.
         let (public_auth0, secret_auth0) = keys.pop().unwrap();
 
-        let mut state = AuthorityState::new(committee.clone(), public_auth0, secret_auth0.copy());
+        use std::env;
+        use std::fs;
+        let dir = env::temp_dir();
+        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        fs::create_dir(&path).unwrap();
+
+        let mut state =
+            AuthorityState::new(committee.clone(), public_auth0, secret_auth0.copy(), path);
 
         // Seed user accounts.
+        let mut rt = Runtime::new().unwrap();
         let mut account_objects = Vec::new();
-        for _ in 0..self.num_accounts {
-            let keypair = get_key_pair();
-            let object_id: ObjectID = ObjectID::random();
+        rt.block_on(async {
+            for _ in 0..self.num_accounts {
+                let keypair = get_key_pair();
+                let object_id: ObjectID = ObjectID::random();
 
-            let client = Object::with_id_owner_for_testing(object_id, keypair.0);
-            assert!(client.next_sequence_number == SequenceNumber::from(0));
-            state.init_order_lock(client.to_object_reference());
-            state.insert_object(client);
-            account_objects.push((keypair.0, object_id, keypair.1));
-        }
+                let client = Object::with_id_owner_for_testing(object_id, keypair.0);
+                assert!(client.next_sequence_number == SequenceNumber::from(0));
+                state.init_order_lock(client.to_object_reference()).await;
+                state.insert_object(client).await;
+                account_objects.push((keypair.0, object_id, keypair.1));
+            }
+        });
 
         info!("Preparing transactions.");
         // Make one transaction per account (transfer order + confirmation).
@@ -150,7 +161,6 @@ impl ClientServerBenchmark {
 
             orders.push(serialized_order.into());
             orders.push(serialized_certificate.into());
-
         }
 
         (state, orders)

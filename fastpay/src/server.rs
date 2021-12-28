@@ -9,6 +9,7 @@ use fastx_types::{base_types::*, committee::Committee, object::Object};
 
 use futures::future::join_all;
 use log::*;
+use std::path::Path;
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
 
@@ -33,14 +34,18 @@ fn make_server(
         committee,
         server_config.authority.address,
         server_config.key.copy(),
+        Path::new(&server_config.authority.database_path),
     );
 
     // Load initial states
-    for (address, object_id) in &initial_accounts_config.accounts {
-        let mut client = Object::with_id_for_testing(*object_id);
-        client.transfer(*address);
-        state.insert_object(client);
-    }
+    let mut rt = Runtime::new().unwrap();
+    rt.block_on(async {
+        for (address, object_id) in &initial_accounts_config.accounts {
+            let mut client = Object::with_id_for_testing(*object_id);
+            client.transfer(*address);
+            state.insert_object(client).await;
+        }
+    });
 
     network::Server::new(
         server_config.authority.network_protocol,

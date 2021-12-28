@@ -4,7 +4,7 @@
 #![deny(warnings)]
 
 use fastpay::{config::*, network, transport};
-use fastpay_core::{client::*};
+use fastpay_core::client::*;
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
 
 use bytes::Bytes;
@@ -219,11 +219,9 @@ async fn mass_broadcast_orders(
     );
     let mut streams = Vec::new();
     for client in authority_clients {
-
         let mut requests = Vec::new();
         for (_object_id, buf) in &orders {
-            requests
-                .push(buf.clone());
+            requests.push(buf.clone());
         }
         streams.push(client.run(requests));
     }

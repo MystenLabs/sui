@@ -75,6 +75,8 @@ pub struct AuthorityState {
 
     /// Move native functions that are available to invoke
     native_functions: NativeFunctionTable,
+    /// The database
+    _database: Arc<futures::lock::Mutex<AuthorityStore>>,
 }
 
 /// Interface provided by each authority.
@@ -125,9 +127,9 @@ impl AuthorityState {
             // Check that the seq number is the same
             fp_ensure!(
                 object.next_sequence_number == sequence_number,
-                FastPayError::UnexpectedSequenceNumber{
-                    object_id, 
-                    expected_sequence: object.next_sequence_number, 
+                FastPayError::UnexpectedSequenceNumber {
+                    object_id,
+                    expected_sequence: object.next_sequence_number,
                     received_sequence: sequence_number
                 }
             );
@@ -314,7 +316,12 @@ impl AuthorityState {
 }
 
 impl AuthorityState {
-    pub fn new(committee: Committee, name: AuthorityName, secret: KeyPair) -> Self {
+    pub fn new<P: AsRef<Path>>(
+        committee: Committee,
+        name: AuthorityName,
+        secret: KeyPair,
+        path: P,
+    ) -> Self {
         AuthorityState {
             committee,
             name,
@@ -324,6 +331,7 @@ impl AuthorityState {
             certificates: BTreeMap::new(),
             parent_sync: BTreeMap::new(),
             native_functions: NativeFunctionTable::new(),
+            _database: Arc::new(futures::lock::Mutex::new(AuthorityStore::open(path))),
         }
     }
 
@@ -336,13 +344,8 @@ impl AuthorityState {
             .ok_or(FastPayError::UnknownSenderAccount)
     }
 
-    pub fn insert_object(&self, object: Object) {
+    pub async fn insert_object(&self, object: Object) {
         self.objects.lock().unwrap().insert(object.id(), object);
-    }
-
-    #[cfg(test)]
-    pub fn accounts_mut(&self) -> &Arc<Mutex<BTreeMap<ObjectID, Object>>> {
-        &self.objects
     }
 
     /// Make an information summary of an object to help clients
@@ -370,7 +373,7 @@ impl AuthorityState {
     // Helper function to manage order_locks
 
     /// Initialize an order lock for an object/sequence to None
-    pub fn init_order_lock(&mut self, object_ref: ObjectRef) {
+    pub async fn init_order_lock(&mut self, object_ref: ObjectRef) {
         self.order_lock.entry(object_ref).or_insert(None);
         // If the lock exists, we do not modify it or reset it.
     }
@@ -450,10 +453,10 @@ impl AuthorityState {
 
             if !object.is_read_only() {
                 // Only objects that can be mutated have locks.
-                self.init_order_lock(output_ref);
+                self.init_order_lock(output_ref).await;
             }
 
-            self.insert_object(object);
+            self.insert_object(object).await;
         }
         Ok(())
     }
