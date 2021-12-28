@@ -7,6 +7,7 @@
     rust_2021_compatibility
 )]
 
+use base64ct::{Base64, Encoding, InvalidLengthError};
 use ed25519_dalek as dalek;
 use ed25519_dalek::{ed25519, Signer as _};
 use rand::{rngs::OsRng, CryptoRng, RngCore};
@@ -139,14 +140,12 @@ pub struct SecretKey([u8; 64]);
 
 impl SecretKey {
     pub fn encode_base64(&self) -> String {
-        base64::encode(&self.0[..])
+        Base64::encode_string(&self.0[..])
     }
 
-    pub fn decode_base64(s: &str) -> Result<Self, base64::DecodeError> {
-        let bytes = base64::decode(s)?;
-        let array = bytes[..64]
-            .try_into()
-            .map_err(|_| base64::DecodeError::InvalidLength)?;
+    pub fn decode_base64(s: &str) -> Result<Self, base64ct::Error> {
+        let bytes = Base64::decode_vec(s)?;
+        let array = bytes[..64].try_into().map_err(|_| InvalidLengthError)?;
         Ok(Self(array))
     }
 }
