@@ -12,11 +12,7 @@ use ed25519_dalek as dalek;
 use ed25519_dalek::{ed25519, Signer as _};
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use serde::{de, ser, Deserialize, Serialize};
-use std::{
-    array::TryFromSliceError,
-    convert::{TryFrom, TryInto},
-    fmt,
-};
+use std::{convert::TryInto, fmt};
 use tokio::sync::{
     mpsc::{channel, Sender},
     oneshot,
@@ -68,13 +64,6 @@ impl fmt::Display for Digest {
 impl AsRef<[u8]> for Digest {
     fn as_ref(&self) -> &[u8] {
         &self.0
-    }
-}
-
-impl TryFrom<&[u8]> for Digest {
-    type Error = TryFromSliceError;
-    fn try_from(item: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Digest(item.try_into()?))
     }
 }
 
