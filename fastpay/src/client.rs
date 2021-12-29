@@ -12,7 +12,6 @@ use futures::stream::StreamExt;
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
-    fmt::Write,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
@@ -445,19 +444,13 @@ fn main() {
         }
 
         ClientCommands::QueryAccountAddresses {} => {
-            let mut addr_text: String = String::new();
-
-            for addr in accounts_config.addresses() {
-                let mut tmp = String::new();
-                write!(&mut tmp, "{:?}", addr).unwrap();
-                // Remove `=` symbol at the end
-                tmp = match tmp.strip_suffix('=') {
-                    Some(x) => x.to_string(),
-                    None => tmp,
-                };
-                writeln!(addr_text, "{}", tmp).unwrap();
-            }
-            print!("{}", addr_text);
+            let addr_strings: Vec<_> = accounts_config
+                .addresses()
+                .into_iter()
+                .map(|addr| format!("{:?}", addr).trim_end_matches('=').to_string())
+                .collect();
+            let addr_text = addr_strings.join("\n");
+            println!("{}", addr_text);
         }
 
         ClientCommands::QueryObjects { address } => {
