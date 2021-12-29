@@ -556,6 +556,51 @@ async fn test_account_state_unknown_account() {
         .is_err());
 }
 
+#[tokio::test]
+async fn test_authority_persist() {
+    let (authority_address, authority_key) = get_key_pair();
+    let mut authorities = BTreeMap::new();
+    authorities.insert(
+        /* address */ authority_address,
+        /* voting right */ 1,
+    );
+    let committee = Committee::new(authorities);
+
+    // Create a random directory to store the DB
+    let dir = env::temp_dir();
+    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+
+    // Create an authority
+    let authority = AuthorityState::new(
+        committee.clone(),
+        authority_address,
+        authority_key.copy(),
+        &path,
+    );
+
+    // Create an object
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let mut obj = Object::with_id_for_testing(object_id);
+    obj.transfer(recipient);
+
+    // Store an object
+    authority.insert_object(obj).await;
+    authority.init_order_lock((object_id, 0.into())).await;
+
+    // Close the authority
+    drop(authority);
+
+    // Reopen the authority with the same path
+    let authority2 = AuthorityState::new(committee, authority_address, authority_key, &path);
+    let obj2 = authority2.object_state(&object_id).await.unwrap();
+
+    // Check the object is present
+    assert_eq!(obj2.id(), object_id);
+    assert_eq!(obj2.owner, recipient);
+}
+
 // helpers
 
 #[cfg(test)]

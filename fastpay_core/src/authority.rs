@@ -51,7 +51,10 @@ pub struct AuthorityState {
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
 ///
-/// Repeating commands should produce no changes and returns no error.
+/// Note the authority operations can be accesessed through a read reaf (&) and do not
+/// require &mut. Internally a database is syncronized through a mutex lock.
+///
+/// Repeating commands should produce no changes and return no error.
 impl AuthorityState {
     /// Initiate a new order.
     pub async fn handle_order(&self, order: Order) -> Result<AccountInfoResponse, FastPayError> {
@@ -341,7 +344,6 @@ impl AuthorityState {
             .unwrap()
             .init_order_lock(object_ref)
             .expect("TODO: propagate the error")
-        // If the lock exists, we do not modify it or reset it.
     }
 
     /// Set the order lock to a specific transaction
