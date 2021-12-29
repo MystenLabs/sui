@@ -5,11 +5,11 @@ use crate::transport::*;
 use fastpay_core::{authority::*, client::*};
 use fastx_types::{error::*, messages::*, serialize::*};
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use bytes::Bytes;
 use futures::future::FutureExt;
 use log::*;
 use std::io;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::time;
 
 pub struct Server {
@@ -43,11 +43,11 @@ impl Server {
     }
 
     pub fn packets_processed(&self) -> usize {
-        self.packets_processed.load(Ordering::Relaxed,)
+        self.packets_processed.load(Ordering::Relaxed)
     }
 
     pub fn user_errors(&self) -> usize {
-        self.user_errors.load(Ordering::Relaxed,)
+        self.user_errors.load(Ordering::Relaxed)
     }
 
     pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
@@ -114,21 +114,24 @@ impl MessageHandler for RunningServerState {
                 }
             };
 
-            self.server.packets_processed.fetch_add(1, Ordering::Relaxed,) ;
-            
+            self.server
+                .packets_processed
+                .fetch_add(1, Ordering::Relaxed);
+
             if self.server.packets_processed() % 5000 == 0 {
                 info!(
                     "{}:{} has processed {} packets",
-                    self.server.base_address, self.server.base_port, self.server.packets_processed()
+                    self.server.base_address,
+                    self.server.base_port,
+                    self.server.packets_processed()
                 );
             }
-            
 
             match reply {
                 Ok(x) => x,
                 Err(error) => {
                     warn!("User query failed: {}", error);
-                    self.server.user_errors.fetch_add(1, Ordering::Relaxed,) ;
+                    self.server.user_errors.fetch_add(1, Ordering::Relaxed);
                     Some(serialize_error(&error))
                 }
             }
@@ -321,7 +324,7 @@ impl MassClient {
         let outer_requests: Vec<_> = requests.into_iter().collect();
         let size = outer_requests.len() / connections;
         for chunk in outer_requests[..].chunks(size) {
-            let requests: Vec<_> = chunk.iter().cloned().collect();
+            let requests: Vec<_> = chunk.to_vec();
             let client = self.clone();
             handles.push(
                 tokio::spawn(async move {

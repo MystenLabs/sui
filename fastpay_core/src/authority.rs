@@ -276,8 +276,7 @@ impl AuthorityState {
             response.requested_certificate = Some(
                 self.read_certificate(&transaction_digest)
                     .await?
-                    .ok_or(FastPayError::CertificateNotfound)?
-                    .clone(),
+                    .ok_or(FastPayError::CertificateNotfound)?,
             );
         }
         Ok(response)
@@ -329,7 +328,7 @@ impl AuthorityState {
             object_id: object.id(),
             owner: object.owner,
             next_sequence_number: object.next_sequence_number,
-            pending_confirmation: lock.clone(),
+            pending_confirmation: lock,
             requested_certificate: None,
             requested_received_transfers: Vec::new(),
         })

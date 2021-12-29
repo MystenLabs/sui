@@ -96,10 +96,10 @@ impl Storage for AuthorityTemporaryStore {
         match self.objects.get(id) {
             Some(x) => Some(x.clone()),
             None => {
-                let object = self.object_store.lock().unwrap().object_state(&id);
+                let object = self.object_store.lock().unwrap().object_state(id);
                 match object {
                     Ok(o) => Some(o),
-                    Err(FastPayError::UnknownSenderAccount) => None,
+                    Err(FastPayError::ObjectNotFound) => None,
                     _ => panic!("Cound not read object"),
                 }
             }
@@ -178,7 +178,7 @@ impl ResourceResolver for AuthorityTemporaryStore {
                     if !x.is_read_only() {
                         fp_bail!(FastPayError::ExecutionInvariantViolation);
                     }
-                    x.clone()
+                    x
                 }
             },
         };

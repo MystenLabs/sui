@@ -12,7 +12,6 @@ pub struct AuthorityStore {
 }
 
 impl AuthorityStore {
-
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P) -> AuthorityStore {
         let db = open_cf(
@@ -60,8 +59,8 @@ impl AuthorityStore {
             .map_err(|_| FastPayError::StorageError)
     }
 
-    /// Read the transactionDigest that is the parent of an object reference 
-    /// (ie. the transaction that created an object at this version.) 
+    /// Read the transactionDigest that is the parent of an object reference
+    /// (ie. the transaction that created an object at this version.)
     pub fn parent(
         &mut self,
         object_ref: &ObjectRef,
@@ -91,11 +90,10 @@ impl AuthorityStore {
         Ok(())
     }
 
-
     /// Set the order lock to a specific transaction
-    /// 
+    ///
     /// This function checks all locks exist, are either None or equal to the passed order
-    /// and then sets them to the order. Otherwise an Err is returned. Locks are set 
+    /// and then sets them to the order. Otherwise an Err is returned. Locks are set
     /// atomically in this implementation.
     ///
     pub fn set_order_lock(
@@ -103,7 +101,6 @@ impl AuthorityStore {
         mutable_input_objects: &[ObjectRef],
         signed_order: SignedOrder,
     ) -> Result<(), FastPayError> {
-
         // TODO: There is a lot of cloning used -- eliminate it.
         let mut lock_batch = self.order_lock.batch();
 
@@ -122,7 +119,7 @@ impl AuthorityStore {
                 } else {
                     // We are trying to set the lock to a different order, this is unsafe.
                     return Err(FastPayError::ConflictingOrder {
-                        pending_confirmation: existing_signed_order.order.clone(),
+                        pending_confirmation: existing_signed_order.order,
                     });
                 }
             }
@@ -139,7 +136,7 @@ impl AuthorityStore {
     }
 
     /// Updates the state resulting from the execution of a certificate.
-    /// 
+    ///
     /// Internally it checks that all locks for active inputs are at the correct
     /// version, and then writes locks, objects, certificates, parents atomicaly.
     pub fn update_state(
@@ -147,7 +144,6 @@ impl AuthorityStore {
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedOrder,
     ) -> Result<(), FastPayError> {
-
         // TODO: There is a lot of cloning used -- eliminate it.
 
         // Extract the new state from the execution
