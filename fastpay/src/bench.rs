@@ -40,7 +40,7 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "1000")]
     max_in_flight: usize,
     /// Number of accounts and transactions used in the benchmark
-    #[structopt(long, default_value = "100000")]
+    #[structopt(long, default_value = "40000")]
     num_accounts: usize,
     /// Timeout for sending queries (us)
     #[structopt(long, default_value = "4000000")]
@@ -49,7 +49,7 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "4000000")]
     recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
-    #[structopt(long, default_value = "4000000")]
+    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
 }
 
