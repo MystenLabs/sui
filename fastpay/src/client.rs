@@ -564,12 +564,11 @@ fn main() {
 
             for _ in 0..num_accounts {
                 let mut obj_ids = Vec::new();
-                let account: UserAccount;
 
                 for _ in 0..gas_objs_per_account {
                     obj_ids.push(ObjectID::random());
                 }
-                account = UserAccount::new(obj_ids.clone());
+                let account = UserAccount::new(obj_ids.clone());
 
                 init_state_cfg.config.push(InitialStateConfigEntry {
                     address: account.address,
