@@ -3,12 +3,12 @@
 
 use anyhow::Result;
 
-use crate::{
-    bytecode_rewriter::ModuleHandleRewriter,
-    genesis::{TX_CONTEXT_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
-};
+use crate::bytecode_rewriter::ModuleHandleRewriter;
 use fastx_types::{
-    base_types::{FastPayAddress, ObjectID, ObjectRef, SequenceNumber, TxContext},
+    base_types::{
+        FastPayAddress, ObjectID, ObjectRef, SequenceNumber, TxContext, TX_CONTEXT_ADDRESS,
+        TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+    },
     error::{FastPayError, FastPayResult},
     object::{Data, MoveObject, Object},
     storage::Storage,

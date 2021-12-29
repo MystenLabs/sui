@@ -7,7 +7,10 @@ use std::convert::TryFrom;
 use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 
-use crate::base_types::{FastPayAddress, ObjectID, ObjectRef, SequenceNumber};
+use crate::{
+    base_types::{FastPayAddress, ObjectID, ObjectRef, SequenceNumber},
+    gas_coin::GasCoin,
+};
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize)]
 pub struct MoveObject {
@@ -49,6 +52,14 @@ impl Data {
         match self {
             Move(_) => None,
             Module(bytes) => CompiledModule::deserialize(bytes).ok(),
+        }
+    }
+
+    pub fn type_(&self) -> Option<&StructTag> {
+        use Data::*;
+        match self {
+            Move(m) => Some(&m.type_),
+            Module(_) => None,
         }
     }
 }
@@ -110,31 +121,34 @@ impl Object {
         }
     }
 
+    pub fn type_(&self) -> Option<&StructTag> {
+        self.data.type_()
+    }
+
     /// Change the owner of `self` to `new_owner`
-    // TODO: we do not want to support unconditional transfers of all objects. eliminate
     pub fn transfer(&mut self, new_owner: FastPayAddress) {
-        // TODO: probably want to enforce imutability in type system instead of with dynamic checks
+        // TODO: these should be raised FastPayError's instead of panic's
         assert!(
             !self.data.is_read_only(),
             "Cannot transfer an immutable object"
         );
-        self.owner = new_owner;
+        match self.type_() {
+            Some(t) => {
+                assert!(
+                    t == &GasCoin::type_(),
+                    "Invalid transfer: only transfer of GasCoin is supported"
+                );
+                self.owner = new_owner;
+            }
+            None => panic!("Cannot transfer a module object"),
+        }
     }
 
     pub fn with_id_owner_for_testing(id: ObjectID, owner: FastPayAddress) -> Self {
-        use move_core_types::identifier::Identifier;
-
-        let module = Identifier::new("Test").unwrap();
-        let name = Identifier::new("Struct").unwrap();
-        let type_params = Vec::new();
+        let coin_value = 0;
         let data = Data::Move(MoveObject {
-            type_: StructTag {
-                address: AccountAddress::new([0u8; AccountAddress::LENGTH]),
-                module,
-                name,
-                type_params,
-            },
-            contents: id.to_vec(),
+            type_: GasCoin::type_(),
+            contents: GasCoin::new(id, coin_value).to_bcs_bytes(),
         });
         let next_sequence_number = SequenceNumber::new();
         Self {

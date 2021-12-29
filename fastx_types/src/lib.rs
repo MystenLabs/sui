@@ -14,7 +14,10 @@ use move_core_types::account_address::AccountAddress;
 pub mod error;
 
 pub mod base_types;
+pub mod coin;
 pub mod committee;
+pub mod gas_coin;
+pub mod id;
 pub mod messages;
 pub mod object;
 pub mod serialize;
