@@ -291,7 +291,8 @@ fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
 #[derive(StructOpt)]
 #[structopt(
     name = "FastPay Client",
-    about = "A Byzantine fault tolerant payments sidechain with low-latency finality and high throughput"
+    about = "A Byzantine fault tolerant payments sidechain with low-latency finality and high throughput",
+    rename_all = "kebab-case"
 )]
 struct ClientOpt {
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
@@ -320,6 +321,7 @@ struct ClientOpt {
 }
 
 #[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
 enum ClientCommands {
     /// Transfer funds
     #[structopt(name = "transfer")]
@@ -337,11 +339,11 @@ enum ClientCommands {
     },
 
     /// Obtain the Account Addresses
-    #[structopt(name = "query_accounts_addrs")]
+    #[structopt(name = "query-accounts-addrs")]
     QueryAccountAddresses {},
 
     /// Obtain the Object Info
-    #[structopt(name = "query_objects")]
+    #[structopt(name = "query-objects")]
     QueryObjects {
         /// Address of the account
         address: String,
@@ -364,19 +366,19 @@ enum ClientCommands {
     },
 
     /// Create new user accounts with randomly generated object IDs
-    #[structopt(name = "create_accounts")]
+    #[structopt(name = "create-accounts")]
     CreateAccounts {
         /// Number of additional accounts to create
-        #[structopt(long, default_value = "1000", name = "num")]
+        #[structopt(long, default_value = "1000")]
         num: u32,
 
         /// Number of objects per account
-        #[structopt(long, default_value = "1000", name = "objs-per-account")]
-        objs_per_account: u32,
+        #[structopt(long, default_value = "1000")]
+        gas_objs_per_account: u32,
 
         /// Gas value per object
-        #[structopt(long, default_value = "1000", name = "gas-per-obj")]
-        gas_per_obj: u32,
+        #[structopt(long, default_value = "1000")]
+        value_per_per_obj: u32,
 
         /// Initial state config file path
         #[structopt(name = "init-state-cfg")]
@@ -575,15 +577,15 @@ fn main() {
 
         ClientCommands::CreateAccounts {
             num,
-            objs_per_account,
-            gas_per_obj,
+            gas_objs_per_account,
+            value_per_per_obj,
             initial_state_config_path,
         } => {
             let num_accounts: u32 = num;
             let mut init_state_cfg: InitialStateConfig = InitialStateConfig::new();
 
             for _ in 0..num_accounts {
-                let obj_ids = create_random_object_ids(objs_per_account);
+                let obj_ids = create_random_object_ids(gas_objs_per_account);
                 let account = UserAccount::new(obj_ids.clone());
 
                 init_state_cfg.config.push(InitialStateConfigEntry {
@@ -591,11 +593,12 @@ fn main() {
                     object_ids: obj_ids.clone(),
                 });
 
+                // TODO: Integrate gas logic with https://github.com/MystenLabs/fastnft/pull/97
                 println!(
-                    "{}:{:?}, with gas {}",
+                    "{}: gas object IDs {:?}, with value {}",
                     encode_address(&account.address),
                     obj_ids,
-                    gas_per_obj
+                    value_per_per_obj
                 );
                 accounts_config.insert(account);
             }
