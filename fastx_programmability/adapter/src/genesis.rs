@@ -5,24 +5,23 @@ use crate::adapter;
 use anyhow::Result;
 use fastx_framework::{self};
 use fastx_types::{
-    base_types::{FastPayAddress, SequenceNumber, TransactionDigest, TxContext},
+    base_types::{
+        FastPayAddress, SequenceNumber, TransactionDigest, TxContext, TX_CONTEXT_ADDRESS,
+        TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+    },
+    coin::{COIN_ADDRESS, COIN_MODULE_NAME, COIN_STRUCT_NAME},
+    gas_coin::{GAS_ADDRESS, GAS_MODULE_NAME, GAS_STRUCT_NAME},
+    id::{ID_ADDRESS, ID_MODULE_NAME, ID_STRUCT_NAME},
     object::Object,
     FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS,
 };
 use move_binary_format::access::ModuleAccess;
 use move_core_types::{
-    account_address::AccountAddress, ident_str, identifier::IdentStr, language_storage::ModuleId,
+    account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use once_cell::sync::Lazy;
-use std::sync::Mutex;
-
-/// 0x873707f730d18d3867cb77ec7c838c0b
-pub const TX_CONTEXT_ADDRESS: AccountAddress = AccountAddress::new([
-    0x87, 0x37, 0x07, 0xf7, 0x30, 0xd1, 0x8d, 0x38, 0x67, 0xcb, 0x77, 0xec, 0x7c, 0x83, 0x8c, 0x0b,
-]);
-pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
-pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
+use std::{collections::BTreeMap, sync::Mutex};
 
 pub static GENESIS: Lazy<Mutex<Genesis>> =
     Lazy::new(|| Mutex::new(create_genesis_module_objects().unwrap()));
@@ -44,25 +43,38 @@ fn create_genesis_module_objects() -> Result<Genesis> {
         let old_id = ModuleId::new(native.0, native.1.to_owned());
         if let Some(new_id) = sub_map.get(&old_id) {
             native.0 = *new_id.address();
-            native.1 = new_id.name().to_owned();
+            // substitution should not change module names
+            assert_eq!(native.1, new_id.name().to_owned());
         }
     }
     let owner = FastPayAddress::default();
+    let expected_addresses: BTreeMap<&IdentStr, (AccountAddress, &IdentStr)> = vec![
+        (COIN_MODULE_NAME, (COIN_ADDRESS, COIN_STRUCT_NAME)),
+        (GAS_MODULE_NAME, (GAS_ADDRESS, GAS_STRUCT_NAME)),
+        (ID_MODULE_NAME, (ID_ADDRESS, ID_STRUCT_NAME)),
+        (
+            TX_CONTEXT_MODULE_NAME,
+            (TX_CONTEXT_ADDRESS, TX_CONTEXT_STRUCT_NAME),
+        ),
+    ]
+    .into_iter()
+    .collect();
     let objects = modules
         .into_iter()
         .map(|m| {
             let self_id = m.self_id();
             // check that modules the runtime needs to know about have the expected names and addresses
-            // if these assertions fail, it's likely because approrpiate constants need to be updated
-            if self_id.name() == TX_CONTEXT_MODULE_NAME {
+            // if these assertions fail, it's likely because the corresponding constants need to be updated
+            if let Some((address, struct_name)) = expected_addresses.get(self_id.name()) {
                 assert!(
-                    self_id.address() == &TX_CONTEXT_ADDRESS,
-                    "Found new address for TxContext: {}",
+                    self_id.address() == address,
+                    "Found new address for {}: {}",
+                    self_id.name(),
                     self_id.address()
                 );
-                assert!(
-                    m.identifier_at(m.struct_handle_at(m.struct_defs[0].struct_handle).name)
-                        == TX_CONTEXT_STRUCT_NAME
+                assert_eq!(
+                    m.identifier_at(m.struct_handle_at(m.struct_defs[0].struct_handle).name),
+                    *struct_name
                 );
             }
             Object::new_module(m, owner, SequenceNumber::new())
