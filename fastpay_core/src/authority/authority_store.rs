@@ -12,6 +12,8 @@ pub struct AuthorityStore {
 }
 
 impl AuthorityStore {
+
+    /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P) -> AuthorityStore {
         let db = open_cf(
             &path,
@@ -29,13 +31,15 @@ impl AuthorityStore {
 
     // Methods to read the store
 
+    /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
     pub fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
         self.objects
             .get(object_id)
             .map_err(|_| FastPayError::StorageError)?
-            .ok_or(FastPayError::UnknownSenderAccount)
+            .ok_or(FastPayError::ObjectNotFound)
     }
 
+    /// Read a lock or returns Err(OrderLockDoesNotExist) if the lock does not exist.
     pub fn get_order_lock(
         &self,
         object_ref: &ObjectRef,
@@ -46,6 +50,7 @@ impl AuthorityStore {
             .ok_or(FastPayError::OrderLockDoesNotExist)
     }
 
+    /// Read a certificate and return an option with None if it does not exist.
     pub fn read_certificate(
         &self,
         digest: &TransactionDigest,
@@ -55,6 +60,8 @@ impl AuthorityStore {
             .map_err(|_| FastPayError::StorageError)
     }
 
+    /// Read the transactionDigest that is the parent of an object reference 
+    /// (ie. the transaction that created an object at this version.) 
     pub fn parent(
         &mut self,
         object_ref: &ObjectRef,
@@ -66,12 +73,15 @@ impl AuthorityStore {
 
     // Methods to mutate the store
 
+    /// Insert an object
     pub fn insert_object(&self, object: Object) -> Result<(), FastPayError> {
         self.objects
             .insert(&object.id(), &object)
             .map_err(|_| FastPayError::StorageError)
     }
 
+    /// Initialize a lock to an object reference to None, but keep it
+    /// as it is if a value is already present.
     pub fn init_order_lock(&mut self, object_ref: ObjectRef) -> Result<(), FastPayError> {
         // TODO: Do we really need the get_or_insert here, or can we just do insert? Presumably we
         //       have checked that there are no conflicts?
@@ -81,18 +91,20 @@ impl AuthorityStore {
         Ok(())
     }
 
+
     /// Set the order lock to a specific transaction
+    /// 
+    /// This function checks all locks exist, are either None or equal to the passed order
+    /// and then sets them to the order. Otherwise an Err is returned. Locks are set 
+    /// atomically in this implementation.
+    ///
     pub fn set_order_lock(
         &mut self,
         mutable_input_objects: &[ObjectRef],
         signed_order: SignedOrder,
     ) -> Result<(), FastPayError> {
-        // This is the only function that writes as part of the handle_order flow
-        // and the only that therefore needs an exclusive write lock on the lock
-        // database. Inconsistent / delayed reads of the lock database do not result in safety
-        // violations since at the end this function also re-checks that the lock
-        // is not set and returns an Err if it is.
 
+        // TODO: There is a lot of cloning used -- eliminate it.
         let mut lock_batch = self.order_lock.batch();
 
         for obj_ref in mutable_input_objects {
@@ -126,11 +138,18 @@ impl AuthorityStore {
         lock_batch.write().map_err(|_| FastPayError::StorageError)
     }
 
+    /// Updates the state resulting from the execution of a certificate.
+    /// 
+    /// Internally it checks that all locks for active inputs are at the correct
+    /// version, and then writes locks, objects, certificates, parents atomicaly.
     pub fn update_state(
         &mut self,
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedOrder,
     ) -> Result<(), FastPayError> {
+
+        // TODO: There is a lot of cloning used -- eliminate it.
+
         // Extract the new state from the execution
         let (mut objects, active_inputs, written, _deleted) = temporary_store.into_inner();
         let mut write_batch = self.order_lock.batch();
