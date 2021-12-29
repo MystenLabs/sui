@@ -664,11 +664,7 @@ impl<'a> ModuleResolver for AuthorityTemporaryStore<'a> {
             .get(module_id.address())
         {
             Some(o) => match &o.data {
-                Data::Module(c) => {
-                    let mut bytes = Vec::new();
-                    c.serialize(&mut bytes).expect("Invariant violation: serialization of well-formed module should never fail");
-                    Ok(Some(bytes))
-                }
+                Data::Module(c) => Ok(Some(c.clone())),
                 _ => Err(FastPayError::BadObjectType {
                     error: "Expected module object".to_string(),
                 }),
