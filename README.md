@@ -55,7 +55,7 @@ ACCOUNT1_OBJECT1=`./client --committee committee.json --accounts accounts.json q
 # Transfer object by ObjectID
 ./client --committee committee.json --accounts accounts.json transfer "$ACCOUNT1_OBJECT1" --from "$ACCOUNT1" --to "$ACCOUNT2"
 
-# Query objects again again
+# Query objects again
 ./client --committee committee.json --accounts accounts.json query-objects "$ACCOUNT1"
 ./client --committee committee.json --accounts accounts.json query-objects "$ACCOUNT2"
 
