@@ -109,7 +109,9 @@ impl AuthorityStore {
                     continue;
                 } else {
                     // We are trying to set the lock to a different order, this is unsafe.
-                    return Err(FastPayError::OrderLockReset);
+                    return Err(FastPayError::ConflictingOrder {
+                        pending_confirmation: existing_signed_order.order.clone(),
+                    });
                 }
             }
 

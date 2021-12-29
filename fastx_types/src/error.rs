@@ -6,6 +6,7 @@ use thiserror::Error;
 use crate::base_types::*;
 use move_binary_format::errors::PartialVMError;
 use serde::{Deserialize, Serialize};
+use crate::messages::Order;
 
 #[macro_export]
 macro_rules! fp_bail {
@@ -54,6 +55,8 @@ pub enum FastPayError {
          "The transferred amount must be not exceed the current account balance: {current_balance:?}"
     )]
     InsufficientFunding { current_balance: Balance },
+    #[error("Conflicting order already received: {pending_confirmation:?}")]
+    ConflictingOrder { pending_confirmation: Order },
     #[error("Transfer order was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransferOrder,
     #[error("An invalid answer was returned by the authority while requesting a certificate")]

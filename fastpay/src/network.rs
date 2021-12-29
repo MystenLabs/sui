@@ -307,7 +307,11 @@ impl MassClient {
     }
 
     /// Spin off one task on this authority client.
-    pub fn run<I>(&self, requests: I, connections : usize) -> impl futures::stream::Stream<Item = Vec<Bytes>>
+    pub fn run<I>(
+        &self,
+        requests: I,
+        connections: usize,
+    ) -> impl futures::stream::Stream<Item = Vec<Bytes>>
     where
         I: IntoIterator<Item = Bytes>,
     {

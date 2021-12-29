@@ -183,7 +183,7 @@ impl ClientServerBenchmark {
         let items_number = orders.len() / 2;
         let time_start = Instant::now();
 
-        let connections : usize = 8;
+        let connections: usize = 8;
         let max_in_flight = self.max_in_flight / connections as usize;
         info!("Set max_in_flight to {}", max_in_flight);
 

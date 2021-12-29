@@ -43,62 +43,25 @@ pub struct AuthorityState {
     /// The signature key of the authority.
     pub secret: KeyPair,
 
-    // The variable length dynamic state of the authority
-    /// States of fastnft objects
-    ///
-    /// This is the placeholder data representation for the actual database
-    /// of objects that we will eventually have in a persistent store. Since
-    /// this database will have to be used by many refs of the authority, and
-    /// others it should be useable as a &ref for both reads and writes/deletes.
-    /// Right now we do this through placing it in an Arc/Mutex, but eventually
-    /// we will architect this to ensure perf.
-    // objects: Arc<Mutex<BTreeMap<ObjectID, Object>>>,
-
-    /* Order lock states and invariants
-
-    Each object in `objects` needs to have an entry in `order_locks`
-    that is initially initialized to None. This indicates we have not
-    seen any valid transactions mutating this object. Once we see the
-    first valid transaction the lock is set to Some(SignedOrder). We
-    will never change this lock to a different value of back to None.
-
-    Eventually, a certificate may be seen with a transaction that consumes
-    an object. In that case we can delete the key-value of the lock and
-    archive them. This reduces the amount of memory consumed by locks. It
-    also means that if an object has a lock entry it is 'active' ie transaction
-    may use it as an input. If not, a transaction can be rejected.
-
-    */
-    /// Order lock map maps object versions to the first next transaction seen
-    // order_lock: BTreeMap<ObjectRef, Option<SignedOrder>>,
-    /// Certificates that have been accepted.
-    //certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
-    /// An index mapping object IDs to the Transaction Digest that created them.
-    /// This is used by synchronization logic to sync authorities.
-    // parent_sync: BTreeMap<ObjectRef, TransactionDigest>,
-
     /// Move native functions that are available to invoke
     native_functions: NativeFunctionTable,
     /// The database
     _database: Arc<Mutex<AuthorityStore>>,
 }
 
-/// Interface provided by each authority.
-/// All commands return either the current account info or an error.
-/// Repeating commands produces no changes and returns no error.
-
+/// The authority state encapsulates all state, drives execution, and ensures safety.
+///
+/// Repeating commands should produce no changes and returns no error.
 impl AuthorityState {
-    /// Initiate a new transfer.
+    /// Initiate a new order.
     pub async fn handle_order(&self, order: Order) -> Result<AccountInfoResponse, FastPayError> {
-        // Check the sender's signature and retrieve the transfer data.
+        // Check the sender's signature.
         order.check_signature()?;
 
-        // We first do all the checks that can be done in parallel with read only access to
-        // the object database and lock database.
         let input_objects = order.input_objects();
         let mut mutable_objects = Vec::with_capacity(input_objects.len());
 
-        // Ensure at least one object is input to be mutated.
+        // There is at least one input
         fp_ensure!(
             !input_objects.is_empty(),
             FastPayError::InsufficientObjectNumber
@@ -135,22 +98,30 @@ impl AuthorityState {
                 }
             );
 
-            // If this is an immutable object, we do no more checks
-            // and check no locks.
+            // If this is an immutable object, checks end here.
             if object.is_read_only() {
                 continue;
             }
 
             // Additional checks for mutable objects
-
             // Check the transaction sender is also the object owner
             fp_ensure!(
                 order.sender() == &object.owner,
                 FastPayError::IncorrectSigner
             );
 
+            /* The call to self.set_order_lock checks the lock is not conflicting,
+            and returns ConflictingOrder in case there is a lock on a different
+            existing order */
+
             mutable_objects.push((object_id, sequence_number));
         }
+
+        // There is at least one mutable input.
+        fp_ensure!(
+            !mutable_objects.is_empty(),
+            FastPayError::InsufficientObjectNumber
+        );
 
         // TODO(https://github.com/MystenLabs/fastnft/issues/45): check that c.gas_payment exists + that its value is > gas_budget
         // Note: the above code already checks that the gas object exists because it is included in the
@@ -159,9 +130,10 @@ impl AuthorityState {
         let object_id = *order.object_id();
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
 
-        // This is the critical section that requires a write lock on the lock DB.
+        // Check and write locks, to signed order, into the database
         self.set_order_lock(&mutable_objects, signed_order).await?;
 
+        // TODO: what should we return here?
         let info = self.make_object_info(object_id).await?;
         Ok(info)
     }
@@ -180,13 +152,11 @@ impl AuthorityState {
         let mut inputs = vec![];
         for (input_object_id, input_seq) in order.input_objects() {
             // If we have a certificate on the confirmation order it means that the input
-            // object exists on other honest authorities, but we do not have it. The only
-            // way this may happen is if we missed some updates.
-            let input_object = self.object_state(&input_object_id).await.map_err(|_| {
-                FastPayError::MissingEalierConfirmations {
-                    current_sequence_number: SequenceNumber::from(0),
-                }
-            })?;
+            // object exists on other honest authorities, but we do not have it.
+            let input_object = self
+                .object_state(&input_object_id)
+                .await
+                .map_err(|_| FastPayError::ObjectNotFound)?;
 
             let input_sequence_number = input_object.next_sequence_number;
 
@@ -203,10 +173,6 @@ impl AuthorityState {
 
             inputs.push(input_object.clone());
         }
-
-        // Note: State is mutated below and should be committed in an atomic way
-        // to memory or persistent storage. Currently this is done in memory
-        // through the calls to store being infallible.
 
         // Insert into the certificates map
         let transaction_digest = certificate.order.digest();
@@ -285,9 +251,7 @@ impl AuthorityState {
             }
         };
 
-        // Note: State is mutated below and should be committed in an atomic way
-        // to memory or persistent storage. Currently this is done in memory
-        // through the calls to store being infallible.
+        // Update the database in an atomic manner
         self.update_state(temporary_store, certificate).await?;
 
         let info = self.make_object_info(object_id).await?;
