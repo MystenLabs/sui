@@ -5,6 +5,7 @@ use crate::transport::*;
 use fastpay_core::{authority::*, client::*};
 use fastx_types::{error::*, messages::*, serialize::*};
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use bytes::Bytes;
 use futures::future::FutureExt;
 use log::*;
@@ -18,8 +19,8 @@ pub struct Server {
     state: AuthorityState,
     buffer_size: usize,
     // Stats
-    packets_processed: u64,
-    user_errors: u64,
+    packets_processed: AtomicUsize,
+    user_errors: AtomicUsize,
 }
 
 impl Server {
@@ -36,17 +37,17 @@ impl Server {
             base_port,
             state,
             buffer_size,
-            packets_processed: 0,
-            user_errors: 0,
+            packets_processed: AtomicUsize::new(0),
+            user_errors: AtomicUsize::new(0),
         }
     }
 
-    pub fn packets_processed(&self) -> u64 {
-        self.packets_processed
+    pub fn packets_processed(&self) -> usize {
+        self.packets_processed.load(Ordering::Relaxed,)
     }
 
-    pub fn user_errors(&self) -> u64 {
-        self.user_errors
+    pub fn user_errors(&self) -> usize {
+        self.user_errors.load(Ordering::Relaxed,)
     }
 
     pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
@@ -113,21 +114,21 @@ impl MessageHandler for RunningServerState {
                 }
             };
 
-            // self.server.packets_processed += 1;
-            /*
-            if self.server.packets_processed % 5000 == 0 {
+            self.server.packets_processed.fetch_add(1, Ordering::Relaxed,) ;
+            
+            if self.server.packets_processed() % 5000 == 0 {
                 info!(
                     "{}:{} has processed {} packets",
-                    self.server.base_address, self.server.base_port, self.server.packets_processed
+                    self.server.base_address, self.server.base_port, self.server.packets_processed()
                 );
             }
-            */
+            
 
             match reply {
                 Ok(x) => x,
                 Err(error) => {
                     warn!("User query failed: {}", error);
-                    // self.server.user_errors += 1;
+                    self.server.user_errors.fetch_add(1, Ordering::Relaxed,) ;
                     Some(serialize_error(&error))
                 }
             }
