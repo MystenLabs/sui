@@ -96,10 +96,12 @@ pub enum FastPayError {
     InvalidDecoding,
     #[error("Unexpected message.")]
     UnexpectedMessage,
+    #[error("The transaction inputs contain duplicates ObjectRef's")]
+    DuplicateObjectRefInput,
     #[error("Network error while querying service: {:?}.", error)]
     ClientIoError { error: String },
 
-    // Move related errors
+    // Move module publishing related errors
     #[error("Failed to load the Move module, reason: {error:?}.")]
     ModuleLoadFailure { error: String },
     #[error("Failed to verify the Move module, reason: {error:?}.")]
@@ -108,6 +110,18 @@ pub enum FastPayError {
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error:?}.")]
     ModulePublishFailure { error: String },
+
+    // Move call related errors
+    #[error("Gas budget set higher than max: {error:?}.")]
+    GasBudgetTooHigh { error: String },
+    #[error("Function resolution failure: {error:?}.")]
+    FunctionNotFound { error: String },
+    #[error("Function signature is invalid: {error:?}.")]
+    InvalidFunctionSignature { error: String },
+    #[error("Type error while binding function arguments: {error:?}.")]
+    TypeError { error: String },
+    #[error("Execution aborted: {error:?}.")]
+    AbortedExecution { error: String },
 
     // Internal state errors
     #[error("Attempt to re-initialize an order lock.")]
