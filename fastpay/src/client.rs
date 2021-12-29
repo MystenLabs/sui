@@ -378,6 +378,7 @@ enum ClientCommands {
 
         /// Gas value per object
         #[structopt(long, default_value = "1000")]
+        #[allow(dead_code)]
         value_per_per_obj: u32,
 
         /// Initial state config file path
@@ -481,20 +482,12 @@ fn main() {
                     send_timeout,
                     recv_timeout,
                 );
-                info!("Starting object query");
-                let time_start = Instant::now();
+
                 let objects_ids = client_state.object_ids();
-                let time_total = time_start.elapsed().as_micros();
-                info!("ObjectIds confirmed after {} us", time_total);
 
                 for (obj_id, seq_num) in objects_ids {
                     println!("{:#x}: {:?}", obj_id, seq_num);
                 }
-                accounts_config.update_from_state(&client_state);
-                accounts_config
-                    .write(accounts_config_path)
-                    .expect("Unable to write user accounts");
-                info!("Saved client account state");
             });
         }
 
@@ -578,7 +571,8 @@ fn main() {
         ClientCommands::CreateAccounts {
             num,
             gas_objs_per_account,
-            value_per_per_obj,
+            // TODO: Integrate gas logic with https://github.com/MystenLabs/fastnft/pull/97
+            value_per_per_obj: _,
             initial_state_config_path,
         } => {
             let num_accounts: u32 = num;
@@ -593,13 +587,6 @@ fn main() {
                     object_ids: obj_ids.clone(),
                 });
 
-                // TODO: Integrate gas logic with https://github.com/MystenLabs/fastnft/pull/97
-                println!(
-                    "{}: gas object IDs {:?}, with value {}",
-                    encode_address(&account.address),
-                    obj_ids,
-                    value_per_per_obj
-                );
                 accounts_config.insert(account);
             }
             init_state_cfg
