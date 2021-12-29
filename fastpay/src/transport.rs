@@ -47,8 +47,7 @@ pub trait DataStreamPool: Send {
 
 /// The handler required to create a service.
 pub trait MessageHandler {
-    fn handle_message<'a>(&'a self, buffer: &'a [u8])
-        -> future::BoxFuture<'a, Option<Vec<u8>>>;
+    fn handle_message<'a>(&'a self, buffer: &'a [u8]) -> future::BoxFuture<'a, Option<Vec<u8>>>;
 }
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
@@ -358,9 +357,7 @@ impl NetworkProtocol {
                         }
                     };
 
-                    if let Some(reply) =
-                        guarded_state.handle_message(&buffer[..]).await
-                    {
+                    if let Some(reply) = guarded_state.handle_message(&buffer[..]).await {
                         let status = TcpDataStream::tcp_write_data(&mut socket, &reply[..]).await;
                         if let Err(error) = status {
                             error!("Failed to send query response: {}", error);

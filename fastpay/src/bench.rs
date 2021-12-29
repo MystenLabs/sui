@@ -108,8 +108,7 @@ impl ClientServerBenchmark {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let state =
-            AuthorityState::new(committee.clone(), public_auth0, secret_auth0.copy(), path);
+        let state = AuthorityState::new(committee.clone(), public_auth0, secret_auth0.copy(), path);
 
         // Seed user accounts.
         let mut rt = Runtime::new().unwrap();
@@ -184,7 +183,8 @@ impl ClientServerBenchmark {
         let items_number = orders.len() / 2;
         let time_start = Instant::now();
 
-        let max_in_flight = self.max_in_flight as usize;
+        let connections : usize = 8;
+        let max_in_flight = self.max_in_flight / connections as usize;
         info!("Set max_in_flight to {}", max_in_flight);
 
         info!("Sending requests.");
@@ -199,7 +199,7 @@ impl ClientServerBenchmark {
                 max_in_flight as u64,
             );
 
-            let responses = mass_client.run(orders).concat().await;
+            let responses = mass_client.run(orders, connections).concat().await;
             info!("Received {} responses.", responses.len(),);
         } else {
             // Use actual client core

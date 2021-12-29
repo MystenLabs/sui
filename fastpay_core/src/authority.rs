@@ -89,10 +89,7 @@ pub struct AuthorityState {
 
 impl AuthorityState {
     /// Initiate a new transfer.
-    pub async fn handle_order(
-        &self,
-        order: Order,
-    ) -> Result<AccountInfoResponse, FastPayError> {
+    pub async fn handle_order(&self, order: Order) -> Result<AccountInfoResponse, FastPayError> {
         // Check the sender's signature and retrieve the transfer data.
         order.check_signature()?;
 
@@ -421,7 +418,6 @@ impl AuthorityState {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<CertifiedOrder>, FastPayError> {
-        // Ok(self.certificates.get(digest))
         self._database.lock().unwrap().read_certificate(digest)
     }
 

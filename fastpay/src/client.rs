@@ -223,7 +223,7 @@ async fn mass_broadcast_orders(
         for (_object_id, buf) in &orders {
             requests.push(buf.clone());
         }
-        streams.push(client.run(requests));
+        streams.push(client.run(requests, 1));
     }
     let responses = futures::stream::select_all(streams).concat().await;
     let time_elapsed = time_start.elapsed();

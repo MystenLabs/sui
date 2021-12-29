@@ -26,10 +26,7 @@ impl TestService {
 }
 
 impl MessageHandler for TestService {
-    fn handle_message<'a>(
-        &'a self,
-        buffer: &'a [u8],
-    ) -> future::BoxFuture<'a, Option<Vec<u8>>> {
+    fn handle_message<'a>(&'a self, buffer: &'a [u8]) -> future::BoxFuture<'a, Option<Vec<u8>>> {
         self.counter.fetch_add(buffer.len(), Ordering::Relaxed);
         Box::pin(async move { Some(Vec::from(buffer)) })
     }

@@ -307,37 +307,36 @@ impl MassClient {
     }
 
     /// Spin off one task on this authority client.
-    pub fn run<I>(&self, requests: I) -> impl futures::stream::Stream<Item = Vec<Bytes>>
+    pub fn run<I>(&self, requests: I, connections : usize) -> impl futures::stream::Stream<Item = Vec<Bytes>>
     where
         I: IntoIterator<Item = Bytes>,
     {
         let handles = futures::stream::FuturesUnordered::new();
 
-        
         let outer_requests: Vec<_> = requests.into_iter().collect();
-        let size = outer_requests.len() / 8;
+        let size = outer_requests.len() / connections;
         for chunk in outer_requests[..].chunks(size) {
-            let requests : Vec<_> = chunk.iter().cloned().collect();
+            let requests: Vec<_> = chunk.iter().cloned().collect();
             let client = self.clone();
-        handles.push(
-            tokio::spawn(async move {
-                info!(
-                    "Sending {} requests to {}:{}",
-                    client.network_protocol, client.base_address, client.base_port,
-                );
-                let responses = client
-                    .run_core(requests)
-                    .await
-                    .unwrap_or_else(|_| Vec::new());
-                info!(
-                    "Done sending {} requests to {}:{}",
-                    client.network_protocol, client.base_address, client.base_port,
-                );
-                responses
-            })
-            .then(|x| async { x.unwrap_or_else(|_| Vec::new()) }),
-        );
-    }
+            handles.push(
+                tokio::spawn(async move {
+                    info!(
+                        "Sending {} requests to {}:{}",
+                        client.network_protocol, client.base_address, client.base_port,
+                    );
+                    let responses = client
+                        .run_core(requests)
+                        .await
+                        .unwrap_or_else(|_| Vec::new());
+                    info!(
+                        "Done sending {} requests to {}:{}",
+                        client.network_protocol, client.base_address, client.base_port,
+                    );
+                    responses
+                })
+                .then(|x| async { x.unwrap_or_else(|_| Vec::new()) }),
+            );
+        }
 
         handles
     }

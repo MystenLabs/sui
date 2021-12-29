@@ -100,7 +100,7 @@ impl Storage for AuthorityTemporaryStore {
                 match object {
                     Ok(o) => Some(o),
                     Err(FastPayError::UnknownSenderAccount) => None,
-                    _ => panic!("Cound not read object")
+                    _ => panic!("Cound not read object"),
                 }
             }
         }
