@@ -10,7 +10,6 @@ use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
-use rand::Rng;
 use std::{
     collections::{HashMap, HashSet},
     fmt::Write,
@@ -202,12 +201,9 @@ fn make_benchmark_certificates_from_votes(
 }
 
 /// Create randomly sized vectors (between 1 and 10 items) with random object IDs
-fn create_random_object_ids() -> Vec<ObjectID> {
-    let mut rng = rand::thread_rng();
-    let num_ids: u8 = rng.gen();
-
+fn create_random_object_ids(num_ids: u32) -> Vec<ObjectID> {
     let mut object_ids = Vec::new();
-    for _ in 0..num_ids % 9 + 1 {
+    for _ in 0..num_ids % 10 + 1 {
         object_ids.push(ObjectID::random());
     }
     object_ids
@@ -371,7 +367,16 @@ enum ClientCommands {
     #[structopt(name = "create_accounts")]
     CreateAccounts {
         /// Number of additional accounts to create
+        #[structopt(long, default_value = "1000", name = "num")]
         num: u32,
+
+        /// Number of objects per account
+        #[structopt(long, default_value = "1000", name = "objs-per-account")]
+        objs_per_account: u32,
+
+        /// Gas value per object
+        #[structopt(long, default_value = "1000", name = "gas-per-obj")]
+        gas_per_obj: u32,
 
         /// Initial state config file path
         #[structopt(name = "init-state-cfg")]
@@ -570,13 +575,15 @@ fn main() {
 
         ClientCommands::CreateAccounts {
             num,
+            objs_per_account,
+            gas_per_obj,
             initial_state_config_path,
         } => {
             let num_accounts: u32 = num;
             let mut init_state_cfg: InitialStateConfig = InitialStateConfig::new();
 
             for _ in 0..num_accounts {
-                let obj_ids = create_random_object_ids();
+                let obj_ids = create_random_object_ids(objs_per_account);
                 let account = UserAccount::new(obj_ids.clone());
 
                 init_state_cfg.config.push(InitialStateConfigEntry {
@@ -584,7 +591,12 @@ fn main() {
                     object_ids: obj_ids.clone(),
                 });
 
-                println!("{}:{:?}", encode_address(&account.address), obj_ids);
+                println!(
+                    "{}:{:?}, with gas {}",
+                    encode_address(&account.address),
+                    obj_ids,
+                    gas_per_obj
+                );
                 accounts_config.insert(account);
             }
             init_state_cfg
