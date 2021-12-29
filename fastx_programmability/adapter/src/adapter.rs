@@ -373,7 +373,7 @@ fn resolve_and_type_check(
     let mut args = Vec::new();
     let mut mutable_ref_objects = Vec::new();
     let mut by_value_objects = BTreeMap::new();
-    #[cfg(debug_assertions)]
+    #[allow(unused_mut)]
     let mut num_immutable_objects = 0;
     let num_objects = object_args.len();
 
