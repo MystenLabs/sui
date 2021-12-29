@@ -104,7 +104,7 @@ enum ServerCommands {
         #[structopt(long)]
         port: u32,
 
-        /// Sets the public name of the host
+        /// Sets the path to the database folder
         #[structopt(long)]
         database_path: String,
     },
