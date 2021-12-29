@@ -58,8 +58,6 @@ pub struct ClientState<AuthorityClient> {
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
 pub trait Client {
-    // TODO: refactor client interface to handle generic fastnft objects rather than payments / value transfers.
-
     /// Send money to a FastPay account.
     fn transfer_to_fastpay(
         &mut self,
@@ -83,6 +81,12 @@ pub trait Client {
         object_id: ObjectID,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
+
+    /// Synchronise client state with authorities, updates all object_ids and certificates
+    fn sync_client_state(&mut self) -> AsyncResult<'_, (), anyhow::Error>;
+
+    /// Get all object we own.
+    fn get_own_objects(&mut self) -> AsyncResult<'_, Vec<ObjectRef>, anyhow::Error>;
 }
 
 impl<A> ClientState<A> {
@@ -142,6 +146,13 @@ struct CertificateRequester<A> {
     authority_clients: Vec<A>,
     sender: FastPayAddress,
     object_id: ObjectID,
+}
+
+#[derive(Clone)]
+struct ObjectIdRequester<A> {
+    committee: Committee,
+    authority_clients: Vec<A>,
+    owner: FastPayAddress,
 }
 
 impl<A> CertificateRequester<A> {
@@ -683,6 +694,39 @@ where
                 .execute_transfer(order, /* with_confirmation */ false)
                 .await?;
             Ok(new_certificate)
+        })
+    }
+
+    fn sync_client_state(&mut self) -> AsyncResult<'_, (), anyhow::Error> {
+        Box::pin(async move {
+            if let Some(order) = self.pending_transfer.clone() {
+                // Finish executing the previous transfer.
+                self.execute_transfer(order, /* with_confirmation */ false)
+                    .await?;
+            }
+            // update object_ids.
+
+            // up date certificates.
+            // TODO: Batch update instead of loop?
+            for (object_id, next_sequence_number) in self.object_ids.clone() {
+                if self.sent_certificates.len() < next_sequence_number.into() {
+                    // Recover missing sent certificates.
+                    let new_sent_certificates = self.download_sent_certificates().await?;
+                    self.update_sent_certificates(new_sent_certificates, object_id)?;
+                }
+            }
+            Ok(())
+        })
+    }
+
+    fn get_own_objects(&mut self) -> AsyncResult<'_, Vec<ObjectRef>, anyhow::Error> {
+        Box::pin(async move {
+            Ok(self
+                .object_ids
+                .clone()
+                .into_iter()
+                .map(|object_id| ObjectRef::from(object_id))
+                .collect())
         })
     }
 }
