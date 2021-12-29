@@ -6,6 +6,8 @@ use std::convert::{TryFrom, TryInto};
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Digest, Signer, Verifier};
 use move_core_types::account_address::AccountAddress;
+use move_core_types::ident_str;
+use move_core_types::identifier::IdentStr;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
@@ -71,6 +73,14 @@ pub type ObjectRef = (ObjectID, SequenceNumber);
 // have transfer transactions so we index them by the object/seq they mutate.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct TransactionDigest((ObjectID, SequenceNumber));
+
+// TODO: migrate TxContext type + these constants to a separate file
+/// 0xB86E858F2D22236F2D96DF498FF001D0
+pub const TX_CONTEXT_ADDRESS: AccountAddress = AccountAddress::new([
+    0xB8, 0x6E, 0x85, 0x8F, 0x2D, 0x22, 0x23, 0x6F, 0x2D, 0x96, 0xDF, 0x49, 0x8F, 0xF0, 0x01, 0xD0,
+]);
+pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
+pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
 
 #[derive(Debug)]
 pub struct TxContext {

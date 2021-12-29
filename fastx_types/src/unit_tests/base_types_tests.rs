@@ -3,6 +3,8 @@
 
 #![allow(clippy::blacklisted_name)]
 
+use crate::gas_coin::GasCoin;
+
 use super::*;
 
 #[derive(Serialize, Deserialize)]
@@ -35,4 +37,15 @@ fn test_signatures() {
 fn test_max_sequence_number() {
     let max = SequenceNumber::max();
     assert_eq!(max.0 * 2 + 1, std::u64::MAX);
+}
+
+#[test]
+fn test_gas_coin_ser_deser_roundtrip() {
+    let id = ObjectID::random();
+    let coin = GasCoin::new(id, 10);
+    let coin_bytes = coin.to_bcs_bytes();
+
+    let deserialized_coin: GasCoin = bcs::from_bytes(&coin_bytes).unwrap();
+    assert_eq!(deserialized_coin.id(), coin.id());
+    assert_eq!(deserialized_coin.value(), coin.value());
 }
