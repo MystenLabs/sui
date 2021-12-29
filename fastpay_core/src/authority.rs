@@ -16,7 +16,13 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
-use std::{collections::BTreeMap, convert::TryInto, sync::Arc, sync::Mutex};
+use move_vm_runtime::native_functions::NativeFunctionTable;
+use std::{
+    collections::{BTreeMap, HashSet},
+    convert::TryInto,
+    sync::Arc,
+    sync::Mutex,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -68,6 +74,9 @@ pub struct AuthorityState {
     /// An index mapping object IDs to the Transaction Digest that created them.
     /// This is used by synchronization logic to sync authorities.
     parent_sync: BTreeMap<(ObjectID, SequenceNumber), TransactionDigest>,
+
+    /// Move native functions that are available to invoke
+    native_functions: NativeFunctionTable,
 }
 
 /// Interface provided by each (shard of an) authority.
@@ -107,6 +116,11 @@ impl Authority for AuthorityState {
             !input_objects.is_empty(),
             FastPayError::InsufficientObjectNumber
         );
+        // Ensure that there are no duplicate inputs
+        let mut used = HashSet::new();
+        if !input_objects.iter().all(|o| used.insert(o)) {
+            return Err(FastPayError::DuplicateObjectRefInput);
+        }
 
         for object_ref in input_objects {
             let (object_id, sequence_number) = object_ref;
@@ -234,19 +248,38 @@ impl Authority for AuthorityState {
                 temporary_store.write_object(output_object);
             }
             OrderKind::Call(c) => {
-                let sender = c.sender.to_address_hack();
+                // unwraps here are safe because we built `inputs`
                 // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
-                adapter::execute(
+                let mut gas_object = inputs.pop().unwrap();
+                let module = inputs.pop().unwrap();
+                // Fake the gas payment
+                gas_object.next_sequence_number = gas_object.next_sequence_number.increment()?;
+                temporary_store.write_object(gas_object);
+                match adapter::execute(
                     &mut temporary_store,
-                    &c.module,
+                    self.native_functions.clone(),
+                    module,
                     &c.function,
-                    sender,
-                    c.object_arguments.clone(),
-                    c.pure_arguments.clone(),
-                    c.type_arguments.clone(),
+                    c.type_arguments,
+                    inputs,
+                    c.pure_arguments,
                     Some(c.gas_budget),
-                )
-                .map_err(|_| FastPayError::MoveExecutionFailure)?;
+                    tx_ctx,
+                ) {
+                    Ok(()) => {
+                        // TODO(https://github.com/MystenLabs/fastnft/issues/63): AccountInfoResponse should return all object ID outputs.
+                        // but for now it only returns one, so use this hack
+                        object_id = if temporary_store.written.len() > 1 {
+                            temporary_store.written[1].0
+                        } else {
+                            c.gas_payment.0
+                        }
+                    }
+                    Err(_e) => {
+                        // TODO(https://github.com/MystenLabs/fastnft/issues/63): return this error to the client
+                        object_id = c.gas_payment.0;
+                    }
+                }
             }
             OrderKind::Publish(m) => {
                 // Fake the gas payment
@@ -259,13 +292,12 @@ impl Authority for AuthorityState {
                 let sender = m.sender.to_address_hack();
                 match adapter::publish(&mut temporary_store, m.modules, &sender, &mut tx_ctx) {
                     Ok(outputs) => {
-                        // TODO: AccountInfoResponse should return all object ID outputs.
+                        // TODO(https://github.com/MystenLabs/fastnft/issues/63): AccountInfoResponse should return all object ID outputs.
                         // but for now it only returns one, so use this hack
                         object_id = outputs[0].0;
                     }
                     Err(_e) => {
-                        println!("failure during publishing: {:?}", _e);
-                        // TODO: return this error to the client
+                        // TODO(https://github.com/MystenLabs/fastnft/issues/63): return this error to the client
                         object_id = m.gas_payment.0;
                     }
                 }
@@ -340,6 +372,7 @@ impl AuthorityState {
             number_of_shards: 1,
             certificates: BTreeMap::new(),
             parent_sync: BTreeMap::new(),
+            native_functions: NativeFunctionTable::new(),
         }
     }
 
@@ -360,6 +393,7 @@ impl AuthorityState {
             number_of_shards,
             certificates: BTreeMap::new(),
             parent_sync: BTreeMap::new(),
+            native_functions: NativeFunctionTable::new(),
         }
     }
 
@@ -377,7 +411,7 @@ impl AuthorityState {
         Self::get_shard(self.number_of_shards, object_id)
     }
 
-    fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
+    pub fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
         self.objects
             .lock()
             .unwrap()

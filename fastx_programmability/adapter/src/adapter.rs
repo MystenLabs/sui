@@ -1,32 +1,39 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Result};
-use fastx_framework::natives;
+use anyhow::Result;
+
+use crate::{
+    bytecode_rewriter::ModuleHandleRewriter,
+    genesis::{TX_CONTEXT_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
+};
 use fastx_types::{
-    base_types::{FastPayAddress, ObjectRef, SequenceNumber, TxContext},
+    base_types::{FastPayAddress, ObjectID, ObjectRef, SequenceNumber, TxContext},
     error::{FastPayError, FastPayResult},
-    object::Object,
+    object::{Data, MoveObject, Object},
     storage::Storage,
-    FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS,
 };
 use fastx_verifier::verifier;
-use move_binary_format::{errors::VMError, file_format::CompiledModule};
+use move_binary_format::{
+    file_format::CompiledModule,
+    normalized::{Function, Type},
+};
 
 use move_cli::sandbox::utils::get_gas_status;
 use move_core_types::{
     account_address::AccountAddress,
-    effects::ChangeSet,
-    gas_schedule::GasAlgebra,
-    identifier::{IdentStr, Identifier},
-    language_storage::{ModuleId, TypeTag},
-    resolver::{ModuleResolver, MoveResolver, ResourceResolver},
-    transaction_argument::{convert_txn_args, TransactionArgument},
+    identifier::Identifier,
+    language_storage::{ModuleId, StructTag, TypeTag},
+    resolver::{ModuleResolver, ResourceResolver},
 };
-use move_vm_runtime::move_vm::MoveVM;
+use move_vm_runtime::{
+    move_vm::MoveVM, native_functions::NativeFunctionTable, session::ExecutionResult,
+};
 use std::{collections::BTreeMap, fmt::Debug};
 
-use crate::bytecode_rewriter::ModuleHandleRewriter;
+#[cfg(test)]
+#[path = "unit_tests/adapter_tests.rs"]
+mod adapter_tests;
 
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
 /// Execution will read from/write to the store in `state_view`.
@@ -34,97 +41,67 @@ use crate::bytecode_rewriter::ModuleHandleRewriter;
 #[allow(clippy::too_many_arguments)]
 pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
-    module: &ModuleId,
+    natives: NativeFunctionTable,
+    module_object: Object,
     function: &Identifier,
-    sender: AccountAddress,
-    object_args: Vec<ObjectRef>,
-    mut pure_args: Vec<Vec<u8>>,
     type_args: Vec<TypeTag>,
+    object_args: Vec<Object>,
+    pure_args: Vec<Vec<u8>>,
     gas_budget: Option<u64>,
-) -> Result<()> {
-    let obj_ids: Vec<TransactionArgument> = object_args
-        .iter()
-        .map(|o| TransactionArgument::Address(o.0))
-        .collect();
-    let mut args = convert_txn_args(&obj_ids);
-    args.append(&mut pure_args);
+    ctx: TxContext,
+) -> Result<(), FastPayError> {
+    let TypeCheckSuccess {
+        module_id,
+        args,
+        mutable_ref_objects,
+        by_value_objects,
+    } = resolve_and_type_check(
+        module_object,
+        function,
+        &type_args,
+        object_args,
+        pure_args,
+        ctx,
+    )?;
 
-    if let Err(error) = verify_module(module, state_view) {
-        // TODO: execute should return Result<(), FastPayError>
-        bail!("Verification error: {:?}", error)
-    }
-    match execute_function(
-        module,
+    let vm = MoveVM::new(natives)
+        .expect("VM creation only fails if natives are invalid, and we created the natives");
+    let mut gas_status =
+        get_gas_status(gas_budget).map_err(|e| FastPayError::GasBudgetTooHigh {
+            error: e.to_string(),
+        })?;
+    let session = vm.new_session(state_view);
+    match session.execute_function_for_effects(
+        &module_id,
         function,
         type_args,
-        vec![sender],
-        pure_args,
-        gas_budget,
-        state_view,
-    )? {
+        args,
+        &mut gas_status,
+    ) {
         ExecutionResult::Success {
             change_set,
             events,
-            gas_used: _,
+            return_values,
+            mutable_ref_values,
+            gas_used: _, // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge
         } => {
-            // process change set. important to do this before processing events because it's where deletions happen
-            for (addr, addr_changes) in change_set.into_inner() {
-                for (struct_tag, bytes_opt) in addr_changes.into_resources() {
-                    match bytes_opt {
-                        Some(bytes) => {
-                            // object mutated during execution
-                            let sequence_number = state_view
-                                .read_object(&addr)
-                                .ok_or(FastPayError::ObjectNotFound)?
-                                .next_sequence_number
-                                .increment()
-                                .map_err(|_| FastPayError::InvalidSequenceNumber)?;
-
-                            let owner = FastPayAddress::from_move_address_hack(&sender);
-                            let object =
-                                Object::new_move(struct_tag, bytes, owner, sequence_number);
-                            state_view.write_object(object);
-                        }
-                        None => state_view.delete_object(&addr),
-                    }
-                }
-            }
-            // process events
-            for e in events {
-                if is_transfer_event(&e) {
-                    let (guid, _seq_num, type_, event_bytes) = e;
-                    match type_ {
-                        TypeTag::Struct(s_type) => {
-                            // special transfer event. process by saving object under given authenticator
-                            let transferred_obj = event_bytes;
-                            let recipient = AccountAddress::from_bytes(guid)?;
-                            let sequence_number = SequenceNumber::new();
-                            let owner = FastPayAddress::from_move_address_hack(&recipient);
-                            let mut object =
-                                Object::new_move(s_type, transferred_obj, owner, sequence_number);
-
-                            // If object exists, find new sequence number
-                            if let Some(old_object) = state_view.read_object(&object.id()) {
-                                let sequence_number =
-                                    old_object.next_sequence_number.increment()?;
-                                object.next_sequence_number = sequence_number;
-                            }
-
-                            state_view.write_object(object);
-                        }
-                        _ => unreachable!("Only structs can be transferred"),
-                    }
-                } else {
-                    // the fastX framework doesn't support user-generated events yet, so shouldn't hit this
-                    unimplemented!("Processing user events")
-                }
-            }
+            // we already checked that the function had no return types in resolve_and_type_check--it should
+            // also not return any values at runtime
+            debug_assert!(return_values.is_empty());
+            // FastX Move programs should never touch global state, so ChangeSet should be empty
+            debug_assert!(change_set.accounts().is_empty());
+            // Input ref parameters we put in should be the same number we get out
+            debug_assert!(mutable_ref_objects.len() == mutable_ref_values.len());
+            let mutable_refs = mutable_ref_objects
+                .into_iter()
+                .zip(mutable_ref_values.into_iter());
+            process_successful_execution(state_view, by_value_objects, mutable_refs, events)?;
+            Ok(())
         }
-        ExecutionResult::Fail { error, gas_used: _ } => {
-            bail!("Fail: {}", error)
-        }
+        ExecutionResult::Fail { error, gas_used: _ } => Err(FastPayError::AbortedExecution {
+            error: error.to_string(),
+        }),
     }
-    Ok(())
 }
 
 pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
@@ -185,7 +162,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 pub fn generate_module_ids(
     modules: &mut Vec<CompiledModule>,
     ctx: &mut TxContext,
-) -> Result<(), FastPayError> {
+) -> Result<BTreeMap<ModuleId, ModuleId>, FastPayError> {
     let mut sub_map = BTreeMap::new();
     for module in modules.iter() {
         // derive a fresh ID's for each module and mutate its self address to the ID.
@@ -205,7 +182,7 @@ pub fn generate_module_ids(
         // rewrite module handles to reflect freshly generated ID's
         rewriter.sub_module_ids(module);
     }
-    Ok(())
+    Ok(rewriter.into_inner())
 }
 
 /// Check if this is a special event type emitted when there is a transfer between fastX addresses
@@ -214,113 +191,292 @@ pub fn is_transfer_event(e: &Event) -> bool {
     !e.0.is_empty()
 }
 
-// TODO: Code below here probably wants to move into the VM or elsewhere in
-// the Diem codebase--seems generically useful + nothing similar exists
-
 type Event = (Vec<u8>, u64, TypeTag, Vec<u8>);
 
-/// Result of executing a script or script function in the VM
-pub enum ExecutionResult {
-    /// Execution completed successfully. Changes to global state are
-    /// captured in `change_set`, and `events` are recorded in the order
-    /// they were emitted. `gas_used` records the amount of gas expended
-    /// by execution. Note that this will be 0 in unmetered mode.
-    Success {
-        change_set: ChangeSet,
-        events: Vec<Event>,
-        gas_used: u64,
-    },
-    /// Execution failed for the reason described in `error`.
-    /// `gas_used` records the amount of gas expended by execution. Note
-    /// that this will be 0 in unmetered mode.
-    Fail { error: VMError, gas_used: u64 },
+/// Update `state_view` with the effects of successfully executing a transaction:
+/// - Look for each input in `by_value_objects` to determine whether the object was transferred, frozen, or deleted
+/// - Update objects passed via a mutable reference in `mutable_refs` to their new values
+/// - Process creation of new objects and user-emittd events in `events`
+fn process_successful_execution<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+>(
+    state_view: &mut S,
+    mut by_value_objects: BTreeMap<ObjectID, Object>,
+    mutable_refs: impl Iterator<Item = (Object, Vec<u8>)>,
+    events: Vec<Event>,
+) -> Result<(), FastPayError> {
+    for (mut obj, new_contents) in mutable_refs {
+        match &mut obj.data {
+            Data::Move(m) => m.contents = new_contents,
+            _ => unreachable!("We previously checked that mutable ref inputs are Move objects"),
+        };
+        let sequence_number = obj.next_sequence_number.increment()?;
+        obj.next_sequence_number = sequence_number;
+        state_view.write_object(obj);
+    }
+    // process events to identify transfers, freezes
+    // TODO(https://github.com/MystenLabs/fastnft/issues/96): implement freeze and immutable objects
+    for e in events {
+        if is_transfer_event(&e) {
+            let (guid, _seq_num, type_, event_bytes) = e;
+            match type_ {
+                TypeTag::Struct(s_type) => {
+                    // special transfer event. process by saving object under given authenticator
+                    let contents = event_bytes;
+                    let recipient = FastPayAddress::from_move_address_hack(
+                        &AccountAddress::from_bytes(guid)
+                            .expect("Unwrap safe due to enforcement in native function"),
+                    );
+                    let move_obj = MoveObject::new(s_type, contents);
+                    let id = move_obj.id();
+                    // If object exists, find new sequence number
+                    let mut new_object = if let Some(mut old_object) = by_value_objects.remove(&id)
+                    {
+                        match &mut old_object.data {
+                            Data::Move(o) => {
+                                debug_assert!(o.type_ == move_obj.type_);
+                                o.contents = move_obj.contents;
+                            }
+                            Data::Module(..) =>
+                            // Impossible because the object store is well-typed
+                            {
+                                unreachable!()
+                            }
+                        };
+                        let sequence_number = old_object.next_sequence_number.increment()?;
+                        old_object.next_sequence_number = sequence_number;
+                        old_object
+                    } else {
+                        Object::new_move(move_obj, recipient, SequenceNumber::new())
+                    };
+                    new_object.owner = recipient;
+                    state_view.write_object(new_object);
+                }
+                _ => unreachable!("Only structs can be transferred"),
+            }
+        } else {
+            // the fastX framework doesn't support user-generated events yet, so shouldn't hit this
+            unimplemented!("Processing user events")
+        }
+    }
+    // any object left in `by_value_objects` is an input passed by value that was not transferred or frozen.
+    // this means that either the object was (1) deleted from the FastX system altogether, or
+    // (2) wrapped inside another object that is in the FastX object pool
+    // in either case, we want to delete it
+    for id in by_value_objects.keys() {
+        state_view.delete_object(id);
+    }
+    Ok(())
 }
 
-fn create_vm() -> MoveVM {
-    let natives = natives::all_natives(MOVE_STDLIB_ADDRESS, FASTX_FRAMEWORK_ADDRESS);
-    MoveVM::new(natives).expect("VM creation only fails if natives are invalid")
+struct TypeCheckSuccess {
+    module_id: ModuleId,
+    args: Vec<Vec<u8>>,
+    by_value_objects: BTreeMap<ObjectID, Object>,
+    mutable_ref_objects: Vec<Object>,
 }
 
-/// Execute the function named `script_function` in `module` with the given
-/// `type_args`, `signer_addresses`, and `args` as input.
-/// Execute the function according to the given `gas_budget`. If this budget
-/// is `Some(t)`, use `t` use `t`; if None, run the VM in unmetered mode
-/// Read published modules and global state from `resolver` and native functions
-/// from `natives`.
-#[allow(clippy::too_many_arguments)]
-pub fn execute_function<Resolver: MoveResolver>(
-    module: &ModuleId,
-    script_function: &IdentStr,
-    type_args: Vec<TypeTag>,
-    signer_addresses: Vec<AccountAddress>,
-    mut args: Vec<Vec<u8>>,
-    gas_budget: Option<u64>,
-    resolver: &Resolver,
-) -> Result<ExecutionResult> {
-    let vm = create_vm();
-    let mut gas_status = get_gas_status(gas_budget)?;
-    let mut session = vm.new_session(resolver);
-    // prepend signers to args
-    let mut signer_args: Vec<Vec<u8>> = signer_addresses
-        .iter()
-        .map(|s| bcs::to_bytes(s).unwrap())
-        .collect();
-    signer_args.append(&mut args);
-
-    let res = {
-        session
-            .execute_function(
-                module,
-                script_function,
-                type_args,
-                signer_args,
-                &mut gas_status,
+/// - Check that `module_object` and `function` are valid
+/// - Check that the the signature of `function` is well-typed w.r.t `type_args`, `object_args`, and `pure_args`
+/// - Return the ID of the resolved module, a vector of BCS encoded arguments to pass to the VM, and a partitioning
+/// of the input objects into objects passed by value vs by mutable reference
+fn resolve_and_type_check(
+    module_object: Object,
+    function: &Identifier,
+    type_args: &[TypeTag],
+    object_args: Vec<Object>,
+    mut pure_args: Vec<Vec<u8>>,
+    ctx: TxContext,
+) -> Result<TypeCheckSuccess, FastPayError> {
+    // resolve the function we are calling
+    let (function_signature, module_id) = match module_object.data {
+        Data::Module(bytes) => {
+            let m = CompiledModule::deserialize(&bytes).expect(
+                "Unwrap safe because FastX serializes/verifies modules before publishing them",
+            );
+            (
+                Function::new_from_name(&m, function).ok_or(FastPayError::FunctionNotFound {
+                    error: format!(
+                        "Could not resolve function {} in module {}",
+                        function,
+                        m.self_id()
+                    ),
+                })?,
+                m.self_id(),
             )
-            .map(|_| ())
+        }
+        Data::Move(_) => {
+            return Err(FastPayError::ModuleLoadFailure {
+                error: "Expected a module object, but found a Move object".to_string(),
+            })
+        }
     };
-    let gas_used = match gas_budget {
-        Some(budget) => budget - gas_status.remaining_gas().get(),
-        None => 0,
+    // check validity conditions on the invoked function
+    if !function_signature.return_.is_empty() {
+        return Err(FastPayError::InvalidFunctionSignature {
+            error: "Invoked function must not return a value".to_string(),
+        });
+    }
+    if !function_signature
+        .parameters
+        .iter()
+        .all(|ty| ty.is_closed())
+    {
+        return Err(FastPayError::InvalidFunctionSignature {
+            error: "Invoked function must not have an unbound type parameter".to_string(),
+        });
+    }
+    // check arity of type and value arguments
+    if function_signature.type_parameters.len() != type_args.len() {
+        return Err(FastPayError::InvalidFunctionSignature {
+            error: format!(
+                "Expected {:?} type arguments, but found {:?}",
+                function_signature.type_parameters.len(),
+                type_args.len()
+            ),
+        });
+    }
+    // total number of args is |objects| + |pure_args| + 1 for the the `TxContext` object
+    let num_args = object_args.len() + pure_args.len() + 1;
+    if function_signature.parameters.len() != num_args {
+        return Err(FastPayError::InvalidFunctionSignature {
+            error: format!(
+                "Expected {:?} arguments, but found {:?}",
+                function_signature.parameters.len(),
+                num_args
+            ),
+        });
+    }
+    // check that the last arg is a TxContext object
+    match &function_signature.parameters[function_signature.parameters.len() - 1] {
+        Type::Struct {
+            address,
+            module,
+            name,
+            type_arguments,
+        } if address == &TX_CONTEXT_ADDRESS
+            && module.as_ident_str() == TX_CONTEXT_MODULE_NAME
+            && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME
+            && type_arguments.is_empty() => {}
+        t => {
+            return Err(FastPayError::InvalidFunctionSignature {
+                error: format!(
+                    "Expected last parameter of function signature to be {}::{}::{}, but found {}",
+                    TX_CONTEXT_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, t
+                ),
+            })
+        }
     };
-    if let Err(error) = res {
-        Ok(ExecutionResult::Fail { error, gas_used })
+
+    // type check object arguments passed in by value and by reference
+    let mut args = Vec::new();
+    let mut mutable_ref_objects = Vec::new();
+    let mut by_value_objects = BTreeMap::new();
+    #[allow(unused_mut)]
+    let mut num_immutable_objects = 0;
+    let num_objects = object_args.len();
+
+    let ty_args: Vec<Type> = type_args.iter().map(|t| Type::from(t.clone())).collect();
+    for (idx, object) in object_args.into_iter().enumerate() {
+        let mut param_type = function_signature.parameters[idx].clone();
+        if !param_type.is_closed() {
+            param_type = param_type.subst(&ty_args);
+        }
+        match &object.data {
+            Data::Move(m) => {
+                args.push(m.contents.clone());
+                // check that m.type_ matches the parameter types of the function
+                match &param_type {
+                    Type::MutableReference(inner_t) => {
+                        // (https://github.com/MystenLabs/fastnft/issues/96): check m.mutability
+                        type_check_struct(&m.type_, inner_t)?;
+                        mutable_ref_objects.push(object);
+                    }
+                    Type::Reference(inner_t) => {
+                        type_check_struct(&m.type_, inner_t)?;
+                        #[cfg(debug_assertions)]
+                        {
+                            num_immutable_objects += 1
+                        }
+                    }
+                    Type::Struct { .. } => {
+                        // TODO(https://github.com/MystenLabs/fastnft/issues/96): check m.mutability
+                        type_check_struct(&m.type_, &param_type)?;
+                        let res = by_value_objects.insert(object.id(), object);
+                        // should always pass due to earlier "no duplicate ID's" check
+                        debug_assert!(res.is_none())
+                    }
+                    t => {
+                        return Err(FastPayError::TypeError {
+                            error: format!(
+                                "Found object argument {}, but function expects {}",
+                                m.type_, t
+                            ),
+                        })
+                    }
+                }
+            }
+            Data::Module(_) => {
+                return Err(FastPayError::TypeError {
+                    error: format!("Found module argument, but function expects {}", param_type),
+                })
+            }
+        }
+    }
+    debug_assert!(
+        by_value_objects.len() + mutable_ref_objects.len() + num_immutable_objects == num_objects
+    );
+    // check that the non-object parameters are primitive types
+    for param_type in
+        &function_signature.parameters[args.len()..function_signature.parameters.len() - 1]
+    {
+        if !is_primitive(param_type) {
+            return Err(FastPayError::TypeError {
+                error: format!("Expected primitive type, but found {}", param_type),
+            });
+        }
+    }
+    args.append(&mut pure_args);
+
+    args.push(ctx.to_bcs_bytes_hack());
+
+    Ok(TypeCheckSuccess {
+        module_id,
+        args,
+        by_value_objects,
+        mutable_ref_objects,
+    })
+}
+
+fn type_check_struct(arg_type: &StructTag, param_type: &Type) -> Result<(), FastPayError> {
+    if let Some(param_struct_type) = param_type.clone().into_struct_tag() {
+        if arg_type != &param_struct_type {
+            Err(FastPayError::TypeError {
+                error: format!(
+                    "Expected argument of type {}, but found type {}",
+                    param_struct_type, arg_type
+                ),
+            })
+        } else {
+            Ok(())
+        }
     } else {
-        let (change_set, events) = session.finish().map_err(|e| e.into_vm_status())?;
-        Ok(ExecutionResult::Success {
-            change_set,
-            events,
-            gas_used,
+        Err(FastPayError::TypeError {
+            error: format!(
+                "Expected argument of type {}, but found struct type {}",
+                param_type, arg_type
+            ),
         })
     }
 }
 
-// Load, deserialize, and check the module with the fastx bytecode verifier, without linking
-fn verify_module<Resolver: MoveResolver>(id: &ModuleId, resolver: &Resolver) -> FastPayResult {
-    let module_bytes = match resolver.get_module(id) {
-        Ok(Some(bytes)) => bytes,
-        Ok(None) => {
-            return Err(FastPayError::ModuleLoadFailure {
-                error: format!("Resolver returned None for module {}", &id),
-            })
-        }
-        Err(err) => {
-            return Err(FastPayError::ModuleLoadFailure {
-                error: format!("Resolver failed to load module {}: {:?}", &id, err),
-            })
-        }
-    };
-
-    // for bytes obtained from the data store, they should always deserialize and verify.
-    // It is an invariant violation if they don't.
-    let module = CompiledModule::deserialize(&module_bytes).map_err(|err| {
-        FastPayError::ModuleLoadFailure {
-            error: err.to_string(),
-        }
-    })?;
-
-    // bytecode verifier checks that can be performed with the module itself
-    verifier::verify_module(&module).map_err(|err| FastPayError::ModuleVerificationFailure {
-        error: err.to_string(),
-    })?;
-    Ok(())
+// TODO: upstream Type::is_primitive in diem
+fn is_primitive(t: &Type) -> bool {
+    use Type::*;
+    match t {
+        Bool | U8 | U64 | U128 | Address => true,
+        Vector(inner_t) => is_primitive(inner_t),
+        Signer | Struct { .. } | TypeParameter(_) | Reference(_) | MutableReference(_) => false,
+    }
 }

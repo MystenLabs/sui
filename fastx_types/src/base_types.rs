@@ -103,6 +103,30 @@ impl TxContext {
 
         id
     }
+
+    // TODO(https://github.com/MystenLabs/fastnft/issues/89): temporary hack for Move compatibility
+    pub fn to_bcs_bytes_hack(&self) -> Vec<u8> {
+        let sender = self.digest.0 .0;
+        let inputs_hash = self.digest.0 .0.to_vec();
+        let obj = TxContextForMove {
+            sender,
+            inputs_hash,
+            ids_created: self.ids_created,
+        };
+        bcs::to_bytes(&obj).unwrap()
+    }
+
+    // for testing
+    pub fn random() -> Self {
+        Self::new(TransactionDigest::random())
+    }
+}
+
+#[derive(Serialize)]
+struct TxContextForMove {
+    sender: AccountAddress,
+    inputs_hash: Vec<u8>,
+    ids_created: u64,
 }
 
 impl TransactionDigest {
@@ -117,6 +141,11 @@ impl TransactionDigest {
             ObjectID::new([0u8; ObjectID::LENGTH]),
             SequenceNumber::new(),
         )
+    }
+
+    // for testing
+    pub fn random() -> Self {
+        Self::new(ObjectID::random(), SequenceNumber::new())
     }
 }
 
