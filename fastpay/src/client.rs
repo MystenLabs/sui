@@ -200,15 +200,6 @@ fn make_benchmark_certificates_from_votes(
     certificates
 }
 
-/// Create randomly sized vectors (between 1 and 10 items) with random object IDs
-fn create_random_object_ids(num_ids: u32) -> Vec<ObjectID> {
-    let mut object_ids = Vec::new();
-    for _ in 0..num_ids % 10 + 1 {
-        object_ids.push(ObjectID::random());
-    }
-    object_ids
-}
-
 /// Broadcast a bulk of requests to each authority.
 async fn mass_broadcast_orders(
     phase: &'static str,
@@ -579,12 +570,17 @@ fn main() {
             let mut init_state_cfg: InitialStateConfig = InitialStateConfig::new();
 
             for _ in 0..num_accounts {
-                let obj_ids = create_random_object_ids(gas_objs_per_account);
-                let account = UserAccount::new(obj_ids.clone());
+                let mut obj_ids = Vec::new();
+                let account: UserAccount;
+
+                for _ in 0..gas_objs_per_account {
+                    obj_ids.push(ObjectID::random());
+                }
+                account = UserAccount::new(obj_ids.clone());
 
                 init_state_cfg.config.push(InitialStateConfigEntry {
                     address: account.address,
-                    object_ids: obj_ids.clone(),
+                    object_ids: obj_ids,
                 });
 
                 accounts_config.insert(account);
