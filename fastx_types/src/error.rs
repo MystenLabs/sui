@@ -4,9 +4,9 @@
 use thiserror::Error;
 
 use crate::base_types::*;
+use crate::messages::Order;
 use move_binary_format::errors::PartialVMError;
 use serde::{Deserialize, Serialize};
-use crate::messages::Order;
 
 #[macro_export]
 macro_rules! fp_bail {
