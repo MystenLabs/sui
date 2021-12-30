@@ -13,7 +13,6 @@ use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
 use tokio::{runtime::Builder, time};
-use num_cpus;
 
 use std::env;
 use std::fs;
@@ -57,12 +56,9 @@ struct ClientServerBenchmark {
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let benchmark = ClientServerBenchmark::from_args();
-
     let (state, orders) = benchmark.make_structures();
 
-    // Start the servers on the thread pool
-
-    // Make special single-core runtime for each server
+    // Make multi-threaded runtime for the authority
     let b = benchmark.clone();
     thread::spawn(move || {
         let mut runtime = Builder::new()
@@ -80,6 +76,7 @@ fn main() {
         });
     });
 
+    // Make a single-core runtime for the client.
     let mut runtime = Builder::new()
         .enable_all()
         .basic_scheduler()
