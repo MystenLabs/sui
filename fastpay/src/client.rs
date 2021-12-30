@@ -275,7 +275,8 @@ fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
 #[derive(StructOpt)]
 #[structopt(
     name = "FastPay Client",
-    about = "A Byzantine fault tolerant payments sidechain with low-latency finality and high throughput"
+    about = "A Byzantine fault tolerant payments sidechain with low-latency finality and high throughput",
+    rename_all = "kebab-case"
 )]
 struct ClientOpt {
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
@@ -298,12 +299,13 @@ struct ClientOpt {
     #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
 
-    /// Subcommands. Acceptable values are transfer, query_balance, benchmark, and create_accounts.
+    /// Subcommands. Acceptable values are transfer, query_objects, benchmark, and create_accounts.
     #[structopt(subcommand)]
     cmd: ClientCommands,
 }
 
 #[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
 enum ClientCommands {
     /// Transfer funds
     #[structopt(name = "transfer")]
@@ -320,9 +322,13 @@ enum ClientCommands {
         object_id: String,
     },
 
-    /// Obtain the spendable balance
-    #[structopt(name = "query_balance")]
-    QueryBalance {
+    /// Obtain the Account Addresses
+    #[structopt(name = "query-accounts-addrs")]
+    QueryAccountAddresses {},
+
+    /// Obtain the Object Info
+    #[structopt(name = "query-objects")]
+    QueryObjects {
         /// Address of the account
         address: String,
     },
@@ -343,15 +349,25 @@ enum ClientCommands {
         server_configs: Option<Vec<String>>,
     },
 
-    /// Create new user accounts and print the public keys
-    #[structopt(name = "create_accounts")]
+    /// Create new user accounts with randomly generated object IDs
+    #[structopt(name = "create-accounts")]
     CreateAccounts {
-        /// known initial balance of the account
-        #[structopt(long)]
-        initial_objects: Option<Vec<String>>,
-
         /// Number of additional accounts to create
+        #[structopt(long, default_value = "1000")]
         num: u32,
+
+        /// Number of objects per account
+        #[structopt(long, default_value = "1000")]
+        gas_objs_per_account: u32,
+
+        /// Gas value per object
+        #[structopt(long, default_value = "1000")]
+        #[allow(dead_code)]
+        value_per_per_obj: u32,
+
+        /// Initial state config file path
+        #[structopt(name = "init-state-cfg")]
+        initial_state_config_path: String,
     },
 }
 
@@ -421,7 +437,17 @@ fn main() {
             });
         }
 
-        ClientCommands::QueryBalance { address } => {
+        ClientCommands::QueryAccountAddresses {} => {
+            let addr_strings: Vec<_> = accounts_config
+                .addresses()
+                .into_iter()
+                .map(|addr| format!("{:?}", addr).trim_end_matches('=').to_string())
+                .collect();
+            let addr_text = addr_strings.join("\n");
+            println!("{}", addr_text);
+        }
+
+        ClientCommands::QueryObjects { address } => {
             let user_address = decode_address(&address).expect("Failed to decode address");
 
             let mut rt = Runtime::new().unwrap();
@@ -434,15 +460,17 @@ fn main() {
                     send_timeout,
                     recv_timeout,
                 );
-                info!("Starting balance query");
-                let time_start = Instant::now();
-                let time_total = time_start.elapsed().as_micros();
-                info!("Balance confirmed after {} us", time_total);
+
+                let objects_ids = client_state.object_ids();
+
                 accounts_config.update_from_state(&client_state);
                 accounts_config
                     .write(accounts_config_path)
                     .expect("Unable to write user accounts");
-                info!("Saved client account state");
+
+                for (obj_id, seq_num) in objects_ids {
+                    println!("{:#x}: {:?}", obj_id, seq_num);
+                }
             });
         }
 
@@ -474,7 +502,7 @@ fn main() {
                         deserialize_response(&buf[..]).and_then(|info| info.pending_confirmation)
                     })
                     .collect();
-                warn!("Received {} valid votes.", votes.len());
+                info!("Received {} valid votes.", votes.len());
 
                 warn!("Starting benchmark phase 2 (confirmation orders)");
                 let certificates = if let Some(files) = server_configs {
@@ -524,24 +552,33 @@ fn main() {
         }
 
         ClientCommands::CreateAccounts {
-            initial_objects,
             num,
+            gas_objs_per_account,
+            // TODO: Integrate gas logic with https://github.com/MystenLabs/fastnft/pull/97
+            value_per_per_obj: _,
+            initial_state_config_path,
         } => {
             let num_accounts: u32 = num;
-            let object_ids = match initial_objects {
-                Some(object_ids) => object_ids
-                    .into_iter()
-                    .map(|string| ObjectID::from_hex_literal(&string).unwrap())
-                    .collect(),
-
-                None => Vec::new(),
-            };
+            let mut init_state_cfg: InitialStateConfig = InitialStateConfig::new();
 
             for _ in 0..num_accounts {
-                let account = UserAccount::new(object_ids.clone());
-                println!("{}:{:?}", encode_address(&account.address), object_ids);
+                let mut obj_ids = Vec::new();
+
+                for _ in 0..gas_objs_per_account {
+                    obj_ids.push(ObjectID::random());
+                }
+                let account = UserAccount::new(obj_ids.clone());
+
+                init_state_cfg.config.push(InitialStateConfigEntry {
+                    address: account.address,
+                    object_ids: obj_ids,
+                });
+
                 accounts_config.insert(account);
             }
+            init_state_cfg
+                .write(initial_state_config_path.as_str())
+                .expect("Unable to write to initial state config file");
             accounts_config
                 .write(accounts_config_path)
                 .expect("Unable to write user accounts");

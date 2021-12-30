@@ -40,10 +40,14 @@ fn make_server(
     // Load initial states
     let mut rt = Runtime::new().unwrap();
     rt.block_on(async {
-        for (address, object_id) in &initial_accounts_config.accounts {
-            let mut client = Object::with_id_for_testing(*object_id);
-            client.transfer(*address);
-            state.insert_object(client).await;
+        for initial_state_cfg_entry in &initial_accounts_config.config {
+            let address = &initial_state_cfg_entry.address;
+            for object_id in &initial_state_cfg_entry.object_ids {
+                let object = Object::with_id_owner_for_testing(*object_id, *address);
+
+                state.init_order_lock(object.to_object_reference()).await;
+                state.insert_object(object).await;
+            }
         }
     });
 

@@ -11,8 +11,8 @@ use fastx_types::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
-    fs::{self, File, OpenOptions},
-    io::{BufRead, BufReader, BufWriter, Write},
+    fs::{self, read_to_string, File, OpenOptions},
+    io::{BufReader, BufWriter, Write},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -140,6 +140,10 @@ impl AccountsConfig {
         self.accounts.values_mut()
     }
 
+    pub fn addresses(&mut self) -> impl Iterator<Item = &FastPayAddress> {
+        self.accounts.keys()
+    }
+
     pub fn update_from_state<A>(&mut self, state: &ClientState<A>) {
         let account = self
             .accounts
@@ -197,34 +201,37 @@ impl AccountsConfig {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct InitialStateConfigEntry {
+    pub address: FastPayAddress,
+    pub object_ids: Vec<ObjectID>,
+}
+#[derive(Serialize, Deserialize)]
 pub struct InitialStateConfig {
-    pub accounts: Vec<(FastPayAddress, ObjectID)>,
+    pub config: Vec<InitialStateConfigEntry>,
 }
 
 impl InitialStateConfig {
+    pub fn new() -> Self {
+        Self { config: Vec::new() }
+    }
+
     pub fn read(path: &str) -> Result<Self, anyhow::Error> {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let mut accounts = Vec::new();
-        for line in reader.lines() {
-            let line = line?;
-            let elements = line.split(':').collect::<Vec<_>>();
-            if elements.len() != 2 {
-                anyhow::bail!("expecting two columns separated with ':'")
-            }
-            let address = decode_address(elements[0])?;
-            let object_id = ObjectID::from_hex_literal(elements[1])?;
-            accounts.push((address, object_id));
-        }
-        Ok(Self { accounts })
+        let raw_data: String = read_to_string(path)?.parse()?;
+
+        Ok(toml::from_str(&raw_data)?)
     }
 
     pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new().create(true).write(true).open(path)?;
-        let mut writer = BufWriter::new(file);
-        for (address, object_id) in &self.accounts {
-            writeln!(writer, "{}:{}", encode_address(address), object_id,)?;
-        }
+        let config = toml::to_string(self).unwrap();
+
+        fs::write(path, config).expect("Unable to write to initial config file");
         Ok(())
+    }
+}
+
+impl Default for InitialStateConfig {
+    fn default() -> Self {
+        Self::new()
     }
 }
