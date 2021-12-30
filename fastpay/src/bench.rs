@@ -126,17 +126,26 @@ impl ClientServerBenchmark {
         // Seed user accounts.
         let mut rt = Runtime::new().unwrap();
         let mut account_objects = Vec::new();
+        let mut gas_objects = Vec::new();
         rt.block_on(async {
             for _ in 0..self.num_accounts {
                 let keypair = get_key_pair();
                 let object_id: ObjectID = ObjectID::random();
 
-                let client = Object::with_id_owner_for_testing(object_id, keypair.0);
-                assert!(client.next_sequence_number == SequenceNumber::from(0));
-                let object_ref = client.to_object_reference();
+                let object = Object::with_id_owner_for_testing(object_id, keypair.0);
+                assert!(object.next_sequence_number == SequenceNumber::from(0));
+                let object_ref = object.to_object_reference();
                 state.init_order_lock(object_ref).await;
-                state.insert_object(client).await;
+                state.insert_object(object).await;
                 account_objects.push((keypair.0, object_ref, keypair.1));
+
+                let gas_object_id = ObjectID::random();
+                let gas_object = Object::with_id_owner_for_testing(gas_object_id, keypair.0);
+                assert!(gas_object.next_sequence_number == SequenceNumber::from(0));
+                let gas_object_ref = gas_object.to_object_reference();
+                state.init_order_lock(gas_object_ref).await;
+                state.insert_object(gas_object).await;
+                gas_objects.push(gas_object_ref);
             }
         });
 
@@ -149,6 +158,7 @@ impl ClientServerBenchmark {
                 object_ref: *object_ref,
                 sender: *pubx,
                 recipient: Address::FastPay(next_recipient),
+                gas_payment: gas_objects[0],
                 user_data: UserData::default(),
             };
             next_recipient = *pubx;

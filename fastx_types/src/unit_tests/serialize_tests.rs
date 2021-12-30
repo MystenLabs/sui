@@ -64,6 +64,11 @@ fn test_order() {
         ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
+        gas_payment: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         user_data: UserData::default(),
     };
     let transfer_order = Order::new_transfer(transfer, &sender_key);
@@ -86,6 +91,11 @@ fn test_order() {
         ),
         sender: sender_name,
         recipient: Address::FastPay(dbg_addr(0x20)),
+        gas_payment: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         user_data: UserData::default(),
     };
     let transfer_order2 = Order::new_transfer(transfer2, &sender_key);
@@ -111,6 +121,11 @@ fn test_vote() {
         ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
+        gas_payment: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
@@ -139,6 +154,11 @@ fn test_cert() {
         ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
+        gas_payment: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
@@ -175,6 +195,11 @@ fn test_info_response() {
         ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
+        gas_payment: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
@@ -250,6 +275,11 @@ fn test_time_order() {
         ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
+        gas_payment: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         user_data: UserData::default(),
     };
 
@@ -286,6 +316,11 @@ fn test_time_vote() {
         ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
+        gas_payment: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
@@ -328,6 +363,11 @@ fn test_time_cert() {
         ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0)),
+        gas_payment: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
