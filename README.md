@@ -17,13 +17,15 @@ FastPay allows a set of distributed authorities, some of which are Byzantine, to
 cargo build --release
 cd target/release
 rm -f *.json *.toml
+rm -rf db*
 
-# Create configuration files for 4 authorities with 4 shards each.
+# Create DB dirs and configuration files for 4 authorities.
 # * Private server states are stored in `server*.json`.
 # * `committee.json` is the public description of the FastPay committee.
 for I in 1 2 3 4
 do
-    ./server --server server"$I".json generate --host 127.0.0.1 --port 9"$I"00 --shards 4 >> committee.json
+    mkdir ./db"$I"
+    ./server --server server"$I".json generate --host 127.0.0.1 --port 9"$I"00 --database-path ./db"$I" >> committee.json
 done
 
 # Create configuration files for 100 user accounts, with 4 gas objects per account and 200 value each.
@@ -34,11 +36,8 @@ done
 # Start servers
 for I in 1 2 3 4
 do
-    for J in $(seq 0 3)
-    do
-        ./server --server server"$I".json run --shard "$J" --initial-accounts initial_accounts.toml --committee committee.json &
-    done
- done
+    ./server --server server"$I".json run --initial-accounts initial_accounts.toml --committee committee.json &
+done
  
 # Query account addresses
 ./client --committee committee.json --accounts accounts.json query-accounts-addrs
