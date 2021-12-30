@@ -11,10 +11,10 @@ use futures::stream::StreamExt;
 use log::*;
 use std::{
     collections::HashMap,
-    convert::TryFrom,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
+use strum_macros::EnumString;
 use tokio::{runtime::Builder, time};
 
 use std::thread;
@@ -57,25 +57,16 @@ struct ClientServerBenchmark {
     /// Maximum size of datagrams received and sent (bytes)
     #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
-    /// Which execution path to track. 1 = Orders + Certs, 2 = Orders Only, 3 = Certs Only
+    /// Which execution path to track. OrdersAndCerts or OrdersOnly or CertsOnly
     #[structopt(long, default_value = "1")]
     benchmark_type: BenchmarkType,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, num_enum::TryFromPrimitive)]
-#[repr(u32)]
+#[derive(Debug, Clone, PartialEq, EnumString)]
 enum BenchmarkType {
     OrdersAndCerts = 1,
     OrdersOnly,
     CertsOnly,
-}
-impl std::str::FromStr for BenchmarkType {
-    type Err = core::num::ParseIntError;
-
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let num = text.parse::<u32>().unwrap();
-        Ok(BenchmarkType::try_from(num).unwrap())
-    }
 }
 impl std::fmt::Display for BenchmarkType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
