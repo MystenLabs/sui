@@ -240,11 +240,12 @@ fn test_initiating_valid_transfer() {
     let (recipient, _) = get_key_pair();
     let object_id_1 = ObjectID::random();
     let object_id_2 = ObjectID::random();
+    let gas_object = ObjectID::random();
     let authority_objects = vec![
-        vec![object_id_1],
-        vec![object_id_1, object_id_2],
-        vec![object_id_1, object_id_2],
-        vec![object_id_1, object_id_2],
+        vec![object_id_1, gas_object],
+        vec![object_id_1, object_id_2, gas_object],
+        vec![object_id_1, object_id_2, gas_object],
+        vec![object_id_1, object_id_2, gas_object],
     ];
 
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
@@ -259,6 +260,7 @@ fn test_initiating_valid_transfer() {
     let certificate = rt
         .block_on(sender.transfer_to_fastpay(
             object_id_1,
+            gas_object,
             recipient,
             UserData(Some(*b"hello...........hello...........")),
         ))
@@ -292,11 +294,12 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     let mut rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
     let object_id = ObjectID::random();
+    let gas_object = ObjectID::random();
     let authority_objects = vec![
-        vec![object_id],
-        vec![object_id],
-        vec![object_id],
-        vec![object_id],
+        vec![object_id, gas_object],
+        vec![object_id, gas_object],
+        vec![object_id, gas_object],
+        vec![object_id, gas_object],
     ];
     let mut sender = rt.block_on(init_local_client_state_with_bad_authority(
         authority_objects,
@@ -304,6 +307,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     let certificate = rt
         .block_on(sender.transfer_to_fastpay(
             object_id,
+            gas_object,
             recipient,
             UserData(Some(*b"hello...........hello...........")),
         ))
@@ -330,15 +334,21 @@ fn test_initiating_transfer_low_funds() {
     let (recipient, _) = get_key_pair();
     let object_id_1 = ObjectID::random();
     let object_id_2 = ObjectID::random();
+    let gas_object = ObjectID::random();
     let authority_objects = vec![
-        vec![object_id_1],
-        vec![object_id_1],
-        vec![object_id_1, object_id_2],
-        vec![object_id_1, object_id_2],
+        vec![object_id_1, gas_object],
+        vec![object_id_1, gas_object],
+        vec![object_id_1, object_id_2, gas_object],
+        vec![object_id_1, object_id_2, gas_object],
     ];
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
     assert!(rt
-        .block_on(sender.transfer_to_fastpay(object_id_2, recipient, UserData::default()))
+        .block_on(sender.transfer_to_fastpay(
+            object_id_2,
+            gas_object,
+            recipient,
+            UserData::default()
+        ))
         .is_err());
     // Trying to overspend does not block an account.
     assert_eq!(
@@ -364,16 +374,29 @@ fn test_bidirectional_transfer() {
     let mut client2 = make_client(authority_clients.clone(), committee);
 
     let object_id = ObjectID::random();
-    let authority_objects = vec![
-        vec![object_id],
-        vec![object_id],
-        vec![object_id],
-        vec![object_id],
+    let gas_object1 = ObjectID::random();
+    let gas_object2 = ObjectID::random();
+    let authority1_objects = vec![
+        vec![object_id, gas_object1],
+        vec![object_id, gas_object1],
+        vec![object_id, gas_object1],
+        vec![object_id, gas_object1],
+    ];
+    let authority2_objects = vec![
+        vec![gas_object2],
+        vec![gas_object2],
+        vec![gas_object2],
+        vec![gas_object2],
     ];
     rt.block_on(fund_account(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        authority1_objects,
+    ));
+    rt.block_on(fund_account(
+        authority_clients.values().collect(),
+        &mut client2,
+        authority2_objects,
     ));
 
     // Confirm client1 have ownership of the object.
@@ -388,7 +411,12 @@ fn test_bidirectional_transfer() {
     );
     // Transfer object to client2.
     let certificate = rt
-        .block_on(client1.transfer_to_fastpay(object_id, client2.address, UserData::default()))
+        .block_on(client1.transfer_to_fastpay(
+            object_id,
+            gas_object1,
+            client2.address,
+            UserData::default(),
+        ))
         .unwrap();
 
     assert_eq!(
@@ -434,8 +462,13 @@ fn test_bidirectional_transfer() {
     );
 
     // Transfer the object back to Client1
-    rt.block_on(client2.transfer_to_fastpay(object_id, client1.address, UserData::default()))
-        .unwrap();
+    rt.block_on(client2.transfer_to_fastpay(
+        object_id,
+        gas_object2,
+        client1.address,
+        UserData::default(),
+    ))
+    .unwrap();
 
     assert_eq!(
         client2.next_sequence_number(object_id),
@@ -460,7 +493,12 @@ fn test_bidirectional_transfer() {
 
     // Should fail if Client 2 double spend the object
     assert!(rt
-        .block_on(client2.transfer_to_fastpay(object_id, client1.address, UserData::default()))
+        .block_on(client2.transfer_to_fastpay(
+            object_id,
+            gas_object2,
+            client1.address,
+            UserData::default()
+        ))
         .is_err());
 }
 
@@ -472,11 +510,12 @@ fn test_receiving_unconfirmed_transfer() {
     let mut client2 = make_client(authority_clients.clone(), committee);
 
     let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
     let authority_objects = vec![
-        vec![object_id],
-        vec![object_id],
-        vec![object_id],
-        vec![object_id],
+        vec![object_id, gas_object_id],
+        vec![object_id, gas_object_id],
+        vec![object_id, gas_object_id],
+        vec![object_id, gas_object_id],
     ];
 
     rt.block_on(fund_account(
@@ -490,6 +529,7 @@ fn test_receiving_unconfirmed_transfer() {
         .block_on(client1.transfer_to_fastpay_unsafe_unconfirmed(
             client2.address,
             object_id,
+            gas_object_id,
             UserData::default(),
         ))
         .unwrap();

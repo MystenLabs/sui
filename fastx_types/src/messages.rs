@@ -25,6 +25,7 @@ pub struct Transfer {
     pub sender: FastPayAddress,
     pub recipient: Address,
     pub object_ref: ObjectRef,
+    pub gas_payment: ObjectRef,
     pub user_data: UserData,
 }
 
@@ -229,7 +230,7 @@ impl Order {
     pub fn input_objects(&self) -> Vec<ObjectRef> {
         match &self.kind {
             OrderKind::Transfer(t) => {
-                vec![t.object_ref]
+                vec![t.object_ref, t.gas_payment]
             }
             OrderKind::Call(c) => {
                 let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
@@ -257,6 +258,15 @@ impl Order {
                 );
                 &c.gas_payment.0
             }
+        }
+    }
+
+    pub fn gas_payment_object_id(&self) -> &ObjectID {
+        use OrderKind::*;
+        match &self.kind {
+            Transfer(t) => &t.gas_payment.0,
+            Publish(m) => &m.gas_payment.0,
+            Call(c) => &c.gas_payment.0,
         }
     }
 

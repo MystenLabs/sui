@@ -64,6 +64,7 @@ pub trait Client {
     fn transfer_to_fastpay(
         &mut self,
         object_id: ObjectID,
+        gas_payment: ObjectID,
         recipient: FastPayAddress,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
@@ -81,6 +82,7 @@ pub trait Client {
         &mut self,
         recipient: FastPayAddress,
         object_id: ObjectID,
+        gas_payment: ObjectID,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 }
@@ -486,6 +488,7 @@ where
     async fn transfer(
         &mut self,
         (object_id, sequence_number, _object_digest): ObjectRef,
+        gas_payment: ObjectRef,
         recipient: Address,
         user_data: UserData,
     ) -> Result<CertifiedOrder, anyhow::Error> {
@@ -493,6 +496,7 @@ where
             object_ref: (object_id, sequence_number, _object_digest),
             sender: self.address,
             recipient,
+            gas_payment,
             user_data,
         };
         let order = Order::new_transfer(transfer, &self.secret);
@@ -605,6 +609,7 @@ where
     fn transfer_to_fastpay(
         &mut self,
         object_id: ObjectID,
+        gas_payment: ObjectID,
         recipient: FastPayAddress,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
@@ -612,6 +617,12 @@ where
             (
                 object_id,
                 self.next_sequence_number(object_id),
+                // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
+                ObjectDigest::new([0; 32]),
+            ),
+            (
+                gas_payment,
+                self.next_sequence_number(gas_payment),
                 // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
                 ObjectDigest::new([0; 32]),
             ),
@@ -664,6 +675,7 @@ where
         &mut self,
         recipient: FastPayAddress,
         object_id: ObjectID,
+        gas_payment: ObjectID,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
         Box::pin(async move {
@@ -676,6 +688,12 @@ where
                 ),
                 sender: self.address,
                 recipient: Address::FastPay(recipient),
+                gas_payment: (
+                    gas_payment,
+                    self.next_sequence_number(gas_payment),
+                    // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
+                    ObjectDigest::new([0; 32]),
+                ),
                 user_data,
             };
             let order = Order::new_transfer(transfer, &self.secret);
