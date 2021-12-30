@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
 use tokio::{runtime::Builder, time};
+use num_cpus;
 
 use std::env;
 use std::fs;
@@ -183,7 +184,7 @@ impl ClientServerBenchmark {
         let items_number = orders.len() / 2;
         let time_start = Instant::now();
 
-        let connections: usize = 8;
+        let connections: usize = num_cpus::get();
         let max_in_flight = self.max_in_flight / connections as usize;
         info!("Set max_in_flight to {}", max_in_flight);
 
