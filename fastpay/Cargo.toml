@@ -18,6 +18,8 @@ serde_json = "1.0.57"
 structopt = "0.3"
 tempfile = "3.2.0"
 tokio = { version = "0.2.22", features = ["full"] }
+strum = "0.23.0"
+strum_macros = "0.23"
 num_cpus = "1.13.1"
 
 fastpay_core = { path = "../fastpay_core" }

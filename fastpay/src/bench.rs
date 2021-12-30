@@ -17,6 +17,7 @@ use tokio::{runtime::Builder, time};
 use std::env;
 use std::fs;
 use std::thread;
+use strum_macros::EnumString;
 
 #[derive(Debug, Clone, StructOpt)]
 #[structopt(
@@ -51,8 +52,21 @@ struct ClientServerBenchmark {
     /// Maximum size of datagrams received and sent (bytes)
     #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
+    /// Which execution path to track. OrdersAndCerts or OrdersOnly or CertsOnly
+    #[structopt(long, default_value = "OrdersAndCerts")]
+    benchmark_type: BenchmarkType,
 }
-
+#[derive(Debug, Clone, PartialEq, EnumString)]
+enum BenchmarkType {
+    OrdersAndCerts,
+    OrdersOnly,
+    CertsOnly,
+}
+impl std::fmt::Display for BenchmarkType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let benchmark = ClientServerBenchmark::from_args();
@@ -88,6 +102,7 @@ fn main() {
 
 impl ClientServerBenchmark {
     fn make_structures(&self) -> (AuthorityState, Vec<Bytes>) {
+        info!("Starting benchmark: {}", self.benchmark_type);
         info!("Preparing accounts.");
         let mut keys = Vec::new();
         for _ in 0..self.committee_size {
@@ -157,8 +172,12 @@ impl ClientServerBenchmark {
             let serialized_certificate = serialize_cert(&certificate);
             assert!(!serialized_certificate.is_empty());
 
-            orders.push(serialized_order.into());
-            orders.push(serialized_certificate.into());
+            if self.benchmark_type != BenchmarkType::OrdersOnly {
+                orders.push(serialized_order.into());
+            }
+            if self.benchmark_type != BenchmarkType::CertsOnly {
+                orders.push(serialized_certificate.into());
+            }
         }
 
         (state, orders)
@@ -177,8 +196,12 @@ impl ClientServerBenchmark {
 
     async fn launch_client(&self, mut orders: Vec<Bytes>) {
         time::delay_for(Duration::from_millis(1000)).await;
-
-        let items_number = orders.len() / 2;
+        let order_len_factor = if self.benchmark_type == BenchmarkType::OrdersAndCerts {
+            2
+        } else {
+            1
+        };
+        let items_number = orders.len() / order_len_factor;
         let time_start = Instant::now();
 
         let connections: usize = num_cpus::get();
@@ -229,7 +252,8 @@ impl ClientServerBenchmark {
 
         let time_total = time_start.elapsed().as_micros();
         warn!(
-            "Total time: {}us, items: {}, tx/sec: {}",
+            "Completed benchmark for {}\nTotal time: {}us, items: {}, tx/sec: {}",
+            self.benchmark_type,
             time_total,
             items_number,
             1_000_000.0 * (items_number as f64) / (time_total as f64)
