@@ -6,29 +6,27 @@
 use bytes::Bytes;
 use fastpay::{network, transport};
 use fastpay_core::authority::*;
-use fastx_types::{base_types::*, committee::Committee, messages::*, object::Object, serialize::*};
+use fastx_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use futures::stream::StreamExt;
 use log::*;
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 use structopt::StructOpt;
-use strum_macros::EnumString;
+use tokio::runtime::Runtime;
 use tokio::{runtime::Builder, time};
 
+use std::env;
+use std::fs;
 use std::thread;
+use strum_macros::EnumString;
 
 #[derive(Debug, Clone, StructOpt)]
 #[structopt(
     name = "FastPay Benchmark",
-    about = "Local end-to-end test and benchmark of the FastPay protocol
-    throughput",
-    rename_all = "kebab-case"
+    about = "Local end-to-end test and benchmark of the FastPay protocol"
 )]
 struct ClientServerBenchmark {
     /// Choose a network protocol between Udp and Tcp
-    #[structopt(long, default_value = "udp")]
+    #[structopt(long, default_value = "tcp")]
     protocol: transport::NetworkProtocol,
     /// Hostname
     #[structopt(long, default_value = "127.0.0.1")]
@@ -39,9 +37,6 @@ struct ClientServerBenchmark {
     /// Size of the FastPay committee
     #[structopt(long, default_value = "10")]
     committee_size: usize,
-    /// Number of shards per FastPay authority
-    #[structopt(long, default_value = "15")]
-    num_shards: u32,
     /// Maximum number of requests in flight (0 for blocking client)
     #[structopt(long, default_value = "1000")]
     max_in_flight: usize,
@@ -58,13 +53,12 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
     /// Which execution path to track. OrdersAndCerts or OrdersOnly or CertsOnly
-    #[structopt(long, default_value = "1")]
+    #[structopt(long, default_value = "OrdersAndCerts")]
     benchmark_type: BenchmarkType,
 }
-
 #[derive(Debug, Clone, PartialEq, EnumString)]
 enum BenchmarkType {
-    OrdersAndCerts = 1,
+    OrdersAndCerts,
     OrdersOnly,
     CertsOnly,
 }
@@ -73,34 +67,30 @@ impl std::fmt::Display for BenchmarkType {
         write!(f, "{:?}", self)
     }
 }
-
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let benchmark = ClientServerBenchmark::from_args();
+    let (state, orders) = benchmark.make_structures();
 
-    let (states, orders) = benchmark.make_structures();
+    // Make multi-threaded runtime for the authority
+    let b = benchmark.clone();
+    thread::spawn(move || {
+        let mut runtime = Builder::new()
+            .enable_all()
+            .threaded_scheduler()
+            .thread_stack_size(15 * 1024 * 1024)
+            .build()
+            .unwrap();
 
-    // Start the servers on the thread pool
-    for state in states {
-        // Make special single-core runtime for each server
-        let b = benchmark.clone();
-        thread::spawn(move || {
-            let mut runtime = Builder::new()
-                .enable_all()
-                .basic_scheduler()
-                .thread_stack_size(15 * 1024 * 1024)
-                .build()
-                .unwrap();
-
-            runtime.block_on(async move {
-                let server = b.spawn_server(state).await;
-                if let Err(err) = server.join().await {
-                    error!("Server ended with an error: {}", err);
-                }
-            });
+        runtime.block_on(async move {
+            let server = b.spawn_server(state).await;
+            if let Err(err) = server.join().await {
+                error!("Server ended with an error: {}", err);
+            }
         });
-    }
+    });
 
+    // Make a single-core runtime for the client.
     let mut runtime = Builder::new()
         .enable_all()
         .basic_scheduler()
@@ -111,8 +101,8 @@ fn main() {
 }
 
 impl ClientServerBenchmark {
-    fn make_structures(&self) -> (Vec<AuthorityState>, Vec<(u32, Bytes)>) {
-        info!("Starting benchmark of: {}", self.benchmark_type);
+    fn make_structures(&self) -> (AuthorityState, Vec<Bytes>) {
+        info!("Starting benchmark: {}", self.benchmark_type);
         info!("Preparing accounts.");
         let mut keys = Vec::new();
         for _ in 0..self.committee_size {
@@ -123,37 +113,35 @@ impl ClientServerBenchmark {
             total_votes: self.committee_size,
         };
 
-        // Pick an authority and create one state per shard.
+        // Pick an authority and create state.
         let (public_auth0, secret_auth0) = keys.pop().unwrap();
-        let mut states = Vec::new();
-        for i in 0..self.num_shards {
-            let state = AuthorityState::new_shard(
-                committee.clone(),
-                public_auth0,
-                secret_auth0.copy(),
-                i as u32,
-                self.num_shards,
-            );
-            states.push(state);
-        }
+
+        // Create a random directory to store the DB
+        let dir = env::temp_dir();
+        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        fs::create_dir(&path).unwrap();
+
+        let state = AuthorityState::new(committee.clone(), public_auth0, secret_auth0.copy(), path);
 
         // Seed user accounts.
+        let mut rt = Runtime::new().unwrap();
         let mut account_objects = Vec::new();
-        for _ in 0..self.num_accounts {
-            let keypair = get_key_pair();
-            let object_id: ObjectID = ObjectID::random();
-            let i = AuthorityState::get_shard(self.num_shards, &object_id) as usize;
-            assert!(states[i].in_shard(&object_id));
-            let mut client = Object::with_id_for_testing(object_id);
-            client.transfer(keypair.0);
-            states[i].init_order_lock(client.to_object_reference());
-            states[i].insert_object(client);
-            account_objects.push((keypair.0, object_id, keypair.1));
-        }
+        rt.block_on(async {
+            for _ in 0..self.num_accounts {
+                let keypair = get_key_pair();
+                let object_id: ObjectID = ObjectID::random();
+
+                let client = Object::with_id_owner_for_testing(object_id, keypair.0);
+                assert!(client.next_sequence_number == SequenceNumber::from(0));
+                state.init_order_lock(client.to_object_reference()).await;
+                state.insert_object(client).await;
+                account_objects.push((keypair.0, object_id, keypair.1));
+            }
+        });
 
         info!("Preparing transactions.");
         // Make one transaction per account (transfer order + confirmation).
-        let mut orders: Vec<(u32, Bytes)> = Vec::new();
+        let mut orders: Vec<Bytes> = Vec::new();
         let mut next_recipient = get_key_pair().0;
         for (pubx, object_id, secx) in account_objects.iter() {
             let transfer = Transfer {
@@ -164,12 +152,11 @@ impl ClientServerBenchmark {
                 user_data: UserData::default(),
             };
             next_recipient = *pubx;
-            let order = Order::new_transfer(transfer.clone(), secx);
-            let shard = AuthorityState::get_shard(self.num_shards, order.object_id());
+            let order = Order::new_transfer(transfer, secx);
 
             // Serialize order
-            let serialized_orders = serialize_order(&order);
-            assert!(!serialized_orders.is_empty());
+            let serialized_order = serialize_order(&order);
+            assert!(!serialized_order.is_empty());
 
             // Make certificate
             let mut certificate = CertifiedOrder {
@@ -182,18 +169,18 @@ impl ClientServerBenchmark {
                 certificate.signatures.push((*pubx, sig));
             }
 
-            let serialized_certs = serialize_cert(&certificate);
-            assert!(!serialized_certs.is_empty());
+            let serialized_certificate = serialize_cert(&certificate);
+            assert!(!serialized_certificate.is_empty());
 
             if self.benchmark_type != BenchmarkType::OrdersOnly {
-                orders.push((shard, serialized_certs.into()));
+                orders.push(serialized_order.into());
             }
             if self.benchmark_type != BenchmarkType::CertsOnly {
-                orders.push((shard, serialized_orders.into()));
+                orders.push(serialized_certificate.into());
             }
         }
 
-        (states, orders)
+        (state, orders)
     }
 
     async fn spawn_server(&self, state: AuthorityState) -> transport::SpawnedServer {
@@ -207,9 +194,8 @@ impl ClientServerBenchmark {
         server.spawn().await.unwrap()
     }
 
-    async fn launch_client(&self, mut orders: Vec<(u32, Bytes)>) {
+    async fn launch_client(&self, mut orders: Vec<Bytes>) {
         time::delay_for(Duration::from_millis(1000)).await;
-
         let order_len_factor = if self.benchmark_type == BenchmarkType::OrdersAndCerts {
             2
         } else {
@@ -218,8 +204,9 @@ impl ClientServerBenchmark {
         let items_number = orders.len() / order_len_factor;
         let time_start = Instant::now();
 
-        let max_in_flight = (self.max_in_flight / self.num_shards as usize) as usize;
-        info!("Set max_in_flight per shard to {}", max_in_flight);
+        let connections: usize = num_cpus::get();
+        let max_in_flight = self.max_in_flight / connections as usize;
+        info!("Set max_in_flight to {}", max_in_flight);
 
         info!("Sending requests.");
         if self.max_in_flight > 0 {
@@ -232,14 +219,8 @@ impl ClientServerBenchmark {
                 Duration::from_micros(self.recv_timeout_us),
                 max_in_flight as u64,
             );
-            let mut sharded_requests = HashMap::new();
-            for (shard, buf) in orders.iter().rev() {
-                sharded_requests
-                    .entry(*shard)
-                    .or_insert_with(Vec::new)
-                    .push(buf.clone());
-            }
-            let responses = mass_client.run(sharded_requests).concat().await;
+
+            let responses = mass_client.run(orders, connections).concat().await;
             info!("Received {} responses.", responses.len(),);
         } else {
             // Use actual client core
@@ -247,7 +228,6 @@ impl ClientServerBenchmark {
                 self.protocol,
                 self.host.clone(),
                 self.port,
-                self.num_shards,
                 self.buffer_size,
                 Duration::from_micros(self.send_timeout_us),
                 Duration::from_micros(self.recv_timeout_us),
@@ -257,8 +237,8 @@ impl ClientServerBenchmark {
                 if orders.len() % 1000 == 0 {
                     info!("Process message {}...", orders.len());
                 }
-                let (shard, order) = orders.pop().unwrap();
-                let status = client.send_recv_bytes(shard, order.to_vec()).await;
+                let order = orders.pop().unwrap();
+                let status = client.send_recv_bytes(order.to_vec()).await;
                 match status {
                     Ok(info) => {
                         debug!("Query response: {:?}", info);
