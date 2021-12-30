@@ -27,7 +27,6 @@ pub struct Balance(i128);
 )]
 pub struct SequenceNumber(u64);
 
-pub type ShardId = u32;
 pub type VersionNumber = SequenceNumber;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]

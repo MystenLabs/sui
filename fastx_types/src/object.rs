@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
+use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
 use move_binary_format::CompiledModule;
@@ -8,7 +9,7 @@ use move_core_types::{account_address::AccountAddress, language_storage::StructT
 
 use crate::base_types::{FastPayAddress, ObjectID, ObjectRef, SequenceNumber};
 
-#[derive(Eq, PartialEq, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize)]
 pub struct MoveObject {
     pub type_: StructTag,
     pub contents: Vec<u8>,
@@ -24,7 +25,7 @@ impl MoveObject {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum Data {
     /// An object whose governing logic lives in a published Move module
@@ -52,7 +53,7 @@ impl Data {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize)]
 pub struct Object {
     /// The meat of the object
     pub data: Data,

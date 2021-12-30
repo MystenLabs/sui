@@ -375,6 +375,7 @@ fn resolve_and_type_check(
     let mut by_value_objects = BTreeMap::new();
     #[allow(unused_mut)]
     let mut num_immutable_objects = 0;
+    #[cfg(debug_assertions)]
     let num_objects = object_args.len();
 
     let ty_args: Vec<Type> = type_args.iter().map(|t| Type::from(t.clone())).collect();
@@ -424,6 +425,7 @@ fn resolve_and_type_check(
             }
         }
     }
+    #[cfg(debug_assertions)]
     debug_assert!(
         by_value_objects.len() + mutable_ref_objects.len() + num_immutable_objects == num_objects
     );
