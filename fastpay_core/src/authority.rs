@@ -130,7 +130,9 @@ impl Authority for AuthorityState {
                 FastPayError::InvalidSequenceNumber
             );
 
-            // Get a ref to the object concerned by the transaction
+            // Get a copy of the object.
+            // TODO: We only need to read the read_only and owner field of the object,
+            //      it's a bit wasteful to copy the entire object.
             let object = self
                 .object_state(&object_id)
                 .map_err(|_| FastPayError::ObjectNotFound)?;
@@ -154,18 +156,6 @@ impl Authority for AuthorityState {
                 order.sender() == &object.owner,
                 FastPayError::IncorrectSigner
             );
-
-            // Check that this is the first, or same as the first order we sign.
-            if let Some(pending_confirmation) = self.get_order_lock(&object_ref)? {
-                fp_ensure!(
-                    pending_confirmation.order.kind == order.kind,
-                    FastPayError::PreviousTransferMustBeConfirmedFirst {
-                        pending_confirmation: pending_confirmation.order.clone()
-                    }
-                );
-                // This exact transfer order was already signed. Return the previous value.
-                return self.make_object_info(object_id);
-            }
 
             mutable_objects.push((object_id, sequence_number));
         }

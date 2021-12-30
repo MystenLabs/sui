@@ -3,7 +3,7 @@
 
 use thiserror::Error;
 
-use crate::{base_types::*, messages::*};
+use crate::base_types::*;
 use move_binary_format::errors::PartialVMError;
 use serde::{Deserialize, Serialize};
 
@@ -50,10 +50,6 @@ pub enum FastPayError {
          "The transferred amount must be not exceed the current account balance: {current_balance:?}"
     )]
     InsufficientFunding { current_balance: Balance },
-    #[error(
-          "Cannot initiate transfer while a transfer order is still pending confirmation: {pending_confirmation:?}"
-    )]
-    PreviousTransferMustBeConfirmedFirst { pending_confirmation: Order },
     #[error("Transfer order was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransferOrder,
     #[error("An invalid answer was returned by the authority while requesting a certificate")]
