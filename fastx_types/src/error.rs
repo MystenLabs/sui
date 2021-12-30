@@ -4,6 +4,7 @@
 use thiserror::Error;
 
 use crate::base_types::*;
+use crate::messages::Order;
 use move_binary_format::errors::PartialVMError;
 use serde::{Deserialize, Serialize};
 
@@ -43,13 +44,19 @@ pub enum FastPayError {
     #[error("Transfers must have positive amount")]
     IncorrectTransferAmount,
     #[error(
-        "The given sequence number must match the next expected sequence number of the account"
+        "The given sequence ({received_sequence:?}) number must match the next expected sequence ({expected_sequence:?}) number of the account"
     )]
-    UnexpectedSequenceNumber,
+    UnexpectedSequenceNumber {
+        object_id: ObjectID,
+        expected_sequence: SequenceNumber,
+        received_sequence: SequenceNumber,
+    },
     #[error(
          "The transferred amount must be not exceed the current account balance: {current_balance:?}"
     )]
     InsufficientFunding { current_balance: Balance },
+    #[error("Conflicting order already received: {pending_confirmation:?}")]
+    ConflictingOrder { pending_confirmation: Order },
     #[error("Transfer order was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransferOrder,
     #[error("An invalid answer was returned by the authority while requesting a certificate")]
@@ -84,10 +91,6 @@ pub enum FastPayError {
     BalanceOverflow,
     #[error("Account balance underflow.")]
     BalanceUnderflow,
-    #[error("Wrong shard used.")]
-    WrongShard,
-    #[error("Invalid cross shard update.")]
-    InvalidCrossShardUpdate,
     #[error("Cannot deserialize.")]
     InvalidDecoding,
     #[error("Unexpected message.")]
@@ -136,6 +139,8 @@ pub enum FastPayError {
     InsufficientObjectNumber,
     #[error("Execution invariant violated")]
     ExecutionInvariantViolation,
+    #[error("Storage error")]
+    StorageError,
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;

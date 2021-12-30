@@ -12,12 +12,15 @@ use move_binary_format::{
 };
 use move_core_types::ident_str;
 
-#[test]
-fn test_handle_transfer_order_bad_signature() {
+use std::env;
+use std::fs;
+
+#[tokio::test]
+async fn test_handle_transfer_order_bad_signature() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
-    let mut authority_state = init_state_with_object(sender, object_id);
+    let authority_state = init_state_with_object(sender, object_id).await;
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
     let object_id = *transfer_order.object_id();
     let (_unknown_address, unknown_key) = get_key_pair();
@@ -25,43 +28,49 @@ fn test_handle_transfer_order_bad_signature() {
     bad_signature_transfer_order.signature = Signature::new(&transfer_order.kind, &unknown_key);
     assert!(authority_state
         .handle_order(bad_signature_transfer_order)
+        .await
         .is_err());
 
-    let object = authority_state.object_state(&object_id).unwrap();
+    let object = authority_state.object_state(&object_id).await.unwrap();
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
+        .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
+        .await
         .unwrap()
         .is_none());
 }
 
-#[test]
-fn test_handle_transfer_order_unknown_sender() {
+#[tokio::test]
+async fn test_handle_transfer_order_unknown_sender() {
     let (sender, sender_key) = get_key_pair();
     let (unknown_address, unknown_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = Address::FastPay(dbg_addr(2));
-    let mut authority_state = init_state_with_object(sender, object_id);
+    let authority_state = init_state_with_object(sender, object_id).await;
     let transfer_order = init_transfer_order(unknown_address, &sender_key, recipient, object_id);
 
     let unknown_sender_transfer = transfer_order.kind;
     let unknown_sender_transfer_order = Order::new(unknown_sender_transfer, &unknown_key);
     assert!(authority_state
         .handle_order(unknown_sender_transfer_order)
+        .await
         .is_err());
 
-    let object = authority_state.object_state(&object_id).unwrap();
+    let object = authority_state.object_state(&object_id).await.unwrap();
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
+        .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
+        .await
         .unwrap()
         .is_none());
 }
@@ -94,30 +103,34 @@ fn test_handle_transfer_order_bad_sequence_number() {
 }
 */
 
-#[test]
-fn test_handle_transfer_order_ok() {
+#[tokio::test]
+async fn test_handle_transfer_order_ok() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
-    let mut authority_state = init_state_with_object(sender, object_id);
+    let authority_state = init_state_with_object(sender, object_id).await;
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
     // Check the initial state of the locks
     assert!(authority_state
         .get_order_lock(&(object_id, 0.into()))
+        .await
         .unwrap()
         .is_none());
     assert!(authority_state
         .get_order_lock(&(object_id, 1.into()))
+        .await
         .is_err());
 
     let account_info = authority_state
         .handle_order(transfer_order.clone())
+        .await
         .unwrap();
 
-    let object = authority_state.object_state(&object_id).unwrap();
+    let object = authority_state.object_state(&object_id).await.unwrap();
     let pending_confirmation = authority_state
         .get_order_lock(&object.to_object_reference())
+        .await
         .unwrap()
         .clone()
         .unwrap();
@@ -129,11 +142,13 @@ fn test_handle_transfer_order_ok() {
     // Check the final state of the locks
     assert!(authority_state
         .get_order_lock(&(object_id, 0.into()))
+        .await
         .unwrap()
         .is_some());
     assert_eq!(
         authority_state
             .get_order_lock(&(object_id, 0.into()))
+            .await
             .unwrap()
             .as_ref()
             .unwrap()
@@ -143,12 +158,12 @@ fn test_handle_transfer_order_ok() {
     );
 }
 
-fn send_and_confirm_order(
+async fn send_and_confirm_order(
     authority: &mut AuthorityState,
     order: Order,
 ) -> Result<AccountInfoResponse, FastPayError> {
     // Make the initial request
-    let response = authority.handle_order(order.clone()).unwrap();
+    let response = authority.handle_order(order.clone()).await.unwrap();
     let vote = response.pending_confirmation.unwrap();
 
     // Collect signatures from a quorum of authorities
@@ -159,7 +174,9 @@ fn send_and_confirm_order(
         .unwrap();
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    authority.handle_confirmation_order(ConfirmationOrder::new(certificate))
+    authority
+        .handle_confirmation_order(ConfirmationOrder::new(certificate))
+        .await
 }
 
 /// Create a `CompiledModule` that depends on `m`
@@ -179,8 +196,8 @@ fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
 }
 
 // Test that publishing a module that depends on an existing one works
-#[test]
-fn test_publish_dependent_module_ok() {
+#[tokio::test]
+async fn test_publish_dependent_module_ok() {
     let (sender, sender_key) = get_key_pair();
     // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
@@ -201,7 +218,7 @@ fn test_publish_dependent_module_ok() {
         bytes
     };
     genesis_module_objects.push(gas_payment_object);
-    let mut authority = init_state_with_objects(genesis_module_objects);
+    let mut authority = init_state_with_objects(genesis_module_objects).await;
 
     let order = Order::new_module(
         sender,
@@ -210,20 +227,20 @@ fn test_publish_dependent_module_ok() {
         &sender_key,
     );
     let dependent_module_id = TxContext::new(order.digest()).fresh_id();
-    let response = send_and_confirm_order(&mut authority, order).unwrap();
+    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
     // check that the dependent module got published
     assert!(response.object_id == dependent_module_id);
 }
 
 // Test that publishing a module with no dependencies works
-#[test]
-fn test_publish_module_no_dependencies_ok() {
+#[tokio::test]
+async fn test_publish_module_no_dependencies_ok() {
     let (sender, sender_key) = get_key_pair();
     // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
-    let mut authority = init_state_with_objects(vec![gas_payment_object]);
+    let mut authority = init_state_with_objects(vec![gas_payment_object]).await;
 
     let module = file_format::empty_module();
     let mut module_bytes = Vec::new();
@@ -234,14 +251,14 @@ fn test_publish_module_no_dependencies_ok() {
         vec![module_bytes],
         &sender_key,
     );
-    let module_id = TxContext::new(order.digest()).fresh_id();
-    let response = send_and_confirm_order(&mut authority, order).unwrap();
+    let module_object_id = TxContext::new(order.digest()).fresh_id();
+    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
     // check that the module actually got published
-    assert!(response.object_id == module_id);
+    assert!(response.object_id == module_object_id);
 }
 
-#[test]
-fn test_handle_move_order() {
+#[tokio::test]
+async fn test_handle_move_order() {
     let (sender, sender_key) = get_key_pair();
     // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
@@ -265,7 +282,7 @@ fn test_handle_move_order() {
         .unwrap();
 
     genesis_module_objects.push(gas_payment_object);
-    let mut authority_state = init_state_with_objects(genesis_module_objects);
+    let mut authority_state = init_state_with_objects(genesis_module_objects).await;
     authority_state.native_functions = genesis.native_functions.clone();
 
     let function = ident_str!("create").to_owned();
@@ -283,10 +300,15 @@ fn test_handle_move_order() {
         1000,
         &sender_key,
     );
-    let res = send_and_confirm_order(&mut authority_state, order).unwrap();
+    let res = send_and_confirm_order(&mut authority_state, order)
+        .await
+        .unwrap();
     let created_object_id = res.object_id;
     // check that order actually created an object with the expected ID, owner, sequence number
-    let created_obj = authority_state.object_state(&created_object_id).unwrap();
+    let created_obj = authority_state
+        .object_state(&created_object_id)
+        .await
+        .unwrap();
     assert_eq!(
         created_obj.owner.to_address_hack(),
         sender.to_address_hack()
@@ -295,26 +317,27 @@ fn test_handle_move_order() {
     assert_eq!(created_obj.next_sequence_number, SequenceNumber::new());
 }
 
-#[test]
-fn test_handle_transfer_order_double_spend() {
+#[tokio::test]
+async fn test_handle_transfer_order_double_spend() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
-    let mut authority_state = init_state_with_object(sender, object_id);
+    let authority_state = init_state_with_object(sender, object_id).await;
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
     let signed_order = authority_state
         .handle_order(transfer_order.clone())
+        .await
         .unwrap();
-    let double_spend_signed_order = authority_state.handle_order(transfer_order).unwrap();
+    let double_spend_signed_order = authority_state.handle_order(transfer_order).await.unwrap();
     assert_eq!(signed_order, double_spend_signed_order);
 }
 
-#[test]
-fn test_handle_confirmation_order_unknown_sender() {
+#[tokio::test]
+async fn test_handle_confirmation_order_unknown_sender() {
     let recipient = dbg_addr(2);
     let (sender, sender_key) = get_key_pair();
-    let mut authority_state = init_state();
+    let authority_state = init_state();
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
@@ -325,11 +348,12 @@ fn test_handle_confirmation_order_unknown_sender() {
 
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .await
         .is_err());
 }
 
-#[test]
-fn test_handle_confirmation_order_bad_sequence_number() {
+#[tokio::test]
+async fn test_handle_confirmation_order_bad_sequence_number() {
     // TODO: refactor this test to be less magic:
     // * Create an explicit state within an authority, by passing objects.
     // * Create an explicit transfer, and execute it.
@@ -338,13 +362,12 @@ fn test_handle_confirmation_order_bad_sequence_number() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
-    let mut authority_state = init_state_with_object(sender, object_id);
+    let authority_state = init_state_with_object(sender, object_id).await;
 
     // Record the old sequence number
     let old_seq_num;
     {
-        let mut lock = authority_state.objects.lock().unwrap();
-        let old_account = lock.get_mut(&object_id).unwrap();
+        let old_account = authority_state.object_state(&object_id).await.unwrap();
         old_seq_num = old_account.next_sequence_number;
     }
 
@@ -358,20 +381,21 @@ fn test_handle_confirmation_order_bad_sequence_number() {
 
     // Increment the sequence number
     {
-        let mut lock = authority_state.objects.lock().unwrap();
-        let sender_object = lock.get_mut(&object_id).unwrap();
+        let mut sender_object = authority_state.object_state(&object_id).await.unwrap();
         sender_object.next_sequence_number =
             sender_object.next_sequence_number.increment().unwrap();
+        authority_state.insert_object(sender_object).await;
     }
 
     // Explanation: providing an old cert that has already need applied
     //              returns a Ok(_) with info about the new object states.
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .await
         .is_ok());
 
     // Check that the new object is the one recorded.
-    let new_account = authority_state.object_state(&object_id).unwrap();
+    let new_account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(
         old_seq_num.increment().unwrap(),
         new_account.next_sequence_number
@@ -379,19 +403,17 @@ fn test_handle_confirmation_order_bad_sequence_number() {
 
     // No recipient object was created.
     assert!(authority_state
-        .objects
-        .lock()
-        .unwrap()
-        .get(&dbg_object_id(2))
-        .is_none());
+        .object_state(&dbg_object_id(2))
+        .await
+        .is_err());
 }
 
-#[test]
-fn test_handle_confirmation_order_exceed_balance() {
+#[tokio::test]
+async fn test_handle_confirmation_order_exceed_balance() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
-    let mut authority_state = init_state_with_object(sender, object_id);
+    let authority_state = init_state_with_object(sender, object_id).await;
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
@@ -402,22 +424,23 @@ fn test_handle_confirmation_order_exceed_balance() {
     );
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .await
         .is_ok());
-    let new_account = authority_state.object_state(&object_id).unwrap();
+    let new_account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(SequenceNumber::from(1), new_account.next_sequence_number);
     assert!(authority_state
-        .parent_sync
-        .get(&(object_id, new_account.next_sequence_number))
+        .parent(&(object_id, new_account.next_sequence_number))
+        .await
         .is_some());
 }
 
-#[test]
-fn test_handle_confirmation_order_receiver_balance_overflow() {
+#[tokio::test]
+async fn test_handle_confirmation_order_receiver_balance_overflow() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let (recipient, _) = get_key_pair();
-    let mut authority_state =
-        init_state_with_ids(vec![(sender, object_id), (recipient, ObjectID::random())]);
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (recipient, ObjectID::random())]).await;
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
@@ -428,24 +451,25 @@ fn test_handle_confirmation_order_receiver_balance_overflow() {
     );
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .await
         .is_ok());
-    let new_sender_account = authority_state.object_state(&object_id).unwrap();
+    let new_sender_account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(
         SequenceNumber::from(1),
         new_sender_account.next_sequence_number
     );
 
     assert!(authority_state
-        .parent_sync
-        .get(&(object_id, new_sender_account.next_sequence_number))
+        .parent(&(object_id, new_sender_account.next_sequence_number))
+        .await
         .is_some());
 }
 
-#[test]
-fn test_handle_confirmation_order_receiver_equal_sender() {
+#[tokio::test]
+async fn test_handle_confirmation_order_receiver_equal_sender() {
     let (address, key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
-    let mut authority_state = init_state_with_object(address, object_id);
+    let authority_state = init_state_with_object(address, object_id).await;
 
     let certified_transfer_order = init_certified_transfer_order(
         address,
@@ -456,22 +480,23 @@ fn test_handle_confirmation_order_receiver_equal_sender() {
     );
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .await
         .is_ok());
-    let account = authority_state.object_state(&object_id).unwrap();
+    let account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(SequenceNumber::from(1), account.next_sequence_number);
 
     assert!(authority_state
-        .parent_sync
-        .get(&(object_id, account.next_sequence_number))
+        .parent(&(object_id, account.next_sequence_number))
+        .await
         .is_some());
 }
 
-#[test]
-fn test_handle_confirmation_order_ok() {
+#[tokio::test]
+async fn test_handle_confirmation_order_ok() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
-    let mut authority_state = init_state_with_object(sender, object_id);
+    let authority_state = init_state_with_object(sender, object_id).await;
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
@@ -480,71 +505,105 @@ fn test_handle_confirmation_order_ok() {
         &authority_state,
     );
 
-    let old_account = authority_state.object_state(&object_id).unwrap();
+    let old_account = authority_state.object_state(&object_id).await.unwrap();
     let mut next_sequence_number = old_account.next_sequence_number;
     next_sequence_number = next_sequence_number.increment().unwrap();
 
     let info = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .await
         .unwrap();
     // Key check: the ownership has changed
     assert_eq!(recipient, info.owner);
     assert_eq!(next_sequence_number, info.next_sequence_number);
     assert_eq!(None, info.pending_confirmation);
     assert_eq!(
-        authority_state.certificates.get(
-            authority_state
-                .parent_sync
-                .get(&(object_id, info.next_sequence_number))
+        {
+            let refx = authority_state
+                .parent(&(object_id, info.next_sequence_number))
+                .await
                 .unwrap()
-        ),
-        Some(&certified_transfer_order)
+                .clone();
+            authority_state.read_certificate(&refx).await.unwrap()
+        },
+        Some(certified_transfer_order)
     );
 
     // Check locks are set and archived correctly
     assert!(authority_state
         .get_order_lock(&(object_id, 0.into()))
+        .await
         .is_err());
     assert!(authority_state
         .get_order_lock(&(object_id, 1.into()))
+        .await
         .expect("Exists")
         .is_none());
 }
 
-#[test]
-fn test_account_state_ok() {
+#[tokio::test]
+async fn test_account_state_ok() {
     let sender = dbg_addr(1);
     let object_id = dbg_object_id(1);
 
-    let authority_state = init_state_with_object(sender, object_id);
-    authority_state.object_state(&object_id).unwrap();
+    let authority_state = init_state_with_object(sender, object_id).await;
+    authority_state.object_state(&object_id).await.unwrap();
 }
 
-#[test]
-fn test_account_state_unknown_account() {
+#[tokio::test]
+async fn test_account_state_unknown_account() {
     let sender = dbg_addr(1);
     let unknown_address = dbg_object_id(99);
-    let authority_state = init_state_with_object(sender, ObjectID::random());
-    assert!(authority_state.object_state(&unknown_address).is_err());
+    let authority_state = init_state_with_object(sender, ObjectID::random()).await;
+    assert!(authority_state
+        .object_state(&unknown_address)
+        .await
+        .is_err());
 }
 
-#[test]
-fn test_get_shards() {
-    let num_shards = 16u32;
-    let mut found = vec![false; num_shards as usize];
-    let mut left = num_shards;
-    loop {
-        let object_id = ObjectID::random();
-        let shard = AuthorityState::get_shard(num_shards, &object_id) as usize;
-        println!("found {}", shard);
-        if !found[shard] {
-            found[shard] = true;
-            left -= 1;
-            if left == 0 {
-                break;
-            }
-        }
-    }
+#[tokio::test]
+async fn test_authority_persist() {
+    let (authority_address, authority_key) = get_key_pair();
+    let mut authorities = BTreeMap::new();
+    authorities.insert(
+        /* address */ authority_address,
+        /* voting right */ 1,
+    );
+    let committee = Committee::new(authorities);
+
+    // Create a random directory to store the DB
+    let dir = env::temp_dir();
+    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+
+    // Create an authority
+    let authority = AuthorityState::new(
+        committee.clone(),
+        authority_address,
+        authority_key.copy(),
+        &path,
+    );
+
+    // Create an object
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let mut obj = Object::with_id_for_testing(object_id);
+    obj.transfer(recipient);
+
+    // Store an object
+    authority.insert_object(obj).await;
+    authority.init_order_lock((object_id, 0.into())).await;
+
+    // Close the authority
+    drop(authority);
+
+    // Reopen the authority with the same path
+    let authority2 = AuthorityState::new(committee, authority_address, authority_key, &path);
+    let obj2 = authority2.object_state(&object_id).await.unwrap();
+
+    // Check the object is present
+    assert_eq!(obj2.id(), object_id);
+    assert_eq!(obj2.owner, recipient);
 }
 
 // helpers
@@ -558,40 +617,43 @@ fn init_state() -> AuthorityState {
         /* voting right */ 1,
     );
     let committee = Committee::new(authorities);
-    AuthorityState::new(committee, authority_address, authority_key)
+
+    // Create a random directory to store the DB
+    let dir = env::temp_dir();
+    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+
+    AuthorityState::new(committee, authority_address, authority_key, path)
 }
 
 #[cfg(test)]
-fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
+async fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
     objects: I,
 ) -> AuthorityState {
-    let mut state = init_state();
+    let state = init_state();
     for (address, object_id) in objects {
-        {
-            let mut unlocked_db = state.objects.lock().unwrap();
-            let account = unlocked_db
-                .entry(object_id)
-                .or_insert_with(|| Object::with_id_for_testing(object_id));
-            account.transfer(address);
-        } // drop lock
-        state.init_order_lock((object_id, 0.into()));
+        let mut obj = Object::with_id_for_testing(object_id);
+        obj.transfer(address);
+        state.insert_object(obj).await;
+        state.init_order_lock((object_id, 0.into())).await;
     }
     state
 }
 
-fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
-    let mut state = init_state();
+async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
+    let state = init_state();
+
     for o in objects {
         let obj_ref = o.to_object_reference();
-        state.objects.lock().unwrap().insert(o.id(), o);
-        state.init_order_lock(obj_ref);
+        state.insert_object(o).await;
+        state.init_order_lock(obj_ref).await;
     }
     state
 }
 
 #[cfg(test)]
-fn init_state_with_object(address: FastPayAddress, object: ObjectID) -> AuthorityState {
-    init_state_with_ids(std::iter::once((address, object)))
+async fn init_state_with_object(address: FastPayAddress, object: ObjectID) -> AuthorityState {
+    init_state_with_ids(std::iter::once((address, object))).await
 }
 
 #[cfg(test)]
