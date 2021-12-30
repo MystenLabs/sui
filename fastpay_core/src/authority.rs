@@ -17,12 +17,11 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
+use std::path::Path;
 use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
-    sync::Mutex,
 };
-use std::path::Path;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -46,7 +45,7 @@ pub struct AuthorityState {
     /// Move native functions that are available to invoke
     native_functions: NativeFunctionTable,
     /// The database
-    _database: Arc<Mutex<AuthorityStore>>,
+    _database: Arc<AuthorityStore>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -294,20 +293,17 @@ impl AuthorityState {
             committee,
             name,
             secret,
-            // objects: Arc::new(Mutex::new(BTreeMap::new())),
             native_functions: NativeFunctionTable::new(),
-            _database: Arc::new(Mutex::new(AuthorityStore::open(path))),
+            _database: Arc::new(AuthorityStore::open(path)),
         }
     }
 
     async fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
-        self._database.lock().unwrap().object_state(object_id)
+        self._database.object_state(object_id)
     }
 
     pub async fn insert_object(&self, object: Object) {
         self._database
-            .lock()
-            .unwrap()
             .insert_object(object)
             .expect("TODO: propagate the error")
     }
@@ -339,8 +335,6 @@ impl AuthorityState {
     /// Initialize an order lock for an object/sequence to None
     pub async fn init_order_lock(&self, object_ref: ObjectRef) {
         self._database
-            .lock()
-            .unwrap()
             .init_order_lock(object_ref)
             .expect("TODO: propagate the error")
     }
@@ -352,8 +346,6 @@ impl AuthorityState {
         signed_order: SignedOrder,
     ) -> Result<(), FastPayError> {
         self._database
-            .lock()
-            .unwrap()
             .set_order_lock(mutable_input_objects, signed_order)
     }
 
@@ -362,10 +354,7 @@ impl AuthorityState {
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedOrder,
     ) -> Result<(), FastPayError> {
-        self._database
-            .lock()
-            .unwrap()
-            .update_state(temporary_store, certificate)
+        self._database.update_state(temporary_store, certificate)
     }
 
     /// Get a read reference to an object/seq lock
@@ -373,7 +362,7 @@ impl AuthorityState {
         &self,
         object_ref: &ObjectRef,
     ) -> Result<Option<SignedOrder>, FastPayError> {
-        self._database.lock().unwrap().get_order_lock(object_ref)
+        self._database.get_order_lock(object_ref)
     }
 
     // Helper functions to manage certificates
@@ -383,13 +372,11 @@ impl AuthorityState {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<CertifiedOrder>, FastPayError> {
-        self._database.lock().unwrap().read_certificate(digest)
+        self._database.read_certificate(digest)
     }
 
     pub async fn parent(&self, object_ref: &ObjectRef) -> Option<TransactionDigest> {
         self._database
-            .lock()
-            .unwrap()
             .parent(object_ref)
             .expect("TODO: propagate the error")
     }

@@ -1,10 +1,10 @@
 use super::*;
 
 pub struct AuthorityTemporaryStore {
-    object_store: Arc<Mutex<AuthorityStore>>,
+    object_store: Arc<AuthorityStore>,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
-    pub written: Vec<ObjectRef>,       // Objects written
+    pub written: Vec<ObjectRef>,   // Objects written
     deleted: Vec<ObjectRef>,       // Objects actively deleted
 }
 
@@ -96,7 +96,7 @@ impl Storage for AuthorityTemporaryStore {
         match self.objects.get(id) {
             Some(x) => Some(x.clone()),
             None => {
-                let object = self.object_store.lock().unwrap().object_state(id);
+                let object = self.object_store.object_state(id);
                 match object {
                     Ok(o) => Some(o),
                     Err(FastPayError::ObjectNotFound) => None,

@@ -300,10 +300,15 @@ async fn test_handle_move_order() {
         1000,
         &sender_key,
     );
-    let res = send_and_confirm_order(&mut authority_state, order).await.unwrap();
+    let res = send_and_confirm_order(&mut authority_state, order)
+        .await
+        .unwrap();
     let created_object_id = res.object_id;
     // check that order actually created an object with the expected ID, owner, sequence number
-    let created_obj = authority_state.object_state(&created_object_id).await.unwrap();
+    let created_obj = authority_state
+        .object_state(&created_object_id)
+        .await
+        .unwrap();
     assert_eq!(
         created_obj.owner.to_address_hack(),
         sender.to_address_hack()

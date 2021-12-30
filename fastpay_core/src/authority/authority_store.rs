@@ -1,6 +1,7 @@
 use super::*;
 
 use std::path::Path;
+use std::sync::Mutex;
 use store::rocks::{open_cf, DBMap};
 use store::traits::Map;
 
@@ -9,6 +10,7 @@ pub struct AuthorityStore {
     order_lock: DBMap<ObjectRef, Option<SignedOrder>>,
     certificates: DBMap<TransactionDigest, CertifiedOrder>,
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
+    check_and_write_lock: Mutex<()>,
 }
 
 impl AuthorityStore {
@@ -25,6 +27,7 @@ impl AuthorityStore {
             order_lock: DBMap::reopen(&db, Some("order_lock")).expect("Cannot open CF."),
             certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
             parent_sync: DBMap::reopen(&db, Some("parent_sync")).expect("Cannot open CF."),
+            check_and_write_lock: Mutex::new(()),
         }
     }
 
@@ -62,7 +65,7 @@ impl AuthorityStore {
     /// Read the transactionDigest that is the parent of an object reference
     /// (ie. the transaction that created an object at this version.)
     pub fn parent(
-        &mut self,
+        &self,
         object_ref: &ObjectRef,
     ) -> Result<Option<TransactionDigest>, FastPayError> {
         self.parent_sync
@@ -81,7 +84,7 @@ impl AuthorityStore {
 
     /// Initialize a lock to an object reference to None, but keep it
     /// as it is if a value is already present.
-    pub fn init_order_lock(&mut self, object_ref: ObjectRef) -> Result<(), FastPayError> {
+    pub fn init_order_lock(&self, object_ref: ObjectRef) -> Result<(), FastPayError> {
         // TODO: Do we really need the get_or_insert here, or can we just do insert? Presumably we
         //       have checked that there are no conflicts?
         self.order_lock
@@ -97,33 +100,15 @@ impl AuthorityStore {
     /// atomically in this implementation.
     ///
     pub fn set_order_lock(
-        &mut self,
+        &self,
         mutable_input_objects: &[ObjectRef],
         signed_order: SignedOrder,
     ) -> Result<(), FastPayError> {
         // TODO: There is a lot of cloning used -- eliminate it.
+
+        // First we make the batch of changes
         let mut lock_batch = self.order_lock.batch();
-
         for obj_ref in mutable_input_objects {
-            // The object / version must exist, and therefore lock initialized.
-            let lock = self
-                .order_lock
-                .get(obj_ref)
-                .map_err(|_| FastPayError::StorageError)?
-                .ok_or(FastPayError::OrderLockDoesNotExist)?;
-
-            if let Some(existing_signed_order) = lock {
-                if existing_signed_order.order == signed_order.order {
-                    // For some reason we are re-inserting the same order. Not optimal but correct.
-                    continue;
-                } else {
-                    // We are trying to set the lock to a different order, this is unsafe.
-                    return Err(FastPayError::ConflictingOrder {
-                        pending_confirmation: existing_signed_order.order,
-                    });
-                }
-            }
-
             // The lock is None, so we replace it with the given order.
             let update = [(*obj_ref, Some(signed_order.clone()))];
             lock_batch = lock_batch
@@ -131,8 +116,41 @@ impl AuthorityStore {
                 .map_err(|_| FastPayError::StorageError)?;
         }
 
-        // Atomic write of all locks
-        lock_batch.write().map_err(|_| FastPayError::StorageError)
+        // This is the critical region: testing the locks and writing the
+        // new locks must be atomic, and not writes should happen in between.
+        {
+            // Aquire the lock to ensure no one else writes when we are in here.
+            let _lock = self
+                .check_and_write_lock
+                .lock()
+                .map_err(|_| FastPayError::StorageError)?;
+
+            for obj_ref in mutable_input_objects {
+                // The object / version must exist, and therefore lock initialized.
+                let lock = self
+                    .order_lock
+                    .get(obj_ref)
+                    .map_err(|_| FastPayError::StorageError)?
+                    .ok_or(FastPayError::OrderLockDoesNotExist)?;
+
+                if let Some(existing_signed_order) = lock {
+                    if existing_signed_order.order == signed_order.order {
+                        // For some reason we are re-inserting the same order. Not optimal but correct.
+                        continue;
+                    } else {
+                        // We are trying to set the lock to a different order, this is unsafe.
+                        return Err(FastPayError::ConflictingOrder {
+                            pending_confirmation: existing_signed_order.order,
+                        });
+                    }
+                }
+            }
+
+            // Atomic write of all locks
+            lock_batch.write().map_err(|_| FastPayError::StorageError)
+
+            // Implicit: drop(_lock);
+        } // End of critical region
     }
 
     /// Updates the state resulting from the execution of a certificate.
@@ -140,7 +158,7 @@ impl AuthorityStore {
     /// Internally it checks that all locks for active inputs are at the correct
     /// version, and then writes locks, objects, certificates, parents atomicaly.
     pub fn update_state(
-        &mut self,
+        &self,
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedOrder,
     ) -> Result<(), FastPayError> {
@@ -151,14 +169,9 @@ impl AuthorityStore {
         let mut write_batch = self.order_lock.batch();
 
         // Archive the old lock.
-        for input_ref in active_inputs {
-            let old_lock = self
-                .order_lock
-                .get(&input_ref)
-                .map_err(|_| FastPayError::StorageError)?;
-            fp_ensure!(old_lock.is_some(), FastPayError::OrderLockDoesNotExist);
+        for input_ref in &active_inputs {
             write_batch = write_batch
-                .delete_batch(&self.order_lock, [input_ref].iter().cloned()) // TODO: I am sure we can avoid this clone
+                .delete_batch(&self.order_lock, [*input_ref].iter().cloned()) // TODO: I am sure we can avoid this clone
                 .map_err(|_| FastPayError::StorageError)?;
         }
 
@@ -206,7 +219,29 @@ impl AuthorityStore {
                 .map_err(|_| FastPayError::StorageError)?;
         }
 
-        // Atomic write of all locks & other data
-        write_batch.write().map_err(|_| FastPayError::StorageError)
+        // This is the critical region: testing the locks and writing the
+        // new locks must be atomic, and not writes should happen in between.
+        {
+            // Aquire the lock to ensure no one else writes when we are in here.
+            let _lock = self
+                .check_and_write_lock
+                .lock()
+                .map_err(|_| FastPayError::StorageError)?;
+
+            // Archive the old lock.
+            for input_ref in active_inputs {
+                fp_ensure!(
+                    self.order_lock
+                        .contains_key(&input_ref)
+                        .map_err(|_| FastPayError::StorageError)?,
+                    FastPayError::OrderLockDoesNotExist
+                );
+            }
+
+            // Atomic write of all locks & other data
+            write_batch.write().map_err(|_| FastPayError::StorageError)
+
+            // Implicit: drop(_lock);
+        } // End of critical region
     }
 }
