@@ -6,11 +6,12 @@
 use bytes::Bytes;
 use fastpay::{network, transport};
 use fastpay_core::authority::*;
-use fastx_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
+use fastx_types::{base_types::*, committee::Committee, messages::*, object::Object, serialize::*};
 use futures::stream::StreamExt;
 use log::*;
 use std::{
     collections::HashMap,
+    convert::TryFrom,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
@@ -21,7 +22,9 @@ use std::thread;
 #[derive(Debug, Clone, StructOpt)]
 #[structopt(
     name = "FastPay Benchmark",
-    about = "Local end-to-end test and benchmark of the FastPay protocol"
+    about = "Local end-to-end test and benchmark of the FastPay protocol
+    throughput",
+    rename_all = "kebab-case"
 )]
 struct ClientServerBenchmark {
     /// Choose a network protocol between Udp and Tcp
@@ -54,6 +57,30 @@ struct ClientServerBenchmark {
     /// Maximum size of datagrams received and sent (bytes)
     #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
+    /// Which execution path to track. 1 = Orders + Certs, 2 = Orders Only, 3 = Certs Only
+    #[structopt(long, default_value = "1")]
+    benchmark_type: BenchmarkType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, num_enum::TryFromPrimitive)]
+#[repr(u32)]
+enum BenchmarkType {
+    OrdersAndCerts = 1,
+    OrdersOnly,
+    CertsOnly,
+}
+impl std::str::FromStr for BenchmarkType {
+    type Err = core::num::ParseIntError;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let num = text.parse::<u32>().unwrap();
+        Ok(BenchmarkType::try_from(num).unwrap())
+    }
+}
+impl std::fmt::Display for BenchmarkType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 fn main() {
@@ -94,6 +121,7 @@ fn main() {
 
 impl ClientServerBenchmark {
     fn make_structures(&self) -> (Vec<AuthorityState>, Vec<(u32, Bytes)>) {
+        info!("Starting benchmark of: {}", self.benchmark_type);
         info!("Preparing accounts.");
         let mut keys = Vec::new();
         for _ in 0..self.committee_size {
@@ -149,8 +177,8 @@ impl ClientServerBenchmark {
             let shard = AuthorityState::get_shard(self.num_shards, order.object_id());
 
             // Serialize order
-            let bufx = serialize_order(&order);
-            assert!(!bufx.is_empty());
+            let serialized_orders = serialize_order(&order);
+            assert!(!serialized_orders.is_empty());
 
             // Make certificate
             let mut certificate = CertifiedOrder {
@@ -163,11 +191,15 @@ impl ClientServerBenchmark {
                 certificate.signatures.push((*pubx, sig));
             }
 
-            let bufx2 = serialize_cert(&certificate);
-            assert!(!bufx2.is_empty());
+            let serialized_certs = serialize_cert(&certificate);
+            assert!(!serialized_certs.is_empty());
 
-            orders.push((shard, bufx2.into()));
-            orders.push((shard, bufx.into()));
+            if self.benchmark_type != BenchmarkType::OrdersOnly {
+                orders.push((shard, serialized_certs.into()));
+            }
+            if self.benchmark_type != BenchmarkType::CertsOnly {
+                orders.push((shard, serialized_orders.into()));
+            }
         }
 
         (states, orders)
@@ -187,7 +219,12 @@ impl ClientServerBenchmark {
     async fn launch_client(&self, mut orders: Vec<(u32, Bytes)>) {
         time::delay_for(Duration::from_millis(1000)).await;
 
-        let items_number = orders.len() / 2;
+        let order_len_factor = if self.benchmark_type == BenchmarkType::OrdersAndCerts {
+            2
+        } else {
+            1
+        };
+        let items_number = orders.len() / order_len_factor;
         let time_start = Instant::now();
 
         let max_in_flight = (self.max_in_flight / self.num_shards as usize) as usize;
@@ -244,7 +281,8 @@ impl ClientServerBenchmark {
 
         let time_total = time_start.elapsed().as_micros();
         warn!(
-            "Total time: {}us, items: {}, tx/sec: {}",
+            "Completed benchmark for {}\nTotal time: {}us, items: {}, tx/sec: {}",
+            self.benchmark_type,
             time_total,
             items_number,
             1_000_000.0 * (items_number as f64) / (time_total as f64)
