@@ -17,10 +17,10 @@ bincode = "1.3.3"
 bytes = "1.1.0"
 async-recursion = "0.3.2"
 async-trait = "0.1.52"
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store" }
 tracing = { version = "0.1.29", features = ["log"] }
 
 crypto = { path = "../crypto" }
-store = { path = "../store" }
 config = { path = "../config" }
 network = { path = "../network" }
 

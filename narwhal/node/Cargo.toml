@@ -16,10 +16,10 @@ rand = "0.7.3"
 futures = "0.3.19"
 tracing = { version = "0.1.29", features = ["log"] }
 tracing-log = "0.1.2"
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store" }
 tracing-subscriber = { version = "0.3.4", features = ["time", "env-filter"] }
 
 config = { path = "../config" }
-store = { path = "../store" }
 crypto = { path = "../crypto" }
 primary = { path = "../primary" }
 worker = { path = "../worker" }
