@@ -469,6 +469,11 @@ fn main() {
 
                 let objects_ids = client_state.object_ids();
 
+                accounts_config.update_from_state(&client_state);
+                accounts_config
+                    .write(accounts_config_path)
+                    .expect("Unable to write user accounts");
+
                 for (obj_id, seq_num) in objects_ids {
                     println!("{:#x}: {:?}", obj_id, seq_num);
                 }
