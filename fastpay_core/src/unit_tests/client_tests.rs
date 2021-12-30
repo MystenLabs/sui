@@ -3,7 +3,7 @@
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
 use super::*;
-use crate::authority::{Authority, AuthorityState};
+use crate::authority::AuthorityState;
 use fastx_types::object::Object;
 use futures::lock::Mutex;
 use std::{
@@ -12,13 +12,16 @@ use std::{
 };
 use tokio::runtime::Runtime;
 
+use std::env;
+use std::fs;
+
 #[derive(Clone)]
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
 impl AuthorityClient for LocalAuthorityClient {
     fn handle_order(&mut self, order: Order) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_order(order) })
+        Box::pin(async move { state.lock().await.handle_order(order).await })
     }
 
     fn handle_confirmation_order(
@@ -26,7 +29,7 @@ impl AuthorityClient for LocalAuthorityClient {
         order: ConfirmationOrder,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_confirmation_order(order) })
+        Box::pin(async move { state.lock().await.handle_confirmation_order(order).await })
     }
 
     fn handle_account_info_request(
@@ -34,7 +37,13 @@ impl AuthorityClient for LocalAuthorityClient {
         request: AccountInfoRequest,
     ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_account_info_request(request) })
+        Box::pin(async move {
+            state
+                .lock()
+                .await
+                .handle_account_info_request(request)
+                .await
+        })
     }
 }
 
@@ -59,7 +68,12 @@ fn init_local_authorities(
 
     let mut clients = HashMap::new();
     for (address, secret) in key_pairs {
-        let state = AuthorityState::new(committee.clone(), address, secret);
+        // Random directory for the DB
+        let dir = env::temp_dir();
+        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        fs::create_dir(&path).unwrap();
+
+        let state = AuthorityState::new(committee.clone(), address, secret, path);
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
@@ -85,7 +99,12 @@ fn init_local_authorities_bad_1(
 
     let mut clients = HashMap::new();
     for (address, secret) in key_pairs {
-        let state = AuthorityState::new(committee.clone(), address, secret);
+        // Random directory
+        let dir = env::temp_dir();
+        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        fs::create_dir(&path).unwrap();
+
+        let state = AuthorityState::new(committee.clone(), address, secret, path);
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
@@ -109,7 +128,7 @@ fn make_client(
 }
 
 #[cfg(test)]
-fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
+async fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
     authorities: Vec<&LocalAuthorityClient>,
     client: &mut ClientState<LocalAuthorityClient>,
     object_ids: I,
@@ -118,13 +137,10 @@ fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
         for object_id in object_ids {
             let mut object = Object::with_id_for_testing(object_id);
             object.transfer(client.address);
-            let mut client_ref = authority.0.as_ref().try_lock().unwrap();
-            client_ref
-                .accounts_mut()
-                .lock()
-                .unwrap()
-                .insert(object_id, object);
-            client_ref.init_order_lock((object_id, 0.into()));
+            let client_ref = authority.0.as_ref().try_lock().unwrap();
+
+            client_ref.insert_object(object).await;
+            client_ref.init_order_lock((object_id, 0.into())).await;
 
             client.object_ids.insert(object_id, SequenceNumber::new());
         }
@@ -132,19 +148,22 @@ fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
 }
 
 #[cfg(test)]
-fn init_local_client_state(object_ids: Vec<Vec<ObjectID>>) -> ClientState<LocalAuthorityClient> {
+async fn init_local_client_state(
+    object_ids: Vec<Vec<ObjectID>>,
+) -> ClientState<LocalAuthorityClient> {
     let (authority_clients, committee) = init_local_authorities(object_ids.len());
     let mut client = make_client(authority_clients.clone(), committee);
     fund_account(
         authority_clients.values().collect(),
         &mut client,
         object_ids,
-    );
+    )
+    .await;
     client
 }
 
 #[cfg(test)]
-fn init_local_client_state_with_bad_authority(
+async fn init_local_client_state_with_bad_authority(
     object_ids: Vec<Vec<ObjectID>>,
 ) -> ClientState<LocalAuthorityClient> {
     let (authority_clients, committee) = init_local_authorities_bad_1(object_ids.len());
@@ -153,7 +172,8 @@ fn init_local_client_state_with_bad_authority(
         authority_clients.values().collect(),
         &mut client,
         object_ids,
-    );
+    )
+    .await;
     client
 }
 
@@ -169,7 +189,7 @@ fn test_get_strong_majority_owner() {
             vec![object_id_1, object_id_2],
             vec![object_id_1, object_id_2],
         ];
-        let client = init_local_client_state(authority_objects);
+        let client = init_local_client_state(authority_objects).await;
         assert_eq!(
             client.get_strong_majority_owner(object_id_1).await,
             Some((client.address, SequenceNumber::from(0)))
@@ -188,7 +208,7 @@ fn test_get_strong_majority_owner() {
             vec![object_id_3, object_id_2],
             vec![object_id_3],
         ];
-        let client = init_local_client_state(authority_objects);
+        let client = init_local_client_state(authority_objects).await;
         assert_eq!(client.get_strong_majority_owner(object_id_1).await, None);
         assert_eq!(client.get_strong_majority_owner(object_id_2).await, None);
         assert_eq!(
@@ -211,7 +231,7 @@ fn test_initiating_valid_transfer() {
         vec![object_id_1, object_id_2],
     ];
 
-    let mut sender = init_local_client_state(authority_objects);
+    let mut sender = rt.block_on(init_local_client_state(authority_objects));
     assert_eq!(
         rt.block_on(sender.get_strong_majority_owner(object_id_1)),
         Some((sender.address, SequenceNumber::from(0)))
@@ -262,7 +282,9 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
         vec![object_id],
         vec![object_id],
     ];
-    let mut sender = init_local_client_state_with_bad_authority(authority_objects);
+    let mut sender = rt.block_on(init_local_client_state_with_bad_authority(
+        authority_objects,
+    ));
     let certificate = rt
         .block_on(sender.transfer_to_fastpay(
             object_id,
@@ -298,7 +320,7 @@ fn test_initiating_transfer_low_funds() {
         vec![object_id_1, object_id_2],
         vec![object_id_1, object_id_2],
     ];
-    let mut sender = init_local_client_state(authority_objects);
+    let mut sender = rt.block_on(init_local_client_state(authority_objects));
     assert!(rt
         .block_on(sender.transfer_to_fastpay(object_id_2, recipient, UserData::default()))
         .is_err());
@@ -332,11 +354,11 @@ fn test_bidirectional_transfer() {
         vec![object_id],
         vec![object_id],
     ];
-    fund_account(
+    rt.block_on(fund_account(
         authority_clients.values().collect(),
         &mut client1,
         authority_objects,
-    );
+    ));
 
     // Confirm client1 have ownership of the object.
     assert_eq!(
@@ -441,11 +463,11 @@ fn test_receiving_unconfirmed_transfer() {
         vec![object_id],
     ];
 
-    fund_account(
+    rt.block_on(fund_account(
         authority_clients.values().collect(),
         &mut client1,
         authority_objects,
-    );
+    ));
     // not updating client1.balance
 
     let certificate = rt

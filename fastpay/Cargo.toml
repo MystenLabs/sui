@@ -20,6 +20,7 @@ tempfile = "3.2.0"
 tokio = { version = "0.2.22", features = ["full"] }
 rand = "0.7.3"
 toml = "0.5.8"
+num_cpus = "1.13.1"
 
 fastpay_core = { path = "../fastpay_core" }
 fastx-types = { path = "../fastx_types" }

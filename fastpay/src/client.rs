@@ -4,7 +4,7 @@
 #![deny(warnings)]
 
 use fastpay::{config::*, network, transport};
-use fastpay_core::{authority::*, client::*};
+use fastpay_core::client::*;
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
 
 use bytes::Bytes;
@@ -30,7 +30,6 @@ fn make_authority_clients(
             config.network_protocol,
             config.host,
             config.base_port,
-            config.num_shards,
             buffer_size,
             send_timeout,
             recv_timeout,
@@ -46,7 +45,7 @@ fn make_authority_mass_clients(
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
     max_in_flight: u64,
-) -> Vec<(u32, network::MassClient)> {
+) -> Vec<network::MassClient> {
     let mut authority_clients = Vec::new();
     for config in &committee_config.authorities {
         let client = network::MassClient::new(
@@ -56,9 +55,9 @@ fn make_authority_mass_clients(
             buffer_size,
             send_timeout,
             recv_timeout,
-            max_in_flight / config.num_shards as u64, // Distribute window to diff shards
+            max_in_flight,
         );
-        authority_clients.push((config.num_shards, client));
+        authority_clients.push(client);
     }
     authority_clients
 }
@@ -219,17 +218,12 @@ async fn mass_broadcast_orders(
         max_in_flight,
     );
     let mut streams = Vec::new();
-    for (num_shards, client) in authority_clients {
-        // Re-index orders by shard for this particular authority client.
-        let mut sharded_requests = HashMap::new();
-        for (object_id, buf) in &orders {
-            let shard = AuthorityState::get_shard(num_shards, object_id);
-            sharded_requests
-                .entry(shard)
-                .or_insert_with(Vec::new)
-                .push(buf.clone());
+    for client in authority_clients {
+        let mut requests = Vec::new();
+        for (_object_id, buf) in &orders {
+            requests.push(buf.clone());
         }
-        streams.push(client.run(sharded_requests));
+        streams.push(client.run(requests, 1));
     }
     let responses = futures::stream::select_all(streams).concat().await;
     let time_elapsed = time_start.elapsed();
@@ -489,7 +483,7 @@ fn main() {
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
-                info!("Starting benchmark phase 1 (transfer orders)");
+                warn!("Starting benchmark phase 1 (transfer orders)");
                 let (orders, serialize_orders) =
                     make_benchmark_transfer_orders(&mut accounts_config, max_orders);
                 let responses = mass_broadcast_orders(
@@ -510,13 +504,13 @@ fn main() {
                     .collect();
                 info!("Received {} valid votes.", votes.len());
 
-                info!("Starting benchmark phase 2 (confirmation orders)");
+                warn!("Starting benchmark phase 2 (confirmation orders)");
                 let certificates = if let Some(files) = server_configs {
                     warn!("Using server configs provided by --server-configs");
                     let files = files.iter().map(AsRef::as_ref).collect();
                     make_benchmark_certificates_from_orders_and_server_configs(orders, files)
                 } else {
-                    info!("Using committee config");
+                    warn!("Using committee config");
                     make_benchmark_certificates_from_votes(&committee_config, votes)
                 };
                 let responses = mass_broadcast_orders(
@@ -540,13 +534,13 @@ fn main() {
                             }
                             None => acc,
                         });
-                info!(
+                warn!(
                     "Received {} valid confirmations for {} transfers.",
                     num_valid,
                     confirmed.len()
                 );
 
-                info!("Updating local state of user accounts");
+                warn!("Updating local state of user accounts");
                 // Make sure that the local balances are accurate so that future
                 // balance checks of the non-mass client pass.
                 mass_update_recipients(&mut accounts_config, certificates);
