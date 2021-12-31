@@ -68,7 +68,6 @@ fn init_local_authorities(
 
     let mut clients = HashMap::new();
     for (address, secret) in key_pairs {
-
         // Random directory for the DB
         let dir = env::temp_dir();
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
