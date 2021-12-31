@@ -219,6 +219,7 @@ fn test_get_strong_majority_owner() {
 }
 
 #[test]
+#[ignore = "Enable after https://github.com/MystenLabs/fastnft/issues/109 is fixed"]
 fn test_initiating_valid_transfer() {
     let mut rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
@@ -272,6 +273,7 @@ fn test_initiating_valid_transfer() {
 }
 
 #[test]
+#[ignore = "Enable after https://github.com/MystenLabs/fastnft/issues/109 is fixed"]
 fn test_initiating_valid_transfer_despite_bad_authority() {
     let mut rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
