@@ -12,9 +12,6 @@ use move_binary_format::{
 };
 use move_core_types::ident_str;
 
-use std::env;
-use std::fs;
-
 #[tokio::test]
 async fn test_handle_transfer_order_bad_signature() {
     let (sender, sender_key) = get_key_pair();
@@ -572,16 +569,14 @@ async fn test_authority_persist() {
     let committee = Committee::new(authorities);
 
     // Create a random directory to store the DB
-    let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-    fs::create_dir(&path).unwrap();
+    let dir = tempfile::tempdir();
 
     // Create an authority
     let authority = AuthorityState::new(
         committee.clone(),
         authority_address,
         authority_key.copy(),
-        &path,
+        dir.as_ref().unwrap(),
     );
 
     // Create an object
@@ -598,7 +593,8 @@ async fn test_authority_persist() {
     drop(authority);
 
     // Reopen the authority with the same path
-    let authority2 = AuthorityState::new(committee, authority_address, authority_key, &path);
+    let authority2 =
+        AuthorityState::new(committee, authority_address, authority_key, &dir.unwrap());
     let obj2 = authority2.object_state(&object_id).await.unwrap();
 
     // Check the object is present
@@ -619,11 +615,9 @@ fn init_state() -> AuthorityState {
     let committee = Committee::new(authorities);
 
     // Create a random directory to store the DB
-    let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-    fs::create_dir(&path).unwrap();
+    let dir = tempfile::tempdir();
 
-    AuthorityState::new(committee, authority_address, authority_key, path)
+    AuthorityState::new(committee, authority_address, authority_key, dir.unwrap())
 }
 
 #[cfg(test)]

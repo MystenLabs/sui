@@ -12,9 +12,6 @@ use std::{
 };
 use tokio::runtime::Runtime;
 
-use std::env;
-use std::fs;
-
 #[derive(Clone)]
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
@@ -69,11 +66,9 @@ fn init_local_authorities(
     let mut clients = HashMap::new();
     for (address, secret) in key_pairs {
         // Random directory for the DB
-        let dir = env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        fs::create_dir(&path).unwrap();
+        let dir = tempfile::tempdir();
 
-        let state = AuthorityState::new(committee.clone(), address, secret, path);
+        let state = AuthorityState::new(committee.clone(), address, secret, dir.unwrap());
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
@@ -100,11 +95,9 @@ fn init_local_authorities_bad_1(
     let mut clients = HashMap::new();
     for (address, secret) in key_pairs {
         // Random directory
-        let dir = env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        fs::create_dir(&path).unwrap();
+        let dir = tempfile::tempdir();
 
-        let state = AuthorityState::new(committee.clone(), address, secret, path);
+        let state = AuthorityState::new(committee.clone(), address, secret, dir.unwrap());
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
