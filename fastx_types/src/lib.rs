@@ -16,6 +16,7 @@ pub mod error;
 pub mod base_types;
 pub mod coin;
 pub mod committee;
+pub mod gas;
 pub mod gas_coin;
 pub mod id;
 pub mod messages;

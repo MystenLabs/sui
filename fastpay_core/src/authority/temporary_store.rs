@@ -75,19 +75,6 @@ impl AuthorityTemporaryStore {
             },
             "Object both written and deleted."
         );
-
-        // Check all mutable inputs are either written or deleted
-        debug_assert!(
-            {
-                use std::collections::HashSet;
-                let mut used = HashSet::new();
-                self.written.iter().all(|elt| used.insert(elt.0));
-                self.deleted.iter().all(|elt| used.insert(elt.0));
-
-                self.active_inputs.iter().all(|elt| !used.insert(elt.0))
-            },
-            "Mutable input neither written nor deleted."
-        );
     }
 }
 
