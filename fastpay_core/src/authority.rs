@@ -17,7 +17,6 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
-use std::path::Path;
 use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
@@ -31,7 +30,7 @@ mod temporary_store;
 use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
-use authority_store::AuthorityStore;
+pub use authority_store::AuthorityStore;
 
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
@@ -282,18 +281,18 @@ impl AuthorityState {
 }
 
 impl AuthorityState {
-    pub fn new<P: AsRef<Path>>(
+    pub fn new(
         committee: Committee,
         name: AuthorityName,
         secret: KeyPair,
-        path: P,
+        store: Arc<AuthorityStore>,
     ) -> Self {
         AuthorityState {
             committee,
             name,
             secret,
             native_functions: NativeFunctionTable::new(),
-            _database: Arc::new(AuthorityStore::open(path)),
+            _database: store,
         }
     }
 

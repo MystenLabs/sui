@@ -6,6 +6,7 @@ publish = false
 edition = "2018"
 
 [dependencies]
+rocksdb = "0.17.0"
 anyhow = "1.0"
 bcs = "0.1.2"
 failure = "0.1.8"

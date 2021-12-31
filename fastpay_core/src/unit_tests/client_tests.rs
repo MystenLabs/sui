@@ -3,7 +3,7 @@
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
 use super::*;
-use crate::authority::AuthorityState;
+use crate::authority::{AuthorityState, AuthorityStore};
 use fastx_types::object::Object;
 use futures::lock::Mutex;
 use std::{
@@ -73,7 +73,10 @@ fn init_local_authorities(
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let state = AuthorityState::new(committee.clone(), address, secret, path);
+        let mut opts = rocksdb::Options::default();
+        opts.set_max_open_files(10);
+        let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+        let state = AuthorityState::new(committee.clone(), address, secret, store);
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
@@ -104,7 +107,10 @@ fn init_local_authorities_bad_1(
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let state = AuthorityState::new(committee.clone(), address, secret, path);
+        let mut opts = rocksdb::Options::default();
+        opts.set_max_open_files(10);
+        let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+        let state = AuthorityState::new(committee.clone(), address, secret, store);
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)

@@ -572,11 +572,14 @@ async fn test_authority_persist() {
     fs::create_dir(&path).unwrap();
 
     // Create an authority
+    let mut opts = rocksdb::Options::default();
+    opts.set_max_open_files(10);
+    let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
     let authority = AuthorityState::new(
         committee.clone(),
         authority_address,
         authority_key.copy(),
-        &path,
+        store,
     );
 
     // Create an object
@@ -593,7 +596,10 @@ async fn test_authority_persist() {
     drop(authority);
 
     // Reopen the authority with the same path
-    let authority2 = AuthorityState::new(committee, authority_address, authority_key, &path);
+    let mut opts = rocksdb::Options::default();
+    opts.set_max_open_files(10);
+    let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
+    let authority2 = AuthorityState::new(committee, authority_address, authority_key, store);
     let obj2 = authority2.object_state(&object_id).await.unwrap();
 
     // Check the object is present
@@ -618,7 +624,10 @@ fn init_state() -> AuthorityState {
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&path).unwrap();
 
-    AuthorityState::new(committee, authority_address, authority_key, path)
+    let mut opts = rocksdb::Options::default();
+    opts.set_max_open_files(10);
+    let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+    AuthorityState::new(committee, authority_address, authority_key, store)
 }
 
 #[cfg(test)]
