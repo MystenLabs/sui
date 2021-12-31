@@ -151,6 +151,7 @@ impl AuthorityState {
         // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
+        let mut alraedy_confirmed = false;
         let mut inputs = vec![];
         for (input_object_id, input_seq) in order.input_objects() {
             // If we have a certificate on the confirmation order it means that the input
@@ -169,11 +170,15 @@ impl AuthorityState {
                 });
             }
             if input_sequence_number > input_seq {
-                // Transfer was already confirmed.
-                return self.make_object_info(object_id).await;
+                alraedy_confirmed = true;
             }
 
-            inputs.push(input_object.clone());
+            inputs.push(input_object);
+        }
+        if alraedy_confirmed {
+            // If any of the objects' sequence number is higher than that in the transaction,
+            // we consider the transaction already confirmed.
+            return self.make_object_info(object_id).await;
         }
 
         // Insert into the certificates map
