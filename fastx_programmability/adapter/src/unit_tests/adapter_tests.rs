@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{adapter, genesis};
-use fastx_types::{base_types, storage::Storage};
+use fastx_types::{base_types, error::FastPayResult, storage::Storage};
+use move_binary_format::file_format;
 use move_core_types::account_address::AccountAddress;
 use std::mem;
 
 use super::*;
+
+const MAX_GAS: u64 = 100000;
 
 // temporary store where writes buffer before they get committed
 #[derive(Default, Debug)]
@@ -118,6 +121,31 @@ impl ResourceResolver for InMemoryStorage {
     }
 }
 
+fn call(
+    storage: &mut InMemoryStorage,
+    native_functions: &NativeFunctionTable,
+    name: &str,
+    gas_object: Object,
+    gas_budget: Option<u64>,
+    object_args: Vec<Object>,
+    pure_args: Vec<Vec<u8>>,
+) -> FastPayResult {
+    let module = storage.find_module("ObjectBasics").unwrap();
+
+    adapter::execute(
+        storage,
+        native_functions.clone(),
+        module,
+        &Identifier::new(name).unwrap(),
+        Vec::new(),
+        object_args,
+        pure_args,
+        gas_budget,
+        gas_object,
+        TxContext::random(),
+    )
+}
+
 /// Exercise test functions that create, transfer, read, update, and delete objects
 #[test]
 fn test_object_basics() {
@@ -128,29 +156,10 @@ fn test_object_basics() {
     let native_functions = genesis.native_functions.clone();
     let mut storage = InMemoryStorage::new(genesis.objects.clone());
 
-    fn call(
-        storage: &mut InMemoryStorage,
-        native_functions: &NativeFunctionTable,
-        name: &str,
-        object_args: Vec<Object>,
-        pure_args: Vec<Vec<u8>>,
-    ) {
-        let gas_budget = None;
-        let module = storage.find_module("ObjectBasics").unwrap();
-
-        adapter::execute(
-            storage,
-            native_functions.clone(),
-            module,
-            &Identifier::new(name).unwrap(),
-            Vec::new(),
-            object_args,
-            pure_args,
-            gas_budget,
-            TxContext::random(),
-        )
-        .unwrap();
-    }
+    // 0. Create a gas object for gas payment. Note that we won't really use it because we won't be providing a gas budget.
+    let gas_object = Object::with_id_for_testing(ObjectID::random());
+    storage.write_object(gas_object.clone());
+    storage.flush();
 
     // 1. Create obj1 owned by addr1
     // ObjectBasics::create expects integer value and recipient address
@@ -165,9 +174,12 @@ fn test_object_basics() {
         &mut storage,
         &native_functions,
         "create",
+        gas_object.clone(),
+        None,
         Vec::new(),
         pure_args,
-    );
+    )
+    .unwrap();
 
     let created = storage.created();
     assert_eq!(created.len(), 1);
@@ -191,9 +203,12 @@ fn test_object_basics() {
         &mut storage,
         &native_functions,
         "transfer",
+        gas_object.clone(),
+        None,
         vec![obj1.clone()],
         pure_args,
-    );
+    )
+    .unwrap();
 
     let updated = storage.updated();
     assert_eq!(updated.len(), 1);
@@ -216,9 +231,12 @@ fn test_object_basics() {
         &mut storage,
         &native_functions,
         "create",
+        gas_object.clone(),
+        None,
         Vec::new(),
         pure_args,
-    );
+    )
+    .unwrap();
     let obj2 = storage
         .created()
         .values()
@@ -232,9 +250,12 @@ fn test_object_basics() {
         &mut storage,
         &native_functions,
         "update",
+        gas_object.clone(),
+        None,
         vec![obj1.clone(), obj2],
         Vec::new(),
-    );
+    )
+    .unwrap();
     let updated = storage.updated();
     assert_eq!(updated.len(), 1);
     assert!(storage.created().is_empty());
@@ -252,15 +273,92 @@ fn test_object_basics() {
         &mut storage,
         &native_functions,
         "delete",
+        gas_object,
+        None,
         vec![obj1],
         Vec::new(),
-    );
+    )
+    .unwrap();
     let deleted = storage.deleted();
     assert_eq!(deleted.len(), 1);
     assert!(storage.created().is_empty());
     assert!(storage.updated().is_empty());
     storage.flush();
     assert!(storage.read_object(&id1).is_none())
+}
+
+#[test]
+fn test_move_call_insufficient_gas() {
+    let genesis = genesis::GENESIS.lock().unwrap();
+    let native_functions = genesis.native_functions.clone();
+    let mut storage = InMemoryStorage::new(genesis.objects.clone());
+
+    // 0. Create a gas object for gas payment.
+    let gas_object = Object::with_id_owner_gas_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+        MAX_GAS,
+    );
+    storage.write_object(gas_object.clone());
+    storage.flush();
+
+    // 1. Create obj1 owned by addr1
+    // ObjectBasics::create expects integer value and recipient address
+    let addr1 = base_types::get_key_pair().0;
+    let pure_args = vec![
+        10u64.to_le_bytes().to_vec(),
+        //bcs::to_bytes(&old_addr1.to_vec()).unwrap(),
+        bcs::to_bytes(&addr1.to_vec()).unwrap(),
+        //MoveValue::vector_u8(addr1.to_vec()).simple_serialize().unwrap(),
+        //        transaction_argument::convert_txn_args(&vec![TransactionArgument::U8Vector(addr1.to_vec())]).pop().unwrap(),
+    ];
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "create",
+        gas_object,
+        Some(50), // This budget is not enough to execute all bytecode.
+        Vec::new(),
+        pure_args,
+    );
+    assert!(response
+        .unwrap_err()
+        .to_string()
+        .contains("VMError with status OUT_OF_GAS"));
+}
+
+#[test]
+fn test_publish_module_insufficient_gas() {
+    let genesis = genesis::GENESIS.lock().unwrap();
+    let mut storage = InMemoryStorage::new(genesis.objects.clone());
+
+    // 0. Create a gas object for gas payment.
+    let gas_object = Object::with_id_owner_gas_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+        30,
+    );
+    storage.write_object(gas_object.clone());
+    storage.flush();
+
+    // 1. Create a module.
+    let module = file_format::empty_module();
+    let mut module_bytes = Vec::new();
+    module.serialize(&mut module_bytes).unwrap();
+    let module_bytes = vec![module_bytes];
+
+    let mut tx_context = TxContext::random();
+    let response = adapter::publish(
+        &mut storage,
+        module_bytes,
+        base_types::FastPayAddress::default(),
+        &mut tx_context,
+        gas_object,
+    );
+    assert!(response
+        .unwrap_err()
+        .to_string()
+        .contains("Gas balance is 30, not enough to pay 58"));
 }
 
 // TODO(https://github.com/MystenLabs/fastnft/issues/92): tests that exercise all the error codes of the adapter

@@ -5,7 +5,10 @@ use super::*;
 use bcs;
 use fastx_adapter::genesis;
 #[cfg(test)]
-use fastx_types::base_types::dbg_addr;
+use fastx_types::{
+    base_types::dbg_addr,
+    gas::{calculate_module_publish_gas, get_gas_balance},
+};
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
@@ -14,6 +17,8 @@ use move_core_types::ident_str;
 
 use std::env;
 use std::fs;
+
+const MAX_GAS: u64 = 100000;
 
 #[tokio::test]
 async fn test_handle_transfer_order_bad_signature() {
@@ -194,13 +199,23 @@ fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
     dependent_module
 }
 
+fn check_gas_object(
+    gas_object: &Object,
+    expected_balance: u64,
+    expected_sequence_number: SequenceNumber,
+) {
+    assert_eq!(gas_object.next_sequence_number, expected_sequence_number);
+    let new_balance = get_gas_balance(gas_object).unwrap();
+    assert_eq!(new_balance, expected_balance);
+}
+
 // Test that publishing a module that depends on an existing one works
 #[tokio::test]
 async fn test_publish_dependent_module_ok() {
     let (sender, sender_key) = get_key_pair();
-    // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
+    let gas_payment_object =
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, MAX_GAS);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
     let genesis = genesis::GENESIS.lock().unwrap();
@@ -235,33 +250,69 @@ async fn test_publish_dependent_module_ok() {
 #[tokio::test]
 async fn test_publish_module_no_dependencies_ok() {
     let (sender, sender_key) = get_key_pair();
-    // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
+    let gas_balance = MAX_GAS;
+    let gas_payment_object =
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
+    let gas_seq = gas_payment_object.next_sequence_number;
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     let mut authority = init_state_with_objects(vec![gas_payment_object]).await;
 
     let module = file_format::empty_module();
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
-    let order = Order::new_module(
-        sender,
-        gas_payment_object_ref,
-        vec![module_bytes],
-        &sender_key,
-    );
+    let module_bytes = vec![module_bytes];
+    let gas_cost = calculate_module_publish_gas(&module_bytes);
+    let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, &sender_key);
     let module_object_id = TxContext::new(order.digest()).fresh_id();
     let response = send_and_confirm_order(&mut authority, order).await.unwrap();
     // check that the module actually got published
     assert!(response.object_id == module_object_id);
+
+    // Check that gas is properly deducted.
+    let gas_payment_object = authority
+        .object_state(&gas_payment_object_id)
+        .await
+        .unwrap();
+    check_gas_object(
+        &gas_payment_object,
+        gas_balance - gas_cost,
+        gas_seq.increment().unwrap(),
+    )
+}
+
+// Test the case when the gas provided is less than minimum requirement during module publish.
+// Note that the case where gas is insufficient to publish the module is tested
+// separately in the adapter tests.
+#[tokio::test]
+async fn test_publish_module_insufficient_gas() {
+    let (sender, sender_key) = get_key_pair();
+    let gas_payment_object_id = ObjectID::random();
+    let gas_balance = 9;
+    let gas_payment_object =
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
+    let gas_payment_object_ref = gas_payment_object.to_object_reference();
+    let authority = init_state_with_objects(vec![gas_payment_object]).await;
+
+    let module = file_format::empty_module();
+    let mut module_bytes = Vec::new();
+    module.serialize(&mut module_bytes).unwrap();
+    let module_bytes = vec![module_bytes];
+    let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, &sender_key);
+    let response = authority.handle_order(order.clone()).await.unwrap_err();
+    assert!(response
+        .to_string()
+        .contains("Gas balance is 9, smaller than minimum requirement of 10 for module publish"));
 }
 
 #[tokio::test]
 async fn test_handle_move_order() {
     let (sender, sender_key) = get_key_pair();
-    // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
+    let gas_balance = MAX_GAS;
+    let gas_payment_object =
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
+    let gas_seq = gas_payment_object.next_sequence_number;
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // find the function Object::create and call it to create a new object
     let genesis = genesis::GENESIS.lock().unwrap();
@@ -296,9 +347,10 @@ async fn test_handle_move_order() {
             16u64.to_le_bytes().to_vec(),
             bcs::to_bytes(&sender.to_vec()).unwrap(),
         ],
-        1000,
+        MAX_GAS,
         &sender_key,
     );
+    let gas_cost = 142;
     let res = send_and_confirm_order(&mut authority_state, order)
         .await
         .unwrap();
@@ -311,6 +363,69 @@ async fn test_handle_move_order() {
     assert_eq!(created_obj.owner, sender,);
     assert_eq!(created_obj.id(), created_object_id);
     assert_eq!(created_obj.next_sequence_number, SequenceNumber::new());
+
+    // Check that gas is properly deducted.
+    let gas_payment_object = authority_state
+        .object_state(&gas_payment_object_id)
+        .await
+        .unwrap();
+    check_gas_object(
+        &gas_payment_object,
+        gas_balance - gas_cost,
+        gas_seq.increment().unwrap(),
+    )
+}
+
+// Test the case when the gas budget provided is less than minimum requirement during move call.
+// Note that the case where gas is insufficient to execute move bytecode is tested
+// separately in the adapter tests.
+#[tokio::test]
+async fn test_handle_move_order_insufficient_budget() {
+    let (sender, sender_key) = get_key_pair();
+    let gas_payment_object_id = ObjectID::random();
+    let gas_balance = MAX_GAS;
+    let gas_payment_object =
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
+    let gas_payment_object_ref = gas_payment_object.to_object_reference();
+    // find the function Object::create and call it to create a new object
+    let genesis = genesis::GENESIS.lock().unwrap();
+    let mut genesis_module_objects = genesis.objects.clone();
+    let module_object_ref = genesis_module_objects
+        .iter()
+        .find_map(|o| match o.data.as_module() {
+            Some(m) if m.self_id().name() == ident_str!("ObjectBasics") => {
+                Some((*m.self_id().address(), SequenceNumber::new()))
+            }
+            _ => None,
+        })
+        .unwrap();
+
+    genesis_module_objects.push(gas_payment_object);
+    let mut authority_state = init_state_with_objects(genesis_module_objects).await;
+    authority_state.native_functions = genesis.native_functions.clone();
+
+    let function = ident_str!("create").to_owned();
+    let order = Order::new_move_call(
+        sender,
+        module_object_ref,
+        function,
+        Vec::new(),
+        gas_payment_object_ref,
+        Vec::new(),
+        vec![
+            16u64.to_le_bytes().to_vec(),
+            bcs::to_bytes(&sender.to_vec()).unwrap(),
+        ],
+        9,
+        &sender_key,
+    );
+    let response = authority_state
+        .handle_order(order.clone())
+        .await
+        .unwrap_err();
+    assert!(response
+        .to_string()
+        .contains("Gas budget is 9, smaller than minimum requirement of 10 for move call"));
 }
 
 #[tokio::test]

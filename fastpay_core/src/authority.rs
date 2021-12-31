@@ -7,6 +7,7 @@ use fastx_types::{
     committee::Committee,
     error::FastPayError,
     fp_bail, fp_ensure,
+    gas::check_gas_requirement,
     messages::*,
     object::{Data, Object},
     storage::Storage,
@@ -74,7 +75,8 @@ impl AuthorityState {
             return Err(FastPayError::DuplicateObjectRefInput);
         }
 
-        for object_ref in input_objects {
+        let input_object_cnt = input_objects.len();
+        for (idx, object_ref) in input_objects.into_iter().enumerate() {
             let (object_id, sequence_number) = object_ref;
 
             fp_ensure!(
@@ -112,6 +114,11 @@ impl AuthorityState {
                 FastPayError::IncorrectSigner
             );
 
+            if idx + 1 == input_object_cnt {
+                // The last object in input_objects is always the gas payment object.
+                check_gas_requirement(&order, &object)?;
+            }
+
             /* The call to self.set_order_lock checks the lock is not conflicting,
             and returns ConflictingOrder in case there is a lock on a different
             existing order */
@@ -124,10 +131,6 @@ impl AuthorityState {
             !mutable_objects.is_empty(),
             FastPayError::InsufficientObjectNumber
         );
-
-        // TODO(https://github.com/MystenLabs/fastnft/issues/45): check that c.gas_payment exists + that its value is > gas_budget
-        // Note: the above code already checks that the gas object exists because it is included in the
-        //       input_objects() list. So need to check it contains some gas.
 
         let object_id = *order.object_id();
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
@@ -198,12 +201,8 @@ impl AuthorityState {
             }
             OrderKind::Call(c) => {
                 // unwraps here are safe because we built `inputs`
-                // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
-                let mut gas_object = inputs.pop().unwrap();
+                let gas_object = inputs.pop().unwrap();
                 let module = inputs.pop().unwrap();
-                // Fake the gas payment
-                gas_object.next_sequence_number = gas_object.next_sequence_number.increment()?;
-                temporary_store.write_object(gas_object);
                 match adapter::execute(
                     &mut temporary_store,
                     self.native_functions.clone(),
@@ -213,16 +212,13 @@ impl AuthorityState {
                     inputs,
                     c.pure_arguments,
                     Some(c.gas_budget),
+                    gas_object,
                     tx_ctx,
                 ) {
                     Ok(()) => {
                         // TODO(https://github.com/MystenLabs/fastnft/issues/63): AccountInfoResponse should return all object ID outputs.
                         // but for now it only returns one, so use this hack
-                        object_id = if temporary_store.written.len() > 1 {
-                            temporary_store.written[1].0
-                        } else {
-                            c.gas_payment.0
-                        }
+                        object_id = temporary_store.written[0].0
                     }
                     Err(_e) => {
                         // TODO(https://github.com/MystenLabs/fastnft/issues/63): return this error to the client
@@ -231,14 +227,14 @@ impl AuthorityState {
                 }
             }
             OrderKind::Publish(m) => {
-                // Fake the gas payment
-                let mut gas_object = temporary_store
-                    .read_object(&object_id)
-                    .expect("Checked existence at start of function.");
-                gas_object.next_sequence_number = gas_object.next_sequence_number.increment()?;
-                temporary_store.write_object(gas_object);
-                // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge for gas
-                match adapter::publish(&mut temporary_store, m.modules, m.sender, &mut tx_ctx) {
+                let gas_object = inputs.pop().unwrap();
+                match adapter::publish(
+                    &mut temporary_store,
+                    m.modules,
+                    m.sender,
+                    &mut tx_ctx,
+                    gas_object,
+                ) {
                     Ok(outputs) => {
                         // TODO(https://github.com/MystenLabs/fastnft/issues/63): AccountInfoResponse should return all object ID outputs.
                         // but for now it only returns one, so use this hack

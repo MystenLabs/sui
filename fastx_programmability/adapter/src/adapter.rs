@@ -10,6 +10,7 @@ use fastx_types::{
         TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     error::{FastPayError, FastPayResult},
+    gas::{calculate_module_publish_gas, deduct_gas},
     object::{Data, MoveObject, Object},
     storage::Storage,
 };
@@ -47,6 +48,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
     gas_budget: Option<u64>,
+    gas_object: Object,
     ctx: TxContext,
 ) -> Result<(), FastPayError> {
     let TypeCheckSuccess {
@@ -65,6 +67,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
     let vm = MoveVM::new(natives)
         .expect("VM creation only fails if natives are invalid, and we created the natives");
+    // TODO: Update Move gas constants to reflect the gas fee on fastx.
     let mut gas_status =
         get_gas_status(gas_budget).map_err(|e| FastPayError::GasBudgetTooHigh {
             error: e.to_string(),
@@ -82,7 +85,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             events,
             return_values,
             mutable_ref_values,
-            gas_used: _, // TODO(https://github.com/MystenLabs/fastnft/issues/45): charge
+            gas_used,
         } => {
             // we already checked that the function had no return types in resolve_and_type_check--it should
             // also not return any values at runtime
@@ -91,10 +94,19 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             debug_assert!(change_set.accounts().is_empty());
             // Input ref parameters we put in should be the same number we get out
             debug_assert!(mutable_ref_objects.len() == mutable_ref_values.len());
+            // Either we consumed gas, or budget is not provided hence no gas metering.
+            debug_assert!(gas_used > 0 || gas_budget == None);
             let mutable_refs = mutable_ref_objects
                 .into_iter()
                 .zip(mutable_ref_values.into_iter());
-            process_successful_execution(state_view, by_value_objects, mutable_refs, events)?;
+            process_successful_execution(
+                state_view,
+                by_value_objects,
+                mutable_refs,
+                events,
+                gas_object,
+                gas_used,
+            )?;
             Ok(())
         }
         ExecutionResult::Fail { error, gas_used: _ } => Err(FastPayError::AbortedExecution {
@@ -108,12 +120,16 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     module_bytes: Vec<Vec<u8>>,
     sender: FastPayAddress,
     ctx: &mut TxContext,
+    mut gas_object: Object,
 ) -> Result<Vec<ObjectRef>, FastPayError> {
     if module_bytes.is_empty() {
         return Err(FastPayError::ModulePublishFailure {
             error: "Publishing empty list of modules".to_string(),
         });
     }
+    let gas_cost = calculate_module_publish_gas(&module_bytes);
+    deduct_gas(&mut gas_object, gas_cost)?;
+    state_view.write_object(gas_object);
 
     let mut modules = module_bytes
         .iter()
@@ -200,6 +216,8 @@ fn process_successful_execution<
     mut by_value_objects: BTreeMap<ObjectID, Object>,
     mutable_refs: impl Iterator<Item = (Object, Vec<u8>)>,
     events: Vec<Event>,
+    mut gas_object: Object,
+    gas_used: u64,
 ) -> Result<(), FastPayError> {
     for (mut obj, new_contents) in mutable_refs {
         match &mut obj.data {
@@ -260,6 +278,14 @@ fn process_successful_execution<
     for id in by_value_objects.keys() {
         state_view.delete_object(id);
     }
+
+    if gas_used > 0 {
+        // The fact that Move VM succeeded means that there is enough gas.
+        // Hence deduct_gas cannot fail.
+        deduct_gas(&mut gas_object, gas_used).unwrap();
+        state_view.write_object(gas_object);
+    }
+
     Ok(())
 }
 
