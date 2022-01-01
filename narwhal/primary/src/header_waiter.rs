@@ -78,7 +78,6 @@ pub struct HeaderWaiter {
 }
 
 impl HeaderWaiter {
-    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         name: PublicKey,
         committee: Committee,

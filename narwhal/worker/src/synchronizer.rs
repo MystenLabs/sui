@@ -58,7 +58,6 @@ pub struct Synchronizer {
 }
 
 impl Synchronizer {
-    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,

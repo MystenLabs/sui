@@ -68,7 +68,6 @@ pub struct Primary;
 impl Primary {
     const INADDR_ANY: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 
-    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         keypair: KeyPair,
         committee: Committee,

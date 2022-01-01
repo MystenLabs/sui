@@ -47,7 +47,6 @@ pub struct Proposer {
 }
 
 impl Proposer {
-    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         name: PublicKey,
         committee: &Committee,
