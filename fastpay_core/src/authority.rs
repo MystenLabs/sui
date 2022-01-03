@@ -144,7 +144,7 @@ impl AuthorityState {
         self.set_order_lock(&mutable_objects, signed_order).await?;
 
         // TODO: what should we return here?
-        let info = self.make_object_info(object_id).await?;
+        let info = self.make_object_info(object_id, None).await?;
         Ok(info)
     }
 
@@ -257,35 +257,47 @@ impl AuthorityState {
         // Update the database in an atomic manner
         self.update_state(temporary_store, certificate).await?;
 
-        let info = self.make_object_info(object_id).await?;
+        let info = self.make_object_info(object_id, None).await?;
         Ok(info)
     }
 
-    pub async fn handle_account_info_request(
+    pub async fn handle_info_request(
         &self,
-        request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, FastPayError> {
-        let mut response = self.make_object_info(request.object_id).await?;
-        if let Some(seq) = request.request_sequence_number {
-            // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy
-            // to provide back to the client the object digest for specific objects requested. Probably,
-            // we have to return the full ObjectRef and why not the actual full object here.
-            let obj = self
-                .object_state(&request.object_id)
-                .await
-                .map_err(|_| FastPayError::ObjectNotFound)?;
+        request: InfoRequest,
+    ) -> Result<InfoResponse, FastPayError> {
+        match request.kind {
+            InfoRequestKind::AccountInfoRequest(request) => {
+                let response = self.make_account_info(request.account);
+                response.map(|info| InfoResponse::new(InfoResponseKind::AccountInfoResponse(info)))
+            }
+            InfoRequestKind::ObjectInfoRequest(request) => {
+                let response = if let Some(seq) = request.request_sequence_number {
+                    // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy
+                    // to provide back to the client the object digest for specific objects requested. Probably,
+                    // we have to return the full ObjectRef and why not the actual full object here.
+                    let obj = self
+                        .object_state(&request.object_id)
+                        .await
+                        .map_err(|_| FastPayError::ObjectNotFound)?;
 
-            // Get the Transaction Digest that created the object
-            let transaction_digest = self
-                .parent(&(request.object_id, seq.increment()?, obj.digest()))
-                .await
-                .ok_or(FastPayError::CertificateNotfound)?;
-            // Get the cert from the transaction digest
-            response.requested_certificate = Some(
-                self.read_certificate(&transaction_digest)
-                    .await?
-                    .ok_or(FastPayError::CertificateNotfound)?,
-            );
+                    // Get the Transaction Digest that created the object
+                    let transaction_digest = self
+                        .parent(&(request.object_id, seq.increment()?, obj.digest()))
+                        .await
+                        .ok_or(FastPayError::CertificateNotfound)?;
+                    // Get the cert from the transaction digest
+                    let requested_certificate = Some(
+                        self.read_certificate(&transaction_digest)
+                            .await?
+                            .ok_or(FastPayError::CertificateNotfound)?,
+                    );
+                    self.make_object_info(request.object_id, requested_certificate)
+                        .await
+                } else {
+                    self.make_object_info(request.object_id, None).await
+                };
+                response.map(|info| InfoResponse::new(InfoResponseKind::ObjectInfoResponse(info)))
+            }
         }
     }
 }
@@ -321,7 +333,8 @@ impl AuthorityState {
     async fn make_object_info(
         &self,
         object_id: ObjectID,
-    ) -> Result<AccountInfoResponse, FastPayError> {
+        requested_certificate: Option<CertifiedOrder>,
+    ) -> Result<ObjectInfoResponse, FastPayError> {
         let object = self.object_state(&object_id).await?;
         let lock = self
             .get_order_lock(&object.to_object_reference())
@@ -342,20 +355,12 @@ impl AuthorityState {
         &self,
         account: FastPayAddress,
     ) -> Result<AccountInfoResponse, FastPayError> {
-        let object_ids: Vec<ObjectRef> = self
-            .objects
-            .lock()
-            .unwrap()
-            .clone()
-            .into_iter()
-            .filter(|(_, obj)| obj.owner == account)
-            .map(|(object_id, object)| ObjectRef::from((object_id, object.next_sequence_number)))
-            .collect();
-
-        Ok(AccountInfoResponse {
-            object_ids,
-            owner: account,
-        })
+        self._database
+            .get_account_objects(account)
+            .map(|object_ids| AccountInfoResponse {
+                object_ids,
+                owner: account,
+            })
     }
 
     // Helper function to manage order_locks

@@ -519,7 +519,7 @@ fn test_client_state_sync() {
         .collect::<Vec<ObjectID>>();
     let authority_objects = (0..10).map(|_| object_ids.clone()).collect();
 
-    let mut sender = init_local_client_state(authority_objects);
+    let mut sender = rt.block_on(init_local_client_state(authority_objects));
 
     let old_object_ids = sender.object_ids.clone();
     let old_sent_certificate = sender.sent_certificates.clone();

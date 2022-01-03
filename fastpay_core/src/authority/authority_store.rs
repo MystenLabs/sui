@@ -42,6 +42,18 @@ impl AuthorityStore {
 
     // Methods to read the store
 
+    pub fn get_account_objects(
+        &self,
+        account: FastPayAddress,
+    ) -> Result<Vec<ObjectRef>, FastPayError> {
+        Ok(self
+            .objects
+            .iter()
+            .filter(|(_, object)| object.owner == account)
+            .map(|(id, object)| ObjectRef::from((id, object.next_sequence_number)))
+            .collect())
+    }
+
     /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
     pub fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
         self.objects
