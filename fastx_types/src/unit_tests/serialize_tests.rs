@@ -21,12 +21,12 @@ fn test_error() {
 
 #[test]
 fn test_info_request() {
-    let req1 = AccountInfoRequest {
+    let req1 = ObjectInfoRequest {
         object_id: dbg_object_id(0x20),
         request_sequence_number: None,
         request_received_transfers_excluding_first_nth: None,
     };
-    let req2 = AccountInfoRequest {
+    let req2 = ObjectInfoRequest {
         object_id: dbg_object_id(0x20),
         request_sequence_number: Some(SequenceNumber::from(129)),
         request_received_transfers_excluding_first_nth: None,
@@ -40,12 +40,12 @@ fn test_info_request() {
     assert!(result1.is_ok());
     assert!(result2.is_ok());
 
-    if let SerializedMessage::InfoReq(o) = result1.unwrap() {
+    if let SerializedMessage::ObjectInfoReq(o) = result1.unwrap() {
         assert!(*o == req1);
     } else {
         panic!()
     }
-    if let SerializedMessage::InfoReq(o) = result2.unwrap() {
+    if let SerializedMessage::ObjectInfoReq(o) = result2.unwrap() {
         assert!(*o == req2);
     } else {
         panic!()
@@ -231,7 +231,7 @@ fn test_info_response() {
         let buf = serialize_info_response(resp);
         let result = deserialize_message(buf.as_slice());
         assert!(result.is_ok());
-        if let SerializedMessage::InfoResp(o) = result.unwrap() {
+        if let SerializedMessage::ObjectInfoResp(o) = result.unwrap() {
             assert!(*o == *resp);
         } else {
             panic!()

@@ -56,7 +56,7 @@ pub struct AuthorityState {
 /// Repeating commands should produce no changes and return no error.
 impl AuthorityState {
     /// Initiate a new order.
-    pub async fn handle_order(&self, order: Order) -> Result<AccountInfoResponse, FastPayError> {
+    pub async fn handle_order(&self, order: Order) -> Result<ObjectInfoResponse, FastPayError> {
         // Check the sender's signature.
         order.check_signature()?;
 
@@ -152,7 +152,7 @@ impl AuthorityState {
     pub async fn handle_confirmation_order(
         &self,
         confirmation_order: ConfirmationOrder,
-    ) -> Result<AccountInfoResponse, FastPayError> {
+    ) -> Result<ObjectInfoResponse, FastPayError> {
         let certificate = confirmation_order.certificate;
         let order = certificate.order.clone();
         let mut object_id = *order.object_id();
@@ -178,7 +178,7 @@ impl AuthorityState {
             }
             if input_sequence_number > input_seq {
                 // Transfer was already confirmed.
-                return self.make_object_info(object_id).await;
+                return self.make_object_info(object_id, None).await;
             }
 
             inputs.push(input_object.clone());
@@ -225,9 +225,10 @@ impl AuthorityState {
                         // but for now it only returns one, so use this hack
                         object_id = temporary_store.written[0].0
                     }
-                    Err(_e) => {
+                    Err(e) => {
                         // TODO(https://github.com/MystenLabs/fastnft/issues/63): return this error to the client
-                        object_id = c.gas_payment.0;
+                        //object_id = c.gas_payment.0;
+                        return Err(e);
                     }
                 }
             }
@@ -286,7 +287,6 @@ impl AuthorityState {
                     .ok_or(FastPayError::CertificateNotfound)?,
             );
         }
-        Ok(response)
     }
 }
 
@@ -328,13 +328,33 @@ impl AuthorityState {
             .await
             .or::<FastPayError>(Ok(None))?;
 
-        Ok(AccountInfoResponse {
+        Ok(ObjectInfoResponse {
             object_id: object.id(),
             owner: object.owner,
             next_sequence_number: object.next_sequence_number,
+            requested_certificate,
             pending_confirmation: lock,
-            requested_certificate: None,
             requested_received_transfers: Vec::new(),
+        })
+    }
+
+    fn make_account_info(
+        &self,
+        account: FastPayAddress,
+    ) -> Result<AccountInfoResponse, FastPayError> {
+        let object_ids: Vec<ObjectRef> = self
+            .objects
+            .lock()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .filter(|(_, obj)| obj.owner == account)
+            .map(|(object_id, object)| ObjectRef::from((object_id, object.next_sequence_number)))
+            .collect();
+
+        Ok(AccountInfoResponse {
+            object_ids,
+            owner: account,
         })
     }
 

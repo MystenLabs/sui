@@ -175,7 +175,7 @@ async fn test_handle_transfer_order_ok() {
 async fn send_and_confirm_order(
     authority: &mut AuthorityState,
     order: Order,
-) -> Result<AccountInfoResponse, FastPayError> {
+) -> Result<ObjectInfoResponse, FastPayError> {
     // Make the initial request
     let response = authority.handle_order(order.clone()).await.unwrap();
     let vote = response.pending_confirmation.unwrap();

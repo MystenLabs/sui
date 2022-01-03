@@ -91,21 +91,121 @@ pub struct RedeemTransaction {
     pub certificate: CertifiedOrder,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum InfoRequestKind {
+    AccountInfoRequest(AccountInfoRequest),
+    ObjectInfoRequest(ObjectInfoRequest),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum InfoResponseKind {
+    AccountInfoResponse(AccountInfoResponse),
+    ObjectInfoResponse(ObjectInfoResponse),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
+    pub account: FastPayAddress,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ObjectInfoRequest {
     pub object_id: ObjectID,
     pub request_sequence_number: Option<SequenceNumber>,
     pub request_received_transfers_excluding_first_nth: Option<usize>,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoResponse {
+    pub object_ids: Vec<ObjectRef>,
+    pub owner: FastPayAddress,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ObjectInfoResponse {
     pub object_id: ObjectID,
     pub owner: FastPayAddress,
     pub next_sequence_number: SequenceNumber,
-    pub pending_confirmation: Option<SignedOrder>,
     pub requested_certificate: Option<CertifiedOrder>,
+    pub pending_confirmation: Option<SignedOrder>,
     pub requested_received_transfers: Vec<CertifiedOrder>,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct InfoRequest {
+    pub kind: InfoRequestKind,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct InfoResponse {
+    pub kind: InfoResponseKind,
+}
+
+impl InfoRequest {
+    pub fn new(kind: InfoRequestKind) -> Self {
+        InfoRequest { kind }
+    }
+    pub fn new_account_info_req(address: FastPayAddress) -> Self {
+        Self::new(InfoRequestKind::AccountInfoRequest(AccountInfoRequest {
+            account: address,
+        }))
+    }
+
+    pub fn new_object_info_req(
+        object_id: ObjectID,
+        request_sequence_number: Option<SequenceNumber>,
+    ) -> Self {
+        Self::new(InfoRequestKind::ObjectInfoRequest(ObjectInfoRequest {
+            object_id,
+            request_sequence_number,
+            request_received_transfers_excluding_first_nth: None,
+        }))
+    }
+}
+
+impl InfoResponse {
+    pub fn new(kind: InfoResponseKind) -> Self {
+        InfoResponse { kind }
+    }
+
+    pub fn new_account_info_resp(object_ids: Vec<ObjectRef>, owner: FastPayAddress) -> Self {
+        Self::new(InfoResponseKind::AccountInfoResponse(AccountInfoResponse {
+            object_ids,
+            owner,
+        }))
+    }
+
+    pub fn new_object_info_resp(
+        object_id: ObjectID,
+        owner: FastPayAddress,
+        next_sequence_number: SequenceNumber,
+        requested_certificate: Option<CertifiedOrder>,
+        pending_confirmation: Option<SignedOrder>,
+        requested_received_transfers: Vec<CertifiedOrder>,
+    ) -> Self {
+        Self::new(InfoResponseKind::ObjectInfoResponse(ObjectInfoResponse {
+            object_id,
+            owner,
+            next_sequence_number,
+            requested_certificate,
+            pending_confirmation,
+            requested_received_transfers,
+        }))
+    }
+
+    pub fn to_account_info_response(&self) -> Option<AccountInfoResponse> {
+        match self.kind.clone() {
+            InfoResponseKind::AccountInfoResponse(response) => Some(response),
+            InfoResponseKind::ObjectInfoResponse(_) => None,
+        }
+    }
+
+    pub fn to_object_info_response(&self) -> Option<ObjectInfoResponse> {
+        match self.kind.clone() {
+            InfoResponseKind::ObjectInfoResponse(response) => Some(response),
+            InfoResponseKind::AccountInfoResponse(_) => None,
+        }
+    }
 }
 
 impl Hash for Order {

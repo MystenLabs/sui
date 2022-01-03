@@ -254,7 +254,7 @@ fn mass_update_recipients(
 
 fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
     match deserialize_message(response) {
-        Ok(SerializedMessage::InfoResp(info)) => Some(*info),
+        Ok(SerializedMessage::ObjectInfoResp(info)) => Some(*info),
         Ok(SerializedMessage::Error(error)) => {
             error!("Received error value: {}", error);
             None

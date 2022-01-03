@@ -17,8 +17,8 @@ pub enum SerializedMessage {
     Vote(Box<SignedOrder>),
     Cert(Box<CertifiedOrder>),
     Error(Box<FastPayError>),
-    InfoReq(Box<AccountInfoRequest>),
-    InfoResp(Box<AccountInfoResponse>),
+    InfoReq(Box<InfoRequest>),
+    InfoResp(Box<InfoResponse>),
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.
@@ -30,8 +30,8 @@ enum ShallowSerializedMessage<'a> {
     Vote(&'a SignedOrder),
     Cert(&'a CertifiedOrder),
     Error(&'a FastPayError),
-    InfoReq(&'a AccountInfoRequest),
-    InfoResp(&'a AccountInfoResponse),
+    InfoReq(&'a InfoRequest),
+    InfoResp(&'a InfoResponse),
 }
 
 fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), anyhow::Error>
@@ -82,11 +82,11 @@ where
     serialize_into(writer, &ShallowSerializedMessage::Cert(value))
 }
 
-pub fn serialize_info_request(value: &AccountInfoRequest) -> Vec<u8> {
+pub fn serialize_info_request(value: &InfoRequest) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::InfoReq(value))
 }
 
-pub fn serialize_info_response(value: &AccountInfoResponse) -> Vec<u8> {
+pub fn serialize_info_response(value: &InfoResponse) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::InfoResp(value))
 }
 
