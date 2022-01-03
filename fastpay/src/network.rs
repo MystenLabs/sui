@@ -221,9 +221,41 @@ impl AuthorityClient for Client {
 
     fn handle_info_request(
         &self,
-        request: AccountInfoRequest,
-    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
-        Box::pin(async move { self.send_recv_bytes(serialize_info_request(&request)).await })
+        request: InfoRequest,
+    ) -> AsyncResult<'_, InfoResponse, FastPayError> {
+        Box::pin(async move {
+            match request.kind {
+                InfoRequestKind::AccountInfoRequest(ref account_request) => {
+                    let mut all_object_ids = Vec::new();
+
+                    for shard in 0..self.num_shards {
+                        let result: Result<InfoResponse, FastPayError> = self
+                            .send_recv_bytes(shard, serialize_info_request(&request))
+                            .await;
+
+                        match result {
+                            Ok(InfoResponse {
+                                kind: InfoResponseKind::AccountInfoResponse(response),
+                            }) => all_object_ids.extend(response.object_ids),
+                            Err(e) => return Err(e),
+                            _ => return Err(FastPayError::UnexpectedMessage),
+                        }
+                    }
+                    Ok(InfoResponse::new(InfoResponseKind::AccountInfoResponse(
+                        AccountInfoResponse {
+                            object_ids: all_object_ids,
+                            owner: account_request.account,
+                        },
+                    )))
+                }
+                InfoRequestKind::ObjectInfoRequest(ref object_request) => {
+                    let shard =
+                        AuthorityState::get_shard(self.num_shards, &object_request.object_id);
+                    self.send_recv_bytes(shard, serialize_info_request(&request))
+                        .await
+                }
+            }
+        })
     }
 }
 
