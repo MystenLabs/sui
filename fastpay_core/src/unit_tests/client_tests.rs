@@ -28,7 +28,7 @@ fn max_files_client_tests() -> i32 {
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
 impl AuthorityClient for LocalAuthorityClient {
-    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
+    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move { state.lock().await.handle_order(order).await })
     }
@@ -36,23 +36,17 @@ impl AuthorityClient for LocalAuthorityClient {
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move { state.lock().await.handle_confirmation_order(order).await })
     }
 
-    fn handle_account_info_request(
+    fn handle_info_request(
         &self,
-        request: AccountInfoRequest,
-    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
+        request: InfoRequest,
+    ) -> AsyncResult<'_, InfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move {
-            state
-                .lock()
-                .await
-                .handle_account_info_request(request)
-                .await
-        })
+        Box::pin(async move { state.lock().await.handle_info_request(request).await })
     }
 }
 
@@ -554,4 +548,34 @@ fn test_receiving_unconfirmed_transfer() {
         rt.block_on(client2.get_strong_majority_owner(object_id)),
         Some((client2.address, SequenceNumber::from(1)))
     );
+}
+
+#[test]
+fn test_client_state_sync() {
+    let mut rt = Runtime::new().unwrap();
+
+    let object_ids = (0..20)
+        .map(|_| ObjectID::random())
+        .collect::<Vec<ObjectID>>();
+    let authority_objects = (0..10).map(|_| object_ids.clone()).collect();
+
+    let mut sender = init_local_client_state(authority_objects);
+
+    let old_object_ids = sender.object_ids.clone();
+    let old_sent_certificate = sender.sent_certificates.clone();
+
+    // Remove all client-side data
+    sender.object_ids.clear();
+    sender.sent_certificates.clear();
+    assert!(rt.block_on(sender.get_own_objects()).unwrap().is_empty());
+    assert!(sender.object_ids.is_empty());
+    assert!(sender.sent_certificates.is_empty());
+
+    // Sync client state
+    rt.block_on(sender.sync_client_state()).unwrap();
+
+    // Confirm data are the same after sync
+    assert!(!rt.block_on(sender.get_own_objects()).unwrap().is_empty());
+    assert_eq!(old_object_ids, sender.object_ids);
+    assert_eq!(old_sent_certificate, sender.sent_certificates);
 }
