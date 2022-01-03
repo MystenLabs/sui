@@ -168,31 +168,6 @@ impl InfoResponse {
         InfoResponse { kind }
     }
 
-    pub fn new_account_info_resp(object_ids: Vec<ObjectRef>, owner: FastPayAddress) -> Self {
-        Self::new(InfoResponseKind::AccountInfoResponse(AccountInfoResponse {
-            object_ids,
-            owner,
-        }))
-    }
-
-    pub fn new_object_info_resp(
-        object_id: ObjectID,
-        owner: FastPayAddress,
-        next_sequence_number: SequenceNumber,
-        requested_certificate: Option<CertifiedOrder>,
-        pending_confirmation: Option<SignedOrder>,
-        requested_received_transfers: Vec<CertifiedOrder>,
-    ) -> Self {
-        Self::new(InfoResponseKind::ObjectInfoResponse(ObjectInfoResponse {
-            object_id,
-            owner,
-            next_sequence_number,
-            requested_certificate,
-            pending_confirmation,
-            requested_received_transfers,
-        }))
-    }
-
     pub fn to_account_info_response(&self) -> Option<AccountInfoResponse> {
         match self.kind.clone() {
             InfoResponseKind::AccountInfoResponse(response) => Some(response),
