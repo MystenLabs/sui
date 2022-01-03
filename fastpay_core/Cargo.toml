@@ -25,3 +25,6 @@ move-vm-runtime = { git = "https://github.com/diem/diem", rev="346301f33b3489bb4
 
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "c1ab69f1a4004414bf0dee412f2e5839b71bc8f6" }
+
+[dev-dependencies]
+fdlimit = "0.2.1"

@@ -8,12 +8,21 @@ use fastx_types::object::Object;
 use futures::lock::Mutex;
 use std::{
     collections::{BTreeMap, HashMap},
+    convert::TryInto,
     sync::Arc,
 };
 use tokio::runtime::Runtime;
 
 use std::env;
 use std::fs;
+
+pub fn system_maxfiles() -> usize {
+    fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
+}
+
+fn max_files_client_tests() -> i32 {
+    (system_maxfiles() / 8).try_into().unwrap()
+}
 
 #[derive(Clone)]
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
@@ -74,7 +83,7 @@ fn init_local_authorities(
         fs::create_dir(&path).unwrap();
 
         let mut opts = rocksdb::Options::default();
-        opts.set_max_open_files(10);
+        opts.set_max_open_files(max_files_client_tests());
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
         let state = AuthorityState::new(committee.clone(), address, secret, store);
         clients.insert(address, LocalAuthorityClient::new(state));
@@ -108,7 +117,7 @@ fn init_local_authorities_bad_1(
         fs::create_dir(&path).unwrap();
 
         let mut opts = rocksdb::Options::default();
-        opts.set_max_open_files(10);
+        opts.set_max_open_files(max_files_client_tests());
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
         let state = AuthorityState::new(committee.clone(), address, secret, store);
         clients.insert(address, LocalAuthorityClient::new(state));

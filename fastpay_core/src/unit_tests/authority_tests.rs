@@ -12,8 +12,16 @@ use move_binary_format::{
 };
 use move_core_types::ident_str;
 
-use std::env;
 use std::fs;
+use std::{convert::TryInto, env};
+
+pub fn system_maxfiles() -> usize {
+    fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
+}
+
+fn max_files_authority_tests() -> i32 {
+    (system_maxfiles() / 8).try_into().unwrap()
+}
 
 #[tokio::test]
 async fn test_handle_transfer_order_bad_signature() {
@@ -573,7 +581,7 @@ async fn test_authority_persist() {
 
     // Create an authority
     let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(10);
+    opts.set_max_open_files(max_files_authority_tests());
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
     let authority = AuthorityState::new(
         committee.clone(),
@@ -597,7 +605,7 @@ async fn test_authority_persist() {
 
     // Reopen the authority with the same path
     let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(10);
+    opts.set_max_open_files(max_files_authority_tests());
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
     let authority2 = AuthorityState::new(committee, authority_address, authority_key, store);
     let obj2 = authority2.object_state(&object_id).await.unwrap();
@@ -625,7 +633,7 @@ fn init_state() -> AuthorityState {
     fs::create_dir(&path).unwrap();
 
     let mut opts = rocksdb::Options::default();
-    opts.set_max_open_files(10);
+    opts.set_max_open_files(max_files_authority_tests());
     let store = Arc::new(AuthorityStore::open(path, Some(opts)));
     AuthorityState::new(committee, authority_address, authority_key, store)
 }
