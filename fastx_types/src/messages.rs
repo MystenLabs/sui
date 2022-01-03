@@ -163,23 +163,27 @@ impl InfoRequest {
     }
 }
 
+impl From<InfoResponse> for AccountInfoResponse {
+    fn from(info: InfoResponse) -> Self {
+        match info.kind.clone() {
+            InfoResponseKind::AccountInfoResponse(response) => response,
+            _ => panic!(),
+        }
+    }
+}
+
+impl From<InfoResponse> for ObjectInfoResponse {
+    fn from(info: InfoResponse) -> Self {
+        match info.kind.clone() {
+            InfoResponseKind::ObjectInfoResponse(response) => response,
+            _ => panic!(),
+        }
+    }
+}
+
 impl InfoResponse {
     pub fn new(kind: InfoResponseKind) -> Self {
         InfoResponse { kind }
-    }
-
-    pub fn to_account_info_response(&self) -> Option<AccountInfoResponse> {
-        match self.kind.clone() {
-            InfoResponseKind::AccountInfoResponse(response) => Some(response),
-            InfoResponseKind::ObjectInfoResponse(_) => None,
-        }
-    }
-
-    pub fn to_object_info_response(&self) -> Option<ObjectInfoResponse> {
-        match self.kind.clone() {
-            InfoResponseKind::ObjectInfoResponse(response) => Some(response),
-            InfoResponseKind::AccountInfoResponse(_) => None,
-        }
     }
 }
 
