@@ -10,6 +10,7 @@ use fastx_types::{base_types::*, committee::Committee, object::Object};
 use futures::future::join_all;
 use log::*;
 use std::path::Path;
+use std::sync::Arc;
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
 
@@ -30,11 +31,15 @@ fn make_server(
 
     let committee = Committee::new(committee_config.voting_rights());
 
+    let store = Arc::new(AuthorityStore::open(
+        Path::new(&server_config.authority.database_path),
+        None,
+    ));
     let state = AuthorityState::new(
         committee,
         server_config.authority.address,
         server_config.key.copy(),
-        Path::new(&server_config.authority.database_path),
+        store,
     );
 
     // Load initial states

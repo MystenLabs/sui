@@ -1,5 +1,6 @@
 use super::*;
 
+use rocksdb::Options;
 use std::path::Path;
 use std::sync::Mutex;
 use typed_store::rocks::{open_cf, DBMap};
@@ -16,10 +17,10 @@ pub struct AuthorityStore {
 
 impl AuthorityStore {
     /// Open an authority store by directory path
-    pub fn open<P: AsRef<Path>>(path: P) -> AuthorityStore {
+    pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> AuthorityStore {
         let db = open_cf(
             &path,
-            None,
+            db_options,
             &[
                 "objects",
                 "order_lock",
