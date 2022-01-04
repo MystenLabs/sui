@@ -82,11 +82,11 @@ pub type AuthorityName = PublicKeyBytes;
 pub type ObjectID = AccountAddress;
 pub type ObjectRef = (ObjectID, SequenceNumber);
 
-// TODO(https://github.com/MystenLabs/fastnft/issues/65): eventually a transaction will have a (unique) digest. For the moment we only
-// have transfer transactions so we index them by the object/seq they mutate.
+// A transaction will have a (unique) digest.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct TransactionDigest([u8; 32]); // We use SHA3-256 hence 32 bytes here
 
+// Each object has a unique digest
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct ObjectDigest([u8; 32]); // We use SHA3-256 hence 32 bytes here
 
@@ -120,16 +120,11 @@ impl TxContext {
         // audit ID derivation: do we want/need domain separation, different hash function, truncation ...
 
         let mut hasher = Sha3_256::default();
+        // TODO: hasher.update("OBJECT_ID_DERIVE::");
         hasher.update(self.digest.0);
         hasher.update(self.ids_created.to_le_bytes());
         let hash = hasher.finalize();
 
-        /*
-        let hash_arg = &mut self.digest.0 .0.to_vec();
-        hash_arg.append(&mut self.digest.0 .1 .0.to_le_bytes().to_vec());
-        hash_arg.append(&mut self.ids_created.to_le_bytes().to_vec());
-        let hash = Sha3_256::digest(hash_arg.as_slice());
-        */
         // truncate into an ObjectID.
         let id = AccountAddress::try_from(&hash[0..AccountAddress::LENGTH]).unwrap();
 
