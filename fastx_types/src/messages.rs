@@ -101,7 +101,7 @@ pub enum InfoRequestKind {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum InfoResponseKind {
     AccountInfoResponse(AccountInfoResponse),
-    ObjectInfoResponse(ObjectInfoResponse),
+    ObjectInfoResponse(Box<ObjectInfoResponse>),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -166,7 +166,7 @@ impl InfoRequest {
 
 impl From<InfoResponse> for AccountInfoResponse {
     fn from(info: InfoResponse) -> Self {
-        match info.kind.clone() {
+        match info.kind {
             InfoResponseKind::AccountInfoResponse(response) => response,
             _ => panic!(),
         }
@@ -175,10 +175,22 @@ impl From<InfoResponse> for AccountInfoResponse {
 
 impl From<InfoResponse> for ObjectInfoResponse {
     fn from(info: InfoResponse) -> Self {
-        match info.kind.clone() {
-            InfoResponseKind::ObjectInfoResponse(response) => response,
+        match info.kind {
+            InfoResponseKind::ObjectInfoResponse(response) => *response,
             _ => panic!(),
         }
+    }
+}
+
+impl From<ObjectInfoResponse> for InfoResponse {
+    fn from(info: ObjectInfoResponse) -> Self {
+        InfoResponse::new(InfoResponseKind::ObjectInfoResponse(Box::new(info)))
+    }
+}
+
+impl From<AccountInfoResponse> for InfoResponse {
+    fn from(info: AccountInfoResponse) -> Self {
+        InfoResponse::new(InfoResponseKind::AccountInfoResponse(info))
     }
 }
 

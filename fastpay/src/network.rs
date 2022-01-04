@@ -80,13 +80,12 @@ impl MessageHandler for RunningServerState {
                 Err(_) => Err(FastPayError::InvalidDecoding),
                 Ok(result) => {
                     match result {
-                        SerializedMessage::Order(message) => {
-                            self.server.state.handle_order(*message).await.map(|info| {
-                                let info =
-                                    InfoResponse::new(InfoResponseKind::ObjectInfoResponse(info));
-                                Some(serialize_info_response(&info))
-                            })
-                        }
+                        SerializedMessage::Order(message) => self
+                            .server
+                            .state
+                            .handle_order(*message)
+                            .await
+                            .map(|info| Some(serialize_info_response(&info.into()))),
                         SerializedMessage::Cert(message) => {
                             let confirmation_order = ConfirmationOrder {
                                 certificate: message.as_ref().clone(),
@@ -99,10 +98,7 @@ impl MessageHandler for RunningServerState {
                             {
                                 Ok(info) => {
                                     // Response
-                                    let info = InfoResponse::new(
-                                        InfoResponseKind::ObjectInfoResponse(info),
-                                    );
-                                    Ok(Some(serialize_info_response(&info)))
+                                    Ok(Some(serialize_info_response(&info.into())))
                                 }
                                 Err(error) => Err(error),
                             }

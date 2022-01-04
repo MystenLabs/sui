@@ -264,9 +264,9 @@ fn mass_update_recipients(
     }
 }
 
-fn deserialize_response(response: &[u8]) -> Option<AccountInfoResponse> {
+fn deserialize_response(response: &[u8]) -> Option<InfoResponse> {
     match deserialize_message(response) {
-        Ok(SerializedMessage::ObjectInfoResp(info)) => Some(*info),
+        Ok(SerializedMessage::InfoResp(info)) => Some(*info),
         Ok(SerializedMessage::Error(error)) => {
             error!("Received error value: {}", error);
             None
@@ -517,7 +517,10 @@ fn main() {
                 let votes: Vec<_> = responses
                     .into_iter()
                     .filter_map(|buf| {
-                        deserialize_response(&buf[..]).and_then(|info| info.pending_confirmation)
+                        deserialize_response(&buf[..]).and_then(|info| {
+                            let info: ObjectInfoResponse = info.into();
+                            info.pending_confirmation
+                        })
                     })
                     .collect();
                 info!("Received {} valid votes.", votes.len());
@@ -547,6 +550,7 @@ fn main() {
                         .iter()
                         .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
                             Some(info) => {
+                                let info: ObjectInfoResponse = info.into();
                                 confirmed.insert(info.object_id);
                                 acc + 1
                             }

@@ -219,38 +219,42 @@ fn test_info_response() {
         cert.signatures.push((authority_name, sig));
     }
 
-    let resp1 = InfoResponse::new(InfoResponseKind::ObjectInfoResponse(ObjectInfoResponse {
+    let resp1: InfoResponse = ObjectInfoResponse {
         object_id: dbg_object_id(0x20),
         owner: dbg_addr(0x20),
         next_sequence_number: SequenceNumber::new(),
         pending_confirmation: None,
         requested_certificate: None,
         requested_received_transfers: Vec::new(),
-    }));
-    let resp2 = InfoResponse::new(InfoResponseKind::ObjectInfoResponse(ObjectInfoResponse {
+    }
+    .into();
+    let resp2: InfoResponse = ObjectInfoResponse {
         object_id: dbg_object_id(0x20),
         owner: dbg_addr(0x20),
         next_sequence_number: SequenceNumber::new(),
         pending_confirmation: Some(vote.clone()),
         requested_certificate: None,
         requested_received_transfers: Vec::new(),
-    }));
-    let resp3 = InfoResponse::new(InfoResponseKind::ObjectInfoResponse(ObjectInfoResponse {
+    }
+    .into();
+    let resp3: InfoResponse = ObjectInfoResponse {
         object_id: dbg_object_id(0x20),
         owner: dbg_addr(0x20),
         next_sequence_number: SequenceNumber::new(),
         pending_confirmation: None,
         requested_certificate: Some(cert.clone()),
         requested_received_transfers: Vec::new(),
-    }));
-    let resp4 = InfoResponse::new(InfoResponseKind::ObjectInfoResponse(ObjectInfoResponse {
+    }
+    .into();
+    let resp4: InfoResponse = ObjectInfoResponse {
         object_id: dbg_object_id(0x20),
         owner: dbg_addr(0x20),
         next_sequence_number: SequenceNumber::new(),
         pending_confirmation: Some(vote),
         requested_certificate: Some(cert),
         requested_received_transfers: Vec::new(),
-    }));
+    }
+    .into();
 
     for resp in [resp1, resp2, resp3, resp4].iter() {
         let buf = serialize_info_response(resp);

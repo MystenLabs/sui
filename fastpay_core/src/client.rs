@@ -199,14 +199,9 @@ where
             self.authority_clients.shuffle(&mut rand::thread_rng());
             for client in self.authority_clients.iter_mut() {
                 let result = client.handle_info_request(request.clone()).await;
-                if let Ok(InfoResponse {
-                    kind:
-                        InfoResponseKind::ObjectInfoResponse(ObjectInfoResponse {
-                            requested_certificate: Some(certificate),
-                            ..
-                        }),
-                }) = &result
-                {
+                if let Ok(response) = result {
+                    let response: ObjectInfoResponse = response.into();
+                    let certificate = response.requested_certificate.unwrap();
                     if certificate.check(&self.committee).is_ok() {
                         let order = &certificate.order;
                         if order.sender() == &self.sender
@@ -787,13 +782,6 @@ where
     }
 
     fn get_own_objects(&mut self) -> AsyncResult<'_, Vec<ObjectRef>, anyhow::Error> {
-        Box::pin(async move {
-            Ok(self
-                .object_ids
-                .clone()
-                .into_iter()
-                .map(|object_id| ObjectRef::from(object_id))
-                .collect())
-        })
+        Box::pin(async move { Ok(self.object_ids.clone().into_iter().collect()) })
     }
 }
