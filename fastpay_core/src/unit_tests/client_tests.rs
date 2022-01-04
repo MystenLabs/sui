@@ -3,17 +3,26 @@
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
 use super::*;
-use crate::authority::AuthorityState;
+use crate::authority::{AuthorityState, AuthorityStore};
 use fastx_types::object::Object;
 use futures::lock::Mutex;
 use std::{
     collections::{BTreeMap, HashMap},
+    convert::TryInto,
     sync::Arc,
 };
 use tokio::runtime::Runtime;
 
 use std::env;
 use std::fs;
+
+pub fn system_maxfiles() -> usize {
+    fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
+}
+
+fn max_files_client_tests() -> i32 {
+    (system_maxfiles() / 8).try_into().unwrap()
+}
 
 #[derive(Clone)]
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
@@ -73,7 +82,10 @@ fn init_local_authorities(
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let state = AuthorityState::new(committee.clone(), address, secret, path);
+        let mut opts = rocksdb::Options::default();
+        opts.set_max_open_files(max_files_client_tests());
+        let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+        let state = AuthorityState::new(committee.clone(), address, secret, store);
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
@@ -104,7 +116,10 @@ fn init_local_authorities_bad_1(
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let state = AuthorityState::new(committee.clone(), address, secret, path);
+        let mut opts = rocksdb::Options::default();
+        opts.set_max_open_files(max_files_client_tests());
+        let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+        let state = AuthorityState::new(committee.clone(), address, secret, store);
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
@@ -219,7 +234,6 @@ fn test_get_strong_majority_owner() {
 }
 
 #[test]
-#[ignore = "Enable after https://github.com/MystenLabs/fastnft/issues/109 is fixed"]
 fn test_initiating_valid_transfer() {
     let mut rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
@@ -273,7 +287,6 @@ fn test_initiating_valid_transfer() {
 }
 
 #[test]
-#[ignore = "Enable after https://github.com/MystenLabs/fastnft/issues/109 is fixed"]
 fn test_initiating_valid_transfer_despite_bad_authority() {
     let mut rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();

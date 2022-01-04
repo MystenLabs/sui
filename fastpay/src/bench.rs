@@ -16,6 +16,7 @@ use tokio::{runtime::Builder, time};
 
 use std::env;
 use std::fs;
+use std::sync::Arc;
 use std::thread;
 use strum_macros::EnumString;
 
@@ -121,7 +122,9 @@ impl ClientServerBenchmark {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let state = AuthorityState::new(committee.clone(), public_auth0, secret_auth0.copy(), path);
+        let store = Arc::new(AuthorityStore::open(path, None));
+        let state =
+            AuthorityState::new(committee.clone(), public_auth0, secret_auth0.copy(), store);
 
         // Seed user accounts.
         let mut rt = Runtime::new().unwrap();
