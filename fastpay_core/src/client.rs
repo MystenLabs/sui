@@ -236,7 +236,7 @@ where
                     return Ok(object_ids.clone());
                 }
             }
-            Err(FastPayError::ErrorWhileRequestingCertificate)
+            Err(FastPayError::ErrorWhileRequestingInformation)
         })
     }
 }
