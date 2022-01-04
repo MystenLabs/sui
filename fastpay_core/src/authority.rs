@@ -266,10 +266,9 @@ impl AuthorityState {
         request: InfoRequest,
     ) -> Result<InfoResponse, FastPayError> {
         match request.kind {
-            InfoRequestKind::AccountInfoRequest(request) => {
-                let response = self.make_account_info(request.account);
-                response.map(|info| InfoResponse::new(InfoResponseKind::AccountInfoResponse(info)))
-            }
+            InfoRequestKind::AccountInfoRequest(request) => self
+                .make_account_info(request.account)
+                .map(|info| info.into()),
             InfoRequestKind::ObjectInfoRequest(request) => {
                 let response = if let Some(seq) = request.request_sequence_number {
                     // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy
@@ -296,7 +295,7 @@ impl AuthorityState {
                 } else {
                     self.make_object_info(request.object_id, None).await
                 };
-                response.map(|info| InfoResponse::new(InfoResponseKind::ObjectInfoResponse(info)))
+                response.map(|info| info.into())
             }
         }
     }
