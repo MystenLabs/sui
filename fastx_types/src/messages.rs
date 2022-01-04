@@ -156,12 +156,6 @@ impl PartialEq for CertifiedOrder {
     }
 }
 
-impl Transfer {
-    pub fn key(&self) -> ObjectRef {
-        (self.object_id, self.sequence_number)
-    }
-}
-
 impl Order {
     pub fn new(kind: OrderKind, secret: &KeyPair) -> Self {
         let signature = Signature::new(&kind, secret);
@@ -362,14 +356,6 @@ impl<'a> SignatureAggregator<'a> {
 }
 
 impl CertifiedOrder {
-    pub fn key(&self) -> ObjectRef {
-        use OrderKind::*;
-        match &self.order.kind {
-            Transfer(t) => t.key(),
-            Publish(_) => unimplemented!("Deriving key() for Publish"),
-            Call(_) => unimplemented!("Deriving key() for Call"),
-        }
-    }
 
     /// Verify the certificate.
     pub fn check(&self, committee: &Committee) -> Result<(), FastPayError> {
