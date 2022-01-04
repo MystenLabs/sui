@@ -51,7 +51,7 @@ pub struct ClientState<AuthorityClient> {
     sent_certificates: Vec<CertifiedOrder>,
     /// Known received certificates, indexed by sender and sequence number.
     /// TODO: API to search and download yet unknown `received_certificates`.
-    received_certificates: BTreeMap<ObjectRef, CertifiedOrder>,
+    received_certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
     /// The known objects with it's sequence number owned by the client.
     object_ids: BTreeMap<ObjectID, SequenceNumber>,
 }
@@ -113,7 +113,7 @@ impl<A> ClientState<A> {
             sent_certificates,
             received_certificates: received_certificates
                 .into_iter()
-                .map(|cert| (cert.key(), cert))
+                .map(|cert| (cert.order.digest(), cert))
                 .collect(),
             object_ids,
         }
@@ -660,7 +660,7 @@ where
                     .await?;
                     // Everything worked: update the local balance.
                     if let btree_map::Entry::Vacant(entry) =
-                        self.received_certificates.entry(transfer.key())
+                        self.received_certificates.entry(certificate.order.digest())
                     {
                         self.object_ids.insert(
                             transfer.object_id,
