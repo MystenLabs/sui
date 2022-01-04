@@ -150,7 +150,6 @@ struct CertificateRequester<A> {
 
 #[derive(Clone)]
 struct ObjectIdRequester<A> {
-    committee: Committee,
     authority_clients: Vec<A>,
 }
 
@@ -171,11 +170,8 @@ impl<A> CertificateRequester<A> {
 }
 
 impl<A> ObjectIdRequester<A> {
-    fn new(committee: Committee, authority_clients: Vec<A>) -> Self {
-        Self {
-            committee,
-            authority_clients,
-        }
+    fn new(authority_clients: Vec<A>) -> Self {
+        Self { authority_clients }
     }
 }
 
@@ -639,10 +635,8 @@ where
     }
 
     async fn download_own_object_ids(&self) -> Result<Vec<ObjectRef>, anyhow::Error> {
-        let mut requester = ObjectIdRequester::new(
-            self.committee.clone(),
-            self.authority_clients.values().cloned().collect(),
-        );
+        let mut requester =
+            ObjectIdRequester::new(self.authority_clients.values().cloned().collect());
         return Ok(requester.query(self.address).await?);
     }
 }
