@@ -231,8 +231,6 @@ impl AuthorityState {
                         object_id = temporary_store.written[0].0
                     }
                     Err(e) => {
-                        // TODO(https://github.com/MystenLabs/fastnft/issues/63): return this error to the client
-                        //object_id = c.gas_payment.0;
                         return Err(e);
                     }
                 }
