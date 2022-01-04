@@ -85,12 +85,12 @@ pub type ObjectRef = (ObjectID, SequenceNumber);
 // TODO(https://github.com/MystenLabs/fastnft/issues/65): eventually a transaction will have a (unique) digest. For the moment we only
 // have transfer transactions so we index them by the object/seq they mutate.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct TransactionDigest((ObjectID, SequenceNumber));
+pub struct TransactionDigest([u8; 32]); // We use SHA3-256 hence 32 bytes here
 
 // TODO: migrate TxContext type + these constants to a separate file
-/// 0xB86E858F2D22236F2D96DF498FF001D0
+/// 0x242C70E260BADD483440B4E3DAD63E9D
 pub const TX_CONTEXT_ADDRESS: AccountAddress = AccountAddress::new([
-    0xB8, 0x6E, 0x85, 0x8F, 0x2D, 0x22, 0x23, 0x6F, 0x2D, 0x96, 0xDF, 0x49, 0x8F, 0xF0, 0x01, 0xD0,
+    0x24, 0x2C, 0x70, 0xE2, 0x60, 0xBA, 0xDD, 0x48, 0x34, 0x40, 0xB4, 0xE3, 0xDA, 0xD6, 0x3E, 0x9D,
 ]);
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
@@ -115,10 +115,18 @@ impl TxContext {
     pub fn fresh_id(&mut self) -> ObjectID {
         // TODO(https://github.com/MystenLabs/fastnft/issues/58):
         // audit ID derivation: do we want/need domain separation, different hash function, truncation ...
+
+        let mut hasher = Sha3_256::default();
+        hasher.update(self.digest.0);
+        hasher.update(self.ids_created.to_le_bytes());
+        let hash = hasher.finalize();
+
+        /*
         let hash_arg = &mut self.digest.0 .0.to_vec();
         hash_arg.append(&mut self.digest.0 .1 .0.to_le_bytes().to_vec());
         hash_arg.append(&mut self.ids_created.to_le_bytes().to_vec());
         let hash = Sha3_256::digest(hash_arg.as_slice());
+        */
         // truncate into an ObjectID.
         let id = AccountAddress::try_from(&hash[0..AccountAddress::LENGTH]).unwrap();
 
@@ -130,7 +138,7 @@ impl TxContext {
     // TODO(https://github.com/MystenLabs/fastnft/issues/89): temporary hack for Move compatibility
     pub fn to_bcs_bytes_hack(&self) -> Vec<u8> {
         let sender = FastPayAddress::default();
-        let inputs_hash = self.digest.0 .0.to_vec();
+        let inputs_hash = self.digest.0.to_vec();
         let obj = TxContextForMove {
             sender: sender.to_vec(),
             inputs_hash,
@@ -153,22 +161,21 @@ struct TxContextForMove {
 }
 
 impl TransactionDigest {
-    pub fn new(id: ObjectID, seq: SequenceNumber) -> Self {
-        Self((id, seq))
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
     }
 
     /// Get the mock digest of the genesis transaction
     /// TODO(https://github.com/MystenLabs/fastnft/issues/65): we can pick anything here    
     pub fn genesis() -> Self {
-        Self::new(
-            ObjectID::new([0u8; ObjectID::LENGTH]),
-            SequenceNumber::new(),
-        )
+        Self::new([0; 32])
     }
 
     // for testing
     pub fn random() -> Self {
-        Self::new(ObjectID::random(), SequenceNumber::new())
+        use rand::Rng;
+        let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
+        Self::new(random_bytes)
     }
 }
 
@@ -405,8 +412,8 @@ impl From<SequenceNumber> for usize {
 }
 
 /// Something that we know how to hash and sign.
-pub trait Signable<Hasher> {
-    fn write(&self, hasher: &mut Hasher);
+pub trait Signable<HashedMessageWriter> {
+    fn write(&self, to_be_hashed_message: &mut HashedMessageWriter);
 }
 
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
@@ -414,16 +421,17 @@ pub trait Signable<Hasher> {
 /// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
 pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
 
-impl<T, Hasher> Signable<Hasher> for T
+impl<T, HashedMessageWriter> Signable<HashedMessageWriter> for T
 where
     T: BcsSignable,
-    Hasher: std::io::Write,
+    HashedMessageWriter: std::io::Write,
 {
-    fn write(&self, hasher: &mut Hasher) {
+    fn write(&self, to_be_hashed_message: &mut HashedMessageWriter) {
         let name = serde_name::trace_name::<Self>().expect("Self must be a struct or an enum");
         // Note: This assumes that names never contain the separator `::`.
-        write!(hasher, "{}::", name).expect("Hasher should not fail");
-        bcs::serialize_into(hasher, &self).expect("Message serialization should not fail");
+        write!(to_be_hashed_message, "{}::", name).expect("Hasher should not fail");
+        bcs::serialize_into(to_be_hashed_message, &self)
+            .expect("Message serialization should not fail");
     }
 }
 
@@ -480,4 +488,11 @@ impl Signature {
             }
         })
     }
+}
+
+pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
+    let mut digest = Sha3_256::default();
+    signable.write(&mut digest);
+    let hash = digest.finalize();
+    hash.as_slice().try_into().expect("Correct size")
 }

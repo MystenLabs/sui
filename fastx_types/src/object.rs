@@ -8,7 +8,7 @@ use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 
 use crate::{
-    base_types::{FastPayAddress, ObjectID, ObjectRef, SequenceNumber},
+    base_types::{BcsSignable, FastPayAddress, ObjectID, ObjectRef, SequenceNumber},
     gas_coin::GasCoin,
 };
 
@@ -88,6 +88,8 @@ pub struct Object {
     pub owner: FastPayAddress,
     pub next_sequence_number: SequenceNumber,
 }
+
+impl BcsSignable for Object {}
 
 impl Object {
     /// Create a new Move object

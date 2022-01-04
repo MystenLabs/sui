@@ -286,7 +286,7 @@ impl Order {
 
     // TODO: derive a real cryptographic hash of the transaction here.
     pub fn digest(&self) -> TransactionDigest {
-        TransactionDigest::new(*self.object_id(), self.sequence_number())
+        TransactionDigest::new(sha3_hash(&self.kind))
     }
 }
 
