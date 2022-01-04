@@ -190,7 +190,11 @@ where
         sequence_number: SequenceNumber,
     ) -> AsyncResult<'_, CertifiedOrder, FastPayError> {
         Box::pin(async move {
-            let request = InfoRequest::new_object_info_req(self.object_id, Some(sequence_number));
+            let request = InfoRequest::ObjectInfoRequest(ObjectInfoRequest {
+                object_id: self.object_id,
+                request_sequence_number: Some(sequence_number),
+                request_received_transfers_excluding_first_nth: None,
+            });
             // Sequentially try each authority in random order.
             self.authority_clients.shuffle(&mut rand::thread_rng());
             for client in self.authority_clients.iter_mut() {
@@ -223,17 +227,15 @@ where
     /// Try to find a certificate for the given sender and sequence number.
     fn query(&mut self, account: FastPayAddress) -> AsyncResult<'_, Vec<ObjectRef>, FastPayError> {
         Box::pin(async move {
-            let request = InfoRequest::new_account_info_req(account);
+            let request = InfoRequest::AccountInfoRequest(AccountInfoRequest { account });
             // Sequentially try each authority in random order.
             self.authority_clients.shuffle(&mut rand::thread_rng());
             for client in self.authority_clients.iter_mut() {
                 let result = client.handle_info_request(request.clone()).await;
-                if let Ok(InfoResponse {
-                    kind:
-                        InfoResponseKind::AccountInfoResponse(AccountInfoResponse {
-                            object_ids, ..
-                        }),
-                }) = &result
+                if let Ok(InfoResponse::AccountInfoResponse(AccountInfoResponse {
+                    object_ids,
+                    ..
+                })) = &result
                 {
                     return Ok(object_ids.clone());
                 }
@@ -276,7 +278,11 @@ where
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
     async fn get_strong_majority_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
-        let request = InfoRequest::new_object_info_req(object_id, None);
+        let request = InfoRequest::ObjectInfoRequest(ObjectInfoRequest {
+            object_id,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        });
         let mut authority_clients = self.authority_clients.clone();
         let numbers: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
@@ -284,9 +290,9 @@ where
                 let fut = client.handle_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(InfoResponse {
-                            kind: InfoResponseKind::ObjectInfoResponse(info),
-                        }) => Some((*name, info.next_sequence_number)),
+                        Ok(InfoResponse::ObjectInfoResponse(info)) => {
+                            Some((*name, info.next_sequence_number))
+                        }
                         _ => None,
                     }
                 }
@@ -304,7 +310,11 @@ where
         &self,
         object_id: ObjectID,
     ) -> Option<(FastPayAddress, SequenceNumber)> {
-        let request = InfoRequest::new_object_info_req(object_id, None);
+        let request = InfoRequest::ObjectInfoRequest(ObjectInfoRequest {
+            object_id,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        });
         let authority_clients = self.authority_clients.clone();
         let numbers: futures::stream::FuturesUnordered<_> = authority_clients
             .iter()
@@ -312,9 +322,9 @@ where
                 let fut = client.handle_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(InfoResponse {
-                            kind: InfoResponseKind::ObjectInfoResponse(info),
-                        }) => Some((*name, Some((info.owner, info.next_sequence_number)))),
+                        Ok(InfoResponse::ObjectInfoResponse(info)) => {
+                            Some((*name, Some((info.owner, info.next_sequence_number))))
+                        }
                         _ => None,
                     }
                 }
@@ -411,13 +421,14 @@ where
                 let committee = &committee;
                 Box::pin(async move {
                     // Figure out which certificates this authority is missing.
-                    let request = InfoRequest::new_object_info_req(object_id, None);
+                    let request = InfoRequest::ObjectInfoRequest(ObjectInfoRequest {
+                        object_id,
+                        request_sequence_number: None,
+                        request_received_transfers_excluding_first_nth: None,
+                    });
                     let response = client.handle_info_request(request).await?;
 
-                    let response = match response.kind {
-                        InfoResponseKind::ObjectInfoResponse(response) => response,
-                        _ => panic!(),
-                    };
+                    let response: ObjectInfoResponse = response.into();
 
                     let current_sequence_number = response.next_sequence_number;
                     // Download each missing certificate in reverse order using the downloader.

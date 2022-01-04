@@ -268,11 +268,11 @@ impl AuthorityState {
         &self,
         request: InfoRequest,
     ) -> Result<InfoResponse, FastPayError> {
-        match request.kind {
-            InfoRequestKind::AccountInfoRequest(request) => self
+        match request {
+            InfoRequest::AccountInfoRequest(request) => self
                 .make_account_info(request.account)
                 .map(|info| info.into()),
-            InfoRequestKind::ObjectInfoRequest(request) => {
+            InfoRequest::ObjectInfoRequest(request) => {
                 let response = if let Some(seq) = request.request_sequence_number {
                     // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy
                     // to provide back to the client the object digest for specific objects requested. Probably,
