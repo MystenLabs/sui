@@ -14,13 +14,6 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct FundingTransaction {
-    pub recipient: FastPayAddress,
-    pub primary_coins: Amount,
-    // TODO: Authenticated by Primary sender.
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub enum Address {
     Primary(PrimaryAddress),

@@ -91,14 +91,6 @@ pub trait Client {
         object_id: ObjectID,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
-
-    /// Find how much money we can spend.
-    /// TODO: Currently, this value only reflects received transfers that were
-    /// locally processed by `receive_from_fastpay`.
-    fn get_spendable_amount(
-        &mut self,
-        object_id: ObjectID,
-    ) -> AsyncResult<'_, Amount, anyhow::Error>;
 }
 
 impl<A> ClientState<A> {
@@ -467,7 +459,7 @@ where
 
     /// Make sure we have all our certificates with sequence number
     /// in the range 0..self.next_sequence_number
-    async fn download_sent_certificates(&self) -> Result<Vec<CertifiedOrder>, FastPayError> {
+    pub async fn download_sent_certificates(&self) -> Result<Vec<CertifiedOrder>, FastPayError> {
         let known_sequence_numbers: BTreeSet<_> = self
             .sent_certificates
             .iter()
@@ -696,7 +688,6 @@ where
                 object_id,
                 sender: self.address,
                 recipient: Address::FastPay(recipient),
-                // amount,
                 sequence_number: self.next_sequence_number(object_id),
                 user_data,
             };
@@ -705,26 +696,6 @@ where
                 .execute_transfer(order, /* with_confirmation */ false)
                 .await?;
             Ok(new_certificate)
-        })
-    }
-
-    fn get_spendable_amount(
-        &mut self,
-        object_id: ObjectID,
-    ) -> AsyncResult<'_, Amount, anyhow::Error> {
-        Box::pin(async move {
-            if let Some(order) = self.pending_transfer.clone() {
-                // Finish executing the previous transfer.
-                self.execute_transfer(order, /* with_confirmation */ false)
-                    .await?;
-            }
-            let next_sequence_number = self.next_sequence_number(object_id);
-            if self.sent_certificates.len() < next_sequence_number.into() {
-                // Recover missing sent certificates.
-                let new_sent_certificates = self.download_sent_certificates().await?;
-                self.update_sent_certificates(new_sent_certificates, object_id)?;
-            }
-            Ok(Amount::zero())
         })
     }
 }

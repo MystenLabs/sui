@@ -20,14 +20,6 @@ mod base_types_tests;
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
-pub struct Amount(u64);
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
-pub struct Balance(i128);
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
 pub struct SequenceNumber(u64);
 
 pub type VersionNumber = SequenceNumber;
@@ -81,6 +73,8 @@ pub type AuthorityName = PublicKeyBytes;
 // addresses and ID's
 pub type ObjectID = AccountAddress;
 pub type ObjectRef = (ObjectID, SequenceNumber);
+
+pub type ObjectRefFull = (ObjectID, SequenceNumber, ObjectDigest);
 
 // A transaction will have a (unique) digest.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
@@ -282,88 +276,6 @@ impl std::fmt::Debug for PublicKeyBytes {
     }
 }
 
-impl Amount {
-    pub fn zero() -> Self {
-        Amount(0)
-    }
-
-    pub fn try_add(self, other: Self) -> Result<Self, FastPayError> {
-        let val = self.0.checked_add(other.0);
-        match val {
-            None => Err(FastPayError::AmountOverflow),
-            Some(val) => Ok(Self(val)),
-        }
-    }
-
-    pub fn try_sub(self, other: Self) -> Result<Self, FastPayError> {
-        let val = self.0.checked_sub(other.0);
-        match val {
-            None => Err(FastPayError::AmountUnderflow),
-            Some(val) => Ok(Self(val)),
-        }
-    }
-}
-
-impl Balance {
-    pub fn zero() -> Self {
-        Balance(0)
-    }
-
-    pub fn max() -> Self {
-        Balance(std::i128::MAX)
-    }
-
-    pub fn try_add(&self, other: Self) -> Result<Self, FastPayError> {
-        let val = self.0.checked_add(other.0);
-        match val {
-            None => Err(FastPayError::BalanceOverflow),
-            Some(val) => Ok(Self(val)),
-        }
-    }
-
-    pub fn try_sub(&self, other: Self) -> Result<Self, FastPayError> {
-        let val = self.0.checked_sub(other.0);
-        match val {
-            None => Err(FastPayError::BalanceUnderflow),
-            Some(val) => Ok(Self(val)),
-        }
-    }
-}
-
-impl std::fmt::Display for Balance {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::str::FromStr for Balance {
-    type Err = std::num::ParseIntError;
-
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        Ok(Self(i128::from_str(src)?))
-    }
-}
-
-impl From<Amount> for u64 {
-    fn from(val: Amount) -> Self {
-        val.0
-    }
-}
-
-impl From<Amount> for Balance {
-    fn from(val: Amount) -> Self {
-        Balance(val.0 as i128)
-    }
-}
-
-impl TryFrom<Balance> for Amount {
-    type Error = std::num::TryFromIntError;
-
-    fn try_from(val: Balance) -> Result<Self, Self::Error> {
-        Ok(Amount(val.0.try_into()?))
-    }
-}
-
 impl SequenceNumber {
     pub fn new() -> Self {
         SequenceNumber(0)
@@ -393,18 +305,6 @@ impl SequenceNumber {
 impl From<SequenceNumber> for u64 {
     fn from(val: SequenceNumber) -> Self {
         val.0
-    }
-}
-
-impl From<u64> for Amount {
-    fn from(value: u64) -> Self {
-        Amount(value)
-    }
-}
-
-impl From<i128> for Balance {
-    fn from(value: i128) -> Self {
-        Balance(value)
     }
 }
 
