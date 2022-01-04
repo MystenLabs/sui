@@ -312,10 +312,17 @@ fn test_time_cert() {
         signatures: Vec::new(),
     };
 
+    use ed25519_dalek::PublicKey;
+    use std::collections::HashMap;
+    let mut cache = HashMap::new();
     for _ in 0..7 {
         let (authority_name, authority_key) = get_key_pair();
         let sig = Signature::new(&cert.order.kind, &authority_key);
         cert.signatures.push((authority_name, sig));
+        cache.insert(
+            authority_name,
+            PublicKey::from_bytes(&authority_name.0).expect("No problem parsing key."),
+        );
     }
 
     let mut buf = Vec::new();
@@ -330,7 +337,7 @@ fn test_time_cert() {
     let mut buf2 = buf.as_slice();
     for _ in 0..count {
         if let SerializedMessage::Cert(cert) = deserialize_message(&mut buf2).unwrap() {
-            Signature::verify_batch(&cert.order.kind, &cert.signatures).unwrap();
+            Signature::verify_batch(&cert.order.kind, &cert.signatures, &cache).unwrap();
         }
     }
     assert!(deserialize_message(buf2).is_err());

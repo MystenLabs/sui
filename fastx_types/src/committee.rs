@@ -2,20 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use std::collections::BTreeMap;
+use ed25519_dalek::PublicKey;
+use std::collections::{BTreeMap, HashMap};
 
-#[derive(Eq, PartialEq, Clone, Hash, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Committee {
     pub voting_rights: BTreeMap<AuthorityName, usize>,
     pub total_votes: usize,
+    pub expanded_keys: HashMap<AuthorityName, PublicKey>,
 }
 
 impl Committee {
     pub fn new(voting_rights: BTreeMap<AuthorityName, usize>) -> Self {
-        let total_votes = voting_rights.iter().fold(0, |sum, (_, votes)| sum + *votes);
+        let total_votes = voting_rights.iter().map(|(_, votes)| votes).sum();
+        let expanded_keys: HashMap<_, _> = voting_rights
+            .iter()
+            .map(|(addr, _)| (*addr, PublicKey::from_bytes(&addr.0).expect("Key is valid")))
+            .collect();
         Committee {
             voting_rights,
             total_votes,
+            expanded_keys,
         }
     }
 

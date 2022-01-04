@@ -1,10 +1,11 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 use crate::error::FastPayError;
+use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 
 use ed25519_dalek as dalek;
-use ed25519_dalek::{Digest, Signer, Verifier};
+use ed25519_dalek::{Digest, PublicKey, Signer, Verifier};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -38,7 +39,7 @@ pub struct UserData(pub Option<[u8; 32]>);
 pub struct KeyPair(dalek::Keypair);
 
 #[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct PublicKeyBytes([u8; dalek::PUBLIC_KEY_LENGTH]);
+pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
 
 impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
@@ -449,7 +450,11 @@ impl Signature {
             })
     }
 
-    fn verify_batch_internal<'a, T, I>(value: &'a T, votes: I) -> Result<(), dalek::SignatureError>
+    fn verify_batch_internal<'a, T, I>(
+        value: &'a T,
+        votes: I,
+        key_cache: &HashMap<PublicKeyBytes, PublicKey>,
+    ) -> Result<(), dalek::SignatureError>
     where
         T: Signable<Vec<u8>>,
         I: IntoIterator<Item = &'a (FastPayAddress, Signature)>,
@@ -462,17 +467,24 @@ impl Signature {
         for (addr, sig) in votes.into_iter() {
             messages.push(&msg);
             signatures.push(sig.0);
-            public_keys.push(dalek::PublicKey::from_bytes(&addr.0)?);
+            match key_cache.get(addr) {
+                Some(v) => public_keys.push(*v),
+                None => public_keys.push(dalek::PublicKey::from_bytes(&addr.0)?),
+            }
         }
         dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..])
     }
 
-    pub fn verify_batch<'a, T, I>(value: &'a T, votes: I) -> Result<(), FastPayError>
+    pub fn verify_batch<'a, T, I>(
+        value: &'a T,
+        votes: I,
+        key_cache: &HashMap<PublicKeyBytes, PublicKey>,
+    ) -> Result<(), FastPayError>
     where
         T: Signable<Vec<u8>>,
         I: IntoIterator<Item = &'a (FastPayAddress, Signature)>,
     {
-        Signature::verify_batch_internal(value, votes).map_err(|error| {
+        Signature::verify_batch_internal(value, votes, key_cache).map_err(|error| {
             FastPayError::InvalidSignature {
                 error: format!("{}", error),
             }
