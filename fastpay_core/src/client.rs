@@ -68,14 +68,6 @@ pub trait Client {
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
-    /// Send money to a Primary account.
-    fn transfer_to_primary(
-        &mut self,
-        object_id: ObjectID,
-        recipient: PrimaryAddress,
-        user_data: UserData,
-    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
-
     /// Receive money from FastPay.
     fn receive_from_fastpay(
         &mut self,
@@ -620,19 +612,6 @@ where
         Box::pin(self.transfer(
             (object_id, self.next_sequence_number(object_id)),
             Address::FastPay(recipient),
-            user_data,
-        ))
-    }
-
-    fn transfer_to_primary(
-        &mut self,
-        object_id: ObjectID,
-        recipient: PrimaryAddress,
-        user_data: UserData,
-    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
-        Box::pin(self.transfer(
-            (object_id, self.next_sequence_number(object_id)),
-            Address::Primary(recipient),
             user_data,
         ))
     }
