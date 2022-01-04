@@ -6,7 +6,10 @@ use crate::{
 };
 use bytes::Bytes;
 use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses};
-use crypto::{generate_keypair, Digest, PublicKey, SecretKey};
+use crypto::{
+    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
+    Digest,
+};
 use ed25519_dalek::{Digest as _, Sha512};
 use futures::{sink::SinkExt as _, stream::StreamExt as _};
 use rand::{rngs::StdRng, SeedableRng as _};
@@ -21,13 +24,16 @@ pub fn temp_dir() -> std::path::PathBuf {
 }
 
 // Fixture
-pub fn keys() -> Vec<(PublicKey, SecretKey)> {
+pub fn keys() -> Vec<(Ed25519PublicKey, Ed25519PrivateKey)> {
     let mut rng = StdRng::from_seed([0; 32]);
-    (0..4).map(|_| generate_keypair(&mut rng)).collect()
+    (0..4)
+        .map(|_| ed25519_dalek::Keypair::generate(&mut rng))
+        .map(|kp| (Ed25519PublicKey(kp.public), Ed25519PrivateKey(kp.secret)))
+        .collect()
 }
 
 // Fixture
-pub fn committee() -> Committee {
+pub fn committee() -> Committee<Ed25519PublicKey> {
     Committee {
         authorities: keys()
             .iter()
@@ -49,7 +55,7 @@ pub fn committee() -> Committee {
                 .cloned()
                 .collect();
                 (
-                    *id,
+                    id.clone(),
                     Authority {
                         stake: 1,
                         primary,
@@ -62,7 +68,7 @@ pub fn committee() -> Committee {
 }
 
 // Fixture.
-pub fn committee_with_base_port(base_port: u16) -> Committee {
+pub fn committee_with_base_port(base_port: u16) -> Committee<Ed25519PublicKey> {
     let mut committee = committee();
     for authority in committee.authorities.values_mut() {
         let primary = &mut authority.primary;
@@ -99,7 +105,7 @@ pub fn batch() -> Batch {
 
 // Fixture
 pub fn serialized_batch() -> Vec<u8> {
-    let message = WorkerMessage::Batch(batch());
+    let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch());
     bincode::serialize(&message).unwrap()
 }
 

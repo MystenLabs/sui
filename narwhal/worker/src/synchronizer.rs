@@ -6,7 +6,7 @@ use crate::{
 };
 use bytes::Bytes;
 use config::{Committee, WorkerId};
-use crypto::{Digest, PublicKey};
+use crypto::{traits::VerifyingKey, Digest};
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::SimpleSender;
 use primary::PrimaryWorkerMessage;
@@ -29,13 +29,13 @@ pub mod synchronizer_tests;
 const TIMER_RESOLUTION: u64 = 1_000;
 
 // The `Synchronizer` is responsible to keep the worker in sync with the others.
-pub struct Synchronizer {
+pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// The public key of this authority.
     name: PublicKey,
     /// The id of this worker.
     id: WorkerId,
     /// The committee information.
-    committee: Committee,
+    committee: Committee<PublicKey>,
     // The persistent storage.
     store: Store<Digest, SerializedBatchMessage>,
     /// The depth of the garbage collection.
@@ -46,7 +46,7 @@ pub struct Synchronizer {
     /// are picked at random from the committee.
     sync_retry_nodes: usize,
     /// Input channel to receive the commands from the primary.
-    rx_message: Receiver<PrimaryWorkerMessage>,
+    rx_message: Receiver<PrimaryWorkerMessage<PublicKey>>,
     /// A network sender to send requests to the other workers.
     network: SimpleSender,
     /// Loosely keep track of the primary's round number (only used for cleanup).
@@ -57,16 +57,16 @@ pub struct Synchronizer {
     pending: HashMap<Digest, (Round, Sender<()>, u128)>,
 }
 
-impl Synchronizer {
+impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,
-        committee: Committee,
+        committee: Committee<PublicKey>,
         store: Store<Digest, SerializedBatchMessage>,
         gc_depth: Round,
         sync_retry_delay: u64,
         sync_retry_nodes: usize,
-        rx_message: Receiver<PrimaryWorkerMessage>,
+        rx_message: Receiver<PrimaryWorkerMessage<PublicKey>>,
     ) {
         tokio::spawn(async move {
             Self {
@@ -159,7 +159,7 @@ impl Synchronizer {
                                 continue;
                             }
                         };
-                        let message = WorkerMessage::BatchRequest(missing, self.name);
+                        let message = WorkerMessage::BatchRequest(missing, self.name.clone());
                         let serialized = bincode::serialize(&message).expect("Failed to serialize our own message");
                         self.network.send(address, Bytes::from(serialized)).await;
                     },
@@ -216,7 +216,7 @@ impl Synchronizer {
                             .others_workers(&self.name, &self.id)
                             .iter().map(|(_, address)| address.worker_to_worker)
                             .collect();
-                        let message = WorkerMessage::BatchRequest(retry, self.name);
+                        let message = WorkerMessage::BatchRequest(retry, self.name.clone());
                         let serialized = bincode::serialize(&message).expect("Failed to serialize our own message");
                         self.network
                             .lucky_broadcast(addresses, Bytes::from(serialized), self.sync_retry_nodes)

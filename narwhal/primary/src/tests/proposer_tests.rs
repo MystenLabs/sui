@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::common::{committee, keys};
+use crypto::traits::KeyPair;
 use tokio::sync::mpsc::channel;
 
 #[tokio::test]
 async fn propose_empty() {
-    let (name, secret) = keys().pop().unwrap();
-    let signature_service = SignatureService::new(secret);
+    let kp = keys().pop().unwrap();
+    let name = kp.public().clone();
+    let signature_service = SignatureService::new(kp);
 
     let (_tx_parents, rx_parents) = channel(1);
     let (_tx_our_digests, rx_our_digests) = channel(1);
@@ -34,8 +36,9 @@ async fn propose_empty() {
 
 #[tokio::test]
 async fn propose_payload() {
-    let (name, secret) = keys().pop().unwrap();
-    let signature_service = SignatureService::new(secret);
+    let kp = keys().pop().unwrap();
+    let name = kp.public().clone();
+    let signature_service = SignatureService::new(kp);
 
     let (_tx_parents, rx_parents) = channel(1);
     let (tx_our_digests, rx_our_digests) = channel(1);
@@ -43,7 +46,7 @@ async fn propose_payload() {
 
     // Spawn the proposer.
     Proposer::spawn(
-        name,
+        name.clone(),
         &committee(),
         signature_service,
         /* header_size */ 32,
@@ -54,7 +57,8 @@ async fn propose_payload() {
     );
 
     // Send enough digests for the header payload.
-    let digest = Digest::new(name.0);
+    let name_bytes: [u8; 32] = *name.0.as_bytes();
+    let digest = Digest::new(name_bytes);
     let worker_id = 0;
     tx_our_digests
         .send((digest.clone(), worker_id))

@@ -7,7 +7,7 @@ use crate::{
 };
 use bytes::Bytes;
 use config::{Committee, WorkerId};
-use crypto::{Digest, PublicKey};
+use crypto::{traits::VerifyingKey, Digest};
 use futures::{
     future::{try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
@@ -35,19 +35,19 @@ const TIMER_RESOLUTION: u64 = 1_000;
 
 /// The commands that can be sent to the `Waiter`.
 #[derive(Debug)]
-pub enum WaiterMessage {
-    SyncBatches(HashMap<Digest, WorkerId>, Header),
-    SyncParents(Vec<Digest>, Header),
+pub enum WaiterMessage<PublicKey: VerifyingKey> {
+    SyncBatches(HashMap<Digest, WorkerId>, Header<PublicKey>),
+    SyncParents(Vec<Digest>, Header<PublicKey>),
 }
 
 /// Waits for missing parent certificates and batches' digests.
-pub struct HeaderWaiter {
+pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     /// The name of this authority.
     name: PublicKey,
     /// The committee information.
-    committee: Committee,
+    committee: Committee<PublicKey>,
     /// The persistent storage for headers.
-    header_store: Store<Digest, Header>,
+    header_store: Store<Digest, Header<PublicKey>>,
     /// The persistent storage for payload markers from workers.
     payload_store: Store<(Digest, WorkerId), PayloadToken>,
     /// The current consensus round (used for cleanup).
@@ -60,9 +60,9 @@ pub struct HeaderWaiter {
     sync_retry_nodes: usize,
 
     /// Receives sync commands from the `Synchronizer`.
-    rx_synchronizer: Receiver<WaiterMessage>,
+    rx_synchronizer: Receiver<WaiterMessage<PublicKey>>,
     /// Loops back to the core headers for which we got all parents and batches.
-    tx_core: Sender<Header>,
+    tx_core: Sender<Header<PublicKey>>,
 
     /// Network driver allowing to send messages.
     network: SimpleSender,
@@ -77,18 +77,18 @@ pub struct HeaderWaiter {
     pending: HashMap<Digest, (Round, Sender<()>)>,
 }
 
-impl HeaderWaiter {
+impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
     pub fn spawn(
         name: PublicKey,
-        committee: Committee,
-        header_store: Store<Digest, Header>,
+        committee: Committee<PublicKey>,
+        header_store: Store<Digest, Header<PublicKey>>,
         payload_store: Store<(Digest, WorkerId), PayloadToken>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
         sync_retry_delay: u64,
         sync_retry_nodes: usize,
-        rx_synchronizer: Receiver<WaiterMessage>,
-        tx_core: Sender<Header>,
+        rx_synchronizer: Receiver<WaiterMessage<PublicKey>>,
+        tx_core: Sender<Header<PublicKey>>,
     ) {
         tokio::spawn(async move {
             Self {
@@ -117,9 +117,9 @@ impl HeaderWaiter {
     async fn waiter<T, V>(
         missing: Vec<T>,
         store: Store<T, V>,
-        deliver: Header,
+        deliver: Header<PublicKey>,
         mut handler: Receiver<()>,
-    ) -> DagResult<Option<Header>>
+    ) -> DagResult<Option<Header<PublicKey>>>
     where
         T: Serialize + DeserializeOwned + Send + Clone,
         V: Serialize + DeserializeOwned + Send,
@@ -148,7 +148,7 @@ impl HeaderWaiter {
                             debug!("Synching the payload of {}", header);
                             let header_id = header.id.clone();
                             let round = header.round;
-                            let author = header.author;
+                            let author = header.author.clone();
 
                             // Ensure we sync only once per header.
                             if self.pending.contains_key(&header_id) {
@@ -179,7 +179,7 @@ impl HeaderWaiter {
                                     .worker(&author, &worker_id)
                                     .expect("Author of valid header is not in the committee")
                                     .primary_to_worker;
-                                let message = PrimaryWorkerMessage::Synchronize(digests, author);
+                                let message = PrimaryWorkerMessage::Synchronize(digests, author.clone());
                                 let bytes = bincode::serialize(&message)
                                     .expect("Failed to serialize batch sync request");
                                 self.network.send(address, Bytes::from(bytes)).await;
@@ -190,7 +190,7 @@ impl HeaderWaiter {
                             debug!("Synching the parents of {}", header);
                             let header_id = header.id.clone();
                             let round = header.round;
-                            let author = header.author;
+                            let author = header.author.clone();
 
                             // Ensure we sync only once per header.
                             if self.pending.contains_key(&header_id) {
@@ -225,7 +225,7 @@ impl HeaderWaiter {
                                     .primary(&author)
                                     .expect("Author of valid header not in the committee")
                                     .primary_to_primary;
-                                let message = PrimaryMessage::CertificatesRequest(requires_sync, self.name);
+                                let message = PrimaryMessage::CertificatesRequest(requires_sync, self.name.clone());
                                 let bytes = bincode::serialize(&message).expect("Failed to serialize cert request");
                                 self.network.send(address, Bytes::from(bytes)).await;
                             }
@@ -275,7 +275,7 @@ impl HeaderWaiter {
                         .iter()
                         .map(|(_, x)| x.primary_to_primary)
                         .collect();
-                    let message = PrimaryMessage::CertificatesRequest(retry, self.name);
+                    let message = PrimaryMessage::CertificatesRequest(retry, self.name.clone());
                     let bytes = bincode::serialize(&message).expect("Failed to serialize cert request");
                     self.network.lucky_broadcast(addresses, Bytes::from(bytes), self.sync_retry_nodes).await;
 

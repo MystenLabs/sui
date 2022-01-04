@@ -5,7 +5,10 @@ use crate::{
     primary::Round,
 };
 use config::{Committee, WorkerId};
-use crypto::{Digest, Hash, PublicKey, Signature, SignatureService};
+use crypto::{
+    traits::{EncodeDecodeBase64Ext, VerifyingKey},
+    Digest, Hash, SignatureService,
+};
 use ed25519_dalek::{Digest as _, Sha512};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -15,22 +18,23 @@ use std::{
 };
 
 #[derive(Clone, Serialize, Deserialize, Default)]
-pub struct Header {
+#[serde(bound(deserialize = "PublicKey: VerifyingKey"))] // bump the bound to VerifyingKey as soon as you include a sig
+pub struct Header<PublicKey: VerifyingKey> {
     pub author: PublicKey,
     pub round: Round,
     pub payload: BTreeMap<Digest, WorkerId>,
     pub parents: BTreeSet<Digest>,
     pub id: Digest,
-    pub signature: Signature,
+    pub signature: <PublicKey as VerifyingKey>::Sig,
 }
 
-impl Header {
+impl<PublicKey: VerifyingKey> Header<PublicKey> {
     pub async fn new(
         author: PublicKey,
         round: Round,
         payload: BTreeMap<Digest, WorkerId>,
         parents: BTreeSet<Digest>,
-        signature_service: &mut SignatureService,
+        signature_service: &mut SignatureService<PublicKey::Sig>,
     ) -> Self {
         let header = Self {
             author,
@@ -38,7 +42,7 @@ impl Header {
             payload,
             parents,
             id: Digest::default(),
-            signature: Signature::default(),
+            signature: PublicKey::Sig::default(),
         };
         let id = header.digest();
         let signature = signature_service.request_signature(id.clone()).await;
@@ -49,13 +53,16 @@ impl Header {
         }
     }
 
-    pub fn verify(&self, committee: &Committee) -> DagResult<()> {
+    pub fn verify(&self, committee: &Committee<PublicKey>) -> DagResult<()> {
         // Ensure the header id is well formed.
         ensure!(self.digest() == self.id, DagError::InvalidHeaderId);
 
         // Ensure the authority has voting rights.
         let voting_rights = committee.stake(&self.author);
-        ensure!(voting_rights > 0, DagError::UnknownAuthority(self.author));
+        ensure!(
+            voting_rights > 0,
+            DagError::UnknownAuthority(self.author.encode_base64())
+        );
 
         // Ensure all worker ids are correct.
         for worker_id in self.payload.values() {
@@ -65,13 +72,13 @@ impl Header {
         }
 
         // Check the signature.
-        self.signature
-            .verify(&self.id, &self.author)
+        self.author
+            .verify(self.id.as_ref(), &self.signature)
             .map_err(DagError::from)
     }
 }
 
-impl Hash for Header {
+impl<PublicKey: VerifyingKey> Hash for Header<PublicKey> {
     fn digest(&self) -> Digest {
         let mut hasher = Sha512::new();
         hasher.update(&self.author);
@@ -87,66 +94,68 @@ impl Hash for Header {
     }
 }
 
-impl fmt::Debug for Header {
+impl<PublicKey: VerifyingKey> fmt::Debug for Header<PublicKey> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
             "{}: B{}({}, {})",
             self.id,
             self.round,
-            self.author,
+            self.author.encode_base64(),
             self.payload.keys().map(|x| x.size()).sum::<usize>(),
         )
     }
 }
 
-impl fmt::Display for Header {
+impl<PublicKey: VerifyingKey> fmt::Display for Header<PublicKey> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "B{}({})", self.round, self.author)
+        write!(f, "B{}({})", self.round, self.author.encode_base64())
     }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct Vote {
+#[serde(bound(deserialize = "PublicKey: VerifyingKey"))] // bump the bound to VerifyingKey as soon as you include a sig
+
+pub struct Vote<PublicKey: VerifyingKey> {
     pub id: Digest,
     pub round: Round,
     pub origin: PublicKey,
     pub author: PublicKey,
-    pub signature: Signature,
+    pub signature: <PublicKey as VerifyingKey>::Sig,
 }
 
-impl Vote {
+impl<PublicKey: VerifyingKey> Vote<PublicKey> {
     pub async fn new(
-        header: &Header,
+        header: &Header<PublicKey>,
         author: &PublicKey,
-        signature_service: &mut SignatureService,
+        signature_service: &mut SignatureService<PublicKey::Sig>,
     ) -> Self {
         let vote = Self {
             id: header.id.clone(),
             round: header.round,
-            origin: header.author,
-            author: *author,
-            signature: Signature::default(),
+            origin: header.author.clone(),
+            author: author.clone(),
+            signature: PublicKey::Sig::default(),
         };
         let signature = signature_service.request_signature(vote.digest()).await;
         Self { signature, ..vote }
     }
 
-    pub fn verify(&self, committee: &Committee) -> DagResult<()> {
+    pub fn verify(&self, committee: &Committee<PublicKey>) -> DagResult<()> {
         // Ensure the authority has voting rights.
         ensure!(
             committee.stake(&self.author) > 0,
-            DagError::UnknownAuthority(self.author)
+            DagError::UnknownAuthority(self.author.encode_base64())
         );
 
         // Check the signature.
-        self.signature
-            .verify(&self.digest(), &self.author)
+        self.author
+            .verify(self.digest().as_ref(), &self.signature)
             .map_err(DagError::from)
     }
 }
 
-impl Hash for Vote {
+impl<PublicKey: VerifyingKey> Hash for Vote<PublicKey> {
     fn digest(&self) -> Digest {
         let mut hasher = Sha512::new();
         hasher.update(&self.id);
@@ -156,33 +165,34 @@ impl Hash for Vote {
     }
 }
 
-impl fmt::Debug for Vote {
+impl<PublicKey: VerifyingKey> fmt::Debug for Vote<PublicKey> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
             "{}: V{}({}, {})",
             self.digest(),
             self.round,
-            self.author,
+            self.author.encode_base64(),
             self.id
         )
     }
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
-pub struct Certificate {
-    pub header: Header,
-    pub votes: Vec<(PublicKey, Signature)>,
+#[serde(bound(deserialize = "PublicKey: VerifyingKey"))] // bump the bound to VerifyingKey as soon as you include a sig
+pub struct Certificate<PublicKey: VerifyingKey> {
+    pub header: Header<PublicKey>,
+    pub votes: Vec<(PublicKey, <PublicKey as VerifyingKey>::Sig)>,
 }
 
-impl Certificate {
-    pub fn genesis(committee: &Committee) -> Vec<Self> {
+impl<PublicKey: VerifyingKey> Certificate<PublicKey> {
+    pub fn genesis(committee: &Committee<PublicKey>) -> Vec<Self> {
         committee
             .authorities
             .keys()
             .map(|name| Self {
                 header: Header {
-                    author: *name,
+                    author: name.clone(),
                     ..Header::default()
                 },
                 ..Self::default()
@@ -190,7 +200,7 @@ impl Certificate {
             .collect()
     }
 
-    pub fn verify(&self, committee: &Committee) -> DagResult<()> {
+    pub fn verify(&self, committee: &Committee<PublicKey>) -> DagResult<()> {
         // Genesis certificates are always valid.
         if Self::genesis(committee).contains(self) {
             return Ok(());
@@ -203,19 +213,25 @@ impl Certificate {
         let mut weight = 0;
         let mut used = HashSet::new();
         for (name, _) in self.votes.iter() {
-            ensure!(!used.contains(name), DagError::AuthorityReuse(*name));
+            ensure!(
+                !used.contains(name),
+                DagError::AuthorityReuse(name.encode_base64())
+            );
             let voting_rights = committee.stake(name);
-            ensure!(voting_rights > 0, DagError::UnknownAuthority(*name));
-            used.insert(*name);
+            ensure!(
+                voting_rights > 0,
+                DagError::UnknownAuthority(name.encode_base64())
+            );
+            used.insert(name.clone());
             weight += voting_rights;
         }
         ensure!(
             weight >= committee.quorum_threshold(),
             DagError::CertificateRequiresQuorum
         );
-
-        // Check the signatures.
-        Signature::verify_batch(&self.digest(), &self.votes).map_err(DagError::from)
+        let (pks, sigs): (Vec<PublicKey>, Vec<PublicKey::Sig>) = self.votes.iter().cloned().unzip();
+        // Verify the signatures
+        PublicKey::verify_batch(self.digest().as_ref(), &pks, &sigs).map_err(DagError::from)
     }
 
     pub fn round(&self) -> Round {
@@ -223,11 +239,11 @@ impl Certificate {
     }
 
     pub fn origin(&self) -> PublicKey {
-        self.header.author
+        self.header.author.clone()
     }
 }
 
-impl Hash for Certificate {
+impl<PublicKey: VerifyingKey> Hash for Certificate<PublicKey> {
     fn digest(&self) -> Digest {
         let mut hasher = Sha512::new();
         hasher.update(&self.header.id);
@@ -237,20 +253,20 @@ impl Hash for Certificate {
     }
 }
 
-impl fmt::Debug for Certificate {
+impl<PublicKey: VerifyingKey> fmt::Debug for Certificate<PublicKey> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
             "{}: C{}({}, {})",
             self.digest(),
             self.round(),
-            self.origin(),
+            self.origin().encode_base64(),
             self.header.id
         )
     }
 }
 
-impl PartialEq for Certificate {
+impl<PublicKey: VerifyingKey> PartialEq for Certificate<PublicKey> {
     fn eq(&self, other: &Self) -> bool {
         let mut ret = self.header.id == other.header.id;
         ret &= self.round() == other.round();

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::processor::SerializedBatchMessage;
 use config::{Committee, Stake};
-use crypto::PublicKey;
+use crypto::traits::VerifyingKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::CancelHandler;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -12,7 +12,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 pub mod quorum_waiter_tests;
 
 #[derive(Debug)]
-pub struct QuorumWaiterMessage {
+pub struct QuorumWaiterMessage<PublicKey> {
     /// A serialized `WorkerMessage::Batch` message.
     pub batch: SerializedBatchMessage,
     /// The cancel handlers to receive the acknowledgements of our broadcast.
@@ -20,23 +20,23 @@ pub struct QuorumWaiterMessage {
 }
 
 /// The QuorumWaiter waits for 2f authorities to acknowledge reception of a batch.
-pub struct QuorumWaiter {
+pub struct QuorumWaiter<PublicKey: VerifyingKey> {
     /// The committee information.
-    committee: Committee,
+    committee: Committee<PublicKey>,
     /// The stake of this authority.
     stake: Stake,
     /// Input Channel to receive commands.
-    rx_message: Receiver<QuorumWaiterMessage>,
+    rx_message: Receiver<QuorumWaiterMessage<PublicKey>>,
     /// Channel to deliver batches for which we have enough acknowledgements.
     tx_batch: Sender<SerializedBatchMessage>,
 }
 
-impl QuorumWaiter {
+impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
     /// Spawn a new QuorumWaiter.
     pub fn spawn(
-        committee: Committee,
+        committee: Committee<PublicKey>,
         stake: Stake,
-        rx_message: Receiver<QuorumWaiterMessage>,
+        rx_message: Receiver<QuorumWaiterMessage<PublicKey>>,
         tx_batch: Sender<Vec<u8>>,
     ) {
         tokio::spawn(async move {

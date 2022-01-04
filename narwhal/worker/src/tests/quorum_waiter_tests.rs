@@ -6,6 +6,7 @@ use crate::{
     worker::WorkerMessage,
 };
 use bytes::Bytes;
+use crypto::ed25519::Ed25519PublicKey;
 use futures::future::try_join_all;
 use network::ReliableSender;
 use tokio::sync::mpsc::channel;
@@ -21,7 +22,7 @@ async fn wait_for_quorum() {
     QuorumWaiter::spawn(committee.clone(), /* stake */ 1, rx_message, tx_batch);
 
     // Make a batch.
-    let message = WorkerMessage::Batch(batch());
+    let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch());
     let serialized = bincode::serialize(&message).unwrap();
     let expected = Bytes::from(serialized.clone());
 

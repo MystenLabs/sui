@@ -5,7 +5,7 @@ use crate::{
     primary::Round,
 };
 use config::{Committee, WorkerId};
-use crypto::{Digest, Hash as _, PublicKey, SignatureService};
+use crypto::{traits::VerifyingKey, Digest, Hash as _, SignatureService};
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::{sleep, Duration, Instant},
@@ -19,11 +19,11 @@ use tracing::info;
 pub mod proposer_tests;
 
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
-pub struct Proposer {
+pub struct Proposer<PublicKey: VerifyingKey> {
     /// The public key of this primary.
     name: PublicKey,
     /// Service to sign headers.
-    signature_service: SignatureService,
+    signature_service: SignatureService<PublicKey::Sig>,
     /// The size of the headers' payload.
     header_size: usize,
     /// The maximum delay to wait for batches' digests.
@@ -34,7 +34,7 @@ pub struct Proposer {
     /// Receives the batches' digests from our workers.
     rx_workers: Receiver<(Digest, WorkerId)>,
     /// Sends newly created headers to the `Core`.
-    tx_core: Sender<Header>,
+    tx_core: Sender<Header<PublicKey>>,
 
     /// The current round of the dag.
     round: Round,
@@ -46,16 +46,16 @@ pub struct Proposer {
     payload_size: usize,
 }
 
-impl Proposer {
+impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
     pub fn spawn(
         name: PublicKey,
-        committee: &Committee,
-        signature_service: SignatureService,
+        committee: &Committee<PublicKey>,
+        signature_service: SignatureService<PublicKey::Sig>,
         header_size: usize,
         max_header_delay: u64,
         rx_core: Receiver<(Vec<Digest>, Round)>,
         rx_workers: Receiver<(Digest, WorkerId)>,
-        tx_core: Sender<Header>,
+        tx_core: Sender<Header<PublicKey>>,
     ) {
         let genesis = Certificate::genesis(committee)
             .iter()
@@ -84,7 +84,7 @@ impl Proposer {
     async fn make_header(&mut self) {
         // Make a new header.
         let header = Header::new(
-            self.name,
+            self.name.clone(),
             self.round,
             self.digests.drain(..).collect(),
             self.last_parents.drain(..).collect(),

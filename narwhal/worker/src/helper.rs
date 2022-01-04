@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
 use config::{Committee, WorkerId};
-use crypto::{Digest, PublicKey};
+use crypto::{traits::VerifyingKey, Digest};
 use network::SimpleSender;
 use store::Store;
 use tokio::sync::mpsc::Receiver;
@@ -15,11 +15,11 @@ use crate::processor::SerializedBatchMessage;
 pub mod helper_tests;
 
 /// A task dedicated to help other authorities by replying to their batch requests.
-pub struct Helper {
+pub struct Helper<PublicKey: VerifyingKey> {
     /// The id of this worker.
     id: WorkerId,
     /// The committee information.
-    committee: Committee,
+    committee: Committee<PublicKey>,
     /// The persistent storage.
     store: Store<Digest, SerializedBatchMessage>,
     /// Input channel to receive batch requests.
@@ -28,10 +28,10 @@ pub struct Helper {
     network: SimpleSender,
 }
 
-impl Helper {
+impl<PublicKey: VerifyingKey> Helper<PublicKey> {
     pub fn spawn(
         id: WorkerId,
-        committee: Committee,
+        committee: Committee<PublicKey>,
         store: Store<Digest, SerializedBatchMessage>,
         rx_request: Receiver<(Vec<Digest>, PublicKey)>,
     ) {

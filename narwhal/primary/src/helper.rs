@@ -3,28 +3,28 @@
 use crate::{primary::PrimaryMessage, Certificate};
 use bytes::Bytes;
 use config::Committee;
-use crypto::{Digest, PublicKey};
+use crypto::{traits::VerifyingKey, Digest};
 use network::SimpleSender;
 use store::Store;
 use tokio::sync::mpsc::Receiver;
 use tracing::{error, warn};
 
 /// A task dedicated to help other authorities by replying to their certificates requests.
-pub struct Helper {
+pub struct Helper<PublicKey: VerifyingKey> {
     /// The committee information.
-    committee: Committee,
+    committee: Committee<PublicKey>,
     /// The persistent storage.
-    store: Store<Digest, Certificate>,
+    store: Store<Digest, Certificate<PublicKey>>,
     /// Input channel to receive certificates requests.
     rx_primaries: Receiver<(Vec<Digest>, PublicKey)>,
     /// A network sender to reply to the sync requests.
     network: SimpleSender,
 }
 
-impl Helper {
+impl<PublicKey: VerifyingKey> Helper<PublicKey> {
     pub fn spawn(
-        committee: Committee,
-        store: Store<Digest, Certificate>,
+        committee: Committee<PublicKey>,
+        store: Store<Digest, Certificate<PublicKey>>,
         rx_primaries: Receiver<(Vec<Digest>, PublicKey)>,
     ) {
         tokio::spawn(async move {

@@ -9,11 +9,11 @@ publish = false
 [dependencies]
 base64ct = { version = "1.3.2", features = ["alloc"] }
 tokio = { version = "1.15.0", features = ["sync", "rt", "macros"] }
-ed25519-dalek = { version = "1.0.1", features = ["batch"] }
+ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 serde = { version = "1.0.132", features = ["derive"] }
 rand = "0.7.3"
 base64 = "0.13.0"
 zeroize = "1.4.3"
+signature = "1.4.0"
+eyre = "0.6.5"
 
-[dev-dependencies]
-serde_test = "1.0"

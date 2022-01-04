@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{quorum_waiter::QuorumWaiterMessage, worker::WorkerMessage};
 use bytes::Bytes;
+use crypto::traits::VerifyingKey;
 #[cfg(feature = "benchmark")]
 use crypto::Digest;
-use crypto::PublicKey;
 #[cfg(feature = "benchmark")]
 use ed25519_dalek::{Digest as _, Sha512};
 use network::ReliableSender;
@@ -26,7 +26,7 @@ pub type Transaction = Vec<u8>;
 pub type Batch = Vec<Transaction>;
 
 /// Assemble clients transactions into batches.
-pub struct BatchMaker {
+pub struct BatchMaker<PublicKey> {
     /// The preferred batch size (in bytes).
     batch_size: usize,
     /// The maximum delay after which to seal the batch (in ms).
@@ -34,7 +34,7 @@ pub struct BatchMaker {
     /// Channel to receive transactions from the network.
     rx_transaction: Receiver<Transaction>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
-    tx_message: Sender<QuorumWaiterMessage>,
+    tx_message: Sender<QuorumWaiterMessage<PublicKey>>,
     /// The network addresses of the other workers that share our worker id.
     workers_addresses: Vec<(PublicKey, SocketAddr)>,
     /// Holds the current batch.
@@ -45,12 +45,12 @@ pub struct BatchMaker {
     network: ReliableSender,
 }
 
-impl BatchMaker {
+impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
     pub fn spawn(
         batch_size: usize,
         max_batch_delay: u64,
         rx_transaction: Receiver<Transaction>,
-        tx_message: Sender<QuorumWaiterMessage>,
+        tx_message: Sender<QuorumWaiterMessage<PublicKey>>,
         workers_addresses: Vec<(PublicKey, SocketAddr)>,
     ) {
         tokio::spawn(async move {
@@ -117,7 +117,7 @@ impl BatchMaker {
         // Serialize the batch.
         self.current_batch_size = 0;
         let batch: Vec<_> = self.current_batch.drain(..).collect();
-        let message = WorkerMessage::Batch(batch);
+        let message = WorkerMessage::<PublicKey>::Batch(batch);
         let serialized = bincode::serialize(&message).expect("Failed to serialize our own batch");
 
         #[cfg(feature = "benchmark")]

@@ -1,7 +1,7 @@
 // Copyright(C) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 use crate::primary::Round;
-use crypto::{CryptoError, Digest, PublicKey};
+use crypto::{CryptoError, Digest};
 use store::StoreError;
 use thiserror::Error;
 
@@ -41,10 +41,10 @@ pub enum DagError {
     MalformedHeader(Digest),
 
     #[error("Received message from unknown authority {0}")]
-    UnknownAuthority(PublicKey),
+    UnknownAuthority(String),
 
     #[error("Authority {0} appears in quorum more than once")]
-    AuthorityReuse(PublicKey),
+    AuthorityReuse(String),
 
     #[error("Received unexpected vote fo header {0}")]
     UnexpectedVote(Digest),

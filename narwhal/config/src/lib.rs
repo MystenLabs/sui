@@ -7,13 +7,14 @@
     rust_2021_compatibility
 )]
 
-use crypto::{generate_production_keypair, PublicKey, SecretKey};
+use crypto::traits::{EncodeDecodeBase64Ext, VerifyingKey};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
     fs::{self, OpenOptions},
     io::{BufWriter, Write as _},
     net::SocketAddr,
+    ops::Deref,
 };
 use thiserror::Error;
 use tracing::info;
@@ -21,7 +22,7 @@ use tracing::info;
 #[derive(Error, Debug)]
 pub enum ConfigError {
     #[error("Node {0} is not in the committee")]
-    NotInCommittee(PublicKey),
+    NotInCommittee(String),
 
     #[error("Unknown worker id {0}")]
     UnknownWorker(WorkerId),
@@ -46,6 +47,8 @@ pub trait Import: DeserializeOwned {
     }
 }
 
+impl<D: DeserializeOwned> Import for D {}
+
 pub trait Export: Serialize {
     fn export(&self, path: &str) -> Result<(), ConfigError> {
         let writer = || -> Result<(), std::io::Error> {
@@ -62,6 +65,8 @@ pub trait Export: Serialize {
         })
     }
 }
+
+impl<S: Serialize> Export for S {}
 
 pub type Stake = u32;
 pub type WorkerId = u32;
@@ -102,8 +107,6 @@ impl Default for Parameters {
         }
     }
 }
-
-impl Import for Parameters {}
 
 impl Parameters {
     pub fn tracing(&self) {
@@ -146,13 +149,12 @@ pub struct Authority {
 }
 
 #[derive(Clone, Deserialize)]
-pub struct Committee {
+#[serde(bound(deserialize = "PublicKey: DeserializeOwned"))]
+pub struct Committee<PublicKey: VerifyingKey> {
     pub authorities: BTreeMap<PublicKey, Authority>,
 }
 
-impl Import for Committee {}
-
-impl Committee {
+impl<PublicKey: VerifyingKey> Committee<PublicKey> {
     /// Returns the number of authorities.
     pub fn size(&self) -> usize {
         self.authorities.len()
@@ -160,15 +162,17 @@ impl Committee {
 
     /// Return the stake of a specific authority.
     pub fn stake(&self, name: &PublicKey) -> Stake {
-        self.authorities.get(name).map_or_else(|| 0, |x| x.stake)
+        self.authorities
+            .get(&name.clone())
+            .map_or_else(|| 0, |x| x.stake)
     }
 
     /// Returns the stake of all authorities except `myself`.
     pub fn others_stake(&self, myself: &PublicKey) -> Vec<(PublicKey, Stake)> {
         self.authorities
             .iter()
-            .filter(|(name, _)| name != &myself)
-            .map(|(name, authority)| (*name, authority.stake))
+            .filter(|(name, _)| *name != myself)
+            .map(|(name, authority)| (name.deref().clone(), authority.stake))
             .collect()
     }
 
@@ -191,17 +195,17 @@ impl Committee {
     /// Returns the primary addresses of the target primary.
     pub fn primary(&self, to: &PublicKey) -> Result<PrimaryAddresses, ConfigError> {
         self.authorities
-            .get(to)
+            .get(&to.clone())
             .map(|x| x.primary.clone())
-            .ok_or(ConfigError::NotInCommittee(*to))
+            .ok_or_else(|| ConfigError::NotInCommittee((*to).encode_base64()))
     }
 
     /// Returns the addresses of all primaries except `myself`.
     pub fn others_primaries(&self, myself: &PublicKey) -> Vec<(PublicKey, PrimaryAddresses)> {
         self.authorities
             .iter()
-            .filter(|(name, _)| name != &myself)
-            .map(|(name, authority)| (*name, authority.primary.clone()))
+            .filter(|(name, _)| *name != myself)
+            .map(|(name, authority)| (name.deref().clone(), authority.primary.clone()))
             .collect()
     }
 
@@ -209,14 +213,16 @@ impl Committee {
     pub fn worker(&self, to: &PublicKey, id: &WorkerId) -> Result<WorkerAddresses, ConfigError> {
         self.authorities
             .iter()
-            .find(|(name, _)| name == &to)
+            .find(|(name, _)| *name == to)
             .map(|(_, authority)| authority)
-            .ok_or(ConfigError::NotInCommittee(*to))?
+            .ok_or_else(|| {
+                ConfigError::NotInCommittee(ToString::to_string(&(*to).encode_base64()))
+            })?
             .workers
             .iter()
             .find(|(worker_id, _)| worker_id == &id)
             .map(|(_, worker)| worker.clone())
-            .ok_or(ConfigError::NotInCommittee(*to))
+            .ok_or_else(|| ConfigError::NotInCommittee((*to).encode_base64()))
     }
 
     /// Returns the addresses of all our workers.
@@ -224,9 +230,9 @@ impl Committee {
         let res = self
             .authorities
             .iter()
-            .find(|(name, _)| name == &myself)
+            .find(|(name, _)| *name == myself)
             .map(|(_, authority)| authority)
-            .ok_or(ConfigError::NotInCommittee(*myself))?
+            .ok_or_else(|| ConfigError::NotInCommittee((*myself).encode_base64()))?
             .workers
             .values()
             .cloned()
@@ -243,38 +249,14 @@ impl Committee {
     ) -> Vec<(PublicKey, WorkerAddresses)> {
         self.authorities
             .iter()
-            .filter(|(name, _)| name != &myself)
+            .filter(|(name, _)| *name != myself)
             .filter_map(|(name, authority)| {
                 authority
                     .workers
                     .iter()
                     .find(|(worker_id, _)| worker_id == &id)
-                    .map(|(_, addresses)| (*name, addresses.clone()))
+                    .map(|(_, addresses)| (name.deref().clone(), addresses.clone()))
             })
             .collect()
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct KeyPair {
-    /// The node's public key (and identifier).
-    pub name: PublicKey,
-    /// The node's secret key.
-    pub secret: SecretKey,
-}
-
-impl Import for KeyPair {}
-impl Export for KeyPair {}
-
-impl KeyPair {
-    pub fn new() -> Self {
-        let (name, secret) = generate_production_keypair();
-        Self { name, secret }
-    }
-}
-
-impl Default for KeyPair {
-    fn default() -> Self {
-        Self::new()
     }
 }

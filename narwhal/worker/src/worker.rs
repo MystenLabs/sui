@@ -11,7 +11,7 @@ use crate::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use config::{Committee, Parameters, WorkerId};
-use crypto::{Digest, PublicKey};
+use crypto::{traits::VerifyingKey, Digest};
 use futures::sink::SinkExt as _;
 use network::{MessageHandler, Receiver, Writer};
 use primary::PrimaryWorkerMessage;
@@ -40,31 +40,32 @@ pub type SerializedBatchDigestMessage = Vec<u8>;
 
 /// The message exchanged between workers.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum WorkerMessage {
+#[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
+pub enum WorkerMessage<PublicKey: VerifyingKey> {
     Batch(Batch),
     BatchRequest(Vec<Digest>, /* origin */ PublicKey),
 }
 
-pub struct Worker {
+pub struct Worker<PublicKey: VerifyingKey> {
     /// The public key of this authority.
     name: PublicKey,
     /// The id of this worker.
     id: WorkerId,
     /// The committee information.
-    committee: Committee,
+    committee: Committee<PublicKey>,
     /// The configuration parameters.
     parameters: Parameters,
     /// The persistent storage.
     store: Store<Digest, SerializedBatchMessage>,
 }
 
-impl Worker {
-    const INADDR_ANY: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+const INADDR_ANY: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 
+impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,
-        committee: Committee,
+        committee: Committee<PublicKey>,
         parameters: Parameters,
         store: Store<Digest, SerializedBatchMessage>,
     ) {
@@ -116,7 +117,7 @@ impl Worker {
             .worker(&self.name, &self.id)
             .expect("Our public key or worker id is not in the committee")
             .primary_to_worker;
-        address.set_ip(Worker::INADDR_ANY);
+        address.set_ip(INADDR_ANY);
         Receiver::spawn(
             address,
             /* handler */
@@ -126,7 +127,7 @@ impl Worker {
         // The `Synchronizer` is responsible to keep the worker in sync with the others. It handles the commands
         // it receives from the primary (which are mainly notifications that we are out of sync).
         Synchronizer::spawn(
-            self.name,
+            self.name.clone(),
             self.id,
             self.committee.clone(),
             self.store.clone(),
@@ -154,7 +155,7 @@ impl Worker {
             .worker(&self.name, &self.id)
             .expect("Our public key or worker id is not in the committee")
             .transactions;
-        address.set_ip(Worker::INADDR_ANY);
+        address.set_ip(INADDR_ANY);
         Receiver::spawn(
             address,
             /* handler */ TxReceiverHandler { tx_batch_maker },
@@ -172,7 +173,7 @@ impl Worker {
             self.committee
                 .others_workers(&self.name, &self.id)
                 .iter()
-                .map(|(name, addresses)| (*name, addresses.worker_to_worker))
+                .map(|(name, addresses)| (name.clone(), addresses.worker_to_worker))
                 .collect(),
         );
 
@@ -212,7 +213,7 @@ impl Worker {
             .worker(&self.name, &self.id)
             .expect("Our public key or worker id is not in the committee")
             .worker_to_worker;
-        address.set_ip(Worker::INADDR_ANY);
+        address.set_ip(INADDR_ANY);
         Receiver::spawn(
             address,
             /* handler */
@@ -270,13 +271,13 @@ impl MessageHandler for TxReceiverHandler {
 
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
-struct WorkerReceiverHandler {
+struct WorkerReceiverHandler<PublicKey: VerifyingKey> {
     tx_helper: Sender<(Vec<Digest>, PublicKey)>,
     tx_processor: Sender<SerializedBatchMessage>,
 }
 
 #[async_trait]
-impl MessageHandler for WorkerReceiverHandler {
+impl<PublicKey: VerifyingKey> MessageHandler for WorkerReceiverHandler<PublicKey> {
     async fn dispatch(&self, writer: &mut Writer, serialized: Bytes) -> Result<(), Box<dyn Error>> {
         // Reply with an ACK.
         let _ = writer.send(Bytes::from("Ack")).await;
@@ -301,12 +302,12 @@ impl MessageHandler for WorkerReceiverHandler {
 
 /// Defines how the network receiver handles incoming primary messages.
 #[derive(Clone)]
-struct PrimaryReceiverHandler {
-    tx_synchronizer: Sender<PrimaryWorkerMessage>,
+struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
+    tx_synchronizer: Sender<PrimaryWorkerMessage<PublicKey>>,
 }
 
 #[async_trait]
-impl MessageHandler for PrimaryReceiverHandler {
+impl<PublicKey: VerifyingKey> MessageHandler for PrimaryReceiverHandler<PublicKey> {
     async fn dispatch(
         &self,
         _writer: &mut Writer,

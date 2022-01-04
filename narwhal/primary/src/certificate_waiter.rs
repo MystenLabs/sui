@@ -4,7 +4,7 @@ use crate::{
     error::{DagError, DagResult},
     messages::Certificate,
 };
-use crypto::Digest;
+use crypto::{traits::VerifyingKey, Digest};
 use futures::{
     future::try_join_all,
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
@@ -15,20 +15,20 @@ use tracing::error;
 
 /// Waits to receive all the ancestors of a certificate before looping it back to the `Core`
 /// for further processing.
-pub struct CertificateWaiter {
+pub struct CertificateWaiter<PublicKey: VerifyingKey> {
     /// The persistent storage.
-    store: Store<Digest, Certificate>,
+    store: Store<Digest, Certificate<PublicKey>>,
     /// Receives sync commands from the `Synchronizer`.
-    rx_synchronizer: Receiver<Certificate>,
+    rx_synchronizer: Receiver<Certificate<PublicKey>>,
     /// Loops back to the core certificates for which we got all parents.
-    tx_core: Sender<Certificate>,
+    tx_core: Sender<Certificate<PublicKey>>,
 }
 
-impl CertificateWaiter {
+impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
     pub fn spawn(
-        store: Store<Digest, Certificate>,
-        rx_synchronizer: Receiver<Certificate>,
-        tx_core: Sender<Certificate>,
+        store: Store<Digest, Certificate<PublicKey>>,
+        rx_synchronizer: Receiver<Certificate<PublicKey>>,
+        tx_core: Sender<Certificate<PublicKey>>,
     ) {
         tokio::spawn(async move {
             Self {
@@ -45,9 +45,9 @@ impl CertificateWaiter {
     /// and then delivers the specified header.
     async fn waiter(
         missing: Vec<Digest>,
-        store: &Store<Digest, Certificate>,
-        deliver: Certificate,
-    ) -> DagResult<Certificate> {
+        store: &Store<Digest, Certificate<PublicKey>>,
+        deliver: Certificate<PublicKey>,
+    ) -> DagResult<Certificate<PublicKey>> {
         let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
 
         try_join_all(waiting)

@@ -8,7 +8,10 @@
 )]
 
 use config::{Committee, Stake};
-use crypto::{Digest, Hash as _, PublicKey};
+use crypto::{
+    traits::{EncodeDecodeBase64Ext, VerifyingKey},
+    Digest, Hash as _,
+};
 use primary::{Certificate, Round};
 use std::{
     cmp::max,
@@ -22,10 +25,10 @@ use tracing::{debug, info, warn};
 pub mod consensus_tests;
 
 /// The representation of the DAG in memory.
-type Dag = HashMap<Round, HashMap<PublicKey, (Digest, Certificate)>>;
+type Dag<PublicKey> = HashMap<Round, HashMap<PublicKey, (Digest, Certificate<PublicKey>)>>;
 
 /// The state that needs to be persisted for crash-recovery.
-pub struct State {
+pub struct State<PublicKey: VerifyingKey> {
     /// The last committed round.
     last_committed_round: Round,
     // Keeps the last committed round for each authority. This map is used to clean up the dag and
@@ -33,11 +36,11 @@ pub struct State {
     last_committed: HashMap<PublicKey, Round>,
     /// Keeps the latest committed certificate (and its parents) for every authority. Anything older
     /// must be regularly cleaned up through the function `update`.
-    dag: Dag,
+    dag: Dag<PublicKey>,
 }
 
-impl State {
-    pub fn new(genesis: Vec<Certificate>) -> Self {
+impl<PublicKey: VerifyingKey> State<PublicKey> {
+    pub fn new(genesis: Vec<Certificate<PublicKey>>) -> Self {
         let genesis = genesis
             .into_iter()
             .map(|x| (x.origin(), (x.digest(), x)))
@@ -45,19 +48,22 @@ impl State {
 
         Self {
             last_committed_round: 0,
-            last_committed: genesis.iter().map(|(x, (_, y))| (*x, y.round())).collect(),
+            last_committed: genesis
+                .iter()
+                .map(|(x, (_, y))| (x.clone(), y.round()))
+                .collect(),
             dag: [(0, genesis)].iter().cloned().collect(),
         }
     }
 
     /// Update and clean up internal state base on committed certificates.
-    fn update(&mut self, certificate: &Certificate, gc_depth: Round) {
+    fn update(&mut self, certificate: &Certificate<PublicKey>, gc_depth: Round) {
         self.last_committed
             .entry(certificate.origin())
             .and_modify(|r| *r = max(*r, certificate.round()))
             .or_insert_with(|| certificate.round());
 
-        let last_committed_round = *self.last_committed.values().max().unwrap();
+        let last_committed_round = *std::iter::Iterator::max(self.last_committed.values()).unwrap();
         self.last_committed_round = last_committed_round;
 
         // We purge all certificates past the gc depth
@@ -74,31 +80,31 @@ impl State {
     }
 }
 
-pub struct Consensus {
+pub struct Consensus<PublicKey: VerifyingKey> {
     /// The committee information.
-    committee: Committee,
+    committee: Committee<PublicKey>,
     /// The depth of the garbage collector.
     gc_depth: Round,
 
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.
-    rx_primary: Receiver<Certificate>,
+    rx_primary: Receiver<Certificate<PublicKey>>,
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
-    tx_primary: Sender<Certificate>,
+    tx_primary: Sender<Certificate<PublicKey>>,
     /// Outputs the sequence of ordered certificates to the application layer.
-    tx_output: Sender<Certificate>,
+    tx_output: Sender<Certificate<PublicKey>>,
 
     /// The genesis certificates.
-    genesis: Vec<Certificate>,
+    genesis: Vec<Certificate<PublicKey>>,
 }
 
-impl Consensus {
+impl<PublicKey: VerifyingKey> Consensus<PublicKey> {
     pub fn spawn(
-        committee: Committee,
+        committee: Committee<PublicKey>,
         gc_depth: Round,
-        rx_primary: Receiver<Certificate>,
-        tx_primary: Sender<Certificate>,
-        tx_output: Sender<Certificate>,
+        rx_primary: Receiver<Certificate<PublicKey>>,
+        tx_primary: Sender<Certificate<PublicKey>>,
+        tx_output: Sender<Certificate<PublicKey>>,
     ) {
         tokio::spawn(async move {
             Self {
@@ -151,11 +157,11 @@ impl Consensus {
     }
 
     pub fn process_certificate(
-        committee: &Committee,
+        committee: &Committee<PublicKey>,
         gc_depth: Round,
-        state: &mut State,
-        certificate: Certificate,
-    ) -> Vec<Certificate> {
+        state: &mut State<PublicKey>,
+        certificate: Certificate<PublicKey>,
+    ) -> Vec<Certificate<PublicKey>> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
 
@@ -225,7 +231,7 @@ impl Consensus {
         // Performance note: if tracing at the debug log level is disabled, this is cheap, see
         // https://github.com/tokio-rs/tracing/pull/326
         for (name, round) in &state.last_committed {
-            debug!("Latest commit of {}: Round {}", name, round);
+            debug!("Latest commit of {}: Round {}", name.encode_base64(), round);
         }
 
         sequence
@@ -234,10 +240,10 @@ impl Consensus {
     /// Returns the certificate (and the certificate's digest) originated by the leader of the
     /// specified round (if any).
     fn leader<'a>(
-        committee: &Committee,
+        committee: &Committee<PublicKey>,
         round: Round,
-        dag: &'a Dag,
-    ) -> Option<&'a (Digest, Certificate)> {
+        dag: &'a Dag<PublicKey>,
+    ) -> Option<&'a (Digest, Certificate<PublicKey>)> {
         // TODO: We should elect the leader of round r-2 using the common coin revealed at round r.
         // At this stage, we are guaranteed to have 2f+1 certificates from round r (which is enough to
         // compute the coin). We currently just use round-robin.
@@ -249,18 +255,18 @@ impl Consensus {
         // Elect the leader.
         let mut keys: Vec<_> = committee.authorities.keys().cloned().collect();
         keys.sort();
-        let leader = keys[coin as usize % committee.size()];
+        let leader = &keys[coin as usize % committee.size()];
 
         // Return its certificate and the certificate's digest.
-        dag.get(&round).and_then(|x| x.get(&leader))
+        dag.get(&round).and_then(|x| x.get(leader))
     }
 
     /// Order the past leaders that we didn't already commit.
     fn order_leaders(
-        committee: &Committee,
-        leader: &Certificate,
-        state: &State,
-    ) -> Vec<Certificate> {
+        committee: &Committee<PublicKey>,
+        leader: &Certificate<PublicKey>,
+        state: &State<PublicKey>,
+    ) -> Vec<Certificate<PublicKey>> {
         let mut to_commit = vec![leader.clone()];
         let mut leader = leader;
         for r in (state.last_committed_round + 2..leader.round())
@@ -283,7 +289,11 @@ impl Consensus {
     }
 
     /// Checks if there is a path between two leaders.
-    fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
+    fn linked(
+        leader: &Certificate<PublicKey>,
+        prev_leader: &Certificate<PublicKey>,
+        dag: &Dag<PublicKey>,
+    ) -> bool {
         let mut parents = vec![leader];
         for r in (prev_leader.round()..leader.round()).rev() {
             parents = dag
@@ -299,7 +309,11 @@ impl Consensus {
 
     /// Flatten the dag referenced by the input certificate. This is a classic depth-first search (pre-order):
     /// https://en.wikipedia.org/wiki/Tree_traversal#Pre-order
-    fn order_dag(gc_depth: Round, leader: &Certificate, state: &State) -> Vec<Certificate> {
+    fn order_dag(
+        gc_depth: Round,
+        leader: &Certificate<PublicKey>,
+        state: &State<PublicKey>,
+    ) -> Vec<Certificate<PublicKey>> {
         debug!("Processing sub-dag of {:?}", leader);
         let mut ordered = Vec::new();
         let mut already_ordered = HashSet::new();
@@ -346,6 +360,7 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
+    use crypto::traits::KeyPair;
     use primary::Certificate;
     use rand::Rng;
 
@@ -357,7 +372,7 @@ mod tests {
         let rounds: Round = rand::thread_rng().gen_range(10, 100);
 
         // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = keys().into_iter().map(|(x, _)| x).collect();
+        let keys: Vec<_> = keys().into_iter().map(|kp| kp.public().clone()).collect();
 
         let genesis = Certificate::genesis(&mock_committee(&keys[..]))
             .iter()
@@ -391,7 +406,7 @@ mod tests {
         let rounds: Round = rand::thread_rng().gen_range(10, 100);
 
         // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = keys().into_iter().map(|(x, _)| x).collect();
+        let keys: Vec<_> = keys().into_iter().map(|kp| kp.public().clone()).collect();
 
         let genesis = Certificate::genesis(&mock_committee(&keys[..]))
             .iter()

@@ -14,8 +14,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use bytes::Bytes;
-use config::{Committee, KeyPair, Parameters, WorkerId};
-use crypto::{Digest, PublicKey, SignatureService};
+use config::{Committee, Parameters, WorkerId};
+use crypto::{
+    traits::{EncodeDecodeBase64Ext, Signer, VerifyingKey},
+    Digest, SignatureService,
+};
 use futures::sink::SinkExt as _;
 use network::{MessageHandler, Receiver as NetworkReceiver, Writer};
 use serde::{Deserialize, Serialize};
@@ -35,16 +38,17 @@ pub const CHANNEL_CAPACITY: usize = 1_000;
 pub type Round = u64;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum PrimaryMessage {
-    Header(Header),
-    Vote(Vote),
-    Certificate(Certificate),
+#[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
+pub enum PrimaryMessage<PublicKey: VerifyingKey> {
+    Header(Header<PublicKey>),
+    Vote(Vote<PublicKey>),
+    Certificate(Certificate<PublicKey>),
     CertificatesRequest(Vec<Digest>, /* requestor */ PublicKey),
 }
 
 /// The messages sent by the primary to its workers.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum PrimaryWorkerMessage {
+pub enum PrimaryWorkerMessage<PublicKey> {
     /// The primary indicates that the worker need to sync the target missing batches.
     Synchronize(Vec<Digest>, /* target */ PublicKey),
     /// The primary indicates a round update.
@@ -68,15 +72,16 @@ pub struct Primary;
 impl Primary {
     const INADDR_ANY: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 
-    pub fn spawn(
-        keypair: KeyPair,
-        committee: Committee,
+    pub fn spawn<PublicKey: VerifyingKey, Signatory: Signer<PublicKey::Sig> + Send + 'static>(
+        name: PublicKey,
+        signer: Signatory,
+        committee: Committee<PublicKey>,
         parameters: Parameters,
-        header_store: Store<Digest, Header>,
-        certificate_store: Store<Digest, Certificate>,
+        header_store: Store<Digest, Header<PublicKey>>,
+        certificate_store: Store<Digest, Certificate<PublicKey>>,
         payload_store: Store<(Digest, WorkerId), PayloadToken>,
-        tx_consensus: Sender<Certificate>,
-        rx_consensus: Receiver<Certificate>,
+        tx_consensus: Sender<Certificate<PublicKey>>,
+        rx_consensus: Receiver<Certificate<PublicKey>>,
     ) {
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
         let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
@@ -91,10 +96,6 @@ impl Primary {
 
         // Write the parameters to the logs.
         parameters.tracing();
-
-        // Parse the public and secret key of this authority.
-        let name = keypair.name;
-        let secret = keypair.secret;
 
         // Atomic variable use to synchronizer all tasks with the latest consensus round. This is only
         // used for cleanup. The only tasks that write into this variable is `GarbageCollector`.
@@ -116,7 +117,8 @@ impl Primary {
         );
         info!(
             "Primary {} listening to primary messages on {}",
-            name, address
+            name.encode_base64(),
+            address
         );
 
         // Spawn the network receiver listening to messages from our workers.
@@ -135,12 +137,13 @@ impl Primary {
         );
         info!(
             "Primary {} listening to workers messages on {}",
-            name, address
+            name.encode_base64(),
+            address
         );
 
         // The `Synchronizer` provides auxiliary methods helping to `Core` to sync.
         let synchronizer = Synchronizer::new(
-            name,
+            name.clone(),
             &committee,
             certificate_store.clone(),
             payload_store.clone(),
@@ -149,11 +152,11 @@ impl Primary {
         );
 
         // The `SignatureService` is used to require signatures on specific digests.
-        let signature_service = SignatureService::new(secret);
+        let signature_service = SignatureService::new(signer);
 
         // The `Core` receives and handles headers, votes, and certificates from the other primaries.
         Core::spawn(
-            name,
+            name.clone(),
             committee.clone(),
             header_store.clone(),
             certificate_store.clone(),
@@ -182,7 +185,7 @@ impl Primary {
         // batch digests, it commands the `HeaderWaiter` to synchronizer with other nodes, wait for their reply, and
         // re-schedule execution of the header once we have all missing data.
         HeaderWaiter::spawn(
-            name,
+            name.clone(),
             committee.clone(),
             header_store,
             payload_store,
@@ -205,7 +208,7 @@ impl Primary {
         // When the `Core` collects enough parent certificates, the `Proposer` generates a new header with new batch
         // digests from our workers and it back to the `Core`.
         Proposer::spawn(
-            name,
+            name.clone(),
             &committee,
             signature_service,
             parameters.header_size,
@@ -221,7 +224,7 @@ impl Primary {
         // NOTE: This log entry is used to compute performance.
         info!(
             "Primary {} successfully booted on {}",
-            name,
+            name.encode_base64(),
             committee
                 .primary(&name)
                 .expect("Our public key or worker id is not in the committee")
@@ -233,13 +236,13 @@ impl Primary {
 
 /// Defines how the network receiver handles incoming primary messages.
 #[derive(Clone)]
-struct PrimaryReceiverHandler {
-    tx_primary_messages: Sender<PrimaryMessage>,
+struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
+    tx_primary_messages: Sender<PrimaryMessage<PublicKey>>,
     tx_cert_requests: Sender<(Vec<Digest>, PublicKey)>,
 }
 
 #[async_trait]
-impl MessageHandler for PrimaryReceiverHandler {
+impl<PublicKey: VerifyingKey> MessageHandler for PrimaryReceiverHandler<PublicKey> {
     async fn dispatch(&self, writer: &mut Writer, serialized: Bytes) -> Result<(), Box<dyn Error>> {
         // Reply with an ACK.
         let _ = writer.send(Bytes::from("Ack")).await;

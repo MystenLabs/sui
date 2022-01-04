@@ -5,6 +5,7 @@ use crate::{
     common::{batch, temp_dir},
     worker::WorkerMessage,
 };
+use crypto::ed25519::Ed25519PublicKey;
 use store::rocks;
 use tokio::sync::mpsc::channel;
 
@@ -30,7 +31,7 @@ async fn hash_and_store() {
     );
 
     // Send a batch to the `Processor`.
-    let message = WorkerMessage::Batch(batch());
+    let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch());
     let serialized = bincode::serialize(&message).unwrap();
     tx_batch.send(serialized.clone()).await.unwrap();
 

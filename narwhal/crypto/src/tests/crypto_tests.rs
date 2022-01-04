@@ -1,8 +1,15 @@
+use std::convert::TryInto;
+
 // Copyright(C) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use crate::{
+    ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature},
+    traits::{EncodeDecodeBase64Ext, VerifyingKey},
+};
 use ed25519_dalek::{Digest as _, Sha512};
 use rand::{rngs::StdRng, SeedableRng as _};
+use signature::{Signature, Signer, Verifier};
 
 impl Hash for &[u8] {
     fn digest(&self) -> Digest {
@@ -10,69 +17,62 @@ impl Hash for &[u8] {
     }
 }
 
-impl PartialEq for SecretKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl fmt::Debug for SecretKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.encode_base64())
-    }
-}
-
-pub fn keys() -> Vec<(PublicKey, SecretKey)> {
+pub fn keys() -> Vec<Ed25519KeyPair> {
     let mut rng = StdRng::from_seed([0; 32]);
-    (0..4).map(|_| generate_keypair(&mut rng)).collect()
+    (0..4).map(|_| Ed25519KeyPair::generate(&mut rng)).collect()
 }
 
 #[test]
 fn import_export_public_key() {
-    let (public_key, _) = keys().pop().unwrap();
+    let kpref = keys().pop().unwrap();
+    let public_key = kpref.public();
     let export = public_key.encode_base64();
-    let import = PublicKey::decode_base64(&export);
+    let import = Ed25519PublicKey::decode_base64(&export);
     assert!(import.is_ok());
-    assert_eq!(import.unwrap(), public_key);
+    assert_eq!(&import.unwrap(), public_key);
 }
 
 #[test]
 fn import_export_secret_key() {
-    let (_, secret_key) = keys().pop().unwrap();
+    let kpref = keys().pop().unwrap();
+    let secret_key = kpref.private();
     let export = secret_key.encode_base64();
-    let import = SecretKey::decode_base64(&export);
+    let import = Ed25519PrivateKey::decode_base64(&export);
     assert!(import.is_ok());
-    assert_eq!(import.unwrap(), secret_key);
+    assert_eq!(import.unwrap().as_ref(), secret_key.as_ref());
 }
 
 #[test]
 fn verify_valid_signature() {
     // Get a keypair.
-    let (public_key, secret_key) = keys().pop().unwrap();
+    let kp = keys().pop().unwrap();
 
     // Make signature.
     let message: &[u8] = b"Hello, world!";
     let digest = message.digest();
-    let signature = Signature::new(&digest, &secret_key);
+
+    let signature = kp.sign(&digest.0);
 
     // Verify the signature.
-    assert!(signature.verify(&digest, &public_key).is_ok());
+    assert!(kp.public().verify(&digest.0, &signature).is_ok());
 }
 
 #[test]
 fn verify_invalid_signature() {
     // Get a keypair.
-    let (public_key, secret_key) = keys().pop().unwrap();
+    let kp = keys().pop().unwrap();
 
     // Make signature.
     let message: &[u8] = b"Hello, world!";
     let digest = message.digest();
-    let signature = Signature::new(&digest, &secret_key);
+
+    let signature = kp.sign(&digest.0);
 
     // Verify the signature.
     let bad_message: &[u8] = b"Bad message!";
     let digest = bad_message.digest();
-    assert!(signature.verify(&digest, &public_key).is_err());
+
+    assert!(kp.public().verify(&digest.0, &signature).is_err());
 }
 
 #[test]
@@ -80,46 +80,50 @@ fn verify_valid_batch() {
     // Make signatures.
     let message: &[u8] = b"Hello, world!";
     let digest = message.digest();
-    let mut keys = keys();
-    let signatures: Vec<_> = (0..3)
-        .map(|_| {
-            let (public_key, secret_key) = keys.pop().unwrap();
-            (public_key, Signature::new(&digest, &secret_key))
+    let (pubkeys, signatures): (Vec<Ed25519PublicKey>, Vec<Ed25519Signature>) = keys()
+        .into_iter()
+        .take(3)
+        .map(|kp| {
+            let sig = kp.sign(&digest.0);
+            (kp.public().clone(), sig)
         })
-        .collect();
+        .unzip();
 
     // Verify the batch.
-    assert!(Signature::verify_batch(&digest, &signatures).is_ok());
+    let res = Ed25519PublicKey::verify_batch(&digest.0, &pubkeys, &signatures);
+    assert!(res.is_ok(), "{:?}", res);
 }
 
 #[test]
 fn verify_invalid_batch() {
-    // Make 2 valid signatures.
+    // Make signatures.
     let message: &[u8] = b"Hello, world!";
     let digest = message.digest();
-    let mut keys = keys();
-    let mut signatures: Vec<_> = (0..2)
-        .map(|_| {
-            let (public_key, secret_key) = keys.pop().unwrap();
-            (public_key, Signature::new(&digest, &secret_key))
+    let (pubkeys, mut signatures): (Vec<Ed25519PublicKey>, Vec<Ed25519Signature>) = keys()
+        .into_iter()
+        .take(3)
+        .map(|kp| {
+            let sig = kp.sign(&digest.0);
+            (kp.public().clone(), sig)
         })
-        .collect();
+        .unzip();
 
-    // Add an invalid signature.
-    let (public_key, _) = keys.pop().unwrap();
-    signatures.push((public_key, Signature::default()));
+    // mangle one signature
+    signatures[0] = Ed25519Signature::from_bytes(&[0u8; 64]).unwrap();
 
     // Verify the batch.
-    assert!(Signature::verify_batch(&digest, &signatures).is_err());
+    let res = Ed25519PublicKey::verify_batch(&digest.0, &pubkeys, &signatures);
+    assert!(res.is_err(), "{:?}", res);
 }
 
 #[tokio::test]
 async fn signature_service() {
     // Get a keypair.
-    let (public_key, secret_key) = keys().pop().unwrap();
+    let kp = keys().pop().unwrap();
+    let pk = kp.public().clone();
 
     // Spawn the signature service.
-    let mut service = SignatureService::new(secret_key);
+    let mut service = SignatureService::new(kp);
 
     // Request signature from the service.
     let message: &[u8] = b"Hello, world!";
@@ -127,5 +131,5 @@ async fn signature_service() {
     let signature = service.request_signature(digest.clone()).await;
 
     // Verify the signature we received.
-    assert!(signature.verify(&digest, &public_key).is_ok());
+    assert!(pk.verify(digest.as_ref(), &signature).is_ok());
 }

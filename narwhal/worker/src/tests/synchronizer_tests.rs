@@ -22,7 +22,7 @@ async fn synchronize() {
 
     // Spawn a `Synchronizer` instance.
     Synchronizer::spawn(
-        name,
+        name.clone(),
         id,
         committee.clone(),
         store.clone(),
@@ -36,7 +36,7 @@ async fn synchronize() {
     let (target, _) = keys.pop().unwrap();
     let address = committee.worker(&target, &id).unwrap().worker_to_worker;
     let missing = vec![batch_digest()];
-    let message = WorkerMessage::BatchRequest(missing.clone(), name);
+    let message = WorkerMessage::BatchRequest(missing.clone(), name.clone());
     let serialized = bincode::serialize(&message).unwrap();
     let handle = listener(address, Some(Bytes::from(serialized)));
 

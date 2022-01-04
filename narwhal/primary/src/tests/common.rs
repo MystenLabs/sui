@@ -3,20 +3,24 @@
 use crate::messages::{Certificate, Header, Vote};
 use bytes::Bytes;
 use config::{Authority, Committee, PrimaryAddresses, WorkerAddresses};
-use crypto::{generate_keypair, Hash as _, PublicKey, SecretKey, Signature};
+use crypto::{
+    ed25519::{Ed25519KeyPair, Ed25519PublicKey, Ed25519Signature},
+    traits::{KeyPair, Signer, VerifyingKey},
+    Hash as _,
+};
 use futures::{sink::SinkExt as _, stream::StreamExt as _};
 use rand::{rngs::StdRng, SeedableRng as _};
 use std::net::SocketAddr;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-impl PartialEq for Header {
+impl<PublicKey: VerifyingKey> PartialEq for Header<PublicKey> {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl PartialEq for Vote {
+impl<PublicKey: VerifyingKey> PartialEq for Vote<PublicKey> {
     fn eq(&self, other: &Self) -> bool {
         self.digest() == other.digest()
     }
@@ -29,18 +33,19 @@ pub fn temp_dir() -> std::path::PathBuf {
 }
 
 // Fixture
-pub fn keys() -> Vec<(PublicKey, SecretKey)> {
+pub fn keys() -> Vec<Ed25519KeyPair> {
     let mut rng = StdRng::from_seed([0; 32]);
-    (0..4).map(|_| generate_keypair(&mut rng)).collect()
+    (0..4).map(|_| Ed25519KeyPair::generate(&mut rng)).collect()
 }
 
 // Fixture
-pub fn committee() -> Committee {
+pub fn committee() -> Committee<Ed25519PublicKey> {
     Committee {
         authorities: keys()
             .iter()
             .enumerate()
-            .map(|(i, (id, _))| {
+            .map(|(i, kp)| {
+                let id = kp.public();
                 let primary = PrimaryAddresses {
                     primary_to_primary: format!("127.0.0.1:{}", 100 + i).parse().unwrap(),
                     worker_to_primary: format!("127.0.0.1:{}", 200 + i).parse().unwrap(),
@@ -57,7 +62,7 @@ pub fn committee() -> Committee {
                 .cloned()
                 .collect();
                 (
-                    *id,
+                    id.clone(),
                     Authority {
                         stake: 1,
                         primary,
@@ -70,7 +75,7 @@ pub fn committee() -> Committee {
 }
 
 // Fixture.
-pub fn committee_with_base_port(base_port: u16) -> Committee {
+pub fn committee_with_base_port(base_port: u16) -> Committee<Ed25519PublicKey> {
     let mut committee = committee();
     for authority in committee.authorities.values_mut() {
         let primary = &mut authority.primary;
@@ -96,10 +101,10 @@ pub fn committee_with_base_port(base_port: u16) -> Committee {
 }
 
 // Fixture
-pub fn header() -> Header {
-    let (author, secret) = keys().pop().unwrap();
+pub fn header() -> Header<Ed25519PublicKey> {
+    let kp = keys().pop().unwrap();
     let header = Header {
-        author,
+        author: kp.public().clone(),
         round: 1,
         parents: Certificate::genesis(&committee())
             .iter()
@@ -107,20 +112,21 @@ pub fn header() -> Header {
             .collect(),
         ..Header::default()
     };
+
     Header {
         id: header.digest(),
-        signature: Signature::new(&header.digest(), &secret),
+        signature: kp.sign(header.digest().as_ref()),
         ..header
     }
 }
 
 // Fixture
-pub fn headers() -> Vec<Header> {
+pub fn headers() -> Vec<Header<Ed25519PublicKey>> {
     keys()
         .into_iter()
-        .map(|(author, secret)| {
+        .map(|kp| {
             let header = Header {
-                author,
+                author: kp.public().clone(),
                 round: 1,
                 parents: Certificate::genesis(&committee())
                     .iter()
@@ -130,7 +136,7 @@ pub fn headers() -> Vec<Header> {
             };
             Header {
                 id: header.digest(),
-                signature: Signature::new(&header.digest(), &secret),
+                signature: kp.sign(header.digest().as_ref()),
                 ..header
             }
         })
@@ -138,19 +144,19 @@ pub fn headers() -> Vec<Header> {
 }
 
 // Fixture
-pub fn votes(header: &Header) -> Vec<Vote> {
+pub fn votes(header: &Header<Ed25519PublicKey>) -> Vec<Vote<Ed25519PublicKey>> {
     keys()
         .into_iter()
-        .map(|(author, secret)| {
+        .map(|kp| {
             let vote = Vote {
                 id: header.id.clone(),
                 round: header.round,
-                origin: header.author,
-                author,
-                signature: Signature::default(),
+                origin: header.author.clone(),
+                author: kp.public().clone(),
+                signature: Ed25519Signature::default(),
             };
             Vote {
-                signature: Signature::new(&vote.digest(), &secret),
+                signature: kp.sign(vote.digest().as_ref()),
                 ..vote
             }
         })
@@ -158,7 +164,7 @@ pub fn votes(header: &Header) -> Vec<Vote> {
 }
 
 // Fixture
-pub fn certificate(header: &Header) -> Certificate {
+pub fn certificate(header: &Header<Ed25519PublicKey>) -> Certificate<Ed25519PublicKey> {
     Certificate {
         header: header.clone(),
         votes: votes(header)

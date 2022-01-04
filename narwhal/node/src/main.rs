@@ -9,9 +9,14 @@
 
 use anyhow::{Context, Result};
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
-use config::{Committee, Export as _, Import as _, KeyPair, Parameters, WorkerId};
+use config::{Committee, Import, Parameters, WorkerId};
 use consensus::Consensus;
-use crypto::Digest;
+use crypto::{
+    ed25519::{Ed25519KeyPair, Ed25519PublicKey},
+    generate_production_keypair,
+    traits::{KeyPair, VerifyingKey},
+    Digest,
+};
 use primary::{Certificate, Header, PayloadToken, Primary};
 use store::{rocks, Store};
 use tokio::sync::mpsc::{channel, Receiver};
@@ -77,9 +82,11 @@ async fn main() -> Result<()> {
     set_global_default(subscriber).expect("Failed to set subscriber");
 
     match matches.subcommand() {
-        ("generate_keys", Some(sub_matches)) => KeyPair::new()
-            .export(sub_matches.value_of("filename").unwrap())
-            .context("Failed to generate key pair")?,
+        ("generate_keys", Some(sub_matches)) => {
+            let kp = generate_production_keypair::<Ed25519KeyPair>();
+            config::Export::export(&kp, sub_matches.value_of("filename").unwrap())
+                .context("Failed to generate key pair")?
+        }
         ("run", Some(sub_matches)) => run(sub_matches).await?,
         _ => unreachable!(),
     }
@@ -94,7 +101,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
     let store_path = matches.value_of("store").unwrap();
 
     // Read the committee and node's keypair from file.
-    let keypair = KeyPair::import(key_file).context("Failed to load the node's keypair")?;
+    let keypair = Ed25519KeyPair::import(key_file).context("Failed to load the node's keypair")?;
     let committee =
         Committee::import(committee_file).context("Failed to load the committee information")?;
 
@@ -114,12 +121,15 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
     )
     .expect("Failed creating database");
     let header_store = Store::new(
-        rocks::DBMap::<Digest, Header>::reopen(&rocksdb, Some("headers"))
+        rocks::DBMap::<Digest, Header<Ed25519PublicKey>>::reopen(&rocksdb, Some("headers"))
             .expect("Failed keying headers database"),
     );
     let certificate_store = Store::new(
-        rocks::DBMap::<Digest, Certificate>::reopen(&rocksdb, Some("certificates"))
-            .expect("Failed keying certificates database"),
+        rocks::DBMap::<Digest, Certificate<Ed25519PublicKey>>::reopen(
+            &rocksdb,
+            Some("certificates"),
+        )
+        .expect("Failed keying certificates database"),
     );
     let payload_store = Store::new(
         rocks::DBMap::<(Digest, WorkerId), PayloadToken>::reopen(&rocksdb, Some("payload"))
@@ -140,6 +150,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
             let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
             let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
             Primary::spawn(
+                keypair.public().clone(),
                 keypair,
                 committee.clone(),
                 parameters.clone(),
@@ -165,7 +176,13 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
                 .unwrap()
                 .parse::<WorkerId>()
                 .context("The worker id must be a positive integer")?;
-            Worker::spawn(keypair.name, id, committee, parameters, batch_store);
+            Worker::spawn(
+                keypair.public().clone(),
+                id,
+                committee,
+                parameters,
+                batch_store,
+            );
         }
         _ => unreachable!(),
     }
@@ -178,7 +195,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
 }
 
 /// Receives an ordered list of certificates and apply any application-specific logic.
-async fn analyze(mut rx_output: Receiver<Certificate>) {
+async fn analyze<PublicKey: VerifyingKey>(mut rx_output: Receiver<Certificate<PublicKey>>) {
     while let Some(_certificate) = rx_output.recv().await {
         // NOTE: Here goes the application logic.
     }

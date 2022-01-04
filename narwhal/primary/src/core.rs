@@ -10,7 +10,7 @@ use crate::{
 use async_recursion::async_recursion;
 use bytes::Bytes;
 use config::Committee;
-use crypto::{Digest, Hash as _, PublicKey, SignatureService};
+use crypto::{traits::VerifyingKey, Digest, Hash as _, SignatureService};
 use network::{CancelHandler, ReliableSender};
 use std::{
     collections::{HashMap, HashSet},
@@ -27,34 +27,34 @@ use tracing::{debug, error, warn};
 #[path = "tests/core_tests.rs"]
 pub mod core_tests;
 
-pub struct Core {
+pub struct Core<PublicKey: VerifyingKey> {
     /// The public key of this primary.
     name: PublicKey,
     /// The committee information.
-    committee: Committee,
+    committee: Committee<PublicKey>,
     /// The persistent storage keyed to headers.
-    header_store: Store<Digest, Header>,
+    header_store: Store<Digest, Header<PublicKey>>,
     /// The persistent storage keyed to certificates.
-    certificate_store: Store<Digest, Certificate>,
+    certificate_store: Store<Digest, Certificate<PublicKey>>,
     /// Handles synchronization with other nodes and our workers.
-    synchronizer: Synchronizer,
+    synchronizer: Synchronizer<PublicKey>,
     /// Service to sign headers.
-    signature_service: SignatureService,
+    signature_service: SignatureService<PublicKey::Sig>,
     /// The current consensus round (used for cleanup).
     consensus_round: Arc<AtomicU64>,
     /// The depth of the garbage collector.
     gc_depth: Round,
 
     /// Receiver for dag messages (headers, votes, certificates).
-    rx_primaries: Receiver<PrimaryMessage>,
+    rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
     /// Receives loopback headers from the `HeaderWaiter`.
-    rx_header_waiter: Receiver<Header>,
+    rx_header_waiter: Receiver<Header<PublicKey>>,
     /// Receives loopback certificates from the `CertificateWaiter`.
-    rx_certificate_waiter: Receiver<Certificate>,
+    rx_certificate_waiter: Receiver<Certificate<PublicKey>>,
     /// Receives our newly created headers from the `Proposer`.
-    rx_proposer: Receiver<Header>,
+    rx_proposer: Receiver<Header<PublicKey>>,
     /// Output all certificates to the consensus layer.
-    tx_consensus: Sender<Certificate>,
+    tx_consensus: Sender<Certificate<PublicKey>>,
     /// Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
     tx_proposer: Sender<(Vec<Digest>, Round)>,
 
@@ -65,32 +65,32 @@ pub struct Core {
     /// The set of headers we are currently processing.
     processing: HashMap<Round, HashSet<Digest>>,
     /// The last header we proposed (for which we are waiting votes).
-    current_header: Header,
+    current_header: Header<PublicKey>,
     /// Aggregates votes into a certificate.
-    votes_aggregator: VotesAggregator,
+    votes_aggregator: VotesAggregator<PublicKey>,
     /// Aggregates certificates to use as parents for new headers.
-    certificates_aggregators: HashMap<Round, Box<CertificatesAggregator>>,
+    certificates_aggregators: HashMap<Round, Box<CertificatesAggregator<PublicKey>>>,
     /// A network sender to send the batches to the other workers.
     network: ReliableSender,
     /// Keeps the cancel handlers of the messages we sent.
     cancel_handlers: HashMap<Round, Vec<CancelHandler>>,
 }
 
-impl Core {
+impl<PublicKey: VerifyingKey> Core<PublicKey> {
     pub fn spawn(
         name: PublicKey,
-        committee: Committee,
-        header_store: Store<Digest, Header>,
-        certificate_store: Store<Digest, Certificate>,
-        synchronizer: Synchronizer,
-        signature_service: SignatureService,
+        committee: Committee<PublicKey>,
+        header_store: Store<Digest, Header<PublicKey>>,
+        certificate_store: Store<Digest, Certificate<PublicKey>>,
+        synchronizer: Synchronizer<PublicKey>,
+        signature_service: SignatureService<PublicKey::Sig>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
-        rx_primaries: Receiver<PrimaryMessage>,
-        rx_header_waiter: Receiver<Header>,
-        rx_certificate_waiter: Receiver<Certificate>,
-        rx_proposer: Receiver<Header>,
-        tx_consensus: Sender<Certificate>,
+        rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
+        rx_header_waiter: Receiver<Header<PublicKey>>,
+        rx_certificate_waiter: Receiver<Certificate<PublicKey>>,
+        rx_proposer: Receiver<Header<PublicKey>>,
+        tx_consensus: Sender<Certificate<PublicKey>>,
         tx_proposer: Sender<(Vec<Digest>, Round)>,
     ) {
         tokio::spawn(async move {
@@ -123,7 +123,7 @@ impl Core {
         });
     }
 
-    async fn process_own_header(&mut self, header: Header) -> DagResult<()> {
+    async fn process_own_header(&mut self, header: Header<PublicKey>) -> DagResult<()> {
         // Reset the votes aggregator.
         self.current_header = header.clone();
         self.votes_aggregator = VotesAggregator::new();
@@ -148,7 +148,7 @@ impl Core {
     }
 
     #[async_recursion]
-    async fn process_header(&mut self, header: &Header) -> DagResult<()> {
+    async fn process_header(&mut self, header: &Header<PublicKey>) -> DagResult<()> {
         debug!("Processing {:?}", header);
         // Indicate that we are processing this header.
         self.processing
@@ -159,7 +159,7 @@ impl Core {
         // Ensure we have the parents. If at least one parent is missing, the synchronizer returns an empty
         // vector; it will gather the missing parents (as well as all ancestors) from other nodes and then
         // reschedule processing of this header.
-        let parents = self.synchronizer.get_parents(header).await?;
+        let parents: Vec<Certificate<PublicKey>> = self.synchronizer.get_parents(header).await?;
         if parents.is_empty() {
             debug!("Processing of {} suspended: missing parent(s)", header.id);
             return Ok(());
@@ -196,7 +196,7 @@ impl Core {
             .last_voted
             .entry(header.round)
             .or_insert_with(HashSet::new)
-            .insert(header.author)
+            .insert(header.author.clone())
         {
             // Make a vote and send it to the header's creator.
             let vote = Vote::new(header, &self.name, &mut self.signature_service).await;
@@ -224,7 +224,7 @@ impl Core {
     }
 
     #[async_recursion]
-    async fn process_vote(&mut self, vote: Vote) -> DagResult<()> {
+    async fn process_vote(&mut self, vote: Vote<PublicKey>) -> DagResult<()> {
         debug!("Processing {:?}", vote);
 
         // Add it to the votes' aggregator and try to make a new certificate.
@@ -258,7 +258,7 @@ impl Core {
     }
 
     #[async_recursion]
-    async fn process_certificate(&mut self, certificate: Certificate) -> DagResult<()> {
+    async fn process_certificate(&mut self, certificate: Certificate<PublicKey>) -> DagResult<()> {
         debug!("Processing {:?}", certificate);
 
         // Process the header embedded in the certificate if we haven't already voted for it (if we already
@@ -314,7 +314,7 @@ impl Core {
         Ok(())
     }
 
-    fn sanitize_header(&mut self, header: &Header) -> DagResult<()> {
+    fn sanitize_header(&mut self, header: &Header<PublicKey>) -> DagResult<()> {
         ensure!(
             self.gc_round <= header.round,
             DagError::TooOld(header.id.clone(), header.round)
@@ -328,7 +328,7 @@ impl Core {
         Ok(())
     }
 
-    fn sanitize_vote(&mut self, vote: &Vote) -> DagResult<()> {
+    fn sanitize_vote(&mut self, vote: &Vote<PublicKey>) -> DagResult<()> {
         ensure!(
             self.current_header.round <= vote.round,
             DagError::TooOld(vote.digest(), vote.round)
@@ -346,7 +346,7 @@ impl Core {
         vote.verify(&self.committee).map_err(DagError::from)
     }
 
-    fn sanitize_certificate(&mut self, certificate: &Certificate) -> DagResult<()> {
+    fn sanitize_certificate(&mut self, certificate: &Certificate<PublicKey>) -> DagResult<()> {
         ensure!(
             self.gc_round <= certificate.round(),
             DagError::TooOld(certificate.digest(), certificate.round())

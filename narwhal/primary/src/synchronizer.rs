@@ -7,35 +7,35 @@ use crate::{
     primary::PayloadToken,
 };
 use config::{Committee, WorkerId};
-use crypto::{Digest, Hash as _, PublicKey};
+use crypto::{traits::VerifyingKey, Digest, Hash as _};
 use std::collections::HashMap;
 use store::Store;
 use tokio::sync::mpsc::Sender;
 
 /// The `Synchronizer` checks if we have all batches and parents referenced by a header. If we don't, it sends
 /// a command to the `Waiter` to request the missing data.
-pub struct Synchronizer {
+pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// The public key of this primary.
     name: PublicKey,
     /// The persistent storage.
-    certificate_store: Store<Digest, Certificate>,
+    certificate_store: Store<Digest, Certificate<PublicKey>>,
     payload_store: Store<(Digest, WorkerId), PayloadToken>,
     /// Send commands to the `HeaderWaiter`.
-    tx_header_waiter: Sender<WaiterMessage>,
+    tx_header_waiter: Sender<WaiterMessage<PublicKey>>,
     /// Send commands to the `CertificateWaiter`.
-    tx_certificate_waiter: Sender<Certificate>,
+    tx_certificate_waiter: Sender<Certificate<PublicKey>>,
     /// The genesis and its digests.
-    genesis: Vec<(Digest, Certificate)>,
+    genesis: Vec<(Digest, Certificate<PublicKey>)>,
 }
 
-impl Synchronizer {
+impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
     pub fn new(
         name: PublicKey,
-        committee: &Committee,
-        certificate_store: Store<Digest, Certificate>,
+        committee: &Committee<PublicKey>,
+        certificate_store: Store<Digest, Certificate<PublicKey>>,
         payload_store: Store<(Digest, WorkerId), PayloadToken>,
-        tx_header_waiter: Sender<WaiterMessage>,
-        tx_certificate_waiter: Sender<Certificate>,
+        tx_header_waiter: Sender<WaiterMessage<PublicKey>>,
+        tx_certificate_waiter: Sender<Certificate<PublicKey>>,
     ) -> Self {
         Self {
             name,
@@ -53,7 +53,7 @@ impl Synchronizer {
     /// Returns `true` if we have all transactions of the payload. If we don't, we return false,
     /// synchronize with other nodes (through our workers), and re-schedule processing of the
     /// header for when we will have its complete payload.
-    pub async fn missing_payload(&mut self, header: &Header) -> DagResult<bool> {
+    pub async fn missing_payload(&mut self, header: &Header<PublicKey>) -> DagResult<bool> {
         // We don't store the payload of our own workers.
         if header.author == self.name {
             return Ok(false);
@@ -96,7 +96,10 @@ impl Synchronizer {
     /// Returns the parents of a header if we have them all. If at least one parent is missing,
     /// we return an empty vector, synchronize with other nodes, and re-schedule processing
     /// of the header for when we will have all the parents.
-    pub async fn get_parents(&mut self, header: &Header) -> DagResult<Vec<Certificate>> {
+    pub async fn get_parents(
+        &mut self,
+        header: &Header<PublicKey>,
+    ) -> DagResult<Vec<Certificate<PublicKey>>> {
         let mut missing = Vec::new();
         let mut parents = Vec::new();
         for digest in &header.parents {
@@ -129,7 +132,10 @@ impl Synchronizer {
 
     /// Check whether we have all the ancestors of the certificate. If we don't, send the certificate to
     /// the `CertificateWaiter` which will trigger re-processing once we have all the missing data.
-    pub async fn deliver_certificate(&mut self, certificate: &Certificate) -> DagResult<bool> {
+    pub async fn deliver_certificate(
+        &mut self,
+        certificate: &Certificate<PublicKey>,
+    ) -> DagResult<bool> {
         for digest in &certificate.header.parents {
             if self.genesis.iter().any(|(x, _)| x == digest) {
                 continue;

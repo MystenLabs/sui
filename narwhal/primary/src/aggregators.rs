@@ -5,17 +5,20 @@ use crate::{
     messages::{Certificate, Header, Vote},
 };
 use config::{Committee, Stake};
-use crypto::{Digest, Hash as _, PublicKey, Signature};
+use crypto::{
+    traits::{EncodeDecodeBase64Ext, VerifyingKey},
+    Digest, Hash as _,
+};
 use std::collections::HashSet;
 
 /// Aggregates votes for a particular header into a certificate.
-pub struct VotesAggregator {
+pub struct VotesAggregator<PublicKey: VerifyingKey> {
     weight: Stake,
-    votes: Vec<(PublicKey, Signature)>,
+    votes: Vec<(PublicKey, PublicKey::Sig)>,
     used: HashSet<PublicKey>,
 }
 
-impl VotesAggregator {
+impl<PublicKey: VerifyingKey> VotesAggregator<PublicKey> {
     pub fn new() -> Self {
         Self {
             weight: 0,
@@ -26,16 +29,19 @@ impl VotesAggregator {
 
     pub fn append(
         &mut self,
-        vote: Vote,
-        committee: &Committee,
-        header: &Header,
-    ) -> DagResult<Option<Certificate>> {
+        vote: Vote<PublicKey>,
+        committee: &Committee<PublicKey>,
+        header: &Header<PublicKey>,
+    ) -> DagResult<Option<Certificate<PublicKey>>> {
         let author = vote.author;
 
         // Ensure it is the first time this authority votes.
-        ensure!(self.used.insert(author), DagError::AuthorityReuse(author));
+        ensure!(
+            self.used.insert(author.clone()),
+            DagError::AuthorityReuse(author.encode_base64())
+        );
 
-        self.votes.push((author, vote.signature));
+        self.votes.push((author.clone(), vote.signature));
         self.weight += committee.stake(&author);
         if self.weight >= committee.quorum_threshold() {
             self.weight = 0; // Ensures quorum is only reached once.
@@ -49,13 +55,13 @@ impl VotesAggregator {
 }
 
 /// Aggregate certificates and check if we reach a quorum.
-pub struct CertificatesAggregator {
+pub struct CertificatesAggregator<PublicKey: VerifyingKey> {
     weight: Stake,
     certificates: Vec<Digest>,
     used: HashSet<PublicKey>,
 }
 
-impl CertificatesAggregator {
+impl<PublicKey: VerifyingKey> CertificatesAggregator<PublicKey> {
     pub fn new() -> Self {
         Self {
             weight: 0,
@@ -66,13 +72,13 @@ impl CertificatesAggregator {
 
     pub fn append(
         &mut self,
-        certificate: Certificate,
-        committee: &Committee,
+        certificate: Certificate<PublicKey>,
+        committee: &Committee<PublicKey>,
     ) -> DagResult<Option<Vec<Digest>>> {
         let origin = certificate.origin();
 
         // Ensure it is the first time this authority votes.
-        if !self.used.insert(origin) {
+        if !self.used.insert(origin.clone()) {
             return Ok(None);
         }
 
