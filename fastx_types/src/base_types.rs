@@ -135,6 +135,11 @@ impl TxContext {
         id
     }
 
+    /// Return the transaction digest, to include in new objects
+    pub fn get_transaction_digest(&self) -> TransactionDigest {
+        self.digest
+    }
+
     // TODO(https://github.com/MystenLabs/fastnft/issues/89): temporary hack for Move compatibility
     pub fn to_bcs_bytes_hack(&self) -> Vec<u8> {
         let sender = FastPayAddress::default();

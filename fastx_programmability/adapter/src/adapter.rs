@@ -65,7 +65,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         &type_args,
         object_args,
         pure_args,
-        ctx,
+        &ctx,
     )?;
 
     let vm = MoveVM::new(natives)
@@ -108,7 +108,9 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
                 gas_object,
                 gas_used,
                 gas_budget,
+                &ctx,
             )?;
+
             Ok(())
         }
         ExecutionResult::Fail { error, gas_used } => {
@@ -169,7 +171,12 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         let _ = state_view;
 
         // Create module objects and write them to the store
-        let module_object = Object::new_module(module, sender, SequenceNumber::new());
+        let module_object = Object::new_module(
+            module,
+            sender,
+            SequenceNumber::new(),
+            ctx.get_transaction_digest(),
+        );
         written_refs.push(module_object.to_object_reference());
         state_view.write_object(module_object);
     }
@@ -229,6 +236,7 @@ fn process_successful_execution<
     mut gas_object: Object,
     mut gas_used: u64,
     gas_budget: u64,
+    ctx: &TxContext,
 ) -> Result<(), FastPayError> {
     for (mut obj, new_contents) in mutable_refs {
         match &mut obj.data {
@@ -270,7 +278,12 @@ fn process_successful_execution<
                         old_object.next_sequence_number = sequence_number;
                         old_object
                     } else {
-                        let obj = Object::new_move(move_obj, recipient, SequenceNumber::new());
+                        let obj = Object::new_move(
+                            move_obj,
+                            recipient,
+                            SequenceNumber::new(),
+                            ctx.get_transaction_digest(),
+                        );
                         gas_used += calculate_object_creation_cost(&obj);
                         obj
                     };
@@ -328,7 +341,7 @@ fn resolve_and_type_check(
     type_args: &[TypeTag],
     object_args: Vec<Object>,
     mut pure_args: Vec<Vec<u8>>,
-    ctx: TxContext,
+    ctx: &TxContext,
 ) -> Result<TypeCheckSuccess, FastPayError> {
     // resolve the function we are calling
     let (function_signature, module_id) = match module_object.data {

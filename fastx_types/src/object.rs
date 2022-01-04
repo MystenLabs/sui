@@ -8,7 +8,9 @@ use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 
 use crate::{
-    base_types::{BcsSignable, FastPayAddress, ObjectID, ObjectRef, SequenceNumber},
+    base_types::{
+        BcsSignable, FastPayAddress, ObjectID, ObjectRef, SequenceNumber, TransactionDigest,
+    },
     gas_coin::GasCoin,
 };
 
@@ -86,7 +88,10 @@ pub struct Object {
     pub data: Data,
     /// The authenticator that unlocks this object (eg. public key, or other)
     pub owner: FastPayAddress,
+    /// The version of this object, starting at zero
     pub next_sequence_number: SequenceNumber,
+    /// The digest of the order that created or last mutated this object
+    pub previous_transaction: TransactionDigest,
 }
 
 impl BcsSignable for Object {}
@@ -97,11 +102,13 @@ impl Object {
         o: MoveObject,
         owner: FastPayAddress,
         next_sequence_number: SequenceNumber,
+        previous_transaction: TransactionDigest,
     ) -> Self {
         Object {
             data: Data::Move(o),
             owner,
             next_sequence_number,
+            previous_transaction,
         }
     }
 
@@ -109,6 +116,7 @@ impl Object {
         m: CompiledModule,
         owner: FastPayAddress,
         next_sequence_number: SequenceNumber,
+        previous_transaction: TransactionDigest,
     ) -> Self {
         let mut bytes = Vec::new();
         m.serialize(&mut bytes).unwrap();
@@ -116,6 +124,7 @@ impl Object {
             data: Data::Module(bytes),
             owner,
             next_sequence_number,
+            previous_transaction,
         }
     }
 
@@ -172,6 +181,7 @@ impl Object {
             owner,
             data,
             next_sequence_number,
+            previous_transaction: TransactionDigest::new([0; 32]),
         }
     }
 
