@@ -9,7 +9,8 @@ use move_core_types::{account_address::AccountAddress, language_storage::StructT
 
 use crate::{
     base_types::{
-        BcsSignable, FastPayAddress, ObjectID, ObjectRef, SequenceNumber, TransactionDigest,
+        sha3_hash, BcsSignable, FastPayAddress, ObjectDigest, ObjectID, ObjectRef, SequenceNumber,
+        TransactionDigest,
     },
     gas_coin::GasCoin,
 };
@@ -150,6 +151,10 @@ impl Object {
 
     pub fn type_(&self) -> Option<&StructTag> {
         self.data.type_()
+    }
+
+    pub fn digest(&self) -> ObjectDigest {
+        ObjectDigest::new(sha3_hash(self))
     }
 
     /// Change the owner of `self` to `new_owner`

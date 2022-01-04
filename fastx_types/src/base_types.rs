@@ -87,6 +87,9 @@ pub type ObjectRef = (ObjectID, SequenceNumber);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct TransactionDigest([u8; 32]); // We use SHA3-256 hence 32 bytes here
 
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct ObjectDigest([u8; 32]); // We use SHA3-256 hence 32 bytes here
+
 // TODO: migrate TxContext type + these constants to a separate file
 /// 0x242C70E260BADD483440B4E3DAD63E9D
 pub const TX_CONTEXT_ADDRESS: AccountAddress = AccountAddress::new([
@@ -181,6 +184,12 @@ impl TransactionDigest {
         use rand::Rng;
         let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
         Self::new(random_bytes)
+    }
+}
+
+impl ObjectDigest {
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
     }
 }
 
