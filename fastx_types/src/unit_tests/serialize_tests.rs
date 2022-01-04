@@ -21,16 +21,16 @@ fn test_error() {
 
 #[test]
 fn test_info_request() {
-    let req1 = InfoRequest::new(InfoRequestKind::ObjectInfoRequest(ObjectInfoRequest {
+    let req1 = InfoRequest::ObjectInfoRequest(ObjectInfoRequest {
         object_id: dbg_object_id(0x20),
         request_sequence_number: None,
         request_received_transfers_excluding_first_nth: None,
-    }));
-    let req2 = InfoRequest::new(InfoRequestKind::ObjectInfoRequest(ObjectInfoRequest {
+    });
+    let req2 = InfoRequest::ObjectInfoRequest(ObjectInfoRequest {
         object_id: dbg_object_id(0x20),
         request_sequence_number: Some(SequenceNumber::from(129)),
         request_received_transfers_excluding_first_nth: None,
-    }));
+    });
 
     let buf1 = serialize_info_request(&req1);
     let buf2 = serialize_info_request(&req2);

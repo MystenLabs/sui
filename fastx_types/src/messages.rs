@@ -92,13 +92,13 @@ pub struct RedeemTransaction {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum InfoRequestKind {
+pub enum InfoRequest {
     AccountInfoRequest(AccountInfoRequest),
     ObjectInfoRequest(ObjectInfoRequest),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum InfoResponseKind {
+pub enum InfoResponse {
     AccountInfoResponse(AccountInfoResponse),
     ObjectInfoResponse(Box<ObjectInfoResponse>),
 }
@@ -131,42 +131,10 @@ pub struct ObjectInfoResponse {
     pub requested_received_transfers: Vec<CertifiedOrder>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct InfoRequest {
-    pub kind: InfoRequestKind,
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct InfoResponse {
-    pub kind: InfoResponseKind,
-}
-
-impl InfoRequest {
-    pub fn new(kind: InfoRequestKind) -> Self {
-        InfoRequest { kind }
-    }
-    pub fn new_account_info_req(address: FastPayAddress) -> Self {
-        Self::new(InfoRequestKind::AccountInfoRequest(AccountInfoRequest {
-            account: address,
-        }))
-    }
-
-    pub fn new_object_info_req(
-        object_id: ObjectID,
-        request_sequence_number: Option<SequenceNumber>,
-    ) -> Self {
-        Self::new(InfoRequestKind::ObjectInfoRequest(ObjectInfoRequest {
-            object_id,
-            request_sequence_number,
-            request_received_transfers_excluding_first_nth: None,
-        }))
-    }
-}
-
 impl From<InfoResponse> for AccountInfoResponse {
     fn from(info: InfoResponse) -> Self {
-        match info.kind {
-            InfoResponseKind::AccountInfoResponse(response) => response,
+        match info {
+            InfoResponse::AccountInfoResponse(response) => response,
             _ => panic!(),
         }
     }
@@ -174,8 +142,8 @@ impl From<InfoResponse> for AccountInfoResponse {
 
 impl From<InfoResponse> for ObjectInfoResponse {
     fn from(info: InfoResponse) -> Self {
-        match info.kind {
-            InfoResponseKind::ObjectInfoResponse(response) => *response,
+        match info {
+            InfoResponse::ObjectInfoResponse(response) => *response,
             _ => panic!(),
         }
     }
@@ -183,19 +151,13 @@ impl From<InfoResponse> for ObjectInfoResponse {
 
 impl From<ObjectInfoResponse> for InfoResponse {
     fn from(info: ObjectInfoResponse) -> Self {
-        InfoResponse::new(InfoResponseKind::ObjectInfoResponse(Box::new(info)))
+        InfoResponse::ObjectInfoResponse(Box::new(info))
     }
 }
 
 impl From<AccountInfoResponse> for InfoResponse {
     fn from(info: AccountInfoResponse) -> Self {
-        InfoResponse::new(InfoResponseKind::AccountInfoResponse(info))
-    }
-}
-
-impl InfoResponse {
-    pub fn new(kind: InfoResponseKind) -> Self {
-        InfoResponse { kind }
+        InfoResponse::AccountInfoResponse(info)
     }
 }
 
