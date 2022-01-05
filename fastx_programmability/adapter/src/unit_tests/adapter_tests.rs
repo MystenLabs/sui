@@ -40,7 +40,7 @@ impl InMemoryStorage {
     pub fn find_module(&self, name: &str) -> Option<Object> {
         let id = Identifier::new(name).unwrap();
         for o in self.persistent.values() {
-            match o.data.as_module() {
+            match o.data.try_as_module() {
                 Some(m) if m.self_id().name() == id.as_ident_str() => return Some(o.clone()),
                 _ => (),
             }
@@ -126,7 +126,7 @@ fn call(
     native_functions: &NativeFunctionTable,
     name: &str,
     gas_object: Object,
-    gas_budget: Option<u64>,
+    gas_budget: u64,
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
 ) -> FastPayResult {
@@ -157,7 +157,11 @@ fn test_object_basics() {
     let mut storage = InMemoryStorage::new(genesis.objects.clone());
 
     // 0. Create a gas object for gas payment. Note that we won't really use it because we won't be providing a gas budget.
-    let gas_object = Object::with_id_for_testing(ObjectID::random());
+    let gas_object = Object::with_id_owner_gas_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+        MAX_GAS,
+    );
     storage.write_object(gas_object.clone());
     storage.flush();
 
@@ -175,7 +179,7 @@ fn test_object_basics() {
         &native_functions,
         "create",
         gas_object.clone(),
-        None,
+        MAX_GAS,
         Vec::new(),
         pure_args,
     )
@@ -183,7 +187,7 @@ fn test_object_basics() {
 
     let created = storage.created();
     assert_eq!(created.len(), 1);
-    assert!(storage.updated().is_empty());
+    assert_eq!(storage.updated().len(), 1); // The gas object
     assert!(storage.deleted().is_empty());
     let id1 = created
         .keys()
@@ -204,14 +208,14 @@ fn test_object_basics() {
         &native_functions,
         "transfer",
         gas_object.clone(),
-        None,
+        MAX_GAS,
         vec![obj1.clone()],
         pure_args,
     )
     .unwrap();
 
     let updated = storage.updated();
-    assert_eq!(updated.len(), 1);
+    assert_eq!(updated.len(), 2);
     assert!(storage.created().is_empty());
     assert!(storage.deleted().is_empty());
     storage.flush();
@@ -232,7 +236,7 @@ fn test_object_basics() {
         &native_functions,
         "create",
         gas_object.clone(),
-        None,
+        MAX_GAS,
         Vec::new(),
         pure_args,
     )
@@ -251,13 +255,13 @@ fn test_object_basics() {
         &native_functions,
         "update",
         gas_object.clone(),
-        None,
+        MAX_GAS,
         vec![obj1.clone(), obj2],
         Vec::new(),
     )
     .unwrap();
     let updated = storage.updated();
-    assert_eq!(updated.len(), 1);
+    assert_eq!(updated.len(), 2);
     assert!(storage.created().is_empty());
     assert!(storage.deleted().is_empty());
     storage.flush();
@@ -274,7 +278,7 @@ fn test_object_basics() {
         &native_functions,
         "delete",
         gas_object,
-        None,
+        MAX_GAS,
         vec![obj1],
         Vec::new(),
     )
@@ -282,7 +286,7 @@ fn test_object_basics() {
     let deleted = storage.deleted();
     assert_eq!(deleted.len(), 1);
     assert!(storage.created().is_empty());
-    assert!(storage.updated().is_empty());
+    assert_eq!(storage.updated().len(), 1);
     storage.flush();
     assert!(storage.read_object(&id1).is_none())
 }
@@ -317,7 +321,7 @@ fn test_move_call_insufficient_gas() {
         &native_functions,
         "create",
         gas_object,
-        Some(50), // This budget is not enough to execute all bytecode.
+        50, // This budget is not enough to execute all bytecode.
         Vec::new(),
         pure_args,
     );

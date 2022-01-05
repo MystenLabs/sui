@@ -29,7 +29,7 @@ pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResul
             Ok(())
         }
         OrderKind::Publish(publish) => {
-            assert_eq!(publish.gas_payment.0, gas_object.id());
+            debug_assert_eq!(publish.gas_payment.0, gas_object.id());
             let balance = get_gas_balance(gas_object)?;
             ok_or_gas_error!(
                 balance >= MIN_MOVE_PUBLISH_GAS,
@@ -40,7 +40,7 @@ pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResul
             )
         }
         OrderKind::Call(call) => {
-            assert_eq!(call.gas_payment.0, gas_object.id());
+            debug_assert_eq!(call.gas_payment.0, gas_object.id());
             ok_or_gas_error!(
                 call.gas_budget >= MIN_MOVE_CALL_GAS,
                 format!(
@@ -60,15 +60,26 @@ pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResul
     }
 }
 
-pub fn deduct_gas(gas_object: &mut Object, amount: u64) -> FastPayResult {
+/// Subtract the gas balance of \p gas_object by \p amount.
+/// \p amount being positive means gas deduction; \p amount being negative
+/// means gas refund.
+pub fn deduct_gas(gas_object: &mut Object, amount: i128) -> FastPayResult {
     let gas_coin = GasCoin::try_from(&*gas_object)?;
-    let balance = gas_coin.value();
+    let balance = gas_coin.value() as i128;
+    let new_balance = balance - amount;
     ok_or_gas_error!(
-        balance >= amount,
+        new_balance >= 0,
         format!("Gas balance is {}, not enough to pay {}", balance, amount)
     )?;
-    let new_gas_coin = GasCoin::new(*gas_coin.id(), balance - amount);
-    gas_object.data.as_move_mut().unwrap().contents = bcs::to_bytes(&new_gas_coin).unwrap();
+    ok_or_gas_error!(
+        new_balance <= u64::MAX as i128,
+        format!(
+            "Gas balance is {}, overflow after reclaiming {}",
+            balance, -amount
+        )
+    )?;
+    let new_gas_coin = GasCoin::new(*gas_coin.id(), new_balance as u64);
+    gas_object.data.try_as_move_mut().unwrap().contents = bcs::to_bytes(&new_gas_coin).unwrap();
     let sequence_number = gas_object.next_sequence_number.increment()?;
     gas_object.next_sequence_number = sequence_number;
     Ok(())
@@ -78,8 +89,18 @@ pub fn get_gas_balance(gas_object: &Object) -> FastPayResult<u64> {
     Ok(GasCoin::try_from(gas_object)?.value())
 }
 
-pub fn calculate_module_publish_gas(module_bytes: &[Vec<u8>]) -> u64 {
+pub fn calculate_module_publish_cost(module_bytes: &[Vec<u8>]) -> u64 {
     // TODO: Figure out module publish gas formula.
     // Currently just use the size in bytes of the modules plus a default minimum.
     module_bytes.iter().map(|v| v.len() as u64).sum::<u64>() + MIN_MOVE_PUBLISH_GAS
+}
+
+pub fn calculate_object_creation_cost(object: &Object) -> u64 {
+    // TODO: Figure out object creation gas formula.
+    object.data.try_as_move().unwrap().contents.len() as u64
+}
+
+pub fn calculate_object_deletion_refund(object: &Object) -> u64 {
+    // TODO: Figure out object creation gas formula.
+    (object.data.try_as_move().unwrap().contents.len() / 2) as u64
 }

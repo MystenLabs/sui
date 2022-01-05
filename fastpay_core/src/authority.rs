@@ -114,8 +114,9 @@ impl AuthorityState {
                 FastPayError::IncorrectSigner
             );
 
+            // The last object in input_objects is always the gas payment object.
+            // TODO: Add get_gas_object_ref() to Order once Transfer order also has gas object.
             if idx + 1 == input_object_cnt {
-                // The last object in input_objects is always the gas payment object.
                 check_gas_requirement(&order, &object)?;
             }
 
@@ -211,7 +212,7 @@ impl AuthorityState {
                     c.type_arguments,
                     inputs,
                     c.pure_arguments,
-                    Some(c.gas_budget),
+                    c.gas_budget,
                     gas_object,
                     tx_ctx,
                 ) {
