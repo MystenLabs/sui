@@ -266,8 +266,8 @@ impl AuthorityState {
     ) -> Result<AccountInfoResponse, FastPayError> {
         let mut response = self.make_object_info(request.object_id).await?;
         if let Some(seq) = request.request_sequence_number {
-            // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy 
-            // to provide back to the client the object digest for specific objects requested. Probably, 
+            // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy
+            // to provide back to the client the object digest for specific objects requested. Probably,
             // we have to return the full ObjectRef and why not the actual full object here.
             let obj = self
                 .object_state(&request.object_id)
