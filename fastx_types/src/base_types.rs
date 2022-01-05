@@ -41,41 +41,41 @@ pub struct KeyPair(dalek::Keypair);
 
 #[readonly::make]
 #[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub struct PublicKeyBytes(#[readonly] pub ed25519_dalek::PublicKey);
+pub struct PublicKey(#[readonly] pub ed25519_dalek::PublicKey);
 
 #[allow(clippy::derive_hash_xor_eq)] // dalek's Eq is compatible
-impl std::hash::Hash for PublicKeyBytes {
+impl std::hash::Hash for PublicKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.as_bytes().hash(state);
     }
 }
 
-impl PartialOrd for PublicKeyBytes {
+impl PartialOrd for PublicKey {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.0.as_bytes().partial_cmp(other.0.as_bytes())
     }
 }
 
-impl Ord for PublicKeyBytes {
+impl Ord for PublicKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.as_bytes().cmp(other.0.as_bytes())
     }
 }
 
-impl Default for PublicKeyBytes {
+impl Default for PublicKey {
     fn default() -> Self {
-        PublicKeyBytes(ed25519_dalek::PublicKey::from_bytes(&[0u8; 32]).unwrap())
+        PublicKey(ed25519_dalek::PublicKey::from_bytes(&[0u8; 32]).unwrap())
     }
 }
 
-impl PublicKeyBytes {
+impl PublicKey {
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.as_ref().to_vec()
     }
 }
 
 // TODO(https://github.com/MystenLabs/fastnft/issues/101): more robust key validation
-impl TryFrom<&[u8]> for PublicKeyBytes {
+impl TryFrom<&[u8]> for PublicKey {
     type Error = FastPayError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, FastPayError> {
@@ -85,9 +85,9 @@ impl TryFrom<&[u8]> for PublicKeyBytes {
     }
 }
 
-pub type PrimaryAddress = PublicKeyBytes;
-pub type FastPayAddress = PublicKeyBytes;
-pub type AuthorityName = PublicKeyBytes;
+pub type PrimaryAddress = PublicKey;
+pub type FastPayAddress = PublicKey;
+pub type AuthorityName = PublicKey;
 
 // Define digests and object IDs. For now, ID's are the same as Move account addresses
 // (16 bytes) for easy compatibility with Move. However, we'll probably want 20+ byte
@@ -189,17 +189,17 @@ impl TransactionDigest {
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;
     let keypair = dalek::Keypair::generate(&mut csprng);
-    (PublicKeyBytes(keypair.public), KeyPair(keypair))
+    (PublicKey(keypair.public), KeyPair(keypair))
 }
 
-pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
+pub fn address_as_base64<S>(key: &PublicKey, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::ser::Serializer,
 {
     serializer.serialize_str(&encode_address(key))
 }
 
-pub fn address_from_base64<'de, D>(deserializer: D) -> Result<PublicKeyBytes, D::Error>
+pub fn address_from_base64<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
@@ -208,20 +208,20 @@ where
     Ok(value)
 }
 
-pub fn encode_address(key: &PublicKeyBytes) -> String {
+pub fn encode_address(key: &PublicKey) -> String {
     base64::encode(key.0.as_bytes())
 }
 
-pub fn decode_address(s: &str) -> Result<PublicKeyBytes, anyhow::Error> {
+pub fn decode_address(s: &str) -> Result<PublicKey, anyhow::Error> {
     let value = base64::decode(s)?;
-    let res = PublicKeyBytes::try_from(&value[..])?;
+    let res = PublicKey::try_from(&value[..])?;
     Ok(res)
 }
 
 pub fn dbg_addr(name: u8) -> FastPayAddress {
     let mut rng = StdRng::from_seed([name; 32]);
     let pk = ed25519_dalek::Keypair::generate(&mut rng).public;
-    PublicKeyBytes(pk)
+    PublicKey(pk)
 }
 
 pub fn dbg_object_id(name: u8) -> ObjectID {
@@ -272,7 +272,7 @@ impl std::fmt::Debug for Signature {
     }
 }
 
-impl std::fmt::Debug for PublicKeyBytes {
+impl std::fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let s = base64::encode(&self.0);
         write!(f, "{}", s)?;
