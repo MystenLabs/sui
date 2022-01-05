@@ -2,27 +2,32 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 # SPDX-License-Identifier: Apache-2.0
 
-num_shards=15
-num_accounts=500000
-max_in_flight=700
+num_accounts=4000
+max_in_flight=1000
+gas_objs_per_account=4
+value_per_per_obj=200
 committee_size=4
-protocol=UDP
+protocol=TCP
 
 if [ "$1" != "" ]; then
-	num_shards=$1
+	num_accounts=$1
 fi
 if [ "$2" != "" ]; then
-	num_accounts=$2
+	max_in_flight=$2
 fi
 if [ "$3" != "" ]; then
-	max_in_flight=$3
+	committee_size=$3
 fi
 if [ "$4" != "" ]; then
-	committee_size=$4
+	protocol=$4
 fi
 if [ "$5" != "" ]; then
-	protocol=$5
+	gas_objs_per_account=$5
 fi
+if [ "$6" != "" ]; then
+	value_per_per_obj=$6
+fi
+
 
 # Distinguish local and aws tests.
 if [ "$6" != "aws" ]; then 
@@ -33,38 +38,33 @@ fi
 killall server || true
 killall client || true
 rm *.json || true
+rm *.toml || true
+rm -rf db* || true
 
 # Create committee and server configs.
 key_files=""
 for (( i=1; i<=$committee_size; i++ ))
 do
-	key_files="$key_files server-$i.json"
-	./server --server server-"$i".json generate \
+	key_files="$key_files server$i.json"
+	mkdir ./db"$i"
+	./server --server server"$i".json generate \
 		--host 127.0.0.1 \
-		--port 9500 \
-		--shards $num_shards \
+		--port 9"$i"00 \
+		--database-path ./db"$i" \
 		--protocol $protocol \
 		>> committee.json 
 done
 
 # Create clients' accounts.
-./client --committee committee.json --accounts accounts.json create_accounts $num_accounts >> initial_accounts.json
+./client --committee committee.json --accounts accounts.json create-accounts --num $num_accounts \
+--gas-objs-per-account $gas_objs_per_account --value-per-per-obj $value_per_per_obj initial_accounts.toml
 
-# Run a single authority (with multiple shards).
-for (( i=0; i<$num_shards; i++ ))
+# Run a authorities.
+for (( I=1; I<=$committee_size; I++ ))
 do
-	./server --server server-1.json run \
-		--initial_accounts initial_accounts.json \
-		--initial_balance 100 \
-		--committee committee.json \
-		--shard $i &
+    ./server --server server"$I".json run --initial-accounts initial_accounts.toml --committee committee.json &
 done
 
 # Run the client benchmark.
-sleep 1 # wait for server to be ready before benchmark
-read -r line < committee.json
-echo "$line" > committee-single.json
-./client --committee committee-single.json --accounts accounts.json benchmark \
-	--server_configs $key_files \
-	--max_in_flight $max_in_flight
-	
+sleep 2 # wait for servers to be ready before benchmark
+./client --committee committee.json --accounts accounts.json benchmark --max-in-flight $max_in_flight

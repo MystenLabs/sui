@@ -6,6 +6,7 @@ use fastpay_core::client::ClientState;
 use fastx_types::{
     base_types::*,
     messages::{Address, CertifiedOrder, OrderKind},
+    object::Object,
 };
 
 use serde::{Deserialize, Serialize};
@@ -32,6 +33,22 @@ impl AuthorityConfig {
     pub fn print(&self) {
         let data = serde_json::to_string(self).unwrap();
         println!("{}", data);
+    }
+
+    pub fn new(
+        address: FastPayAddress,
+        host: String,
+        port: u32,
+        database_path: String,
+        protocol: NetworkProtocol,
+    ) -> Self {
+        AuthorityConfig {
+            address,
+            host,
+            base_port: port,
+            database_path,
+            network_protocol: protocol,
+        }
     }
 }
 
@@ -115,6 +132,12 @@ impl UserAccount {
                 .collect(),
             sent_certificates: Vec::new(),
             received_certificates: Vec::new(),
+        }
+    }
+
+    pub fn from_objs(&mut self, objects: &Vec<Object>) {
+        for obj in objects {
+            self.object_ids.insert(obj.id(), obj.next_sequence_number);
         }
     }
 }

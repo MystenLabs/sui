@@ -354,16 +354,16 @@ enum ClientCommands {
     CreateAccounts {
         /// Number of additional accounts to create
         #[structopt(long, default_value = "1000")]
-        num: u32,
+        num: usize,
 
         /// Number of objects per account
         #[structopt(long, default_value = "1000")]
-        gas_objs_per_account: u32,
+        gas_objs_per_account: usize,
 
         /// Gas value per object
         #[structopt(long, default_value = "1000")]
         #[allow(dead_code)]
-        value_per_per_obj: u32,
+        value_per_per_obj: usize,
 
         /// Initial state config file path
         #[structopt(name = "init-state-cfg")]
@@ -558,7 +558,7 @@ fn main() {
             value_per_per_obj: _,
             initial_state_config_path,
         } => {
-            let num_accounts: u32 = num;
+            let num_accounts = num;
             let mut init_state_cfg: InitialStateConfig = InitialStateConfig::new();
 
             for _ in 0..num_accounts {
