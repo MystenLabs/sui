@@ -88,7 +88,7 @@ pub trait Client {
     fn sync_client_state(&mut self) -> AsyncResult<'_, (), anyhow::Error>;
 
     /// Get all object we own.
-    fn get_own_objects(&mut self) -> AsyncResult<'_, Vec<ObjectRef>, anyhow::Error>;
+    fn get_owned_objects(&mut self) -> AsyncResult<'_, Vec<ObjectRef>, anyhow::Error>;
 }
 
 impl<A> ClientState<A> {
