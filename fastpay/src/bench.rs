@@ -137,11 +137,7 @@ fn main() {
     let report = if benchmark.benchmark_type == BenchmarkType::TransferResponseTime {
         // Wait for servers to be ready
         thread::sleep(Duration::from_millis(6000));
-    benchmark.launch_client_for_native_end_to_end_transfer(
-            &accounts,
-            &committee,
-            &port_table,
-        )
+        benchmark.launch_client_for_native_end_to_end_transfer(&accounts, &committee, &port_table)
     } else {
         // Make a single-core runtime for the client.
         let mut runtime = Builder::new()
@@ -151,7 +147,7 @@ fn main() {
             .build()
             .unwrap();
         runtime.block_on(benchmark.launch_client_for_batch(orders))
-    }
+    };
     println!("Num_tx: {}, time: {}us", report.0, report.1);
 }
 
