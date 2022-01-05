@@ -107,11 +107,8 @@ fn main() {
 
     // Make distinct ports per authority
     let mut port_table = HashMap::new();
-    for idx in 0..authority_states.len() {
-        port_table.insert(
-            authority_states[idx].name,
-            make_port(benchmark.port, idx as u32),
-        );
+    for (idx, state) in authority_states.iter().enumerate() {
+        port_table.insert(state.name, make_port(benchmark.port, idx as u32));
     }
 
     // Create orders for mass transfer
@@ -120,7 +117,7 @@ fn main() {
     // Make multi-threaded runtime for authorities
     for state in authority_states {
         let b = benchmark.clone();
-        let port = *port_table.clone().get(&state.name).clone().unwrap();
+        let port = *port_table.get(&state.name).unwrap();
 
         thread::spawn(move || {
             let mut runtime = Builder::new()
@@ -143,7 +140,7 @@ fn main() {
         thread::sleep(Duration::from_millis(6000));
         report = benchmark.launch_client_for_native_end_to_end_transfer(
             &accounts,
-            &committee.clone(),
+            &committee,
             &port_table,
         );
     } else {
@@ -174,7 +171,7 @@ impl ClientServerBenchmark {
             let client = network::Client::new(
                 self.protocol,
                 self.host.clone(),
-                *port_table.get(&authority.0).unwrap(),
+                *port_table.get(authority.0).unwrap(),
                 self.buffer_size,
                 Duration::from_micros(self.send_timeout_us),
                 Duration::from_micros(self.recv_timeout_us),
@@ -254,9 +251,9 @@ impl ClientServerBenchmark {
 
     fn make_mass_orders(
         &self,
-        accounts: &Vec<(UserAccount, Vec<Object>)>,
+        accounts: &[(UserAccount, Vec<Object>)],
         committee: &Committee,
-        authority_states: &Vec<AuthorityState>,
+        authority_states: &[AuthorityState],
     ) -> Vec<Bytes> {
         // Make one transaction per account (transfer order + confirmation).
         let mut orders: Vec<Bytes> = Vec::new();
@@ -274,7 +271,7 @@ impl ClientServerBenchmark {
                     user_data: UserData::default(),
                 };
                 next_recipient = account_addr;
-                let order = Order::new_transfer(transfer, &account_secret);
+                let order = Order::new_transfer(transfer, account_secret);
 
                 // Serialize order
                 let serialized_order = serialize_order(&order);
@@ -291,7 +288,7 @@ impl ClientServerBenchmark {
                         &authority_states.get(i).unwrap().secret,
                     );
 
-                    let sig = Signature::new(&certificate.order.kind, &secx);
+                    let sig = Signature::new(&certificate.order.kind, secx);
                     certificate.signatures.push((pubx, sig));
                 }
 
@@ -389,7 +386,7 @@ impl ClientServerBenchmark {
     /// Simulates real world transfer
     fn launch_client_for_native_end_to_end_transfer(
         &self,
-        accounts: &Vec<(UserAccount, Vec<Object>)>,
+        accounts: &[(UserAccount, Vec<Object>)],
         committee: &Committee,
         port_table: &HashMap<PublicKeyBytes, u32>,
     ) -> (usize, u128) {
@@ -398,7 +395,7 @@ impl ClientServerBenchmark {
         let mut recipient_idx = rng.gen_range(0, accounts.len());
 
         // Check that we have objects to send from this sender
-        while accounts.get(sender_idx).unwrap().0.object_ids.len() == 0 {
+        while accounts.get(sender_idx).unwrap().0.object_ids.is_empty() {
             sender_idx = rng.gen_range(0, accounts.len());
         }
         // Ensure sender is not receipient
@@ -416,7 +413,7 @@ impl ClientServerBenchmark {
 
         let mut rt = Runtime::new().unwrap();
         let elapsed_time = rt.block_on(async move {
-            let mut sender_client_state = self.make_client_state(&sender, &committee, port_table);
+            let mut sender_client_state = self.make_client_state(sender, committee, port_table);
 
             let time_start = Instant::now();
             let cert = sender_client_state
@@ -425,7 +422,7 @@ impl ClientServerBenchmark {
                 .unwrap();
             let elapsed_time = time_start.elapsed().as_micros();
             let mut recipient_client_state =
-                self.make_client_state(&recipient, &committee, port_table);
+                self.make_client_state(recipient, committee, port_table);
             recipient_client_state
                 .receive_from_fastpay(cert)
                 .await

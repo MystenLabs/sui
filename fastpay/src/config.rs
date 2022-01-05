@@ -135,7 +135,7 @@ impl UserAccount {
         }
     }
 
-    pub fn from_objs(&mut self, objects: &Vec<Object>) {
+    pub fn from_objs(&mut self, objects: &[Object]) {
         for obj in objects {
             self.object_ids.insert(obj.id(), obj.next_sequence_number);
         }
