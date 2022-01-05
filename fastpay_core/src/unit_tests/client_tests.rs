@@ -567,7 +567,7 @@ fn test_client_state_sync() {
     // Remove all client-side data
     sender.object_ids.clear();
     sender.sent_certificates.clear();
-    assert!(rt.block_on(sender.get_own_objects()).unwrap().is_empty());
+    assert!(rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
     assert!(sender.object_ids.is_empty());
     assert!(sender.sent_certificates.is_empty());
 
@@ -575,7 +575,7 @@ fn test_client_state_sync() {
     rt.block_on(sender.sync_client_state()).unwrap();
 
     // Confirm data are the same after sync
-    assert!(!rt.block_on(sender.get_own_objects()).unwrap().is_empty());
+    assert!(!rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
     assert_eq!(old_object_ids, sender.object_ids);
     assert_eq!(old_sent_certificate, sender.sent_certificates);
 }
