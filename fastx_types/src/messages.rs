@@ -271,7 +271,7 @@ impl Order {
         }
     }
 
-    // TODO: derive a real cryptographic hash of the transaction here.
+    // Derive a cryptographic hash of the transaction.
     pub fn digest(&self) -> TransactionDigest {
         TransactionDigest::new(sha3_hash(&self.kind))
     }

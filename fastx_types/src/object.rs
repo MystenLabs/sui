@@ -186,7 +186,7 @@ impl Object {
             owner,
             data,
             next_sequence_number,
-            previous_transaction: TransactionDigest::new([0; 32]),
+            previous_transaction: TransactionDigest::genesis(),
         }
     }
 

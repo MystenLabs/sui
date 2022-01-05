@@ -81,7 +81,7 @@ fn create_genesis_module_objects() -> Result<Genesis> {
                 m,
                 owner,
                 SequenceNumber::new(),
-                TransactionDigest::new([0; 32]),
+                TransactionDigest::genesis(),
             )
         })
         .collect();
