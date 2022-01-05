@@ -39,11 +39,17 @@ pub struct UserData(pub Option<[u8; 32]>);
 pub struct KeyPair(dalek::Keypair);
 
 #[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct PublicKeyBytes(pub [u8; dalek::PUBLIC_KEY_LENGTH]);
+pub struct PublicKeyBytes([u8; dalek::PUBLIC_KEY_LENGTH]);
 
 impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
+    }
+}
+
+impl AsRef<[u8]> for PublicKeyBytes {
+    fn as_ref(&self) -> &[u8] {
+        &self.0[..]
     }
 }
 

@@ -17,7 +17,12 @@ impl Committee {
         let total_votes = voting_rights.iter().map(|(_, votes)| votes).sum();
         let expanded_keys: HashMap<_, _> = voting_rights
             .iter()
-            .map(|(addr, _)| (*addr, PublicKey::from_bytes(&addr.0).expect("Key is valid")))
+            .map(|(addr, _)| {
+                (
+                    *addr,
+                    PublicKey::from_bytes(addr.as_ref()).expect("Invalid Authority Key"),
+                )
+            })
             .collect();
         Committee {
             voting_rights,

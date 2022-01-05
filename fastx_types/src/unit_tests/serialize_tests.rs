@@ -321,7 +321,7 @@ fn test_time_cert() {
         cert.signatures.push((authority_name, sig));
         cache.insert(
             authority_name,
-            PublicKey::from_bytes(&authority_name.0).expect("No problem parsing key."),
+            PublicKey::from_bytes(authority_name.as_ref()).expect("No problem parsing key."),
         );
     }
 
