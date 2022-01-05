@@ -220,11 +220,7 @@ impl ClientServerBenchmark {
         for _ in 0..self.committee_size {
             authority_keys.push(get_key_pair());
         }
-        // Set up the committee
-        let committee = Committee {
-            voting_rights: authority_keys.iter().map(|(k, _)| (*k, 1)).collect(),
-            total_votes: self.committee_size,
-        };
+        let committee = Committee::new(authority_keys.iter().map(|(k, _)| (*k, 1)).collect());
 
         // Create states for each authority
         let mut authority_states = Vec::new();

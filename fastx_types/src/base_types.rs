@@ -1,10 +1,11 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 use crate::error::FastPayError;
+use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 
 use ed25519_dalek as dalek;
-use ed25519_dalek::{Digest, Signer, Verifier};
+use ed25519_dalek::{Digest, PublicKey, Signer, Verifier};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -43,6 +44,18 @@ pub struct PublicKeyBytes([u8; dalek::PUBLIC_KEY_LENGTH]);
 impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
+    }
+
+    pub fn to_public_key(&self) -> Result<PublicKey, FastPayError> {
+        // TODO(https://github.com/MystenLabs/fastnft/issues/101): Do better key validation
+        // to ensure the bytes represent a point on the curve.
+        PublicKey::from_bytes(self.as_ref()).map_err(|_| FastPayError::InvalidAuthenticator)
+    }
+}
+
+impl AsRef<[u8]> for PublicKeyBytes {
+    fn as_ref(&self) -> &[u8] {
+        &self.0[..]
     }
 }
 
@@ -425,31 +438,25 @@ impl Signature {
         Signature(signature)
     }
 
-    fn check_internal<T>(
-        &self,
-        value: &T,
-        author: FastPayAddress,
-    ) -> Result<(), dalek::SignatureError>
+    pub fn check<T>(&self, value: &T, author: FastPayAddress) -> Result<(), FastPayError>
     where
         T: Signable<Vec<u8>>,
     {
         let mut message = Vec::new();
         value.write(&mut message);
-        let public_key = dalek::PublicKey::from_bytes(&author.0)?;
-        public_key.verify(&message, &self.0)
-    }
-
-    pub fn check<T>(&self, value: &T, author: FastPayAddress) -> Result<(), FastPayError>
-    where
-        T: Signable<Vec<u8>>,
-    {
-        self.check_internal(value, author)
+        let public_key = author.to_public_key()?;
+        public_key
+            .verify(&message, &self.0)
             .map_err(|error| FastPayError::InvalidSignature {
                 error: format!("{}", error),
             })
     }
 
-    fn verify_batch_internal<'a, T, I>(value: &'a T, votes: I) -> Result<(), dalek::SignatureError>
+    pub fn verify_batch<'a, T, I>(
+        value: &'a T,
+        votes: I,
+        key_cache: &HashMap<PublicKeyBytes, PublicKey>,
+    ) -> Result<(), FastPayError>
     where
         T: Signable<Vec<u8>>,
         I: IntoIterator<Item = &'a (FastPayAddress, Signature)>,
@@ -462,17 +469,12 @@ impl Signature {
         for (addr, sig) in votes.into_iter() {
             messages.push(&msg);
             signatures.push(sig.0);
-            public_keys.push(dalek::PublicKey::from_bytes(&addr.0)?);
+            match key_cache.get(addr) {
+                Some(v) => public_keys.push(*v),
+                None => public_keys.push(addr.to_public_key()?),
+            }
         }
-        dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..])
-    }
-
-    pub fn verify_batch<'a, T, I>(value: &'a T, votes: I) -> Result<(), FastPayError>
-    where
-        T: Signable<Vec<u8>>,
-        I: IntoIterator<Item = &'a (FastPayAddress, Signature)>,
-    {
-        Signature::verify_batch_internal(value, votes).map_err(|error| {
+        dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..]).map_err(|error| {
             FastPayError::InvalidSignature {
                 error: format!("{}", error),
             }
