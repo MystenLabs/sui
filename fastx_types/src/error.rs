@@ -117,8 +117,6 @@ pub enum FastPayError {
     ModulePublishFailure { error: String },
 
     // Move call related errors
-    #[error("Gas budget set higher than max: {error:?}.")]
-    GasBudgetTooHigh { error: String },
     #[error("Function resolution failure: {error:?}.")]
     FunctionNotFound { error: String },
     #[error("Function signature is invalid: {error:?}.")]
@@ -127,6 +125,12 @@ pub enum FastPayError {
     TypeError { error: String },
     #[error("Execution aborted: {error:?}.")]
     AbortedExecution { error: String },
+
+    // Gas related errors
+    #[error("Gas budget set higher than max: {error:?}.")]
+    GasBudgetTooHigh { error: String },
+    #[error("Insufficient gas: {error:?}.")]
+    InsufficientGas { error: String },
 
     // Internal state errors
     #[error("Attempt to re-initialize an order lock.")]

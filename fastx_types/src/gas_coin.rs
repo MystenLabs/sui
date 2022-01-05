@@ -5,8 +5,15 @@ use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::IdentStr, language_storage::StructTag,
 };
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
-use crate::{base_types::ObjectID, coin::Coin, id::ID};
+use crate::{
+    base_types::ObjectID,
+    coin::Coin,
+    error::{FastPayError, FastPayResult},
+    id::ID,
+    object::{Data, Object},
+};
 
 /// 0x330D4D3816201553185C08101CF1AB5E
 pub const GAS_ADDRESS: AccountAddress = AccountAddress::new([
@@ -43,5 +50,29 @@ impl GasCoin {
 
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
         bcs::to_bytes(&self).unwrap()
+    }
+}
+
+impl TryFrom<&Object> for GasCoin {
+    type Error = FastPayError;
+
+    fn try_from(value: &Object) -> FastPayResult<GasCoin> {
+        match (value.type_(), &value.data) {
+            (Some(t), Data::Move(obj)) => {
+                if t != &GasCoin::type_() {
+                    return Err(FastPayError::TypeError {
+                        error: format!("Gas object type is not a gas coin: {}", t),
+                    });
+                }
+                let gas_coin: GasCoin =
+                    bcs::from_bytes(&obj.contents).map_err(|err| FastPayError::TypeError {
+                        error: format!("Unable to deserialize gas object: {:?}", err),
+                    })?;
+                Ok(gas_coin)
+            }
+            _ => Err(FastPayError::TypeError {
+                error: format!("Gas object type is not a gas coin: {:?}", value),
+            }),
+        }
     }
 }

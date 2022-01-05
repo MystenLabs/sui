@@ -47,7 +47,23 @@ impl Data {
         }
     }
 
-    pub fn as_module(&self) -> Option<CompiledModule> {
+    pub fn try_as_move(&self) -> Option<&MoveObject> {
+        use Data::*;
+        match self {
+            Move(m) => Some(m),
+            Module(_) => None,
+        }
+    }
+
+    pub fn try_as_move_mut(&mut self) -> Option<&mut MoveObject> {
+        use Data::*;
+        match self {
+            Move(m) => Some(m),
+            Module(_) => None,
+        }
+    }
+
+    pub fn try_as_module(&self) -> Option<CompiledModule> {
         use Data::*;
         match self {
             Move(_) => None,
@@ -144,11 +160,10 @@ impl Object {
         }
     }
 
-    pub fn with_id_owner_for_testing(id: ObjectID, owner: FastPayAddress) -> Self {
-        let coin_value = 0;
+    pub fn with_id_owner_gas_for_testing(id: ObjectID, owner: FastPayAddress, gas: u64) -> Self {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
-            contents: GasCoin::new(id, coin_value).to_bcs_bytes(),
+            contents: GasCoin::new(id, gas).to_bcs_bytes(),
         });
         let next_sequence_number = SequenceNumber::new();
         Self {
@@ -156,6 +171,10 @@ impl Object {
             data,
             next_sequence_number,
         }
+    }
+
+    pub fn with_id_owner_for_testing(id: ObjectID, owner: FastPayAddress) -> Self {
+        Self::with_id_owner_gas_for_testing(id, owner, 0)
     }
 
     // TODO: this should be test-only, but it's still used in bench and server
