@@ -128,6 +128,7 @@ fn test_object_basics() {
     let native_functions = genesis.native_functions.clone();
     let mut storage = InMemoryStorage::new(genesis.objects.clone());
 
+    #[allow(clippy::ptr_arg)]
     fn call(
         storage: &mut InMemoryStorage,
         native_functions: &NativeFunctionTable,
@@ -140,7 +141,7 @@ fn test_object_basics() {
 
         adapter::execute(
             storage,
-            native_functions.clone(),
+            native_functions.to_owned(),
             module,
             &Identifier::new(name).unwrap(),
             Vec::new(),

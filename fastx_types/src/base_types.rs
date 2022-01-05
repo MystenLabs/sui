@@ -8,7 +8,9 @@ use ed25519_dalek::{Digest, Signer, Verifier};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
+use rand::prelude::StdRng;
 use rand::rngs::OsRng;
+use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
 
@@ -37,12 +39,38 @@ pub struct UserData(pub Option<[u8; 32]>);
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 pub struct KeyPair(dalek::Keypair);
 
-#[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct PublicKeyBytes([u8; dalek::PUBLIC_KEY_LENGTH]);
+#[readonly::make]
+#[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
+pub struct PublicKeyBytes(#[readonly] pub ed25519_dalek::PublicKey);
+
+#[allow(clippy::derive_hash_xor_eq)] // dalek's Eq is compatible
+impl std::hash::Hash for PublicKeyBytes {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.as_bytes().hash(state);
+    }
+}
+
+impl PartialOrd for PublicKeyBytes {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0.as_bytes().partial_cmp(other.0.as_bytes())
+    }
+}
+
+impl Ord for PublicKeyBytes {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.as_bytes().cmp(other.0.as_bytes())
+    }
+}
+
+impl Default for PublicKeyBytes {
+    fn default() -> Self {
+        PublicKeyBytes(ed25519_dalek::PublicKey::from_bytes(&[0u8; 32]).unwrap())
+    }
+}
 
 impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
-        self.0.to_vec()
+        self.0.as_ref().to_vec()
     }
 }
 
@@ -51,10 +79,9 @@ impl TryFrom<&[u8]> for PublicKeyBytes {
     type Error = FastPayError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, FastPayError> {
-        let arr: [u8; dalek::PUBLIC_KEY_LENGTH] = bytes
-            .try_into()
+        let pk = ed25519_dalek::PublicKey::from_bytes(bytes)
             .map_err(|_| FastPayError::InvalidAuthenticator)?;
-        Ok(Self(arr))
+        Ok(Self(pk))
     }
 }
 
@@ -162,7 +189,7 @@ impl TransactionDigest {
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;
     let keypair = dalek::Keypair::generate(&mut csprng);
-    (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
+    (PublicKeyBytes(keypair.public), KeyPair(keypair))
 }
 
 pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
@@ -182,19 +209,19 @@ where
 }
 
 pub fn encode_address(key: &PublicKeyBytes) -> String {
-    base64::encode(&key.0[..])
+    base64::encode(key.0.as_bytes())
 }
 
 pub fn decode_address(s: &str) -> Result<PublicKeyBytes, anyhow::Error> {
     let value = base64::decode(s)?;
-    let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
-    address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
-    Ok(PublicKeyBytes(address))
+    let res = PublicKeyBytes::try_from(&value[..])?;
+    Ok(res)
 }
 
 pub fn dbg_addr(name: u8) -> FastPayAddress {
-    let addr = [name; dalek::PUBLIC_KEY_LENGTH];
-    PublicKeyBytes(addr)
+    let mut rng = StdRng::from_seed([name; 32]);
+    let pk = ed25519_dalek::Keypair::generate(&mut rng).public;
+    PublicKeyBytes(pk)
 }
 
 pub fn dbg_object_id(name: u8) -> ObjectID {
@@ -435,8 +462,7 @@ impl Signature {
     {
         let mut message = Vec::new();
         value.write(&mut message);
-        let public_key = dalek::PublicKey::from_bytes(&author.0)?;
-        public_key.verify(&message, &self.0)
+        author.0.verify(&message, &self.0)
     }
 
     pub fn check<T>(&self, value: &T, author: FastPayAddress) -> Result<(), FastPayError>
@@ -462,7 +488,7 @@ impl Signature {
         for (addr, sig) in votes.into_iter() {
             messages.push(&msg);
             signatures.push(sig.0);
-            public_keys.push(dalek::PublicKey::from_bytes(&addr.0)?);
+            public_keys.push(addr.0);
         }
         dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..])
     }
