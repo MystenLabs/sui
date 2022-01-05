@@ -10,7 +10,10 @@ use fastx_types::{
         TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     error::{FastPayError, FastPayResult},
-    gas::{calculate_module_publish_gas, deduct_gas},
+    gas::{
+        calculate_module_publish_cost, calculate_object_creation_cost,
+        calculate_object_deletion_refund, deduct_gas,
+    },
     object::{Data, MoveObject, Object},
     storage::Storage,
 };
@@ -47,8 +50,8 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     type_args: Vec<TypeTag>,
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
-    gas_budget: Option<u64>,
-    gas_object: Object,
+    gas_budget: u64,
+    mut gas_object: Object,
     ctx: TxContext,
 ) -> Result<(), FastPayError> {
     let TypeCheckSuccess {
@@ -69,7 +72,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         .expect("VM creation only fails if natives are invalid, and we created the natives");
     // TODO: Update Move gas constants to reflect the gas fee on fastx.
     let mut gas_status =
-        get_gas_status(gas_budget).map_err(|e| FastPayError::GasBudgetTooHigh {
+        get_gas_status(Some(gas_budget)).map_err(|e| FastPayError::GasBudgetTooHigh {
             error: e.to_string(),
         })?;
     let session = vm.new_session(state_view);
@@ -94,8 +97,6 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             debug_assert!(change_set.accounts().is_empty());
             // Input ref parameters we put in should be the same number we get out
             debug_assert!(mutable_ref_objects.len() == mutable_ref_values.len());
-            // Either we consumed gas, or budget is not provided hence no gas metering.
-            debug_assert!(gas_used > 0 || gas_budget == None);
             let mutable_refs = mutable_ref_objects
                 .into_iter()
                 .zip(mutable_ref_values.into_iter());
@@ -106,12 +107,20 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
                 events,
                 gas_object,
                 gas_used,
+                gas_budget,
             )?;
             Ok(())
         }
-        ExecutionResult::Fail { error, gas_used: _ } => Err(FastPayError::AbortedExecution {
-            error: error.to_string(),
-        }),
+        ExecutionResult::Fail { error, gas_used } => {
+            // Need to deduct gas even if the execution failed.
+            deduct_gas(&mut gas_object, gas_used as i128)?;
+            state_view.write_object(gas_object);
+            // TODO: Keep track the gas deducted so that we could give them to participants.
+
+            Err(FastPayError::AbortedExecution {
+                error: error.to_string(),
+            })
+        }
     }
 }
 
@@ -127,9 +136,10 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             error: "Publishing empty list of modules".to_string(),
         });
     }
-    let gas_cost = calculate_module_publish_gas(&module_bytes);
-    deduct_gas(&mut gas_object, gas_cost)?;
+    let gas_cost = calculate_module_publish_cost(&module_bytes);
+    deduct_gas(&mut gas_object, gas_cost as i128)?;
     state_view.write_object(gas_object);
+    // TODO: Keep track the gas deducted so that we could give them to participants.
 
     let mut modules = module_bytes
         .iter()
@@ -217,7 +227,8 @@ fn process_successful_execution<
     mutable_refs: impl Iterator<Item = (Object, Vec<u8>)>,
     events: Vec<Event>,
     mut gas_object: Object,
-    gas_used: u64,
+    mut gas_used: u64,
+    gas_budget: u64,
 ) -> Result<(), FastPayError> {
     for (mut obj, new_contents) in mutable_refs {
         match &mut obj.data {
@@ -259,7 +270,9 @@ fn process_successful_execution<
                         old_object.next_sequence_number = sequence_number;
                         old_object
                     } else {
-                        Object::new_move(move_obj, recipient, SequenceNumber::new())
+                        let obj = Object::new_move(move_obj, recipient, SequenceNumber::new());
+                        gas_used += calculate_object_creation_cost(&obj);
+                        obj
                     };
                     new_object.owner = recipient;
                     state_view.write_object(new_object);
@@ -271,20 +284,29 @@ fn process_successful_execution<
             unimplemented!("Processing user events")
         }
     }
+    if gas_used > gas_budget {
+        return Err(FastPayError::InsufficientGas {
+            error: format!(
+                "Gas budget is {}, not enough to pay for cost {}",
+                gas_budget, gas_used
+            ),
+        });
+    }
     // any object left in `by_value_objects` is an input passed by value that was not transferred or frozen.
     // this means that either the object was (1) deleted from the FastX system altogether, or
     // (2) wrapped inside another object that is in the FastX object pool
     // in either case, we want to delete it
-    for id in by_value_objects.keys() {
+    let mut gas_refund: u64 = 0;
+    for (id, object) in by_value_objects.iter() {
         state_view.delete_object(id);
+        gas_refund += calculate_object_deletion_refund(object);
     }
 
-    if gas_used > 0 {
-        // The fact that Move VM succeeded means that there is enough gas.
-        // Hence deduct_gas cannot fail.
-        deduct_gas(&mut gas_object, gas_used).unwrap();
-        state_view.write_object(gas_object);
-    }
+    // TODO: In the current approach, we basically can use refund gas to pay for current transaction.
+    // Is this allowed?
+    deduct_gas(&mut gas_object, (gas_used as i128) - (gas_refund as i128))?;
+    state_view.write_object(gas_object);
+    // TODO: Keep track the gas deducted so that we could give them to participants.
 
     Ok(())
 }
@@ -392,7 +414,7 @@ fn resolve_and_type_check(
     let mut args = Vec::new();
     let mut mutable_ref_objects = Vec::new();
     let mut by_value_objects = BTreeMap::new();
-    #[allow(unused_mut)]
+    #[cfg(debug_assertions)]
     let mut num_immutable_objects = 0;
     #[cfg(debug_assertions)]
     let num_objects = object_args.len();

@@ -7,7 +7,7 @@ use fastx_adapter::genesis;
 #[cfg(test)]
 use fastx_types::{
     base_types::dbg_addr,
-    gas::{calculate_module_publish_gas, get_gas_balance},
+    gas::{calculate_module_publish_cost, get_gas_balance},
 };
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
@@ -199,6 +199,7 @@ fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
     dependent_module
 }
 
+#[cfg(test)]
 fn check_gas_object(
     gas_object: &Object,
     expected_balance: u64,
@@ -262,7 +263,7 @@ async fn test_publish_module_no_dependencies_ok() {
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
-    let gas_cost = calculate_module_publish_gas(&module_bytes);
+    let gas_cost = calculate_module_publish_cost(&module_bytes);
     let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, &sender_key);
     let module_object_id = TxContext::new(order.digest()).fresh_id();
     let response = send_and_confirm_order(&mut authority, order).await.unwrap();
@@ -319,7 +320,7 @@ async fn test_handle_move_order() {
     let mut genesis_module_objects = genesis.objects.clone();
     let module_object_ref = genesis_module_objects
         .iter()
-        .find_map(|o| match o.data.as_module() {
+        .find_map(|o| match o.data.try_as_module() {
             Some(m) => {
                 if m.self_id().name() == ident_str!("ObjectBasics") {
                     Some((*m.self_id().address(), SequenceNumber::new()))
@@ -350,7 +351,7 @@ async fn test_handle_move_order() {
         MAX_GAS,
         &sender_key,
     );
-    let gas_cost = 142;
+    let gas_cost = 142 + 24; // 142 is for bytecode execution, 24 is for object creation.
     let res = send_and_confirm_order(&mut authority_state, order)
         .await
         .unwrap();
@@ -392,7 +393,7 @@ async fn test_handle_move_order_insufficient_budget() {
     let mut genesis_module_objects = genesis.objects.clone();
     let module_object_ref = genesis_module_objects
         .iter()
-        .find_map(|o| match o.data.as_module() {
+        .find_map(|o| match o.data.try_as_module() {
             Some(m) if m.self_id().name() == ident_str!("ObjectBasics") => {
                 Some((*m.self_id().address(), SequenceNumber::new()))
             }

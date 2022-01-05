@@ -47,7 +47,7 @@ impl Data {
         }
     }
 
-    pub fn as_move(&self) -> Option<&MoveObject> {
+    pub fn try_as_move(&self) -> Option<&MoveObject> {
         use Data::*;
         match self {
             Move(m) => Some(m),
@@ -55,7 +55,7 @@ impl Data {
         }
     }
 
-    pub fn as_move_mut(&mut self) -> Option<&mut MoveObject> {
+    pub fn try_as_move_mut(&mut self) -> Option<&mut MoveObject> {
         use Data::*;
         match self {
             Move(m) => Some(m),
@@ -63,7 +63,7 @@ impl Data {
         }
     }
 
-    pub fn as_module(&self) -> Option<CompiledModule> {
+    pub fn try_as_module(&self) -> Option<CompiledModule> {
         use Data::*;
         match self {
             Move(_) => None,
