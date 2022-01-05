@@ -175,7 +175,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             module,
             sender,
             SequenceNumber::new(),
-            ctx.get_transaction_digest(),
+            ctx.digest(),
         );
         written_refs.push(module_object.to_object_reference());
         state_view.write_object(module_object);
@@ -282,7 +282,7 @@ fn process_successful_execution<
                             move_obj,
                             recipient,
                             SequenceNumber::new(),
-                            ctx.get_transaction_digest(),
+                            ctx.digest(),
                         );
                         gas_used += calculate_object_creation_cost(&obj);
                         obj

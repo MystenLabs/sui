@@ -121,14 +121,12 @@ impl TxContext {
 
         // truncate into an ObjectID.
         let id = AccountAddress::try_from(&hash[0..AccountAddress::LENGTH]).unwrap();
-
         self.ids_created += 1;
-
         id
     }
 
     /// Return the transaction digest, to include in new objects
-    pub fn get_transaction_digest(&self) -> TransactionDigest {
+    pub fn digest(&self) -> TransactionDigest {
         self.digest
     }
 
@@ -403,5 +401,5 @@ pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     let mut digest = Sha3_256::default();
     signable.write(&mut digest);
     let hash = digest.finalize();
-    hash.as_slice().try_into().expect("Correct size")
+    hash.into()
 }
