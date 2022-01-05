@@ -404,6 +404,7 @@ impl CertifiedOrder {
         Signature::verify_batch(
             &self.order.kind,
             std::iter::once(&inner_sig).chain(&self.signatures),
+            &committee.expanded_keys,
         )
     }
 }
