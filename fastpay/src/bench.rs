@@ -189,7 +189,7 @@ impl ClientServerBenchmark {
         &self,
         num_accounts: usize,
         num_objs_per_acc: usize,
-        _gas_value_per_obj: usize,
+        gas_value_per_obj: usize,
     ) -> Vec<(UserAccount, Vec<Object>)> {
         let mut accounts = Vec::new();
 
@@ -197,7 +197,11 @@ impl ClientServerBenchmark {
             let mut account = UserAccount::new(Vec::new());
             let mut objs = Vec::new();
             for _ in 0..num_objs_per_acc {
-                let obj = Object::with_id_owner_for_testing(ObjectID::random(), account.address);
+                let obj = Object::with_id_owner_gas_for_testing(
+                    ObjectID::random(),
+                    account.address,
+                    gas_value_per_obj as u64,
+                );
                 objs.push(obj);
             }
             account.from_objs(&objs);
