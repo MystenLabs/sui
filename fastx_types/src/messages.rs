@@ -98,9 +98,10 @@ pub enum InfoRequest {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum InfoResponse {
     AccountInfoResponse(AccountInfoResponse),
-    ObjectInfoResponse(Box<ObjectInfoResponse>),
+    ObjectInfoResponse(ObjectInfoResponse),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -143,7 +144,7 @@ impl From<InfoResponse> for AccountInfoResponse {
 impl From<InfoResponse> for ObjectInfoResponse {
     fn from(info: InfoResponse) -> Self {
         match info {
-            InfoResponse::ObjectInfoResponse(response) => *response,
+            InfoResponse::ObjectInfoResponse(response) => response,
             _ => panic!(),
         }
     }
@@ -151,7 +152,7 @@ impl From<InfoResponse> for ObjectInfoResponse {
 
 impl From<ObjectInfoResponse> for InfoResponse {
     fn from(info: ObjectInfoResponse) -> Self {
-        InfoResponse::ObjectInfoResponse(Box::new(info))
+        InfoResponse::ObjectInfoResponse(info)
     }
 }
 
