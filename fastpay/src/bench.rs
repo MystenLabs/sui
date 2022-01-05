@@ -109,10 +109,7 @@ impl ClientServerBenchmark {
         for _ in 0..self.committee_size {
             keys.push(get_key_pair());
         }
-        let committee = Committee {
-            voting_rights: keys.iter().map(|(k, _)| (*k, 1)).collect(),
-            total_votes: self.committee_size,
-        };
+        let committee = Committee::new(keys.iter().map(|(k, _)| (*k, 1)).collect());
 
         // Pick an authority and create state.
         let (public_auth0, secret_auth0) = keys.pop().unwrap();

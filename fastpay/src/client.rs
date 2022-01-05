@@ -130,10 +130,7 @@ fn make_benchmark_certificates_from_orders_and_server_configs(
         let server_config = AuthorityServerConfig::read(file).expect("Fail to read server config");
         keys.push((server_config.authority.address, server_config.key));
     }
-    let committee = Committee {
-        voting_rights: keys.iter().map(|(k, _)| (*k, 1)).collect(),
-        total_votes: keys.len(),
-    };
+    let committee = Committee::new(keys.iter().map(|(k, _)| (*k, 1)).collect());
     assert!(
         keys.len() >= committee.quorum_threshold(),
         "Not enough server configs were provided with --server-configs"
