@@ -7,26 +7,27 @@ use super::*;
 
 #[test]
 fn test_signed_values() {
+    #[allow(clippy::mutable_key_type)] // Hash doesn't access the Cell in PublicKey
     let mut authorities = BTreeMap::new();
     let (a1, sec1) = get_key_pair();
     let (a2, sec2) = get_key_pair();
     let (a3, sec3) = get_key_pair();
 
-    authorities.insert(/* address */ a1, /* voting right */ 1);
-    authorities.insert(/* address */ a2, /* voting right */ 0);
+    authorities.insert(/* address */ a1.clone(), /* voting right */ 1);
+    authorities.insert(/* address */ a2.clone(), /* voting right */ 0);
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
         object_id: ObjectID::random(),
-        sender: a1,
-        recipient: Address::FastPay(a2),
+        sender: a1.clone(),
+        recipient: Address::FastPay(a2.clone()),
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer.clone(), &sec1);
     let bad_order = Order::new_transfer(transfer, &sec2);
 
-    let v = SignedOrder::new(order.clone(), a1, &sec1);
+    let v = SignedOrder::new(order.clone(), a1.clone(), &sec1);
     assert!(v.check(&committee).is_ok());
 
     let v = SignedOrder::new(order.clone(), a2, &sec2);
@@ -45,15 +46,16 @@ fn test_certificates() {
     let (a2, sec2) = get_key_pair();
     let (a3, sec3) = get_key_pair();
 
+    #[allow(clippy::mutable_key_type)] // Hash doesn't access the Cell in PublicKey
     let mut authorities = BTreeMap::new();
-    authorities.insert(/* address */ a1, /* voting right */ 1);
-    authorities.insert(/* address */ a2, /* voting right */ 1);
+    authorities.insert(/* address */ a1.clone(), /* voting right */ 1);
+    authorities.insert(/* address */ a2.clone(), /* voting right */ 1);
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
         object_id: ObjectID::random(),
-        sender: a1,
-        recipient: Address::FastPay(a2),
+        sender: a1.clone(),
+        recipient: Address::FastPay(a2.clone()),
         sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
@@ -66,7 +68,7 @@ fn test_certificates() {
 
     let mut builder = SignatureAggregator::try_new(order.clone(), &committee).unwrap();
     assert!(builder
-        .append(v1.authority, v1.signature)
+        .append(v1.authority.clone(), v1.signature)
         .unwrap()
         .is_none());
     let mut c = builder.append(v2.authority, v2.signature).unwrap().unwrap();

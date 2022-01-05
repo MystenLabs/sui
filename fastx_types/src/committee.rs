@@ -11,6 +11,7 @@ pub struct Committee {
 }
 
 impl Committee {
+    #[allow(clippy::mutable_key_type)] // Hash does not access the Cell of PublicKey
     pub fn new(voting_rights: BTreeMap<AuthorityName, usize>) -> Self {
         let total_votes = voting_rights.iter().fold(0, |sum, (_, votes)| sum + *votes);
         Committee {

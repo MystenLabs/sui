@@ -48,7 +48,7 @@ fn make_server(
         for initial_state_cfg_entry in &initial_accounts_config.config {
             let address = &initial_state_cfg_entry.address;
             for object_id in &initial_state_cfg_entry.object_ids {
-                let object = Object::with_id_owner_for_testing(*object_id, *address);
+                let object = Object::with_id_owner_for_testing(*object_id, address.clone());
 
                 state.init_order_lock(object.to_object_reference()).await;
                 state.insert_object(object).await;

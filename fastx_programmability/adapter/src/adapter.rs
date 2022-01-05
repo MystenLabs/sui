@@ -143,7 +143,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         let _ = state_view;
 
         // Create module objects and write them to the store
-        let module_object = Object::new_module(module, sender, SequenceNumber::new());
+        let module_object = Object::new_module(module, sender.clone(), SequenceNumber::new());
         written_refs.push(module_object.to_object_reference());
         state_view.write_object(module_object);
     }
@@ -241,7 +241,7 @@ fn process_successful_execution<
                         old_object.next_sequence_number = sequence_number;
                         old_object
                     } else {
-                        Object::new_move(move_obj, recipient, SequenceNumber::new())
+                        Object::new_move(move_obj, recipient.clone(), SequenceNumber::new())
                     };
                     new_object.owner = recipient;
                     state_view.write_object(new_object);

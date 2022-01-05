@@ -103,6 +103,7 @@ pub trait Client {
 
 impl<A> ClientState<A> {
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::mutable_key_type)] // Hash for PublicKey doesn't access the Cell
     pub fn new(
         address: FastPayAddress,
         secret: KeyPair,
@@ -128,7 +129,7 @@ impl<A> ClientState<A> {
     }
 
     pub fn address(&self) -> FastPayAddress {
-        self.address
+        self.address.clone()
     }
 
     pub fn next_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
@@ -256,6 +257,7 @@ where
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
+        #[allow(clippy::mutable_key_type)] // Hash implementation doesn't access the Cell
         let mut authority_clients = self.authority_clients.clone();
         let numbers: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
@@ -263,7 +265,7 @@ where
                 let fut = client.handle_account_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => Some((*name, info.next_sequence_number)),
+                        Ok(info) => Some((name.clone(), info.next_sequence_number)),
                         _ => None,
                     }
                 }
@@ -286,6 +288,7 @@ where
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
         };
+        #[allow(clippy::mutable_key_type)] // Hash implementation doesn't access the Cell
         let authority_clients = self.authority_clients.clone();
         let numbers: futures::stream::FuturesUnordered<_> = authority_clients
             .iter()
@@ -293,7 +296,9 @@ where
                 let fut = client.handle_account_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => Some((*name, Some((info.owner, info.next_sequence_number)))),
+                        Ok(info) => {
+                            Some((name.clone(), Some((info.owner, info.next_sequence_number))))
+                        }
                         _ => None,
                     }
                 }
@@ -313,17 +318,19 @@ where
         F: Fn(AuthorityName, &'a mut A) -> AsyncResult<'a, V, FastPayError> + Clone,
     {
         let committee = &self.committee;
+        #[allow(clippy::mutable_key_type)] // Hash for PublicKey doesn't access the Cell
         let authority_clients = &mut self.authority_clients;
         let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
             .map(|(name, client)| {
                 let execute = execute.clone();
-                async move { (*name, execute(*name, client).await) }
+                async move { (name.clone(), execute(name.clone(), client).await) }
             })
             .collect();
 
         let mut values = Vec::new();
         let mut value_score = 0;
+        #[allow(clippy::mutable_key_type)] // Hash for PublicKey doesn't access the Cell
         let mut error_scores = HashMap::new();
         while let Some((name, result)) = responses.next().await {
             match result {
@@ -369,7 +376,7 @@ where
         let requester = CertificateRequester::new(
             self.committee.clone(),
             self.authority_clients.values().cloned().collect(),
-            sender,
+            sender.clone(),
             object_id,
         );
         let (task, mut handle) = Downloader::start(
@@ -479,7 +486,7 @@ where
             let mut requester = CertificateRequester::new(
                 self.committee.clone(),
                 self.authority_clients.values().cloned().collect(),
-                self.address,
+                self.address.clone(),
                 object_id,
             );
 
@@ -507,7 +514,7 @@ where
     ) -> Result<CertifiedOrder, anyhow::Error> {
         let transfer = Transfer {
             object_id,
-            sender: self.address,
+            sender: self.address.clone(),
             recipient,
             sequence_number,
             user_data,
@@ -587,7 +594,7 @@ where
         self.pending_transfer = Some(order.clone());
         let new_sent_certificates = self
             .communicate_transfers(
-                self.address,
+                self.address.clone(),
                 *order.object_id(),
                 self.sent_certificates.clone(),
                 CommunicateAction::SendOrder(order.clone()),
@@ -602,7 +609,7 @@ where
         // Confirm last transfer certificate if needed.
         if with_confirmation {
             self.communicate_transfers(
-                self.address,
+                self.address.clone(),
                 *order.object_id(),
                 self.sent_certificates.clone(),
                 CommunicateAction::SynchronizeNextSequenceNumber(
@@ -654,11 +661,11 @@ where
             match &certificate.order.kind {
                 OrderKind::Transfer(transfer) => {
                     ensure!(
-                        transfer.recipient == Address::FastPay(self.address),
+                        transfer.recipient == Address::FastPay(self.address.clone()),
                         "Transfer should be received by us."
                     );
                     self.communicate_transfers(
-                        transfer.sender,
+                        transfer.sender.clone(),
                         *certificate.order.object_id(),
                         vec![certificate.clone()],
                         CommunicateAction::SynchronizeNextSequenceNumber(
@@ -694,7 +701,7 @@ where
         Box::pin(async move {
             let transfer = Transfer {
                 object_id,
-                sender: self.address,
+                sender: self.address.clone(),
                 recipient: Address::FastPay(recipient),
                 // amount,
                 sequence_number: self.next_sequence_number(object_id),

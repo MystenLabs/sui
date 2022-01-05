@@ -107,9 +107,10 @@ fn test_handle_redeem_transaction_double_spend() {
 #[cfg(test)]
 fn init_contract() -> (FastPaySmartContractState, AuthorityName, KeyPair) {
     let (authority_address, authority_key) = get_key_pair();
+    #[allow(clippy::mutable_key_type)] // Hash implementation doesn't access the Cell
     let mut authorities = BTreeMap::new();
     authorities.insert(
-        /* address */ authority_address,
+        /* address */ authority_address.clone(),
         /* voting right */ 1,
     );
     let committee = Committee::new(authorities);

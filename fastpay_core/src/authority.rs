@@ -129,7 +129,7 @@ impl AuthorityState {
         //       input_objects() list. So need to check it contains some gas.
 
         let object_id = *order.object_id();
-        let signed_order = SignedOrder::new(order, self.name, &self.secret);
+        let signed_order = SignedOrder::new(order, self.name.clone(), &self.secret);
 
         // Check and write locks, to signed order, into the database
         self.set_order_lock(&mutable_objects, signed_order).await?;

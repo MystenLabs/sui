@@ -21,7 +21,7 @@ pub struct FundingTransaction {
     // TODO: Authenticated by Primary sender.
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Address {
     Primary(PrimaryAddress),
     FastPay(FastPayAddress),
@@ -219,7 +219,7 @@ impl Order {
     }
 
     pub fn check_signature(&self) -> Result<(), FastPayError> {
-        self.signature.check(&self.kind, *self.sender())
+        self.signature.check(&self.kind, self.sender().clone())
     }
 
     // TODO: support orders with multiple objects, each with their own sequence number (https://github.com/MystenLabs/fastnft/issues/8)
@@ -306,7 +306,8 @@ impl SignedOrder {
         self.order.check_signature()?;
         let weight = committee.weight(&self.authority);
         fp_ensure!(weight > 0, FastPayError::UnknownSigner);
-        self.signature.check(&self.order.kind, self.authority)?;
+        self.signature
+            .check(&self.order.kind, self.authority.clone())?;
         Ok(weight)
     }
 }
@@ -346,13 +347,13 @@ impl<'a> SignatureAggregator<'a> {
         authority: AuthorityName,
         signature: Signature,
     ) -> Result<Option<CertifiedOrder>, FastPayError> {
-        signature.check(&self.partial.order.kind, authority)?;
+        signature.check(&self.partial.order.kind, authority.clone())?;
         // Check that each authority only appears once.
         fp_ensure!(
             !self.used_authorities.contains(&authority),
             FastPayError::CertificateAuthorityReuse
         );
-        self.used_authorities.insert(authority);
+        self.used_authorities.insert(authority.clone());
         // Update weight.
         let voting_rights = self.committee.weight(&authority);
         fp_ensure!(voting_rights > 0, FastPayError::UnknownSigner);
@@ -382,6 +383,7 @@ impl CertifiedOrder {
     pub fn check(&self, committee: &Committee) -> Result<(), FastPayError> {
         // Check the quorum.
         let mut weight = 0;
+        #[allow(clippy::mutable_key_type)] // Hash does not access the Cell of PublicKey
         let mut used_authorities = HashSet::new();
         for (authority, _) in self.signatures.iter() {
             // Check that each authority only appears once.
@@ -389,7 +391,7 @@ impl CertifiedOrder {
                 !used_authorities.contains(authority),
                 FastPayError::CertificateAuthorityReuse
             );
-            used_authorities.insert(*authority);
+            used_authorities.insert(authority.clone());
             // Update weight.
             let voting_rights = committee.weight(authority);
             fp_ensure!(voting_rights > 0, FastPayError::UnknownSigner);
@@ -400,7 +402,7 @@ impl CertifiedOrder {
             FastPayError::CertificateRequiresQuorum
         );
         // All that is left is checking signatures!
-        let inner_sig = (*self.order.sender(), self.order.signature);
+        let inner_sig = (self.order.sender().clone(), self.order.signature);
         Signature::verify_batch(
             &self.order.kind,
             std::iter::once(&inner_sig).chain(&self.signatures),

@@ -67,14 +67,16 @@ fn init_local_authorities(
     count: usize,
 ) -> (HashMap<AuthorityName, LocalAuthorityClient>, Committee) {
     let mut key_pairs = Vec::new();
+    #[allow(clippy::mutable_key_type)] // Hash implementation doesn't access the Cell
     let mut voting_rights = BTreeMap::new();
     for _ in 0..count {
         let key_pair = get_key_pair();
-        voting_rights.insert(key_pair.0, 1);
+        voting_rights.insert(key_pair.0.clone(), 1);
         key_pairs.push(key_pair);
     }
     let committee = Committee::new(voting_rights);
 
+    #[allow(clippy::mutable_key_type)] // Hash implementation doesn't access the Cell
     let mut clients = HashMap::new();
     for (address, secret) in key_pairs {
         // Random directory for the DB
@@ -85,7 +87,7 @@ fn init_local_authorities(
         let mut opts = rocksdb::Options::default();
         opts.set_max_open_files(max_files_client_tests());
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
-        let state = AuthorityState::new(committee.clone(), address, secret, store);
+        let state = AuthorityState::new(committee.clone(), address.clone(), secret, store);
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
@@ -96,10 +98,11 @@ fn init_local_authorities_bad_1(
     count: usize,
 ) -> (HashMap<AuthorityName, LocalAuthorityClient>, Committee) {
     let mut key_pairs = Vec::new();
+    #[allow(clippy::mutable_key_type)] // Hash implementation doesn't access the Cell
     let mut voting_rights = BTreeMap::new();
     for i in 0..count {
         let key_pair = get_key_pair();
-        voting_rights.insert(key_pair.0, 1);
+        voting_rights.insert(key_pair.0.clone(), 1);
         if i + 1 < (count + 2) / 3 {
             // init 1 authority with a bad keypair
             key_pairs.push(get_key_pair());
@@ -109,6 +112,7 @@ fn init_local_authorities_bad_1(
     }
     let committee = Committee::new(voting_rights);
 
+    #[allow(clippy::mutable_key_type)] // Hash implementation doesn't access the Cell
     let mut clients = HashMap::new();
     for (address, secret) in key_pairs {
         // Random directory
@@ -119,12 +123,13 @@ fn init_local_authorities_bad_1(
         let mut opts = rocksdb::Options::default();
         opts.set_max_open_files(max_files_client_tests());
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
-        let state = AuthorityState::new(committee.clone(), address, secret, store);
+        let state = AuthorityState::new(committee.clone(), address.clone(), secret, store);
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
 }
 
+#[allow(clippy::mutable_key_type)] // Hash implementation doesn't access the Cell
 #[cfg(test)]
 fn make_client(
     authority_clients: HashMap<AuthorityName, LocalAuthorityClient>,
@@ -151,7 +156,7 @@ async fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
     for (authority, object_ids) in authorities.into_iter().zip(object_ids.into_iter()) {
         for object_id in object_ids {
             let mut object = Object::with_id_for_testing(object_id);
-            object.transfer(client.address);
+            object.transfer(client.address.clone());
             let client_ref = authority.0.as_ref().try_lock().unwrap();
 
             client_ref.insert_object(object).await;
@@ -207,7 +212,7 @@ fn test_get_strong_majority_owner() {
         let client = init_local_client_state(authority_objects).await;
         assert_eq!(
             client.get_strong_majority_owner(object_id_1).await,
-            Some((client.address, SequenceNumber::from(0)))
+            Some((client.address.clone(), SequenceNumber::from(0)))
         );
         assert_eq!(
             client.get_strong_majority_owner(object_id_2).await,
@@ -249,16 +254,16 @@ fn test_initiating_valid_transfer() {
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
     assert_eq!(
         rt.block_on(sender.get_strong_majority_owner(object_id_1)),
-        Some((sender.address, SequenceNumber::from(0)))
+        Some((sender.address.clone(), SequenceNumber::from(0)))
     );
     assert_eq!(
         rt.block_on(sender.get_strong_majority_owner(object_id_2)),
-        Some((sender.address, SequenceNumber::from(0)))
+        Some((sender.address.clone(), SequenceNumber::from(0)))
     );
     let certificate = rt
         .block_on(sender.transfer_to_fastpay(
             object_id_1,
-            recipient,
+            recipient.clone(),
             UserData(Some(*b"hello...........hello...........")),
         ))
         .unwrap();
@@ -273,11 +278,11 @@ fn test_initiating_valid_transfer() {
     );
     assert_eq!(
         rt.block_on(sender.get_strong_majority_owner(object_id_2)),
-        Some((sender.address, SequenceNumber::from(0)))
+        Some((sender.address.clone(), SequenceNumber::from(0)))
     );
     assert_eq!(
         rt.block_on(sender.request_certificate(
-            sender.address,
+            sender.address.clone(),
             object_id_1,
             SequenceNumber::from(0),
         ))
@@ -303,7 +308,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     let certificate = rt
         .block_on(sender.transfer_to_fastpay(
             object_id,
-            recipient,
+            recipient.clone(),
             UserData(Some(*b"hello...........hello...........")),
         ))
         .unwrap();
@@ -317,8 +322,12 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
         Some((recipient, SequenceNumber::from(1)))
     );
     assert_eq!(
-        rt.block_on(sender.request_certificate(sender.address, object_id, SequenceNumber::from(0)))
-            .unwrap(),
+        rt.block_on(sender.request_certificate(
+            sender.address.clone(),
+            object_id,
+            SequenceNumber::from(0)
+        ))
+        .unwrap(),
         certificate
     );
 }
@@ -347,7 +356,7 @@ fn test_initiating_transfer_low_funds() {
     // assert_eq!(sender.pending_transfer, None);
     assert_eq!(
         rt.block_on(sender.get_strong_majority_owner(object_id_1)),
-        Some((sender.address, SequenceNumber::from(0))),
+        Some((sender.address.clone(), SequenceNumber::from(0))),
     );
     assert_eq!(
         rt.block_on(sender.get_strong_majority_owner(object_id_2)),
@@ -378,16 +387,20 @@ fn test_bidirectional_transfer() {
     // Confirm client1 have ownership of the object.
     assert_eq!(
         rt.block_on(client1.get_strong_majority_owner(object_id)),
-        Some((client1.address, SequenceNumber::from(0)))
+        Some((client1.address.clone(), SequenceNumber::from(0)))
     );
     // Confirm client2 doesn't have ownership of the object.
     assert_eq!(
         rt.block_on(client2.get_strong_majority_owner(object_id)),
-        Some((client1.address, SequenceNumber::from(0)))
+        Some((client1.address.clone(), SequenceNumber::from(0)))
     );
     // Transfer object to client2.
     let certificate = rt
-        .block_on(client1.transfer_to_fastpay(object_id, client2.address, UserData::default()))
+        .block_on(client1.transfer_to_fastpay(
+            object_id,
+            client2.address.clone(),
+            UserData::default(),
+        ))
         .unwrap();
 
     assert_eq!(
@@ -399,12 +412,12 @@ fn test_bidirectional_transfer() {
     // Confirm client1 lose ownership of the object.
     assert_eq!(
         rt.block_on(client1.get_strong_majority_owner(object_id)),
-        Some((client2.address, SequenceNumber::from(1)))
+        Some((client2.address.clone(), SequenceNumber::from(1)))
     );
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
         rt.block_on(client2.get_strong_majority_owner(object_id)),
-        Some((client2.address, SequenceNumber::from(1)))
+        Some((client2.address.clone(), SequenceNumber::from(1)))
     );
     // Confirm sequence number is consistent between authorities and client.
     assert_eq!(
@@ -414,7 +427,7 @@ fn test_bidirectional_transfer() {
     // Confirm certificate is consistent between authorities and client.
     assert_eq!(
         rt.block_on(client1.request_certificate(
-            client1.address,
+            client1.address.clone(),
             object_id,
             SequenceNumber::from(0),
         ))
@@ -429,12 +442,16 @@ fn test_bidirectional_transfer() {
     // Confirm sequence number are consistent between clients.
     assert_eq!(
         rt.block_on(client2.get_strong_majority_owner(object_id)),
-        Some((client2.address, SequenceNumber::from(1)))
+        Some((client2.address.clone(), SequenceNumber::from(1)))
     );
 
     // Transfer the object back to Client1
-    rt.block_on(client2.transfer_to_fastpay(object_id, client1.address, UserData::default()))
-        .unwrap();
+    rt.block_on(client2.transfer_to_fastpay(
+        object_id,
+        client1.address.clone(),
+        UserData::default(),
+    ))
+    .unwrap();
 
     assert_eq!(
         client2.next_sequence_number(object_id),
@@ -445,7 +462,7 @@ fn test_bidirectional_transfer() {
     // Confirm client2 lose ownership of the object.
     assert_eq!(
         rt.block_on(client2.get_strong_majority_owner(object_id)),
-        Some((client1.address, SequenceNumber::from(2)))
+        Some((client1.address.clone(), SequenceNumber::from(2)))
     );
     assert_eq!(
         rt.block_on(client2.get_strong_majority_sequence_number(object_id)),
@@ -454,7 +471,7 @@ fn test_bidirectional_transfer() {
     // Confirm client1 acquired ownership of the object.
     assert_eq!(
         rt.block_on(client1.get_strong_majority_owner(object_id)),
-        Some((client1.address, SequenceNumber::from(2)))
+        Some((client1.address.clone(), SequenceNumber::from(2)))
     );
 
     // Should fail if Client 2 double spend the object
@@ -487,7 +504,7 @@ fn test_receiving_unconfirmed_transfer() {
 
     let certificate = rt
         .block_on(client1.transfer_to_fastpay_unsafe_unconfirmed(
-            client2.address,
+            client2.address.clone(),
             object_id,
             UserData::default(),
         ))
@@ -502,7 +519,7 @@ fn test_receiving_unconfirmed_transfer() {
     // ..but not confirmed remotely, hence an unchanged balance and sequence number.
     assert_eq!(
         rt.block_on(client1.get_strong_majority_owner(object_id)),
-        Some((client1.address, SequenceNumber::from(0)))
+        Some((client1.address.clone(), SequenceNumber::from(0)))
     );
     assert_eq!(
         rt.block_on(client1.get_strong_majority_sequence_number(object_id)),

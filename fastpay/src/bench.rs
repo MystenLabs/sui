@@ -110,7 +110,7 @@ impl ClientServerBenchmark {
             keys.push(get_key_pair());
         }
         let committee = Committee {
-            voting_rights: keys.iter().map(|(k, _)| (*k, 1)).collect(),
+            voting_rights: keys.iter().map(|(k, _)| (k.clone(), 1)).collect(),
             total_votes: self.committee_size,
         };
 
@@ -134,7 +134,7 @@ impl ClientServerBenchmark {
                 let keypair = get_key_pair();
                 let object_id: ObjectID = ObjectID::random();
 
-                let client = Object::with_id_owner_for_testing(object_id, keypair.0);
+                let client = Object::with_id_owner_for_testing(object_id, keypair.0.clone());
                 assert!(client.next_sequence_number == SequenceNumber::from(0));
                 state.init_order_lock(client.to_object_reference()).await;
                 state.insert_object(client).await;
@@ -149,12 +149,12 @@ impl ClientServerBenchmark {
         for (pubx, object_id, secx) in account_objects.iter() {
             let transfer = Transfer {
                 object_id: *object_id,
-                sender: *pubx,
+                sender: pubx.clone(),
                 recipient: Address::FastPay(next_recipient),
                 sequence_number: SequenceNumber::from(0),
                 user_data: UserData::default(),
             };
-            next_recipient = *pubx;
+            next_recipient = pubx.clone();
             let order = Order::new_transfer(transfer, secx);
 
             // Serialize order
@@ -169,7 +169,7 @@ impl ClientServerBenchmark {
             for i in 0..committee.quorum_threshold() {
                 let (pubx, secx) = keys.get(i).unwrap();
                 let sig = Signature::new(&certificate.order.kind, secx);
-                certificate.signatures.push((*pubx, sig));
+                certificate.signatures.push((pubx.clone(), sig));
             }
 
             let serialized_certificate = serialize_cert(&certificate);

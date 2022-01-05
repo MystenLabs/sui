@@ -81,10 +81,11 @@ impl CommitteeConfig {
         Ok(())
     }
 
+    #[allow(clippy::mutable_key_type)] // Hash implementation doesn't access the Cell
     pub fn voting_rights(&self) -> BTreeMap<AuthorityName, usize> {
         let mut map = BTreeMap::new();
         for authority in &self.authorities {
-            map.insert(authority.address, 1);
+            map.insert(authority.address.clone(), 1);
         }
         map
     }
@@ -129,7 +130,7 @@ impl AccountsConfig {
     }
 
     pub fn insert(&mut self, account: UserAccount) {
-        self.accounts.insert(account.address, account);
+        self.accounts.insert(account.address.clone(), account);
     }
 
     pub fn num_accounts(&self) -> usize {
@@ -185,7 +186,7 @@ impl AccountsConfig {
         Ok(Self {
             accounts: stream
                 .filter_map(Result::ok)
-                .map(|account: UserAccount| (account.address, account))
+                .map(|account: UserAccount| (account.address.clone(), account))
                 .collect(),
         })
     }

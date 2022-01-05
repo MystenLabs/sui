@@ -28,8 +28,8 @@ async fn test_handle_transfer_order_bad_signature() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
-    let authority_state = init_state_with_object(sender, object_id).await;
-    let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
+    let authority_state = init_state_with_object(sender.clone(), object_id).await;
+    let transfer_order = init_transfer_order(sender.clone(), &sender_key, recipient, object_id);
     let object_id = *transfer_order.object_id();
     let (_unknown_address, unknown_key) = get_key_pair();
     let mut bad_signature_transfer_order = transfer_order.clone();
@@ -116,7 +116,7 @@ async fn test_handle_transfer_order_ok() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
-    let authority_state = init_state_with_object(sender, object_id).await;
+    let authority_state = init_state_with_object(sender.clone(), object_id).await;
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
     // Check the initial state of the locks
@@ -208,7 +208,8 @@ async fn test_publish_dependent_module_ok() {
     let (sender, sender_key) = get_key_pair();
     // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
+    let gas_payment_object =
+        Object::with_id_owner_for_testing(gas_payment_object_id, sender.clone());
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
     let genesis = genesis::GENESIS.lock().unwrap();
@@ -245,7 +246,8 @@ async fn test_publish_module_no_dependencies_ok() {
     let (sender, sender_key) = get_key_pair();
     // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
+    let gas_payment_object =
+        Object::with_id_owner_for_testing(gas_payment_object_id, sender.clone());
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     let mut authority = init_state_with_objects(vec![gas_payment_object]).await;
 
@@ -269,7 +271,8 @@ async fn test_handle_move_order() {
     let (sender, sender_key) = get_key_pair();
     // create a dummy gas payment object. ok for now because we don't check gas
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
+    let gas_payment_object =
+        Object::with_id_owner_for_testing(gas_payment_object_id, sender.clone());
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // find the function Object::create and call it to create a new object
     let genesis = genesis::GENESIS.lock().unwrap();
@@ -294,7 +297,7 @@ async fn test_handle_move_order() {
 
     let function = ident_str!("create").to_owned();
     let order = Order::new_move_call(
-        sender,
+        sender.clone(),
         module_object_ref,
         function,
         Vec::new(),
@@ -326,7 +329,7 @@ async fn test_handle_transfer_order_double_spend() {
     let (sender, sender_key) = get_key_pair();
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
-    let authority_state = init_state_with_object(sender, object_id).await;
+    let authority_state = init_state_with_object(sender.clone(), object_id).await;
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
     let signed_order = authority_state
@@ -366,7 +369,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
-    let authority_state = init_state_with_object(sender, object_id).await;
+    let authority_state = init_state_with_object(sender.clone(), object_id).await;
 
     // Record the old sequence number
     let old_seq_num;
@@ -417,7 +420,7 @@ async fn test_handle_confirmation_order_exceed_balance() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
-    let authority_state = init_state_with_object(sender, object_id).await;
+    let authority_state = init_state_with_object(sender.clone(), object_id).await;
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
@@ -443,8 +446,11 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let (recipient, _) = get_key_pair();
-    let authority_state =
-        init_state_with_ids(vec![(sender, object_id), (recipient, ObjectID::random())]).await;
+    let authority_state = init_state_with_ids(vec![
+        (sender.clone(), object_id),
+        (recipient.clone(), ObjectID::random()),
+    ])
+    .await;
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
@@ -473,10 +479,10 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
 async fn test_handle_confirmation_order_receiver_equal_sender() {
     let (address, key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
-    let authority_state = init_state_with_object(address, object_id).await;
+    let authority_state = init_state_with_object(address.clone(), object_id).await;
 
     let certified_transfer_order = init_certified_transfer_order(
-        address,
+        address.clone(),
         &key,
         Address::FastPay(address),
         object_id,
@@ -500,11 +506,11 @@ async fn test_handle_confirmation_order_ok() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
-    let authority_state = init_state_with_object(sender, object_id).await;
+    let authority_state = init_state_with_object(sender.clone(), object_id).await;
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
-        Address::FastPay(recipient),
+        Address::FastPay(recipient.clone()),
         object_id,
         &authority_state,
     );
@@ -567,9 +573,10 @@ async fn test_account_state_unknown_account() {
 #[tokio::test]
 async fn test_authority_persist() {
     let (authority_address, authority_key) = get_key_pair();
+    #[allow(clippy::mutable_key_type)] // Hash implementation doesn't access the Cell
     let mut authorities = BTreeMap::new();
     authorities.insert(
-        /* address */ authority_address,
+        /* address */ authority_address.clone(),
         /* voting right */ 1,
     );
     let committee = Committee::new(authorities);
@@ -585,7 +592,7 @@ async fn test_authority_persist() {
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
     let authority = AuthorityState::new(
         committee.clone(),
-        authority_address,
+        authority_address.clone(),
         authority_key.copy(),
         store,
     );
@@ -594,7 +601,7 @@ async fn test_authority_persist() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let mut obj = Object::with_id_for_testing(object_id);
-    obj.transfer(recipient);
+    obj.transfer(recipient.clone());
 
     // Store an object
     authority.insert_object(obj).await;
@@ -620,9 +627,10 @@ async fn test_authority_persist() {
 #[cfg(test)]
 fn init_state() -> AuthorityState {
     let (authority_address, authority_key) = get_key_pair();
+    #[allow(clippy::mutable_key_type)] // Hash implementation doesn't access the Cell
     let mut authorities = BTreeMap::new();
     authorities.insert(
-        /* address */ authority_address,
+        /* address */ authority_address.clone(),
         /* voting right */ 1,
     );
     let committee = Committee::new(authorities);
@@ -696,7 +704,7 @@ fn init_certified_transfer_order(
     let transfer_order = init_transfer_order(sender, secret, recipient, object_id);
     let vote = SignedOrder::new(
         transfer_order.clone(),
-        authority_state.name,
+        authority_state.name.clone(),
         &authority_state.secret,
     );
     let mut builder =

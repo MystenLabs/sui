@@ -17,6 +17,7 @@ use std::{
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
 
+#[allow(clippy::mutable_key_type)] //Public Key's Hash doesn't access the Cell
 fn make_authority_clients(
     committee_config: &CommitteeConfig,
     buffer_size: usize,
@@ -72,6 +73,7 @@ fn make_client_state(
 ) -> ClientState<network::Client> {
     let account = accounts.get(&address).expect("Unknown account");
     let committee = Committee::new(committee_config.voting_rights());
+    #[allow(clippy::mutable_key_type)] //Public Key's Hash doesn't access the Cell
     let authority_clients =
         make_authority_clients(committee_config, buffer_size, send_timeout, recv_timeout);
     ClientState::new(
@@ -98,7 +100,7 @@ fn make_benchmark_transfer_orders(
         let object_id = account.object_ids.clone().into_keys().next().unwrap();
         let transfer = Transfer {
             object_id,
-            sender: account.address,
+            sender: account.address.clone(),
             recipient: Address::FastPay(next_recipient),
             sequence_number: account.object_ids[&object_id],
             user_data: UserData::default(),
@@ -108,7 +110,7 @@ fn make_benchmark_transfer_orders(
             object_id,
             account.object_ids[&object_id].increment().unwrap(),
         );
-        next_recipient = account.address;
+        next_recipient = account.address.clone();
         let order = Order::new_transfer(transfer.clone(), &account.key);
         orders.push(order.clone());
         let serialized_order = serialize_order(&order);
@@ -131,7 +133,7 @@ fn make_benchmark_certificates_from_orders_and_server_configs(
         keys.push((server_config.authority.address, server_config.key));
     }
     let committee = Committee {
-        voting_rights: keys.iter().map(|(k, _)| (*k, 1)).collect(),
+        voting_rights: keys.iter().map(|(k, _)| (k.clone(), 1)).collect(),
         total_votes: keys.len(),
     };
     assert!(
@@ -147,7 +149,7 @@ fn make_benchmark_certificates_from_orders_and_server_configs(
         for i in 0..committee.quorum_threshold() {
             let (pubx, secx) = keys.get(i).unwrap();
             let sig = Signature::new(&certificate.order.kind, secx);
-            certificate.signatures.push((*pubx, sig));
+            certificate.signatures.push((pubx.clone(), sig));
         }
         let serialized_certificate = serialize_cert(&certificate);
         serialized_certificates.push((*order.object_id(), serialized_certificate.into()));
@@ -161,12 +163,14 @@ fn make_benchmark_certificates_from_votes(
     votes: Vec<SignedOrder>,
 ) -> Vec<(ObjectID, Bytes)> {
     let committee = Committee::new(committee_config.voting_rights());
+    #[allow(clippy::mutable_key_type)] //Public Key's Hash doesn't access the Cell
     let mut aggregators = HashMap::new();
     let mut certificates = Vec::new();
+    #[allow(clippy::mutable_key_type)] //Public Key's Hash doesn't access the Cell
     let mut done_senders = HashSet::new();
     for vote in votes {
         // We aggregate votes indexed by sender.
-        let address = *vote.order.sender();
+        let address = vote.order.sender().clone();
         let object_id = *vote.order.object_id();
         if done_senders.contains(&address) {
             continue;
@@ -178,7 +182,7 @@ fn make_benchmark_certificates_from_votes(
         );
         let value = vote.order;
         let aggregator = aggregators
-            .entry(address)
+            .entry(address.clone())
             .or_insert_with(|| SignatureAggregator::try_new(value, &committee).unwrap());
         match aggregator.append(vote.authority, vote.signature) {
             Ok(Some(certificate)) => {
@@ -409,7 +413,7 @@ fn main() {
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let cert = client_state
-                    .transfer_to_fastpay(object_id, recipient, UserData::default())
+                    .transfer_to_fastpay(object_id, recipient.clone(), UserData::default())
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
@@ -570,7 +574,7 @@ fn main() {
                 let account = UserAccount::new(obj_ids.clone());
 
                 init_state_cfg.config.push(InitialStateConfigEntry {
-                    address: account.address,
+                    address: account.address.clone(),
                     object_ids: obj_ids,
                 });
 

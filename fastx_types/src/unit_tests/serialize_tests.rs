@@ -274,7 +274,7 @@ fn test_time_vote() {
     let mut buf = Vec::new();
     let now = Instant::now();
     for _ in 0..100 {
-        let vote = SignedOrder::new(order.clone(), authority_name, &authority_key);
+        let vote = SignedOrder::new(order.clone(), authority_name.clone(), &authority_key);
         serialize_vote_into(&mut buf, &vote).unwrap();
     }
     println!("Write Vote: {} microsec", now.elapsed().as_micros() / 100);
