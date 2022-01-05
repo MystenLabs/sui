@@ -72,9 +72,7 @@ pub type AuthorityName = PublicKeyBytes;
 // addresses, either by changing Move to allow different address lengths or by decoupling
 // addresses and ID's
 pub type ObjectID = AccountAddress;
-pub type ObjectRef = (ObjectID, SequenceNumber);
-
-pub type ObjectRefFull = (ObjectID, SequenceNumber, ObjectDigest);
+pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
 // A transaction will have a (unique) digest.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]

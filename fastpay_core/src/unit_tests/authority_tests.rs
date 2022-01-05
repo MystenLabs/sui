@@ -124,14 +124,16 @@ async fn test_handle_transfer_order_ok() {
     let authority_state = init_state_with_object(sender, object_id).await;
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
+    let test_object = authority_state.object_state(&object_id).await.unwrap();
+
     // Check the initial state of the locks
     assert!(authority_state
-        .get_order_lock(&(object_id, 0.into()))
+        .get_order_lock(&(object_id, 0.into(), test_object.digest()))
         .await
         .unwrap()
         .is_none());
     assert!(authority_state
-        .get_order_lock(&(object_id, 1.into()))
+        .get_order_lock(&(object_id, 1.into(), test_object.digest()))
         .await
         .is_err());
 
@@ -153,13 +155,13 @@ async fn test_handle_transfer_order_ok() {
 
     // Check the final state of the locks
     assert!(authority_state
-        .get_order_lock(&(object_id, 0.into()))
+        .get_order_lock(&(object_id, 0.into(), object.digest()))
         .await
         .unwrap()
         .is_some());
     assert_eq!(
         authority_state
-            .get_order_lock(&(object_id, 0.into()))
+            .get_order_lock(&(object_id, 0.into(), object.digest()))
             .await
             .unwrap()
             .as_ref()
@@ -331,7 +333,7 @@ async fn test_handle_move_order() {
         .find_map(|o| match o.data.try_as_module() {
             Some(m) => {
                 if m.self_id().name() == ident_str!("ObjectBasics") {
-                    Some((*m.self_id().address(), SequenceNumber::new()))
+                    Some((*m.self_id().address(), SequenceNumber::new(), o.digest()))
                 } else {
                     None
                 }
@@ -403,7 +405,7 @@ async fn test_handle_move_order_insufficient_budget() {
         .iter()
         .find_map(|o| match o.data.try_as_module() {
             Some(m) if m.self_id().name() == ident_str!("ObjectBasics") => {
-                Some((*m.self_id().address(), SequenceNumber::new()))
+                Some((*m.self_id().address(), SequenceNumber::new(), o.digest()))
             }
             _ => None,
         })
@@ -549,7 +551,11 @@ async fn test_handle_confirmation_order_exceed_balance() {
     let new_account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(SequenceNumber::from(1), new_account.next_sequence_number);
     assert!(authority_state
-        .parent(&(object_id, new_account.next_sequence_number))
+        .parent(&(
+            object_id,
+            new_account.next_sequence_number,
+            new_account.digest()
+        ))
         .await
         .is_some());
 }
@@ -580,7 +586,11 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
     );
 
     assert!(authority_state
-        .parent(&(object_id, new_sender_account.next_sequence_number))
+        .parent(&(
+            object_id,
+            new_sender_account.next_sequence_number,
+            new_sender_account.digest()
+        ))
         .await
         .is_some());
 }
@@ -606,7 +616,7 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
     assert_eq!(SequenceNumber::from(1), account.next_sequence_number);
 
     assert!(authority_state
-        .parent(&(object_id, account.next_sequence_number))
+        .parent(&(object_id, account.next_sequence_number, account.digest()))
         .await
         .is_some());
 }
@@ -634,13 +644,15 @@ async fn test_handle_confirmation_order_ok() {
         .await
         .unwrap();
     // Key check: the ownership has changed
+
+    let new_account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(recipient, info.owner);
     assert_eq!(next_sequence_number, info.next_sequence_number);
     assert_eq!(None, info.pending_confirmation);
     assert_eq!(
         {
             let refx = authority_state
-                .parent(&(object_id, info.next_sequence_number))
+                .parent(&(object_id, info.next_sequence_number, new_account.digest()))
                 .await
                 .unwrap();
             authority_state.read_certificate(&refx).await.unwrap()
@@ -650,11 +662,11 @@ async fn test_handle_confirmation_order_ok() {
 
     // Check locks are set and archived correctly
     assert!(authority_state
-        .get_order_lock(&(object_id, 0.into()))
+        .get_order_lock(&(object_id, 0.into(), old_account.digest()))
         .await
         .is_err());
     assert!(authority_state
-        .get_order_lock(&(object_id, 1.into()))
+        .get_order_lock(&(object_id, 1.into(), new_account.digest()))
         .await
         .expect("Exists")
         .is_none());
@@ -713,8 +725,10 @@ async fn test_authority_persist() {
     obj.transfer(recipient);
 
     // Store an object
+    authority
+        .init_order_lock((object_id, 0.into(), obj.digest()))
+        .await;
     authority.insert_object(obj).await;
-    authority.init_order_lock((object_id, 0.into())).await;
 
     // Close the authority
     drop(authority);
@@ -762,8 +776,10 @@ async fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>
     for (address, object_id) in objects {
         let mut obj = Object::with_id_for_testing(object_id);
         obj.transfer(address);
+        state
+            .init_order_lock((object_id, 0.into(), obj.digest()))
+            .await;
         state.insert_object(obj).await;
-        state.init_order_lock((object_id, 0.into())).await;
     }
     state
 }
@@ -792,10 +808,10 @@ fn init_transfer_order(
     object_id: ObjectID,
 ) -> Order {
     let transfer = Transfer {
-        object_id,
+        // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
+        object_ref: (object_id, SequenceNumber::new(), ObjectDigest::new([0; 32])),
         sender,
         recipient,
-        sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
     Order::new_transfer(transfer, secret)

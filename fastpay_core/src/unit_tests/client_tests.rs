@@ -154,9 +154,10 @@ async fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
             object.transfer(client.address);
             let client_ref = authority.0.as_ref().try_lock().unwrap();
 
+            client_ref
+                .init_order_lock((object_id, 0.into(), object.digest()))
+                .await;
             client_ref.insert_object(object).await;
-            client_ref.init_order_lock((object_id, 0.into())).await;
-
             client.object_ids.insert(object_id, SequenceNumber::new());
         }
     }

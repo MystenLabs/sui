@@ -24,8 +24,7 @@ pub enum Address {
 pub struct Transfer {
     pub sender: FastPayAddress,
     pub recipient: Address,
-    pub object_id: ObjectID,
-    pub sequence_number: SequenceNumber,
+    pub object_ref: ObjectRef,
     pub user_data: UserData,
 }
 
@@ -213,7 +212,7 @@ impl Order {
     pub fn sequence_number(&self) -> SequenceNumber {
         use OrderKind::*;
         match &self.kind {
-            Transfer(t) => t.sequence_number,
+            Transfer(t) => t.object_ref.1,
             Publish(_) => SequenceNumber::new(), // modules are immutable, seq # is always 0
             Call(c) => {
                 assert!(
@@ -230,7 +229,7 @@ impl Order {
     pub fn input_objects(&self) -> Vec<ObjectRef> {
         match &self.kind {
             OrderKind::Transfer(t) => {
-                vec![(t.object_id, t.sequence_number)]
+                vec![t.object_ref]
             }
             OrderKind::Call(c) => {
                 let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
@@ -249,7 +248,7 @@ impl Order {
     pub fn object_id(&self) -> &ObjectID {
         use OrderKind::*;
         match &self.kind {
-            Transfer(t) => &t.object_id,
+            Transfer(t) => &t.object_ref.0,
             Publish(m) => &m.gas_payment.0,
             Call(c) => {
                 assert!(
@@ -356,7 +355,6 @@ impl<'a> SignatureAggregator<'a> {
 }
 
 impl CertifiedOrder {
-
     /// Verify the certificate.
     pub fn check(&self, committee: &Committee) -> Result<(), FastPayError> {
         // Check the quorum.

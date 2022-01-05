@@ -134,7 +134,7 @@ impl Object {
     }
 
     pub fn to_object_reference(&self) -> ObjectRef {
-        (self.id(), self.next_sequence_number)
+        (self.id(), self.next_sequence_number, self.digest())
     }
 
     pub fn id(&self) -> ObjectID {

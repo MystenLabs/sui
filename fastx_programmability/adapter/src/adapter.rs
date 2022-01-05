@@ -171,12 +171,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         let _ = state_view;
 
         // Create module objects and write them to the store
-        let module_object = Object::new_module(
-            module,
-            sender,
-            SequenceNumber::new(),
-            ctx.digest(),
-        );
+        let module_object = Object::new_module(module, sender, SequenceNumber::new(), ctx.digest());
         written_refs.push(module_object.to_object_reference());
         state_view.write_object(module_object);
     }

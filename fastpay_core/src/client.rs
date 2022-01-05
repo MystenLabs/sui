@@ -485,15 +485,14 @@ where
     /// Transfers an object to a recipient address.
     async fn transfer(
         &mut self,
-        (object_id, sequence_number): ObjectRef,
+        (object_id, sequence_number, _object_digest): ObjectRef,
         recipient: Address,
         user_data: UserData,
     ) -> Result<CertifiedOrder, anyhow::Error> {
         let transfer = Transfer {
-            object_id,
+            object_ref: (object_id, sequence_number, _object_digest),
             sender: self.address,
             recipient,
-            sequence_number,
             user_data,
         };
         let order = Order::new_transfer(transfer, &self.secret);
@@ -610,7 +609,12 @@ where
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
         Box::pin(self.transfer(
-            (object_id, self.next_sequence_number(object_id)),
+            (
+                object_id,
+                self.next_sequence_number(object_id),
+                // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
+                ObjectDigest::new([0; 32]),
+            ),
             Address::FastPay(recipient),
             user_data,
         ))
@@ -633,7 +637,7 @@ where
                         *certificate.order.object_id(),
                         vec![certificate.clone()],
                         CommunicateAction::SynchronizeNextSequenceNumber(
-                            transfer.sequence_number.increment()?,
+                            transfer.object_ref.1.increment()?,
                         ),
                     )
                     .await?;
@@ -642,8 +646,8 @@ where
                         self.received_certificates.entry(certificate.order.digest())
                     {
                         self.object_ids.insert(
-                            transfer.object_id,
-                            transfer.sequence_number.increment().unwrap(),
+                            transfer.object_ref.0,
+                            transfer.object_ref.1.increment().unwrap(),
                         );
                         entry.insert(certificate);
                     }
@@ -664,10 +668,14 @@ where
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
         Box::pin(async move {
             let transfer = Transfer {
-                object_id,
+                object_ref: (
+                    object_id,
+                    self.next_sequence_number(object_id),
+                    // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
+                    ObjectDigest::new([0; 32]),
+                ),
                 sender: self.address,
                 recipient: Address::FastPay(recipient),
-                sequence_number: self.next_sequence_number(object_id),
                 user_data,
             };
             let order = Order::new_transfer(transfer, &self.secret);
