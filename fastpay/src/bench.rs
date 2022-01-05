@@ -86,7 +86,6 @@ fn make_port(base_port: u32, offset: u32) -> u32 {
 }
 fn main() {
     env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    let report;
     let benchmark = ClientServerBenchmark::from_args();
 
     // Create user accounts
@@ -135,14 +134,14 @@ fn main() {
             });
         });
     }
-    if benchmark.benchmark_type == BenchmarkType::TransferResponseTime {
+    let report = if benchmark.benchmark_type == BenchmarkType::TransferResponseTime {
         // Wait for servers to be ready
         thread::sleep(Duration::from_millis(6000));
-        report = benchmark.launch_client_for_native_end_to_end_transfer(
+    benchmark.launch_client_for_native_end_to_end_transfer(
             &accounts,
             &committee,
             &port_table,
-        );
+        )
     } else {
         // Make a single-core runtime for the client.
         let mut runtime = Builder::new()
@@ -151,7 +150,7 @@ fn main() {
             .thread_stack_size(15 * 1024 * 1024)
             .build()
             .unwrap();
-        report = runtime.block_on(benchmark.launch_client_for_batch(orders));
+        runtime.block_on(benchmark.launch_client_for_batch(orders))
     }
     println!("Num_tx: {}, time: {}us", report.0, report.1);
 }
