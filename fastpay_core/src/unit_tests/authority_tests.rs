@@ -163,7 +163,7 @@ async fn test_handle_transfer_order_ok() {
         .unwrap()
         .unwrap();
     assert_eq!(
-        account_info.pending_confirmation.unwrap(),
+        account_info.signed_order.unwrap(),
         pending_confirmation
     );
 
@@ -189,10 +189,10 @@ async fn test_handle_transfer_order_ok() {
 async fn send_and_confirm_order(
     authority: &mut AuthorityState,
     order: Order,
-) -> Result<ObjectInfoResponse, FastPayError> {
+) -> Result<OrderInfoResponse, FastPayError> {
     // Make the initial request
     let response = authority.handle_order(order.clone()).await.unwrap();
-    let vote = response.pending_confirmation.unwrap();
+    let vote = response.signed_order.unwrap();
 
     // Collect signatures from a quorum of authorities
     let mut builder = SignatureAggregator::try_new(order, &authority.committee).unwrap();
@@ -265,9 +265,13 @@ async fn test_publish_dependent_module_ok() {
         &sender_key,
     );
     let dependent_module_id = TxContext::new(order.digest()).fresh_id();
-    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
+
+    // Object does not exist
+    assert!(authority.object_state(&dependent_module_id).await.is_err());
+    let _response = send_and_confirm_order(&mut authority, order).await.unwrap();
+
     // check that the dependent module got published
-    assert!(response.object_id == dependent_module_id);
+    assert!(authority.object_state(&dependent_module_id).await.is_ok());
 }
 
 // Test that publishing a module with no dependencies works
@@ -288,10 +292,11 @@ async fn test_publish_module_no_dependencies_ok() {
     let module_bytes = vec![module_bytes];
     let gas_cost = calculate_module_publish_cost(&module_bytes);
     let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, &sender_key);
-    let module_object_id = TxContext::new(order.digest()).fresh_id();
-    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
+    let _module_object_id = TxContext::new(order.digest()).fresh_id();
+    let _response = send_and_confirm_order(&mut authority, order).await.unwrap();
+
     // check that the module actually got published
-    assert!(response.object_id == module_object_id);
+    assert!(_response.certified_order.is_some());
 
     // Check that gas is properly deducted.
     let gas_payment_object = authority
@@ -383,7 +388,13 @@ async fn test_handle_move_order() {
     let res = send_and_confirm_order(&mut authority_state, order)
         .await
         .unwrap();
-    let created_object_id = res.object_id;
+
+    // Check that effects are reported
+    assert!(_res.signed_effects.is_some());
+    let mutated = _res.signed_effects.unwrap().effects.mutated;
+    assert!(mutated.len() == 2);
+
+    let created_object_id = mutated[0].0; // res.object_id;
     // check that order actually created an object with the expected ID, owner, sequence number
     let created_obj = authority_state
         .object_state(&created_object_id)
@@ -684,13 +695,13 @@ async fn test_handle_confirmation_order_ok() {
     // Key check: the ownership has changed
 
     let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(recipient, info.owner);
-    assert_eq!(next_sequence_number, info.next_sequence_number);
-    assert_eq!(None, info.pending_confirmation);
+    assert_eq!(recipient, new_account.owner);
+    assert_eq!(next_sequence_number, new_account.next_sequence_number);
+    assert_eq!(None, info.signed_order);
     assert_eq!(
         {
             let refx = authority_state
-                .parent(&(object_id, info.next_sequence_number, new_account.digest()))
+                .parent(&(object_id, new_account.next_sequence_number, new_account.digest()))
                 .await
                 .unwrap();
             authority_state.read_certificate(&refx).await.unwrap()

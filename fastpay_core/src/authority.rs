@@ -56,9 +56,10 @@ pub struct AuthorityState {
 /// Repeating commands should produce no changes and return no error.
 impl AuthorityState {
     /// Initiate a new order.
-    pub async fn handle_order(&self, order: Order) -> Result<ObjectInfoResponse, FastPayError> {
+    pub async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
         // Check the sender's signature.
         order.check_signature()?;
+        let transaction_digest = order.digest();
 
         let input_objects = order.input_objects();
         let mut mutable_objects = Vec::with_capacity(input_objects.len());
@@ -134,25 +135,26 @@ impl AuthorityState {
             FastPayError::InsufficientObjectNumber
         );
 
-        let object_id = *order.object_id();
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
 
         // Check and write locks, to signed order, into the database
         self.set_order_lock(&mutable_objects, signed_order).await?;
 
-        // TODO: what should we return here?
-        let info = self.make_object_info(object_id, None).await?;
-        Ok(info)
+        // Return the signed Order or maybe a cert.
+        self.make_order_info(&transaction_digest).await
+
     }
 
     /// Confirm a transfer.
     pub async fn handle_confirmation_order(
         &self,
         confirmation_order: ConfirmationOrder,
-    ) -> Result<ObjectInfoResponse, FastPayError> {
+    ) -> Result<OrderInfoResponse, FastPayError> {
         let certificate = confirmation_order.certificate;
         let order = certificate.order.clone();
-        let mut object_id = *order.object_id();
+        let transaction_digest = order.digest();
+
+        // let mut object_id = *order.object_id();
         // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
@@ -175,7 +177,7 @@ impl AuthorityState {
             }
             if input_sequence_number > input_seq {
                 // Transfer was already confirmed.
-                return self.make_object_info(object_id, None).await;
+                return self.make_order_info(&transaction_digest).await;
             }
 
             inputs.push(input_object.clone());
@@ -228,10 +230,11 @@ impl AuthorityState {
                     Ok(()) => {
                         // TODO(https://github.com/MystenLabs/fastnft/issues/63): AccountInfoResponse should return all object ID outputs.
                         // but for now it only returns one, so use this hack
-                        object_id = temporary_store.written[0].0
+                        // object_id = temporary_store.written[0].0
                     }
-                    Err(e) => {
-                        return Err(e);
+                    Err(_e) => {
+                        // TODO(https://github.com/MystenLabs/fastnft/issues/63): return this error to the client
+                        // object_id = c.gas_payment.0;
                     }
                 }
             }
@@ -244,24 +247,24 @@ impl AuthorityState {
                     &mut tx_ctx,
                     gas_object,
                 ) {
-                    Ok(outputs) => {
+                    Ok(_outputs) => {
                         // TODO(https://github.com/MystenLabs/fastnft/issues/63): AccountInfoResponse should return all object ID outputs.
                         // but for now it only returns one, so use this hack
-                        object_id = outputs[0].0;
+                        // object_id = outputs[0].0;
                     }
                     Err(_e) => {
                         // TODO(https://github.com/MystenLabs/fastnft/issues/63): return this error to the client
-                        object_id = m.gas_payment.0;
+                        // object_id = m.gas_payment.0;
                     }
                 }
             }
         };
 
         // Update the database in an atomic manner
-        self.update_state(temporary_store, certificate).await?;
+        let to_signed_effects = temporary_store.to_signed_effects(&self.name, &self.secret, &transaction_digest);
+        self.update_state(temporary_store, certificate, to_signed_effects).await?;
 
-        let info = self.make_object_info(object_id, None).await?;
-        Ok(info)
+        self.make_order_info(&transaction_digest).await
     }
 
     pub async fn handle_account_info_request(
@@ -329,8 +332,13 @@ impl AuthorityState {
             .expect("TODO: propagate the error")
     }
 
-    /// Make an information summary of an object to help clients
 
+    /// Make an information response for an order
+    async fn make_order_info(&self, transaction_digest : &TransactionDigest) -> Result<OrderInfoResponse, FastPayError> {
+        self._database.get_order_info(transaction_digest)
+    }
+
+    /// Make an information summary of an object to help clients
     async fn make_object_info(
         &self,
         object_id: ObjectID,
@@ -387,8 +395,9 @@ impl AuthorityState {
         &self,
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedOrder,
+        signed_effects : SignedOrderEffects,
     ) -> Result<(), FastPayError> {
-        self._database.update_state(temporary_store, certificate)
+        self._database.update_state(temporary_store, certificate, signed_effects)
     }
 
     /// Get a read reference to an object/seq lock

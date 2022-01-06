@@ -21,11 +21,13 @@ pub enum SerializedMessage {
     AccountInfoResp(Box<AccountInfoResponse>),
     ObjectInfoReq(Box<ObjectInfoRequest>),
     ObjectInfoResp(Box<ObjectInfoResponse>),
+    OrderResp(Box<OrderInfoResponse>),
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.
 // Here we must replicate the definition of SerializedMessage exactly
 // so that the variant tags match.
+#[allow(dead_code)]
 #[derive(Serialize)]
 enum ShallowSerializedMessage<'a> {
     Order(&'a Order),
@@ -36,6 +38,7 @@ enum ShallowSerializedMessage<'a> {
     AccountInfoResp(&'a AccountInfoResponse),
     ObjectInfoReq(&'a ObjectInfoRequest),
     ObjectInfoResp(&'a ObjectInfoResponse),
+    OrderResp(&'a OrderInfoResponse),
 }
 
 fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), anyhow::Error>
@@ -113,6 +116,17 @@ where
     serialize_into(writer, &ShallowSerializedMessage::Vote(value))
 }
 
+pub fn serialize_order_info(value: &OrderInfoResponse) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::OrderResp(value))
+}
+
+pub fn serialize_order_info_into<W>(writer: W, value: &OrderInfoResponse) -> Result<(), anyhow::Error>
+where
+    W: std::io::Write,
+{
+    serialize_into(writer, &ShallowSerializedMessage::OrderResp(value))
+}
+
 pub fn deserialize_message<R>(reader: R) -> Result<SerializedMessage, anyhow::Error>
 where
     R: std::io::Read,
@@ -125,6 +139,7 @@ pub fn object_info_deserializer(
 ) -> Result<ObjectInfoResponse, FastPayError> {
     match message {
         SerializedMessage::ObjectInfoResp(resp) => Ok(*resp),
+        SerializedMessage::Error(error) => Err(*error),
         _ => Err(FastPayError::UnexpectedMessage),
     }
 }
@@ -134,6 +149,18 @@ pub fn account_info_deserializer(
 ) -> Result<AccountInfoResponse, FastPayError> {
     match message {
         SerializedMessage::AccountInfoResp(resp) => Ok(*resp),
+        SerializedMessage::Error(error) => Err(*error),
         _ => Err(FastPayError::UnexpectedMessage),
     }
 }
+
+pub fn order_info_deserializer(
+    message: SerializedMessage,
+) -> Result<OrderInfoResponse, FastPayError> {
+    match message {
+        SerializedMessage::OrderResp(resp) => Ok(*resp),
+        SerializedMessage::Error(error) => Err(*error),
+        _ => Err(FastPayError::UnexpectedMessage),
+    }
+}
+
