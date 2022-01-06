@@ -14,13 +14,6 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct FundingTransaction {
-    pub recipient: FastPayAddress,
-    pub primary_coins: Amount,
-    // TODO: Authenticated by Primary sender.
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
 pub enum Address {
     Primary(PrimaryAddress),
@@ -31,8 +24,7 @@ pub enum Address {
 pub struct Transfer {
     pub sender: FastPayAddress,
     pub recipient: Address,
-    pub object_id: ObjectID,
-    pub sequence_number: SequenceNumber,
+    pub object_ref: ObjectRef,
     pub user_data: UserData,
 }
 
@@ -163,12 +155,6 @@ impl PartialEq for CertifiedOrder {
     }
 }
 
-impl Transfer {
-    pub fn key(&self) -> ObjectRef {
-        (self.object_id, self.sequence_number)
-    }
-}
-
 impl Order {
     pub fn new(kind: OrderKind, secret: &KeyPair) -> Self {
         let signature = Signature::new(&kind, secret);
@@ -226,7 +212,7 @@ impl Order {
     pub fn sequence_number(&self) -> SequenceNumber {
         use OrderKind::*;
         match &self.kind {
-            Transfer(t) => t.sequence_number,
+            Transfer(t) => t.object_ref.1,
             Publish(_) => SequenceNumber::new(), // modules are immutable, seq # is always 0
             Call(c) => {
                 assert!(
@@ -243,7 +229,7 @@ impl Order {
     pub fn input_objects(&self) -> Vec<ObjectRef> {
         match &self.kind {
             OrderKind::Transfer(t) => {
-                vec![(t.object_id, t.sequence_number)]
+                vec![t.object_ref]
             }
             OrderKind::Call(c) => {
                 let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
@@ -262,7 +248,7 @@ impl Order {
     pub fn object_id(&self) -> &ObjectID {
         use OrderKind::*;
         match &self.kind {
-            Transfer(t) => &t.object_id,
+            Transfer(t) => &t.object_ref.0,
             Publish(m) => &m.gas_payment.0,
             Call(c) => {
                 assert!(
@@ -284,9 +270,9 @@ impl Order {
         }
     }
 
-    // TODO: derive a real cryptographic hash of the transaction here.
+    // Derive a cryptographic hash of the transaction.
     pub fn digest(&self) -> TransactionDigest {
-        TransactionDigest::new(*self.object_id(), self.sequence_number())
+        TransactionDigest::new(sha3_hash(&self.kind))
     }
 }
 
@@ -369,15 +355,6 @@ impl<'a> SignatureAggregator<'a> {
 }
 
 impl CertifiedOrder {
-    pub fn key(&self) -> ObjectRef {
-        use OrderKind::*;
-        match &self.order.kind {
-            Transfer(t) => t.key(),
-            Publish(_) => unimplemented!("Deriving key() for Publish"),
-            Call(_) => unimplemented!("Deriving key() for Call"),
-        }
-    }
-
     /// Verify the certificate.
     pub fn check(&self, committee: &Committee) -> Result<(), FastPayError> {
         // Check the quorum.

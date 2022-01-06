@@ -20,14 +20,6 @@ mod base_types_tests;
 #[derive(
     Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
-pub struct Amount(u64);
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
-pub struct Balance(i128);
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
 pub struct SequenceNumber(u64);
 
 pub type VersionNumber = SequenceNumber;
@@ -80,17 +72,20 @@ pub type AuthorityName = PublicKeyBytes;
 // addresses, either by changing Move to allow different address lengths or by decoupling
 // addresses and ID's
 pub type ObjectID = AccountAddress;
-pub type ObjectRef = (ObjectID, SequenceNumber);
+pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
-// TODO(https://github.com/MystenLabs/fastnft/issues/65): eventually a transaction will have a (unique) digest. For the moment we only
-// have transfer transactions so we index them by the object/seq they mutate.
+// A transaction will have a (unique) digest.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct TransactionDigest((ObjectID, SequenceNumber));
+pub struct TransactionDigest([u8; 32]); // We use SHA3-256 hence 32 bytes here
+
+// Each object has a unique digest
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct ObjectDigest([u8; 32]); // We use SHA3-256 hence 32 bytes here
 
 // TODO: migrate TxContext type + these constants to a separate file
-/// 0xB86E858F2D22236F2D96DF498FF001D0
+/// 0x242C70E260BADD483440B4E3DAD63E9D
 pub const TX_CONTEXT_ADDRESS: AccountAddress = AccountAddress::new([
-    0xB8, 0x6E, 0x85, 0x8F, 0x2D, 0x22, 0x23, 0x6F, 0x2D, 0x96, 0xDF, 0x49, 0x8F, 0xF0, 0x01, 0xD0,
+    0x24, 0x2C, 0x70, 0xE2, 0x60, 0xBA, 0xDD, 0x48, 0x34, 0x40, 0xB4, 0xE3, 0xDA, 0xD6, 0x3E, 0x9D,
 ]);
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
@@ -115,22 +110,27 @@ impl TxContext {
     pub fn fresh_id(&mut self) -> ObjectID {
         // TODO(https://github.com/MystenLabs/fastnft/issues/58):
         // audit ID derivation: do we want/need domain separation, different hash function, truncation ...
-        let hash_arg = &mut self.digest.0 .0.to_vec();
-        hash_arg.append(&mut self.digest.0 .1 .0.to_le_bytes().to_vec());
-        hash_arg.append(&mut self.ids_created.to_le_bytes().to_vec());
-        let hash = Sha3_256::digest(hash_arg.as_slice());
+
+        let mut hasher = Sha3_256::default();
+        hasher.update(self.digest.0);
+        hasher.update(self.ids_created.to_le_bytes());
+        let hash = hasher.finalize();
+
         // truncate into an ObjectID.
         let id = AccountAddress::try_from(&hash[0..AccountAddress::LENGTH]).unwrap();
-
         self.ids_created += 1;
-
         id
+    }
+
+    /// Return the transaction digest, to include in new objects
+    pub fn digest(&self) -> TransactionDigest {
+        self.digest
     }
 
     // TODO(https://github.com/MystenLabs/fastnft/issues/89): temporary hack for Move compatibility
     pub fn to_bcs_bytes_hack(&self) -> Vec<u8> {
         let sender = FastPayAddress::default();
-        let inputs_hash = self.digest.0 .0.to_vec();
+        let inputs_hash = self.digest.0.to_vec();
         let obj = TxContextForMove {
             sender: sender.to_vec(),
             inputs_hash,
@@ -153,22 +153,27 @@ struct TxContextForMove {
 }
 
 impl TransactionDigest {
-    pub fn new(id: ObjectID, seq: SequenceNumber) -> Self {
-        Self((id, seq))
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
     }
 
     /// Get the mock digest of the genesis transaction
     /// TODO(https://github.com/MystenLabs/fastnft/issues/65): we can pick anything here    
     pub fn genesis() -> Self {
-        Self::new(
-            ObjectID::new([0u8; ObjectID::LENGTH]),
-            SequenceNumber::new(),
-        )
+        Self::new([0; 32])
     }
 
     // for testing
     pub fn random() -> Self {
-        Self::new(ObjectID::random(), SequenceNumber::new())
+        use rand::Rng;
+        let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
+        Self::new(random_bytes)
+    }
+}
+
+impl ObjectDigest {
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
     }
 }
 
@@ -266,88 +271,6 @@ impl std::fmt::Debug for PublicKeyBytes {
     }
 }
 
-impl Amount {
-    pub fn zero() -> Self {
-        Amount(0)
-    }
-
-    pub fn try_add(self, other: Self) -> Result<Self, FastPayError> {
-        let val = self.0.checked_add(other.0);
-        match val {
-            None => Err(FastPayError::AmountOverflow),
-            Some(val) => Ok(Self(val)),
-        }
-    }
-
-    pub fn try_sub(self, other: Self) -> Result<Self, FastPayError> {
-        let val = self.0.checked_sub(other.0);
-        match val {
-            None => Err(FastPayError::AmountUnderflow),
-            Some(val) => Ok(Self(val)),
-        }
-    }
-}
-
-impl Balance {
-    pub fn zero() -> Self {
-        Balance(0)
-    }
-
-    pub fn max() -> Self {
-        Balance(std::i128::MAX)
-    }
-
-    pub fn try_add(&self, other: Self) -> Result<Self, FastPayError> {
-        let val = self.0.checked_add(other.0);
-        match val {
-            None => Err(FastPayError::BalanceOverflow),
-            Some(val) => Ok(Self(val)),
-        }
-    }
-
-    pub fn try_sub(&self, other: Self) -> Result<Self, FastPayError> {
-        let val = self.0.checked_sub(other.0);
-        match val {
-            None => Err(FastPayError::BalanceUnderflow),
-            Some(val) => Ok(Self(val)),
-        }
-    }
-}
-
-impl std::fmt::Display for Balance {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::str::FromStr for Balance {
-    type Err = std::num::ParseIntError;
-
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        Ok(Self(i128::from_str(src)?))
-    }
-}
-
-impl From<Amount> for u64 {
-    fn from(val: Amount) -> Self {
-        val.0
-    }
-}
-
-impl From<Amount> for Balance {
-    fn from(val: Amount) -> Self {
-        Balance(val.0 as i128)
-    }
-}
-
-impl TryFrom<Balance> for Amount {
-    type Error = std::num::TryFromIntError;
-
-    fn try_from(val: Balance) -> Result<Self, Self::Error> {
-        Ok(Amount(val.0.try_into()?))
-    }
-}
-
 impl SequenceNumber {
     pub fn new() -> Self {
         SequenceNumber(0)
@@ -380,18 +303,6 @@ impl From<SequenceNumber> for u64 {
     }
 }
 
-impl From<u64> for Amount {
-    fn from(value: u64) -> Self {
-        Amount(value)
-    }
-}
-
-impl From<i128> for Balance {
-    fn from(value: i128) -> Self {
-        Balance(value)
-    }
-}
-
 impl From<u64> for SequenceNumber {
     fn from(value: u64) -> Self {
         SequenceNumber(value)
@@ -405,8 +316,8 @@ impl From<SequenceNumber> for usize {
 }
 
 /// Something that we know how to hash and sign.
-pub trait Signable<Hasher> {
-    fn write(&self, hasher: &mut Hasher);
+pub trait Signable<W> {
+    fn write(&self, writer: &mut W);
 }
 
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
@@ -414,16 +325,16 @@ pub trait Signable<Hasher> {
 /// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
 pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
 
-impl<T, Hasher> Signable<Hasher> for T
+impl<T, W> Signable<W> for T
 where
     T: BcsSignable,
-    Hasher: std::io::Write,
+    W: std::io::Write,
 {
-    fn write(&self, hasher: &mut Hasher) {
+    fn write(&self, writer: &mut W) {
         let name = serde_name::trace_name::<Self>().expect("Self must be a struct or an enum");
         // Note: This assumes that names never contain the separator `::`.
-        write!(hasher, "{}::", name).expect("Hasher should not fail");
-        bcs::serialize_into(hasher, &self).expect("Message serialization should not fail");
+        write!(writer, "{}::", name).expect("Hasher should not fail");
+        bcs::serialize_into(writer, &self).expect("Message serialization should not fail");
     }
 }
 
@@ -480,4 +391,11 @@ impl Signature {
             }
         })
     }
+}
+
+pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
+    let mut digest = Sha3_256::default();
+    signable.write(&mut digest);
+    let hash = digest.finalize();
+    hash.into()
 }

@@ -97,10 +97,14 @@ fn make_benchmark_transfer_orders(
     for account in accounts_config.accounts_mut() {
         let object_id = account.object_ids.clone().into_keys().next().unwrap();
         let transfer = Transfer {
-            object_id,
+            object_ref: (
+                object_id,
+                account.object_ids[&object_id],
+                // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
+                ObjectDigest::new([0; 32]),
+            ),
             sender: account.address,
             recipient: Address::FastPay(next_recipient),
-            sequence_number: account.object_ids[&object_id],
             user_data: UserData::default(),
         };
         debug!("Preparing transfer order: {:?}", transfer);

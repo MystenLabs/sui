@@ -154,9 +154,10 @@ async fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
             object.transfer(client.address);
             let client_ref = authority.0.as_ref().try_lock().unwrap();
 
+            client_ref
+                .init_order_lock((object_id, 0.into(), object.digest()))
+                .await;
             client_ref.insert_object(object).await;
-            client_ref.init_order_lock((object_id, 0.into())).await;
-
             client.object_ids.insert(object_id, SequenceNumber::new());
         }
     }
@@ -492,8 +493,6 @@ fn test_receiving_unconfirmed_transfer() {
             UserData::default(),
         ))
         .unwrap();
-    // Transfer was executed locally, creating negative balance.
-    // assert_eq!(client1.balance, Balance::from(-2));
     assert_eq!(
         client1.next_sequence_number(object_id),
         SequenceNumber::from(1)
@@ -516,76 +515,3 @@ fn test_receiving_unconfirmed_transfer() {
         Some((client2.address, SequenceNumber::from(1)))
     );
 }
-
-/*
-#[test]
-fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances() {
-    let mut rt = Runtime::new().unwrap();
-    let (mut authority_clients, committee) = init_local_authorities(4);
-    let mut client0 = make_client(authority_clients.clone(), committee.clone());
-    let mut client1 = make_client(authority_clients.clone(), committee.clone());
-    let mut client2 = make_client(authority_clients.clone(), committee);
-    fund_account(&mut authority_clients, client0.address, vec![2, 3, 4, 4]);
-    // not updating client balances
-
-    // transferring funds from client0 to client1.
-    // confirming to a quorum of node only at the end.
-    rt.block_on(async {
-        client0
-            .transfer_to_fastpay_unsafe_unconfirmed(
-                Amount::from(1),
-                client1.address,
-                UserData::default(),
-            )
-            .await
-            .unwrap();
-        client0
-            .transfer_to_fastpay_unsafe_unconfirmed(
-                Amount::from(1),
-                client1.address,
-                UserData::default(),
-            )
-            .await
-            .unwrap();
-        client0
-            .communicate_transfers(
-                client0.address,
-                client0.sent_certificates.clone(),
-                CommunicateAction::SynchronizeNextSequenceNumber(client0.next_sequence_number),
-            )
-            .await
-            .unwrap();
-    });
-    // transferring funds from client1 to client2 without confirmation
-    let certificate = rt
-        .block_on(client1.transfer_to_fastpay_unsafe_unconfirmed(
-            Amount::from(2),
-            client2.address,
-            UserData::default(),
-        ))
-        .unwrap();
-    // Transfers were executed locally, possibly creating negative balances.
-    assert_eq!(client0.balance, Balance::from(-2));
-    assert_eq!(client0.next_sequence_number, SequenceNumber::from(2));
-    assert_eq!(client0.pending_transfer, None);
-    assert_eq!(client1.balance, Balance::from(-2));
-    assert_eq!(client1.next_sequence_number, SequenceNumber::from(1));
-    assert_eq!(client1.pending_transfer, None);
-    // Last one was not confirmed remotely, hence an unchanged (remote) balance and sequence number.
-    assert_eq!(
-        rt.block_on(client1.get_strong_majority_balance()),
-        Balance::from(2)
-    );
-    assert_eq!(
-        rt.block_on(client1.get_strong_majority_sequence_number(client1.address)),
-        SequenceNumber::from(0)
-    );
-    // Let the receiver confirm in last resort.
-    rt.block_on(client2.receive_from_fastpay(certificate))
-        .unwrap();
-    assert_eq!(
-        rt.block_on(client2.get_strong_majority_balance()),
-        Balance::from(2)
-    );
-}
-*/

@@ -133,9 +133,10 @@ impl ClientServerBenchmark {
 
                 let client = Object::with_id_owner_for_testing(object_id, keypair.0);
                 assert!(client.next_sequence_number == SequenceNumber::from(0));
-                state.init_order_lock(client.to_object_reference()).await;
+                let object_ref = client.to_object_reference();
+                state.init_order_lock(object_ref).await;
                 state.insert_object(client).await;
-                account_objects.push((keypair.0, object_id, keypair.1));
+                account_objects.push((keypair.0, object_ref, keypair.1));
             }
         });
 
@@ -143,12 +144,11 @@ impl ClientServerBenchmark {
         // Make one transaction per account (transfer order + confirmation).
         let mut orders: Vec<Bytes> = Vec::new();
         let mut next_recipient = get_key_pair().0;
-        for (pubx, object_id, secx) in account_objects.iter() {
+        for (pubx, object_ref, secx) in account_objects.iter() {
             let transfer = Transfer {
-                object_id: *object_id,
+                object_ref: *object_ref,
                 sender: *pubx,
                 recipient: Address::FastPay(next_recipient),
-                sequence_number: SequenceNumber::from(0),
                 user_data: UserData::default(),
             };
             next_recipient = *pubx;

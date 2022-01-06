@@ -161,7 +161,9 @@ impl AccountsConfig {
                     if let Some(config) = self.accounts.get_mut(recipient) {
                         if let Err(position) = config
                             .received_certificates
-                            .binary_search_by_key(&certificate.key(), CertifiedOrder::key)
+                            .binary_search_by_key(&certificate.order.digest(), |cert| {
+                                cert.order.digest()
+                            })
                         {
                             config.received_certificates.insert(position, certificate)
                         }
