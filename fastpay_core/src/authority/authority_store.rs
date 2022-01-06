@@ -42,6 +42,19 @@ impl AuthorityStore {
 
     // Methods to read the store
 
+    // TODO: add object owner index to improve performance https://github.com/MystenLabs/fastnft/issues/127
+    pub fn get_account_objects(
+        &self,
+        account: FastPayAddress,
+    ) -> Result<Vec<ObjectRef>, FastPayError> {
+        Ok(self
+            .objects
+            .iter()
+            .filter(|(_, object)| object.owner == account)
+            .map(|(id, object)| (id, object.next_sequence_number, object.digest()))
+            .collect())
+    }
+
     /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
     pub fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
         self.objects

@@ -92,20 +92,31 @@ pub struct RedeemTransaction {
     pub certificate: CertifiedOrder,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
+    pub account: FastPayAddress,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ObjectInfoRequest {
     pub object_id: ObjectID,
     pub request_sequence_number: Option<SequenceNumber>,
     pub request_received_transfers_excluding_first_nth: Option<usize>,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoResponse {
+    pub object_ids: Vec<ObjectRef>,
+    pub owner: FastPayAddress,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ObjectInfoResponse {
     pub object_id: ObjectID,
     pub owner: FastPayAddress,
     pub next_sequence_number: SequenceNumber,
-    pub pending_confirmation: Option<SignedOrder>,
     pub requested_certificate: Option<CertifiedOrder>,
+    pub pending_confirmation: Option<SignedOrder>,
     pub requested_received_transfers: Vec<CertifiedOrder>,
 }
 
