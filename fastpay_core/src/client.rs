@@ -92,8 +92,11 @@ pub trait Client {
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
-    /// Synchronise client state with authorities, updates all object_ids and certificates
-    fn sync_client_state(&mut self) -> AsyncResult<'_, (), anyhow::Error>;
+    /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
+    /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
+    fn sync_client_state_with_random_authority(
+        &mut self,
+    ) -> AsyncResult<'_, AuthorityName, anyhow::Error>;
 
     /// Get all object we own.
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectRef>, anyhow::Error>;
@@ -158,11 +161,6 @@ struct CertificateRequester<A> {
     object_id: ObjectID,
 }
 
-#[derive(Clone)]
-struct ObjectIdRequester<A> {
-    authority_clients: Vec<A>,
-}
-
 impl<A> CertificateRequester<A> {
     fn new(
         committee: Committee,
@@ -176,12 +174,6 @@ impl<A> CertificateRequester<A> {
             sender,
             object_id,
         }
-    }
-}
-
-impl<A> ObjectIdRequester<A> {
-    fn new(authority_clients: Vec<A>) -> Self {
-        Self { authority_clients }
     }
 }
 
@@ -225,37 +217,6 @@ where
                 }
             }
             Err(FastPayError::ErrorWhileRequestingCertificate)
-        })
-    }
-}
-
-impl<A> Requester for ObjectIdRequester<A>
-where
-    A: AuthorityClient + Send + Sync + 'static + Clone,
-{
-    type Key = FastPayAddress;
-    type Value = Result<Vec<ObjectRef>, FastPayError>;
-
-    /// Try to find all object id and it's sequence number for the given account.
-    fn query(&mut self, account: FastPayAddress) -> AsyncResult<'_, Vec<ObjectRef>, FastPayError> {
-        Box::pin(async move {
-            let request = AccountInfoRequest { account };
-            // Sequentially try each authority in random order.
-            self.authority_clients.shuffle(&mut rand::thread_rng());
-            // Authority could be byzantine, add timeout to avoid waiting forever.
-            // TODO: Make timeout duration configurable.
-            for client in self.authority_clients.iter_mut() {
-                let result = timeout(
-                    Duration::from_secs(60),
-                    client.handle_account_info_request(request.clone()),
-                )
-                .map_err(|_| FastPayError::ErrorWhileRequestingInformation)
-                .await?;
-                if let Ok(AccountInfoResponse { object_ids, .. }) = &result {
-                    return Ok(object_ids.clone());
-                }
-            }
-            Err(FastPayError::ErrorWhileRequestingInformation)
         })
     }
 }
@@ -671,10 +632,31 @@ where
         Ok(self.sent_certificates.last().unwrap().clone())
     }
 
-    async fn download_own_object_ids(&self) -> Result<Vec<ObjectRef>, anyhow::Error> {
-        let mut requester =
-            ObjectIdRequester::new(self.authority_clients.values().cloned().collect());
-        return Ok(requester.query(self.address).await?);
+    async fn download_own_object_ids(
+        &self,
+    ) -> Result<(AuthorityName, Vec<ObjectRef>), FastPayError> {
+        let request = AccountInfoRequest {
+            account: self.address,
+        };
+        // Sequentially try each authority in random order.
+        let mut authorities: Vec<AuthorityName> =
+            self.authority_clients.clone().into_keys().collect();
+        authorities.shuffle(&mut rand::thread_rng());
+        // Authority could be byzantine, add timeout to avoid waiting forever.
+        // TODO: Make timeout duration configurable.
+        for authority_name in authorities {
+            let authority = self.authority_clients.get(&authority_name).unwrap();
+            let result = timeout(
+                Duration::from_secs(60),
+                authority.handle_account_info_request(request.clone()),
+            )
+            .map_err(|_| FastPayError::ErrorWhileRequestingInformation)
+            .await?;
+            if let Ok(AccountInfoResponse { object_ids, .. }) = &result {
+                return Ok((authority_name, object_ids.clone()));
+            }
+        }
+        Err(FastPayError::ErrorWhileRequestingInformation)
     }
 }
 
@@ -780,7 +762,9 @@ where
         })
     }
 
-    fn sync_client_state(&mut self) -> AsyncResult<'_, (), anyhow::Error> {
+    fn sync_client_state_with_random_authority(
+        &mut self,
+    ) -> AsyncResult<'_, AuthorityName, anyhow::Error> {
         Box::pin(async move {
             if let Some(order) = self.pending_transfer.clone() {
                 // Finish executing the previous transfer.
@@ -790,7 +774,8 @@ where
             // update object_ids.
             self.object_ids.clear();
 
-            for (object_id, sequence_number) in self.download_own_object_ids().await? {
+            let (authority_name, object_ids) = self.download_own_object_ids().await?;
+            for (object_id, sequence_number) in object_ids {
                 self.object_ids.insert(object_id, sequence_number);
             }
 
@@ -798,7 +783,7 @@ where
             let new_certificates = self.download_certificates().await?;
             self.update_certificates(new_certificates)?;
 
-            Ok(())
+            Ok(authority_name)
         })
     }
 
