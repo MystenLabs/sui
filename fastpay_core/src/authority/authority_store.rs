@@ -42,6 +42,7 @@ impl AuthorityStore {
 
     // Methods to read the store
 
+    // TODO: add object owner index to improve performance https://github.com/MystenLabs/fastnft/issues/127
     pub fn get_account_objects(
         &self,
         account: FastPayAddress,

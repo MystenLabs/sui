@@ -6,9 +6,11 @@ use anyhow::{bail, ensure};
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
-use futures::{future, StreamExt};
+use futures::{future, StreamExt, TryFutureExt};
 use rand::seq::SliceRandom;
 use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
+use std::time::Duration;
+use tokio::time::timeout;
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -200,6 +202,7 @@ where
                 request_received_transfers_excluding_first_nth: None,
             };
             // Sequentially try each authority in random order.
+            // TODO: Improve shuffle, different authorities might different amount of stake.
             self.authority_clients.shuffle(&mut rand::thread_rng());
             for client in self.authority_clients.iter_mut() {
                 let result = client.handle_object_info_request(request.clone()).await;
@@ -237,8 +240,15 @@ where
             let request = AccountInfoRequest { account };
             // Sequentially try each authority in random order.
             self.authority_clients.shuffle(&mut rand::thread_rng());
+            // Authority could be byzantine, add timeout to avoid waiting forever.
+            // TODO: Make timeout duration configurable.
             for client in self.authority_clients.iter_mut() {
-                let result = client.handle_account_info_request(request.clone()).await;
+                let result = timeout(
+                    Duration::from_secs(60),
+                    client.handle_account_info_request(request.clone()),
+                )
+                .map_err(|_| FastPayError::ErrorWhileRequestingInformation)
+                .await?;
                 if let Ok(AccountInfoResponse { object_ids, .. }) = &result {
                     return Ok(object_ids.clone());
                 }
