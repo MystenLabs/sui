@@ -546,7 +546,8 @@ fn test_client_state_sync() {
     assert!(sender.sent_certificates.is_empty());
 
     // Sync client state
-    rt.block_on(sender.sync_client_state()).unwrap();
+    rt.block_on(sender.sync_client_state_with_random_authority())
+        .unwrap();
 
     // Confirm data are the same after sync
     assert!(!rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
@@ -591,7 +592,10 @@ fn test_client_state_sync_with_transferred_object() {
     assert!(client2.sent_certificates.is_empty());
 
     // Sync client state
-    rt.block_on(client2.sync_client_state()).unwrap();
+    while client2.object_ids.is_empty() {
+        rt.block_on(client2.sync_client_state_with_random_authority())
+            .unwrap();
+    }
 
     // Confirm client 2 received the new object id and cert
     assert_eq!(1, rt.block_on(client2.get_owned_objects()).unwrap().len());
