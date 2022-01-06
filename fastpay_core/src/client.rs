@@ -97,7 +97,7 @@ pub trait Client {
     ) -> AsyncResult<'_, AuthorityName, anyhow::Error>;
 
     /// Get all object we own.
-    fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectRef>, anyhow::Error>;
+    fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error>;
 }
 
 impl<A> ClientState<A> {
@@ -545,13 +545,8 @@ where
             if *new_cert.order.sender() == self.address {
                 self.sent_certificates.push(new_cert.clone());
             } else {
-                self.received_certificates.insert(
-                    (
-                        *new_cert.order.object_id(),
-                        new_cert.order.sequence_number(),
-                    ),
-                    new_cert.clone(),
-                );
+                self.received_certificates
+                    .insert(new_cert.order.digest(), new_cert.clone());
             }
 
             // Atomic update
@@ -757,7 +752,7 @@ where
             self.object_ids.clear();
 
             let (authority_name, object_ids) = self.download_own_object_ids().await?;
-            for (object_id, sequence_number) in object_ids {
+            for (object_id, sequence_number, _) in object_ids {
                 self.object_ids.insert(object_id, sequence_number);
             }
 
@@ -769,7 +764,7 @@ where
         })
     }
 
-    fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectRef>, anyhow::Error> {
-        Box::pin(async move { Ok(self.object_ids.clone().into_iter().collect()) })
+    fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error> {
+        Box::pin(async move { Ok(self.object_ids.clone().keys().copied().collect()) })
     }
 }
