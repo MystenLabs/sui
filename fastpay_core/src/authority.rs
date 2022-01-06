@@ -76,7 +76,7 @@ impl AuthorityState {
 
         let input_object_cnt = input_objects.len();
         for (idx, object_ref) in input_objects.into_iter().enumerate() {
-            let (object_id, sequence_number) = object_ref;
+            let (object_id, sequence_number, _object_digest) = object_ref;
 
             fp_ensure!(
                 sequence_number <= SequenceNumber::max(),
@@ -90,6 +90,11 @@ impl AuthorityState {
                 .object_state(&object_id)
                 .await
                 .map_err(|_| FastPayError::ObjectNotFound)?;
+
+            // TODO(https://github.com/MystenLabs/fastnft/issues/123): This hack substitutes the real
+            // object digest instead of using the one passed in by the client. We need to fix clients and
+            // then use the digest provided, by deleting this line.
+            let object_digest = object.digest();
 
             // Check that the seq number is the same
             fp_ensure!(
@@ -123,7 +128,7 @@ impl AuthorityState {
             and returns ConflictingOrder in case there is a lock on a different
             existing order */
 
-            mutable_objects.push((object_id, sequence_number));
+            mutable_objects.push((object_id, sequence_number, object_digest));
         }
 
         // There is at least one mutable input.
@@ -155,7 +160,7 @@ impl AuthorityState {
         certificate.check(&self.committee)?;
 
         let mut inputs = vec![];
-        for (input_object_id, input_seq) in order.input_objects() {
+        for (input_object_id, input_seq, _input_digest) in order.input_objects() {
             // If we have a certificate on the confirmation order it means that the input
             // object exists on other honest authorities, but we do not have it.
             let input_object = self
@@ -261,9 +266,17 @@ impl AuthorityState {
     ) -> Result<AccountInfoResponse, FastPayError> {
         let mut response = self.make_object_info(request.object_id).await?;
         if let Some(seq) = request.request_sequence_number {
+            // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy
+            // to provide back to the client the object digest for specific objects requested. Probably,
+            // we have to return the full ObjectRef and why not the actual full object here.
+            let obj = self
+                .object_state(&request.object_id)
+                .await
+                .map_err(|_| FastPayError::ObjectNotFound)?;
+
             // Get the Transaction Digest that created the object
             let transaction_digest = self
-                .parent(&(request.object_id, seq.increment()?))
+                .parent(&(request.object_id, seq.increment()?, obj.digest()))
                 .await
                 .ok_or(FastPayError::CertificateNotfound)?;
             // Get the cert from the transaction digest

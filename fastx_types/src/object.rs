@@ -8,7 +8,10 @@ use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 
 use crate::{
-    base_types::{FastPayAddress, ObjectID, ObjectRef, SequenceNumber},
+    base_types::{
+        sha3_hash, BcsSignable, FastPayAddress, ObjectDigest, ObjectID, ObjectRef, SequenceNumber,
+        TransactionDigest,
+    },
     gas_coin::GasCoin,
 };
 
@@ -86,8 +89,13 @@ pub struct Object {
     pub data: Data,
     /// The authenticator that unlocks this object (eg. public key, or other)
     pub owner: FastPayAddress,
+    /// The version of this object, starting at zero
     pub next_sequence_number: SequenceNumber,
+    /// The digest of the order that created or last mutated this object
+    pub previous_transaction: TransactionDigest,
 }
+
+impl BcsSignable for Object {}
 
 impl Object {
     /// Create a new Move object
@@ -95,11 +103,13 @@ impl Object {
         o: MoveObject,
         owner: FastPayAddress,
         next_sequence_number: SequenceNumber,
+        previous_transaction: TransactionDigest,
     ) -> Self {
         Object {
             data: Data::Move(o),
             owner,
             next_sequence_number,
+            previous_transaction,
         }
     }
 
@@ -107,6 +117,7 @@ impl Object {
         m: CompiledModule,
         owner: FastPayAddress,
         next_sequence_number: SequenceNumber,
+        previous_transaction: TransactionDigest,
     ) -> Self {
         let mut bytes = Vec::new();
         m.serialize(&mut bytes).unwrap();
@@ -114,6 +125,7 @@ impl Object {
             data: Data::Module(bytes),
             owner,
             next_sequence_number,
+            previous_transaction,
         }
     }
 
@@ -122,7 +134,7 @@ impl Object {
     }
 
     pub fn to_object_reference(&self) -> ObjectRef {
-        (self.id(), self.next_sequence_number)
+        (self.id(), self.next_sequence_number, self.digest())
     }
 
     pub fn id(&self) -> ObjectID {
@@ -139,6 +151,10 @@ impl Object {
 
     pub fn type_(&self) -> Option<&StructTag> {
         self.data.type_()
+    }
+
+    pub fn digest(&self) -> ObjectDigest {
+        ObjectDigest::new(sha3_hash(self))
     }
 
     /// Change the owner of `self` to `new_owner`
@@ -170,6 +186,7 @@ impl Object {
             owner,
             data,
             next_sequence_number,
+            previous_transaction: TransactionDigest::genesis(),
         }
     }
 

@@ -17,10 +17,13 @@ fn test_signed_values() {
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
-        object_id: ObjectID::random(),
+        object_ref: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         sender: a1,
         recipient: Address::FastPay(a2),
-        sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer.clone(), &sec1);
@@ -51,10 +54,13 @@ fn test_certificates() {
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
-        object_id: ObjectID::random(),
+        object_ref: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         sender: a1,
         recipient: Address::FastPay(a2),
-        sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer.clone(), &sec1);

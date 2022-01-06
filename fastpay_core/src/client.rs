@@ -51,7 +51,7 @@ pub struct ClientState<AuthorityClient> {
     sent_certificates: Vec<CertifiedOrder>,
     /// Known received certificates, indexed by sender and sequence number.
     /// TODO: API to search and download yet unknown `received_certificates`.
-    received_certificates: BTreeMap<ObjectRef, CertifiedOrder>,
+    received_certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
     /// The known objects with it's sequence number owned by the client.
     object_ids: BTreeMap<ObjectID, SequenceNumber>,
 }
@@ -65,14 +65,6 @@ pub trait Client {
         &mut self,
         object_id: ObjectID,
         recipient: FastPayAddress,
-        user_data: UserData,
-    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
-
-    /// Send money to a Primary account.
-    fn transfer_to_primary(
-        &mut self,
-        object_id: ObjectID,
-        recipient: PrimaryAddress,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
@@ -91,14 +83,6 @@ pub trait Client {
         object_id: ObjectID,
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
-
-    /// Find how much money we can spend.
-    /// TODO: Currently, this value only reflects received transfers that were
-    /// locally processed by `receive_from_fastpay`.
-    fn get_spendable_amount(
-        &mut self,
-        object_id: ObjectID,
-    ) -> AsyncResult<'_, Amount, anyhow::Error>;
 }
 
 impl<A> ClientState<A> {
@@ -121,7 +105,7 @@ impl<A> ClientState<A> {
             sent_certificates,
             received_certificates: received_certificates
                 .into_iter()
-                .map(|cert| (cert.key(), cert))
+                .map(|cert| (cert.order.digest(), cert))
                 .collect(),
             object_ids,
         }
@@ -467,7 +451,7 @@ where
 
     /// Make sure we have all our certificates with sequence number
     /// in the range 0..self.next_sequence_number
-    async fn download_sent_certificates(&self) -> Result<Vec<CertifiedOrder>, FastPayError> {
+    pub async fn download_sent_certificates(&self) -> Result<Vec<CertifiedOrder>, FastPayError> {
         let known_sequence_numbers: BTreeSet<_> = self
             .sent_certificates
             .iter()
@@ -501,15 +485,14 @@ where
     /// Transfers an object to a recipient address.
     async fn transfer(
         &mut self,
-        (object_id, sequence_number): ObjectRef,
+        (object_id, sequence_number, _object_digest): ObjectRef,
         recipient: Address,
         user_data: UserData,
     ) -> Result<CertifiedOrder, anyhow::Error> {
         let transfer = Transfer {
-            object_id,
+            object_ref: (object_id, sequence_number, _object_digest),
             sender: self.address,
             recipient,
-            sequence_number,
             user_data,
         };
         let order = Order::new_transfer(transfer, &self.secret);
@@ -626,21 +609,13 @@ where
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
         Box::pin(self.transfer(
-            (object_id, self.next_sequence_number(object_id)),
+            (
+                object_id,
+                self.next_sequence_number(object_id),
+                // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
+                ObjectDigest::new([0; 32]),
+            ),
             Address::FastPay(recipient),
-            user_data,
-        ))
-    }
-
-    fn transfer_to_primary(
-        &mut self,
-        object_id: ObjectID,
-        recipient: PrimaryAddress,
-        user_data: UserData,
-    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
-        Box::pin(self.transfer(
-            (object_id, self.next_sequence_number(object_id)),
-            Address::Primary(recipient),
             user_data,
         ))
     }
@@ -662,17 +637,17 @@ where
                         *certificate.order.object_id(),
                         vec![certificate.clone()],
                         CommunicateAction::SynchronizeNextSequenceNumber(
-                            transfer.sequence_number.increment()?,
+                            transfer.object_ref.1.increment()?,
                         ),
                     )
                     .await?;
                     // Everything worked: update the local balance.
                     if let btree_map::Entry::Vacant(entry) =
-                        self.received_certificates.entry(transfer.key())
+                        self.received_certificates.entry(certificate.order.digest())
                     {
                         self.object_ids.insert(
-                            transfer.object_id,
-                            transfer.sequence_number.increment().unwrap(),
+                            transfer.object_ref.0,
+                            transfer.object_ref.1.increment().unwrap(),
                         );
                         entry.insert(certificate);
                     }
@@ -693,11 +668,14 @@ where
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
         Box::pin(async move {
             let transfer = Transfer {
-                object_id,
+                object_ref: (
+                    object_id,
+                    self.next_sequence_number(object_id),
+                    // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
+                    ObjectDigest::new([0; 32]),
+                ),
                 sender: self.address,
                 recipient: Address::FastPay(recipient),
-                // amount,
-                sequence_number: self.next_sequence_number(object_id),
                 user_data,
             };
             let order = Order::new_transfer(transfer, &self.secret);
@@ -705,26 +683,6 @@ where
                 .execute_transfer(order, /* with_confirmation */ false)
                 .await?;
             Ok(new_certificate)
-        })
-    }
-
-    fn get_spendable_amount(
-        &mut self,
-        object_id: ObjectID,
-    ) -> AsyncResult<'_, Amount, anyhow::Error> {
-        Box::pin(async move {
-            if let Some(order) = self.pending_transfer.clone() {
-                // Finish executing the previous transfer.
-                self.execute_transfer(order, /* with_confirmation */ false)
-                    .await?;
-            }
-            let next_sequence_number = self.next_sequence_number(object_id);
-            if self.sent_certificates.len() < next_sequence_number.into() {
-                // Recover missing sent certificates.
-                let new_sent_certificates = self.download_sent_certificates().await?;
-                self.update_sent_certificates(new_sent_certificates, object_id)?;
-            }
-            Ok(Amount::zero())
         })
     }
 }

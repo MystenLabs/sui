@@ -77,7 +77,12 @@ fn create_genesis_module_objects() -> Result<Genesis> {
                     *struct_name
                 );
             }
-            Object::new_module(m, owner, SequenceNumber::new())
+            Object::new_module(
+                m,
+                owner,
+                SequenceNumber::new(),
+                TransactionDigest::genesis(),
+            )
         })
         .collect();
     Ok(Genesis {

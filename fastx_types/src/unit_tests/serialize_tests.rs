@@ -57,10 +57,13 @@ fn test_order() {
     let (sender_name, sender_key) = get_key_pair();
 
     let transfer = Transfer {
-        object_id: ObjectID::random(),
+        object_ref: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
-        sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
     let transfer_order = Order::new_transfer(transfer, &sender_key);
@@ -76,10 +79,13 @@ fn test_order() {
 
     let (sender_name, sender_key) = get_key_pair();
     let transfer2 = Transfer {
-        object_id: ObjectID::random(),
+        object_ref: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         sender: sender_name,
         recipient: Address::FastPay(dbg_addr(0x20)),
-        sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
     let transfer_order2 = Order::new_transfer(transfer2, &sender_key);
@@ -98,10 +104,13 @@ fn test_order() {
 fn test_vote() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_id: ObjectID::random(),
+        object_ref: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
-        sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
@@ -123,10 +132,13 @@ fn test_vote() {
 fn test_cert() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_id: ObjectID::random(),
+        object_ref: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
-        sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
@@ -156,10 +168,13 @@ fn test_cert() {
 fn test_info_response() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_id: ObjectID::random(),
+        object_ref: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
-        sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
@@ -228,10 +243,13 @@ fn test_info_response() {
 fn test_time_order() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_id: ObjectID::random(),
+        object_ref: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
-        sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
 
@@ -261,10 +279,13 @@ fn test_time_order() {
 fn test_time_vote() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_id: ObjectID::random(),
+        object_ref: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
-        sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
@@ -300,10 +321,13 @@ fn test_time_cert() {
     let count = 100;
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_id: ObjectID::random(),
+        object_ref: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0)),
-        sequence_number: SequenceNumber::new(),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);

@@ -40,9 +40,6 @@ pub enum FastPayError {
     // Certificate verification
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
-    // Transfer processing
-    #[error("Transfers must have positive amount")]
-    IncorrectTransferAmount,
     #[error(
         "The given sequence ({received_sequence:?}) number must match the next expected sequence ({expected_sequence:?}) number of the account"
     )]
@@ -51,10 +48,6 @@ pub enum FastPayError {
         expected_sequence: SequenceNumber,
         received_sequence: SequenceNumber,
     },
-    #[error(
-         "The transferred amount must be not exceed the current account balance: {current_balance:?}"
-    )]
-    InsufficientFunding { current_balance: Balance },
     #[error("Conflicting order already received: {pending_confirmation:?}")]
     ConflictingOrder { pending_confirmation: Order },
     #[error("Transfer order was processed but no signature was produced by authority")]
@@ -83,14 +76,6 @@ pub enum FastPayError {
     SequenceOverflow,
     #[error("Sequence number underflow.")]
     SequenceUnderflow,
-    #[error("Amount overflow.")]
-    AmountOverflow,
-    #[error("Amount underflow.")]
-    AmountUnderflow,
-    #[error("Account balance overflow.")]
-    BalanceOverflow,
-    #[error("Account balance underflow.")]
-    BalanceUnderflow,
     #[error("Wrong shard used.")]
     WrongShard,
     #[error("Invalid cross shard update.")]
