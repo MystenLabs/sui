@@ -162,10 +162,7 @@ async fn test_handle_transfer_order_ok() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(
-        account_info.signed_order.unwrap(),
-        pending_confirmation
-    );
+    assert_eq!(account_info.signed_order.unwrap(), pending_confirmation);
 
     // Check the final state of the locks
     assert!(authority_state
@@ -395,7 +392,7 @@ async fn test_handle_move_order() {
     assert!(mutated.len() == 2);
 
     let created_object_id = mutated[0].0; // res.object_id;
-    // check that order actually created an object with the expected ID, owner, sequence number
+                                          // check that order actually created an object with the expected ID, owner, sequence number
     let created_obj = authority_state
         .object_state(&created_object_id)
         .await
@@ -701,7 +698,11 @@ async fn test_handle_confirmation_order_ok() {
     assert_eq!(
         {
             let refx = authority_state
-                .parent(&(object_id, new_account.next_sequence_number, new_account.digest()))
+                .parent(&(
+                    object_id,
+                    new_account.next_sequence_number,
+                    new_account.digest(),
+                ))
                 .await
                 .unwrap();
             authority_state.read_certificate(&refx).await.unwrap()

@@ -28,7 +28,7 @@ impl AuthorityStore {
                 "signed_orders",
                 "certificates",
                 "parent_sync",
-                "signed_effects"
+                "signed_effects",
             ],
         )
         .expect("Cannot open DB.");
@@ -58,11 +58,23 @@ impl AuthorityStore {
             .collect())
     }
 
-    pub fn get_order_info(&self, transaction_digest : &TransactionDigest) -> Result<OrderInfoResponse, FastPayError> {
+    pub fn get_order_info(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Result<OrderInfoResponse, FastPayError> {
         Ok(OrderInfoResponse {
-            signed_order: self.signed_orders.get(transaction_digest).map_err(|_| FastPayError::StorageError)?,
-            certified_order: self.certificates.get(transaction_digest).map_err(|_| FastPayError::StorageError)?,
-            signed_effects: self.signed_effects.get(transaction_digest).map_err(|_| FastPayError::StorageError)?,
+            signed_order: self
+                .signed_orders
+                .get(transaction_digest)
+                .map_err(|_| FastPayError::StorageError)?,
+            certified_order: self
+                .certificates
+                .get(transaction_digest)
+                .map_err(|_| FastPayError::StorageError)?,
+            signed_effects: self
+                .signed_effects
+                .get(transaction_digest)
+                .map_err(|_| FastPayError::StorageError)?,
         })
     }
 

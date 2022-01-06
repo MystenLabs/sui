@@ -142,7 +142,6 @@ impl AuthorityState {
 
         // Return the signed Order or maybe a cert.
         self.make_order_info(&transaction_digest).await
-
     }
 
     /// Confirm a transfer.
@@ -261,8 +260,10 @@ impl AuthorityState {
         };
 
         // Update the database in an atomic manner
-        let to_signed_effects = temporary_store.to_signed_effects(&self.name, &self.secret, &transaction_digest);
-        self.update_state(temporary_store, certificate, to_signed_effects).await?;
+        let to_signed_effects =
+            temporary_store.to_signed_effects(&self.name, &self.secret, &transaction_digest);
+        self.update_state(temporary_store, certificate, to_signed_effects)
+            .await?;
 
         self.make_order_info(&transaction_digest).await
     }
@@ -332,9 +333,11 @@ impl AuthorityState {
             .expect("TODO: propagate the error")
     }
 
-
     /// Make an information response for an order
-    async fn make_order_info(&self, transaction_digest : &TransactionDigest) -> Result<OrderInfoResponse, FastPayError> {
+    async fn make_order_info(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Result<OrderInfoResponse, FastPayError> {
         self._database.get_order_info(transaction_digest)
     }
 
@@ -395,9 +398,10 @@ impl AuthorityState {
         &self,
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedOrder,
-        signed_effects : SignedOrderEffects,
+        signed_effects: SignedOrderEffects,
     ) -> Result<(), FastPayError> {
-        self._database.update_state(temporary_store, certificate, signed_effects)
+        self._database
+            .update_state(temporary_store, certificate, signed_effects)
     }
 
     /// Get a read reference to an object/seq lock

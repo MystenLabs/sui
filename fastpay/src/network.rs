@@ -207,7 +207,10 @@ impl Client {
         }
     }
 
-    pub async fn send_recv_bytes_order(&self, buf: Vec<u8>) -> Result<OrderInfoResponse, FastPayError> {
+    pub async fn send_recv_bytes_order(
+        &self,
+        buf: Vec<u8>,
+    ) -> Result<OrderInfoResponse, FastPayError> {
         match self.send_recv_bytes_internal(buf).await {
             Err(error) => Err(FastPayError::ClientIoError {
                 error: format!("{}", error),

@@ -42,7 +42,12 @@ impl AuthorityTemporaryStore {
         (self.objects, self.active_inputs, self.written, self.deleted)
     }
 
-    pub fn to_signed_effects(&self, authority_name: &AuthorityName, secret: &KeyPair, transaction_digest: &TransactionDigest) -> SignedOrderEffects {
+    pub fn to_signed_effects(
+        &self,
+        authority_name: &AuthorityName,
+        secret: &KeyPair,
+        transaction_digest: &TransactionDigest,
+    ) -> SignedOrderEffects {
         let effects = OrderEffects {
             transaction_digest: *transaction_digest,
             mutated: self.written.clone(),
@@ -55,7 +60,6 @@ impl AuthorityTemporaryStore {
             authority: *authority_name,
             signature,
         }
-
     }
 
     /// An internal check of the invariants (will only fire in debug)

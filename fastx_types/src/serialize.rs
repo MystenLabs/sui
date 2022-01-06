@@ -120,7 +120,10 @@ pub fn serialize_order_info(value: &OrderInfoResponse) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::OrderResp(value))
 }
 
-pub fn serialize_order_info_into<W>(writer: W, value: &OrderInfoResponse) -> Result<(), anyhow::Error>
+pub fn serialize_order_info_into<W>(
+    writer: W,
+    value: &OrderInfoResponse,
+) -> Result<(), anyhow::Error>
 where
     W: std::io::Write,
 {

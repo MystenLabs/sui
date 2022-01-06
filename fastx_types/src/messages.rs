@@ -118,19 +118,19 @@ pub struct ObjectInfoResponse {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct OrderInfoResponse {
     // The signed order response to handle_order
-    pub signed_order : Option<SignedOrder>,
+    pub signed_order: Option<SignedOrder>,
     // The certificate in case one is available
     pub certified_order: Option<CertifiedOrder>,
     // The effects resulting from a successful execution should
     // contain ObjectRef created, mutated, deleted and events.
-    pub signed_effects: Option<SignedOrderEffects>, 
+    pub signed_effects: Option<SignedOrderEffects>,
 }
 
 /// The response from processing an order or a certified order
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct OrderEffects {
     // The transaction digest
-    pub transaction_digest : TransactionDigest,
+    pub transaction_digest: TransactionDigest,
     // ObjectRefs containing mutated or new objects
     pub mutated: Vec<ObjectRef>,
     // Object Refs of objects now deleted (the old refs).
@@ -147,7 +147,6 @@ pub struct SignedOrderEffects {
     pub authority: AuthorityName,
     pub signature: Signature,
 }
-
 
 impl Hash for Order {
     fn hash<H: Hasher>(&self, state: &mut H) {
