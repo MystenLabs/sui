@@ -765,12 +765,11 @@ where
                     .await?;
             }
             // update object_ids.
-            self.object_ids = self
-                .download_own_object_ids()
-                .await?
-                .into_iter()
-                .map(|object_ref| (object_ref.0, object_ref.1))
-                .collect::<BTreeMap<ObjectID, SequenceNumber>>();
+            self.object_ids.clear();
+
+            for (object_id, sequence_number) in self.download_own_object_ids().await? {
+                self.object_ids.insert(object_id, sequence_number);
+            }
 
             // Recover missing certificates.
             let new_certificates = self.download_certificates().await?;
