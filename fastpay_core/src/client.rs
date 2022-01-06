@@ -561,19 +561,19 @@ where
             // Sanity check
             // Some certificates of the object will be from received_certs if the object is originated from other sender.
             // TODO: Maybe we should store certificates in one place sorted by object_ref instead of sent/received?
-let mut sent_certificates: Vec<CertifiedOrder> = self
-            .sent_certificates
-            .iter()
-            .filter(|cert| *cert.order.object_id() == object_id)
-            .cloned()
-            .collect();
+            let mut sent_certificates: Vec<CertifiedOrder> = self
+                .sent_certificates
+                .iter()
+                .filter(|cert| *cert.order.object_id() == object_id)
+                .cloned()
+                .collect();
 
-        let mut received_certs: Vec<CertifiedOrder> = self
-            .received_certificates
-            .values()
-            .filter(|cert| *cert.order.object_id() == object_id)
-            .cloned()
-            .collect();
+            let mut received_certs: Vec<CertifiedOrder> = self
+                .received_certificates
+                .values()
+                .filter(|cert| *cert.order.object_id() == object_id)
+                .cloned()
+                .collect();
 
             sent_certificates.append(&mut received_certs);
 
