@@ -603,11 +603,13 @@ fn test_client_state_sync_with_transferred_object() {
     let mut client2 = make_client(authority_clients.clone(), committee);
 
     let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+
     let authority_objects = vec![
-        vec![object_id],
-        vec![object_id],
-        vec![object_id],
-        vec![object_id],
+        vec![object_id, gas_object_id],
+        vec![object_id, gas_object_id],
+        vec![object_id, gas_object_id],
+        vec![object_id, gas_object_id],
     ];
     rt.block_on(fund_account(
         authority_clients.values().collect(),
@@ -616,8 +618,13 @@ fn test_client_state_sync_with_transferred_object() {
     ));
 
     // Transfer object to client2.
-    rt.block_on(client1.transfer_to_fastpay(object_id, client2.address, UserData::default()))
-        .unwrap();
+    rt.block_on(client1.transfer_to_fastpay(
+        object_id,
+        gas_object_id,
+        client2.address,
+        UserData::default(),
+    ))
+    .unwrap();
 
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
