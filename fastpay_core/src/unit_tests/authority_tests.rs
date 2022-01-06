@@ -346,6 +346,9 @@ async fn test_handle_move_order() {
     let mut authority_state = init_state_with_objects(genesis_module_objects).await;
     authority_state.native_functions = genesis.native_functions.clone();
 
+    // Drop lock here in case test fails to not poison lock.
+    drop(genesis);
+
     let function = ident_str!("create").to_owned();
     let order = Order::new_move_call(
         sender,
@@ -361,7 +364,7 @@ async fn test_handle_move_order() {
         MAX_GAS,
         &sender_key,
     );
-    let gas_cost = 142 + 24; // 142 is for bytecode execution, 24 is for object creation.
+    let gas_cost = 143 + 24; // 143 is for bytecode execution, 25 is for object creation.
     let res = send_and_confirm_order(&mut authority_state, order)
         .await
         .unwrap();
