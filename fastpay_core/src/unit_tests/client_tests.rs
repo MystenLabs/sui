@@ -41,12 +41,26 @@ impl AuthorityClient for LocalAuthorityClient {
         Box::pin(async move { state.lock().await.handle_confirmation_order(order).await })
     }
 
-    fn handle_info_request(
+    fn handle_account_info_request(
         &self,
-        request: InfoRequest,
-    ) -> AsyncResult<'_, InfoResponse, FastPayError> {
+        request: AccountInfoRequest,
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_info_request(request).await })
+        Box::pin(async move {
+            state
+                .lock()
+                .await
+                .handle_account_info_request(request)
+                .await
+        })
+    }
+
+    fn handle_object_info_request(
+        &self,
+        request: ObjectInfoRequest,
+    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
+        let state = self.0.clone();
+        Box::pin(async move { state.lock().await.handle_object_info_request(request).await })
     }
 }
 

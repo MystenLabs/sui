@@ -93,19 +93,6 @@ pub struct RedeemTransaction {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum InfoRequest {
-    AccountInfoRequest(AccountInfoRequest),
-    ObjectInfoRequest(ObjectInfoRequest),
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-#[allow(clippy::large_enum_variant)]
-pub enum InfoResponse {
-    AccountInfoResponse(AccountInfoResponse),
-    ObjectInfoResponse(ObjectInfoResponse),
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
     pub account: FastPayAddress,
 }
@@ -131,36 +118,6 @@ pub struct ObjectInfoResponse {
     pub requested_certificate: Option<CertifiedOrder>,
     pub pending_confirmation: Option<SignedOrder>,
     pub requested_received_transfers: Vec<CertifiedOrder>,
-}
-
-impl From<InfoResponse> for AccountInfoResponse {
-    fn from(info: InfoResponse) -> Self {
-        match info {
-            InfoResponse::AccountInfoResponse(response) => response,
-            _ => panic!(),
-        }
-    }
-}
-
-impl From<InfoResponse> for ObjectInfoResponse {
-    fn from(info: InfoResponse) -> Self {
-        match info {
-            InfoResponse::ObjectInfoResponse(response) => response,
-            _ => panic!(),
-        }
-    }
-}
-
-impl From<ObjectInfoResponse> for InfoResponse {
-    fn from(info: ObjectInfoResponse) -> Self {
-        InfoResponse::ObjectInfoResponse(info)
-    }
-}
-
-impl From<AccountInfoResponse> for InfoResponse {
-    fn from(info: AccountInfoResponse) -> Self {
-        InfoResponse::AccountInfoResponse(info)
-    }
 }
 
 impl Hash for Order {
