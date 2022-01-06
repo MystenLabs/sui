@@ -85,7 +85,7 @@ impl MessageHandler for RunningServerState {
                             .state
                             .handle_order(*message)
                             .await
-                            .map(|info| Some(serialize_info_response(&info.into()))),
+                            .map(|info| Some(serialize_object_info_response(&info))),
                         SerializedMessage::Cert(message) => {
                             let confirmation_order = ConfirmationOrder {
                                 certificate: message.as_ref().clone(),
@@ -98,17 +98,23 @@ impl MessageHandler for RunningServerState {
                             {
                                 Ok(info) => {
                                     // Response
-                                    Ok(Some(serialize_info_response(&info.into())))
+                                    Ok(Some(serialize_object_info_response(&info)))
                                 }
                                 Err(error) => Err(error),
                             }
                         }
-                        SerializedMessage::InfoReq(message) => self
+                        SerializedMessage::AccountInfoReq(message) => self
                             .server
                             .state
-                            .handle_info_request(*message)
+                            .handle_account_info_request(*message)
                             .await
-                            .map(|info| Some(serialize_info_response(&info))),
+                            .map(|info| Some(serialize_account_info_response(&info))),
+                        SerializedMessage::ObjectInfoReq(message) => self
+                            .server
+                            .state
+                            .handle_object_info_request(*message)
+                            .await
+                            .map(|info| Some(serialize_object_info_response(&info))),
                         _ => Err(FastPayError::UnexpectedMessage),
                     }
                 }
@@ -180,7 +186,11 @@ impl Client {
         time::timeout(self.recv_timeout, stream.read_data()).await?
     }
 
-    pub async fn send_recv_bytes(&self, buf: Vec<u8>) -> Result<InfoResponse, FastPayError> {
+    pub async fn send_recv_bytes<T>(
+        &self,
+        buf: Vec<u8>,
+        deserializer: fn(SerializedMessage) -> Result<T, FastPayError>,
+    ) -> Result<T, FastPayError> {
         match self.send_recv_bytes_internal(buf).await {
             Err(error) => Err(FastPayError::ClientIoError {
                 error: format!("{}", error),
@@ -188,10 +198,10 @@ impl Client {
             Ok(response) => {
                 // Parse reply
                 match deserialize_message(&response[..]) {
-                    Ok(SerializedMessage::InfoResp(resp)) => Ok(*resp),
                     Ok(SerializedMessage::Error(error)) => Err(*error),
+                    Ok(message) => deserializer(message),
                     Err(_) => Err(FastPayError::InvalidDecoding),
-                    _ => Err(FastPayError::UnexpectedMessage),
+                    // _ => Err(FastPayError::UnexpectedMessage),
                 }
             }
         }
@@ -202,9 +212,8 @@ impl AuthorityClient for Client {
     /// Initiate a new transfer to a FastPay or Primary account.
     fn handle_order(&mut self, order: Order) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
         Box::pin(async move {
-            self.send_recv_bytes(serialize_order(&order))
+            self.send_recv_bytes(serialize_order(&order), object_info_deserializer)
                 .await
-                .map(|response| response.into())
         })
     }
 
@@ -214,17 +223,35 @@ impl AuthorityClient for Client {
         order: ConfirmationOrder,
     ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
         Box::pin(async move {
-            self.send_recv_bytes(serialize_cert(&order.certificate))
+            self.send_recv_bytes(serialize_cert(&order.certificate), object_info_deserializer)
                 .await
-                .map(|response| response.into())
         })
     }
 
-    fn handle_info_request(
+    fn handle_account_info_request(
         &self,
-        request: InfoRequest,
-    ) -> AsyncResult<'_, InfoResponse, FastPayError> {
-        Box::pin(async move { self.send_recv_bytes(serialize_info_request(&request)).await })
+        request: AccountInfoRequest,
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
+        Box::pin(async move {
+            self.send_recv_bytes(
+                serialize_account_info_request(&request),
+                account_info_deserializer,
+            )
+            .await
+        })
+    }
+
+    fn handle_object_info_request(
+        &self,
+        request: ObjectInfoRequest,
+    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
+        Box::pin(async move {
+            self.send_recv_bytes(
+                serialize_object_info_request(&request),
+                object_info_deserializer,
+            )
+            .await
+        })
     }
 }
 

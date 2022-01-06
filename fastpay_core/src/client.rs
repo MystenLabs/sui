@@ -26,11 +26,17 @@ pub trait AuthorityClient {
         order: ConfirmationOrder,
     ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError>;
 
-    /// Handle information requests for this account.
-    fn handle_info_request(
+    /// Handle Account information requests for this account.
+    fn handle_account_info_request(
         &self,
-        request: InfoRequest,
-    ) -> AsyncResult<'_, InfoResponse, FastPayError>;
+        request: AccountInfoRequest,
+    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError>;
+
+    /// Handle Object information requests for this account.
+    fn handle_object_info_request(
+        &self,
+        request: ObjectInfoRequest,
+    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError>;
 }
 
 pub struct ClientState<AuthorityClient> {
@@ -188,17 +194,16 @@ where
         sequence_number: SequenceNumber,
     ) -> AsyncResult<'_, CertifiedOrder, FastPayError> {
         Box::pin(async move {
-            let request = InfoRequest::ObjectInfoRequest(ObjectInfoRequest {
+            let request = ObjectInfoRequest {
                 object_id: self.object_id,
                 request_sequence_number: Some(sequence_number),
                 request_received_transfers_excluding_first_nth: None,
-            });
+            };
             // Sequentially try each authority in random order.
             self.authority_clients.shuffle(&mut rand::thread_rng());
             for client in self.authority_clients.iter_mut() {
-                let result = client.handle_info_request(request.clone()).await;
+                let result = client.handle_object_info_request(request.clone()).await;
                 if let Ok(response) = result {
-                    let response: ObjectInfoResponse = response.into();
                     let certificate = response.requested_certificate.unwrap();
                     if certificate.check(&self.committee).is_ok() {
                         let order = &certificate.order;
@@ -229,16 +234,12 @@ where
     /// Try to find all object id and it's sequence number for the given account.
     fn query(&mut self, account: FastPayAddress) -> AsyncResult<'_, Vec<ObjectRef>, FastPayError> {
         Box::pin(async move {
-            let request = InfoRequest::AccountInfoRequest(AccountInfoRequest { account });
+            let request = AccountInfoRequest { account };
             // Sequentially try each authority in random order.
             self.authority_clients.shuffle(&mut rand::thread_rng());
             for client in self.authority_clients.iter_mut() {
-                let result = client.handle_info_request(request.clone()).await;
-                if let Ok(InfoResponse::AccountInfoResponse(AccountInfoResponse {
-                    object_ids,
-                    ..
-                })) = &result
-                {
+                let result = client.handle_account_info_request(request.clone()).await;
+                if let Ok(AccountInfoResponse { object_ids, .. }) = &result {
                     return Ok(object_ids.clone());
                 }
             }
@@ -280,21 +281,19 @@ where
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
     async fn get_strong_majority_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
-        let request = InfoRequest::ObjectInfoRequest(ObjectInfoRequest {
+        let request = ObjectInfoRequest {
             object_id,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
-        });
+        };
         let mut authority_clients = self.authority_clients.clone();
         let numbers: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
             .map(|(name, client)| {
-                let fut = client.handle_info_request(request.clone());
+                let fut = client.handle_object_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(InfoResponse::ObjectInfoResponse(info)) => {
-                            Some((*name, info.next_sequence_number))
-                        }
+                        Ok(info) => Some((*name, info.next_sequence_number)),
                         _ => None,
                     }
                 }
@@ -312,21 +311,19 @@ where
         &self,
         object_id: ObjectID,
     ) -> Option<(FastPayAddress, SequenceNumber)> {
-        let request = InfoRequest::ObjectInfoRequest(ObjectInfoRequest {
+        let request = ObjectInfoRequest {
             object_id,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
-        });
+        };
         let authority_clients = self.authority_clients.clone();
         let numbers: futures::stream::FuturesUnordered<_> = authority_clients
             .iter()
             .map(|(name, client)| {
-                let fut = client.handle_info_request(request.clone());
+                let fut = client.handle_object_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(InfoResponse::ObjectInfoResponse(info)) => {
-                            Some((*name, Some((info.owner, info.next_sequence_number))))
-                        }
+                        Ok(info) => Some((*name, Some((info.owner, info.next_sequence_number)))),
                         _ => None,
                     }
                 }
@@ -423,14 +420,12 @@ where
                 let committee = &committee;
                 Box::pin(async move {
                     // Figure out which certificates this authority is missing.
-                    let request = InfoRequest::ObjectInfoRequest(ObjectInfoRequest {
+                    let request = ObjectInfoRequest {
                         object_id,
                         request_sequence_number: None,
                         request_received_transfers_excluding_first_nth: None,
-                    });
-                    let response = client.handle_info_request(request).await?;
-
-                    let response: ObjectInfoResponse = response.into();
+                    };
+                    let response = client.handle_object_info_request(request).await?;
 
                     let current_sequence_number = response.next_sequence_number;
                     // Download each missing certificate in reverse order using the downloader.
@@ -564,7 +559,7 @@ where
         certificates: Vec<CertifiedOrder>,
     ) -> Result<(), FastPayError> {
         for new_cert in &certificates {
-            let object_id = new_cert.order.object_id().clone();
+            let object_id = *new_cert.order.object_id();
             let mut new_next_sequence_number = self.next_sequence_number(object_id);
 
             if new_cert.order.sequence_number() >= new_next_sequence_number {
@@ -576,12 +571,12 @@ where
             }
             // store cert in sent_certificate if the cert is created by the client, else store it in received certificates.
             // TODO: Refactor how we stor certs in client to avoid this logic https://github.com/MystenLabs/fastnft/issues/82
-            if new_cert.order.sender().clone() == self.address {
+            if *new_cert.order.sender() == self.address {
                 self.sent_certificates.push(new_cert.clone());
             } else {
                 self.received_certificates.insert(
                     (
-                        new_cert.order.object_id().clone(),
+                        *new_cert.order.object_id(),
                         new_cert.order.sequence_number(),
                     ),
                     new_cert.clone(),
