@@ -768,6 +768,6 @@ where
     }
 
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error> {
-        Box::pin(async move { Ok(self.object_ids.clone().keys().copied().collect()) })
+        Box::pin(async move { Ok(self.object_ids.keys().copied().collect()) })
     }
 }
