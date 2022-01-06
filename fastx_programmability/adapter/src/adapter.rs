@@ -220,6 +220,7 @@ type Event = (Vec<u8>, u64, TypeTag, Vec<u8>);
 /// - Look for each input in `by_value_objects` to determine whether the object was transferred, frozen, or deleted
 /// - Update objects passed via a mutable reference in `mutable_refs` to their new values
 /// - Process creation of new objects and user-emittd events in `events`
+#[allow(clippy::too_many_arguments)]
 fn process_successful_execution<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
