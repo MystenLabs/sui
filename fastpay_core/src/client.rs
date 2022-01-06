@@ -564,13 +564,12 @@ let mut sent_certificates: Vec<CertifiedOrder> = self
             .cloned()
             .collect();
 
-            let mut received_certs: Vec<CertifiedOrder> = self
-                .received_certificates
-                .clone()
-                .into_values()
-                .into_iter()
-                .filter(|cert| *cert.order.object_id() == object_id)
-                .collect();
+        let mut received_certs: Vec<CertifiedOrder> = self
+            .received_certificates
+            .values()
+            .filter(|cert| *cert.order.object_id() == object_id)
+            .cloned()
+            .collect();
 
             sent_certificates.append(&mut received_certs);
 
