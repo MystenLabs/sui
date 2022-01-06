@@ -112,7 +112,6 @@ impl TxContext {
         // audit ID derivation: do we want/need domain separation, different hash function, truncation ...
 
         let mut hasher = Sha3_256::default();
-        // TODO: hasher.update("OBJECT_ID_DERIVE::");
         hasher.update(self.digest.0);
         hasher.update(self.ids_created.to_le_bytes());
         let hash = hasher.finalize();
@@ -317,8 +316,8 @@ impl From<SequenceNumber> for usize {
 }
 
 /// Something that we know how to hash and sign.
-pub trait Signable<HashedMessageWriter> {
-    fn write(&self, to_be_hashed_message: &mut HashedMessageWriter);
+pub trait Signable<W> {
+    fn write(&self, writer: &mut W);
 }
 
 /// Activate the blanket implementation of `Signable` based on serde and BCS.
@@ -326,16 +325,16 @@ pub trait Signable<HashedMessageWriter> {
 /// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
 pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
 
-impl<T, HashedMessageWriter> Signable<HashedMessageWriter> for T
+impl<T, W> Signable<W> for T
 where
     T: BcsSignable,
-    HashedMessageWriter: std::io::Write,
+    W: std::io::Write,
 {
-    fn write(&self, to_be_hashed_message: &mut HashedMessageWriter) {
+    fn write(&self, writer: &mut W) {
         let name = serde_name::trace_name::<Self>().expect("Self must be a struct or an enum");
         // Note: This assumes that names never contain the separator `::`.
-        write!(to_be_hashed_message, "{}::", name).expect("Hasher should not fail");
-        bcs::serialize_into(to_be_hashed_message, &self)
+        write!(writer, "{}::", name).expect("Hasher should not fail");
+        bcs::serialize_into(writer, &self)
             .expect("Message serialization should not fail");
     }
 }
