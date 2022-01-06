@@ -16,6 +16,9 @@ use tokio::time::timeout;
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
 
+// TODO: Make timeout duration configurable.
+const AUTHORITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 pub trait AuthorityClient {
@@ -632,13 +635,13 @@ where
         // Sequentially try each authority in random order.
         let mut authorities: Vec<AuthorityName> =
             self.authority_clients.clone().into_keys().collect();
+        // TODO: implement sampling according to stake distribution and using secure RNG. https://github.com/MystenLabs/fastnft/issues/128
         authorities.shuffle(&mut rand::thread_rng());
         // Authority could be byzantine, add timeout to avoid waiting forever.
-        // TODO: Make timeout duration configurable.
         for authority_name in authorities {
             let authority = self.authority_clients.get(&authority_name).unwrap();
             let result = timeout(
-                Duration::from_secs(60),
+                AUTHORITY_REQUEST_TIMEOUT,
                 authority.handle_account_info_request(request.clone()),
             )
             .map_err(|_| FastPayError::ErrorWhileRequestingInformation)
