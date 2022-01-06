@@ -10,9 +10,10 @@ use fastx_types::{
 
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs::{self, read_to_string, File, OpenOptions},
     io::{BufReader, BufWriter, Write},
+    iter::FromIterator,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -99,20 +100,24 @@ pub struct UserAccount {
     pub address: FastPayAddress,
     pub key: KeyPair,
     pub object_ids: BTreeMap<ObjectID, SequenceNumber>,
+    pub gas_object_ids: BTreeSet<ObjectID>, // Every id in gas_object_ids should also be in object_ids.
     pub sent_certificates: Vec<CertifiedOrder>,
     pub received_certificates: Vec<CertifiedOrder>,
 }
 
 impl UserAccount {
-    pub fn new(object_ids: Vec<ObjectID>) -> Self {
+    pub fn new(object_ids: Vec<ObjectID>, gas_object_ids: Vec<ObjectID>) -> Self {
         let (address, key) = get_key_pair();
+        let object_ids = object_ids
+            .into_iter()
+            .map(|object_id| (object_id, SequenceNumber::new()))
+            .collect();
+        let gas_object_ids = BTreeSet::from_iter(gas_object_ids);
         Self {
             address,
             key,
-            object_ids: object_ids
-                .into_iter()
-                .map(|object_id| (object_id, SequenceNumber::new()))
-                .collect(),
+            object_ids,
+            gas_object_ids,
             sent_certificates: Vec::new(),
             received_certificates: Vec::new(),
         }

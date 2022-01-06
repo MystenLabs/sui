@@ -157,10 +157,9 @@ fn test_object_basics() {
     let mut storage = InMemoryStorage::new(genesis.objects.clone());
 
     // 0. Create a gas object for gas payment. Note that we won't really use it because we won't be providing a gas budget.
-    let gas_object = Object::with_id_owner_gas_for_testing(
+    let gas_object = Object::with_id_owner_for_testing(
         ObjectID::random(),
         base_types::FastPayAddress::default(),
-        MAX_GAS,
     );
     storage.write_object(gas_object.clone());
     storage.flush();
@@ -298,10 +297,9 @@ fn test_move_call_insufficient_gas() {
     let mut storage = InMemoryStorage::new(genesis.objects.clone());
 
     // 0. Create a gas object for gas payment.
-    let gas_object = Object::with_id_owner_gas_for_testing(
+    let gas_object = Object::with_id_owner_for_testing(
         ObjectID::random(),
         base_types::FastPayAddress::default(),
-        MAX_GAS,
     );
     storage.write_object(gas_object.clone());
     storage.flush();

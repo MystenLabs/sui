@@ -191,7 +191,8 @@ impl Object {
     }
 
     pub fn with_id_owner_for_testing(id: ObjectID, owner: FastPayAddress) -> Self {
-        Self::with_id_owner_gas_for_testing(id, owner, 0)
+        // For testing, we provide sufficient gas by default.
+        Self::with_id_owner_gas_for_testing(id, owner, 100000_u64)
     }
 
     // TODO: this should be test-only, but it's still used in bench and server
