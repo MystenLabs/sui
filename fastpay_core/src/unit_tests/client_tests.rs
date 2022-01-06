@@ -539,3 +539,47 @@ fn test_client_state_sync() {
     assert_eq!(old_object_ids, sender.object_ids);
     assert_eq!(old_sent_certificate, sender.sent_certificates);
 }
+
+#[test]
+fn test_client_state_sync_with_transferred_object() {
+    let mut rt = Runtime::new().unwrap();
+    let (authority_clients, committee) = init_local_authorities(4);
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let mut client2 = make_client(authority_clients.clone(), committee);
+
+    let object_id = ObjectID::random();
+    let authority_objects = vec![
+        vec![object_id],
+        vec![object_id],
+        vec![object_id],
+        vec![object_id],
+    ];
+    rt.block_on(fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    ));
+
+    // Transfer object to client2.
+    rt.block_on(client1.transfer_to_fastpay(object_id, client2.address, UserData::default()))
+        .unwrap();
+
+    // Confirm client2 acquired ownership of the object.
+    assert_eq!(
+        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        Some((client2.address, SequenceNumber::from(1)))
+    );
+
+    // Client 2's local object_id and cert should be empty before sync
+    assert!(client2.object_ids.is_empty());
+    assert!(client2.received_certificates.is_empty());
+    assert!(client2.sent_certificates.is_empty());
+
+    // Sync client state
+    rt.block_on(client2.sync_client_state()).unwrap();
+
+    // Confirm client 2 received the new object id and cert
+    assert_eq!(1, client2.object_ids.len());
+    assert_eq!(1, client2.received_certificates.len());
+    assert_eq!(0, client2.sent_certificates.len());
+}
