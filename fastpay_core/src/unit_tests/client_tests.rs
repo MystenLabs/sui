@@ -611,6 +611,7 @@ fn test_client_state_sync_with_transferred_object() {
     );
 
     // Client 2's local object_id and cert should be empty before sync
+    assert!(rt.block_on(client2.get_owned_objects()).unwrap().is_empty());
     assert!(client2.object_ids.is_empty());
     assert!(client2.received_certificates.is_empty());
     assert!(client2.sent_certificates.is_empty());
@@ -619,6 +620,7 @@ fn test_client_state_sync_with_transferred_object() {
     rt.block_on(client2.sync_client_state()).unwrap();
 
     // Confirm client 2 received the new object id and cert
+    assert_eq!(1, rt.block_on(client2.get_owned_objects()).unwrap().len());
     assert_eq!(1, client2.object_ids.len());
     assert_eq!(1, client2.received_certificates.len());
     assert_eq!(0, client2.sent_certificates.len());
