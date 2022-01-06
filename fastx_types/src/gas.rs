@@ -95,6 +95,11 @@ pub fn calculate_module_publish_cost(module_bytes: &[Vec<u8>]) -> u64 {
     module_bytes.iter().map(|v| v.len() as u64).sum::<u64>() + MIN_MOVE_PUBLISH_GAS
 }
 
+pub fn calculate_object_transfer_cost(object: &Object) -> u64 {
+    // TODO: Figure out object transfer gas formula.
+    (object.data.try_as_move().unwrap().contents.len() / 2) as u64
+}
+
 pub fn calculate_object_creation_cost(object: &Object) -> u64 {
     // TODO: Figure out object creation gas formula.
     object.data.try_as_move().unwrap().contents.len() as u64

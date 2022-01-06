@@ -95,7 +95,13 @@ fn make_benchmark_transfer_orders(
     // TODO: deterministic sequence of orders to recover from interrupted benchmarks.
     let mut next_recipient = get_key_pair().0;
     for account in accounts_config.accounts_mut() {
-        let object_id = account.object_ids.clone().into_keys().next().unwrap();
+        let gas_object_id = *account.gas_object_ids.iter().next().unwrap();
+        let gas_object_seq = *account.object_ids.get(&gas_object_id).unwrap();
+        let object_id = *account
+            .object_ids
+            .keys()
+            .find(|key| *key != &gas_object_id)
+            .unwrap();
         let transfer = Transfer {
             object_ref: (
                 object_id,
@@ -105,6 +111,12 @@ fn make_benchmark_transfer_orders(
             ),
             sender: account.address,
             recipient: Address::FastPay(next_recipient),
+            gas_payment: (
+                gas_object_id,
+                gas_object_seq,
+                // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
+                ObjectDigest::new([0; 32]),
+            ),
             user_data: UserData::default(),
         };
         debug!("Preparing transfer order: {:?}", transfer);
@@ -321,6 +333,9 @@ enum ClientCommands {
 
         /// Object to transfer, in 20 bytes Hex string
         object_id: String,
+
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        gas_object_id: String,
     },
 
     /// Obtain the Account Addresses
@@ -392,10 +407,12 @@ fn main() {
             from,
             to,
             object_id,
+            gas_object_id,
         } => {
             let sender = decode_address(&from).expect("Failed to decode sender's address");
             let recipient = decode_address(&to).expect("Failed to decode recipient's address");
             let object_id = ObjectID::from_hex_literal(&object_id).unwrap();
+            let gas_object_id = ObjectID::from_hex_literal(&gas_object_id).unwrap();
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
@@ -410,7 +427,7 @@ fn main() {
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let cert = client_state
-                    .transfer_to_fastpay(object_id, recipient, UserData::default())
+                    .transfer_to_fastpay(object_id, gas_object_id, recipient, UserData::default())
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
@@ -568,7 +585,7 @@ fn main() {
                 for _ in 0..gas_objs_per_account {
                     obj_ids.push(ObjectID::random());
                 }
-                let account = UserAccount::new(obj_ids.clone());
+                let account = UserAccount::new(obj_ids.clone(), obj_ids.clone());
 
                 init_state_cfg.config.push(InitialStateConfigEntry {
                     address: account.address,

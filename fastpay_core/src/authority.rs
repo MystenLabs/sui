@@ -7,7 +7,7 @@ use fastx_types::{
     committee::Committee,
     error::FastPayError,
     fp_bail, fp_ensure,
-    gas::check_gas_requirement,
+    gas::{calculate_object_transfer_cost, check_gas_requirement, deduct_gas},
     messages::*,
     object::{Data, Object},
     storage::Storage,
@@ -74,8 +74,7 @@ impl AuthorityState {
             return Err(FastPayError::DuplicateObjectRefInput);
         }
 
-        let input_object_cnt = input_objects.len();
-        for (idx, object_ref) in input_objects.into_iter().enumerate() {
+        for object_ref in input_objects {
             let (object_id, sequence_number, _object_digest) = object_ref;
 
             fp_ensure!(
@@ -118,9 +117,7 @@ impl AuthorityState {
                 FastPayError::IncorrectSigner
             );
 
-            // The last object in input_objects is always the gas payment object.
-            // TODO: Add get_gas_object_ref() to Order once Transfer order also has gas object.
-            if idx + 1 == input_object_cnt {
+            if &object_id == order.gas_payment_object_id() {
                 check_gas_requirement(&order, &object)?;
             }
 
@@ -194,6 +191,14 @@ impl AuthorityState {
         let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
         match order.kind {
             OrderKind::Transfer(t) => {
+                // unwraps here are safe because we built `inputs`
+                let mut gas_object = inputs.pop().unwrap();
+                deduct_gas(
+                    &mut gas_object,
+                    calculate_object_transfer_cost(&inputs[0]) as i128,
+                )?;
+                temporary_store.write_object(gas_object);
+
                 let mut output_object = inputs[0].clone();
                 output_object.next_sequence_number =
                     output_object.next_sequence_number.increment()?;

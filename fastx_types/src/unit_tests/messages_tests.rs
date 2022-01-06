@@ -24,6 +24,11 @@ fn test_signed_values() {
         ),
         sender: a1,
         recipient: Address::FastPay(a2),
+        gas_payment: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer.clone(), &sec1);
@@ -61,6 +66,11 @@ fn test_certificates() {
         ),
         sender: a1,
         recipient: Address::FastPay(a2),
+        gas_payment: (
+            ObjectID::random(),
+            SequenceNumber::new(),
+            ObjectDigest::new([0; 32]),
+        ),
         user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer.clone(), &sec1);
