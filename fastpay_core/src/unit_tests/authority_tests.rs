@@ -387,8 +387,8 @@ async fn test_handle_move_order() {
         .unwrap();
 
     // Check that effects are reported
-    assert!(_res.signed_effects.is_some());
-    let mutated = _res.signed_effects.unwrap().effects.mutated;
+    assert!(res.signed_effects.is_some());
+    let mutated = res.signed_effects.unwrap().effects.mutated;
     assert!(mutated.len() == 2);
 
     let created_object_id = mutated[0].0; // res.object_id;

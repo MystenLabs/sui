@@ -206,26 +206,6 @@ impl Client {
             }
         }
     }
-
-    pub async fn send_recv_bytes_order(
-        &self,
-        buf: Vec<u8>,
-    ) -> Result<OrderInfoResponse, FastPayError> {
-        match self.send_recv_bytes_internal(buf).await {
-            Err(error) => Err(FastPayError::ClientIoError {
-                error: format!("{}", error),
-            }),
-            Ok(response) => {
-                // Parse reply
-                match deserialize_message(&response[..]) {
-                    Ok(SerializedMessage::OrderResp(resp)) => Ok(*resp),
-                    Ok(SerializedMessage::Error(error)) => Err(*error),
-                    Err(_) => Err(FastPayError::InvalidDecoding),
-                    _ => Err(FastPayError::UnexpectedMessage),
-                }
-            }
-        }
-    }
 }
 
 impl AuthorityClient for Client {

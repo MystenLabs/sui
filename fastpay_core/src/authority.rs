@@ -153,7 +153,6 @@ impl AuthorityState {
         let order = certificate.order.clone();
         let transaction_digest = order.digest();
 
-        // let mut object_id = *order.object_id();
         // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
@@ -187,8 +186,6 @@ impl AuthorityState {
         let mut tx_ctx = TxContext::new(transaction_digest);
 
         // Order-specific logic
-        //
-        // TODO: think very carefully what to do in case we throw an Err here.
         let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
         let _status = match order.kind {
             OrderKind::Transfer(t) => {
