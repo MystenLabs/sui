@@ -1,32 +1,27 @@
 module 0x2::CreateTransferUse {
-    use FastX::Authenticator::{Self, Authenticator};
+    use FastX::Address::{Self, Address};
     use FastX::ID::ID;
     use FastX::Transfer;
-    use FastX::TxContext;
+    use FastX::TxContext::{Self, TxContext};
 
     struct S has key {
         id: ID,
         f: u64
     }
 
-    /// Create an object and transfer it to `signer`
-    public fun create(signer: signer, f: u64, inputs_hash: vector<u8>) {
-        let ctx = TxContext::make_unsafe(signer, inputs_hash);
-        let s = S { id: TxContext::new_id(&mut ctx), f };
-        Transfer::transfer(s, TxContext::get_authenticator(&ctx));
+    /// Create an object and transfer it to `recipient`
+    public fun create(f: u64, recipient: vector<u8>, ctx: TxContext) {
+        Transfer::transfer(
+            S { id: TxContext::new_id(&mut ctx), f },
+            Address::new(recipient)
+        )
     }
 
-    fun transfer_(s: S, recipient: Authenticator) {
+    public fun transfer(s: S, recipient: Address, _ctx: TxContext) {
         Transfer::transfer(s, recipient)
     }
 
-    public fun transfer(
-        _signer: signer,
-        id: address,
-        recipient: address,
-        _inputs_hash: vector<u8>
-    ) acquires S {
-        let s = move_from<S>(id);
-        transfer_(s, Authenticator::new_from_address(recipient))
+    public fun use_it(s: &S, _ctx: TxContext) {
+        s.f;
     }
 }
