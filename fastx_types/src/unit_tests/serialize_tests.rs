@@ -21,32 +21,32 @@ fn test_error() {
 
 #[test]
 fn test_info_request() {
-    let req1 = AccountInfoRequest {
+    let req1 = ObjectInfoRequest {
         object_id: dbg_object_id(0x20),
         request_sequence_number: None,
         request_received_transfers_excluding_first_nth: None,
     };
-    let req2 = AccountInfoRequest {
+    let req2 = ObjectInfoRequest {
         object_id: dbg_object_id(0x20),
         request_sequence_number: Some(SequenceNumber::from(129)),
         request_received_transfers_excluding_first_nth: None,
     };
 
-    let buf1 = serialize_info_request(&req1);
-    let buf2 = serialize_info_request(&req2);
+    let buf1 = serialize_object_info_request(&req1);
+    let buf2 = serialize_object_info_request(&req2);
 
     let result1 = deserialize_message(buf1.as_slice());
     let result2 = deserialize_message(buf2.as_slice());
     assert!(result1.is_ok());
     assert!(result2.is_ok());
 
-    if let SerializedMessage::InfoReq(o) = result1.unwrap() {
-        assert!(*o == req1);
+    if let SerializedMessage::ObjectInfoReq(o) = result1.unwrap() {
+        assert_eq!(*o, req1);
     } else {
         panic!()
     }
-    if let SerializedMessage::InfoReq(o) = result2.unwrap() {
-        assert!(*o == req2);
+    if let SerializedMessage::ObjectInfoReq(o) = result2.unwrap() {
+        assert_eq!(*o, req2);
     } else {
         panic!()
     }
@@ -219,7 +219,7 @@ fn test_info_response() {
         cert.signatures.push((authority_name, sig));
     }
 
-    let resp1 = AccountInfoResponse {
+    let resp1 = ObjectInfoResponse {
         object_id: dbg_object_id(0x20),
         owner: dbg_addr(0x20),
         next_sequence_number: SequenceNumber::new(),
@@ -227,7 +227,7 @@ fn test_info_response() {
         requested_certificate: None,
         requested_received_transfers: Vec::new(),
     };
-    let resp2 = AccountInfoResponse {
+    let resp2 = ObjectInfoResponse {
         object_id: dbg_object_id(0x20),
         owner: dbg_addr(0x20),
         next_sequence_number: SequenceNumber::new(),
@@ -235,7 +235,7 @@ fn test_info_response() {
         requested_certificate: None,
         requested_received_transfers: Vec::new(),
     };
-    let resp3 = AccountInfoResponse {
+    let resp3 = ObjectInfoResponse {
         object_id: dbg_object_id(0x20),
         owner: dbg_addr(0x20),
         next_sequence_number: SequenceNumber::new(),
@@ -243,7 +243,7 @@ fn test_info_response() {
         requested_certificate: Some(cert.clone()),
         requested_received_transfers: Vec::new(),
     };
-    let resp4 = AccountInfoResponse {
+    let resp4 = ObjectInfoResponse {
         object_id: dbg_object_id(0x20),
         owner: dbg_addr(0x20),
         next_sequence_number: SequenceNumber::new(),
@@ -253,11 +253,11 @@ fn test_info_response() {
     };
 
     for resp in [resp1, resp2, resp3, resp4].iter() {
-        let buf = serialize_info_response(resp);
+        let buf = serialize_object_info_response(resp);
         let result = deserialize_message(buf.as_slice());
         assert!(result.is_ok());
-        if let SerializedMessage::InfoResp(o) = result.unwrap() {
-            assert!(*o == *resp);
+        if let SerializedMessage::ObjectInfoResp(o) = result.unwrap() {
+            assert_eq!(*o, *resp);
         } else {
             panic!()
         }

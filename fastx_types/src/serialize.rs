@@ -17,8 +17,10 @@ pub enum SerializedMessage {
     Vote(Box<SignedOrder>),
     Cert(Box<CertifiedOrder>),
     Error(Box<FastPayError>),
-    InfoReq(Box<AccountInfoRequest>),
-    InfoResp(Box<AccountInfoResponse>),
+    AccountInfoReq(Box<AccountInfoRequest>),
+    AccountInfoResp(Box<AccountInfoResponse>),
+    ObjectInfoReq(Box<ObjectInfoRequest>),
+    ObjectInfoResp(Box<ObjectInfoResponse>),
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.
@@ -30,8 +32,10 @@ enum ShallowSerializedMessage<'a> {
     Vote(&'a SignedOrder),
     Cert(&'a CertifiedOrder),
     Error(&'a FastPayError),
-    InfoReq(&'a AccountInfoRequest),
-    InfoResp(&'a AccountInfoResponse),
+    AccountInfoReq(&'a AccountInfoRequest),
+    AccountInfoResp(&'a AccountInfoResponse),
+    ObjectInfoReq(&'a ObjectInfoRequest),
+    ObjectInfoResp(&'a ObjectInfoResponse),
 }
 
 fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), anyhow::Error>
@@ -82,12 +86,20 @@ where
     serialize_into(writer, &ShallowSerializedMessage::Cert(value))
 }
 
-pub fn serialize_info_request(value: &AccountInfoRequest) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::InfoReq(value))
+pub fn serialize_account_info_request(value: &AccountInfoRequest) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::AccountInfoReq(value))
 }
 
-pub fn serialize_info_response(value: &AccountInfoResponse) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::InfoResp(value))
+pub fn serialize_account_info_response(value: &AccountInfoResponse) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::AccountInfoResp(value))
+}
+
+pub fn serialize_object_info_request(value: &ObjectInfoRequest) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::ObjectInfoReq(value))
+}
+
+pub fn serialize_object_info_response(value: &ObjectInfoResponse) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::ObjectInfoResp(value))
 }
 
 pub fn serialize_vote(value: &SignedOrder) -> Vec<u8> {
@@ -106,4 +118,22 @@ where
     R: std::io::Read,
 {
     bincode::deserialize_from(reader).map_err(|err| format_err!("{}", err))
+}
+
+pub fn object_info_deserializer(
+    message: SerializedMessage,
+) -> Result<ObjectInfoResponse, FastPayError> {
+    match message {
+        SerializedMessage::ObjectInfoResp(resp) => Ok(*resp),
+        _ => Err(FastPayError::UnexpectedMessage),
+    }
+}
+
+pub fn account_info_deserializer(
+    message: SerializedMessage,
+) -> Result<AccountInfoResponse, FastPayError> {
+    match message {
+        SerializedMessage::AccountInfoResp(resp) => Ok(*resp),
+        _ => Err(FastPayError::UnexpectedMessage),
+    }
 }
