@@ -28,7 +28,7 @@ fn max_files_client_tests() -> i32 {
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
 impl AuthorityClient for LocalAuthorityClient {
-    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
+    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move { state.lock().await.handle_order(order).await })
     }
@@ -36,7 +36,7 @@ impl AuthorityClient for LocalAuthorityClient {
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move { state.lock().await.handle_confirmation_order(order).await })
     }
@@ -53,6 +53,14 @@ impl AuthorityClient for LocalAuthorityClient {
                 .handle_account_info_request(request)
                 .await
         })
+    }
+
+    fn handle_object_info_request(
+        &self,
+        request: ObjectInfoRequest,
+    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
+        let state = self.0.clone();
+        Box::pin(async move { state.lock().await.handle_object_info_request(request).await })
     }
 }
 
@@ -554,4 +562,91 @@ fn test_receiving_unconfirmed_transfer() {
         rt.block_on(client2.get_strong_majority_owner(object_id)),
         Some((client2.address, SequenceNumber::from(1)))
     );
+}
+
+#[test]
+fn test_client_state_sync() {
+    let mut rt = Runtime::new().unwrap();
+
+    let object_ids = (0..20)
+        .map(|_| ObjectID::random())
+        .collect::<Vec<ObjectID>>();
+    let authority_objects = (0..10).map(|_| object_ids.clone()).collect();
+
+    let mut sender = rt.block_on(init_local_client_state(authority_objects));
+
+    let old_object_ids = sender.object_ids.clone();
+    let old_sent_certificate = sender.sent_certificates.clone();
+
+    // Remove all client-side data
+    sender.object_ids.clear();
+    sender.sent_certificates.clear();
+    assert!(rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
+    assert!(sender.object_ids.is_empty());
+    assert!(sender.sent_certificates.is_empty());
+
+    // Sync client state
+    rt.block_on(sender.sync_client_state_with_random_authority())
+        .unwrap();
+
+    // Confirm data are the same after sync
+    assert!(!rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
+    assert_eq!(old_object_ids, sender.object_ids);
+    assert_eq!(old_sent_certificate, sender.sent_certificates);
+}
+
+#[test]
+fn test_client_state_sync_with_transferred_object() {
+    let mut rt = Runtime::new().unwrap();
+    let (authority_clients, committee) = init_local_authorities(4);
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let mut client2 = make_client(authority_clients.clone(), committee);
+
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+
+    let authority_objects = vec![
+        vec![object_id, gas_object_id],
+        vec![object_id, gas_object_id],
+        vec![object_id, gas_object_id],
+        vec![object_id, gas_object_id],
+    ];
+    rt.block_on(fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    ));
+
+    // Transfer object to client2.
+    rt.block_on(client1.transfer_to_fastpay(
+        object_id,
+        gas_object_id,
+        client2.address,
+        UserData::default(),
+    ))
+    .unwrap();
+
+    // Confirm client2 acquired ownership of the object.
+    assert_eq!(
+        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        Some((client2.address, SequenceNumber::from(1)))
+    );
+
+    // Client 2's local object_id and cert should be empty before sync
+    assert!(rt.block_on(client2.get_owned_objects()).unwrap().is_empty());
+    assert!(client2.object_ids.is_empty());
+    assert!(client2.received_certificates.is_empty());
+    assert!(client2.sent_certificates.is_empty());
+
+    // Sync client state
+    while client2.object_ids.is_empty() {
+        rt.block_on(client2.sync_client_state_with_random_authority())
+            .unwrap();
+    }
+
+    // Confirm client 2 received the new object id and cert
+    assert_eq!(1, rt.block_on(client2.get_owned_objects()).unwrap().len());
+    assert_eq!(1, client2.object_ids.len());
+    assert_eq!(1, client2.received_certificates.len());
+    assert_eq!(0, client2.sent_certificates.len());
 }
