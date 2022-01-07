@@ -248,7 +248,9 @@ impl ClientServerBenchmark {
                     info!("Process message {}...", orders.len());
                 }
                 let order = orders.pop().unwrap();
-                let status = client.send_recv_bytes(order.to_vec()).await;
+                let status = client
+                    .send_recv_bytes(order.to_vec(), object_info_deserializer)
+                    .await;
                 match status {
                     Ok(info) => {
                         debug!("Query response: {:?}", info);
