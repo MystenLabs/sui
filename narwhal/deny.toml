@@ -71,6 +71,7 @@ unlicensed = "deny"
 # [possible values: any SPDX 3.11 short identifier (+ optional exception)].
 allow = [
     "MIT",
+    "BSD-2-Clause",
     "BSD-3-Clause",
     "CC0-1.0",
     "Apache-2.0",
@@ -129,6 +130,12 @@ exceptions = [
     # Each entry is a crate relative path, and the (opaque) hash of its contents
     #{ path = "LICENSE", hash = 0xbd0eed23 }
 #]
+[[licenses.clarify]]
+name = "bls-crypto"
+version = "*"
+expression = "MIT AND Apache-2.0"
+license-files = [
+]
 
 [licenses.private]
 # If true, ignores workspace crates that aren't published, or are only
