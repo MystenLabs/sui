@@ -19,13 +19,13 @@ pub trait ToFromBytes: AsRef<[u8]> + Debug + Sized {
     }
 }
 
-pub trait EncodeDecodeBase64Ext: Sized {
+pub trait EncodeDecodeBase64: Sized {
     fn encode_base64(&self) -> String;
     fn decode_base64(value: &str) -> Result<Self, eyre::Report>;
 }
 
 // The Base64ct is not strictly necessary for (PubKey|Signature), but this simplifies things a lot
-impl<T: ToFromBytes> EncodeDecodeBase64Ext for T {
+impl<T: ToFromBytes> EncodeDecodeBase64 for T {
     fn encode_base64(&self) -> String {
         base64ct::Base64::encode_string(self.as_bytes())
     }

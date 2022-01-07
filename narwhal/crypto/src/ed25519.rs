@@ -2,7 +2,7 @@ use serde::{de, Deserialize, Serialize};
 use signature::{Signature, Signer, Verifier};
 
 use crate::traits::{
-    Authenticator, EncodeDecodeBase64Ext, KeyPair, SigningKey, ToFromBytes, VerifyingKey,
+    Authenticator, EncodeDecodeBase64, KeyPair, SigningKey, ToFromBytes, VerifyingKey,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -10,7 +10,7 @@ pub struct Ed25519PublicKey(pub ed25519_dalek::PublicKey);
 #[derive(Debug)]
 pub struct Ed25519PrivateKey(pub ed25519_dalek::SecretKey);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Ed25519Signature(pub ed25519_dalek::Signature);
 
 impl VerifyingKey for Ed25519PublicKey {

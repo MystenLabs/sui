@@ -16,7 +16,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use config::{Committee, Parameters, WorkerId};
 use crypto::{
-    traits::{EncodeDecodeBase64Ext, Signer, VerifyingKey},
+    traits::{EncodeDecodeBase64, Signer, VerifyingKey},
     Digest, SignatureService,
 };
 use futures::sink::SinkExt as _;

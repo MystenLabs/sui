@@ -11,9 +11,25 @@ base64ct = { version = "1.3.2", features = ["alloc"] }
 tokio = { version = "1.15.0", features = ["sync", "rt", "macros"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 serde = { version = "1.0.132", features = ["derive"] }
-rand = "0.7.3"
+rand = { version = "0.7", features = ["std"] }
 base64 = "0.13.0"
 zeroize = "1.4.3"
 signature = "1.4.0"
 eyre = "0.6.5"
 
+# TODO: switch to https://github.com/celo-org/celo-bls-snark-rs 
+# when https://github.com/celo-org/celo-bls-snark-rs/issues/228 is solved
+celo-bls = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", package = "bls-crypto", optional = true}
+
+ark-ec = { version = "0.3.0", features = ["std"], optional = true }
+ark-ff = { version = "0.3.0", features = ["std"], optional = true }
+ark-std = { version = "0.3.0", features = ["std"], optional = true }
+ark-serialize = { version = "0.3.0", features = ["std"], optional = true }
+ark-bls12-377 = { version = "0.3.0", features = ["std"], optional = true }
+serde_with = { version = "1.11.0", optional = true }
+once_cell = "1.9.0"
+readonly = "0.2.0"
+
+[features]
+default = ["celo"]
+celo = ["ark-ec", "ark-ff", "ark-serialize", "ark-bls12-377", "ark-std", "serde_with", "celo-bls"]

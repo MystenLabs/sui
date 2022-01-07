@@ -7,7 +7,7 @@
     rust_2021_compatibility
 )]
 
-use crypto::traits::{EncodeDecodeBase64Ext, VerifyingKey};
+use crypto::traits::{EncodeDecodeBase64, VerifyingKey};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},

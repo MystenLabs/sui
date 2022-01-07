@@ -6,7 +6,7 @@ use crate::{
 };
 use config::{Committee, Stake};
 use crypto::{
-    traits::{EncodeDecodeBase64Ext, VerifyingKey},
+    traits::{EncodeDecodeBase64, VerifyingKey},
     Digest, Hash as _,
 };
 use std::collections::HashSet;

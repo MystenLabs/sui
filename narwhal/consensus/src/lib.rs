@@ -9,7 +9,7 @@
 
 use config::{Committee, Stake};
 use crypto::{
-    traits::{EncodeDecodeBase64Ext, VerifyingKey},
+    traits::{EncodeDecodeBase64, VerifyingKey},
     Digest, Hash as _,
 };
 use primary::{Certificate, Round};

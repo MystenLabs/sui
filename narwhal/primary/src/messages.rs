@@ -6,7 +6,7 @@ use crate::{
 };
 use config::{Committee, WorkerId};
 use crypto::{
-    traits::{EncodeDecodeBase64Ext, VerifyingKey},
+    traits::{EncodeDecodeBase64, VerifyingKey},
     Digest, Hash, SignatureService,
 };
 use ed25519_dalek::{Digest as _, Sha512};
@@ -248,7 +248,7 @@ impl<PublicKey: VerifyingKey> Hash for Certificate<PublicKey> {
         let mut hasher = Sha512::new();
         hasher.update(&self.header.id);
         hasher.update(self.round().to_le_bytes());
-        hasher.update(&self.origin());
+        hasher.update(self.origin());
         Digest::new(hasher.finalize().as_slice()[..32].try_into().unwrap())
     }
 }
