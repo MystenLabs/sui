@@ -51,8 +51,11 @@ ACCOUNT2=`./client --committee committee.json --accounts accounts.json query-acc
 # Get the first ObjectId for Account1
 ACCOUNT1_OBJECT1=`./client --committee committee.json --accounts accounts.json query-objects "$ACCOUNT1" | head -n 1 |  awk -F: '{ print $1 }'`
 
+# Pick the last item as gas object for Account1
+ACCOUNT1_GAS_OBJECT=`./client --committee committee.json --accounts accounts.json query-objects "$ACCOUNT1" | tail -n -1 |  awk -F: '{ print $1 }'`
+
 # Transfer object by ObjectID
-./client --committee committee.json --accounts accounts.json transfer "$ACCOUNT1_OBJECT1" --from "$ACCOUNT1" --to "$ACCOUNT2"
+./client --committee committee.json --accounts accounts.json transfer "$ACCOUNT1_OBJECT1" "$ACCOUNT1_GAS_OBJECT" --from "$ACCOUNT1" --to "$ACCOUNT2"
 
 # Query objects again
 ./client --committee committee.json --accounts accounts.json query-objects "$ACCOUNT1"

@@ -447,6 +447,12 @@ fn main() {
                 let time_total = time_start.elapsed().as_micros();
                 info!("Publish confirmed after {} us", time_total);
                 println!("{:?}", cert);
+                // Try to sync.
+                // TODO: figure out optimal tuning for high probability of getting full data back
+                for _ in 0..(1 + committee_config.authorities.len() / 3) {
+                    client_state.sync_client_state_with_random_authority();
+                }
+
                 accounts_config.update_from_state(&client_state);
                 accounts_config
                     .write(accounts_config_path)
@@ -522,7 +528,7 @@ fn main() {
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
-                let client_state = make_client_state(
+                let mut client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
                     user_address,
@@ -531,16 +537,21 @@ fn main() {
                     recv_timeout,
                 );
 
-                let objects_ids = client_state.object_ids();
+                // Try to sync.
+                // TODO: figure out optimal tuning for high probability of getting full data back
+                for _ in 0..(1 + committee_config.authorities.len() / 3) {
+                    client_state.sync_client_state_with_random_authority();
+                }
+
+                let objects_ids = client_state.get_owned_objects().await.unwrap();
+                for obj_id in objects_ids {
+                    println!("{:#x}", obj_id);
+                }
 
                 accounts_config.update_from_state(&client_state);
                 accounts_config
                     .write(accounts_config_path)
                     .expect("Unable to write user accounts");
-
-                for (obj_id, seq_num) in objects_ids {
-                    println!("{:#x}: {:?}", obj_id, seq_num);
-                }
             });
         }
 
