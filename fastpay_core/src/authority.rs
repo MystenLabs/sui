@@ -190,7 +190,7 @@ impl AuthorityState {
         //
         // TODO: think very carefully what to do in case we throw an Err here.
         let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
-        match order.kind {
+        let _status = match order.kind {
             OrderKind::Transfer(t) => {
                 // unwraps here are safe because we built `inputs`
                 let mut gas_object = inputs.pop().unwrap();
@@ -209,12 +209,13 @@ impl AuthorityState {
                     Address::FastPay(addr) => addr,
                 });
                 temporary_store.write_object(output_object);
+                Ok(())
             }
             OrderKind::Call(c) => {
                 // unwraps here are safe because we built `inputs`
                 let gas_object = inputs.pop().unwrap();
                 let module = inputs.pop().unwrap();
-                match adapter::execute(
+                adapter::execute(
                     &mut temporary_store,
                     self.native_functions.clone(),
                     module,
@@ -225,43 +226,28 @@ impl AuthorityState {
                     c.gas_budget,
                     gas_object,
                     tx_ctx,
-                ) {
-                    Ok(()) => {
-                        // TODO(https://github.com/MystenLabs/fastnft/issues/63): AccountInfoResponse should return all object ID outputs.
-                        // but for now it only returns one, so use this hack
-                        // object_id = temporary_store.written[0].0
-                    }
-                    Err(_e) => {
-                        // TODO(https://github.com/MystenLabs/fastnft/issues/63): return this error to the client
-                        // object_id = c.gas_payment.0;
-                    }
-                }
+                )
             }
+
             OrderKind::Publish(m) => {
                 let gas_object = inputs.pop().unwrap();
-                match adapter::publish(
+                adapter::publish(
                     &mut temporary_store,
                     m.modules,
                     m.sender,
                     &mut tx_ctx,
                     gas_object,
-                ) {
-                    Ok(_outputs) => {
-                        // TODO(https://github.com/MystenLabs/fastnft/issues/63): AccountInfoResponse should return all object ID outputs.
-                        // but for now it only returns one, so use this hack
-                        // object_id = outputs[0].0;
-                    }
-                    Err(_e) => {
-                        // TODO(https://github.com/MystenLabs/fastnft/issues/63): return this error to the client
-                        // object_id = m.gas_payment.0;
-                    }
-                }
+                )
             }
         };
 
         // Update the database in an atomic manner
-        let to_signed_effects =
-            temporary_store.to_signed_effects(&self.name, &self.secret, &transaction_digest);
+        let to_signed_effects = temporary_store.to_signed_effects(
+            &self.name,
+            &self.secret,
+            &transaction_digest,
+            _status,
+        );
         self.update_state(temporary_store, certificate, to_signed_effects)
             .await?;
 

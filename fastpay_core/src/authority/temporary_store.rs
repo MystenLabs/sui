@@ -47,8 +47,10 @@ impl AuthorityTemporaryStore {
         authority_name: &AuthorityName,
         secret: &KeyPair,
         transaction_digest: &TransactionDigest,
+        status: Result<(), FastPayError>,
     ) -> SignedOrderEffects {
         let effects = OrderEffects {
+            status,
             transaction_digest: *transaction_digest,
             mutated: self.written.clone(),
             deleted: self.deleted.clone(),

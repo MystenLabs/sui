@@ -129,6 +129,8 @@ pub struct OrderInfoResponse {
 /// The response from processing an order or a certified order
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct OrderEffects {
+    // The status of the execution
+    pub status: Result<(), FastPayError>,
     // The transaction digest
     pub transaction_digest: TransactionDigest,
     // ObjectRefs containing mutated or new objects
