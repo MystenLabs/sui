@@ -166,4 +166,3 @@ pub fn order_info_deserializer(
         _ => Err(FastPayError::UnexpectedMessage),
     }
 }
-

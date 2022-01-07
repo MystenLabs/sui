@@ -427,7 +427,8 @@ where
                     }
                     // Send the transfer order (if any) and return a vote.
                     if let CommunicateAction::SendOrder(order) = action {
-                        let result : Result<OrderInfoResponse, FastPayError> = client.handle_order(order).await;
+                        let result: Result<OrderInfoResponse, FastPayError> =
+                            client.handle_order(order).await;
                         match result {
                             Ok(OrderInfoResponse {
                                 signed_order: Some(inner_signed_order),

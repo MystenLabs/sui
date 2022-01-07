@@ -728,12 +728,15 @@ async fn test_handle_confirmation_order_idempotent() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
-    let authority_state = init_state_with_object(sender, object_id).await;
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
         Address::FastPay(recipient),
         object_id,
+        gas_object_id,
         &authority_state,
     );
 
@@ -741,17 +744,15 @@ async fn test_handle_confirmation_order_idempotent() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .await
         .unwrap();
-    
+
     let info2 = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .await
         .unwrap();
-    
+
     assert_eq!(info, info2);
     assert!(info2.certified_order.is_some());
     assert!(info2.signed_effects.is_some());
-
-    
 }
 
 #[tokio::test]
