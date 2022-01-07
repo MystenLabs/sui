@@ -623,7 +623,7 @@ where
         assert_eq!(new_sent_certificates.last().unwrap().order, order);
         // and `next_sequence_number`. (Note that if we were using persistent
         // storage, we should ensure update atomicity in the eventuality of a crash.)
-        self.update_sent_certificates(new_sent_certificates, *order.object_id())?;
+        self.update_certificates(new_sent_certificates)?;
         // Confirm last transfer certificate if needed.
         if with_confirmation {
             self.communicate_transfers(
@@ -813,7 +813,6 @@ where
         })
     }
 
-<<<<<<< HEAD
     fn publish_module(
         &mut self,
         gas_payment: ObjectID,
@@ -828,7 +827,7 @@ where
             ),
             module,
         ))
-=======
+    }
     fn sync_client_state_with_random_authority(
         &mut self,
     ) -> AsyncResult<'_, AuthorityName, anyhow::Error> {
@@ -856,6 +855,5 @@ where
 
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error> {
         Box::pin(async move { Ok(self.object_ids.keys().copied().collect()) })
->>>>>>> main
     }
 }
