@@ -26,6 +26,10 @@ module FastX::ObjectBasics {
         Transfer::transfer(o, Address::new(recipient))
     }
 
+    public fun transfer_and_freeze(o: Object, recipient: vector<u8>, _ctx: &mut TxContext) {
+        Transfer::transfer_and_freeze(o, Address::new(recipient))
+    }
+
     // test that reading o2 and updating o1 works
     public fun update(o1: &mut Object, o2: &Object, _ctx: &mut TxContext) {
         o1.value = o2.value
@@ -43,5 +47,4 @@ module FastX::ObjectBasics {
         let Wrapper { id: _, o } = w;
         Transfer::transfer(o, TxContext::get_signer_address(ctx))
     }
-
 }

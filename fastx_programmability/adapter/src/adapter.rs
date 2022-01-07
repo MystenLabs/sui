@@ -209,12 +209,6 @@ pub fn generate_module_ids(
     Ok(rewriter.into_inner())
 }
 
-/// Check if this is a special event type emitted when there is a transfer between fastX addresses
-pub fn is_transfer_event(e: &Event) -> bool {
-    // TODO: hack that leverages implementation of Transfer::transfer_internal native function
-    !e.0.is_empty()
-}
-
 type Event = (Vec<u8>, u64, TypeTag, Vec<u8>);
 
 /// Update `state_view` with the effects of successfully executing a transaction:
@@ -244,37 +238,38 @@ fn process_successful_execution<
         state_view.write_object(obj);
     }
     // process events to identify transfers, freezes
-    // TODO(https://github.com/MystenLabs/fastnft/issues/96): implement freeze and immutable objects
     for e in events {
-        if is_transfer_event(&e) {
-            let (recipient_bytes, _seq_num, type_, event_bytes) = e;
-            match type_ {
-                TypeTag::Struct(s_type) => {
-                    // special transfer event. process by saving object under given authenticator
-                    let contents = event_bytes;
-                    // unwrap safe due to size enforcement in Move code for `Authenticator`
-                    let recipient = FastPayAddress::try_from(recipient_bytes.borrow()).unwrap();
-                    let mut move_obj = MoveObject::new(s_type, contents);
-                    let _old_object = by_value_objects.remove(&move_obj.id());
+        let (recipient, should_freeze, type_, event_bytes) = e;
+        debug_assert!(!recipient.is_empty() && should_freeze < 2);
+        match type_ {
+            TypeTag::Struct(s_type) => {
+                let contents = event_bytes;
+                let should_freeze = should_freeze != 0;
+                // unwrap safe due to size enforcement in Move code for `Authenticator
+                let recipient = FastPayAddress::try_from(recipient.borrow()).unwrap();
+                let mut move_obj = MoveObject::new(s_type, contents);
+                let old_object = by_value_objects.remove(&move_obj.id());
 
-                    #[cfg(debug_assertions)]
-                    {
-                        check_transferred_object_invariants(&move_obj, &_old_object)
-                    }
-
-                    // increment the object version. note that if the transferred object was
-                    // freshly created, this means that its version will now be 1.
-                    // thus, all objects in the global object pool have version > 0
-                    move_obj.increment_version()?;
-                    let obj = Object::new_move(move_obj, recipient, ctx.digest());
-                    gas_used += calculate_object_creation_cost(&obj);
-                    state_view.write_object(obj);
+                #[cfg(debug_assertions)]
+                {
+                    check_transferred_object_invariants(&move_obj, &old_object)
                 }
-                _ => unreachable!("Only structs can be transferred"),
+
+                // increment the object version. note that if the transferred object was
+                // freshly created, this means that its version will now be 1.
+                // thus, all objects in the global object pool have version > 0
+                move_obj.increment_version()?;
+                if should_freeze {
+                    move_obj.freeze();
+                }
+                let obj = Object::new_move(move_obj, recipient, ctx.digest());
+                if old_object.is_none() {
+                    // Charge extra gas based on object size if we are creating a new object.
+                    gas_used += calculate_object_creation_cost(&obj);
+                }
+                state_view.write_object(obj);
             }
-        } else {
-            // the fastX framework doesn't support user-generated events yet, so shouldn't hit this
-            unimplemented!("Processing user events")
+            _ => unreachable!("Only structs can be transferred"),
         }
     }
     if gas_used > gas_budget {
