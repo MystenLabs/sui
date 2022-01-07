@@ -116,6 +116,8 @@ pub enum FastPayError {
     TypeError { error: String },
     #[error("Execution aborted: {error:?}.")]
     AbortedExecution { error: String },
+    #[error("Invalid move event: {error:?}.")]
+    InvalidMoveEvent { error: String },
 
     // Gas related errors
     #[error("Gas budget set higher than max: {error:?}.")]

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::gas_schedule::GasAlgebra;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     gas_schedule::NativeCostIndex,
@@ -27,20 +26,19 @@ pub fn transfer_internal(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 2);
+    debug_assert!(args.len() == 3);
 
     let ty = ty_args.pop().unwrap();
+    let should_freeze = pop_arg!(args, bool);
     let recipient = pop_arg!(args, Vec<u8>);
     let transferred_obj = args.pop_back().unwrap();
 
-    // Charge by size of transferred object
-    let cost = native_gas(
-        context.cost_table(),
-        NativeCostIndex::EMIT_EVENT,
-        transferred_obj.size().get() as usize,
-    );
-    let seq_num = 0;
-    if !context.save_event(recipient, seq_num, ty, transferred_obj)? {
+    // Charge a constant native gas cost here, since
+    // we will charge it properly when processing
+    // all the events in adapter.
+    // TODO: adjust native_gas cost size base.
+    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
+    if !context.save_event(recipient, should_freeze as u64, ty, transferred_obj)? {
         return Ok(NativeResult::err(cost, 0));
     }
 
