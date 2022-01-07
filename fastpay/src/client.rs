@@ -12,6 +12,7 @@ use futures::stream::StreamExt;
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
+    fs,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
@@ -338,6 +339,21 @@ enum ClientCommands {
         gas_object_id: String,
     },
 
+    /// Publish module
+    #[structopt(name = "publish")]
+    Publish {
+        /// Address (must be one of our accounts)
+        #[structopt(long)]
+        account: String,
+
+        /// Module path
+        #[structopt(long)]
+        path: String,
+
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        gas_object_id: String,
+    },
+
     /// Obtain the Account Addresses
     #[structopt(name = "query-accounts-addrs")]
     QueryAccountAddresses {},
@@ -403,6 +419,42 @@ fn main() {
         CommitteeConfig::read(committee_config_path).expect("Unable to read committee config file");
 
     match options.cmd {
+        ClientCommands::Publish {
+            account,
+            path,
+            gas_object_id,
+        } => {
+            let sender = decode_address(&account).expect("Failed to decode sender's address");
+            let gas_object_id = ObjectID::from_hex_literal(&gas_object_id).unwrap();
+            let module_bytes = fs::read(path).unwrap();
+
+            let mut rt = Runtime::new().unwrap();
+            rt.block_on(async move {
+                let mut client_state = make_client_state(
+                    &accounts_config,
+                    &committee_config,
+                    sender,
+                    buffer_size,
+                    send_timeout,
+                    recv_timeout,
+                );
+                info!("Starting publish");
+                let time_start = Instant::now();
+                let cert = client_state
+                    .publish_module(gas_object_id, module_bytes)
+                    .await
+                    .unwrap();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Publish confirmed after {} us", time_total);
+                println!("{:?}", cert);
+                accounts_config.update_from_state(&client_state);
+                accounts_config
+                    .write(accounts_config_path)
+                    .expect("Unable to write user accounts");
+                info!("Saved user account states");
+            });
+        }
+
         ClientCommands::Transfer {
             from,
             to,
