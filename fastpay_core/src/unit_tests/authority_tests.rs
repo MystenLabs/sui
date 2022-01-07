@@ -478,6 +478,7 @@ async fn test_handle_transfer_order_double_spend() {
         .handle_order(transfer_order.clone())
         .await
         .unwrap();
+    // calls to handlers are idempotent -- returns the same.
     let double_spend_signed_order = authority_state.handle_order(transfer_order).await.unwrap();
     assert_eq!(signed_order, double_spend_signed_order);
 }
@@ -720,6 +721,37 @@ async fn test_handle_confirmation_order_ok() {
         .await
         .expect("Exists")
         .is_none());
+}
+
+#[tokio::test]
+async fn test_handle_confirmation_order_idempotent() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let authority_state = init_state_with_object(sender, object_id).await;
+    let certified_transfer_order = init_certified_transfer_order(
+        sender,
+        &sender_key,
+        Address::FastPay(recipient),
+        object_id,
+        &authority_state,
+    );
+
+    let info = authority_state
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .await
+        .unwrap();
+    
+    let info2 = authority_state
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .await
+        .unwrap();
+    
+    assert_eq!(info, info2);
+    assert!(info2.certified_order.is_some());
+    assert!(info2.signed_effects.is_some());
+
+    
 }
 
 #[tokio::test]
