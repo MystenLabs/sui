@@ -53,4 +53,23 @@ module FastX::Address {
     public fun is_signer(a: &Address, s: &Signer): bool {
         get(s) == a
     }
+
+    // ==== test-only functions ====
+    
+
+    #[test_only]
+    /// Create a `Signer` from `bytes` for testing
+    public fun new_signer(bytes: vector<u8>): Signer {
+        assert!(
+            Vector::length(&bytes) == ADDRESS_LENGTH,
+            Errors::invalid_argument(EBAD_ADDRESS_LENGTH)
+        );
+        Signer { inner: new(bytes) }
+    }
+
+    #[test_only]
+    /// Create a dummy `Signer` for testing
+    public fun dummy_signer(): Signer {
+        new_signer(x"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
 }

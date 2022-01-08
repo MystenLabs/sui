@@ -16,13 +16,13 @@ module FastX::ID {
     }
 
     /// Create a new ID. Only callable by TxContext
-    // TODO (): bring this back
+    // TODO (): bring this back once we can support `friend`
     //public(friend) fun new(bytes: vector<u8>): ID {
-    public fun new(bytes: vector<u8>): ID {
-        ID { id: IDBytes { bytes: bytes_to_address(bytes) } }
+    public fun new(bytes: address): ID {
+        ID { id: IDBytes { bytes } }
     }
 
-    /// Create a new ID bytes for comparison with existing ID's
+    /// Create a new ID bytes for comparison with existing ID's.
     public fun new_bytes(bytes: vector<u8>): IDBytes {
         IDBytes { bytes: bytes_to_address(bytes) }
     }

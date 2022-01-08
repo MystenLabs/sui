@@ -3,6 +3,7 @@
 
 mod id;
 mod transfer;
+mod tx_context;
 
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
@@ -14,6 +15,7 @@ pub fn all_natives(
     const FASTX_NATIVES: &[(&str, &str, NativeFunction)] = &[
         ("ID", "bytes_to_address", id::bytes_to_address),
         ("Transfer", "transfer_internal", transfer::transfer_internal),
+        ("TxContext", "fresh_id", tx_context::fresh_id),
     ];
     FASTX_NATIVES
         .iter()
