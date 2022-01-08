@@ -6,8 +6,8 @@ use anyhow::Result;
 use fastx_framework::{self};
 use fastx_types::{
     base_types::{
-        FastPayAddress, SequenceNumber, TransactionDigest, TxContext, TX_CONTEXT_ADDRESS,
-        TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+        FastPayAddress, TransactionDigest, TxContext, TX_CONTEXT_ADDRESS, TX_CONTEXT_MODULE_NAME,
+        TX_CONTEXT_STRUCT_NAME,
     },
     coin::{COIN_ADDRESS, COIN_MODULE_NAME, COIN_STRUCT_NAME},
     gas_coin::{GAS_ADDRESS, GAS_MODULE_NAME, GAS_STRUCT_NAME},
@@ -77,12 +77,7 @@ fn create_genesis_module_objects() -> Result<Genesis> {
                     *struct_name
                 );
             }
-            Object::new_module(
-                m,
-                owner,
-                SequenceNumber::new(),
-                TransactionDigest::genesis(),
-            )
+            Object::new_module(m, owner, TransactionDigest::genesis())
         })
         .collect();
     Ok(Genesis {

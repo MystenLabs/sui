@@ -113,9 +113,9 @@ fn test_handle_transfer_order_bad_sequence_number() {
     let mut sequence_number_state = authority_state;
     let sequence_number_state_sender_account =
         sequence_number_state.objects.get_mut(&object_id).unwrap();
-    sequence_number_state_sender_account.next_sequence_number =
+    sequence_number_state_sender_account.version() =
         sequence_number_state_sender_account
-            .next_sequence_number
+            .version()
             .increment()
             .unwrap();
     assert!(sequence_number_state
@@ -123,7 +123,7 @@ fn test_handle_transfer_order_bad_sequence_number() {
         .is_err());
 
         let object = sequence_number_state.objects.get(&object_id).unwrap();
-        assert!(sequence_number_state.get_order_lock(object.id, object.next_sequence_number).unwrap().is_none());
+        assert!(sequence_number_state.get_order_lock(object.id, object.version()).unwrap().is_none());
 }
 */
 
@@ -192,7 +192,8 @@ async fn test_handle_transfer_zero_balance() {
 
     // Create a gas object with 0 balance.
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 0);
+    let gas_object =
+        Object::with_id_owner_gas_for_testing(gas_object_id, SequenceNumber::new(), sender, 0);
     authority_state
         .init_order_lock((gas_object_id, 0.into(), gas_object.digest()))
         .await;
@@ -251,7 +252,7 @@ fn check_gas_object(
     expected_balance: u64,
     expected_sequence_number: SequenceNumber,
 ) {
-    assert_eq!(gas_object.next_sequence_number, expected_sequence_number);
+    assert_eq!(gas_object.version(), expected_sequence_number);
     let new_balance = get_gas_balance(gas_object).unwrap();
     assert_eq!(new_balance, expected_balance);
 }
@@ -302,9 +303,9 @@ async fn test_publish_module_no_dependencies_ok() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_balance = MAX_GAS;
+    let gas_seq = SequenceNumber::new();
     let gas_payment_object =
-        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
-    let gas_seq = gas_payment_object.next_sequence_number;
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, gas_seq, sender, gas_balance);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     let mut authority = init_state_with_objects(vec![gas_payment_object]).await;
 
@@ -340,8 +341,12 @@ async fn test_publish_module_insufficient_gas() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_balance = 9;
-    let gas_payment_object =
-        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
+    let gas_payment_object = Object::with_id_owner_gas_for_testing(
+        gas_payment_object_id,
+        SequenceNumber::new(),
+        sender,
+        gas_balance,
+    );
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
@@ -361,9 +366,9 @@ async fn test_handle_move_order() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_balance = MAX_GAS;
+    let gas_seq = SequenceNumber::new();
     let gas_payment_object =
-        Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
-    let gas_seq = gas_payment_object.next_sequence_number;
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, gas_seq, sender, gas_balance);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // find the function Object::create and call it to create a new object
     let genesis = genesis::GENESIS.lock().unwrap();
@@ -404,9 +409,10 @@ async fn test_handle_move_order() {
         MAX_GAS,
         &sender_key,
     );
-    // 27 is for bytecode execution, 24 is for object creation.
+
+    // 36 is for bytecode execution, 24 is for object creation.
     // If the number changes, we want to verify that the change is intended.
-    let gas_cost = 27 + 24;
+    let gas_cost = 36 + 24;
     let res = send_and_confirm_order(&mut authority_state, order)
         .await
         .unwrap();
@@ -424,7 +430,7 @@ async fn test_handle_move_order() {
         .unwrap();
     assert_eq!(created_obj.owner, sender,);
     assert_eq!(created_obj.id(), created_object_id);
-    assert_eq!(created_obj.next_sequence_number, SequenceNumber::new());
+    assert_eq!(created_obj.version(), SequenceNumber::from(1));
 
     // Check that gas is properly deducted.
     let gas_payment_object = authority_state
@@ -546,7 +552,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
     let old_seq_num;
     {
         let old_account = authority_state.object_state(&object_id).await.unwrap();
-        old_seq_num = old_account.next_sequence_number;
+        old_seq_num = old_account.version();
     }
 
     let certified_transfer_order = init_certified_transfer_order(
@@ -561,8 +567,10 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
     // Increment the sequence number
     {
         let mut sender_object = authority_state.object_state(&object_id).await.unwrap();
-        sender_object.next_sequence_number =
-            sender_object.next_sequence_number.increment().unwrap();
+        let o = sender_object.data.try_as_move_mut().unwrap();
+        let old_contents = o.contents().to_vec();
+        // update object contents, which will increment the sequence number
+        o.update_contents(old_contents).unwrap();
         authority_state.insert_object(sender_object).await;
     }
 
@@ -575,10 +583,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
 
     // Check that the new object is the one recorded.
     let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(
-        old_seq_num.increment().unwrap(),
-        new_account.next_sequence_number
-    );
+    assert_eq!(old_seq_num.increment().unwrap(), new_account.version());
 
     // No recipient object was created.
     assert!(authority_state
@@ -609,13 +614,9 @@ async fn test_handle_confirmation_order_exceed_balance() {
         .await
         .is_ok());
     let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(SequenceNumber::from(1), new_account.next_sequence_number);
+    assert_eq!(SequenceNumber::from(1), new_account.version());
     assert!(authority_state
-        .parent(&(
-            object_id,
-            new_account.next_sequence_number,
-            new_account.digest()
-        ))
+        .parent(&(object_id, new_account.version(), new_account.digest()))
         .await
         .is_some());
 }
@@ -646,15 +647,12 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
         .await
         .is_ok());
     let new_sender_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(
-        SequenceNumber::from(1),
-        new_sender_account.next_sequence_number
-    );
+    assert_eq!(SequenceNumber::from(1), new_sender_account.version());
 
     assert!(authority_state
         .parent(&(
             object_id,
-            new_sender_account.next_sequence_number,
+            new_sender_account.version(),
             new_sender_account.digest()
         ))
         .await
@@ -682,10 +680,10 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
         .await
         .is_ok());
     let account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(SequenceNumber::from(1), account.next_sequence_number);
+    assert_eq!(SequenceNumber::from(1), account.version());
 
     assert!(authority_state
-        .parent(&(object_id, account.next_sequence_number, account.digest()))
+        .parent(&(object_id, account.version(), account.digest()))
         .await
         .is_some());
 }
@@ -700,7 +698,12 @@ async fn test_handle_confirmation_order_gas() {
 
         // Create a gas object with insufficient balance.
         let gas_object_id = ObjectID::random();
-        let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, gas);
+        let gas_object = Object::with_id_owner_gas_for_testing(
+            gas_object_id,
+            SequenceNumber::new(),
+            sender,
+            gas,
+        );
         authority_state
             .init_order_lock((gas_object_id, 0.into(), gas_object.digest()))
             .await;
@@ -720,10 +723,8 @@ async fn test_handle_confirmation_order_gas() {
             .await
     };
     let result = run_test_with_gas(10).await;
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Gas balance is 10, not enough to pay 12"));
+    let err_string = result.unwrap_err().to_string();
+    assert!(err_string.contains("Gas balance is 10, not enough to pay 16"));
     let result = run_test_with_gas(20).await;
     assert!(result.is_ok());
 }
@@ -746,7 +747,7 @@ async fn test_handle_confirmation_order_ok() {
     );
 
     let old_account = authority_state.object_state(&object_id).await.unwrap();
-    let mut next_sequence_number = old_account.next_sequence_number;
+    let mut next_sequence_number = old_account.version();
     next_sequence_number = next_sequence_number.increment().unwrap();
 
     let info = authority_state
@@ -757,16 +758,12 @@ async fn test_handle_confirmation_order_ok() {
 
     let new_account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(recipient, new_account.owner);
-    assert_eq!(next_sequence_number, new_account.next_sequence_number);
+    assert_eq!(next_sequence_number, new_account.version());
     assert_eq!(None, info.signed_order);
     assert_eq!(
         {
             let refx = authority_state
-                .parent(&(
-                    object_id,
-                    new_account.next_sequence_number,
-                    new_account.digest(),
-                ))
+                .parent(&(object_id, new_account.version(), new_account.digest()))
                 .await
                 .unwrap();
             authority_state.read_certificate(&refx).await.unwrap()
@@ -867,8 +864,7 @@ async fn test_authority_persist() {
     // Create an object
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
-    let mut obj = Object::with_id_for_testing(object_id);
-    obj.transfer(recipient);
+    let obj = Object::with_id_owner_for_testing(object_id, recipient);
 
     // Store an object
     authority
@@ -920,8 +916,7 @@ async fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>
 ) -> AuthorityState {
     let state = init_state();
     for (address, object_id) in objects {
-        let mut obj = Object::with_id_for_testing(object_id);
-        obj.transfer(address);
+        let obj = Object::with_id_owner_for_testing(object_id, address);
         state
             .init_order_lock((object_id, 0.into(), obj.digest()))
             .await;

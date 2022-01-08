@@ -6,8 +6,8 @@ use anyhow::Result;
 use crate::bytecode_rewriter::ModuleHandleRewriter;
 use fastx_types::{
     base_types::{
-        FastPayAddress, ObjectID, SequenceNumber, TxContext, TX_CONTEXT_ADDRESS,
-        TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+        FastPayAddress, ObjectID, TxContext, TX_CONTEXT_ADDRESS, TX_CONTEXT_MODULE_NAME,
+        TX_CONTEXT_STRUCT_NAME,
     },
     error::{FastPayError, FastPayResult},
     gas::{
@@ -172,7 +172,8 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         let _ = state_view;
 
         // Create module objects and write them to the store
-        let module_object = Object::new_module(module, sender, SequenceNumber::new(), ctx.digest());
+
+        let module_object = Object::new_module(module, sender, ctx.digest());
         state_view.write_object(module_object);
     }
 
@@ -235,12 +236,11 @@ fn process_successful_execution<
     ctx: &TxContext,
 ) -> Result<(), FastPayError> {
     for (mut obj, new_contents) in mutable_refs {
-        match &mut obj.data {
-            Data::Move(m) => m.contents = new_contents,
-            _ => unreachable!("We previously checked that mutable ref inputs are Move objects"),
-        };
-        let sequence_number = obj.next_sequence_number.increment()?;
-        obj.next_sequence_number = sequence_number;
+        // update contents and increment sequence number
+        obj.data
+            .try_as_move_mut()
+            .expect("We previously checked that mutable ref inputs are Move objects")
+            .update_contents(new_contents)?;
         state_view.write_object(obj);
     }
     // process events to identify transfers, freezes
@@ -254,37 +254,21 @@ fn process_successful_execution<
                     let contents = event_bytes;
                     // unwrap safe due to size enforcement in Move code for `Authenticator`
                     let recipient = FastPayAddress::try_from(recipient_bytes.borrow()).unwrap();
-                    let move_obj = MoveObject::new(s_type, contents);
-                    let id = move_obj.id();
-                    // If object exists, find new sequence number
-                    let mut new_object = if let Some(mut old_object) = by_value_objects.remove(&id)
+                    let mut move_obj = MoveObject::new(s_type, contents);
+                    let _old_object = by_value_objects.remove(&move_obj.id());
+
+                    #[cfg(debug_assertions)]
                     {
-                        match &mut old_object.data {
-                            Data::Move(o) => {
-                                debug_assert!(o.type_ == move_obj.type_);
-                                o.contents = move_obj.contents;
-                            }
-                            Data::Module(..) =>
-                            // Impossible because the object store is well-typed
-                            {
-                                unreachable!()
-                            }
-                        };
-                        let sequence_number = old_object.next_sequence_number.increment()?;
-                        old_object.next_sequence_number = sequence_number;
-                        old_object
-                    } else {
-                        let obj = Object::new_move(
-                            move_obj,
-                            recipient,
-                            SequenceNumber::new(),
-                            ctx.digest(),
-                        );
-                        gas_used += calculate_object_creation_cost(&obj);
-                        obj
-                    };
-                    new_object.owner = recipient;
-                    state_view.write_object(new_object);
+                        check_transferred_object_invariants(&move_obj, &_old_object)
+                    }
+
+                    // increment the object version. note that if the transferred object was
+                    // freshly created, this means that its version will now be 1.
+                    // thus, all objects in the global object pool have version > 0
+                    move_obj.increment_version()?;
+                    let obj = Object::new_move(move_obj, recipient, ctx.digest());
+                    gas_used += calculate_object_creation_cost(&obj);
+                    state_view.write_object(obj);
                 }
                 _ => unreachable!("Only structs can be transferred"),
             }
@@ -448,7 +432,7 @@ fn resolve_and_type_check(
         }
         match &object.data {
             Data::Move(m) => {
-                args.push(m.contents.clone());
+                args.push(m.contents().to_vec());
                 // check that m.type_ matches the parameter types of the function
                 match &param_type {
                     Type::MutableReference(inner_t) => {
@@ -541,5 +525,17 @@ fn is_primitive(t: &Type) -> bool {
         Bool | U8 | U64 | U128 | Address => true,
         Vector(inner_t) => is_primitive(inner_t),
         Signer | Struct { .. } | TypeParameter(_) | Reference(_) | MutableReference(_) => false,
+    }
+}
+
+#[cfg(debug_assertions)]
+fn check_transferred_object_invariants(new_object: &MoveObject, old_object: &Option<Object>) {
+    if let Some(o) = old_object {
+        // check consistency between the transferred object `new_object` and the tx input `o`
+        // specificially, the object id, type, and version should be unchanged
+        let m = o.data.try_as_move().unwrap();
+        debug_assert_eq!(m.id(), new_object.id());
+        debug_assert_eq!(m.version(), new_object.version());
+        debug_assert_eq!(m.type_, new_object.type_);
     }
 }

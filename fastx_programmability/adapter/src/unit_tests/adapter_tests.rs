@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{adapter, genesis};
-use fastx_types::{base_types, error::FastPayResult, storage::Storage};
+use fastx_types::{
+    base_types::{self, SequenceNumber},
+    error::FastPayResult,
+    storage::Storage,
+};
 use move_binary_format::file_format;
 use move_core_types::account_address::AccountAddress;
 use std::mem;
@@ -72,6 +76,10 @@ impl InMemoryStorage {
 
     pub fn deleted(&self) -> &[ObjectID] {
         &self.temporary.deleted
+    }
+
+    pub fn get_created_keys(&self) -> Vec<ObjectID> {
+        self.temporary.created.keys().cloned().collect()
     }
 }
 
@@ -168,10 +176,7 @@ fn test_object_basics() {
     // ObjectBasics::create expects integer value and recipient address
     let pure_args = vec![
         10u64.to_le_bytes().to_vec(),
-        //bcs::to_bytes(&old_addr1.to_vec()).unwrap(),
         bcs::to_bytes(&addr1.to_vec()).unwrap(),
-        //MoveValue::vector_u8(addr1.to_vec()).simple_serialize().unwrap(),
-        //        transaction_argument::convert_txn_args(&vec![TransactionArgument::U8Vector(addr1.to_vec())]).pop().unwrap(),
     ];
     call(
         &mut storage,
@@ -188,17 +193,12 @@ fn test_object_basics() {
     assert_eq!(created.len(), 1);
     assert_eq!(storage.updated().len(), 1); // The gas object
     assert!(storage.deleted().is_empty());
-    let id1 = created
-        .keys()
-        .cloned()
-        .collect::<Vec<ObjectID>>()
-        .pop()
-        .unwrap();
+    let id1 = storage.get_created_keys().pop().unwrap();
     storage.flush();
     let mut obj1 = storage.read_object(&id1).unwrap();
-    let mut obj1_seq = SequenceNumber::new();
+    let mut obj1_seq = SequenceNumber::from(1);
     assert_eq!(obj1.owner, addr1);
-    assert_eq!(obj1.next_sequence_number, obj1_seq);
+    assert_eq!(obj1.version(), obj1_seq);
 
     // 2. Transfer obj1 to addr2
     let pure_args = vec![bcs::to_bytes(&addr2.to_vec()).unwrap()];
@@ -221,8 +221,16 @@ fn test_object_basics() {
     let transferred_obj = storage.read_object(&id1).unwrap();
     assert_eq!(transferred_obj.owner, addr2);
     obj1_seq = obj1_seq.increment().unwrap();
-    assert_eq!(transferred_obj.next_sequence_number, obj1_seq);
-    assert_eq!(obj1.data, transferred_obj.data);
+    assert_eq!(obj1.id(), transferred_obj.id());
+    assert_eq!(transferred_obj.version(), obj1_seq);
+    assert_eq!(
+        obj1.data.try_as_move().unwrap().type_specific_contents(),
+        transferred_obj
+            .data
+            .try_as_move()
+            .unwrap()
+            .type_specific_contents()
+    );
     obj1 = transferred_obj;
 
     // 3. Create another object obj2 owned by addr2, use it to update addr1
@@ -267,8 +275,15 @@ fn test_object_basics() {
     let updated_obj = storage.read_object(&id1).unwrap();
     assert_eq!(updated_obj.owner, addr2);
     obj1_seq = obj1_seq.increment().unwrap();
-    assert_eq!(updated_obj.next_sequence_number, obj1_seq);
-    assert_ne!(obj1.data, updated_obj.data);
+    assert_eq!(updated_obj.version(), obj1_seq);
+    assert_ne!(
+        obj1.data.try_as_move().unwrap().type_specific_contents(),
+        updated_obj
+            .data
+            .try_as_move()
+            .unwrap()
+            .type_specific_contents()
+    );
     obj1 = updated_obj;
 
     // 4. Delete obj1
@@ -290,6 +305,100 @@ fn test_object_basics() {
     assert!(storage.read_object(&id1).is_none())
 }
 
+/// Exercise test functions that wrap and object and subsequently unwrap it
+/// Ensure that the object's version is consistent
+#[test]
+fn test_wrap_unwrap() {
+    let addr = base_types::FastPayAddress::default();
+
+    let genesis = genesis::GENESIS.lock().unwrap();
+    let native_functions = genesis.native_functions.clone();
+    let mut storage = InMemoryStorage::new(genesis.objects.clone());
+
+    // 0. Create a gas object for gas payment. Note that we won't really use it because we won't be providing a gas budget.
+    let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), addr);
+    storage.write_object(gas_object.clone());
+    storage.flush();
+
+    // 1. Create obj1 owned by addr
+    let pure_args = vec![
+        10u64.to_le_bytes().to_vec(),
+        bcs::to_bytes(&addr.to_vec()).unwrap(),
+    ];
+    call(
+        &mut storage,
+        &native_functions,
+        "create",
+        gas_object.clone(),
+        MAX_GAS,
+        Vec::new(),
+        pure_args,
+    )
+    .unwrap();
+    let id1 = storage.get_created_keys().pop().unwrap();
+    storage.flush();
+    let obj1 = storage.read_object(&id1).unwrap();
+    let obj1_version = obj1.version();
+    let obj1_contents = obj1
+        .data
+        .try_as_move()
+        .unwrap()
+        .type_specific_contents()
+        .to_vec();
+    assert_eq!(obj1.version(), SequenceNumber::from(1));
+
+    // 2. wrap addr
+    call(
+        &mut storage,
+        &native_functions,
+        "wrap",
+        gas_object.clone(),
+        MAX_GAS,
+        vec![obj1],
+        Vec::new(),
+    )
+    .unwrap();
+    // wrapping should create wrapper object and "delete" wrapped object
+    assert_eq!(storage.created().len(), 1);
+    assert_eq!(storage.deleted().len(), 1);
+    assert_eq!(storage.deleted()[0].clone(), id1);
+    let id2 = storage.get_created_keys().pop().unwrap();
+    storage.flush();
+    assert!(storage.read_object(&id1).is_none());
+    let obj2 = storage.read_object(&id2).unwrap();
+
+    // 3. unwrap addr
+    call(
+        &mut storage,
+        &native_functions,
+        "unwrap",
+        gas_object,
+        MAX_GAS,
+        vec![obj2],
+        Vec::new(),
+    )
+    .unwrap();
+    // wrapping should delete wrapped object and "create" unwrapped object
+    assert_eq!(storage.created().len(), 1);
+    assert_eq!(storage.deleted().len(), 1);
+    assert_eq!(storage.deleted()[0].clone(), id2);
+    assert_eq!(id1, storage.get_created_keys().pop().unwrap());
+    storage.flush();
+    assert!(storage.read_object(&id2).is_none());
+    let new_obj1 = storage.read_object(&id1).unwrap();
+    // sequence # should increase after unwrapping
+    assert_eq!(new_obj1.version(), obj1_version.increment().unwrap());
+    // type-specific contents should not change after unwrapping
+    assert_eq!(
+        new_obj1
+            .data
+            .try_as_move()
+            .unwrap()
+            .type_specific_contents(),
+        &obj1_contents
+    );
+}
+
 #[test]
 fn test_move_call_insufficient_gas() {
     let genesis = genesis::GENESIS.lock().unwrap();
@@ -309,10 +418,7 @@ fn test_move_call_insufficient_gas() {
     let addr1 = base_types::get_key_pair().0;
     let pure_args = vec![
         10u64.to_le_bytes().to_vec(),
-        //bcs::to_bytes(&old_addr1.to_vec()).unwrap(),
         bcs::to_bytes(&addr1.to_vec()).unwrap(),
-        //MoveValue::vector_u8(addr1.to_vec()).simple_serialize().unwrap(),
-        //        transaction_argument::convert_txn_args(&vec![TransactionArgument::U8Vector(addr1.to_vec())]).pop().unwrap(),
     ];
     let response = call(
         &mut storage,
@@ -337,6 +443,7 @@ fn test_publish_module_insufficient_gas() {
     // 0. Create a gas object for gas payment.
     let gas_object = Object::with_id_owner_gas_for_testing(
         ObjectID::random(),
+        SequenceNumber::from(1),
         base_types::FastPayAddress::default(),
         30,
     );

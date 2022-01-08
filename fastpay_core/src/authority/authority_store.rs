@@ -54,7 +54,7 @@ impl AuthorityStore {
             .objects
             .iter()
             .filter(|(_, object)| object.owner == account)
-            .map(|(id, object)| (id, object.next_sequence_number, object.digest()))
+            .map(|(id, object)| (id, object.version(), object.digest()))
             .collect())
     }
 

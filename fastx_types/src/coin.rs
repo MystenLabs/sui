@@ -10,7 +10,7 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    base_types::ObjectID,
+    base_types::{ObjectID, SequenceNumber},
     gas_coin::{GAS_ADDRESS, GAS_MODULE_NAME, GAS_STRUCT_NAME},
     id::ID,
 };
@@ -45,6 +45,10 @@ impl Coin {
 
     pub fn id(&self) -> &ObjectID {
         self.id.object_id()
+    }
+
+    pub fn version(&self) -> SequenceNumber {
+        self.id.version()
     }
 
     pub fn value(&self) -> u64 {

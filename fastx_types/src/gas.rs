@@ -86,10 +86,9 @@ pub fn deduct_gas(gas_object: &mut Object, amount: i128) -> FastPayResult {
             balance, -amount
         )
     )?;
-    let new_gas_coin = GasCoin::new(*gas_coin.id(), new_balance as u64);
-    gas_object.data.try_as_move_mut().unwrap().contents = bcs::to_bytes(&new_gas_coin).unwrap();
-    let sequence_number = gas_object.next_sequence_number.increment()?;
-    gas_object.next_sequence_number = sequence_number;
+    let new_gas_coin = GasCoin::new(*gas_coin.id(), gas_object.version(), new_balance as u64);
+    let move_object = gas_object.data.try_as_move_mut().unwrap();
+    move_object.update_contents(bcs::to_bytes(&new_gas_coin).unwrap())?;
     Ok(())
 }
 
@@ -105,15 +104,15 @@ pub fn calculate_module_publish_cost(module_bytes: &[Vec<u8>]) -> u64 {
 
 pub fn calculate_object_transfer_cost(object: &Object) -> u64 {
     // TODO: Figure out object transfer gas formula.
-    (object.data.try_as_move().unwrap().contents.len() / 2) as u64
+    (object.data.try_as_move().unwrap().contents().len() / 2) as u64
 }
 
 pub fn calculate_object_creation_cost(object: &Object) -> u64 {
     // TODO: Figure out object creation gas formula.
-    object.data.try_as_move().unwrap().contents.len() as u64
+    object.data.try_as_move().unwrap().contents().len() as u64
 }
 
 pub fn calculate_object_deletion_refund(object: &Object) -> u64 {
     // TODO: Figure out object creation gas formula.
-    (object.data.try_as_move().unwrap().contents.len() / 2) as u64
+    (object.data.try_as_move().unwrap().contents().len() / 2) as u64
 }
