@@ -5,14 +5,14 @@ use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::IdentStr, language_storage::StructTag,
 };
 use serde::{Deserialize, Serialize};
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 use crate::{
-    base_types::ObjectID,
+    base_types::{ObjectID, SequenceNumber},
     coin::Coin,
     error::{FastPayError, FastPayResult},
     id::ID,
-    object::{Data, Object},
+    object::{Data, MoveObject, Object},
 };
 
 /// 0x01B3B1DD18A3B775FE0E0D4B873C0AA0
@@ -27,8 +27,8 @@ pub const GAS_STRUCT_NAME: &IdentStr = GAS_MODULE_NAME;
 pub struct GasCoin(Coin);
 
 impl GasCoin {
-    pub fn new(id: ObjectID, value: u64) -> Self {
-        Self(Coin::new(ID::new(id), value))
+    pub fn new(id: ObjectID, version: SequenceNumber, value: u64) -> Self {
+        Self(Coin::new(ID::new(id, version), value))
     }
 
     pub fn value(&self) -> u64 {
@@ -48,8 +48,32 @@ impl GasCoin {
         self.0.id()
     }
 
+    pub fn version(&self) -> SequenceNumber {
+        self.0.version()
+    }
+
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
         bcs::to_bytes(&self).unwrap()
+    }
+
+    pub fn to_object(&self) -> MoveObject {
+        MoveObject::new(Self::type_(), self.to_bcs_bytes())
+    }
+}
+impl TryFrom<&MoveObject> for GasCoin {
+    type Error = FastPayError;
+
+    fn try_from(value: &MoveObject) -> FastPayResult<GasCoin> {
+        if value.type_ != GasCoin::type_() {
+            return Err(FastPayError::TypeError {
+                error: format!("Gas object type is not a gas coin: {}", value.type_),
+            });
+        }
+        let gas_coin: GasCoin =
+            bcs::from_bytes(value.contents()).map_err(|err| FastPayError::TypeError {
+                error: format!("Unable to deserialize gas object: {:?}", err),
+            })?;
+        Ok(gas_coin)
     }
 }
 
@@ -57,20 +81,9 @@ impl TryFrom<&Object> for GasCoin {
     type Error = FastPayError;
 
     fn try_from(value: &Object) -> FastPayResult<GasCoin> {
-        match (value.type_(), &value.data) {
-            (Some(t), Data::Move(obj)) => {
-                if t != &GasCoin::type_() {
-                    return Err(FastPayError::TypeError {
-                        error: format!("Gas object type is not a gas coin: {}", t),
-                    });
-                }
-                let gas_coin: GasCoin =
-                    bcs::from_bytes(&obj.contents).map_err(|err| FastPayError::TypeError {
-                        error: format!("Unable to deserialize gas object: {:?}", err),
-                    })?;
-                Ok(gas_coin)
-            }
-            _ => Err(FastPayError::TypeError {
+        match &value.data {
+            Data::Move(obj) => obj.try_into(),
+            Data::Module(_) => Err(FastPayError::TypeError {
                 error: format!("Gas object type is not a gas coin: {:?}", value),
             }),
         }

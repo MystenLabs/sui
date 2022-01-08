@@ -3,10 +3,19 @@ module FastX::ID {
     // TODO(): bring this back
     //friend FastX::TxContext;
 
+    /// Version of a ID created by the current transaction.
+    const INITIAL_VERSION: u64 = 0;
+
     /// Globally unique identifier of an object. This is a privileged type
     /// that can only be derived from a `TxContext`
     struct ID has store, drop {
-        id: IDBytes
+        id: IDBytes,
+        /// Version number for the ID. The version number is incremented each
+        /// time the object with this ID is passed to a non-failing transaction
+        /// either by value or by mutable reference.
+        /// Note: if the object with this ID gets wrapped in another object, the
+        /// child object may be mutated with no version number change.
+        version: u64
     }
 
     /// Underlying representation of an ID.
@@ -19,7 +28,7 @@ module FastX::ID {
     // TODO (): bring this back once we can support `friend`
     //public(friend) fun new(bytes: vector<u8>): ID {
     public fun new(bytes: address): ID {
-        ID { id: IDBytes { bytes } }
+        ID { id: IDBytes { bytes }, version: INITIAL_VERSION }
     }
 
     /// Create a new ID bytes for comparison with existing ID's.
@@ -35,6 +44,17 @@ module FastX::ID {
     /// Get the `IDBytes` of `obj`
     public fun get_id_bytes<T: key>(obj: &T): &IDBytes {
         &get_id(obj).id
+    }
+
+    /// Get the `version` of `obj`
+    public fun get_version<T: key>(obj: &T): u64 {
+        *&get_id(obj).version
+    }
+
+    /// Return `true` if `obj` was created by the current transaction,
+    /// `false` otherwise.
+    public fun created_by_current_tx<T: key>(obj: &T): bool {
+        get_version(obj) == INITIAL_VERSION
     }
 
     /// Get the raw bytes of `i`
