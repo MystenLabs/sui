@@ -5,9 +5,14 @@ module FastX::ObjectBasics {
     use FastX::TxContext::{Self, TxContext};
     use FastX::Transfer;
 
-    struct Object has key {
+    struct Object has key, store {
         id: ID,
         value: u64,
+    }
+
+    struct Wrapper has key {
+        id: ID,
+        o: Object 
     }
 
     public fun create(value: u64, recipient: vector<u8>, ctx: &mut TxContext) {
@@ -28,6 +33,15 @@ module FastX::ObjectBasics {
 
     public fun delete(o: Object, _ctx: &mut TxContext) {
         let Object { id: _, value: _ } = o;
+    }
+
+    public fun wrap(o: Object, ctx: &mut TxContext) {
+        Transfer::transfer(Wrapper { id: TxContext::new_id(ctx), o }, TxContext::get_signer_address(ctx))
+    }
+
+    public fun unwrap(w: Wrapper, ctx: &mut TxContext) {
+        let Wrapper { id: _, o } = w;
+        Transfer::transfer(o, TxContext::get_signer_address(ctx))
     }
 
 }

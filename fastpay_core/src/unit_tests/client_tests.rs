@@ -158,8 +158,7 @@ async fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
 ) {
     for (authority, object_ids) in authorities.into_iter().zip(object_ids.into_iter()) {
         for object_id in object_ids {
-            let mut object = Object::with_id_for_testing(object_id);
-            object.transfer(client.address);
+            let object = Object::with_id_owner_for_testing(object_id, client.address);
             let client_ref = authority.0.as_ref().try_lock().unwrap();
 
             client_ref
