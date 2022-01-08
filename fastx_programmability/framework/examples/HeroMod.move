@@ -51,7 +51,7 @@ module Examples::HeroMod {
 
     /// Get a treasury cap for the coin and give it to the admin
     // TODO: this leverages Move module initializers
-    fun init(ctx: &mut TxContext, token_supply_max: u64, monster_max: u64) {
+    fun init(token_supply_max: u64, monster_max: u64, ctx: &mut TxContext) {
         // a game with no tokens and/or no monsters is no fun
         assert!(token_supply_max > 0, EINVALID_TOKEN_SUPPLY);
         assert!(monster_max > 0, EINVALID_MONSTER_SUPPLY);

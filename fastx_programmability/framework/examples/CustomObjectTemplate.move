@@ -84,13 +84,14 @@ module Examples::CustomObjectTemplate {
     /// sequence number each object, creates a hash that commits to the
     /// outputs, etc.
     public fun main(
-        ctx: &mut TxContext,
         to_read: &Object,
         to_write: &mut Object,
         to_consume: Object,
         // ... end objects, begin primitive type inputs
         int_input: u64,
-        bytes_input: vector<u8>
+        bytes_input: vector<u8>,
+        // end primitive types. last arg must be TxContext
+        ctx: &mut TxContext,
     ) {
         let v = read_field(to_read);
         write_field(to_write, v + int_input);
