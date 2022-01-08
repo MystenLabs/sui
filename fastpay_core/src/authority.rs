@@ -73,6 +73,11 @@ impl AuthorityState {
         if !input_objects.iter().all(|o| used.insert(o)) {
             return Err(FastPayError::DuplicateObjectRefInput);
         }
+        let transfer_object_id = if let OrderKind::Transfer(t) = &order.kind {
+            Some(&t.object_ref.0)
+        } else {
+            None
+        };
 
         for object_ref in input_objects {
             let (object_id, sequence_number, _object_digest) = object_ref;
@@ -105,8 +110,21 @@ impl AuthorityState {
                 }
             );
 
-            // If this is an immutable object, checks end here.
             if object.is_read_only() {
+                // For a tranfer order, the object to be transferred
+                // must not be read only.
+                fp_ensure!(
+                    Some(&object_id) != transfer_object_id,
+                    FastPayError::TransferImmutableError
+                );
+                // Gas object must not be immutable.
+                fp_ensure!(
+                    &object_id != order.gas_payment_object_id(),
+                    FastPayError::InsufficientGas {
+                        error: "Gas object should not be immutable".to_string()
+                    }
+                );
+                // Checks for read-only objects end here.
                 continue;
             }
 
@@ -128,11 +146,8 @@ impl AuthorityState {
             mutable_objects.push((object_id, sequence_number, object_digest));
         }
 
-        // There is at least one mutable input.
-        fp_ensure!(
-            !mutable_objects.is_empty(),
-            FastPayError::InsufficientObjectNumber
-        );
+        // We have checked that there is a mutable gas object.
+        debug_assert!(!mutable_objects.is_empty());
 
         let object_id = *order.object_id();
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
