@@ -92,6 +92,8 @@ pub enum FastPayError {
     DuplicateObjectRefInput,
     #[error("Network error while querying service: {:?}.", error)]
     ClientIoError { error: String },
+    #[error("Cannot transfer immutable object.")]
+    TransferImmutableError,
 
     // Move module publishing related errors
     #[error("Failed to load the Move module, reason: {error:?}.")]
