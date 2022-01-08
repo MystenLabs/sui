@@ -440,6 +440,8 @@ fn main() {
                 );
                 info!("Starting publish");
                 let time_start = Instant::now();
+
+                // TODO: Need to rectrieve the object ref for the published module
                 let cert = client_state
                     .publish_module(gas_object_id, module_bytes)
                     .await
@@ -448,10 +450,7 @@ fn main() {
                 info!("Publish confirmed after {} us", time_total);
                 println!("{:?}", cert);
                 // Try to sync.
-                // TODO: figure out optimal tuning for high probability of getting full data back
-                for _ in 0..(1 + committee_config.authorities.len() / 3) {
-                    client_state.sync_client_state_with_random_authority();
-                }
+                client_state.sync_client_state_with_all_authorities();
 
                 accounts_config.update_from_state(&client_state);
                 accounts_config

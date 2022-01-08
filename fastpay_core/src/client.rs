@@ -95,7 +95,7 @@ pub trait Client {
         user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
-    /// Publish a module
+    /// Publish a module. Not yet implemented
     fn publish_module(
         &mut self,
         gas_payment: ObjectID,
@@ -106,6 +106,8 @@ pub trait Client {
     fn sync_client_state_with_random_authority(
         &mut self,
     ) -> AsyncResult<'_, AuthorityName, anyhow::Error>;
+
+    fn sync_client_state_with_all_authorities(&mut self) -> AsyncResult<'_, (), anyhow::Error>;
 
     /// Get all object we own.
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error>;
@@ -513,15 +515,24 @@ where
         Ok(sent_certificates)
     }
 
+    /// TODO/TBD: waiting for https://github.com/MystenLabs/fastnft/pull/130
+    async fn communicate_publish(
+        &mut self,
+        _sender: FastPayAddress,
+        _known_certificates: Vec<CertifiedOrder>,
+        _action: CommunicateAction,
+    ) -> Result<Vec<CertifiedOrder>, anyhow::Error> {
+        unimplemented!("Module publish communication not finalized");
+    }
+
     /// Publishes a module
     async fn publish(
         &mut self,
         gas_payment: ObjectRef,
         module: Vec<u8>,
     ) -> Result<CertifiedOrder, anyhow::Error> {
-        let module_bytes = vec![module];
-        let publish_order =
-            Order::new_module(self.address, gas_payment, module_bytes, &self.secret);
+        let modules = vec![module];
+        let publish_order = Order::new_module(self.address, gas_payment, modules, &self.secret);
         let certificate = self
             .execute_module_publish(publish_order, /* with_confirmation */ true)
             .await?;
@@ -613,22 +624,19 @@ where
         with_confirmation: bool,
     ) -> Result<CertifiedOrder, anyhow::Error> {
         let new_sent_certificates = self
-            .communicate_transfers(
+            .communicate_publish(
                 self.address,
-                *order.object_id(),
                 self.sent_certificates.clone(),
                 CommunicateAction::SendOrder(order.clone()),
             )
             .await?;
         assert_eq!(new_sent_certificates.last().unwrap().order, order);
-        // and `next_sequence_number`. (Note that if we were using persistent
-        // storage, we should ensure update atomicity in the eventuality of a crash.)
-        self.update_certificates(new_sent_certificates)?;
+
+        //self.update_certificates(new_sent_certificates)?;
         // Confirm last transfer certificate if needed.
         if with_confirmation {
-            self.communicate_transfers(
+            self.communicate_publish(
                 self.address,
-                *order.object_id(),
                 self.sent_certificates.clone(),
                 CommunicateAction::SynchronizeNextSequenceNumber(
                     self.next_sequence_number(*order.object_id()),
@@ -851,6 +859,10 @@ where
 
             Ok(authority_name)
         })
+    }
+    /// TODO
+    fn sync_client_state_with_all_authorities(&mut self) -> AsyncResult<'_, (), anyhow::Error> {
+        Box::pin(async move { unimplemented!("Syncing with all authorities TBD") })
     }
 
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error> {
