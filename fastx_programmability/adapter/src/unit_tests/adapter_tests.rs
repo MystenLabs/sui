@@ -319,7 +319,7 @@ fn test_move_call_insufficient_gas() {
         &native_functions,
         "create",
         gas_object,
-        50, // This budget is not enough to execute all bytecode.
+        25, // This budget is not enough to execute all bytecode.
         Vec::new(),
         pure_args,
     );
