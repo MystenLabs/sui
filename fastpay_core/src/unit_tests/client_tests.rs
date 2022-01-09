@@ -28,7 +28,7 @@ fn max_files_client_tests() -> i32 {
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
 impl AuthorityClient for LocalAuthorityClient {
-    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
+    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move { state.lock().await.handle_order(order).await })
     }
@@ -36,7 +36,7 @@ impl AuthorityClient for LocalAuthorityClient {
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move { state.lock().await.handle_confirmation_order(order).await })
     }

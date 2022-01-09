@@ -6,7 +6,7 @@ use anyhow::Result;
 use crate::bytecode_rewriter::ModuleHandleRewriter;
 use fastx_types::{
     base_types::{
-        FastPayAddress, ObjectID, ObjectRef, SequenceNumber, TxContext, TX_CONTEXT_ADDRESS,
+        FastPayAddress, ObjectID, SequenceNumber, TxContext, TX_CONTEXT_ADDRESS,
         TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     error::{FastPayError, FastPayResult},
@@ -132,7 +132,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     sender: FastPayAddress,
     ctx: &mut TxContext,
     mut gas_object: Object,
-) -> Result<Vec<ObjectRef>, FastPayError> {
+) -> Result<(), FastPayError> {
     if module_bytes.is_empty() {
         return Err(FastPayError::ModulePublishFailure {
             error: "Publishing empty list of modules".to_string(),
@@ -153,7 +153,6 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         .collect::<FastPayResult<Vec<CompiledModule>>>()?;
     generate_module_ids(&mut modules, ctx)?;
     // verify and link modules, wrap them in objects, write them to the store
-    let mut written_refs = Vec::with_capacity(modules.len());
     for module in modules {
         // It is important to do this before running the FastX verifier, since the fastX
         // verifier may assume well-formedness conditions enforced by the Move verifier hold
@@ -172,11 +171,10 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
         // Create module objects and write them to the store
         let module_object = Object::new_module(module, sender, SequenceNumber::new(), ctx.digest());
-        written_refs.push(module_object.to_object_reference());
         state_view.write_object(module_object);
     }
 
-    Ok(written_refs)
+    Ok(())
 }
 
 /// Use `ctx` to generate fresh ID's for each module in `modules`.
