@@ -186,6 +186,31 @@ async fn test_handle_transfer_order_ok() {
     );
 }
 
+#[tokio::test]
+async fn test_handle_transfer_zero_balance() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = Address::FastPay(dbg_addr(2));
+    let object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+
+    // Create a gas object with 0 balance.
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 0);
+    authority_state
+        .init_order_lock((gas_object_id, 0.into(), gas_object.digest()))
+        .await;
+    authority_state.insert_object(gas_object).await;
+
+    let transfer_order =
+        init_transfer_order(sender, &sender_key, recipient, object_id, gas_object_id);
+
+    let result = authority_state.handle_order(transfer_order.clone()).await;
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Gas balance is 0, smaller than minimum requirement of 8 for object transfer."));
+}
+
 async fn send_and_confirm_order(
     authority: &mut AuthorityState,
     order: Order,
@@ -654,6 +679,44 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
         .parent(&(object_id, account.next_sequence_number, account.digest()))
         .await
         .is_some());
+}
+
+#[tokio::test]
+async fn test_handle_confirmation_order_gas() {
+    let run_test_with_gas = |gas: u64| async move {
+        let (sender, sender_key) = get_key_pair();
+        let recipient = dbg_addr(2);
+        let object_id = ObjectID::random();
+        let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+
+        // Create a gas object with insufficient balance.
+        let gas_object_id = ObjectID::random();
+        let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, gas);
+        authority_state
+            .init_order_lock((gas_object_id, 0.into(), gas_object.digest()))
+            .await;
+        authority_state.insert_object(gas_object).await;
+
+        let certified_transfer_order = init_certified_transfer_order(
+            sender,
+            &sender_key,
+            Address::FastPay(recipient),
+            object_id,
+            gas_object_id,
+            &authority_state,
+        );
+
+        authority_state
+            .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+            .await
+    };
+    let result = run_test_with_gas(10).await;
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Gas balance is 10, not enough to pay 12"));
+    let result = run_test_with_gas(20).await;
+    assert!(result.is_ok());
 }
 
 #[tokio::test]
