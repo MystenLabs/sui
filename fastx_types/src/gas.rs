@@ -21,12 +21,20 @@ macro_rules! ok_or_gas_error {
 
 const MIN_MOVE_CALL_GAS: u64 = 10;
 const MIN_MOVE_PUBLISH_GAS: u64 = 10;
+const MIN_OBJ_TRANSFER_GAS: u64 = 8;
 
 pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResult {
     match &order.kind {
-        OrderKind::Transfer(_) => {
-            // TODO: Add gas logic for transfer orders.
-            Ok(())
+        OrderKind::Transfer(t) => {
+            debug_assert_eq!(t.gas_payment.0, gas_object.id());
+            let balance = get_gas_balance(gas_object)?;
+            ok_or_gas_error!(
+                balance >= MIN_OBJ_TRANSFER_GAS,
+                format!(
+                    "Gas balance is {}, smaller than minimum requirement of {} for object transfer.",
+                    balance, MIN_OBJ_TRANSFER_GAS
+                )
+            )
         }
         OrderKind::Publish(publish) => {
             debug_assert_eq!(publish.gas_payment.0, gas_object.id());
