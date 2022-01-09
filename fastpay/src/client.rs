@@ -470,7 +470,7 @@ fn main() {
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
-                let client_state = make_client_state(
+                let mut client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
                     user_address,
@@ -479,6 +479,8 @@ fn main() {
                     recv_timeout,
                 );
 
+                // Get strongly consistent view of object ids
+                client_state.sync_client_state_with_all_authorities();
                 let objects_ids = client_state.object_ids();
 
                 accounts_config.update_from_state(&client_state);

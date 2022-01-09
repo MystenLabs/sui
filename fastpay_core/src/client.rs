@@ -101,6 +101,10 @@ pub trait Client {
         &mut self,
     ) -> AsyncResult<'_, AuthorityName, anyhow::Error>;
 
+    /// Synchronizes the client state with all authorities, updates all object_ids and certificates.
+    /// Useful when strong consistency is required at expense of perf
+    fn sync_client_state_with_all_authorities(&mut self) -> AsyncResult<'_, (), anyhow::Error>;
+
     /// Get all object we own.
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error>;
 }
@@ -781,6 +785,69 @@ where
             self.update_certificates(new_certificates)?;
 
             Ok(authority_name)
+        })
+    }
+
+    // TODO: make authority fetch concurrent
+    fn sync_client_state_with_all_authorities(&mut self) -> AsyncResult<'_, (), anyhow::Error> {
+        Box::pin(async move {
+            if let Some(order) = self.pending_transfer.clone() {
+                // Finish executing the previous transfer.
+                self.execute_transfer(order, /* with_confirmation */ false)
+                    .await?;
+            }
+            // Reset object_ids.
+            self.object_ids.clear();
+
+            // Request whole account info
+            let request = AccountInfoRequest {
+                account: self.address,
+            };
+            // Try each authority in random order.
+            let authorities: Vec<AuthorityName> =
+                self.authority_clients.clone().into_keys().collect();
+
+            // TODO: use concurrent hashmap when fetching concurrently
+            let mut object_ids_map = HashMap::new();
+
+            // Authority could be byzantine, add timeout to avoid waiting forever.
+            for authority_name in authorities {
+                let authority = self.authority_clients.get(&authority_name).unwrap();
+                let result = timeout(
+                    AUTHORITY_REQUEST_TIMEOUT,
+                    authority.handle_account_info_request(request.clone()),
+                )
+                .map_err(|_| FastPayError::ErrorWhileRequestingInformation)
+                .await?;
+
+                if let Ok(AccountInfoResponse {
+                    object_ids: obj_ids,
+                    ..
+                }) = &result
+                {
+                    // TODO Could be more efficient?
+                    for (object_id, seq_no, _) in obj_ids.clone() {
+                        // Evict lower seq #
+                        if !object_ids_map.contains_key(&object_id)
+                            || (object_ids_map.contains_key(&object_id)
+                                && *object_ids_map.get(&object_id).unwrap() < seq_no)
+                        {
+                            object_ids_map.insert(object_id, seq_no);
+                        }
+                    }
+                }
+            }
+
+            // Update local state
+            for (object_id, sequence_number) in object_ids_map {
+                self.object_ids.insert(object_id, sequence_number);
+            }
+
+            // Recover missing certificates.
+            let new_certificates = self.download_certificates().await?;
+            self.update_certificates(new_certificates)?;
+
+            Ok(())
         })
     }
 

@@ -650,3 +650,72 @@ fn test_client_state_sync_with_transferred_object() {
     assert_eq!(1, client2.received_certificates.len());
     assert_eq!(0, client2.sent_certificates.len());
 }
+
+#[test]
+fn test_client_state_sync_with_all_authorities() {
+    let mut rt = Runtime::new().unwrap();
+    let (authority_clients, committee) = init_local_authorities(4);
+    let mut client = make_client(authority_clients.clone(), committee);
+    use rand::Rng;
+
+    // Create random ObjectIDs with random Seq #
+    let object_ids: HashMap<_, _> = (0..20)
+        .map(|_| {
+            (
+                ObjectID::random(),
+                SequenceNumber::from(rand::thread_rng().gen_range(0, 100)),
+            )
+        })
+        .collect();
+
+    // Simulate data inconsistencies
+    // Skip first 5 values for each authority
+    // Use a lower value of Seq # for the next 5 ObjectIDs
+    for (auth_idx, authority_client) in authority_clients.iter().enumerate() {
+        for (obj_idx, (object_id, seq_no)) in object_ids.iter().enumerate() {
+            // Skip the first 5 for this authority
+            if (obj_idx >= (auth_idx * 5)) && (obj_idx < ((1 + auth_idx) * 5)) {
+                continue;
+            }
+
+            let mut object = Object::with_id_for_testing(*object_id);
+            let mut mod_seq_no = *seq_no;
+            println!("{} {}", auth_idx, obj_idx);
+
+            // Randomize seq # for this authority
+            if obj_idx >= ((1 + auth_idx) * 5) && obj_idx < ((2 + auth_idx) * 5) {
+                let max = u64::from(*seq_no);
+                // Pick a random seq up to oen less than the valid one
+                mod_seq_no = SequenceNumber::from(rand::thread_rng().gen_range(0, max));
+            }
+
+            object.next_sequence_number = mod_seq_no;
+            object.transfer(client.address);
+
+            let client_ref = authority_client.1 .0.as_ref().try_lock().unwrap();
+            rt.block_on(client_ref.init_order_lock((*object_id, 0.into(), object.digest())));
+            rt.block_on(client_ref.insert_object(object));
+        }
+    }
+
+    // Clear all
+    client.object_ids.clear();
+
+    //client.sync_client_state_with_random_authority();
+
+    match rt.block_on(client.sync_client_state_with_all_authorities()) {
+        Ok(_) => (),
+        // FastPayError::ErrorWhileRequestingCertificate is expected because no certs
+        // Gotta be a better way to compare errors?
+        Err(err) => assert_eq!(
+            err.to_string(),
+            FastPayError::ErrorWhileRequestingCertificate.to_string()
+        ),
+    }
+
+    assert_eq!(client.object_ids.len(), object_ids.len());
+    for (true_obj_id, true_seq_no) in object_ids {
+        assert!(client.object_ids.contains_key(&true_obj_id));
+        assert_eq!(*client.object_ids.get(&true_obj_id).unwrap(), true_seq_no);
+    }
+}
