@@ -85,7 +85,7 @@ impl MessageHandler for RunningServerState {
                             .state
                             .handle_order(*message)
                             .await
-                            .map(|info| Some(serialize_object_info_response(&info))),
+                            .map(|info| Some(serialize_order_info(&info))),
                         SerializedMessage::Cert(message) => {
                             let confirmation_order = ConfirmationOrder {
                                 certificate: message.as_ref().clone(),
@@ -98,7 +98,7 @@ impl MessageHandler for RunningServerState {
                             {
                                 Ok(info) => {
                                     // Response
-                                    Ok(Some(serialize_object_info_response(&info)))
+                                    Ok(Some(serialize_order_info(&info)))
                                 }
                                 Err(error) => Err(error),
                             }
@@ -210,9 +210,9 @@ impl Client {
 
 impl AuthorityClient for Client {
     /// Initiate a new transfer to a FastPay or Primary account.
-    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
+    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
         Box::pin(async move {
-            self.send_recv_bytes(serialize_order(&order), object_info_deserializer)
+            self.send_recv_bytes(serialize_order(&order), order_info_deserializer)
                 .await
         })
     }
@@ -221,9 +221,9 @@ impl AuthorityClient for Client {
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
         Box::pin(async move {
-            self.send_recv_bytes(serialize_cert(&order.certificate), object_info_deserializer)
+            self.send_recv_bytes(serialize_cert(&order.certificate), order_info_deserializer)
                 .await
         })
     }

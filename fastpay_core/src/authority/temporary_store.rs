@@ -42,6 +42,28 @@ impl AuthorityTemporaryStore {
         (self.objects, self.active_inputs, self.written, self.deleted)
     }
 
+    pub fn to_signed_effects(
+        &self,
+        authority_name: &AuthorityName,
+        secret: &KeyPair,
+        transaction_digest: &TransactionDigest,
+        status: Result<(), FastPayError>,
+    ) -> SignedOrderEffects {
+        let effects = OrderEffects {
+            status,
+            transaction_digest: *transaction_digest,
+            mutated: self.written.clone(),
+            deleted: self.deleted.clone(),
+        };
+        let signature = Signature::new(&effects, secret);
+
+        SignedOrderEffects {
+            effects,
+            authority: *authority_name,
+            signature,
+        }
+    }
+
     /// An internal check of the invariants (will only fire in debug)
     #[cfg(debug_assertions)]
     fn check_invariants(&self) {

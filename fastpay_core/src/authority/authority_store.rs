@@ -12,6 +12,7 @@ pub struct AuthorityStore {
     signed_orders: DBMap<TransactionDigest, SignedOrder>,
     certificates: DBMap<TransactionDigest, CertifiedOrder>,
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
+    signed_effects: DBMap<TransactionDigest, SignedOrderEffects>,
     check_and_write_lock: Mutex<()>,
 }
 
@@ -27,6 +28,7 @@ impl AuthorityStore {
                 "signed_orders",
                 "certificates",
                 "parent_sync",
+                "signed_effects",
             ],
         )
         .expect("Cannot open DB.");
@@ -36,6 +38,7 @@ impl AuthorityStore {
             signed_orders: DBMap::reopen(&db, Some("signed_orders")).expect("Cannot open CF."),
             certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
             parent_sync: DBMap::reopen(&db, Some("parent_sync")).expect("Cannot open CF."),
+            signed_effects: DBMap::reopen(&db, Some("signed_effects")).expect("Cannot open CF."),
             check_and_write_lock: Mutex::new(()),
         }
     }
@@ -53,6 +56,26 @@ impl AuthorityStore {
             .filter(|(_, object)| object.owner == account)
             .map(|(id, object)| (id, object.next_sequence_number, object.digest()))
             .collect())
+    }
+
+    pub fn get_order_info(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Result<OrderInfoResponse, FastPayError> {
+        Ok(OrderInfoResponse {
+            signed_order: self
+                .signed_orders
+                .get(transaction_digest)
+                .map_err(|_| FastPayError::StorageError)?,
+            certified_order: self
+                .certificates
+                .get(transaction_digest)
+                .map_err(|_| FastPayError::StorageError)?,
+            signed_effects: self
+                .signed_effects
+                .get(transaction_digest)
+                .map_err(|_| FastPayError::StorageError)?,
+        })
     }
 
     /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
@@ -199,6 +222,7 @@ impl AuthorityStore {
         &self,
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedOrder,
+        signed_effects: SignedOrderEffects,
     ) -> Result<(), FastPayError> {
         // TODO: There is a lot of cloning used -- eliminate it.
 
@@ -217,6 +241,14 @@ impl AuthorityStore {
             .insert_batch(
                 &self.certificates,
                 std::iter::once((transaction_digest, certificate)),
+            )
+            .map_err(|_| FastPayError::StorageError)?;
+
+        // Store the signed effects of the order
+        write_batch = write_batch
+            .insert_batch(
+                &self.signed_effects,
+                std::iter::once((transaction_digest, signed_effects)),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
