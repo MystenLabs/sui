@@ -23,13 +23,13 @@ pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 pub trait AuthorityClient {
     /// Initiate a new order to a FastPay or Primary account.
-    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, ObjectInfoResponse, FastPayError>;
+    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, OrderInfoResponse, FastPayError>;
 
     /// Confirm an order to a FastPay or Primary account.
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError>;
+    ) -> AsyncResult<'_, OrderInfoResponse, FastPayError>;
 
     /// Handle Account information requests for this account.
     fn handle_account_info_request(
@@ -427,21 +427,22 @@ where
                     }
                     // Send the transfer order (if any) and return a vote.
                     if let CommunicateAction::SendOrder(order) = action {
-                        let result = client.handle_order(order).await;
-                        return match result {
-                            Ok(ObjectInfoResponse {
-                                pending_confirmation: Some(signed_order),
+                        let result: Result<OrderInfoResponse, FastPayError> =
+                            client.handle_order(order).await;
+                        match result {
+                            Ok(OrderInfoResponse {
+                                signed_order: Some(inner_signed_order),
                                 ..
                             }) => {
                                 fp_ensure!(
-                                    signed_order.authority == name,
+                                    inner_signed_order.authority == name,
                                     FastPayError::ErrorWhileProcessingTransferOrder
                                 );
-                                signed_order.check(committee)?;
-                                Ok(Some(signed_order))
+                                inner_signed_order.check(committee)?;
+                                return Ok(Some(inner_signed_order));
                             }
-                            Err(err) => Err(err),
-                            _ => Err(FastPayError::ErrorWhileProcessingTransferOrder),
+                            Err(err) => return Err(err),
+                            _ => return Err(FastPayError::ErrorWhileProcessingTransferOrder),
                         };
                     }
                     Ok(None)

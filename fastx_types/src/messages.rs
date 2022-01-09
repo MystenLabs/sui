@@ -87,11 +87,6 @@ pub struct ConfirmationOrder {
     pub certificate: CertifiedOrder,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct RedeemTransaction {
-    pub certificate: CertifiedOrder,
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
     pub account: FastPayAddress,
@@ -118,6 +113,41 @@ pub struct ObjectInfoResponse {
     pub requested_certificate: Option<CertifiedOrder>,
     pub pending_confirmation: Option<SignedOrder>,
     pub requested_received_transfers: Vec<CertifiedOrder>,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct OrderInfoResponse {
+    // The signed order response to handle_order
+    pub signed_order: Option<SignedOrder>,
+    // The certificate in case one is available
+    pub certified_order: Option<CertifiedOrder>,
+    // The effects resulting from a successful execution should
+    // contain ObjectRef created, mutated, deleted and events.
+    pub signed_effects: Option<SignedOrderEffects>,
+}
+
+/// The response from processing an order or a certified order
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct OrderEffects {
+    // The status of the execution
+    pub status: Result<(), FastPayError>,
+    // The transaction digest
+    pub transaction_digest: TransactionDigest,
+    // ObjectRefs containing mutated or new objects
+    pub mutated: Vec<ObjectRef>,
+    // Object Refs of objects now deleted (the old refs).
+    pub deleted: Vec<ObjectRef>,
+    // TODO: add events here too.
+}
+
+impl BcsSignable for OrderEffects {}
+
+/// An order signed by a single authority
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct SignedOrderEffects {
+    pub effects: OrderEffects,
+    pub authority: AuthorityName,
+    pub signature: Signature,
 }
 
 impl Hash for Order {
@@ -404,12 +434,6 @@ impl CertifiedOrder {
             std::iter::once(&inner_sig).chain(&self.signatures),
             &committee.expanded_keys,
         )
-    }
-}
-
-impl RedeemTransaction {
-    pub fn new(certificate: CertifiedOrder) -> Self {
-        Self { certificate }
     }
 }
 
