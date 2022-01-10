@@ -30,6 +30,29 @@ env:
   RUST_BACKTRACE: short
 
 jobs:
+  release-check:
+    name: Rust compilation ${{matrix.toolchain}} on ${{matrix.os}}
+    runs-on: ${{matrix.os}}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [nightly]
+        os: [ubuntu]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{matrix.toolchain}}
+          profile: minimal
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - name: Check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --all --tests -Z unstable-options --profile=release
+
   test:
     name: Test Rust ${{matrix.toolchain}} on ${{matrix.os}}
     runs-on: ${{matrix.os}}-latest
