@@ -26,7 +26,6 @@ pub struct Transfer {
     pub recipient: Address,
     pub object_ref: ObjectRef,
     pub gas_payment: ObjectRef,
-    pub user_data: UserData,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
