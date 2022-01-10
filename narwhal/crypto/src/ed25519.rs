@@ -143,6 +143,7 @@ impl AsRef<[u8]> for Ed25519Signature {
     }
 }
 
+// see [#34](https://github.com/MystenLabs/narwhal/issues/34)
 impl Default for Ed25519Signature {
     fn default() -> Self {
         let sig = ed25519_dalek::Signature::from_bytes(&[0u8; 64]).unwrap();

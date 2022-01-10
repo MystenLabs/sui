@@ -68,7 +68,7 @@ impl signature::Signature for BLS12377Signature {
         })
     }
 }
-
+// see [#34](https://github.com/MystenLabs/narwhal/issues/34)
 impl Default for BLS12377Signature {
     fn default() -> Self {
         let g1 = G1Projective::zero();
