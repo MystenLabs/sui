@@ -63,9 +63,12 @@ impl MoveObject {
 
         self.contents = new_contents;
 
-        // caller should never overwrite ID or version
-        debug_assert!(self.id() == old_id);
-        debug_assert!(self.version() == old_version);
+        #[cfg(debug_assertions)]
+        {
+            // caller should never overwrite ID or version
+            debug_assert_eq!(self.id(), old_id);
+            debug_assert_eq!(self.version(), old_version);
+        }
 
         self.increment_version()?;
         Ok(())
