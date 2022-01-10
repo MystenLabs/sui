@@ -4,7 +4,7 @@ version = "0.1.0"
 license = "Apache-2.0"
 authors = ["Libra <oncall+libra@xmail.facebook.com>"]
 publish = false
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 futures = "0.3.19"

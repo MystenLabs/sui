@@ -3,7 +3,7 @@ name = "node"
 version = "0.1.0"
 license = "Apache-2.0"
 authors = ["George Danezis <gdanezis@fb.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 tokio = { version = "1.15.0", features = ["full"] }
