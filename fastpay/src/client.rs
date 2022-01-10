@@ -387,7 +387,7 @@ enum ClientCommands {
 }
 
 fn main() {
-    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let options = ClientOpt::from_args();
 
     let send_timeout = Duration::from_micros(options.send_timeout);
@@ -413,7 +413,7 @@ fn main() {
             let object_id = ObjectID::from_hex_literal(&object_id).unwrap();
             let gas_object_id = ObjectID::from_hex_literal(&gas_object_id).unwrap();
 
-            let mut rt = Runtime::new().unwrap();
+            let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 let mut client_state = make_client_state(
                     &accounts_config,
@@ -464,7 +464,7 @@ fn main() {
         ClientCommands::QueryObjects { address } => {
             let user_address = decode_address(&address).expect("Failed to decode address");
 
-            let mut rt = Runtime::new().unwrap();
+            let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 let client_state = make_client_state(
                     &accounts_config,
@@ -495,7 +495,7 @@ fn main() {
         } => {
             let max_orders = max_orders.unwrap_or_else(|| accounts_config.num_accounts());
 
-            let mut rt = Runtime::new().unwrap();
+            let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 warn!("Starting benchmark phase 1 (transfer orders)");
                 let (orders, serialize_orders) =
