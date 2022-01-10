@@ -3,6 +3,7 @@
 
 use crate::downloader::*;
 use anyhow::{bail, ensure};
+use dashmap::DashMap;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
@@ -780,7 +781,6 @@ where
         })
     }
 
-    // TODO: make authority fetch concurrent
     fn sync_client_state_with_all_authorities(&mut self) -> AsyncResult<'_, (), anyhow::Error> {
         Box::pin(async move {
             if let Some(order) = self.pending_transfer.clone() {
@@ -793,24 +793,24 @@ where
             let authorities: Vec<AuthorityName> =
                 self.authority_clients.clone().into_keys().collect();
 
-            // Authority could be byzantine, add timeout to avoid waiting forever.
-            let mut threads = Vec::new();
-            for authority_name in authorities {
-                let authority = self.authority_clients.get(&authority_name).clone().unwrap();
-                let addr = self.address.clone();
-                threads.push(std::thread::spawn(move || fetch_obj_ids(authority, addr)));
-            }
+            let dashmap = DashMap::new();
 
-            // Evict lower value seq #
-            for thr in threads {
-                for (obj_id, seq_no) in thr.join().unwrap() {
-                    if (self.object_ids.contains_key(&obj_id)
-                        && (*self.object_ids.get(&obj_id).unwrap() < seq_no))
-                        || !self.object_ids.contains_key(&obj_id)
-                    {
-                        self.object_ids.insert(obj_id, seq_no);
-                    }
-                }
+            for authority_name in authorities {
+                let authority = self.authority_clients.get(&authority_name).unwrap();
+                let addr = self.address;
+                rayon::scope(|s| {
+                    s.spawn(|_| {
+                        for (obj_id, seq_no) in fetch_obj_ids(authority, addr) {
+                            // Evict lower value seq #
+                            if (dashmap.contains_key(&obj_id)
+                                && (*dashmap.get(&obj_id).unwrap() < seq_no))
+                                || !dashmap.contains_key(&obj_id)
+                            {
+                                dashmap.insert(obj_id, seq_no);
+                            }
+                        }
+                    })
+                })
             }
 
             // Recover missing certificates.
@@ -834,11 +834,12 @@ fn fetch_obj_ids(
 
     let mut rt = Runtime::new().unwrap();
     let request = AccountInfoRequest { account: address };
+    // Authority could be byzantine, add timeout to avoid waiting forever.
     let result = rt
         .block_on(
             timeout(
                 AUTHORITY_REQUEST_TIMEOUT,
-                authority_client.handle_account_info_request(request.clone()),
+                authority_client.handle_account_info_request(request),
             )
             .map_err(|_| FastPayError::ErrorWhileRequestingInformation),
         )

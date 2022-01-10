@@ -642,7 +642,6 @@ fn test_client_state_sync_with_all_authorities() {
 
             let mut object = Object::with_id_for_testing(*object_id);
             let mut mod_seq_no = *seq_no;
-            println!("{} {}", auth_idx, obj_idx);
 
             // Randomize seq # for this authority
             if obj_idx >= ((1 + auth_idx) * 5) && obj_idx < ((2 + auth_idx) * 5) {
