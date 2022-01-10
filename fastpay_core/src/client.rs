@@ -82,7 +82,6 @@ pub trait Client {
         -> AsyncResult<'_, (), anyhow::Error>;
 
     /// Send object to a FastX account.
-    /// Do not check balance. (This may block the client)
     /// Do not confirm the transaction.
     fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
