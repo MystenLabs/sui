@@ -7,9 +7,11 @@ use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
 use futures::{future, StreamExt, TryFutureExt};
+use move_core_types::account_address::AccountAddress;
 use rand::seq::SliceRandom;
 use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
 use std::time::Duration;
+use tokio::runtime::Runtime;
 use tokio::time::timeout;
 
 #[cfg(test)]
@@ -799,49 +801,27 @@ where
             }
             // Reset object_ids.
             self.object_ids.clear();
-
-            // Request whole account info
-            let request = AccountInfoRequest {
-                account: self.address,
-            };
-            // Try each authority in random order.
             let authorities: Vec<AuthorityName> =
                 self.authority_clients.clone().into_keys().collect();
 
-            // TODO: use concurrent hashmap when fetching concurrently
-            let mut object_ids_map = HashMap::new();
-
             // Authority could be byzantine, add timeout to avoid waiting forever.
+            let mut threads = Vec::new();
             for authority_name in authorities {
-                let authority = self.authority_clients.get(&authority_name).unwrap();
-                let result = timeout(
-                    AUTHORITY_REQUEST_TIMEOUT,
-                    authority.handle_account_info_request(request.clone()),
-                )
-                .map_err(|_| FastPayError::ErrorWhileRequestingInformation)
-                .await?;
-
-                if let Ok(AccountInfoResponse {
-                    object_ids: obj_ids,
-                    ..
-                }) = &result
-                {
-                    // TODO Could be more efficient?
-                    for (object_id, seq_no, _) in obj_ids.clone() {
-                        // Evict lower seq #
-                        if !object_ids_map.contains_key(&object_id)
-                            || (object_ids_map.contains_key(&object_id)
-                                && *object_ids_map.get(&object_id).unwrap() < seq_no)
-                        {
-                            object_ids_map.insert(object_id, seq_no);
-                        }
-                    }
-                }
+                let authority = self.authority_clients.get(&authority_name).clone().unwrap();
+                let addr = self.address.clone();
+                threads.push(std::thread::spawn(move || fetch_obj_ids(authority, addr)));
             }
 
-            // Update local state
-            for (object_id, sequence_number) in object_ids_map {
-                self.object_ids.insert(object_id, sequence_number);
+            // Evict lower value seq #
+            for thr in threads {
+                for (obj_id, seq_no) in thr.join().unwrap() {
+                    if (self.object_ids.contains_key(&obj_id)
+                        && (*self.object_ids.get(&obj_id).unwrap() < seq_no))
+                        || !self.object_ids.contains_key(&obj_id)
+                    {
+                        self.object_ids.insert(obj_id, seq_no);
+                    }
+                }
             }
 
             // Recover missing certificates.
@@ -855,4 +835,35 @@ where
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error> {
         Box::pin(async move { Ok(self.object_ids.keys().copied().collect()) })
     }
+}
+
+fn fetch_obj_ids(
+    authority_client: &dyn AuthorityClient,
+    address: fastx_types::base_types::PublicKeyBytes,
+) -> HashMap<AccountAddress, SequenceNumber> {
+    let mut object_ids_map = HashMap::new();
+
+    let mut rt = Runtime::new().unwrap();
+    let request = AccountInfoRequest { account: address };
+    let result = rt
+        .block_on(
+            timeout(
+                AUTHORITY_REQUEST_TIMEOUT,
+                authority_client.handle_account_info_request(request.clone()),
+            )
+            .map_err(|_| FastPayError::ErrorWhileRequestingInformation),
+        )
+        .unwrap();
+
+    if let Ok(AccountInfoResponse {
+        object_ids: obj_ids,
+        ..
+    }) = &result
+    {
+        // TODO Could be more efficient?
+        for (object_id, seq_no, _) in obj_ids.clone() {
+            object_ids_map.insert(object_id, seq_no);
+        }
+    };
+    object_ids_map
 }

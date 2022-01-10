@@ -14,6 +14,7 @@ futures = "0.3.5"
 rand = "0.7.3"
 serde = { version = "1.0.115", features = ["derive"] }
 tokio = { version = "0.2.22", features = ["full"] }
+crossbeam-utils = "0.8.6"
 
 fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-framework = { path = "../fastx_programmability/framework" }
