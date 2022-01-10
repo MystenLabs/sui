@@ -8,8 +8,8 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-anyhow = "1.0.38"
-smallvec = "1.6.1"
+anyhow = "1.0.52"
+smallvec = "1.7.0"
 
 fastx-types = { path = "../../fastx_types" }
 fastx-verifier = { path = "../verifier" }

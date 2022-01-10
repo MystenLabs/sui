@@ -388,7 +388,7 @@ enum ClientCommands {
 }
 
 fn main() {
-    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let options = ClientOpt::from_args();
 
     let send_timeout = Duration::from_micros(options.send_timeout);
