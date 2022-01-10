@@ -427,7 +427,7 @@ fn main() {
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let cert = client_state
-                    .transfer_to_fastpay(object_id, gas_object_id, recipient, UserData::default())
+                    .transfer_object(object_id, gas_object_id, recipient, UserData::default())
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
@@ -443,10 +443,7 @@ fn main() {
                     send_timeout,
                     recv_timeout,
                 );
-                recipient_client_state
-                    .receive_from_fastpay(cert)
-                    .await
-                    .unwrap();
+                recipient_client_state.receive_object(cert).await.unwrap();
                 accounts_config.update_from_state(&recipient_client_state);
                 accounts_config
                     .write(accounts_config_path)

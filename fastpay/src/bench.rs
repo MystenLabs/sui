@@ -159,7 +159,6 @@ impl ClientServerBenchmark {
                 sender: *pubx,
                 recipient: Address::FastPay(next_recipient),
                 gas_payment: gas_objects[0],
-                user_data: UserData::default(),
             };
             next_recipient = *pubx;
             let order = Order::new_transfer(transfer, secx);

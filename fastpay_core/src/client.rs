@@ -69,30 +69,26 @@ pub struct ClientState<AuthorityClient> {
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
 pub trait Client {
-    /// Send money to a FastPay account.
-    fn transfer_to_fastpay(
+    /// Send object to a FastX account.
+    fn transfer_object(
         &mut self,
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-        user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
-    /// Receive money from FastPay.
-    fn receive_from_fastpay(
-        &mut self,
-        certificate: CertifiedOrder,
-    ) -> AsyncResult<'_, (), anyhow::Error>;
+    /// Receive object from FastX.
+    fn receive_object(&mut self, certificate: CertifiedOrder)
+        -> AsyncResult<'_, (), anyhow::Error>;
 
-    /// Send money to a FastPay account.
+    /// Send object to a FastX account.
     /// Do not check balance. (This may block the client)
     /// Do not confirm the transaction.
-    fn transfer_to_fastpay_unsafe_unconfirmed(
+    fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
         recipient: FastPayAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
-        user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
     /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
@@ -514,14 +510,12 @@ where
         (object_id, sequence_number, _object_digest): ObjectRef,
         gas_payment: ObjectRef,
         recipient: Address,
-        user_data: UserData,
     ) -> Result<CertifiedOrder, anyhow::Error> {
         let transfer = Transfer {
             object_ref: (object_id, sequence_number, _object_digest),
             sender: self.address,
             recipient,
             gas_payment,
-            user_data,
         };
         let order = Order::new_transfer(transfer, &self.secret);
         let certificate = self
@@ -662,12 +656,11 @@ impl<A> Client for ClientState<A>
 where
     A: AuthorityClient + Send + Sync + Clone + 'static,
 {
-    fn transfer_to_fastpay(
+    fn transfer_object(
         &mut self,
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-        user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
         Box::pin(self.transfer(
             (
@@ -683,11 +676,10 @@ where
                 ObjectDigest::new([0; 32]),
             ),
             Address::FastPay(recipient),
-            user_data,
         ))
     }
 
-    fn receive_from_fastpay(
+    fn receive_object(
         &mut self,
         certificate: CertifiedOrder,
     ) -> AsyncResult<'_, (), anyhow::Error> {
@@ -727,12 +719,11 @@ where
         })
     }
 
-    fn transfer_to_fastpay_unsafe_unconfirmed(
+    fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
         recipient: FastPayAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
-        user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
         Box::pin(async move {
             let transfer = Transfer {
@@ -750,7 +741,6 @@ where
                     // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
                     ObjectDigest::new([0; 32]),
                 ),
-                user_data,
             };
             let order = Order::new_transfer(transfer, &self.secret);
             let new_certificate = self
