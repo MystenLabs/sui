@@ -323,10 +323,6 @@ enum ClientCommands {
     /// Transfer funds
     #[structopt(name = "transfer")]
     Transfer {
-        /// Sending address (must be one of our accounts)
-        #[structopt(long)]
-        from: String,
-
         /// Recipient address
         #[structopt(long)]
         to: String,
@@ -465,18 +461,26 @@ fn main() {
         }
 
         ClientCommands::Transfer {
-            from,
             to,
             object_id,
             gas_object_id,
         } => {
-            let sender = decode_address(&from).expect("Failed to decode sender's address");
             let recipient = decode_address(&to).expect("Failed to decode recipient's address");
             let object_id = ObjectID::from_hex_literal(&object_id).unwrap();
             let gas_object_id = ObjectID::from_hex_literal(&gas_object_id).unwrap();
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
+                let mut sender_opt: Option<FastPayAddress> = None;
+                // Find the owner of this obj
+                // TODO: make parellel for perf
+                for acc in accounts_config.accounts_mut() {
+                    if acc.object_ids.contains_key(&gas_object_id) {
+                        sender_opt = Some(acc.address);
+                    }
+                }
+                let sender = sender_opt.expect("Cannot find owner for object");
+
                 let mut client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
