@@ -153,12 +153,12 @@ impl ClientServerBenchmark {
         // Make one transaction per account (transfer order + confirmation).
         let mut orders: Vec<Bytes> = Vec::new();
         let mut next_recipient = get_key_pair().0;
-        for (pubx, object_ref, secx) in account_objects.iter() {
+        for ((pubx, object_ref, secx), gas_payment) in account_objects.iter().zip(gas_objects) {
             let transfer = Transfer {
                 object_ref: *object_ref,
                 sender: *pubx,
                 recipient: Address::FastPay(next_recipient),
-                gas_payment: gas_objects[0],
+                gas_payment,
             };
             next_recipient = *pubx;
             let order = Order::new_transfer(transfer, secx);
