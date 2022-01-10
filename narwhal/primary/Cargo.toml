@@ -15,7 +15,7 @@ ed25519-dalek = "1.0.1"
 thiserror = "1.0.30"
 bincode = "1.3.3"
 bytes = "1.1.0"
-async-recursion = "0.3.2"
+async-recursion = "1.0.0"
 async-trait = "0.1.52"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store" }
 tracing = { version = "0.1.29", features = ["log"] }
