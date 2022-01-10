@@ -10,6 +10,7 @@ mod ed25519_benches {
     use criterion::*;
     use crypto::{
         bls12377::{BLS12377KeyPair, BLS12377Signature},
+        bls12381::{BLS12381KeyPair, BLS12381Signature},
         ed25519::*,
         traits::{KeyPair, VerifyingKey},
         Verifier,
@@ -22,11 +23,15 @@ mod ed25519_benches {
         let mut csprng: ThreadRng = thread_rng();
         let ed_keypair = Ed25519KeyPair::generate(&mut csprng);
         let bls_keypair = BLS12377KeyPair::generate(&mut csprng);
+        let blst_keypair = BLS12381KeyPair::generate(&mut csprng);
         let msg: &[u8] = b"";
 
         c.bench_function("Ed25519 signing", move |b| b.iter(|| ed_keypair.sign(msg)));
         c.bench_function("BLS12377 signing", move |b| {
             b.iter(|| bls_keypair.sign(msg))
+        });
+        c.bench_function("BLS12381 signing", move |b| {
+            b.iter(|| blst_keypair.sign(msg))
         });
     }
 
@@ -34,11 +39,16 @@ mod ed25519_benches {
         let mut csprng: ThreadRng = thread_rng();
         let ed_keypair = Ed25519KeyPair::generate(&mut csprng);
         let bls_keypair = BLS12377KeyPair::generate(&mut csprng);
+        let blst_keypair = BLS12381KeyPair::generate(&mut csprng);
+
         let ed_public = ed_keypair.public();
         let bls_public = bls_keypair.public();
+        let blst_public = blst_keypair.public();
+
         let msg: &[u8] = b"";
         let ed_sig: Ed25519Signature = ed_keypair.sign(msg);
         let bls_sig: BLS12377Signature = bls_keypair.sign(msg);
+        let blst_sig: BLS12381Signature = blst_keypair.sign(msg);
 
         c.bench_function("Ed25519 signature verification", move |b| {
             b.iter(|| ed_public.verify(msg, &ed_sig))
@@ -46,12 +56,13 @@ mod ed25519_benches {
         c.bench_function("BLS12377 signature verification", move |b| {
             b.iter(|| bls_public.verify(msg, &bls_sig))
         });
+        c.bench_function("BLS12381 signature verification", move |b| {
+            b.iter(|| blst_public.verify(msg, &blst_sig))
+        });
     }
 
     fn verify_batch_signatures<M: measurement::Measurement>(c: &mut BenchmarkGroup<M>) {
-        static BATCH_SIZES: [usize; 14] = [
-            16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072,
-        ];
+        static BATCH_SIZES: [usize; 10] = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192];
 
         let mut csprng: ThreadRng = thread_rng();
 
@@ -62,16 +73,26 @@ mod ed25519_benches {
             let bls_keypairs: Vec<_> = (0..*size)
                 .map(|_| BLS12377KeyPair::generate(&mut csprng))
                 .collect();
+            let blst_keypairs: Vec<_> = (0..*size)
+                .map(|_| BLS12381KeyPair::generate(&mut csprng))
+                .collect();
+
             let msg: Vec<u8> = {
                 let mut h = ed25519_dalek::Sha512::new();
                 h.update(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
                 h.finalize().to_vec()
             };
+
             let ed_signatures: Vec<_> = ed_keypairs.iter().map(|key| key.sign(&msg)).collect();
             let ed_public_keys: Vec<_> =
                 ed_keypairs.iter().map(|key| key.public().clone()).collect();
             let bls_signatures: Vec<_> = bls_keypairs.iter().map(|key| key.sign(&msg)).collect();
             let bls_public_keys: Vec<_> = bls_keypairs
+                .iter()
+                .map(|key| key.public().clone())
+                .collect();
+            let blst_signatures: Vec<_> = blst_keypairs.iter().map(|key| key.sign(&msg)).collect();
+            let blst_public_keys: Vec<_> = blst_keypairs
                 .iter()
                 .map(|key| key.public().clone())
                 .collect();
@@ -85,7 +106,14 @@ mod ed25519_benches {
             );
             c.bench_with_input(
                 BenchmarkId::new("BLS12377 batch verification", *size),
-                &(msg, bls_public_keys, bls_signatures),
+                &(msg.clone(), bls_public_keys, bls_signatures),
+                |b, i| {
+                    b.iter(|| VerifyingKey::verify_batch(&i.0, &i.1[..], &i.2[..]));
+                },
+            );
+            c.bench_with_input(
+                BenchmarkId::new("BLS12381 batch verification", *size),
+                &(msg, blst_public_keys, blst_signatures),
                 |b, i| {
                     b.iter(|| VerifyingKey::verify_batch(&i.0, &i.1[..], &i.2[..]));
                 },
@@ -101,6 +129,9 @@ mod ed25519_benches {
         });
         c.bench_function("BLS12377 keypair generation", move |b| {
             b.iter(|| BLS12377KeyPair::generate(&mut csprng))
+        });
+        c.bench_function("BLS12381 keypair generation", move |b| {
+            b.iter(|| BLS12381KeyPair::generate(&mut csprng))
         });
     }
 
