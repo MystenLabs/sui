@@ -84,6 +84,8 @@ pub enum FastPayError {
     InvalidCrossShardUpdate,
     #[error("Invalid authenticator")]
     InvalidAuthenticator,
+    #[error("Invalid transaction digest.")]
+    InvalidTransactionDigest,
     #[error("Cannot deserialize.")]
     InvalidDecoding,
     #[error("Unexpected message.")]

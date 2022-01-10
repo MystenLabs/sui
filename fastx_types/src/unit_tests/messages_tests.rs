@@ -29,7 +29,6 @@ fn test_signed_values() {
             SequenceNumber::new(),
             ObjectDigest::new([0; 32]),
         ),
-        user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer.clone(), &sec1);
     let bad_order = Order::new_transfer(transfer, &sec2);
@@ -71,7 +70,6 @@ fn test_certificates() {
             SequenceNumber::new(),
             ObjectDigest::new([0; 32]),
         ),
-        user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer.clone(), &sec1);
     let bad_order = Order::new_transfer(transfer, &sec2);

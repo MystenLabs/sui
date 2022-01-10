@@ -74,10 +74,12 @@ pub type AuthorityName = PublicKeyBytes;
 pub type ObjectID = AccountAddress;
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
-// A transaction will have a (unique) digest.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct TransactionDigest([u8; 32]); // We use SHA3-256 hence 32 bytes here
+// We use SHA3-256 hence 32 bytes here
+const TRANSACTION_DIGEST_LENGTH: usize = 32;
 
+/// A transaction will have a (unique) digest.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+pub struct TransactionDigest([u8; TRANSACTION_DIGEST_LENGTH]);
 // Each object has a unique digest
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct ObjectDigest([u8; 32]); // We use SHA3-256 hence 32 bytes here
@@ -108,16 +110,8 @@ impl TxContext {
 
     /// Derive a globally unique object ID by hashing self.digest | self.ids_created
     pub fn fresh_id(&mut self) -> ObjectID {
-        // TODO(https://github.com/MystenLabs/fastnft/issues/58):
-        // audit ID derivation: do we want/need domain separation, different hash function, truncation ...
+        let id = self.digest.derive_id(self.ids_created);
 
-        let mut hasher = Sha3_256::default();
-        hasher.update(self.digest.0);
-        hasher.update(self.ids_created.to_le_bytes());
-        let hash = hasher.finalize();
-
-        // truncate into an ObjectID.
-        let id = AccountAddress::try_from(&hash[0..AccountAddress::LENGTH]).unwrap();
         self.ids_created += 1;
         id
     }
@@ -161,6 +155,20 @@ impl TransactionDigest {
     /// TODO(https://github.com/MystenLabs/fastnft/issues/65): we can pick anything here    
     pub fn genesis() -> Self {
         Self::new([0; 32])
+    }
+
+    /// Create an ObjectID from `self` and `creation_num`.
+    /// Caller is responsible for ensuring that `creation_num` is fresh
+    pub fn derive_id(&self, creation_num: u64) -> ObjectID {
+        // TODO(https://github.com/MystenLabs/fastnft/issues/58):audit ID derivation
+
+        let mut hasher = Sha3_256::default();
+        hasher.update(self.0);
+        hasher.update(creation_num.to_le_bytes());
+        let hash = hasher.finalize();
+
+        // truncate into an ObjectID.
+        AccountAddress::try_from(&hash[0..AccountAddress::LENGTH]).unwrap()
     }
 
     // for testing
@@ -398,4 +406,15 @@ pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     signable.write(&mut digest);
     let hash = digest.finalize();
     hash.into()
+}
+
+impl TryFrom<&[u8]> for TransactionDigest {
+    type Error = FastPayError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, FastPayError> {
+        let arr: [u8; TRANSACTION_DIGEST_LENGTH] = bytes
+            .try_into()
+            .map_err(|_| FastPayError::InvalidTransactionDigest)?;
+        Ok(Self(arr))
+    }
 }
