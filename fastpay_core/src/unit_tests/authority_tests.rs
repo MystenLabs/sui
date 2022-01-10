@@ -964,7 +964,6 @@ fn init_transfer_order(
             SequenceNumber::new(),
             ObjectDigest::new([0; 32]),
         ),
-        user_data: UserData::default(),
     };
     Order::new_transfer(transfer, secret)
 }
