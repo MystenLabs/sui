@@ -104,6 +104,11 @@ pub trait Client {
 
     fn sync_client_state_with_all_authorities(&mut self) -> AsyncResult<'_, (), anyhow::Error>;
 
+    fn get_object_owner_authorities(
+        &mut self,
+        object_id: ObjectID,
+    ) -> AsyncResult<'_, FastPayAddress, anyhow::Error>;
+
     /// Get all object we own.
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error>;
 }
@@ -284,8 +289,7 @@ where
     }
 
     /// Return owner address and sequence number of an object backed by a quorum of authorities.
-    /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
-    #[cfg(test)]
+    /// TODO: make fetching async
     async fn get_strong_majority_owner(
         &self,
         object_id: ObjectID,
@@ -853,6 +857,13 @@ where
     /// TODO
     fn sync_client_state_with_all_authorities(&mut self) -> AsyncResult<'_, (), anyhow::Error> {
         Box::pin(async move { unimplemented!("Syncing with all authorities TBD") })
+    }
+
+    fn get_object_owner_authorities(
+        &mut self,
+        object_id: ObjectID,
+    ) -> AsyncResult<'_, FastPayAddress, anyhow::Error> {
+        Box::pin(async move { Ok(self.get_strong_majority_owner(object_id).await.unwrap().0) })
     }
 
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error> {
