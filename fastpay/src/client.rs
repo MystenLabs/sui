@@ -426,7 +426,7 @@ fn main() {
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let cert = client_state
-                    .transfer_object(object_id, gas_object_id, recipient, UserData::default())
+                    .transfer_object(object_id, gas_object_id, recipient)
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
