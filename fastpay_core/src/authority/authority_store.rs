@@ -9,7 +9,7 @@ use typed_store::traits::Map;
 pub struct AuthorityStore {
     objects: DBMap<ObjectID, Object>,
     order_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
-    _owner_index: DBMap<(FastPayAddress, ObjectID), ObjectRef>,
+    owner_index: DBMap<(FastPayAddress, ObjectID), ObjectRef>,
     signed_orders: DBMap<TransactionDigest, SignedOrder>,
     certificates: DBMap<TransactionDigest, CertifiedOrder>,
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
@@ -36,7 +36,7 @@ impl AuthorityStore {
         .expect("Cannot open DB.");
         AuthorityStore {
             objects: DBMap::reopen(&db, Some("objects")).expect("Cannot open CF."),
-            _owner_index: DBMap::reopen(&db, Some("owner_index")).expect("Cannot open CF."),
+            owner_index: DBMap::reopen(&db, Some("owner_index")).expect("Cannot open CF."),
             order_lock: DBMap::reopen(&db, Some("order_lock")).expect("Cannot open CF."),
             signed_orders: DBMap::reopen(&db, Some("signed_orders")).expect("Cannot open CF."),
             certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
@@ -54,7 +54,7 @@ impl AuthorityStore {
         account: FastPayAddress,
     ) -> Result<Vec<ObjectRef>, FastPayError> {
         Ok(self
-            ._owner_index
+            .owner_index
             .iter()
             .skip_to(&(account, AccountAddress::from([0; 16])))
             .map_err(|_| FastPayError::StorageError)?
@@ -143,7 +143,7 @@ impl AuthorityStore {
             .map_err(|_| FastPayError::StorageError)?;
 
         // Update the index
-        self._owner_index
+        self.owner_index
             .insert(&(object.owner, object.id()), &object.to_object_reference())
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -276,7 +276,7 @@ impl AuthorityStore {
         // Delete the old owner index entries
         write_batch = write_batch
             .delete_batch(
-                &self._owner_index,
+                &self.owner_index,
                 _expired_object_owners
                     .into_iter()
                     .map(|(owner, id)| (owner, id)),
@@ -307,7 +307,7 @@ impl AuthorityStore {
         // Update the indexes of the objects written
         write_batch = write_batch
             .insert_batch(
-                &self._owner_index,
+                &self.owner_index,
                 written
                     .iter()
                     .map(|output_ref| ((objects[&output_ref.0].owner, output_ref.0), *output_ref)),
