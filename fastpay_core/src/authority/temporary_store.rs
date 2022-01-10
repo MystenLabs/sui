@@ -209,7 +209,7 @@ impl ResourceResolver for AuthorityTemporaryStore {
             Data::Move(m) => {
                 assert!(struct_tag == &m.type_, "Invariant violation: ill-typed object in storage or bad object request from caller\
 ");
-                Ok(Some(m.contents.clone()))
+                Ok(Some(m.contents().to_vec()))
             }
             other => unimplemented!(
                 "Bad object lookup: expected Move object, but got {:?}",

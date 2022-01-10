@@ -7,7 +7,6 @@ use fastx_verifier::verifier as fastx_bytecode_verifier;
 use move_binary_format::CompiledModule;
 use move_core_types::{ident_str, language_storage::ModuleId};
 use move_package::{compilation::compiled_package::CompiledPackage, BuildConfig};
-
 use std::path::PathBuf;
 
 pub mod natives;

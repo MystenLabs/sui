@@ -279,6 +279,7 @@ impl std::fmt::Debug for PublicKeyBytes {
     }
 }
 
+// TODO: rename to version
 impl SequenceNumber {
     pub fn new() -> Self {
         SequenceNumber(0)
@@ -286,6 +287,10 @@ impl SequenceNumber {
 
     pub fn max() -> Self {
         SequenceNumber(0x7fff_ffff_ffff_ffff)
+    }
+
+    pub fn value(&self) -> u64 {
+        self.0
     }
 
     pub fn increment(self) -> Result<SequenceNumber, FastPayError> {
