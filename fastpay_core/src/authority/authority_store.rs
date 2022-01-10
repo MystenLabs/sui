@@ -56,6 +56,7 @@ impl AuthorityStore {
         Ok(self
             .owner_index
             .iter()
+            // The object id [0; 16] is the smallest possible
             .skip_to(&(account, AccountAddress::from([0; 16])))
             .map_err(|_| FastPayError::StorageError)?
             .take_while(|((owner, _id), _object_ref)| (owner == &account))

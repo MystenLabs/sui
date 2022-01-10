@@ -4,8 +4,8 @@ pub struct AuthorityTemporaryStore {
     object_store: Arc<AuthorityStore>,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
-    written: Vec<ObjectRef>,   // Objects written
-    deleted: Vec<ObjectRef>,   // Objects actively deleted
+    written: Vec<ObjectRef>,       // Objects written
+    deleted: Vec<ObjectRef>,       // Objects actively deleted
 }
 
 impl AuthorityTemporaryStore {
