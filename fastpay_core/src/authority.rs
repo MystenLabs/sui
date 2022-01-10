@@ -80,7 +80,13 @@ impl AuthorityState {
             None
         };
 
-        for object_ref in input_objects {
+        let ids: Vec<_> = input_objects.iter().map(|(id, _, _)| *id).collect();
+        // Get a copy of the object.
+        // TODO: We only need to read the read_only and owner field of the object,
+        //      it's a bit wasteful to copy the entire object.
+        let _objects = self.get_objects(&ids[..]).await?;
+        for (object_ref, object) in input_objects.into_iter().zip(_objects) {
+            //for object_ref in input_objects.into_iter() {
             let (object_id, sequence_number, _object_digest) = object_ref;
 
             fp_ensure!(
@@ -88,13 +94,12 @@ impl AuthorityState {
                 FastPayError::InvalidSequenceNumber
             );
 
-            // Get a copy of the object.
-            // TODO: We only need to read the read_only and owner field of the object,
-            //      it's a bit wasteful to copy the entire object.
-            let object = self
-                .object_state(&object_id)
-                .await
-                .map_err(|_| FastPayError::ObjectNotFound)?;
+            // let object = self
+            //     .object_state(&object_id)
+            //     .await
+            //    .map_err(|_| FastPayError::ObjectNotFound)?;
+
+            let object = object.ok_or(FastPayError::ObjectNotFound)?;
 
             // TODO(https://github.com/MystenLabs/fastnft/issues/123): This hack substitutes the real
             // object digest instead of using the one passed in by the client. We need to fix clients and
@@ -171,15 +176,21 @@ impl AuthorityState {
         // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
+        let input_objects = order.input_objects();
+        let ids: Vec<_> = input_objects.iter().map(|(id, _, _)| *id).collect();
+        // Get a copy of the object.
+        // TODO: We only need to read the read_only and owner field of the object,
+        //      it's a bit wasteful to copy the entire object.
+        let _objects = self.get_objects(&ids[..]).await?;
+
         let mut inputs = vec![];
         let mut owner_index = HashMap::new();
-        for (input_object_id, input_seq, _input_digest) in order.input_objects() {
+        for (object_ref, object) in input_objects.into_iter().zip(_objects) {
+            let (input_object_id, input_seq, _input_digest) = object_ref;
+
             // If we have a certificate on the confirmation order it means that the input
             // object exists on other honest authorities, but we do not have it.
-            let input_object = self
-                .object_state(&input_object_id)
-                .await
-                .map_err(|_| FastPayError::ObjectNotFound)?;
+            let input_object = object.ok_or(FastPayError::ObjectNotFound)?;
 
             let input_sequence_number = input_object.version();
 
@@ -290,9 +301,9 @@ impl AuthorityState {
             certificate,
             to_signed_effects,
         )
-        .await?;
+        .await
 
-        self.make_order_info(&transaction_digest).await
+        // self.make_order_info(&transaction_digest).await
     }
 
     pub async fn handle_account_info_request(
@@ -427,7 +438,7 @@ impl AuthorityState {
         expired_object_owners: Vec<(FastPayAddress, ObjectID)>,
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
-    ) -> Result<(), FastPayError> {
+    ) -> Result<OrderInfoResponse, FastPayError> {
         self._database.update_state(
             temporary_store,
             expired_object_owners,
@@ -458,5 +469,12 @@ impl AuthorityState {
         self._database
             .parent(object_ref)
             .expect("TODO: propagate the error")
+    }
+
+    pub async fn get_objects(
+        &self,
+        _objects: &[ObjectID],
+    ) -> Result<Vec<Option<Object>>, FastPayError> {
+        self._database.get_objects(_objects)
     }
 }

@@ -92,6 +92,13 @@ impl AuthorityStore {
             .ok_or(FastPayError::ObjectNotFound)
     }
 
+    /// Get many objects
+    pub fn get_objects(&self, _objects: &[ObjectID]) -> Result<Vec<Option<Object>>, FastPayError> {
+        self.objects
+            .multi_get(_objects)
+            .map_err(|_| FastPayError::StorageError)
+    }
+
     /// Read a lock or returns Err(OrderLockDoesNotExist) if the lock does not exist.
     pub fn get_order_lock(
         &self,
@@ -197,13 +204,14 @@ impl AuthorityStore {
                 .lock()
                 .map_err(|_| FastPayError::StorageError)?;
 
-            for obj_ref in mutable_input_objects {
+            let locks = self
+                .order_lock
+                .multi_get(mutable_input_objects)
+                .map_err(|_| FastPayError::StorageError)?;
+
+            for (obj_ref, lock) in mutable_input_objects.iter().zip(locks) {
                 // The object / version must exist, and therefore lock initialized.
-                let lock = self
-                    .order_lock
-                    .get(obj_ref)
-                    .map_err(|_| FastPayError::StorageError)?
-                    .ok_or(FastPayError::OrderLockDoesNotExist)?;
+                let lock = lock.ok_or(FastPayError::OrderLockDoesNotExist)?;
 
                 if let Some(previous_tx_digest) = lock {
                     if previous_tx_digest != tx_digest {
@@ -237,7 +245,7 @@ impl AuthorityStore {
         _expired_object_owners: Vec<(FastPayAddress, ObjectID)>,
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
-    ) -> Result<(), FastPayError> {
+    ) -> Result<OrderInfoResponse, FastPayError> {
         // TODO: There is a lot of cloning used -- eliminate it.
 
         // Extract the new state from the execution
@@ -254,7 +262,7 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.certificates,
-                std::iter::once((transaction_digest, certificate)),
+                std::iter::once((transaction_digest, certificate.clone())),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -262,7 +270,7 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.signed_effects,
-                std::iter::once((transaction_digest, signed_effects)),
+                std::iter::once((transaction_digest, signed_effects.clone())),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -343,19 +351,29 @@ impl AuthorityStore {
 
             // Check the locks are still active
             // TODO: maybe we could just check if the certificate is there instead?
-            for input_ref in active_inputs {
-                fp_ensure!(
-                    self.order_lock
-                        .contains_key(&input_ref)
-                        .map_err(|_| FastPayError::StorageError)?,
-                    FastPayError::OrderLockDoesNotExist
-                );
+            let locks = self
+                .order_lock
+                .multi_get(&active_inputs[..])
+                .map_err(|_| FastPayError::StorageError)?;
+            for object_lock in locks {
+                object_lock.ok_or(FastPayError::OrderLockDoesNotExist)?;
             }
 
             // Atomic write of all locks & other data
-            write_batch.write().map_err(|_| FastPayError::StorageError)
+            write_batch
+                .write()
+                .map_err(|_| FastPayError::StorageError)?;
 
-            // Implicit: drop(_lock);
+            // implict: drop(_lock);
         } // End of critical region
+
+        Ok(OrderInfoResponse {
+            signed_order: self
+                .signed_orders
+                .get(&transaction_digest)
+                .map_err(|_| FastPayError::StorageError)?,
+            certified_order: Some(certificate),
+            signed_effects: Some(signed_effects),
+        })
     }
 }
