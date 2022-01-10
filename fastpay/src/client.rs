@@ -341,10 +341,6 @@ enum ClientCommands {
     /// Publish module
     #[structopt(name = "publish")]
     Publish {
-        /// Address (must be one of our accounts)
-        #[structopt(long)]
-        account: String,
-
         /// Module path
         #[structopt(long)]
         path: String,
@@ -419,16 +415,24 @@ fn main() {
 
     match options.cmd {
         ClientCommands::Publish {
-            account,
             path,
             gas_object_id,
         } => {
-            let sender = decode_address(&account).expect("Failed to decode sender's address");
             let gas_object_id = ObjectID::from_hex_literal(&gas_object_id).unwrap();
             let module_bytes = fs::read(path).expect("Failed to read module file path");
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
+                let mut sender_opt: Option<FastPayAddress> = None;
+                // Find the owner of this gas obj
+                // TODO: make parellel for perf
+                for acc in accounts_config.accounts_mut() {
+                    if acc.object_ids.contains_key(&gas_object_id) {
+                        sender_opt = Some(acc.address);
+                    }
+                }
+                let sender = sender_opt.expect("Cannot find owner for gas object");
+
                 let mut client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
@@ -437,6 +441,7 @@ fn main() {
                     send_timeout,
                     recv_timeout,
                 );
+
                 info!("Starting publish");
                 let time_start = Instant::now();
 
