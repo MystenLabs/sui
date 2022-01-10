@@ -28,6 +28,11 @@ pub mod bls12377_tests;
 
 #[cfg(feature = "celo")]
 pub mod bls12377;
+#[cfg(test)]
+#[path = "tests/bls12381_tests.rs"]
+pub mod bls12381_tests;
+
+pub mod bls12381;
 
 pub mod ed25519;
 pub mod traits;
