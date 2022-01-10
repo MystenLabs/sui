@@ -6,7 +6,7 @@ use anyhow::Result;
 use crate::bytecode_rewriter::ModuleHandleRewriter;
 use fastx_types::{
     base_types::{
-        FastPayAddress, ObjectID, ObjectRef, SequenceNumber, TxContext, TX_CONTEXT_ADDRESS,
+        FastPayAddress, ObjectID, SequenceNumber, TxContext, TX_CONTEXT_ADDRESS,
         TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     error::{FastPayError, FastPayResult},
@@ -87,7 +87,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             change_set,
             events,
             return_values,
-            mutable_ref_values,
+            mut mutable_ref_values,
             gas_used,
         } => {
             // we already checked that the function had no return types in resolve_and_type_check--it should
@@ -95,8 +95,10 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             debug_assert!(return_values.is_empty());
             // FastX Move programs should never touch global state, so ChangeSet should be empty
             debug_assert!(change_set.accounts().is_empty());
-            // Input ref parameters we put in should be the same number we get out
-            debug_assert!(mutable_ref_objects.len() == mutable_ref_values.len());
+            // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
+            debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
+            // discard the &mut TxContext arg
+            mutable_ref_values.pop().unwrap();
             let mutable_refs = mutable_ref_objects
                 .into_iter()
                 .zip(mutable_ref_values.into_iter());
@@ -132,7 +134,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     sender: FastPayAddress,
     ctx: &mut TxContext,
     mut gas_object: Object,
-) -> Result<Vec<ObjectRef>, FastPayError> {
+) -> Result<(), FastPayError> {
     if module_bytes.is_empty() {
         return Err(FastPayError::ModulePublishFailure {
             error: "Publishing empty list of modules".to_string(),
@@ -153,7 +155,6 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         .collect::<FastPayResult<Vec<CompiledModule>>>()?;
     generate_module_ids(&mut modules, ctx)?;
     // verify and link modules, wrap them in objects, write them to the store
-    let mut written_refs = Vec::with_capacity(modules.len());
     for module in modules {
         // It is important to do this before running the FastX verifier, since the fastX
         // verifier may assume well-formedness conditions enforced by the Move verifier hold
@@ -172,11 +173,10 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
         // Create module objects and write them to the store
         let module_object = Object::new_module(module, sender, SequenceNumber::new(), ctx.digest());
-        written_refs.push(module_object.to_object_reference());
         state_view.write_object(module_object);
     }
 
-    Ok(written_refs)
+    Ok(())
 }
 
 /// Use `ctx` to generate fresh ID's for each module in `modules`.
@@ -398,9 +398,13 @@ fn resolve_and_type_check(
             ),
         });
     }
-    // check that the last arg is a TxContext object
-    match &function_signature.parameters[function_signature.parameters.len() - 1] {
-        Type::Struct {
+    // check that the last arg is `&mut TxContext`
+    if let Type::MutableReference(s) =
+        &function_signature.parameters[function_signature.parameters.len() - 1]
+    {
+        // TODO: does Rust let you pattern match on a nested box? can simplify big time if so...
+        match s.borrow() {
+            Type::Struct {
             address,
             module,
             name,
@@ -412,12 +416,20 @@ fn resolve_and_type_check(
         t => {
             return Err(FastPayError::InvalidFunctionSignature {
                 error: format!(
-                    "Expected last parameter of function signature to be {}::{}::{}, but found {}",
+                    "Expected last parameter of function signature to be &mut {}::{}::{}, but found {}",
                     TX_CONTEXT_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, t
                 ),
             })
         }
-    };
+    }
+    } else {
+        return Err(FastPayError::InvalidFunctionSignature {
+            error: format!(
+                "Expected last parameter of function signature to be &mut {}::{}::{}, but found non-reference_type",
+                TX_CONTEXT_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME
+            ),
+        });
+    }
 
     // type check object arguments passed in by value and by reference
     let mut args = Vec::new();
@@ -490,7 +502,6 @@ fn resolve_and_type_check(
         }
     }
     args.append(&mut pure_args);
-
     args.push(ctx.to_bcs_bytes_hack());
 
     Ok(TypeCheckSuccess {

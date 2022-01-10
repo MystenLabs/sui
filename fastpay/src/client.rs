@@ -118,7 +118,6 @@ fn make_benchmark_transfer_orders(
                 // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
                 ObjectDigest::new([0; 32]),
             ),
-            user_data: UserData::default(),
         };
         debug!("Preparing transfer order: {:?}", transfer);
         account.object_ids.insert(
@@ -484,7 +483,7 @@ fn main() {
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let cert = client_state
-                    .transfer_to_fastpay(object_id, gas_object_id, recipient, UserData::default())
+                    .transfer_object(object_id, gas_object_id, recipient)
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
@@ -500,10 +499,7 @@ fn main() {
                     send_timeout,
                     recv_timeout,
                 );
-                recipient_client_state
-                    .receive_from_fastpay(cert)
-                    .await
-                    .unwrap();
+                recipient_client_state.receive_object(cert).await.unwrap();
                 accounts_config.update_from_state(&recipient_client_state);
                 accounts_config
                     .write(accounts_config_path)

@@ -10,23 +10,23 @@ module FastX::ObjectBasics {
         value: u64,
     }
 
-    public fun create(value: u64, recipient: vector<u8>, ctx: TxContext) {
+    public fun create(value: u64, recipient: vector<u8>, ctx: &mut TxContext) {
         Transfer::transfer(
-            Object { id: TxContext::new_id(&mut ctx), value },
+            Object { id: TxContext::new_id(ctx), value },
             Address::new(recipient)
         )
     }
 
-    public fun transfer(o: Object, recipient: vector<u8>, _ctx: TxContext) {
+    public fun transfer(o: Object, recipient: vector<u8>, _ctx: &mut TxContext) {
         Transfer::transfer(o, Address::new(recipient))
     }
 
     // test that reading o2 and updating o1 works
-    public fun update(o1: &mut Object, o2: &Object, _ctx: TxContext) {
+    public fun update(o1: &mut Object, o2: &Object, _ctx: &mut TxContext) {
         o1.value = o2.value
     }
 
-    public fun delete(o: Object, _ctx: TxContext) {
+    public fun delete(o: Object, _ctx: &mut TxContext) {
         let Object { id: _, value: _ } = o;
     }
 

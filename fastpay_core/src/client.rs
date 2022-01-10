@@ -23,13 +23,13 @@ pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 pub trait AuthorityClient {
     /// Initiate a new order to a FastPay or Primary account.
-    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, ObjectInfoResponse, FastPayError>;
+    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, OrderInfoResponse, FastPayError>;
 
     /// Confirm an order to a FastPay or Primary account.
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError>;
+    ) -> AsyncResult<'_, OrderInfoResponse, FastPayError>;
 
     /// Handle Account information requests for this account.
     fn handle_account_info_request(
@@ -69,30 +69,25 @@ pub struct ClientState<AuthorityClient> {
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
 pub trait Client {
-    /// Send money to a FastPay account.
-    fn transfer_to_fastpay(
+    /// Send object to a FastX account.
+    fn transfer_object(
         &mut self,
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-        user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
-    /// Receive money from FastPay.
-    fn receive_from_fastpay(
-        &mut self,
-        certificate: CertifiedOrder,
-    ) -> AsyncResult<'_, (), anyhow::Error>;
+    /// Receive object from FastX.
+    fn receive_object(&mut self, certificate: CertifiedOrder)
+        -> AsyncResult<'_, (), anyhow::Error>;
 
-    /// Send money to a FastPay account.
-    /// Do not check balance. (This may block the client)
+    /// Send object to a FastX account.
     /// Do not confirm the transaction.
-    fn transfer_to_fastpay_unsafe_unconfirmed(
+    fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
         recipient: FastPayAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
-        user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
     /// Publish a module. Not yet implemented
@@ -435,21 +430,22 @@ where
                     }
                     // Send the transfer order (if any) and return a vote.
                     if let CommunicateAction::SendOrder(order) = action {
-                        let result = client.handle_order(order).await;
-                        return match result {
-                            Ok(ObjectInfoResponse {
-                                pending_confirmation: Some(signed_order),
+                        let result: Result<OrderInfoResponse, FastPayError> =
+                            client.handle_order(order).await;
+                        match result {
+                            Ok(OrderInfoResponse {
+                                signed_order: Some(inner_signed_order),
                                 ..
                             }) => {
                                 fp_ensure!(
-                                    signed_order.authority == name,
+                                    inner_signed_order.authority == name,
                                     FastPayError::ErrorWhileProcessingTransferOrder
                                 );
-                                signed_order.check(committee)?;
-                                Ok(Some(signed_order))
+                                inner_signed_order.check(committee)?;
+                                return Ok(Some(inner_signed_order));
                             }
-                            Err(err) => Err(err),
-                            _ => Err(FastPayError::ErrorWhileProcessingTransferOrder),
+                            Err(err) => return Err(err),
+                            _ => return Err(FastPayError::ErrorWhileProcessingTransferOrder),
                         };
                     }
                     Ok(None)
@@ -545,14 +541,12 @@ where
         (object_id, sequence_number, _object_digest): ObjectRef,
         gas_payment: ObjectRef,
         recipient: Address,
-        user_data: UserData,
     ) -> Result<CertifiedOrder, anyhow::Error> {
         let transfer = Transfer {
             object_ref: (object_id, sequence_number, _object_digest),
             sender: self.address,
             recipient,
             gas_payment,
-            user_data,
         };
         let order = Order::new_transfer(transfer, &self.secret);
         let certificate = self
@@ -723,12 +717,11 @@ impl<A> Client for ClientState<A>
 where
     A: AuthorityClient + Send + Sync + Clone + 'static,
 {
-    fn transfer_to_fastpay(
+    fn transfer_object(
         &mut self,
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-        user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
         Box::pin(self.transfer(
             (
@@ -744,11 +737,10 @@ where
                 ObjectDigest::new([0; 32]),
             ),
             Address::FastPay(recipient),
-            user_data,
         ))
     }
 
-    fn receive_from_fastpay(
+    fn receive_object(
         &mut self,
         certificate: CertifiedOrder,
     ) -> AsyncResult<'_, (), anyhow::Error> {
@@ -788,12 +780,11 @@ where
         })
     }
 
-    fn transfer_to_fastpay_unsafe_unconfirmed(
+    fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
         recipient: FastPayAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
-        user_data: UserData,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
         Box::pin(async move {
             let transfer = Transfer {
@@ -811,7 +802,6 @@ where
                     // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
                     ObjectDigest::new([0; 32]),
                 ),
-                user_data,
             };
             let order = Order::new_transfer(transfer, &self.secret);
             let new_certificate = self

@@ -69,7 +69,6 @@ fn test_order() {
             SequenceNumber::new(),
             ObjectDigest::new([0; 32]),
         ),
-        user_data: UserData::default(),
     };
     let transfer_order = Order::new_transfer(transfer, &sender_key);
 
@@ -96,7 +95,6 @@ fn test_order() {
             SequenceNumber::new(),
             ObjectDigest::new([0; 32]),
         ),
-        user_data: UserData::default(),
     };
     let transfer_order2 = Order::new_transfer(transfer2, &sender_key);
 
@@ -126,7 +124,6 @@ fn test_vote() {
             SequenceNumber::new(),
             ObjectDigest::new([0; 32]),
         ),
-        user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
 
@@ -159,7 +156,6 @@ fn test_cert() {
             SequenceNumber::new(),
             ObjectDigest::new([0; 32]),
         ),
-        user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
     let mut cert = CertifiedOrder {
@@ -200,7 +196,6 @@ fn test_info_response() {
             SequenceNumber::new(),
             ObjectDigest::new([0; 32]),
         ),
-        user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
 
@@ -280,7 +275,6 @@ fn test_time_order() {
             SequenceNumber::new(),
             ObjectDigest::new([0; 32]),
         ),
-        user_data: UserData::default(),
     };
 
     let mut buf = Vec::new();
@@ -321,7 +315,6 @@ fn test_time_vote() {
             SequenceNumber::new(),
             ObjectDigest::new([0; 32]),
         ),
-        user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
 
@@ -368,7 +361,6 @@ fn test_time_cert() {
             SequenceNumber::new(),
             ObjectDigest::new([0; 32]),
         ),
-        user_data: UserData::default(),
     };
     let order = Order::new_transfer(transfer, &sender_key);
     let mut cert = CertifiedOrder {

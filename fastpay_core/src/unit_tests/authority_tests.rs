@@ -162,10 +162,7 @@ async fn test_handle_transfer_order_ok() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(
-        account_info.pending_confirmation.unwrap(),
-        pending_confirmation
-    );
+    assert_eq!(account_info.signed_order.unwrap(), pending_confirmation);
 
     // Check the final state of the locks
     assert!(authority_state
@@ -214,10 +211,10 @@ async fn test_handle_transfer_zero_balance() {
 async fn send_and_confirm_order(
     authority: &mut AuthorityState,
     order: Order,
-) -> Result<ObjectInfoResponse, FastPayError> {
+) -> Result<OrderInfoResponse, FastPayError> {
     // Make the initial request
     let response = authority.handle_order(order.clone()).await.unwrap();
-    let vote = response.pending_confirmation.unwrap();
+    let vote = response.signed_order.unwrap();
 
     // Collect signatures from a quorum of authorities
     let mut builder = SignatureAggregator::try_new(order, &authority.committee).unwrap();
@@ -290,9 +287,13 @@ async fn test_publish_dependent_module_ok() {
         &sender_key,
     );
     let dependent_module_id = TxContext::new(order.digest()).fresh_id();
-    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
+
+    // Object does not exist
+    assert!(authority.object_state(&dependent_module_id).await.is_err());
+    let _response = send_and_confirm_order(&mut authority, order).await.unwrap();
+
     // check that the dependent module got published
-    assert!(response.object_id == dependent_module_id);
+    assert!(authority.object_state(&dependent_module_id).await.is_ok());
 }
 
 // Test that publishing a module with no dependencies works
@@ -313,10 +314,11 @@ async fn test_publish_module_no_dependencies_ok() {
     let module_bytes = vec![module_bytes];
     let gas_cost = calculate_module_publish_cost(&module_bytes);
     let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, &sender_key);
-    let module_object_id = TxContext::new(order.digest()).fresh_id();
-    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
+    let _module_object_id = TxContext::new(order.digest()).fresh_id();
+    let _response = send_and_confirm_order(&mut authority, order).await.unwrap();
+
     // check that the module actually got published
-    assert!(response.object_id == module_object_id);
+    assert!(_response.certified_order.is_some());
 
     // Check that gas is properly deducted.
     let gas_payment_object = authority
@@ -402,14 +404,20 @@ async fn test_handle_move_order() {
         MAX_GAS,
         &sender_key,
     );
-    // 143 is for bytecode execution, 24 is for object creation.
+    // 27 is for bytecode execution, 24 is for object creation.
     // If the number changes, we want to verify that the change is intended.
-    let gas_cost = 143 + 24;
+    let gas_cost = 27 + 24;
     let res = send_and_confirm_order(&mut authority_state, order)
         .await
         .unwrap();
-    let created_object_id = res.object_id;
-    // check that order actually created an object with the expected ID, owner, sequence number
+
+    // Check that effects are reported
+    assert!(res.signed_effects.is_some());
+    let mutated = res.signed_effects.unwrap().effects.mutated;
+    assert!(mutated.len() == 2);
+
+    let created_object_id = mutated[0].0; // res.object_id;
+                                          // check that order actually created an object with the expected ID, owner, sequence number
     let created_obj = authority_state
         .object_state(&created_object_id)
         .await
@@ -495,6 +503,7 @@ async fn test_handle_transfer_order_double_spend() {
         .handle_order(transfer_order.clone())
         .await
         .unwrap();
+    // calls to handlers are idempotent -- returns the same.
     let double_spend_signed_order = authority_state.handle_order(transfer_order).await.unwrap();
     assert_eq!(signed_order, double_spend_signed_order);
 }
@@ -747,13 +756,17 @@ async fn test_handle_confirmation_order_ok() {
     // Key check: the ownership has changed
 
     let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(recipient, info.owner);
-    assert_eq!(next_sequence_number, info.next_sequence_number);
-    assert_eq!(None, info.pending_confirmation);
+    assert_eq!(recipient, new_account.owner);
+    assert_eq!(next_sequence_number, new_account.next_sequence_number);
+    assert_eq!(None, info.signed_order);
     assert_eq!(
         {
             let refx = authority_state
-                .parent(&(object_id, info.next_sequence_number, new_account.digest()))
+                .parent(&(
+                    object_id,
+                    new_account.next_sequence_number,
+                    new_account.digest(),
+                ))
                 .await
                 .unwrap();
             authority_state.read_certificate(&refx).await.unwrap()
@@ -771,6 +784,38 @@ async fn test_handle_confirmation_order_ok() {
         .await
         .expect("Exists")
         .is_none());
+}
+
+#[tokio::test]
+async fn test_handle_confirmation_order_idempotent() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let certified_transfer_order = init_certified_transfer_order(
+        sender,
+        &sender_key,
+        Address::FastPay(recipient),
+        object_id,
+        gas_object_id,
+        &authority_state,
+    );
+
+    let info = authority_state
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .await
+        .unwrap();
+
+    let info2 = authority_state
+        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .await
+        .unwrap();
+
+    assert_eq!(info, info2);
+    assert!(info2.certified_order.is_some());
+    assert!(info2.signed_effects.is_some());
 }
 
 #[tokio::test]
@@ -919,7 +964,6 @@ fn init_transfer_order(
             SequenceNumber::new(),
             ObjectDigest::new([0; 32]),
         ),
-        user_data: UserData::default(),
     };
     Order::new_transfer(transfer, secret)
 }

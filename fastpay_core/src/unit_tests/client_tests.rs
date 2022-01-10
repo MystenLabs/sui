@@ -28,7 +28,7 @@ fn max_files_client_tests() -> i32 {
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
 impl AuthorityClient for LocalAuthorityClient {
-    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
+    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move { state.lock().await.handle_order(order).await })
     }
@@ -36,7 +36,7 @@ impl AuthorityClient for LocalAuthorityClient {
     fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
+    ) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
         Box::pin(async move { state.lock().await.handle_confirmation_order(order).await })
     }
@@ -266,12 +266,7 @@ fn test_initiating_valid_transfer() {
         Some((sender.address, SequenceNumber::from(0)))
     );
     let certificate = rt
-        .block_on(sender.transfer_to_fastpay(
-            object_id_1,
-            gas_object,
-            recipient,
-            UserData(Some(*b"hello...........hello...........")),
-        ))
+        .block_on(sender.transfer_object(object_id_1, gas_object, recipient))
         .unwrap();
     assert_eq!(
         sender.next_sequence_number(object_id_1),
@@ -313,12 +308,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
         authority_objects,
     ));
     let certificate = rt
-        .block_on(sender.transfer_to_fastpay(
-            object_id,
-            gas_object,
-            recipient,
-            UserData(Some(*b"hello...........hello...........")),
-        ))
+        .block_on(sender.transfer_object(object_id, gas_object, recipient))
         .unwrap();
     assert_eq!(
         sender.next_sequence_number(object_id),
@@ -351,12 +341,7 @@ fn test_initiating_transfer_low_funds() {
     ];
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
     assert!(rt
-        .block_on(sender.transfer_to_fastpay(
-            object_id_2,
-            gas_object,
-            recipient,
-            UserData::default()
-        ))
+        .block_on(sender.transfer_object(object_id_2, gas_object, recipient))
         .is_err());
     // Trying to overspend does not block an account.
     assert_eq!(
@@ -419,12 +404,7 @@ fn test_bidirectional_transfer() {
     );
     // Transfer object to client2.
     let certificate = rt
-        .block_on(client1.transfer_to_fastpay(
-            object_id,
-            gas_object1,
-            client2.address,
-            UserData::default(),
-        ))
+        .block_on(client1.transfer_object(object_id, gas_object1, client2.address))
         .unwrap();
 
     assert_eq!(
@@ -460,8 +440,7 @@ fn test_bidirectional_transfer() {
     );
 
     // Update client2's local object data.
-    rt.block_on(client2.receive_from_fastpay(certificate))
-        .unwrap();
+    rt.block_on(client2.receive_object(certificate)).unwrap();
 
     // Confirm sequence number are consistent between clients.
     assert_eq!(
@@ -470,13 +449,8 @@ fn test_bidirectional_transfer() {
     );
 
     // Transfer the object back to Client1
-    rt.block_on(client2.transfer_to_fastpay(
-        object_id,
-        gas_object2,
-        client1.address,
-        UserData::default(),
-    ))
-    .unwrap();
+    rt.block_on(client2.transfer_object(object_id, gas_object2, client1.address))
+        .unwrap();
 
     assert_eq!(
         client2.next_sequence_number(object_id),
@@ -501,12 +475,7 @@ fn test_bidirectional_transfer() {
 
     // Should fail if Client 2 double spend the object
     assert!(rt
-        .block_on(client2.transfer_to_fastpay(
-            object_id,
-            gas_object2,
-            client1.address,
-            UserData::default()
-        ))
+        .block_on(client2.transfer_object(object_id, gas_object2, client1.address,))
         .is_err());
 }
 
@@ -534,11 +503,10 @@ fn test_receiving_unconfirmed_transfer() {
     // not updating client1.balance
 
     let certificate = rt
-        .block_on(client1.transfer_to_fastpay_unsafe_unconfirmed(
+        .block_on(client1.transfer_to_fastx_unsafe_unconfirmed(
             client2.address,
             object_id,
             gas_object_id,
-            UserData::default(),
         ))
         .unwrap();
     assert_eq!(
@@ -556,8 +524,7 @@ fn test_receiving_unconfirmed_transfer() {
         SequenceNumber::from(0)
     );
     // Let the receiver confirm in last resort.
-    rt.block_on(client2.receive_from_fastpay(certificate))
-        .unwrap();
+    rt.block_on(client2.receive_object(certificate)).unwrap();
     assert_eq!(
         rt.block_on(client2.get_strong_majority_owner(object_id)),
         Some((client2.address, SequenceNumber::from(1)))
@@ -618,13 +585,8 @@ fn test_client_state_sync_with_transferred_object() {
     ));
 
     // Transfer object to client2.
-    rt.block_on(client1.transfer_to_fastpay(
-        object_id,
-        gas_object_id,
-        client2.address,
-        UserData::default(),
-    ))
-    .unwrap();
+    rt.block_on(client1.transfer_object(object_id, gas_object_id, client2.address))
+        .unwrap();
 
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
