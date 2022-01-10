@@ -9,6 +9,7 @@ use typed_store::traits::Map;
 pub struct AuthorityStore {
     objects: DBMap<ObjectID, Object>,
     order_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
+    _owner_index: DBMap<(FastPayAddress, ObjectID), ObjectRef>,
     signed_orders: DBMap<TransactionDigest, SignedOrder>,
     certificates: DBMap<TransactionDigest, CertifiedOrder>,
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
@@ -24,6 +25,7 @@ impl AuthorityStore {
             db_options,
             &[
                 "objects",
+                "owner_index",
                 "order_lock",
                 "signed_orders",
                 "certificates",
@@ -34,6 +36,7 @@ impl AuthorityStore {
         .expect("Cannot open DB.");
         AuthorityStore {
             objects: DBMap::reopen(&db, Some("objects")).expect("Cannot open CF."),
+            _owner_index: DBMap::reopen(&db, Some("owner_index")).expect("Cannot open CF."),
             order_lock: DBMap::reopen(&db, Some("order_lock")).expect("Cannot open CF."),
             signed_orders: DBMap::reopen(&db, Some("signed_orders")).expect("Cannot open CF."),
             certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
@@ -51,10 +54,12 @@ impl AuthorityStore {
         account: FastPayAddress,
     ) -> Result<Vec<ObjectRef>, FastPayError> {
         Ok(self
-            .objects
+            ._owner_index
             .iter()
-            .filter(|(_, object)| object.owner == account)
-            .map(|(id, object)| (id, object.version(), object.digest()))
+            .skip_to(&(account, AccountAddress::from([0; 16])))
+            .map_err(|_| FastPayError::StorageError)?
+            .take_while(|((owner, _id), _object_ref)| (owner == &account))
+            .map(|((_owner, _id), object_ref)| object_ref)
             .collect())
     }
 
@@ -135,7 +140,14 @@ impl AuthorityStore {
     pub fn insert_object(&self, object: Object) -> Result<(), FastPayError> {
         self.objects
             .insert(&object.id(), &object)
-            .map_err(|_| FastPayError::StorageError)
+            .map_err(|_| FastPayError::StorageError)?;
+
+        // Update the index
+        self._owner_index
+            .insert(&(object.owner, object.id()), &object.to_object_reference())
+            .map_err(|_| FastPayError::StorageError)?;
+
+        Ok(())
     }
 
     /// Initialize a lock to an object reference to None, but keep it
@@ -221,6 +233,7 @@ impl AuthorityStore {
     pub fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
+        _expired_object_owners: Vec<(FastPayAddress, ObjectID)>,
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
     ) -> Result<(), FastPayError> {
@@ -260,6 +273,16 @@ impl AuthorityStore {
             )
             .map_err(|_| FastPayError::StorageError)?;
 
+        // Delete the old owner index entries
+        write_batch = write_batch
+            .delete_batch(
+                &self._owner_index,
+                _expired_object_owners
+                    .into_iter()
+                    .map(|(owner, id)| (owner, id)),
+            )
+            .map_err(|_| FastPayError::StorageError)?;
+
         // Index the certificate by the objects created
         write_batch = write_batch
             .insert_batch(
@@ -281,6 +304,16 @@ impl AuthorityStore {
             )
             .map_err(|_| FastPayError::StorageError)?;
 
+        // Update the indexes of the objects written
+        write_batch = write_batch
+            .insert_batch(
+                &self._owner_index,
+                written
+                    .iter()
+                    .map(|output_ref| ((objects[&output_ref.0].owner, output_ref.0), *output_ref)),
+            )
+            .map_err(|_| FastPayError::StorageError)?;
+
         // Insert each output object into the stores
         write_batch = write_batch
             .insert_batch(
@@ -295,6 +328,8 @@ impl AuthorityStore {
                 }),
             )
             .map_err(|_| FastPayError::StorageError)?;
+
+        // Update the indexes of the objects written
 
         // This is the critical region: testing the locks and writing the
         // new locks must be atomic, and no writes should happen in between.

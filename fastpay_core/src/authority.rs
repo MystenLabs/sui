@@ -19,7 +19,7 @@ use move_core_types::{
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -172,6 +172,7 @@ impl AuthorityState {
         certificate.check(&self.committee)?;
 
         let mut inputs = vec![];
+        let mut owner_index = HashMap::new();
         for (input_object_id, input_seq, _input_digest) in order.input_objects() {
             // If we have a certificate on the confirmation order it means that the input
             // object exists on other honest authorities, but we do not have it.
@@ -193,6 +194,10 @@ impl AuthorityState {
                 return self.make_order_info(&transaction_digest).await;
             }
 
+            if !input_object.is_read_only() {
+                owner_index.insert(input_object_id, input_object.owner);
+            }
+
             inputs.push(input_object.clone());
         }
 
@@ -202,7 +207,7 @@ impl AuthorityState {
 
         // Order-specific logic
         let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
-        let _status = match order.kind {
+        let status = match order.kind {
             OrderKind::Transfer(t) => {
                 debug_assert!(
                     inputs.len() == 2,
@@ -254,15 +259,38 @@ impl AuthorityState {
             }
         };
 
+        // Make a list of all object that are either deleted or have changed owner, along with their old owner.
+        // This is used to update the owner index.
+        let drop_index_entries = temporary_store
+            .deleted()
+            .iter()
+            .map(|(id, _, _)| (owner_index[id], *id))
+            .chain(
+                temporary_store
+                    .written()
+                    .iter()
+                    .filter(|(id, _, _)| {
+                        let owner = owner_index.get(id);
+                        owner.is_some() && *owner.unwrap() != temporary_store.objects()[id].owner
+                    })
+                    .map(|(id, _, _)| (owner_index[id], *id)),
+            )
+            .collect();
+
         // Update the database in an atomic manner
         let to_signed_effects = temporary_store.to_signed_effects(
             &self.name,
             &self.secret,
             &transaction_digest,
-            _status,
+            status,
         );
-        self.update_state(temporary_store, certificate, to_signed_effects)
-            .await?;
+        self.update_state(
+            temporary_store,
+            drop_index_entries,
+            certificate,
+            to_signed_effects,
+        )
+        .await?;
 
         self.make_order_info(&transaction_digest).await
     }
@@ -396,11 +424,16 @@ impl AuthorityState {
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
+        expired_object_owners: Vec<(FastPayAddress, ObjectID)>,
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
     ) -> Result<(), FastPayError> {
-        self._database
-            .update_state(temporary_store, certificate, signed_effects)
+        self._database.update_state(
+            temporary_store,
+            expired_object_owners,
+            certificate,
+            signed_effects,
+        )
     }
 
     /// Get a read reference to an object/seq lock

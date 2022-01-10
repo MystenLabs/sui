@@ -4,8 +4,8 @@ pub struct AuthorityTemporaryStore {
     object_store: Arc<AuthorityStore>,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
-    pub written: Vec<ObjectRef>,   // Objects written
-    deleted: Vec<ObjectRef>,       // Objects actively deleted
+    written: Vec<ObjectRef>,   // Objects written
+    deleted: Vec<ObjectRef>,   // Objects actively deleted
 }
 
 impl AuthorityTemporaryStore {
@@ -24,6 +24,20 @@ impl AuthorityTemporaryStore {
             written: Vec::new(),
             deleted: Vec::new(),
         }
+    }
+
+    // Helpers to access private fields
+
+    pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
+        &self.objects
+    }
+
+    pub fn written(&self) -> &Vec<ObjectRef> {
+        &self.written
+    }
+
+    pub fn deleted(&self) -> &Vec<ObjectRef> {
+        &self.deleted
     }
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
