@@ -74,7 +74,7 @@ async fn test_server(protocol: NetworkProtocol) -> Result<(usize, usize), std::i
 
 #[test]
 fn udp_server() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (processed, received) = rt.block_on(test_server(NetworkProtocol::Udp)).unwrap();
     assert_eq!(processed, 13);
     assert_eq!(received, 10);
@@ -82,7 +82,7 @@ fn udp_server() {
 
 #[test]
 fn tcp_server() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (processed, received) = rt.block_on(test_server(NetworkProtocol::Tcp)).unwrap();
     // Active TCP connections are allowed to finish before the server is gracefully killed.
     assert_eq!(processed, 17);

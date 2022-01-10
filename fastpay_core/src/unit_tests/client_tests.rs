@@ -203,7 +203,7 @@ async fn init_local_client_state_with_bad_authority(
 
 #[test]
 fn test_get_strong_majority_owner() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     rt.block_on(async {
         let object_id_1 = ObjectID::random();
         let object_id_2 = ObjectID::random();
@@ -244,7 +244,7 @@ fn test_get_strong_majority_owner() {
 
 #[test]
 fn test_initiating_valid_transfer() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
     let object_id_1 = ObjectID::random();
     let object_id_2 = ObjectID::random();
@@ -299,7 +299,7 @@ fn test_initiating_valid_transfer() {
 
 #[test]
 fn test_initiating_valid_transfer_despite_bad_authority() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
     let object_id = ObjectID::random();
     let gas_object = ObjectID::random();
@@ -338,7 +338,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
 
 #[test]
 fn test_initiating_transfer_low_funds() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
     let object_id_1 = ObjectID::random();
     let object_id_2 = ObjectID::random();
@@ -376,7 +376,7 @@ fn test_initiating_transfer_low_funds() {
 
 #[test]
 fn test_bidirectional_transfer() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (authority_clients, committee) = init_local_authorities(4);
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
@@ -512,7 +512,7 @@ fn test_bidirectional_transfer() {
 
 #[test]
 fn test_receiving_unconfirmed_transfer() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (authority_clients, committee) = init_local_authorities(4);
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
@@ -566,7 +566,7 @@ fn test_receiving_unconfirmed_transfer() {
 
 #[test]
 fn test_client_state_sync() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
 
     let object_ids = (0..20)
         .map(|_| ObjectID::random())
@@ -597,7 +597,7 @@ fn test_client_state_sync() {
 
 #[test]
 fn test_client_state_sync_with_transferred_object() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (authority_clients, committee) = init_local_authorities(4);
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
