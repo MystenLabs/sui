@@ -144,7 +144,9 @@ impl AccountsConfig {
     pub fn accounts_mut(&mut self) -> impl Iterator<Item = &mut UserAccount> {
         self.accounts.values_mut()
     }
-
+    pub fn accounts(&mut self) -> impl Iterator<Item = &UserAccount> {
+        self.accounts.values()
+    }
     pub fn addresses(&mut self) -> impl Iterator<Item = &FastPayAddress> {
         self.accounts.keys()
     }

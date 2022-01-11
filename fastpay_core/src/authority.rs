@@ -353,12 +353,9 @@ impl AuthorityState {
             .or::<FastPayError>(Ok(None))?;
 
         Ok(ObjectInfoResponse {
-            object_id: object.id(),
-            owner: object.owner,
-            next_sequence_number: object.version(),
             requested_certificate,
             pending_confirmation: lock,
-            requested_received_transfers: Vec::new(),
+            object,
         })
     }
 

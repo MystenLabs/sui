@@ -8,6 +8,8 @@ use fastx_types::{
 };
 use futures::{future, StreamExt, TryFutureExt};
 use move_binary_format::CompiledModule;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::TypeTag;
 use rand::seq::SliceRandom;
 use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
 use std::time::Duration;
@@ -91,12 +93,26 @@ pub trait Client {
         gas_payment: ObjectID,
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
-    /// Publish a module. Not yet implemented
+    /// Publish a module
     fn publish_modules(
         &mut self,
         gas_payment: ObjectID,
         modules: Vec<CompiledModule>,
     ) -> AsyncResult<'_, (CertifiedOrder, Vec<ObjectRef>), anyhow::Error>;
+
+    /// Call move functions
+    #[allow(clippy::too_many_arguments)]
+    fn move_call(
+        &mut self,
+        module_object_ref: ObjectRef,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        gas_object_ref: ObjectRef,
+        object_arguments: Vec<ObjectRef>,
+        pure_arguments: Vec<Vec<u8>>,
+        gas_budget: u64,
+    ) -> AsyncResult<'_, (CertifiedOrder, OrderEffects), anyhow::Error>;
+
     /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
     /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
     fn sync_client_state_with_random_authority(
@@ -107,6 +123,12 @@ pub trait Client {
 
     /// Get all object we own.
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error>;
+
+    /// Get the object information
+    fn get_object_info(
+        &mut self,
+        object_info_req: ObjectInfoRequest,
+    ) -> AsyncResult<'_, ObjectInfoResponse, anyhow::Error>;
 }
 
 impl<A> ClientState<A> {
@@ -273,7 +295,7 @@ where
                 let fut = client.handle_object_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => Some((*name, info.next_sequence_number)),
+                        Ok(info) => Some((*name, info.object.version())),
                         _ => None,
                     }
                 }
@@ -303,7 +325,7 @@ where
                 let fut = client.handle_object_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => Some((*name, Some((info.owner, info.next_sequence_number)))),
+                        Ok(info) => Some((*name, Some((info.object.owner, info.object.version())))),
                         _ => None,
                     }
                 }
@@ -407,7 +429,7 @@ where
                     };
                     let response = client.handle_object_info_request(request).await?;
 
-                    let current_sequence_number = response.next_sequence_number;
+                    let current_sequence_number = response.object.version();
                     // Download each missing certificate in reverse order using the downloader.
                     let mut missing_certificates = Vec::new();
                     let mut number = target_sequence_number.decrement();
@@ -512,8 +534,8 @@ where
         Ok(sent_certificates)
     }
 
-    /// TODO/TBD: waiting for https://github.com/MystenLabs/fastnft/pull/130
-    async fn communicate_publish_transaction_order(
+    /// TODO/TBD: flesh this out
+    async fn communicate_transaction_order(
         &mut self,
         order: Order,
     ) -> Result<CertifiedOrder, anyhow::Error> {
@@ -536,7 +558,6 @@ where
                             Ok(resp.signed_order)
                         }
                         Err(err) => Err(err),
-                        //_ => return Err(FastPayError::ErrorWhileProcessingTransferOrder),
                     }
                 })
             })
@@ -555,8 +576,8 @@ where
         Ok(certificate)
     }
 
-    /// TODO/TBD: waiting for https://github.com/MystenLabs/fastnft/pull/130
-    async fn communicate_publish_confirmation_order(
+    /// TODO/TBD: flesh this out
+    async fn communicate_confirmation_order(
         &mut self,
         cert_order: &CertifiedOrder,
     ) -> Result<OrderInfoResponse, anyhow::Error> {
@@ -581,7 +602,6 @@ where
                             Ok(resp)
                         }
                         Err(err) => Err(err),
-                        //_ => return Err(FastPayError::ErrorWhileProcessingTransferOrder),
                     }
                 })
             })
@@ -686,7 +706,7 @@ where
     }
 
     fn update_objects_from_order_info(&mut self, order_info_resp: OrderInfoResponse) {
-        // TODO: use the digest
+        // TODO: use the digest also
         for (obj_id, seq_no, _) in order_info_resp
             .signed_effects
             .clone()
@@ -707,15 +727,15 @@ where
         &mut self,
         order: Order,
     ) -> Result<(CertifiedOrder, Vec<ObjectRef>), anyhow::Error> {
-        // Transfer order
-        let new_certificate = self.communicate_publish_transaction_order(order).await?;
+        // Transaction order
+        let new_certificate = self.communicate_transaction_order(order).await?;
 
         // Update state
         self.update_certificates(vec![new_certificate.clone()])?;
 
         // Confirmation
         let order_info = self
-            .communicate_publish_confirmation_order(&new_certificate)
+            .communicate_confirmation_order(&new_certificate)
             .await?;
 
         // Update local object view
@@ -728,7 +748,7 @@ where
                 .expect("Order for publish not certified"),
             order_info
                 .signed_effects
-                .expect("Publish did not yield new objects")
+                .expect("Publish did not yield signed effects")
                 .effects
                 .mutated,
         ))
@@ -803,6 +823,77 @@ where
             }
         }
         Err(FastPayError::ErrorWhileRequestingInformation)
+    }
+
+    /// Execute call order
+    /// Need improvement and decoupling from transfer logic
+    /// TODO: any more cert checks?
+    async fn execute_call(
+        &mut self,
+        order: Order,
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+        // Transaction order
+        let new_certificate = self.communicate_transaction_order(order).await?;
+
+        // Update state
+        self.update_certificates(vec![new_certificate.clone()])?;
+
+        // Confirmation
+        let order_info = self
+            .communicate_confirmation_order(&new_certificate)
+            .await?;
+
+        // Update local object view
+        self.update_objects_from_order_info(order_info.clone());
+
+        Ok((
+            order_info
+                .certified_order
+                .expect("Order for publish not certified"),
+            order_info
+                .signed_effects
+                .expect("Publish did not yield signed effects")
+                .effects,
+        ))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn call(
+        &mut self,
+        module_object_ref: ObjectRef,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        gas_object_ref: ObjectRef,
+        object_arguments: Vec<ObjectRef>,
+        pure_arguments: Vec<Vec<u8>>,
+        gas_budget: u64,
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+        let move_call_order = Order::new_move_call(
+            self.address,
+            module_object_ref,
+            function,
+            type_arguments,
+            gas_object_ref,
+            object_arguments,
+            pure_arguments,
+            gas_budget,
+            &self.secret,
+        );
+
+        Ok(self.execute_call(move_call_order).await?)
+    }
+
+    async fn get_object_info_execute(
+        &mut self,
+        object_info_req: ObjectInfoRequest,
+    ) -> Result<ObjectInfoResponse, anyhow::Error> {
+        let votes = self
+            .communicate_with_quorum(|_, client| {
+                let req = object_info_req.clone();
+                Box::pin(async move { client.handle_object_info_request(req).await })
+            })
+            .await?;
+        Ok(votes.get(0).unwrap().clone())
     }
 }
 
@@ -950,5 +1041,31 @@ where
 
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error> {
         Box::pin(async move { Ok(self.object_ids.keys().copied().collect()) })
+    }
+    fn move_call(
+        &mut self,
+        module_object_ref: ObjectRef,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        gas_object_ref: ObjectRef,
+        object_arguments: Vec<ObjectRef>,
+        pure_arguments: Vec<Vec<u8>>,
+        gas_budget: u64,
+    ) -> AsyncResult<'_, (CertifiedOrder, OrderEffects), anyhow::Error> {
+        Box::pin(self.call(
+            module_object_ref,
+            function,
+            type_arguments,
+            gas_object_ref,
+            object_arguments,
+            pure_arguments,
+            gas_budget,
+        ))
+    }
+    fn get_object_info(
+        &mut self,
+        object_info_req: ObjectInfoRequest,
+    ) -> AsyncResult<'_, ObjectInfoResponse, anyhow::Error> {
+        Box::pin(self.get_object_info_execute(object_info_req))
     }
 }

@@ -11,7 +11,12 @@ use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
 use move_bytecode_verifier::verify_module;
-use move_core_types::{ident_str, language_storage::ModuleId};
+use move_core_types::{
+    ident_str,
+    identifier::Identifier,
+    language_storage::{ModuleId, TypeTag},
+    parser,
+};
 use move_package::BuildConfig;
 use std::{
     collections::{HashMap, HashSet},
@@ -288,6 +293,18 @@ fn deserialize_response(response: &[u8]) -> Option<ObjectInfoResponse> {
     }
 }
 
+fn find_owner_by_object_cache(
+    account_config: &mut AccountsConfig,
+    object_id: ObjectID,
+) -> Option<PublicKeyBytes> {
+    for acc in account_config.accounts() {
+        if acc.object_ids.contains_key(&object_id) {
+            return Some(acc.address);
+        }
+    }
+    None
+}
+
 #[derive(StructOpt)]
 #[structopt(
     name = "FastPay Client",
@@ -334,7 +351,7 @@ enum ClientCommands {
         object_id: String,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
-        gas_object_id: String,
+        gas_object_id: ObjectID,
     },
 
     /// Publish modules
@@ -345,7 +362,41 @@ enum ClientCommands {
         path: PathBuf,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
-        gas_object_id: String,
+        gas_object_id: ObjectID,
+    },
+
+    /// Call Move
+    #[structopt(name = "call")]
+    Call {
+        /// Module object ID
+        #[structopt(long)]
+        module_obj_id: ObjectID,
+
+        /// Function name in module
+        #[structopt(long)]
+        function: Identifier,
+
+        /// Function name in module
+        #[structopt(long, parse(try_from_str = parser::parse_type_tag))]
+        type_args: Vec<TypeTag>,
+
+        /// Object args object IDs
+        #[structopt(long)]
+        object_args_ids: Vec<ObjectID>,
+
+        // TODO: this somehow turns into a Vec<Vec<u8>>, how?
+        /// Pure args
+        //pure_args: String,
+
+        // // TODO: object args from
+        // /// Pure args
+        // object_args: String,
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        gas_object_id: ObjectID,
+
+        /// Gas budget for this call
+        #[structopt(long)]
+        gas_budget: u64,
     },
 
     /// Obtain the Account Addresses
@@ -413,11 +464,90 @@ fn main() {
         CommitteeConfig::read(committee_config_path).expect("Unable to read committee config file");
 
     match options.cmd {
+        ClientCommands::Call {
+            module_obj_id,
+            function,
+            type_args,
+            object_args_ids,
+            //pure_args: _,
+            gas_object_id,
+            gas_budget,
+        } => {
+            // Find owner of acc
+            let owner = find_owner_by_object_cache(&mut accounts_config, gas_object_id)
+                .expect("Cannot find owner for gas object");
+            // Fetch the module ref
+            //let module_obj_ref =
+
+            let mut client_state = make_client_state(
+                &accounts_config,
+                &committee_config,
+                owner,
+                buffer_size,
+                send_timeout,
+                recv_timeout,
+            );
+
+            let rt = Runtime::new().unwrap();
+            rt.block_on(async move {
+                // Fetch the object info for the module
+                let module_obj_info_req = ObjectInfoRequest {
+                    object_id: module_obj_id,
+                    request_sequence_number: None,
+                    request_received_transfers_excluding_first_nth: None,
+                };
+                let module_obj_info = client_state
+                    .get_object_info(module_obj_info_req)
+                    .await
+                    .unwrap();
+                let module_obj_ref = module_obj_info.object.to_object_reference();
+
+                // Fetch the object info for the gas module
+                // Fetch the object info for the module
+                let gas_obj_info_req = ObjectInfoRequest {
+                    object_id: gas_object_id,
+                    request_sequence_number: None,
+                    request_received_transfers_excluding_first_nth: None,
+                };
+
+                let gas_obj_info = client_state
+                    .get_object_info(gas_obj_info_req)
+                    .await
+                    .unwrap();
+                let gas_obj_ref = gas_obj_info.object.to_object_reference();
+
+                // Fetch the objects for the object args
+                let mut object_args_refs = Vec::new();
+
+                for _ in object_args_ids {
+                    // Fetch the obj ref
+                    let obj_info_req = ObjectInfoRequest {
+                        object_id: gas_object_id,
+                        request_sequence_number: None,
+                        request_received_transfers_excluding_first_nth: None,
+                    };
+
+                    let gas_obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
+                    object_args_refs.push(gas_obj_info.object.to_object_reference());
+                }
+
+                client_state.move_call(
+                    module_obj_ref,
+                    function,
+                    type_args,
+                    gas_obj_ref,
+                    object_args_refs,
+                    // TODO: How to handle pure args?
+                    Vec::new(),
+                    gas_budget,
+                );
+            });
+        }
+
         ClientCommands::Publish {
             path,
             gas_object_id,
         } => {
-            let gas_object_id = ObjectID::from_hex_literal(&gas_object_id).unwrap();
             // TODO: Logic copied over from framework. Need to cleanup
             let denylist = vec![
                 ModuleId::new(
@@ -455,15 +585,9 @@ fn main() {
 
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
-                let mut sender_opt: Option<FastPayAddress> = None;
                 // Find the owner of this gas obj
-                // TODO: make parellel for perf
-                for acc in accounts_config.accounts_mut() {
-                    if acc.object_ids.contains_key(&gas_object_id) {
-                        sender_opt = Some(acc.address);
-                    }
-                }
-                let sender = sender_opt.expect("Cannot find owner for gas object");
+                let sender = find_owner_by_object_cache(&mut accounts_config, gas_object_id)
+                    .expect("Cannot find owner for gas object");
 
                 let mut client_state = make_client_state(
                     &accounts_config,
@@ -512,19 +636,12 @@ fn main() {
         } => {
             let recipient = decode_address(&to).expect("Failed to decode recipient's address");
             let object_id = ObjectID::from_hex_literal(&object_id).unwrap();
-            let gas_object_id = ObjectID::from_hex_literal(&gas_object_id).unwrap();
 
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
-                let mut sender_opt: Option<FastPayAddress> = None;
                 // Find the owner of this obj
-                // TODO: make parellel for perf
-                for acc in accounts_config.accounts_mut() {
-                    if acc.object_ids.contains_key(&gas_object_id) {
-                        sender_opt = Some(acc.address);
-                    }
-                }
-                let sender = sender_opt.expect("Cannot find owner for object");
+                let sender = find_owner_by_object_cache(&mut accounts_config, gas_object_id)
+                    .expect("Cannot find owner for object");
 
                 let mut client_state = make_client_state(
                     &accounts_config,
@@ -659,7 +776,7 @@ fn main() {
                         .iter()
                         .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
                             Some(info) => {
-                                confirmed.insert(info.object_id);
+                                confirmed.insert(info.object.version());
                                 acc + 1
                             }
                             None => acc,
