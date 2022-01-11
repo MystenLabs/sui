@@ -53,8 +53,8 @@ jobs:
           command: check
           args: --all --tests -Z unstable-options --profile=release
 
-  test:
-    name: Test Rust ${{matrix.toolchain}} on ${{matrix.os}}
+  test_debug:
+    name: Test Rust ${{matrix.toolchain}} on ${{matrix.os}} in debug mode
     runs-on: ${{matrix.os}}-latest
     strategy:
       fail-fast: false
@@ -75,6 +75,29 @@ jobs:
         with:
           command: test
           args: --all-features
+
+  test_release:
+    name: Test Rust ${{matrix.toolchain}} on ${{matrix.os}} in release mode
+    runs-on: ${{matrix.os}}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [stable, nightly]
+        os: [ubuntu]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{matrix.toolchain}}
+          profile: minimal
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features --release
 
   clippy:
     name: Clippy
