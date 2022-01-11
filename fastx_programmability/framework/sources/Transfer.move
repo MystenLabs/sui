@@ -16,15 +16,22 @@ module FastX::Transfer {
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the
     /// `key` attribute, which (in turn) ensures that `obj` has a globally
     /// unique ID.
-    // TODO: add bytecode verifier pass to ensure that `T` is a struct declared
-    // in the calling module. This will allow modules to define custom transfer
-    // logic for their structs that cannot be subverted by other modules
     public fun transfer<T: key>(obj: T, recipient: Address) {
         // TODO: emit event
-        transfer_internal(obj, Address::into_bytes(recipient))
+        transfer_internal(obj, Address::into_bytes(recipient), false)
     }
 
-    native fun transfer_internal<T: key>(obj: T, recipient: vector<u8>);
+    /// Transfer ownership of `obj` to `recipient` and then freeze
+    /// `obj`. After freezing `obj` becomes immutable and can no
+    /// longer be transfered or mutated.
+    /// If you just want to freeze an object, you can set the `recipient`
+    /// to the current owner of `obj` and it will only be frozen without
+    /// being transfered.
+    public fun transfer_and_freeze<T: key>(obj: T, recipient: Address) {
+        transfer_internal(obj, Address::into_bytes(recipient), true)
+    }
+
+    native fun transfer_internal<T: key>(obj: T, recipient: vector<u8>, should_freeze: bool);
 
     /*/// Transfer ownership of `obj` to another object `id`. Afterward, `obj`
     /// can only be used in a transaction that also includes the object with

@@ -409,10 +409,9 @@ async fn test_handle_move_order() {
         MAX_GAS,
         &sender_key,
     );
-
-    // 36 is for bytecode execution, 24 is for object creation.
+    // 34 is for bytecode execution, 24 is for object creation.
     // If the number changes, we want to verify that the change is intended.
-    let gas_cost = 36 + 24;
+    let gas_cost = 34 + 24;
     let res = send_and_confirm_order(&mut authority_state, order)
         .await
         .unwrap();
