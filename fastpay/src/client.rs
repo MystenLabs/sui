@@ -10,11 +10,7 @@ use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
-use move_core_types::{
-    identifier::Identifier,
-    language_storage::{TypeTag},
-    parser,
-};
+use move_core_types::{identifier::Identifier, language_storage::TypeTag, parser};
 use move_package::BuildConfig;
 use std::{
     collections::{HashMap, HashSet},
@@ -292,7 +288,7 @@ fn deserialize_response(response: &[u8]) -> Option<ObjectInfoResponse> {
 }
 
 fn parse_public_key_bytes(src: &str) -> Result<PublicKeyBytes, base64::DecodeError> {
-    Ok(decode_address(&src).expect("Failed to decode recipient's address"))
+    Ok(decode_address(src).expect("Failed to decode recipient's address"))
 }
 
 fn find_owner_by_object_cache(
