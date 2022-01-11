@@ -242,7 +242,7 @@ impl AuthorityStore {
     pub fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
-        _expired_object_owners: Vec<(FastPayAddress, ObjectID)>,
+        expired_object_owners: Vec<(FastPayAddress, ObjectID)>,
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
     ) -> Result<OrderInfoResponse, FastPayError> {
@@ -284,12 +284,7 @@ impl AuthorityStore {
 
         // Delete the old owner index entries
         write_batch = write_batch
-            .delete_batch(
-                &self.owner_index,
-                _expired_object_owners
-                    .into_iter()
-                    .map(|(owner, id)| (owner, id)),
-            )
+            .delete_batch(&self.owner_index, expired_object_owners.into_iter())
             .map_err(|_| FastPayError::StorageError)?;
 
         // Index the certificate by the objects created

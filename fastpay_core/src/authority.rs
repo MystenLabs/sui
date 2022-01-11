@@ -84,20 +84,14 @@ impl AuthorityState {
         // Get a copy of the object.
         // TODO: We only need to read the read_only and owner field of the object,
         //      it's a bit wasteful to copy the entire object.
-        let _objects = self.get_objects(&ids[..]).await?;
-        for (object_ref, object) in input_objects.into_iter().zip(_objects) {
-            //for object_ref in input_objects.into_iter() {
+        let objects = self.get_objects(&ids[..]).await?;
+        for (object_ref, object) in input_objects.into_iter().zip(objects) {
             let (object_id, sequence_number, _object_digest) = object_ref;
 
             fp_ensure!(
                 sequence_number <= SequenceNumber::max(),
                 FastPayError::InvalidSequenceNumber
             );
-
-            // let object = self
-            //     .object_state(&object_id)
-            //     .await
-            //    .map_err(|_| FastPayError::ObjectNotFound)?;
 
             let object = object.ok_or(FastPayError::ObjectNotFound)?;
 
@@ -181,11 +175,11 @@ impl AuthorityState {
         // Get a copy of the object.
         // TODO: We only need to read the read_only and owner field of the object,
         //      it's a bit wasteful to copy the entire object.
-        let _objects = self.get_objects(&ids[..]).await?;
+        let objects = self.get_objects(&ids[..]).await?;
 
         let mut inputs = vec![];
         let mut owner_index = HashMap::new();
-        for (object_ref, object) in input_objects.into_iter().zip(_objects) {
+        for (object_ref, object) in input_objects.into_iter().zip(objects) {
             let (input_object_id, input_seq, _input_digest) = object_ref;
 
             // If we have a certificate on the confirmation order it means that the input
@@ -276,16 +270,14 @@ impl AuthorityState {
             .deleted()
             .iter()
             .map(|(id, _, _)| (owner_index[id], *id))
-            .chain(
-                temporary_store
-                    .written()
-                    .iter()
-                    .filter(|(id, _, _)| {
-                        let owner = owner_index.get(id);
-                        owner.is_some() && *owner.unwrap() != temporary_store.objects()[id].owner
-                    })
-                    .map(|(id, _, _)| (owner_index[id], *id)),
-            )
+            .chain(temporary_store.written().iter().filter_map(|(id, _, _)| {
+                let owner = owner_index.get(id);
+                if owner.is_some() && *owner.unwrap() != temporary_store.objects()[id].owner {
+                    Some((owner_index[id], *id))
+                } else {
+                    None
+                }
+            }))
             .collect();
 
         // Update the database in an atomic manner
@@ -301,9 +293,7 @@ impl AuthorityState {
             certificate,
             to_signed_effects,
         )
-        .await
-
-        // self.make_order_info(&transaction_digest).await
+        .await // Returns the OrderInfoResponse
     }
 
     pub async fn handle_account_info_request(
