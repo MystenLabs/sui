@@ -9,6 +9,7 @@ use typed_store::traits::Map;
 pub struct AuthorityStore {
     objects: DBMap<ObjectID, Object>,
     order_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
+    owner_index: DBMap<(FastPayAddress, ObjectID), ObjectRef>,
     signed_orders: DBMap<TransactionDigest, SignedOrder>,
     certificates: DBMap<TransactionDigest, CertifiedOrder>,
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
@@ -24,6 +25,7 @@ impl AuthorityStore {
             db_options,
             &[
                 "objects",
+                "owner_index",
                 "order_lock",
                 "signed_orders",
                 "certificates",
@@ -34,6 +36,7 @@ impl AuthorityStore {
         .expect("Cannot open DB.");
         AuthorityStore {
             objects: DBMap::reopen(&db, Some("objects")).expect("Cannot open CF."),
+            owner_index: DBMap::reopen(&db, Some("owner_index")).expect("Cannot open CF."),
             order_lock: DBMap::reopen(&db, Some("order_lock")).expect("Cannot open CF."),
             signed_orders: DBMap::reopen(&db, Some("signed_orders")).expect("Cannot open CF."),
             certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
@@ -51,10 +54,13 @@ impl AuthorityStore {
         account: FastPayAddress,
     ) -> Result<Vec<ObjectRef>, FastPayError> {
         Ok(self
-            .objects
+            .owner_index
             .iter()
-            .filter(|(_, object)| object.owner == account)
-            .map(|(id, object)| (id, object.version(), object.digest()))
+            // The object id [0; 16] is the smallest possible
+            .skip_to(&(account, AccountAddress::from([0; 16])))
+            .map_err(|_| FastPayError::StorageError)?
+            .take_while(|((owner, _id), _object_ref)| (owner == &account))
+            .map(|((_owner, _id), object_ref)| object_ref)
             .collect())
     }
 
@@ -84,6 +90,13 @@ impl AuthorityStore {
             .get(object_id)
             .map_err(|_| FastPayError::StorageError)?
             .ok_or(FastPayError::ObjectNotFound)
+    }
+
+    /// Get many objects
+    pub fn get_objects(&self, _objects: &[ObjectID]) -> Result<Vec<Option<Object>>, FastPayError> {
+        self.objects
+            .multi_get(_objects)
+            .map_err(|_| FastPayError::StorageError)
     }
 
     /// Read a lock or returns Err(OrderLockDoesNotExist) if the lock does not exist.
@@ -135,7 +148,14 @@ impl AuthorityStore {
     pub fn insert_object(&self, object: Object) -> Result<(), FastPayError> {
         self.objects
             .insert(&object.id(), &object)
-            .map_err(|_| FastPayError::StorageError)
+            .map_err(|_| FastPayError::StorageError)?;
+
+        // Update the index
+        self.owner_index
+            .insert(&(object.owner, object.id()), &object.to_object_reference())
+            .map_err(|_| FastPayError::StorageError)?;
+
+        Ok(())
     }
 
     /// Initialize a lock to an object reference to None, but keep it
@@ -184,13 +204,14 @@ impl AuthorityStore {
                 .lock()
                 .map_err(|_| FastPayError::StorageError)?;
 
-            for obj_ref in mutable_input_objects {
+            let locks = self
+                .order_lock
+                .multi_get(mutable_input_objects)
+                .map_err(|_| FastPayError::StorageError)?;
+
+            for (obj_ref, lock) in mutable_input_objects.iter().zip(locks) {
                 // The object / version must exist, and therefore lock initialized.
-                let lock = self
-                    .order_lock
-                    .get(obj_ref)
-                    .map_err(|_| FastPayError::StorageError)?
-                    .ok_or(FastPayError::OrderLockDoesNotExist)?;
+                let lock = lock.ok_or(FastPayError::OrderLockDoesNotExist)?;
 
                 if let Some(previous_tx_digest) = lock {
                     if previous_tx_digest != tx_digest {
@@ -221,9 +242,10 @@ impl AuthorityStore {
     pub fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
+        expired_object_owners: Vec<(FastPayAddress, ObjectID)>,
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
-    ) -> Result<(), FastPayError> {
+    ) -> Result<OrderInfoResponse, FastPayError> {
         // TODO: There is a lot of cloning used -- eliminate it.
 
         // Extract the new state from the execution
@@ -240,7 +262,7 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.certificates,
-                std::iter::once((transaction_digest, certificate)),
+                std::iter::once((transaction_digest, certificate.clone())),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -248,7 +270,7 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.signed_effects,
-                std::iter::once((transaction_digest, signed_effects)),
+                std::iter::once((transaction_digest, signed_effects.clone())),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -258,6 +280,11 @@ impl AuthorityStore {
                 &self.objects,
                 _deleted.iter().map(|deleted_ref| deleted_ref.0),
             )
+            .map_err(|_| FastPayError::StorageError)?;
+
+        // Delete the old owner index entries
+        write_batch = write_batch
+            .delete_batch(&self.owner_index, expired_object_owners.into_iter())
             .map_err(|_| FastPayError::StorageError)?;
 
         // Index the certificate by the objects created
@@ -281,6 +308,16 @@ impl AuthorityStore {
             )
             .map_err(|_| FastPayError::StorageError)?;
 
+        // Update the indexes of the objects written
+        write_batch = write_batch
+            .insert_batch(
+                &self.owner_index,
+                written
+                    .iter()
+                    .map(|output_ref| ((objects[&output_ref.0].owner, output_ref.0), *output_ref)),
+            )
+            .map_err(|_| FastPayError::StorageError)?;
+
         // Insert each output object into the stores
         write_batch = write_batch
             .insert_batch(
@@ -296,6 +333,8 @@ impl AuthorityStore {
             )
             .map_err(|_| FastPayError::StorageError)?;
 
+        // Update the indexes of the objects written
+
         // This is the critical region: testing the locks and writing the
         // new locks must be atomic, and no writes should happen in between.
         {
@@ -307,19 +346,29 @@ impl AuthorityStore {
 
             // Check the locks are still active
             // TODO: maybe we could just check if the certificate is there instead?
-            for input_ref in active_inputs {
-                fp_ensure!(
-                    self.order_lock
-                        .contains_key(&input_ref)
-                        .map_err(|_| FastPayError::StorageError)?,
-                    FastPayError::OrderLockDoesNotExist
-                );
+            let locks = self
+                .order_lock
+                .multi_get(&active_inputs[..])
+                .map_err(|_| FastPayError::StorageError)?;
+            for object_lock in locks {
+                object_lock.ok_or(FastPayError::OrderLockDoesNotExist)?;
             }
 
             // Atomic write of all locks & other data
-            write_batch.write().map_err(|_| FastPayError::StorageError)
+            write_batch
+                .write()
+                .map_err(|_| FastPayError::StorageError)?;
 
-            // Implicit: drop(_lock);
+            // implict: drop(_lock);
         } // End of critical region
+
+        Ok(OrderInfoResponse {
+            signed_order: self
+                .signed_orders
+                .get(&transaction_digest)
+                .map_err(|_| FastPayError::StorageError)?,
+            certified_order: Some(certificate),
+            signed_effects: Some(signed_effects),
+        })
     }
 }

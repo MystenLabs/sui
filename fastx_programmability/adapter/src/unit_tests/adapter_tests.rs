@@ -164,7 +164,7 @@ fn test_object_basics() {
     let native_functions = genesis.native_functions.clone();
     let mut storage = InMemoryStorage::new(genesis.objects.clone());
 
-    // 0. Create a gas object for gas payment. Note that we won't really use it because we won't be providing a gas budget.
+    // 0. Create a gas object for gas payment.
     let gas_object = Object::with_id_owner_for_testing(
         ObjectID::random(),
         base_types::FastPayAddress::default(),
@@ -425,7 +425,7 @@ fn test_move_call_insufficient_gas() {
         &native_functions,
         "create",
         gas_object,
-        25, // This budget is not enough to execute all bytecode.
+        20, // This budget is not enough to execute all bytecode.
         Vec::new(),
         pure_args,
     );
@@ -468,6 +468,70 @@ fn test_publish_module_insufficient_gas() {
         .unwrap_err()
         .to_string()
         .contains("Gas balance is 30, not enough to pay 58"));
+}
+
+#[test]
+fn test_transfer_and_freeze() {
+    let addr1 = base_types::get_key_pair().0;
+    let addr2 = base_types::get_key_pair().0;
+
+    let genesis = genesis::GENESIS.lock().unwrap();
+    let native_functions = genesis.native_functions.clone();
+    let mut storage = InMemoryStorage::new(genesis.objects.clone());
+
+    // 0. Create a gas object for gas payment.
+    let gas_object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+    );
+    storage.write_object(gas_object.clone());
+    storage.flush();
+
+    // 1. Create obj1 owned by addr1
+    // ObjectBasics::create expects integer value and recipient address
+    let pure_args = vec![
+        10u64.to_le_bytes().to_vec(),
+        bcs::to_bytes(&addr1.to_vec()).unwrap(),
+    ];
+    call(
+        &mut storage,
+        &native_functions,
+        "create",
+        gas_object.clone(),
+        MAX_GAS,
+        Vec::new(),
+        pure_args,
+    )
+    .unwrap();
+
+    let created = storage.created();
+    let id1 = created
+        .keys()
+        .cloned()
+        .collect::<Vec<ObjectID>>()
+        .pop()
+        .unwrap();
+    storage.flush();
+    let obj1 = storage.read_object(&id1).unwrap();
+    assert!(!obj1.is_read_only());
+
+    // 2. Call transfer_and_freeze.
+    let pure_args = vec![bcs::to_bytes(&addr2.to_vec()).unwrap()];
+    call(
+        &mut storage,
+        &native_functions,
+        "transfer_and_freeze",
+        gas_object,
+        MAX_GAS,
+        vec![obj1],
+        pure_args,
+    )
+    .unwrap();
+    assert_eq!(storage.updated().len(), 2);
+    storage.flush();
+    let obj1 = storage.read_object(&id1).unwrap();
+    assert!(obj1.is_read_only());
+    assert_eq!(obj1.owner, addr2);
 }
 
 // TODO(https://github.com/MystenLabs/fastnft/issues/92): tests that exercise all the error codes of the adapter
