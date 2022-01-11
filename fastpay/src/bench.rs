@@ -69,16 +69,15 @@ impl std::fmt::Display for BenchmarkType {
     }
 }
 fn main() {
-    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let benchmark = ClientServerBenchmark::from_args();
     let (state, orders) = benchmark.make_structures();
 
     // Make multi-threaded runtime for the authority
     let b = benchmark.clone();
     thread::spawn(move || {
-        let mut runtime = Builder::new()
+        let runtime = Builder::new_multi_thread()
             .enable_all()
-            .threaded_scheduler()
             .thread_stack_size(15 * 1024 * 1024)
             .build()
             .unwrap();
@@ -92,9 +91,8 @@ fn main() {
     });
 
     // Make a single-core runtime for the client.
-    let mut runtime = Builder::new()
+    let runtime = Builder::new_current_thread()
         .enable_all()
-        .basic_scheduler()
         .thread_stack_size(15 * 1024 * 1024)
         .build()
         .unwrap();
@@ -124,7 +122,7 @@ impl ClientServerBenchmark {
             AuthorityState::new(committee.clone(), public_auth0, secret_auth0.copy(), store);
 
         // Seed user accounts.
-        let mut rt = Runtime::new().unwrap();
+        let rt = Runtime::new().unwrap();
         let mut account_objects = Vec::new();
         let mut gas_objects = Vec::new();
         rt.block_on(async {
@@ -133,7 +131,7 @@ impl ClientServerBenchmark {
                 let object_id: ObjectID = ObjectID::random();
 
                 let object = Object::with_id_owner_for_testing(object_id, keypair.0);
-                assert!(object.next_sequence_number == SequenceNumber::from(0));
+                assert!(object.version() == SequenceNumber::from(0));
                 let object_ref = object.to_object_reference();
                 state.init_order_lock(object_ref).await;
                 state.insert_object(object).await;
@@ -141,7 +139,7 @@ impl ClientServerBenchmark {
 
                 let gas_object_id = ObjectID::random();
                 let gas_object = Object::with_id_owner_for_testing(gas_object_id, keypair.0);
-                assert!(gas_object.next_sequence_number == SequenceNumber::from(0));
+                assert!(gas_object.version() == SequenceNumber::from(0));
                 let gas_object_ref = gas_object.to_object_reference();
                 state.init_order_lock(gas_object_ref).await;
                 state.insert_object(gas_object).await;
@@ -153,12 +151,12 @@ impl ClientServerBenchmark {
         // Make one transaction per account (transfer order + confirmation).
         let mut orders: Vec<Bytes> = Vec::new();
         let mut next_recipient = get_key_pair().0;
-        for (pubx, object_ref, secx) in account_objects.iter() {
+        for ((pubx, object_ref, secx), gas_payment) in account_objects.iter().zip(gas_objects) {
             let transfer = Transfer {
                 object_ref: *object_ref,
                 sender: *pubx,
                 recipient: Address::FastPay(next_recipient),
-                gas_payment: gas_objects[0],
+                gas_payment,
             };
             next_recipient = *pubx;
             let order = Order::new_transfer(transfer, secx);
@@ -204,7 +202,7 @@ impl ClientServerBenchmark {
     }
 
     async fn launch_client(&self, mut orders: Vec<Bytes>) {
-        time::delay_for(Duration::from_millis(1000)).await;
+        time::sleep(Duration::from_millis(1000)).await;
         let order_len_factor = if self.benchmark_type == BenchmarkType::OrdersAndCerts {
             2
         } else {

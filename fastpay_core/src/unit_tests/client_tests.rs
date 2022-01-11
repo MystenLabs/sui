@@ -158,8 +158,7 @@ async fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
 ) {
     for (authority, object_ids) in authorities.into_iter().zip(object_ids.into_iter()) {
         for object_id in object_ids {
-            let mut object = Object::with_id_for_testing(object_id);
-            object.transfer(client.address);
+            let object = Object::with_id_owner_for_testing(object_id, client.address);
             let client_ref = authority.0.as_ref().try_lock().unwrap();
 
             client_ref
@@ -203,7 +202,7 @@ async fn init_local_client_state_with_bad_authority(
 
 #[test]
 fn test_get_strong_majority_owner() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     rt.block_on(async {
         let object_id_1 = ObjectID::random();
         let object_id_2 = ObjectID::random();
@@ -244,7 +243,7 @@ fn test_get_strong_majority_owner() {
 
 #[test]
 fn test_initiating_valid_transfer() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
     let object_id_1 = ObjectID::random();
     let object_id_2 = ObjectID::random();
@@ -294,7 +293,7 @@ fn test_initiating_valid_transfer() {
 
 #[test]
 fn test_initiating_valid_transfer_despite_bad_authority() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
     let object_id = ObjectID::random();
     let gas_object = ObjectID::random();
@@ -328,7 +327,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
 
 #[test]
 fn test_initiating_transfer_low_funds() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
     let object_id_1 = ObjectID::random();
     let object_id_2 = ObjectID::random();
@@ -361,7 +360,7 @@ fn test_initiating_transfer_low_funds() {
 
 #[test]
 fn test_bidirectional_transfer() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (authority_clients, committee) = init_local_authorities(4);
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
@@ -481,7 +480,7 @@ fn test_bidirectional_transfer() {
 
 #[test]
 fn test_receiving_unconfirmed_transfer() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (authority_clients, committee) = init_local_authorities(4);
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
@@ -533,7 +532,7 @@ fn test_receiving_unconfirmed_transfer() {
 
 #[test]
 fn test_client_state_sync() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
 
     let object_ids = (0..20)
         .map(|_| ObjectID::random())
@@ -564,7 +563,7 @@ fn test_client_state_sync() {
 
 #[test]
 fn test_client_state_sync_with_transferred_object() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (authority_clients, committee) = init_local_authorities(4);
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
@@ -615,7 +614,7 @@ fn test_client_state_sync_with_transferred_object() {
 
 #[test]
 fn test_client_state_sync_with_all_authorities() {
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let (authority_clients, committee) = init_local_authorities(4);
     let mut client = make_client(authority_clients.clone(), committee);
     use rand::Rng;
@@ -639,8 +638,6 @@ fn test_client_state_sync_with_all_authorities() {
             if (obj_idx >= (auth_idx * 5)) && (obj_idx < ((1 + auth_idx) * 5)) {
                 continue;
             }
-
-            let mut object = Object::with_id_for_testing(*object_id);
             let mut mod_seq_no = *seq_no;
 
             // Randomize seq # for this authority
@@ -650,8 +647,12 @@ fn test_client_state_sync_with_all_authorities() {
                 mod_seq_no = SequenceNumber::from(rand::thread_rng().gen_range(0, max));
             }
 
-            object.next_sequence_number = mod_seq_no;
-            object.transfer(client.address);
+            let object = Object::with_id_owner_gas_for_testing(
+                *object_id,
+                mod_seq_no,
+                client.address,
+                0xFFFFFFFF,
+            );
 
             let client_ref = authority_client.1 .0.as_ref().try_lock().unwrap();
             rt.block_on(client_ref.init_order_lock((*object_id, 0.into(), object.digest())));

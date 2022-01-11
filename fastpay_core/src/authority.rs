@@ -103,10 +103,10 @@ impl AuthorityState {
 
             // Check that the seq number is the same
             fp_ensure!(
-                object.next_sequence_number == sequence_number,
+                object.version() == sequence_number,
                 FastPayError::UnexpectedSequenceNumber {
                     object_id,
-                    expected_sequence: object.next_sequence_number,
+                    expected_sequence: object.version(),
                     received_sequence: sequence_number
                 }
             );
@@ -180,7 +180,7 @@ impl AuthorityState {
                 .await
                 .map_err(|_| FastPayError::ObjectNotFound)?;
 
-            let input_sequence_number = input_object.next_sequence_number;
+            let input_sequence_number = input_object.version();
 
             // Check that the current object is exactly the right version.
             if input_sequence_number < input_seq {
@@ -204,6 +204,10 @@ impl AuthorityState {
         let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
         let _status = match order.kind {
             OrderKind::Transfer(t) => {
+                debug_assert!(
+                    inputs.len() == 2,
+                    "Expecting two inputs: gas and object to be transferred"
+                );
                 // unwraps here are safe because we built `inputs`
                 let mut gas_object = inputs.pop().unwrap();
                 deduct_gas(
@@ -212,14 +216,11 @@ impl AuthorityState {
                 )?;
                 temporary_store.write_object(gas_object);
 
-                let mut output_object = inputs[0].clone();
-                output_object.next_sequence_number =
-                    output_object.next_sequence_number.increment()?;
-
+                let mut output_object = inputs.pop().unwrap();
                 output_object.transfer(match t.recipient {
                     Address::Primary(_) => FastPayAddress::default(),
                     Address::FastPay(addr) => addr,
-                });
+                })?;
                 temporary_store.write_object(output_object);
                 Ok(())
             }
@@ -354,7 +355,7 @@ impl AuthorityState {
         Ok(ObjectInfoResponse {
             object_id: object.id(),
             owner: object.owner,
-            next_sequence_number: object.next_sequence_number,
+            next_sequence_number: object.version(),
             requested_certificate,
             pending_confirmation: lock,
             requested_received_transfers: Vec::new(),

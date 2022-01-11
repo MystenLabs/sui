@@ -6,7 +6,7 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::base_types::ObjectID;
+use crate::base_types::{ObjectID, SequenceNumber};
 
 /// 0x3C2B307C3239F61643AF5E9A09D7D0C9
 pub const ID_ADDRESS: AccountAddress = AccountAddress::new([
@@ -19,6 +19,7 @@ pub const ID_STRUCT_NAME: &IdentStr = ID_MODULE_NAME;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ID {
     id: IDBytes,
+    version: u64,
 }
 
 /// Rust version of the Move FastX::ID::IDBytes type
@@ -28,9 +29,10 @@ struct IDBytes {
 }
 
 impl ID {
-    pub fn new(bytes: ObjectID) -> Self {
+    pub fn new(bytes: ObjectID, version: SequenceNumber) -> Self {
         Self {
             id: IDBytes::new(bytes),
+            version: version.value(),
         }
     }
 
@@ -45,6 +47,10 @@ impl ID {
 
     pub fn object_id(&self) -> &ObjectID {
         &self.id.bytes
+    }
+
+    pub fn version(&self) -> SequenceNumber {
+        SequenceNumber::from(self.version)
     }
 
     pub fn to_bcs_bytes(&self) -> Vec<u8> {

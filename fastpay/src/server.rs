@@ -43,7 +43,7 @@ fn make_server(
     );
 
     // Load initial states
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     rt.block_on(async {
         for initial_state_cfg_entry in &initial_accounts_config.config {
             let address = &initial_state_cfg_entry.address;
@@ -120,7 +120,7 @@ enum ServerCommands {
 }
 
 fn main() {
-    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let options = ServerOpt::from_args();
 
     let server_config_path = &options.server;
@@ -141,7 +141,7 @@ fn main() {
                 buffer_size,
             );
 
-            let mut rt = Runtime::new().unwrap();
+            let rt = Runtime::new().unwrap();
             let mut handles = Vec::new();
 
             handles.push(async move {

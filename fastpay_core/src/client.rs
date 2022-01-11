@@ -832,7 +832,7 @@ fn fetch_obj_ids(
 ) -> HashMap<AccountAddress, SequenceNumber> {
     let mut object_ids_map = HashMap::new();
 
-    let mut rt = Runtime::new().unwrap();
+    let rt = Runtime::new().unwrap();
     let request = AccountInfoRequest { account: address };
     // Authority could be byzantine, add timeout to avoid waiting forever.
     let result = rt
