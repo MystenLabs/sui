@@ -19,7 +19,7 @@ use move_core_types::{
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -80,7 +80,12 @@ impl AuthorityState {
             None
         };
 
-        for object_ref in input_objects {
+        let ids: Vec<_> = input_objects.iter().map(|(id, _, _)| *id).collect();
+        // Get a copy of the object.
+        // TODO: We only need to read the read_only and owner field of the object,
+        //      it's a bit wasteful to copy the entire object.
+        let objects = self.get_objects(&ids[..]).await?;
+        for (object_ref, object) in input_objects.into_iter().zip(objects) {
             let (object_id, sequence_number, _object_digest) = object_ref;
 
             fp_ensure!(
@@ -88,13 +93,7 @@ impl AuthorityState {
                 FastPayError::InvalidSequenceNumber
             );
 
-            // Get a copy of the object.
-            // TODO: We only need to read the read_only and owner field of the object,
-            //      it's a bit wasteful to copy the entire object.
-            let object = self
-                .object_state(&object_id)
-                .await
-                .map_err(|_| FastPayError::ObjectNotFound)?;
+            let object = object.ok_or(FastPayError::ObjectNotFound)?;
 
             // TODO(https://github.com/MystenLabs/fastnft/issues/123): This hack substitutes the real
             // object digest instead of using the one passed in by the client. We need to fix clients and
@@ -171,14 +170,21 @@ impl AuthorityState {
         // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
+        let input_objects = order.input_objects();
+        let ids: Vec<_> = input_objects.iter().map(|(id, _, _)| *id).collect();
+        // Get a copy of the object.
+        // TODO: We only need to read the read_only and owner field of the object,
+        //      it's a bit wasteful to copy the entire object.
+        let objects = self.get_objects(&ids[..]).await?;
+
         let mut inputs = vec![];
-        for (input_object_id, input_seq, _input_digest) in order.input_objects() {
+        let mut owner_index = HashMap::new();
+        for (object_ref, object) in input_objects.into_iter().zip(objects) {
+            let (input_object_id, input_seq, _input_digest) = object_ref;
+
             // If we have a certificate on the confirmation order it means that the input
             // object exists on other honest authorities, but we do not have it.
-            let input_object = self
-                .object_state(&input_object_id)
-                .await
-                .map_err(|_| FastPayError::ObjectNotFound)?;
+            let input_object = object.ok_or(FastPayError::ObjectNotFound)?;
 
             let input_sequence_number = input_object.version();
 
@@ -193,6 +199,10 @@ impl AuthorityState {
                 return self.make_order_info(&transaction_digest).await;
             }
 
+            if !input_object.is_read_only() {
+                owner_index.insert(input_object_id, input_object.owner);
+            }
+
             inputs.push(input_object.clone());
         }
 
@@ -202,7 +212,7 @@ impl AuthorityState {
 
         // Order-specific logic
         let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
-        let _status = match order.kind {
+        let status = match order.kind {
             OrderKind::Transfer(t) => {
                 debug_assert!(
                     inputs.len() == 2,
@@ -254,17 +264,36 @@ impl AuthorityState {
             }
         };
 
+        // Make a list of all object that are either deleted or have changed owner, along with their old owner.
+        // This is used to update the owner index.
+        let drop_index_entries = temporary_store
+            .deleted()
+            .iter()
+            .map(|(id, _, _)| (owner_index[id], *id))
+            .chain(temporary_store.written().iter().filter_map(|(id, _, _)| {
+                let owner = owner_index.get(id);
+                if owner.is_some() && *owner.unwrap() != temporary_store.objects()[id].owner {
+                    Some((owner_index[id], *id))
+                } else {
+                    None
+                }
+            }))
+            .collect();
+
         // Update the database in an atomic manner
         let to_signed_effects = temporary_store.to_signed_effects(
             &self.name,
             &self.secret,
             &transaction_digest,
-            _status,
+            status,
         );
-        self.update_state(temporary_store, certificate, to_signed_effects)
-            .await?;
-
-        self.make_order_info(&transaction_digest).await
+        self.update_state(
+            temporary_store,
+            drop_index_entries,
+            certificate,
+            to_signed_effects,
+        )
+        .await // Returns the OrderInfoResponse
     }
 
     pub async fn handle_account_info_request(
@@ -396,11 +425,16 @@ impl AuthorityState {
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
+        expired_object_owners: Vec<(FastPayAddress, ObjectID)>,
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
-    ) -> Result<(), FastPayError> {
-        self._database
-            .update_state(temporary_store, certificate, signed_effects)
+    ) -> Result<OrderInfoResponse, FastPayError> {
+        self._database.update_state(
+            temporary_store,
+            expired_object_owners,
+            certificate,
+            signed_effects,
+        )
     }
 
     /// Get a read reference to an object/seq lock
@@ -425,5 +459,12 @@ impl AuthorityState {
         self._database
             .parent(object_ref)
             .expect("TODO: propagate the error")
+    }
+
+    pub async fn get_objects(
+        &self,
+        _objects: &[ObjectID],
+    ) -> Result<Vec<Option<Object>>, FastPayError> {
+        self._database.get_objects(_objects)
     }
 }
