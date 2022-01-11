@@ -10,11 +10,9 @@ use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
-use move_bytecode_verifier::verify_module;
 use move_core_types::{
-    ident_str,
     identifier::Identifier,
-    language_storage::{ModuleId, TypeTag},
+    language_storage::{TypeTag},
     parser,
 };
 use move_package::BuildConfig;
@@ -293,6 +291,10 @@ fn deserialize_response(response: &[u8]) -> Option<ObjectInfoResponse> {
     }
 }
 
+fn parse_public_key_bytes(src: &str) -> Result<PublicKeyBytes, base64::DecodeError> {
+    Ok(decode_address(&src).expect("Failed to decode recipient's address"))
+}
+
 fn find_owner_by_object_cache(
     account_config: &mut AccountsConfig,
     object_id: ObjectID,
@@ -344,11 +346,11 @@ enum ClientCommands {
     #[structopt(name = "transfer")]
     Transfer {
         /// Recipient address
-        #[structopt(long)]
-        to: String,
+        #[structopt(long, parse(try_from_str = parse_public_key_bytes))]
+        to: PublicKeyBytes,
 
         /// Object to transfer, in 20 bytes Hex string
-        object_id: String,
+        object_id: ObjectID,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         gas_object_id: ObjectID,
@@ -549,20 +551,6 @@ fn main() {
             gas_object_id,
         } => {
             // TODO: Logic copied over from framework. Need to cleanup
-            let denylist = vec![
-                ModuleId::new(
-                    fastx_types::MOVE_STDLIB_ADDRESS,
-                    ident_str!("Capability").to_owned(),
-                ),
-                ModuleId::new(
-                    fastx_types::MOVE_STDLIB_ADDRESS,
-                    ident_str!("Event").to_owned(),
-                ),
-                ModuleId::new(
-                    fastx_types::MOVE_STDLIB_ADDRESS,
-                    ident_str!("GUID").to_owned(),
-                ),
-            ];
             // Derive CompiledModule
             let build_cfg = BuildConfig {
                 ..Default::default()
@@ -571,17 +559,7 @@ fn main() {
                 .compile_package(&path, &mut Vec::new())
                 .expect("Unable to compile package from dir");
 
-            let filtered_modules = package
-                .transitive_compiled_modules()
-                .iter_modules_owned()
-                .into_iter()
-                .filter(|m| !denylist.contains(&m.self_id()))
-                .collect();
-            for m in &filtered_modules {
-                verify_module(m).unwrap();
-                verify_module(m).unwrap();
-                // TODO(https://github.com/MystenLabs/fastnft/issues/69): Run Move linker
-            }
+            let filtered_modules = package.transitive_compiled_modules().iter_modules_owned();
 
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
@@ -601,7 +579,6 @@ fn main() {
                 info!("Starting publish");
                 let time_start = Instant::now();
 
-                // TODO: Need to rectrieve the object ref for the published module
                 let (_cert, obj_refs) = client_state
                     .publish_modules(gas_object_id, filtered_modules)
                     .await
@@ -634,9 +611,6 @@ fn main() {
             object_id,
             gas_object_id,
         } => {
-            let recipient = decode_address(&to).expect("Failed to decode recipient's address");
-            let object_id = ObjectID::from_hex_literal(&object_id).unwrap();
-
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 // Find the owner of this obj
@@ -654,7 +628,7 @@ fn main() {
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let cert = client_state
-                    .transfer_object(object_id, gas_object_id, recipient)
+                    .transfer_object(object_id, gas_object_id, to)
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
@@ -665,7 +639,7 @@ fn main() {
                 let mut recipient_client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
-                    recipient,
+                    to,
                     buffer_size,
                     send_timeout,
                     recv_timeout,

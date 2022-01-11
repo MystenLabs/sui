@@ -23,6 +23,7 @@ toml = "0.5.8"
 strum = "0.23.0"
 strum_macros = "0.23.1"
 num_cpus = "1.13.1"
+base64 = "0.13.0"
 
 fastpay_core = { path = "../fastpay_core" }
 fastx-types = { path = "../fastx_types" }
