@@ -453,7 +453,7 @@ fn main() {
                 // TODO(https://github.com/MystenLabs/fastnft/issues/69): Run Move linker
             }
 
-            let mut rt = Runtime::new().unwrap();
+            let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 let mut sender_opt: Option<FastPayAddress> = None;
                 // Find the owner of this gas obj
