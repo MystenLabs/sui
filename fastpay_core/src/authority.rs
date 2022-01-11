@@ -1,7 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastx_adapter::adapter;
+use fastx_adapter::{adapter, genesis};
 use fastx_types::{
     base_types::*,
     committee::Committee,
@@ -336,7 +336,37 @@ impl AuthorityState {
 }
 
 impl AuthorityState {
-    pub fn new(
+    pub async fn new_with_genesis_modules(
+        committee: Committee,
+        name: AuthorityName,
+        secret: KeyPair,
+        store: Arc<AuthorityStore>,
+    ) -> Self {
+        let genesis = genesis::GENESIS.lock().unwrap();
+        let genesis_modules = genesis.objects.clone();
+        let state = AuthorityState {
+            committee,
+            name,
+            secret,
+            native_functions: genesis.native_functions.clone(),
+            _database: store,
+        };
+        // Drop the lock asap.
+        drop(genesis);
+        for genesis_module in genesis_modules {
+            #[cfg(debug_assertions)]
+            genesis_module.data.try_as_module().unwrap();
+
+            state
+                .init_order_lock(genesis_module.to_object_reference())
+                .await;
+            state.insert_object(genesis_module).await;
+        }
+        state
+    }
+
+    #[cfg(test)]
+    pub fn new_without_genesis_for_testing(
         committee: Committee,
         name: AuthorityName,
         secret: KeyPair,
