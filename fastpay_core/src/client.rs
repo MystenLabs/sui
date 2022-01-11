@@ -7,6 +7,7 @@ use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
 use futures::{future, StreamExt, TryFutureExt};
+use move_binary_format::CompiledModule;
 use rand::seq::SliceRandom;
 use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
 use std::time::Duration;
@@ -91,10 +92,10 @@ pub trait Client {
     ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
 
     /// Publish a module. Not yet implemented
-    fn publish_module(
+    fn publish_modules(
         &mut self,
         gas_payment: ObjectID,
-        module: Vec<u8>,
+        modules: Vec<CompiledModule>,
     ) -> AsyncResult<'_, (CertifiedOrder, Vec<ObjectRef>), anyhow::Error>;
     /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
     /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
@@ -593,10 +594,17 @@ where
     async fn publish(
         &mut self,
         gas_payment: ObjectRef,
-        module: Vec<u8>,
+        modules: Vec<CompiledModule>,
     ) -> Result<(CertifiedOrder, Vec<ObjectRef>), anyhow::Error> {
-        let modules = vec![module];
-        let publish_order = Order::new_module(self.address, gas_payment, modules, &self.secret);
+        let modules_buf = modules
+            .iter()
+            .map(|v| {
+                let mut bytes = Vec::new();
+                v.serialize(&mut bytes).unwrap();
+                bytes
+            })
+            .collect::<Vec<_>>();
+        let publish_order = Order::new_module(self.address, gas_payment, modules_buf, &self.secret);
 
         Ok(self.execute_module_publish(publish_order).await?)
     }
@@ -896,10 +904,10 @@ where
         })
     }
 
-    fn publish_module(
+    fn publish_modules(
         &mut self,
         gas_payment: ObjectID,
-        module: Vec<u8>,
+        modules: Vec<CompiledModule>,
     ) -> AsyncResult<'_, (CertifiedOrder, Vec<ObjectRef>), anyhow::Error> {
         Box::pin(self.publish(
             (
@@ -908,7 +916,7 @@ where
                 // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
                 ObjectDigest::new([0; 32]),
             ),
-            module,
+            modules,
         ))
     }
     fn sync_client_state_with_random_authority(

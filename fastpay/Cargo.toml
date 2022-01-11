@@ -26,6 +26,9 @@ num_cpus = "1.13.1"
 
 fastpay_core = { path = "../fastpay_core" }
 fastx-types = { path = "../fastx_types" }
+move-package = { git = "https://github.com/diem/diem", rev="346301f33b3489bb4e486ae6c0aa5e030223b492" }
+move-core-types = { git = "https://github.com/diem/diem", rev="346301f33b3489bb4e486ae6c0aa5e030223b492" }
+move-bytecode-verifier = { git = "https://github.com/diem/diem", rev="346301f33b3489bb4e486ae6c0aa5e030223b492" }
 
 [[bin]]
 name = "client"

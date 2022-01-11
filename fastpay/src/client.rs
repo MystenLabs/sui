@@ -10,9 +10,12 @@ use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
+use move_bytecode_verifier::verify_module;
+use move_core_types::{ident_str, language_storage::ModuleId};
+use move_package::BuildConfig;
 use std::{
     collections::{HashMap, HashSet},
-    fs,
+    path::PathBuf,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
@@ -334,12 +337,12 @@ enum ClientCommands {
         gas_object_id: String,
     },
 
-    /// Publish module
+    /// Publish modules
     #[structopt(name = "publish")]
     Publish {
-        /// Module path
+        /// Package path
         #[structopt(long)]
-        path: String,
+        path: PathBuf,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         gas_object_id: String,
@@ -415,8 +418,40 @@ fn main() {
             gas_object_id,
         } => {
             let gas_object_id = ObjectID::from_hex_literal(&gas_object_id).unwrap();
-            // TODO: This should be Vec<u8> of CompiledModule, not text
-            let module_bytes = fs::read(path).expect("Failed to read module file path");
+            // TODO: Logic copied over from framework. Need to cleanup
+            let denylist = vec![
+                ModuleId::new(
+                    fastx_types::MOVE_STDLIB_ADDRESS,
+                    ident_str!("Capability").to_owned(),
+                ),
+                ModuleId::new(
+                    fastx_types::MOVE_STDLIB_ADDRESS,
+                    ident_str!("Event").to_owned(),
+                ),
+                ModuleId::new(
+                    fastx_types::MOVE_STDLIB_ADDRESS,
+                    ident_str!("GUID").to_owned(),
+                ),
+            ];
+            // Derive CompiledModule
+            let build_cfg = BuildConfig {
+                ..Default::default()
+            };
+            let package = build_cfg
+                .compile_package(&path, &mut Vec::new())
+                .expect("Unable to compile package from dir");
+
+            let filtered_modules = package
+                .transitive_compiled_modules()
+                .iter_modules_owned()
+                .into_iter()
+                .filter(|m| !denylist.contains(&m.self_id()))
+                .collect();
+            for m in &filtered_modules {
+                verify_module(m).unwrap();
+                verify_module(m).unwrap();
+                // TODO(https://github.com/MystenLabs/fastnft/issues/69): Run Move linker
+            }
 
             let mut rt = Runtime::new().unwrap();
             rt.block_on(async move {
@@ -444,14 +479,20 @@ fn main() {
 
                 // TODO: Need to rectrieve the object ref for the published module
                 let (_cert, obj_refs) = client_state
-                    .publish_module(gas_object_id, module_bytes)
+                    .publish_modules(gas_object_id, filtered_modules)
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Publish confirmed after {} us", time_total);
+
+                println!("Gas object used: {}", gas_object_id);
                 println!(
-                    "Mutated object ids: {:?}",
-                    obj_refs.iter().map(|val| val.0).collect::<Vec<_>>()
+                    "Module object ids: {:?}",
+                    obj_refs
+                        .iter()
+                        .map(|val| val.0)
+                        .filter(|e| *e != gas_object_id)
+                        .collect::<Vec<_>>()
                 );
                 // Try to sync.
                 client_state.sync_client_state_with_all_authorities();
