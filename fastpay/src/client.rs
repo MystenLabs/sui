@@ -415,6 +415,7 @@ fn main() {
             gas_object_id,
         } => {
             let gas_object_id = ObjectID::from_hex_literal(&gas_object_id).unwrap();
+            // TODO: This should be Vec<u8> of CompiledModule, not text
             let module_bytes = fs::read(path).expect("Failed to read module file path");
 
             let mut rt = Runtime::new().unwrap();
@@ -442,13 +443,16 @@ fn main() {
                 let time_start = Instant::now();
 
                 // TODO: Need to rectrieve the object ref for the published module
-                let cert = client_state
+                let (_cert, obj_refs) = client_state
                     .publish_module(gas_object_id, module_bytes)
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Publish confirmed after {} us", time_total);
-                println!("{:?}", cert);
+                println!(
+                    "Mutated object ids: {:?}",
+                    obj_refs.iter().map(|val| val.0).collect::<Vec<_>>()
+                );
                 // Try to sync.
                 client_state.sync_client_state_with_all_authorities();
 

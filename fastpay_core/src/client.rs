@@ -95,7 +95,7 @@ pub trait Client {
         &mut self,
         gas_payment: ObjectID,
         module: Vec<u8>,
-    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
+    ) -> AsyncResult<'_, (CertifiedOrder, Vec<ObjectRef>), anyhow::Error>;
     /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
     /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
     fn sync_client_state_with_random_authority(
@@ -512,13 +512,81 @@ where
     }
 
     /// TODO/TBD: waiting for https://github.com/MystenLabs/fastnft/pull/130
-    async fn communicate_publish(
+    async fn communicate_publish_transaction_order(
         &mut self,
-        _sender: FastPayAddress,
-        _known_certificates: Vec<CertifiedOrder>,
-        _action: CommunicateAction,
-    ) -> Result<Vec<CertifiedOrder>, anyhow::Error> {
-        unimplemented!("Module publish communication not finalized");
+        order: Order,
+    ) -> Result<CertifiedOrder, anyhow::Error> {
+        let committee = self.committee.clone();
+
+        let votes = self
+            .communicate_with_quorum(|name, client| {
+                let order = order.clone();
+                let committee = &committee;
+                Box::pin(async move {
+                    let result = client.handle_order(order).await;
+
+                    match result {
+                        Ok(resp) => {
+                            fp_ensure!(
+                                resp.signed_order.as_ref().unwrap().authority == name,
+                                FastPayError::ErrorWhileProcessingTransferOrder
+                            );
+                            resp.signed_order.as_ref().unwrap().check(committee)?;
+                            Ok(resp.signed_order)
+                        }
+                        Err(err) => Err(err),
+                        //_ => return Err(FastPayError::ErrorWhileProcessingTransferOrder),
+                    }
+                })
+            })
+            .await?;
+
+        let certificate = CertifiedOrder {
+            order: order.clone(),
+            signatures: votes
+                .into_iter()
+                .filter_map(|vote| match vote {
+                    Some(signed_order) => Some((signed_order.authority, signed_order.signature)),
+                    None => None,
+                })
+                .collect(),
+        };
+        Ok(certificate)
+    }
+
+    /// TODO/TBD: waiting for https://github.com/MystenLabs/fastnft/pull/130
+    async fn communicate_publish_confirmation_order(
+        &mut self,
+        cert_order: &CertifiedOrder,
+    ) -> Result<OrderInfoResponse, anyhow::Error> {
+        let committee = self.committee.clone();
+
+        let votes = self
+            .communicate_with_quorum(|name, client| {
+                let certified_order = ConfirmationOrder {
+                    certificate: cert_order.clone(),
+                };
+                let committee = &committee;
+                Box::pin(async move {
+                    let result = client.handle_confirmation_order(certified_order).await;
+
+                    match result {
+                        Ok(resp) => {
+                            fp_ensure!(
+                                resp.signed_order.as_ref().unwrap().authority == name,
+                                FastPayError::ErrorWhileProcessingTransferOrder
+                            );
+                            resp.signed_order.as_ref().unwrap().check(committee)?;
+                            Ok(resp)
+                        }
+                        Err(err) => Err(err),
+                        //_ => return Err(FastPayError::ErrorWhileProcessingTransferOrder),
+                    }
+                })
+            })
+            .await?;
+
+        Ok(votes.get(0).unwrap().clone())
     }
 
     /// Publishes a module
@@ -526,13 +594,11 @@ where
         &mut self,
         gas_payment: ObjectRef,
         module: Vec<u8>,
-    ) -> Result<CertifiedOrder, anyhow::Error> {
+    ) -> Result<(CertifiedOrder, Vec<ObjectRef>), anyhow::Error> {
         let modules = vec![module];
         let publish_order = Order::new_module(self.address, gas_payment, modules, &self.secret);
-        let certificate = self
-            .execute_module_publish(publish_order, /* with_confirmation */ true)
-            .await?;
-        Ok(certificate)
+
+        Ok(self.execute_module_publish(publish_order).await?)
     }
 
     /// Transfers an object to a recipient address.
@@ -610,35 +676,54 @@ where
         }
         Ok(())
     }
+
+    fn update_objects_from_order_info(&mut self, order_info_resp: OrderInfoResponse) {
+        // TODO: use the digest
+        for (obj_id, seq_no, _) in order_info_resp
+            .signed_effects
+            .clone()
+            .unwrap()
+            .effects
+            .mutated
+        {
+            self.object_ids.insert(obj_id, seq_no);
+        }
+        for (obj_id, _, _) in order_info_resp.signed_effects.unwrap().effects.deleted {
+            self.object_ids.remove(&obj_id);
+        }
+    }
+
     // TODO: flesh this out and decouple from transfer logic
     // For now reusing code for testing purposes
     async fn execute_module_publish(
         &mut self,
         order: Order,
-        with_confirmation: bool,
-    ) -> Result<CertifiedOrder, anyhow::Error> {
-        let new_sent_certificates = self
-            .communicate_publish(
-                self.address,
-                self.sent_certificates.clone(),
-                CommunicateAction::SendOrder(order.clone()),
-            )
-            .await?;
-        assert_eq!(new_sent_certificates.last().unwrap().order, order);
+    ) -> Result<(CertifiedOrder, Vec<ObjectRef>), anyhow::Error> {
+        // Transfer order
+        let new_certificate = self.communicate_publish_transaction_order(order).await?;
 
-        //self.update_certificates(new_sent_certificates)?;
-        // Confirm last transfer certificate if needed.
-        if with_confirmation {
-            self.communicate_publish(
-                self.address,
-                self.sent_certificates.clone(),
-                CommunicateAction::SynchronizeNextSequenceNumber(
-                    self.next_sequence_number(*order.object_id()),
-                ),
-            )
+        // Update state
+        self.update_certificates(vec![new_certificate.clone()])?;
+
+        // Confirmation
+        let order_info = self
+            .communicate_publish_confirmation_order(&new_certificate)
             .await?;
-        }
-        Ok(self.sent_certificates.last().unwrap().clone())
+
+        // Update local object view
+        self.update_objects_from_order_info(order_info.clone());
+
+        // Publish can only yield 0 or more object refs
+        Ok((
+            order_info
+                .certified_order
+                .expect("Order for publish not certified"),
+            order_info
+                .signed_effects
+                .expect("Publish did not yield new objects")
+                .effects
+                .mutated,
+        ))
     }
 
     /// Execute (or retry) a transfer order. Update local balance.
@@ -815,7 +900,7 @@ where
         &mut self,
         gas_payment: ObjectID,
         module: Vec<u8>,
-    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
+    ) -> AsyncResult<'_, (CertifiedOrder, Vec<ObjectRef>), anyhow::Error> {
         Box::pin(self.publish(
             (
                 gas_payment,
