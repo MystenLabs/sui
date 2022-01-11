@@ -5,10 +5,13 @@ use clap::arg_enum;
 use futures::future;
 use log::*;
 use serde::{Deserialize, Serialize};
+use std::io::ErrorKind;
 use std::{collections::HashMap, convert::TryInto, io, sync::Arc};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpSocket;
 use tokio::{
+    io::{AsyncRead, AsyncWrite},
     net::{TcpListener, TcpStream, UdpSocket},
-    prelude::*,
 };
 
 #[cfg(test)]
@@ -112,7 +115,11 @@ impl NetworkProtocol {
                 tokio::spawn(Self::run_udp_server(socket, state, receiver, buffer_size))
             }
             Self::Tcp => {
-                let listener = TcpListener::bind(address).await?;
+                // see https://fly.io/blog/the-tokio-1-x-upgrade/#tcplistener-from_std-needs-to-be-set-to-nonblocking
+                let std_listener = std::net::TcpListener::bind(address)?;
+                std_listener.set_nonblocking(true)?;
+                let listener = TcpListener::from_std(std_listener)?;
+
                 tokio::spawn(Self::run_tcp_server(listener, state, receiver, buffer_size))
             }
         };
@@ -186,7 +193,7 @@ impl DataStreamPool for UdpDataStreamPool {
 // Server implementation for UDP.
 impl NetworkProtocol {
     async fn run_udp_server<S>(
-        mut socket: UdpSocket,
+        socket: UdpSocket,
         state: S,
         mut exit_future: futures::channel::oneshot::Receiver<()>,
         buffer_size: usize,
@@ -223,9 +230,14 @@ struct TcpDataStream {
 
 impl TcpDataStream {
     async fn connect(address: String, max_data_size: usize) -> Result<Self, std::io::Error> {
-        let stream = TcpStream::connect(address).await?;
-        stream.set_send_buffer_size(max_data_size)?;
-        stream.set_recv_buffer_size(max_data_size)?;
+        let addr = address
+            .parse()
+            .map_err(|e| std::io::Error::new(ErrorKind::Other, e))?;
+        let socket = TcpSocket::new_v4()?;
+        socket.set_send_buffer_size(max_data_size as u32)?;
+        socket.set_recv_buffer_size(max_data_size as u32)?;
+
+        let stream = socket.connect(addr).await?;
         Ok(Self {
             stream,
             max_data_size,
@@ -322,7 +334,7 @@ impl DataStreamPool for TcpDataStreamPool {
 // Server implementation for TCP.
 impl NetworkProtocol {
     async fn run_tcp_server<S>(
-        mut listener: TcpListener,
+        listener: TcpListener,
         state: S,
         mut exit_future: futures::channel::oneshot::Receiver<()>,
         buffer_size: usize,
@@ -332,7 +344,7 @@ impl NetworkProtocol {
     {
         let guarded_state = Arc::new(Box::new(state));
         loop {
-            let (mut socket, _) =
+            let (mut stream, _) =
                 match future::select(exit_future, Box::pin(listener.accept())).await {
                     future::Either::Left(_) => break,
                     future::Either::Right((value, new_exit_future)) => {
@@ -340,12 +352,11 @@ impl NetworkProtocol {
                         value?
                     }
                 };
-            socket.set_send_buffer_size(buffer_size)?;
-            socket.set_recv_buffer_size(buffer_size)?;
+
             let guarded_state = guarded_state.clone();
             tokio::spawn(async move {
                 loop {
-                    let buffer = match TcpDataStream::tcp_read_data(&mut socket, buffer_size).await
+                    let buffer = match TcpDataStream::tcp_read_data(&mut stream, buffer_size).await
                     {
                         Ok(buffer) => buffer,
                         Err(err) => {
@@ -358,7 +369,7 @@ impl NetworkProtocol {
                     };
 
                     if let Some(reply) = guarded_state.handle_message(&buffer[..]).await {
-                        let status = TcpDataStream::tcp_write_data(&mut socket, &reply[..]).await;
+                        let status = TcpDataStream::tcp_write_data(&mut stream, &reply[..]).await;
                         if let Err(error) = status {
                             error!("Failed to send query response: {}", error);
                         }
