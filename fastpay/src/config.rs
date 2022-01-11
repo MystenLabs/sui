@@ -8,6 +8,8 @@ use fastx_types::{
     messages::{Address, CertifiedOrder, OrderKind},
 };
 
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::TypeTag;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -15,7 +17,6 @@ use std::{
     io::{BufReader, BufWriter, Write},
     iter::FromIterator,
 };
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthorityConfig {
     pub network_protocol: NetworkProtocol,
@@ -124,6 +125,48 @@ impl UserAccount {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct MoveCallConfig {
+    /// Module object ID
+    pub module_obj_id: ObjectID,
+    /// Function name in module
+    pub function: Identifier,
+    /// Function name in module
+    pub type_args: Vec<TypeTag>,
+    /// Object args object IDs
+    pub object_args_ids: Vec<ObjectID>,
+    // TODO: this somehow turns into a Vec<Vec<u8>>, how?
+    /// Pure args
+    //pure_args: String,
+    // // TODO: object args from
+    // /// Pure args
+    // object_args: String,
+    /// ID of the gas object for gas payment, in 20 bytes Hex string
+    pub gas_object_id: ObjectID,
+    /// Gas budget for this call
+    pub gas_budget: u64,
+}
+
+impl MoveCallConfig {
+    pub fn read(path: &str) -> Result<Self, std::io::Error> {
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .read(true)
+            .open(path)?;
+        let reader = BufReader::new(file);
+        Ok(serde_json::from_reader(reader)?)
+    }
+
+    pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
+        let file = OpenOptions::new().write(true).open(path)?;
+        let mut writer = BufWriter::new(file);
+        serde_json::to_writer(&mut writer, self)?;
+        writer.write_all(b"\n")?;
+        Ok(())
+    }
+}
+
 pub struct AccountsConfig {
     accounts: BTreeMap<FastPayAddress, UserAccount>,
 }
@@ -144,7 +187,9 @@ impl AccountsConfig {
     pub fn accounts_mut(&mut self) -> impl Iterator<Item = &mut UserAccount> {
         self.accounts.values_mut()
     }
-
+    pub fn accounts(&mut self) -> impl Iterator<Item = &UserAccount> {
+        self.accounts.values()
+    }
     pub fn addresses(&mut self) -> impl Iterator<Item = &FastPayAddress> {
         self.accounts.keys()
     }

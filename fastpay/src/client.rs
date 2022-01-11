@@ -283,6 +283,21 @@ fn deserialize_response(response: &[u8]) -> Option<ObjectInfoResponse> {
         }
     }
 }
+fn find_owner_by_object_cache(
+    account_config: &mut AccountsConfig,
+    object_id: ObjectID,
+) -> Option<PublicKeyBytes> {
+    for acc in account_config.accounts() {
+        if acc.object_ids.contains_key(&object_id) {
+            return Some(acc.address);
+        }
+    }
+    None
+}
+
+fn parse_public_key_bytes(src: &str) -> Result<PublicKeyBytes, base64::DecodeError> {
+    Ok(decode_address(src).expect("Failed to decode recipient's address"))
+}
 
 #[derive(StructOpt)]
 #[structopt(
@@ -319,22 +334,26 @@ struct ClientOpt {
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 enum ClientCommands {
+    /// Call Move
+    #[structopt(name = "call")]
+    Call { path: String },
+
     /// Transfer funds
     #[structopt(name = "transfer")]
     Transfer {
         /// Sending address (must be one of our accounts)
-        #[structopt(long)]
-        from: String,
+        #[structopt(long, parse(try_from_str = parse_public_key_bytes))]
+        from: PublicKeyBytes,
 
         /// Recipient address
-        #[structopt(long)]
-        to: String,
+        #[structopt(long, parse(try_from_str = parse_public_key_bytes))]
+        to: PublicKeyBytes,
 
         /// Object to transfer, in 20 bytes Hex string
-        object_id: String,
+        object_id: ObjectID,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
-        gas_object_id: String,
+        gas_object_id: ObjectID,
     },
 
     /// Obtain the Account Addresses
@@ -345,7 +364,8 @@ enum ClientCommands {
     #[structopt(name = "query-objects")]
     QueryObjects {
         /// Address of the account
-        address: String,
+        #[structopt(long, parse(try_from_str = parse_public_key_bytes))]
+        address: PublicKeyBytes,
     },
 
     /// Send one transfer per account in bulk mode
@@ -402,23 +422,91 @@ fn main() {
         CommitteeConfig::read(committee_config_path).expect("Unable to read committee config file");
 
     match options.cmd {
+        ClientCommands::Call { path } => {
+            let config = MoveCallConfig::read(&path).unwrap();
+            // Find owner of acc
+            let owner = find_owner_by_object_cache(&mut accounts_config, config.gas_object_id)
+                .expect("Cannot find owner for gas object");
+            // Fetch the module ref
+            //let module_obj_ref =
+
+            let mut client_state = make_client_state(
+                &accounts_config,
+                &committee_config,
+                owner,
+                buffer_size,
+                send_timeout,
+                recv_timeout,
+            );
+
+            let rt = Runtime::new().unwrap();
+            rt.block_on(async move {
+                // Fetch the object info for the module
+                let module_obj_info_req = ObjectInfoRequest {
+                    object_id: config.module_obj_id,
+                    request_sequence_number: None,
+                    request_received_transfers_excluding_first_nth: None,
+                };
+                let module_obj_info = client_state
+                    .get_object_info(module_obj_info_req)
+                    .await
+                    .unwrap();
+                let module_obj_ref = module_obj_info.object.to_object_reference();
+
+                // Fetch the object info for the gas module
+                // Fetch the object info for the module
+                let gas_obj_info_req = ObjectInfoRequest {
+                    object_id: config.gas_object_id,
+                    request_sequence_number: None,
+                    request_received_transfers_excluding_first_nth: None,
+                };
+
+                let gas_obj_info = client_state
+                    .get_object_info(gas_obj_info_req)
+                    .await
+                    .unwrap();
+                let gas_obj_ref = gas_obj_info.object.to_object_reference();
+
+                // Fetch the objects for the object args
+                let mut object_args_refs = Vec::new();
+
+                for _ in config.object_args_ids {
+                    // Fetch the obj ref
+                    let obj_info_req = ObjectInfoRequest {
+                        object_id: config.gas_object_id,
+                        request_sequence_number: None,
+                        request_received_transfers_excluding_first_nth: None,
+                    };
+
+                    let gas_obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
+                    object_args_refs.push(gas_obj_info.object.to_object_reference());
+                }
+
+                client_state.move_call(
+                    module_obj_ref,
+                    config.function,
+                    config.type_args,
+                    gas_obj_ref,
+                    object_args_refs,
+                    // TODO: How to handle pure args?
+                    Vec::new(),
+                    config.gas_budget,
+                );
+            });
+        }
+
         ClientCommands::Transfer {
             from,
             to,
             object_id,
             gas_object_id,
         } => {
-            let sender = decode_address(&from).expect("Failed to decode sender's address");
-            let recipient = decode_address(&to).expect("Failed to decode recipient's address");
-            let object_id = ObjectID::from_hex_literal(&object_id).unwrap();
-            let gas_object_id = ObjectID::from_hex_literal(&gas_object_id).unwrap();
-
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 let mut client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
-                    sender,
+                    from,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
@@ -426,7 +514,7 @@ fn main() {
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let cert = client_state
-                    .transfer_object(object_id, gas_object_id, recipient)
+                    .transfer_object(object_id, gas_object_id, to)
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
@@ -437,7 +525,7 @@ fn main() {
                 let mut recipient_client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
-                    recipient,
+                    to,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
@@ -462,14 +550,12 @@ fn main() {
         }
 
         ClientCommands::QueryObjects { address } => {
-            let user_address = decode_address(&address).expect("Failed to decode address");
-
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 let client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
-                    user_address,
+                    address,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
@@ -483,7 +569,7 @@ fn main() {
                     .expect("Unable to write user accounts");
 
                 for (obj_id, seq_num) in objects_ids {
-                    println!("{:#x}: {:?}", obj_id, seq_num);
+                    println!("{}: {:?}", obj_id, seq_num);
                 }
             });
         }
@@ -543,7 +629,7 @@ fn main() {
                         .iter()
                         .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
                             Some(info) => {
-                                confirmed.insert(info.object_id);
+                                confirmed.insert(info.object.id());
                                 acc + 1
                             }
                             None => acc,
