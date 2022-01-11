@@ -20,6 +20,7 @@ use crate::{
 pub struct MoveObject {
     pub type_: StructTag,
     contents: Vec<u8>,
+    read_only: bool,
 }
 
 /// Byte encoding of a 64 byte unsigned integer in BCS
@@ -31,7 +32,11 @@ const VERSION_END_INDEX: usize = 24;
 
 impl MoveObject {
     pub fn new(type_: StructTag, contents: Vec<u8>) -> Self {
-        Self { type_, contents }
+        Self {
+            type_,
+            contents,
+            read_only: false,
+        }
     }
 
     pub fn id(&self) -> ObjectID {
@@ -100,6 +105,14 @@ impl MoveObject {
     pub fn into_contents(self) -> Vec<u8> {
         self.contents
     }
+
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
+    }
+
+    pub fn freeze(&mut self) {
+        self.read_only = true;
+    }
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize)]
@@ -113,14 +126,6 @@ pub enum Data {
 }
 
 impl Data {
-    pub fn is_read_only(&self) -> bool {
-        use Data::*;
-        match self {
-            Move(_) => false,
-            Module { .. } => true,
-        }
-    }
-
     pub fn try_as_move(&self) -> Option<&MoveObject> {
         use Data::*;
         match self {
@@ -195,7 +200,10 @@ impl Object {
     }
 
     pub fn is_read_only(&self) -> bool {
-        self.data.is_read_only()
+        match &self.data {
+            Data::Move(m) => m.is_read_only(),
+            Data::Module(_) => true,
+        }
     }
 
     pub fn to_object_reference(&self) -> ObjectRef {
@@ -234,10 +242,7 @@ impl Object {
     /// Change the owner of `self` to `new_owner`
     pub fn transfer(&mut self, new_owner: FastPayAddress) -> Result<(), FastPayError> {
         // TODO: these should be raised FastPayError's instead of panic's
-        assert!(
-            !self.data.is_read_only(),
-            "Cannot transfer an immutable object"
-        );
+        assert!(!self.is_read_only(), "Cannot transfer an immutable object");
         match &mut self.data {
             Data::Move(m) => {
                 assert!(
@@ -262,6 +267,7 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             contents: GasCoin::new(id, version, gas).to_bcs_bytes(),
+            read_only: false,
         });
         Self {
             owner,
