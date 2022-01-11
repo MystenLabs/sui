@@ -35,16 +35,18 @@ fn make_server(
         Path::new(&server_config.authority.database_path),
         None,
     ));
-    let state = AuthorityState::new(
-        committee,
-        server_config.authority.address,
-        server_config.key.copy(),
-        store,
-    );
 
     // Load initial states
     let rt = Runtime::new().unwrap();
-    rt.block_on(async {
+
+    let state = rt.block_on(async {
+        let state = AuthorityState::new_with_genesis_modules(
+            committee,
+            server_config.authority.address,
+            server_config.key.copy(),
+            store,
+        )
+        .await;
         for initial_state_cfg_entry in &initial_accounts_config.config {
             let address = &initial_state_cfg_entry.address;
             for object_id in &initial_state_cfg_entry.object_ids {
@@ -54,6 +56,7 @@ fn make_server(
                 state.insert_object(object).await;
             }
         }
+        state
     });
 
     network::Server::new(

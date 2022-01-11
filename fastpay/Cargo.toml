@@ -25,6 +25,7 @@ strum_macros = "0.23.1"
 num_cpus = "1.13.1"
 
 fastpay_core = { path = "../fastpay_core" }
+fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-types = { path = "../fastx_types" }
 
 [[bin]]

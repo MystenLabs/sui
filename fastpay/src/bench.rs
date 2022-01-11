@@ -118,14 +118,19 @@ impl ClientServerBenchmark {
         fs::create_dir(&path).unwrap();
 
         let store = Arc::new(AuthorityStore::open(path, None));
-        let state =
-            AuthorityState::new(committee.clone(), public_auth0, secret_auth0.copy(), store);
 
         // Seed user accounts.
         let rt = Runtime::new().unwrap();
         let mut account_objects = Vec::new();
         let mut gas_objects = Vec::new();
-        rt.block_on(async {
+        let state = rt.block_on(async {
+            let state = AuthorityState::new_with_genesis_modules(
+                committee.clone(),
+                public_auth0,
+                secret_auth0.copy(),
+                store,
+            )
+            .await;
             for _ in 0..self.num_accounts {
                 let keypair = get_key_pair();
                 let object_id: ObjectID = ObjectID::random();
@@ -145,6 +150,7 @@ impl ClientServerBenchmark {
                 state.insert_object(gas_object).await;
                 gas_objects.push(gas_object_ref);
             }
+            state
         });
 
         info!("Preparing transactions.");
