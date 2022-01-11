@@ -555,7 +555,7 @@ fn main() {
                 .compile_package(&path, &mut Vec::new())
                 .expect("Unable to compile package from dir");
 
-            let filtered_modules = package.transitive_compiled_modules().iter_modules_owned();
+            let filtered_modules = package.compiled_modules().iter_modules_owned();
 
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
