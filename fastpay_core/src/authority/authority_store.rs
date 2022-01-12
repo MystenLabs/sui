@@ -3,10 +3,10 @@ use super::*;
 use rocksdb::Options;
 use std::path::Path;
 // use std::sync::Mutex;
+use itertools::Itertools;
 use std::convert::TryInto;
 use typed_store::rocks::{open_cf, DBMap};
 use typed_store::traits::Map;
-use itertools::Itertools;
 
 pub struct AuthorityStore {
     objects: DBMap<ObjectID, Object>,
@@ -58,9 +58,10 @@ impl AuthorityStore {
             .iter()
             .map(|(_, _, digest)| {
                 usize::from_le_bytes(digest.0[0..8].try_into().unwrap()) % num_locks
-            }).unique()
+            })
+            .unique()
             .collect();
-        lock_number.sort();
+        lock_number.sort_unstable();
         let mut _guards = Vec::with_capacity(lock_number.len());
         for lock_seq in lock_number {
             _guards.push(self.lock_table[lock_seq].lock());
@@ -251,7 +252,7 @@ impl AuthorityStore {
             // let _lock = self.lock_table[0].lock();
             // .map_err(|_| FastPayError::StorageError)?;
 
-            let _mutexes = self._aqcuire_locks(&mutable_input_objects[..]);
+            let _mutexes = self._aqcuire_locks(mutable_input_objects);
 
             let locks = self
                 .order_lock
