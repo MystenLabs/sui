@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
 use move_binary_format::CompiledModule;
@@ -115,13 +116,16 @@ impl MoveObject {
     }
 }
 
+// TODO: Make MovePackage a NewType so that we can implement functions on it.
+pub type MovePackage = BTreeMap<String, Vec<u8>>;
+
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum Data {
     /// An object whose governing logic lives in a published Move module
     Move(MoveObject),
-    /// Raw bytes that deserialize to a published Move module
-    Module(Vec<u8>),
+    /// Map from each module name to raw serialized Move module bytes
+    Package(MovePackage),
     // ... FastX "native" types go here
 }
 
@@ -130,7 +134,7 @@ impl Data {
         use Data::*;
         match self {
             Move(m) => Some(m),
-            Module(_) => None,
+            Package(_) => None,
         }
     }
 
@@ -138,15 +142,15 @@ impl Data {
         use Data::*;
         match self {
             Move(m) => Some(m),
-            Module(_) => None,
+            Package(_) => None,
         }
     }
 
-    pub fn try_as_module(&self) -> Option<CompiledModule> {
+    pub fn try_as_package(&self) -> Option<&MovePackage> {
         use Data::*;
         match self {
             Move(_) => None,
-            Module(bytes) => CompiledModule::deserialize(bytes).ok(),
+            Package(p) => Some(p),
         }
     }
 
@@ -154,7 +158,7 @@ impl Data {
         use Data::*;
         match self {
             Move(m) => Some(&m.type_),
-            Module(_) => None,
+            Package(_) => None,
         }
     }
 }
@@ -185,15 +189,21 @@ impl Object {
         }
     }
 
-    pub fn new_module(
-        m: CompiledModule,
+    pub fn new_package(
+        modules: Vec<CompiledModule>,
         owner: FastPayAddress,
         previous_transaction: TransactionDigest,
     ) -> Self {
-        let mut bytes = Vec::new();
-        m.serialize(&mut bytes).unwrap();
+        let serialized: MovePackage = modules
+            .into_iter()
+            .map(|module| {
+                let mut bytes = Vec::new();
+                module.serialize(&mut bytes).unwrap();
+                (module.self_id().name().to_string(), bytes)
+            })
+            .collect();
         Object {
-            data: Data::Module(bytes),
+            data: Data::Package(serialized),
             owner,
             previous_transaction,
         }
@@ -202,7 +212,7 @@ impl Object {
     pub fn is_read_only(&self) -> bool {
         match &self.data {
             Data::Move(m) => m.is_read_only(),
-            Data::Module(_) => true,
+            Data::Package(_) => true,
         }
     }
 
@@ -215,9 +225,13 @@ impl Object {
 
         match &self.data {
             Move(v) => v.id(),
-            Module(m) => {
-                // TODO: extract ID by peeking into the bytes instead of deserializing
-                *CompiledModule::deserialize(m).unwrap().self_id().address()
+            Package(m) => {
+                // All modules in the same package must have the same address.
+                // TODO: Use byte trick to get ID directly without deserialization.
+                *CompiledModule::deserialize(m.values().next().unwrap())
+                    .unwrap()
+                    .self_id()
+                    .address()
             }
         }
     }
@@ -227,7 +241,7 @@ impl Object {
 
         match &self.data {
             Move(v) => v.version(),
-            Module(_) => SequenceNumber::from(0), // modules are immutable, version is always 0
+            Package(_) => SequenceNumber::from(0), // modules are immutable, version is always 0
         }
     }
 
@@ -254,7 +268,7 @@ impl Object {
                 m.increment_version()?;
                 Ok(())
             }
-            Data::Module(_) => panic!("Cannot transfer a module object"),
+            Data::Package(_) => panic!("Cannot transfer a module object"),
         }
     }
 

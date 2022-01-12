@@ -40,16 +40,19 @@ impl InMemoryStorage {
         }
     }
 
-    /// Return the object wrapping the module `name` (if any)
-    pub fn find_module(&self, name: &str) -> Option<Object> {
-        let id = Identifier::new(name).unwrap();
-        for o in self.persistent.values() {
-            match o.data.try_as_module() {
-                Some(m) if m.self_id().name() == id.as_ident_str() => return Some(o.clone()),
-                _ => (),
-            }
-        }
-        None
+    /// Return the package that contains the module `name` (if any)
+    pub fn find_package(&self, name: &str) -> Option<Object> {
+        self.persistent
+            .values()
+            .find(|o| {
+                if let Some(package) = o.data.try_as_package() {
+                    if package.get(name).is_some() {
+                        return true;
+                    }
+                }
+                false
+            })
+            .cloned()
     }
 
     /// Flush writes in scratchpad to persistent storage
@@ -111,7 +114,7 @@ impl ModuleResolver for InMemoryStorage {
         Ok(self
             .read_object(module_id.address())
             .map(|o| match &o.data {
-                Data::Module(m) => m.clone(),
+                Data::Package(m) => m[module_id.name().as_str()].clone(),
                 Data::Move(_) => panic!("Type error"),
             }))
     }
@@ -138,12 +141,13 @@ fn call(
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
 ) -> FastPayResult {
-    let module = storage.find_module("ObjectBasics").unwrap();
+    let package = storage.find_package("ObjectBasics").unwrap();
 
     adapter::execute(
         storage,
         native_functions.clone(),
-        module,
+        package,
+        &Identifier::new("ObjectBasics").unwrap(),
         &Identifier::new(name).unwrap(),
         Vec::new(),
         object_args,
@@ -160,9 +164,8 @@ fn test_object_basics() {
     let addr1 = base_types::get_key_pair().0;
     let addr2 = base_types::get_key_pair().0;
 
-    let genesis = genesis::GENESIS.lock().unwrap();
-    let native_functions = genesis.native_functions.clone();
-    let mut storage = InMemoryStorage::new(genesis.objects.clone());
+    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
     let gas_object = Object::with_id_owner_for_testing(
@@ -311,9 +314,8 @@ fn test_object_basics() {
 fn test_wrap_unwrap() {
     let addr = base_types::FastPayAddress::default();
 
-    let genesis = genesis::GENESIS.lock().unwrap();
-    let native_functions = genesis.native_functions.clone();
-    let mut storage = InMemoryStorage::new(genesis.objects.clone());
+    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment. Note that we won't really use it because we won't be providing a gas budget.
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), addr);
@@ -401,9 +403,8 @@ fn test_wrap_unwrap() {
 
 #[test]
 fn test_move_call_insufficient_gas() {
-    let genesis = genesis::GENESIS.lock().unwrap();
-    let native_functions = genesis.native_functions.clone();
-    let mut storage = InMemoryStorage::new(genesis.objects.clone());
+    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
     let gas_object = Object::with_id_owner_for_testing(
@@ -437,8 +438,8 @@ fn test_move_call_insufficient_gas() {
 
 #[test]
 fn test_publish_module_insufficient_gas() {
-    let genesis = genesis::GENESIS.lock().unwrap();
-    let mut storage = InMemoryStorage::new(genesis.objects.clone());
+    let (genesis_objects, _) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
     let gas_object = Object::with_id_owner_gas_for_testing(
@@ -475,9 +476,8 @@ fn test_transfer_and_freeze() {
     let addr1 = base_types::get_key_pair().0;
     let addr2 = base_types::get_key_pair().0;
 
-    let genesis = genesis::GENESIS.lock().unwrap();
-    let native_functions = genesis.native_functions.clone();
-    let mut storage = InMemoryStorage::new(genesis.objects.clone());
+    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
     let gas_object = Object::with_id_owner_for_testing(

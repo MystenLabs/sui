@@ -16,14 +16,15 @@ pub mod natives;
 const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
 
 /// Return all the modules of the fastX framework and its dependencies in topologically
-/// sorted dependency order (leaves first)
-pub fn get_framework_modules() -> Result<Vec<CompiledModule>> {
+/// sorted dependency order (leaves first). The packages are organized
+/// as a map from the address to all modules in that address.
+pub fn get_framework_packages() -> Result<Vec<CompiledModule>> {
     let include_examples = false;
     let verify = true;
-    get_framework_modules_(include_examples, verify)
+    get_framework_packages_(include_examples, verify)
 }
 
-fn get_framework_modules_(include_examples: bool, verify: bool) -> Result<Vec<CompiledModule>> {
+fn get_framework_packages_(include_examples: bool, verify: bool) -> Result<Vec<CompiledModule>> {
     // TODO: prune unused deps from Move stdlib instead of using an explicit denylist.
     // The manually curated list are modules that do not pass the FastX verifier
     let denylist = vec![
@@ -32,7 +33,7 @@ fn get_framework_modules_(include_examples: bool, verify: bool) -> Result<Vec<Co
         ModuleId::new(MOVE_STDLIB_ADDRESS, ident_str!("GUID").to_owned()),
     ];
     let package = build(include_examples)?;
-    let filtered_modules = package
+    let filtered_modules: Vec<CompiledModule> = package
         .transitive_compiled_modules()
         .iter_modules_owned()
         .into_iter()
@@ -62,7 +63,7 @@ fn build(include_examples: bool) -> Result<CompiledPackage> {
 fn check_that_move_code_can_be_built_verified_testsd() {
     let include_examples = true;
     let verify = true;
-    get_framework_modules_(include_examples, verify).unwrap();
+    get_framework_packages_(include_examples, verify).unwrap();
     // ideally this would be a separate test, but doing so introduces
     // races because of https://github.com/diem/diem/issues/10102
     run_move_unit_tests();
