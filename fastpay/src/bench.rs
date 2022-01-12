@@ -14,12 +14,13 @@ use structopt::StructOpt;
 use tokio::runtime::Runtime;
 use tokio::{runtime::Builder, time};
 
-use std::env;
+// use std::env;
 use std::fs;
 use std::sync::Arc;
 use std::thread;
 use strum_macros::EnumString;
 use rocksdb::Options;
+// use std::path::PathBuf;
 
 #[derive(Debug, Clone, StructOpt)]
 #[structopt(
@@ -33,6 +34,9 @@ struct ClientServerBenchmark {
     /// Hostname
     #[structopt(long, default_value = "127.0.0.1")]
     host: String,
+    /// Path to the database
+    #[structopt(long, default_value = "/tmp")]
+    db_dir: String,
     /// Base port number
     #[structopt(long, default_value = "9555")]
     port: u32,
@@ -57,7 +61,7 @@ struct ClientServerBenchmark {
     /// Which execution path to track. OrdersAndCerts or OrdersOnly or CertsOnly
     #[structopt(long, default_value = "OrdersAndCerts")]
     benchmark_type: BenchmarkType,
-    /// Which execution path to track. OrdersAndCerts or OrdersOnly or CertsOnly
+    /// Number of connections to the server
     #[structopt(long, default_value = "4")]
     cpus: usize,
 }
@@ -118,7 +122,8 @@ impl ClientServerBenchmark {
         let (public_auth0, secret_auth0) = keys.pop().unwrap();
 
         // Create a random directory to store the DB
-        let dir = env::temp_dir();
+        use std::path::Path;
+        let dir = Path::new(&self.db_dir);
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
