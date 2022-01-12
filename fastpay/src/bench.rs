@@ -64,6 +64,9 @@ struct ClientServerBenchmark {
     /// Number of connections to the server
     #[structopt(long, default_value = "4")]
     cpus: usize,
+    /// Number of database cpus
+    #[structopt(long, default_value = "1")]
+    db_cpus: usize,
 }
 #[derive(Debug, Clone, PartialEq, EnumString)]
 enum BenchmarkType {
@@ -129,7 +132,7 @@ impl ClientServerBenchmark {
 
 
         let mut opts = Options::default();
-        opts.increase_parallelism(4);
+        opts.increase_parallelism(self.db_cpus as i32);
         let store = Arc::new(AuthorityStore::open(path, None));
 
         // Seed user accounts.
