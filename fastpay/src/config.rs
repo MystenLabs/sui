@@ -102,8 +102,7 @@ pub struct UserAccount {
     pub key: KeyPair,
     pub object_ids: BTreeMap<ObjectID, SequenceNumber>,
     pub gas_object_ids: BTreeSet<ObjectID>, // Every id in gas_object_ids should also be in object_ids.
-    pub sent_certificates: Vec<CertifiedOrder>,
-    pub received_certificates: Vec<CertifiedOrder>,
+    pub certificates: Vec<CertifiedOrder>,
 }
 
 impl UserAccount {
@@ -119,8 +118,7 @@ impl UserAccount {
             key,
             object_ids,
             gas_object_ids,
-            sent_certificates: Vec::new(),
-            received_certificates: Vec::new(),
+            certificates: Vec::new(),
         }
     }
 }
@@ -225,8 +223,7 @@ impl AccountsConfig {
             .get_mut(&state.address())
             .expect("Updated account should already exist");
         account.object_ids = state.object_ids().clone();
-        account.sent_certificates = state.sent_certificates().clone();
-        account.received_certificates = state.received_certificates().cloned().collect();
+        account.certificates = state.certificates().clone();
     }
 
     pub fn update_for_received_transfer(&mut self, certificate: CertifiedOrder) {
@@ -235,12 +232,12 @@ impl AccountsConfig {
                 if let Address::FastPay(recipient) = &transfer.recipient {
                     if let Some(config) = self.accounts.get_mut(recipient) {
                         if let Err(position) = config
-                            .received_certificates
+                            .certificates
                             .binary_search_by_key(&certificate.order.digest(), |cert| {
                                 cert.order.digest()
                             })
                         {
-                            config.received_certificates.insert(position, certificate)
+                            config.certificates.insert(position, certificate)
                         }
                     }
                 }

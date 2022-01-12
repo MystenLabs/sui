@@ -10,7 +10,8 @@ use futures::{future, StreamExt, TryFutureExt};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use rand::seq::SliceRandom;
-use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
+use std::collections::btree_map::Entry;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -59,12 +60,8 @@ pub struct ClientState<AuthorityClient> {
     pending_transfer: Option<Order>,
 
     // The remaining fields are used to minimize networking, and may not always be persisted locally.
-    /// Transfer certificates that we have created ("sent").
-    /// Normally, `sent_certificates` should contain one certificate for each index in `0..next_sequence_number`.
-    sent_certificates: Vec<CertifiedOrder>,
-    /// Known received certificates, indexed by sender and sequence number.
-    /// TODO: API to search and download yet unknown `received_certificates`.
-    received_certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
+    /// Known certificates, indexed by TX digest.
+    certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
     /// The known objects with it's sequence number owned by the client.
     object_ids: BTreeMap<ObjectID, SequenceNumber>,
 }
@@ -127,21 +124,21 @@ impl<A> ClientState<A> {
         secret: KeyPair,
         committee: Committee,
         authority_clients: HashMap<AuthorityName, A>,
-        sent_certificates: Vec<CertifiedOrder>,
-        received_certificates: Vec<CertifiedOrder>,
+        certificates: Vec<CertifiedOrder>,
         object_ids: BTreeMap<ObjectID, SequenceNumber>,
     ) -> Self {
+        let certs = certificates
+            .into_iter()
+            .map(|cert| (cert.order.digest(), cert))
+            .collect();
+
         Self {
             address,
             secret,
             committee,
             authority_clients,
             pending_transfer: None,
-            sent_certificates,
-            received_certificates: received_certificates
-                .into_iter()
-                .map(|cert| (cert.order.digest(), cert))
-                .collect(),
+            certificates: certs,
             object_ids,
         }
     }
@@ -162,12 +159,8 @@ impl<A> ClientState<A> {
         &self.pending_transfer
     }
 
-    pub fn sent_certificates(&self) -> &Vec<CertifiedOrder> {
-        &self.sent_certificates
-    }
-
-    pub fn received_certificates(&self) -> impl Iterator<Item = &CertifiedOrder> {
-        self.received_certificates.values()
+    pub fn certificates(&self) -> Vec<CertifiedOrder> {
+        self.certificates.values().cloned().collect()
     }
 }
 
@@ -490,13 +483,13 @@ where
 
     /// Make sure we have all our certificates with sequence number
     /// in the range 0..self.next_sequence_number
-    pub async fn download_certificates(&self) -> Result<Vec<CertifiedOrder>, FastPayError> {
+    pub async fn download_certificates(&mut self) -> Result<Vec<CertifiedOrder>, FastPayError> {
         let mut sent_certificates = Vec::new();
 
         for (object_id, next_sequence_number) in self.object_ids.clone() {
             let known_sequence_numbers: BTreeSet<_> = self
-                .sent_certificates
-                .iter()
+                .certificates
+                .values()
                 .filter(|cert| cert.order.object_id() == &object_id)
                 .map(|cert| cert.order.sequence_number())
                 .collect();
@@ -561,38 +554,21 @@ where
                     .increment()
                     .unwrap_or_else(|_| SequenceNumber::max());
             }
-            // store cert in sent_certificate if the cert is created by the client, else store it in received certificates.
-            // TODO: Refactor how we stor certs in client to avoid this logic https://github.com/MystenLabs/fastnft/issues/82
-            if *new_cert.order.sender() == self.address {
-                self.sent_certificates.push(new_cert.clone());
-            } else {
-                self.received_certificates
-                    .insert(new_cert.order.digest(), new_cert.clone());
-            }
+            self.certificates
+                .insert(new_cert.order.digest(), new_cert.clone());
 
             // Atomic update
             self.object_ids.insert(object_id, new_next_sequence_number);
             // Sanity check
-            // Some certificates of the object will be from received_certs if the object is originated from other sender.
-            // TODO: Maybe we should store certificates in one place sorted by object_ref instead of sent/received?
-            let mut sent_certificates: Vec<CertifiedOrder> = self
-                .sent_certificates
-                .iter()
-                .filter(|cert| *cert.order.object_id() == object_id)
-                .cloned()
-                .collect();
-
-            let mut received_certs: Vec<CertifiedOrder> = self
-                .received_certificates
+            let certificates: Vec<CertifiedOrder> = self
+                .certificates
                 .values()
-                .filter(|cert| *cert.order.object_id() == object_id)
+                .filter(|cert| cert.order.object_id() == &object_id)
                 .cloned()
                 .collect();
-
-            sent_certificates.append(&mut received_certs);
 
             assert_eq!(
-                sent_certificates.len(),
+                certificates.len(),
                 usize::from(self.next_sequence_number(object_id))
             );
         }
@@ -618,7 +594,7 @@ where
             .communicate_transfers(
                 self.address,
                 *order.object_id(),
-                self.sent_certificates.clone(),
+                self.certificates().clone(),
                 CommunicateAction::SendOrder(order.clone()),
             )
             .await?;
@@ -633,14 +609,14 @@ where
             self.communicate_transfers(
                 self.address,
                 *order.object_id(),
-                self.sent_certificates.clone(),
+                self.certificates().clone(),
                 CommunicateAction::SynchronizeNextSequenceNumber(
                     self.next_sequence_number(*order.object_id()),
                 ),
             )
             .await?;
         }
-        Ok(self.sent_certificates.last().unwrap().clone())
+        Ok(self.certificates().last().unwrap().clone())
     }
 
     async fn download_own_object_ids(
@@ -892,8 +868,8 @@ where
                     )
                     .await?;
                     // Everything worked: update the local balance.
-                    if let btree_map::Entry::Vacant(entry) =
-                        self.received_certificates.entry(certificate.order.digest())
+                    if let Entry::Vacant(entry) =
+                        self.certificates.entry(certificate.order.digest())
                     {
                         self.object_ids.insert(
                             transfer.object_ref.0,

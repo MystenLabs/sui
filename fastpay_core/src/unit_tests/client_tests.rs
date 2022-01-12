@@ -155,7 +155,6 @@ fn make_client(
         committee,
         authority_clients,
         Vec::new(),
-        Vec::new(),
         BTreeMap::new(),
     )
 }
@@ -552,14 +551,14 @@ fn test_client_state_sync() {
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
 
     let old_object_ids = sender.object_ids.clone();
-    let old_sent_certificate = sender.sent_certificates.clone();
+    let old_certificate = sender.certificates.clone();
 
     // Remove all client-side data
     sender.object_ids.clear();
-    sender.sent_certificates.clear();
+    sender.certificates.clear();
     assert!(rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
     assert!(sender.object_ids.is_empty());
-    assert!(sender.sent_certificates.is_empty());
+    assert!(sender.certificates.is_empty());
 
     // Sync client state
     rt.block_on(sender.sync_client_state_with_random_authority())
@@ -568,7 +567,7 @@ fn test_client_state_sync() {
     // Confirm data are the same after sync
     assert!(!rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
     assert_eq!(old_object_ids, sender.object_ids);
-    assert_eq!(old_sent_certificate, sender.sent_certificates);
+    assert_eq!(old_certificate, sender.certificates);
 }
 
 #[test]
@@ -606,8 +605,7 @@ fn test_client_state_sync_with_transferred_object() {
     // Client 2's local object_id and cert should be empty before sync
     assert!(rt.block_on(client2.get_owned_objects()).unwrap().is_empty());
     assert!(client2.object_ids.is_empty());
-    assert!(client2.received_certificates.is_empty());
-    assert!(client2.sent_certificates.is_empty());
+    assert!(client2.certificates.is_empty());
 
     // Sync client state
     while client2.object_ids.is_empty() {
@@ -618,6 +616,5 @@ fn test_client_state_sync_with_transferred_object() {
     // Confirm client 2 received the new object id and cert
     assert_eq!(1, rt.block_on(client2.get_owned_objects()).unwrap().len());
     assert_eq!(1, client2.object_ids.len());
-    assert_eq!(1, client2.received_certificates.len());
-    assert_eq!(0, client2.sent_certificates.len());
+    assert_eq!(1, client2.certificates.len());
 }
