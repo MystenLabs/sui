@@ -91,7 +91,7 @@ fn main() {
     });
 
     // Make a single-core runtime for the client.
-    let runtime = Builder::new_current_thread()
+    let runtime = Builder::new_multi_thread()
         .enable_all()
         .thread_stack_size(15 * 1024 * 1024)
         .build()
@@ -219,6 +219,7 @@ impl ClientServerBenchmark {
 
         let connections: usize = num_cpus::get();
         let max_in_flight = self.max_in_flight / connections as usize;
+        info!("Number of TCP connections: {}", connections);
         info!("Set max_in_flight to {}", max_in_flight);
 
         info!("Sending requests.");
