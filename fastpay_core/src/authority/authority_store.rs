@@ -51,7 +51,8 @@ impl AuthorityStore {
         }
     }
 
-    fn _aqcuire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
+    /// A function that aquires all locks associated with the objects (in order to avoid deadlocks.)
+    fn aqcuire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
         let num_locks = self.lock_table.len();
         // TODO: randomize the lock mapping based on a secet to avoid DoS attacks.
         let mut lock_number: Vec<usize> = _input_objects
@@ -62,11 +63,10 @@ impl AuthorityStore {
             .unique()
             .collect();
         lock_number.sort_unstable();
-        let mut _guards = Vec::with_capacity(lock_number.len());
-        for lock_seq in lock_number {
-            _guards.push(self.lock_table[lock_seq].lock());
-        }
-        _guards
+        lock_number
+            .into_iter()
+            .map(|lock_seq| self.lock_table[lock_seq].lock())
+            .collect()
     }
 
     // Methods to read the store
@@ -248,11 +248,7 @@ impl AuthorityStore {
         // new locks must be atomic, and not writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
-
-            // let _lock = self.lock_table[0].lock();
-            // .map_err(|_| FastPayError::StorageError)?;
-
-            let _mutexes = self._aqcuire_locks(mutable_input_objects);
+            let _mutexes = self.aqcuire_locks(mutable_input_objects);
 
             let locks = self
                 .order_lock
@@ -279,12 +275,9 @@ impl AuthorityStore {
             }
 
             // Atomic write of all locks
-            let ret = lock_batch.write().map_err(|_| FastPayError::StorageError);
+            lock_batch.write().map_err(|_| FastPayError::StorageError)
 
-            drop(_mutexes);
-            // Implicit: drop(_lock);
-
-            ret
+            // Implicit: drop(_mutexes);
         } // End of critical region
     }
 
@@ -392,11 +385,7 @@ impl AuthorityStore {
         // new locks must be atomic, and no writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
-
-            // let _lock = self.lock_table[0].lock();
-            // .map_err(|_| FastPayError::StorageError)?;
-
-            let _mutexes = self._aqcuire_locks(&active_inputs[..]);
+            let _mutexes = self.aqcuire_locks(&active_inputs[..]);
 
             // Check the locks are still active
             // TODO: maybe we could just check if the certificate is there instead?
@@ -413,9 +402,7 @@ impl AuthorityStore {
                 .write()
                 .map_err(|_| FastPayError::StorageError)?;
 
-            drop(_mutexes);
-
-            // implict: drop(_lock);
+            // implict: drop(_mutexes);
         } // End of critical region
 
         Ok(OrderInfoResponse {
