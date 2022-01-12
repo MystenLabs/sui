@@ -15,11 +15,11 @@ use tokio::runtime::Runtime;
 use tokio::{runtime::Builder, time};
 
 // use std::env;
+use rocksdb::Options;
 use std::fs;
 use std::sync::Arc;
 use std::thread;
 use strum_macros::EnumString;
-use rocksdb::Options;
 // use std::path::PathBuf;
 
 #[derive(Debug, Clone, StructOpt)]
@@ -130,7 +130,6 @@ impl ClientServerBenchmark {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-
         let mut opts = Options::default();
         opts.increase_parallelism(self.db_cpus as i32);
         let store = Arc::new(AuthorityStore::open(path, None));
@@ -223,7 +222,7 @@ impl ClientServerBenchmark {
         server.spawn().await.unwrap()
     }
 
-    async fn launch_client(&self, connections:usize, mut orders: Vec<Bytes>) {
+    async fn launch_client(&self, connections: usize, mut orders: Vec<Bytes>) {
         time::sleep(Duration::from_millis(1000)).await;
         let order_len_factor = if self.benchmark_type == BenchmarkType::OrdersAndCerts {
             2
