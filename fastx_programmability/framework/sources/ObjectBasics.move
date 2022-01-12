@@ -30,6 +30,10 @@ module FastX::ObjectBasics {
         Transfer::transfer_and_freeze(o, Address::new(recipient))
     }
 
+    public fun set_value(o: &mut Object, value: u64, _ctx: &mut TxContext) {
+        o.value = value;
+    }
+
     // test that reading o2 and updating o1 works
     public fun update(o1: &mut Object, o2: &Object, _ctx: &mut TxContext) {
         o1.value = o2.value
