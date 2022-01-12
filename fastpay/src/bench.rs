@@ -57,6 +57,9 @@ struct ClientServerBenchmark {
     /// Which execution path to track. OrdersAndCerts or OrdersOnly or CertsOnly
     #[structopt(long, default_value = "OrdersAndCerts")]
     benchmark_type: BenchmarkType,
+    /// Which execution path to track. OrdersAndCerts or OrdersOnly or CertsOnly
+    #[structopt(long, default_value = "4")]
+    cpus: usize,
 }
 #[derive(Debug, Clone, PartialEq, EnumString)]
 enum BenchmarkType {
@@ -76,6 +79,7 @@ fn main() {
 
     // Make multi-threaded runtime for the authority
     let b = benchmark.clone();
+    let connections = benchmark.cpus;
     thread::spawn(move || {
         let runtime = Builder::new_multi_thread()
             .enable_all()
@@ -97,7 +101,7 @@ fn main() {
         .thread_stack_size(15 * 1024 * 1024)
         .build()
         .unwrap();
-    runtime.block_on(benchmark.launch_client(orders));
+    runtime.block_on(benchmark.launch_client(connections, orders));
 }
 
 impl ClientServerBenchmark {
@@ -211,7 +215,7 @@ impl ClientServerBenchmark {
         server.spawn().await.unwrap()
     }
 
-    async fn launch_client(&self, mut orders: Vec<Bytes>) {
+    async fn launch_client(&self, connections:usize, mut orders: Vec<Bytes>) {
         time::sleep(Duration::from_millis(1000)).await;
         let order_len_factor = if self.benchmark_type == BenchmarkType::OrdersAndCerts {
             2
@@ -221,7 +225,7 @@ impl ClientServerBenchmark {
         let items_number = orders.len() / order_len_factor;
         let time_start = Instant::now();
 
-        let connections: usize = num_cpus::get();
+        // let connections: usize = num_cpus::get();
         let max_in_flight = self.max_in_flight / connections as usize;
         info!("Number of TCP connections: {}", connections);
         info!("Set max_in_flight to {}", max_in_flight);
