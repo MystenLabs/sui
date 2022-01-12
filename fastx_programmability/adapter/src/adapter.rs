@@ -431,7 +431,14 @@ fn resolve_and_type_check(
                 // check that m.type_ matches the parameter types of the function
                 match &param_type {
                     Type::MutableReference(inner_t) => {
-                        // (https://github.com/MystenLabs/fastnft/issues/96): check m.mutability
+                        if m.is_read_only() {
+                            return Err(FastPayError::TypeError {
+                                error: format!(
+                                    "Argument {} is expected to be mutable, immutable object found",
+                                    idx
+                                ),
+                            });
+                        }
                         type_check_struct(&m.type_, inner_t)?;
                         mutable_ref_objects.push(object);
                     }
@@ -443,7 +450,14 @@ fn resolve_and_type_check(
                         }
                     }
                     Type::Struct { .. } => {
-                        // TODO(https://github.com/MystenLabs/fastnft/issues/96): check m.mutability
+                        if m.is_read_only() {
+                            return Err(FastPayError::TypeError {
+                                error: format!(
+                                    "Argument {} is expected to be mutable, immutable object found",
+                                    idx
+                                ),
+                            });
+                        }
                         type_check_struct(&m.type_, &param_type)?;
                         let res = by_value_objects.insert(object.id(), object);
                         // should always pass due to earlier "no duplicate ID's" check
