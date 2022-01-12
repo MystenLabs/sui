@@ -19,6 +19,7 @@ use std::fs;
 use std::sync::Arc;
 use std::thread;
 use strum_macros::EnumString;
+use rocksdb::Options;
 
 #[derive(Debug, Clone, StructOpt)]
 #[structopt(
@@ -117,6 +118,9 @@ impl ClientServerBenchmark {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
+
+        let mut opts = Options::default();
+        opts.increase_parallelism(4);
         let store = Arc::new(AuthorityStore::open(path, None));
 
         // Seed user accounts.
