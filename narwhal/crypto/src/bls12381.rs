@@ -8,12 +8,17 @@ use blst::min_sig as blst;
 use once_cell::sync::OnceCell;
 use rand::{rngs::OsRng, RngCore};
 
-use serde::{de::Error as SerdeError, Deserialize, Serialize};
+use serde::{
+    de::{self, Error as SerdeError},
+    Deserialize, Serialize,
+};
 use serde_bytes::ByteBuf as SerdeByteBuf;
 
 use signature::{Signature, Signer, Verifier};
 
-use crate::traits::{Authenticator, KeyPair, SigningKey, ToFromBytes, VerifyingKey};
+use crate::traits::{
+    Authenticator, EncodeDecodeBase64, KeyPair, SigningKey, ToFromBytes, VerifyingKey,
+};
 
 pub const BLS_PRIVATE_KEY_LENGTH: usize = 32;
 pub const BLS_PUBLIC_KEY_LENGTH: usize = 96;
@@ -84,22 +89,25 @@ impl Ord for BLS12381PublicKey {
     }
 }
 
+// There is a strong requirement for this specific impl. in Fab benchmarks
 impl Serialize for BLS12381PublicKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        self.as_ref().serialize(serializer)
+        serializer.serialize_str(&self.encode_base64())
     }
 }
 
+// There is a strong requirement for this specific impl. in Fab benchmarks
 impl<'de> Deserialize<'de> for BLS12381PublicKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de>,
+        D: de::Deserializer<'de>,
     {
-        let bytes = <SerdeByteBuf>::deserialize(deserializer)?;
-        Self::from_bytes(&bytes).map_err(SerdeError::custom)
+        let s = <String as serde::Deserialize>::deserialize(deserializer)?;
+        let value = Self::decode_base64(&s).map_err(|e| de::Error::custom(e.to_string()))?;
+        Ok(value)
     }
 }
 
@@ -258,22 +266,25 @@ impl ToFromBytes for BLS12381PrivateKey {
     }
 }
 
+// There is a strong requirement for this specific impl. in Fab benchmarks
 impl Serialize for BLS12381PrivateKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        self.as_ref().serialize(serializer)
+        serializer.serialize_str(&self.encode_base64())
     }
 }
 
+// There is a strong requirement for this specific impl. in Fab benchmarks
 impl<'de> Deserialize<'de> for BLS12381PrivateKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de>,
+        D: de::Deserializer<'de>,
     {
-        let bytes = <SerdeByteBuf>::deserialize(deserializer)?;
-        Self::from_bytes(&bytes).map_err(SerdeError::custom)
+        let s = <String as serde::Deserialize>::deserialize(deserializer)?;
+        let value = Self::decode_base64(&s).map_err(|e| de::Error::custom(e.to_string()))?;
+        Ok(value)
     }
 }
 

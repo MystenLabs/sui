@@ -1,7 +1,7 @@
 // Copyright(C) 2022, Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::traits::ToFromBytes;
+use crate::traits::{EncodeDecodeBase64, ToFromBytes};
 use ::ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_bls12_377::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{AffineCurve, ProjectiveCurve};
@@ -11,7 +11,7 @@ use ark_ff::{
 };
 use celo_bls::PublicKey;
 use once_cell::sync::OnceCell;
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Serialize};
 use serde_with::serde_as;
 use signature::{Signer, Verifier};
 
@@ -26,24 +26,16 @@ pub const CELO_BLS_PUBLIC_KEY_LENGTH: usize = 96;
 pub const CELO_BLS_SIGNATURE_LENGTH: usize = 48;
 
 #[readonly::make]
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct BLS12377PublicKey {
-    #[serde_as(as = "ark_serialize::SerdeAs")]
     pub pubkey: celo_bls::PublicKey,
-    #[serde(skip)]
-    #[serde(default = "OnceCell::new")]
     pub bytes: OnceCell<[u8; CELO_BLS_PUBLIC_KEY_LENGTH]>,
 }
 
 #[readonly::make]
-#[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct BLS12377PrivateKey {
-    #[serde_as(as = "ark_serialize::SerdeAs")]
     pub privkey: celo_bls::PrivateKey,
-    #[serde(skip)]
-    #[serde(default = "OnceCell::new")]
     pub bytes: OnceCell<[u8; CELO_BLS_PRIVATE_KEY_LENGTH]>,
 }
 
@@ -171,6 +163,28 @@ impl ToFromBytes for BLS12377PublicKey {
     }
 }
 
+// There is a strong requirement for this specific impl. in Fab benchmarks
+impl Serialize for BLS12377PublicKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.encode_base64())
+    }
+}
+
+// There is a strong requirement for this specific impl. in Fab benchmarks
+impl<'de> Deserialize<'de> for BLS12377PublicKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        let s = <String as serde::Deserialize>::deserialize(deserializer)?;
+        let value = Self::decode_base64(&s).map_err(|e| de::Error::custom(e.to_string()))?;
+        Ok(value)
+    }
+}
+
 impl Verifier<BLS12377Signature> for BLS12377PublicKey {
     fn verify(&self, msg: &[u8], signature: &BLS12377Signature) -> Result<(), signature::Error> {
         let hash_to_g1 = &*celo_bls::hash_to_curve::try_and_increment::COMPOSITE_HASH_TO_G1;
@@ -220,6 +234,28 @@ impl ToFromBytes for BLS12377PrivateKey {
             privkey: fr.into(),
             bytes: OnceCell::new(),
         })
+    }
+}
+
+// There is a strong requirement for this specific impl. in Fab benchmarks
+impl Serialize for BLS12377PrivateKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.encode_base64())
+    }
+}
+
+// There is a strong requirement for this specific impl. in Fab benchmarks
+impl<'de> Deserialize<'de> for BLS12377PrivateKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        let s = <String as serde::Deserialize>::deserialize(deserializer)?;
+        let value = Self::decode_base64(&s).map_err(|e| de::Error::custom(e.to_string()))?;
+        Ok(value)
     }
 }
 
