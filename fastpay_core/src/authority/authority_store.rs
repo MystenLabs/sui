@@ -2,7 +2,7 @@ use super::*;
 
 use rocksdb::Options;
 use std::path::Path;
-use std::sync::Mutex;
+// use std::sync::Mutex;
 use typed_store::rocks::{open_cf, DBMap};
 use typed_store::traits::Map;
 
@@ -14,7 +14,7 @@ pub struct AuthorityStore {
     certificates: DBMap<TransactionDigest, CertifiedOrder>,
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
     signed_effects: DBMap<TransactionDigest, SignedOrderEffects>,
-    _check_and_write_lock: Mutex<()>,
+    _check_and_write_lock: parking_lot::Mutex<()>,
 }
 
 impl AuthorityStore {
@@ -42,7 +42,7 @@ impl AuthorityStore {
             certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
             parent_sync: DBMap::reopen(&db, Some("parent_sync")).expect("Cannot open CF."),
             signed_effects: DBMap::reopen(&db, Some("signed_effects")).expect("Cannot open CF."),
-            _check_and_write_lock: Mutex::new(()),
+            _check_and_write_lock: parking_lot::Mutex::new(()),
         }
     }
 
@@ -225,12 +225,12 @@ impl AuthorityStore {
         // new locks must be atomic, and not writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
-            /*
+            
             let _lock = self
-                .check_and_write_lock
-                .lock()
-                .map_err(|_| FastPayError::StorageError)?;
-            */
+                ._check_and_write_lock
+                .lock();
+                // .map_err(|_| FastPayError::StorageError)?;
+            
                 
             let locks = self
                 .order_lock
@@ -368,12 +368,12 @@ impl AuthorityStore {
         // new locks must be atomic, and no writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
-            /*
+            
             let _lock = self
-                .check_and_write_lock
-                .lock()
-                .map_err(|_| FastPayError::StorageError)?;
-            */
+                ._check_and_write_lock
+                .lock();
+                // .map_err(|_| FastPayError::StorageError)?;
+            
 
             // Check the locks are still active
             // TODO: maybe we could just check if the certificate is there instead?
