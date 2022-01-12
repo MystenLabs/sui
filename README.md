@@ -28,11 +28,11 @@ do
     ./server --server server"$I".json generate --host 127.0.0.1 --port 9"$I"00 --database-path ./db"$I" >> committee.json
 done
 
-# Create configuration files for 100 user accounts, with 4 gas objects per account and 200 value each.
+# Create configuration files for 100 user accounts, with 10 gas objects per account and 2000000 value each.
 # * Private account states are stored in one local wallet `accounts.json`.
 # * `initial_accounts.toml` is used to mint the corresponding initially randomly generated (for now) objects at startup on the server side.
 ./client --committee committee.json --accounts accounts.json create-accounts --num 100 \
---gas-objs-per-account 4 --value-per-per-obj 200 initial_accounts.toml
+--gas-objs-per-account 10 --value-per-per-obj 2000000 initial_accounts.toml
 # Start servers
 for I in 1 2 3 4
 do
@@ -45,8 +45,8 @@ done
 # Query (locally cached) object info for first and last user account
 ACCOUNT1=`./client --committee committee.json --accounts accounts.json query-accounts-addrs | head -n 1`
 ACCOUNT2=`./client --committee committee.json --accounts accounts.json query-accounts-addrs | tail -n -1`
-./client --committee committee.json --accounts accounts.json query-objects "$ACCOUNT1"
-./client --committee committee.json --accounts accounts.json query-objects "$ACCOUNT2"
+./client --committee committee.json --accounts accounts.json query-objects --address "$ACCOUNT1"
+./client --committee committee.json --accounts accounts.json query-objects --address "$ACCOUNT2"
 
 # Get the first ObjectId for Account1
 ACCOUNT1_OBJECT1=`./client --committee committee.json --accounts accounts.json query-objects --address "$ACCOUNT1" | head -n 1 |  awk -F: '{ print $1 }'`

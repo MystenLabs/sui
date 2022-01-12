@@ -764,7 +764,8 @@ where
         let new_certificate = self.communicate_transaction_order(order).await?;
 
         // Update state
-        self.update_certificates(vec![new_certificate.clone()])?;
+        // TODO: update_certificates relies on orders having sequence numbers/object IDs , which fails for calls with obj args
+        //self.update_certificates(vec![new_certificate.clone()])?;
 
         // Confirmation
         let order_info = self

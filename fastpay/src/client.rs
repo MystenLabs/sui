@@ -8,6 +8,7 @@ use fastpay_core::client::*;
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
 
 use bytes::Bytes;
+use ed25519_dalek as dalek;
 use futures::stream::StreamExt;
 use log::*;
 use std::{
@@ -295,6 +296,29 @@ fn find_owner_by_object_cache(
     None
 }
 
+fn get_any_cached_account_cache(account_config: &mut AccountsConfig) -> Option<PublicKeyBytes> {
+    account_config
+        .accounts()
+        .into_iter()
+        .next()
+        .map(|x| x.address)
+}
+
+fn show_object_effects(order_effects: OrderEffects) {
+    if !order_effects.mutated.is_empty() {
+        println!("Mutated Objects:");
+        for obj in order_effects.mutated {
+            println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
+        }
+    }
+    if !order_effects.deleted.is_empty() {
+        println!("Deleted Objects:");
+        for obj in order_effects.deleted {
+            println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
+        }
+    }
+}
+
 fn parse_public_key_bytes(src: &str) -> Result<PublicKeyBytes, base64::DecodeError> {
     Ok(decode_address(src).expect("Failed to decode recipient's address"))
 }
@@ -334,6 +358,10 @@ struct ClientOpt {
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 enum ClientCommands {
+    /// Get obj info
+    #[structopt(name = "get-obj-info")]
+    GetObjInfo { obj_id: ObjectID },
+
     /// Call Move
     #[structopt(name = "call")]
     Call { path: String },
@@ -409,7 +437,6 @@ enum ClientCommands {
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let options = ClientOpt::from_args();
-
     let send_timeout = Duration::from_micros(options.send_timeout);
     let recv_timeout = Duration::from_micros(options.recv_timeout);
     let accounts_config_path = &options.accounts;
@@ -422,6 +449,50 @@ fn main() {
         CommitteeConfig::read(committee_config_path).expect("Unable to read committee config file");
 
     match options.cmd {
+        ClientCommands::GetObjInfo { obj_id } => {
+            // Find owner of acc
+            let account = get_any_cached_account_cache(&mut accounts_config)
+                .expect("Cannot find any account");
+            // Fetch the module ref
+            let mut client_state = make_client_state(
+                &accounts_config,
+                &committee_config,
+                account,
+                buffer_size,
+                send_timeout,
+                recv_timeout,
+            );
+            let rt = Runtime::new().unwrap();
+            rt.block_on(async move {
+                // Fetch the object info for the module
+                let module_obj_info_req = ObjectInfoRequest {
+                    object_id: obj_id,
+                    request_sequence_number: None,
+                    request_received_transfers_excluding_first_nth: None,
+                };
+                let obj_info = client_state
+                    .get_object_info(module_obj_info_req)
+                    .await
+                    .unwrap();
+                //let module_obj_ref = obj_info.object.to_object_reference();
+                println!("Owner: {:#?}", obj_info.object.owner);
+                println!("Version: {:#?}", obj_info.object.version().value());
+                println!("ID: {:#?}", obj_info.object.id());
+                println!("Readonly: {:#?}", obj_info.object.is_read_only());
+                println!(
+                    "Type: {:#?}",
+                    obj_info
+                        .object
+                        .data
+                        .type_()
+                        .unwrap()
+                        .module
+                        .as_ident_str()
+                        .to_string()
+                );
+            });
+        }
+
         ClientCommands::Call { path } => {
             let config = MoveCallConfig::read(&path).unwrap();
             // Find owner of acc
@@ -453,8 +524,7 @@ fn main() {
                     .unwrap();
                 let module_obj_ref = module_obj_info.object.to_object_reference();
 
-                // Fetch the object info for the gas module
-                // Fetch the object info for the module
+                // Fetch the object info for the gas obj
                 let gas_obj_info_req = ObjectInfoRequest {
                     object_id: config.gas_object_id,
                     request_sequence_number: None,
@@ -469,29 +539,49 @@ fn main() {
 
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
-
-                for _ in config.object_args_ids {
+                for obj_id in config.object_args_ids {
                     // Fetch the obj ref
                     let obj_info_req = ObjectInfoRequest {
-                        object_id: config.gas_object_id,
+                        object_id: obj_id,
                         request_sequence_number: None,
                         request_received_transfers_excluding_first_nth: None,
                     };
 
-                    let gas_obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
-                    object_args_refs.push(gas_obj_info.object.to_object_reference());
+                    let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
+                    object_args_refs.push(obj_info.object.to_object_reference());
                 }
 
-                client_state.move_call(
-                    module_obj_ref,
-                    config.function,
-                    config.type_args,
-                    gas_obj_ref,
-                    object_args_refs,
-                    // TODO: How to handle pure args?
-                    Vec::new(),
-                    config.gas_budget,
-                );
+                // Pure args
+                let mut pure_args = Vec::new();
+
+                for arg in config.pure_args {
+                    // // HACK to only support addresses or numbers
+                    // // try to convert to account address, else number
+                    let v = if arg.len() < dalek::PUBLIC_KEY_LENGTH {
+                        arg.parse::<u64>().unwrap().to_le_bytes().to_vec()
+                    } else {
+                        match parse_public_key_bytes(&arg) {
+                            Ok(addr) => bcs::to_bytes(&addr.to_vec()).unwrap(),
+                            Err(_) => arg.parse::<u64>().unwrap().to_le_bytes().to_vec(),
+                        }
+                    };
+                    pure_args.push(v);
+                }
+
+                let call_ret = client_state
+                    .move_call(
+                        module_obj_ref,
+                        config.function,
+                        config.type_args,
+                        gas_obj_ref,
+                        object_args_refs,
+                        pure_args,
+                        config.gas_budget,
+                    )
+                    .await
+                    .unwrap();
+                println!("Cert: {:?}", call_ret.0);
+                show_object_effects(call_ret.1);
             });
         }
 
