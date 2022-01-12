@@ -84,11 +84,6 @@ pub struct TransactionDigest([u8; TRANSACTION_DIGEST_LENGTH]);
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct ObjectDigest([u8; 32]); // We use SHA3-256 hence 32 bytes here
 
-// TODO: migrate TxContext type + these constants to a separate file
-/// 0x81D51F48E5DFC02DBC8F6003517274F7
-pub const TX_CONTEXT_ADDRESS: AccountAddress = AccountAddress::new([
-    0x81, 0xD5, 0x1F, 0x48, 0xE5, 0xDF, 0xC0, 0x2D, 0xBC, 0x8F, 0x60, 0x03, 0x51, 0x72, 0x74, 0xF7,
-]);
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
 
