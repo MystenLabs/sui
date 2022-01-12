@@ -95,9 +95,9 @@ module FastX::Coin {
     /// in `cap` accordingly
     /// Aborts if `value` + `cap.total_supply` >= U64_MAX
     public fun mint<T>(
-        value: u64, cap: &mut TreasuryCap<T>, ctx: &mut TxContext,
+        value: u64, ctx: &mut TxContext,
     ): Coin<T> {
-        cap.total_supply = cap.total_supply + value;
+        //cap.total_supply = cap.total_supply + value;
         Coin { id: TxContext::new_id(ctx), value }
     }
 
