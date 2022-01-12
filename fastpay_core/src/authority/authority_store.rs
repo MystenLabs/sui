@@ -14,7 +14,7 @@ pub struct AuthorityStore {
     certificates: DBMap<TransactionDigest, CertifiedOrder>,
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
     signed_effects: DBMap<TransactionDigest, SignedOrderEffects>,
-    check_and_write_lock: Mutex<()>,
+    _check_and_write_lock: Mutex<()>,
 }
 
 impl AuthorityStore {
@@ -42,7 +42,7 @@ impl AuthorityStore {
             certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
             parent_sync: DBMap::reopen(&db, Some("parent_sync")).expect("Cannot open CF."),
             signed_effects: DBMap::reopen(&db, Some("signed_effects")).expect("Cannot open CF."),
-            check_and_write_lock: Mutex::new(()),
+            _check_and_write_lock: Mutex::new(()),
         }
     }
 
@@ -225,15 +225,18 @@ impl AuthorityStore {
         // new locks must be atomic, and not writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
+            /*
             let _lock = self
                 .check_and_write_lock
                 .lock()
                 .map_err(|_| FastPayError::StorageError)?;
-
+            */
+                
             let locks = self
                 .order_lock
                 .multi_get(mutable_input_objects)
                 .map_err(|_| FastPayError::StorageError)?;
+            
 
             for (obj_ref, lock) in mutable_input_objects.iter().zip(locks) {
                 // The object / version must exist, and therefore lock initialized.
@@ -365,10 +368,12 @@ impl AuthorityStore {
         // new locks must be atomic, and no writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
+            /*
             let _lock = self
                 .check_and_write_lock
                 .lock()
                 .map_err(|_| FastPayError::StorageError)?;
+            */
 
             // Check the locks are still active
             // TODO: maybe we could just check if the certificate is there instead?
