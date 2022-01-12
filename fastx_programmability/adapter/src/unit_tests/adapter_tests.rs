@@ -521,7 +521,7 @@ fn test_transfer_and_freeze() {
         &mut storage,
         &native_functions,
         "transfer_and_freeze",
-        gas_object,
+        gas_object.clone(),
         MAX_GAS,
         vec![obj1],
         pure_args,
@@ -532,6 +532,39 @@ fn test_transfer_and_freeze() {
     let obj1 = storage.read_object(&id1).unwrap();
     assert!(obj1.is_read_only());
     assert_eq!(obj1.owner, addr2);
+
+    // 3. Call transfer again and it should fail.
+    let pure_args = vec![bcs::to_bytes(&addr1.to_vec()).unwrap()];
+    let result = call(
+        &mut storage,
+        &native_functions,
+        "transfer",
+        gas_object.clone(),
+        MAX_GAS,
+        vec![obj1],
+        pure_args,
+    );
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Argument 0 is expected to be mutable, immutable object found"));
+
+    // 4. Call set_value (pass as mutable reference) should fail as well.
+    let obj1 = storage.read_object(&id1).unwrap();
+    let pure_args = vec![bcs::to_bytes(&1u64).unwrap()];
+    let result = call(
+        &mut storage,
+        &native_functions,
+        "set_value",
+        gas_object.clone(),
+        MAX_GAS,
+        vec![obj1],
+        pure_args,
+    );
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Argument 0 is expected to be mutable, immutable object found"));
 }
 
 // TODO(https://github.com/MystenLabs/fastnft/issues/92): tests that exercise all the error codes of the adapter
