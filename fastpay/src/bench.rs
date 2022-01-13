@@ -14,8 +14,10 @@ use structopt::StructOpt;
 use tokio::runtime::Runtime;
 use tokio::{runtime::Builder, time};
 
+use rocksdb::Options;
 use std::env;
 use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 use strum_macros::EnumString;
@@ -32,6 +34,9 @@ struct ClientServerBenchmark {
     /// Hostname
     #[structopt(long, default_value = "127.0.0.1")]
     host: String,
+    /// Path to the database
+    #[structopt(long, default_value = "")]
+    db_dir: String,
     /// Base port number
     #[structopt(long, default_value = "9555")]
     port: u32,
@@ -56,6 +61,12 @@ struct ClientServerBenchmark {
     /// Which execution path to track. OrdersAndCerts or OrdersOnly or CertsOnly
     #[structopt(long, default_value = "OrdersAndCerts")]
     benchmark_type: BenchmarkType,
+    /// Number of connections to the server
+    #[structopt(long, default_value = "0")]
+    tcp_connections: usize,
+    /// Number of database cpus
+    #[structopt(long, default_value = "1")]
+    db_cpus: usize,
 }
 #[derive(Debug, Clone, PartialEq, EnumString)]
 enum BenchmarkType {
@@ -75,6 +86,12 @@ fn main() {
 
     // Make multi-threaded runtime for the authority
     let b = benchmark.clone();
+    let connections = if benchmark.tcp_connections > 0 {
+        benchmark.tcp_connections
+    } else {
+        num_cpus::get()
+    };
+
     thread::spawn(move || {
         let runtime = Builder::new_multi_thread()
             .enable_all()
@@ -91,12 +108,12 @@ fn main() {
     });
 
     // Make a single-core runtime for the client.
-    let runtime = Builder::new_current_thread()
+    let runtime = Builder::new_multi_thread()
         .enable_all()
         .thread_stack_size(15 * 1024 * 1024)
         .build()
         .unwrap();
-    runtime.block_on(benchmark.launch_client(orders));
+    runtime.block_on(benchmark.launch_client(connections, orders));
 }
 
 impl ClientServerBenchmark {
@@ -113,10 +130,18 @@ impl ClientServerBenchmark {
         let (public_auth0, secret_auth0) = keys.pop().unwrap();
 
         // Create a random directory to store the DB
-        let dir = env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        let path = if self.db_dir.is_empty() {
+            let dir = env::temp_dir();
+            dir.join(format!("DB_{:?}", ObjectID::random()))
+        } else {
+            let dir = Path::new(&self.db_dir);
+            dir.join(format!("DB_{:?}", ObjectID::random()))
+        };
         fs::create_dir(&path).unwrap();
+        info!("Open database on path: {:?}", path.as_os_str());
 
+        let mut opts = Options::default();
+        opts.increase_parallelism(self.db_cpus as i32);
         let store = Arc::new(AuthorityStore::open(path, None));
 
         // Seed user accounts.
@@ -207,7 +232,7 @@ impl ClientServerBenchmark {
         server.spawn().await.unwrap()
     }
 
-    async fn launch_client(&self, mut orders: Vec<Bytes>) {
+    async fn launch_client(&self, connections: usize, mut orders: Vec<Bytes>) {
         time::sleep(Duration::from_millis(1000)).await;
         let order_len_factor = if self.benchmark_type == BenchmarkType::OrdersAndCerts {
             2
@@ -217,8 +242,9 @@ impl ClientServerBenchmark {
         let items_number = orders.len() / order_len_factor;
         let time_start = Instant::now();
 
-        let connections: usize = num_cpus::get();
+        // let connections: usize = num_cpus::get();
         let max_in_flight = self.max_in_flight / connections as usize;
+        info!("Number of TCP connections: {}", connections);
         info!("Set max_in_flight to {}", max_in_flight);
 
         info!("Sending requests.");
