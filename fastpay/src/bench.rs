@@ -14,13 +14,13 @@ use structopt::StructOpt;
 use tokio::runtime::Runtime;
 use tokio::{runtime::Builder, time};
 
-// use std::env;
 use rocksdb::Options;
+use std::env;
 use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 use strum_macros::EnumString;
-// use std::path::PathBuf;
 
 #[derive(Debug, Clone, StructOpt)]
 #[structopt(
@@ -35,7 +35,7 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "127.0.0.1")]
     host: String,
     /// Path to the database
-    #[structopt(long, default_value = "/tmp")]
+    #[structopt(long, default_value = "")]
     db_dir: String,
     /// Base port number
     #[structopt(long, default_value = "9555")]
@@ -62,8 +62,8 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "OrdersAndCerts")]
     benchmark_type: BenchmarkType,
     /// Number of connections to the server
-    #[structopt(long, default_value = "4")]
-    cpus: usize,
+    #[structopt(long, default_value = "0")]
+    tcp_connections: usize,
     /// Number of database cpus
     #[structopt(long, default_value = "1")]
     db_cpus: usize,
@@ -86,7 +86,12 @@ fn main() {
 
     // Make multi-threaded runtime for the authority
     let b = benchmark.clone();
-    let connections = benchmark.cpus;
+    let connections = if benchmark.tcp_connections > 0 {
+        benchmark.tcp_connections
+    } else {
+        num_cpus::get()
+    };
+
     thread::spawn(move || {
         let runtime = Builder::new_multi_thread()
             .enable_all()
@@ -125,10 +130,15 @@ impl ClientServerBenchmark {
         let (public_auth0, secret_auth0) = keys.pop().unwrap();
 
         // Create a random directory to store the DB
-        use std::path::Path;
-        let dir = Path::new(&self.db_dir);
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        let path = if self.db_dir.is_empty() {
+            let dir = env::temp_dir();
+            dir.join(format!("DB_{:?}", ObjectID::random()))
+        } else {
+            let dir = Path::new(&self.db_dir);
+            dir.join(format!("DB_{:?}", ObjectID::random()))
+        };
         fs::create_dir(&path).unwrap();
+        info!("Open database on path: {:?}", path.as_os_str());
 
         let mut opts = Options::default();
         opts.increase_parallelism(self.db_cpus as i32);
