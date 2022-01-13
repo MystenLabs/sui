@@ -767,7 +767,7 @@ async fn test_handle_confirmation_order_ok() {
                 .unwrap();
             authority_state.read_certificate(&refx).await.unwrap()
         },
-        Some(certified_transfer_order)
+        Some(certified_transfer_order.clone())
     );
 
     // Check locks are set and archived correctly
@@ -780,6 +780,15 @@ async fn test_handle_confirmation_order_ok() {
         .await
         .expect("Exists")
         .is_none());
+
+    // Check that all the parents are returned.
+    assert!(
+        authority_state.get_parent_iterator(object_id, None).await
+            == Ok(vec![(
+                (object_id, 1.into(), new_account.digest()),
+                certified_transfer_order.order.digest()
+            )])
+    );
 }
 
 #[tokio::test]

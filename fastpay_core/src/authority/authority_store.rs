@@ -142,6 +142,32 @@ impl AuthorityStore {
             .map_err(|_| FastPayError::StorageError)
     }
 
+    /// Returns all parents (object_ref and transaction digests) that match an object_id, at
+    /// any object version, or optionally at a specific version.
+    pub fn get_parent_iterator(
+        &self,
+        object_id: ObjectID,
+        seq: Option<SequenceNumber>,
+    ) -> Result<Vec<(ObjectRef, TransactionDigest)>, FastPayError> {
+        let seq_inner = seq.unwrap_or_else(|| SequenceNumber::from(0));
+        let obj_dig_inner = ObjectDigest::new([0; 32]);
+
+        Ok(self
+            .parent_sync
+            .iter()
+            // The object id [0; 16] is the smallest possible
+            .skip_to(&(object_id, seq_inner, obj_dig_inner))
+            .map_err(|_| FastPayError::StorageError)?
+            .take_while(|((id, iseq, _digest), _txd)| {
+                let mut flag = id == &object_id;
+                if seq.is_some() {
+                    flag &= seq_inner == *iseq;
+                }
+                flag
+            })
+            .collect())
+    }
+
     // Methods to mutate the store
 
     /// Insert an object
