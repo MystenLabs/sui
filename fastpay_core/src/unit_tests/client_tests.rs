@@ -652,8 +652,8 @@ fn test_client_state_sync_with_all_authorities() {
 
             // Randomize seq # for this authority
             if obj_idx >= ((1 + auth_idx) * 5) && obj_idx < ((2 + auth_idx) * 5) {
-                let max = u64::from(*seq_no) + 1;
-                // Pick a random seq up to oen less than the valid one
+                let max = u64::from(*seq_no);
+                // Pick a random seq up to one less than the valid one
                 mod_seq_no = SequenceNumber::from(rand::thread_rng().gen_range(0, max));
             }
 
