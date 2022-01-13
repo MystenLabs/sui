@@ -296,14 +296,6 @@ fn find_owner_by_object_cache(
     None
 }
 
-fn get_any_cached_account_cache(account_config: &mut AccountsConfig) -> Option<PublicKeyBytes> {
-    account_config
-        .accounts()
-        .into_iter()
-        .next()
-        .map(|x| x.address)
-}
-
 fn show_object_effects(order_effects: OrderEffects) {
     if !order_effects.mutated.is_empty() {
         println!("Mutated Objects:");
@@ -450,9 +442,13 @@ fn main() {
 
     match options.cmd {
         ClientCommands::GetObjInfo { obj_id } => {
-            // Find owner of acc
-            let account = get_any_cached_account_cache(&mut accounts_config)
-                .expect("Cannot find any account");
+            // Pick an account for use
+            let account = accounts_config
+                .accounts()
+                .into_iter()
+                .next()
+                .expect("Account config is invalid")
+                .address;
             // Fetch the module ref
             let mut client_state = make_client_state(
                 &accounts_config,
@@ -474,7 +470,6 @@ fn main() {
                     .get_object_info(module_obj_info_req)
                     .await
                     .unwrap();
-                //let module_obj_ref = obj_info.object.to_object_reference();
                 println!("Owner: {:#?}", obj_info.object.owner);
                 println!("Version: {:#?}", obj_info.object.version().value());
                 println!("ID: {:#?}", obj_info.object.id());
@@ -485,10 +480,10 @@ fn main() {
                         .object
                         .data
                         .type_()
-                        .unwrap()
-                        .module
-                        .as_ident_str()
-                        .to_string()
+                        .map_or("Type Unwrap Failed".to_owned(), |type_| type_
+                            .module
+                            .as_ident_str()
+                            .to_string())
                 );
             });
         }
@@ -498,8 +493,6 @@ fn main() {
             // Find owner of acc
             let owner = find_owner_by_object_cache(&mut accounts_config, config.gas_object_id)
                 .expect("Cannot find owner for gas object");
-            // Fetch the module ref
-            //let module_obj_ref =
 
             let mut client_state = make_client_state(
                 &accounts_config,

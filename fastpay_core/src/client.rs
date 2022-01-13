@@ -102,7 +102,6 @@ pub trait Client {
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error>;
 
     /// Call move functions
-    #[allow(clippy::too_many_arguments)]
     fn move_call(
         &mut self,
         module_object_ref: ObjectRef,
@@ -122,7 +121,6 @@ pub trait Client {
 }
 
 impl<A> ClientState<A> {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         address: FastPayAddress,
         secret: KeyPair,
@@ -671,10 +669,19 @@ where
         Err(FastPayError::ErrorWhileRequestingInformation)
     }
 
-    fn update_objects_from_order_info(&mut self, order_info_resp: OrderInfoResponse) {
+    fn update_objects_from_order_info(
+        &mut self,
+        order_info_resp: OrderInfoResponse,
+    ) -> Result<(), FastPayError> {
         // TODO: use the digest and mutated objects
-        for (obj_id, _, _) in order_info_resp.signed_effects.unwrap().effects.deleted {
-            self.object_ids.remove(&obj_id);
+        match order_info_resp.signed_effects {
+            Some(v) => {
+                for (obj_id, _, _) in v.effects.deleted {
+                    self.object_ids.remove(&obj_id);
+                }
+                Ok(())
+            }
+            None => Err(FastPayError::ErrorWhileRequestingInformation),
         }
     }
     /// TODO/TBD: flesh this out
@@ -690,17 +697,19 @@ where
                 let committee = &committee;
                 Box::pin(async move {
                     let result = client.handle_order(order).await;
-
-                    match result {
-                        Ok(resp) => {
+                    match result
+                        .as_ref()
+                        .map(|order_info_resp| order_info_resp.signed_order.as_ref())
+                    {
+                        Ok(Some(signed_order)) => {
                             fp_ensure!(
-                                resp.signed_order.as_ref().unwrap().authority == name,
+                                signed_order.authority == name,
                                 FastPayError::ErrorWhileProcessingTransferOrder
                             );
-                            resp.signed_order.as_ref().unwrap().check(committee)?;
-                            Ok(resp.signed_order)
+                            signed_order.check(committee)?;
+                            Ok(signed_order.clone())
                         }
-                        Err(err) => Err(err),
+                        _ => Err(FastPayError::ErrorWhileProcessingTransferOrder),
                     }
                 })
             })
@@ -709,11 +718,8 @@ where
         let certificate = CertifiedOrder {
             order: order.clone(),
             signatures: votes
-                .into_iter()
-                .filter_map(|vote| match vote {
-                    Some(signed_order) => Some((signed_order.authority, signed_order.signature)),
-                    None => None,
-                })
+                .iter()
+                .map(|vote| (vote.authority, vote.signature))
                 .collect(),
         };
         Ok(certificate)
@@ -733,18 +739,23 @@ where
                 };
                 let committee = &committee;
                 Box::pin(async move {
+                    let _ = &certified_order;
+                    let _ = &certified_order;
                     let result = client.handle_confirmation_order(certified_order).await;
 
-                    match result {
-                        Ok(resp) => {
+                    match result
+                        .as_ref()
+                        .map(|order_info_resp| order_info_resp.signed_order.as_ref())
+                    {
+                        Ok(Some(signed_order)) => {
                             fp_ensure!(
-                                resp.signed_order.as_ref().unwrap().authority == name,
+                                signed_order.authority == name,
                                 FastPayError::ErrorWhileProcessingTransferOrder
                             );
-                            resp.signed_order.as_ref().unwrap().check(committee)?;
-                            Ok(resp)
+                            signed_order.check(committee)?;
+                            Ok(result.unwrap())
                         }
-                        Err(err) => Err(err),
+                        _ => Err(FastPayError::ErrorWhileProcessingTransferOrder),
                     }
                 })
             })
@@ -763,9 +774,7 @@ where
         // Transaction order
         let new_certificate = self.communicate_transaction_order(order).await?;
 
-        // Update state
         // TODO: update_certificates relies on orders having sequence numbers/object IDs , which fails for calls with obj args
-        //self.update_certificates(vec![new_certificate.clone()])?;
 
         // Confirmation
         let order_info = self
@@ -773,7 +782,7 @@ where
             .await?;
 
         // Update local object view
-        self.update_objects_from_order_info(order_info.clone());
+        self.update_objects_from_order_info(order_info.clone())?;
 
         Ok((
             order_info
@@ -786,7 +795,6 @@ where
         ))
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn call(
         &mut self,
         module_object_ref: ObjectRef,

@@ -52,6 +52,8 @@ pub enum FastPayError {
     ConflictingOrder { pending_confirmation: Order },
     #[error("Transfer order was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransferOrder,
+    #[error("Invalid response when processing confirmation order by authority")]
+    ErrorWhileProcessingConfirmationOrder,
     #[error("An invalid answer was returned by the authority while requesting a certificate")]
     ErrorWhileRequestingCertificate,
     #[error("An invalid answer was returned by the authority while requesting information")]
