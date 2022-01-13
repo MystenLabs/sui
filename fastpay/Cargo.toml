@@ -3,7 +3,7 @@ name = "fastpay"
 version = "0.1.0"
 authors = ["Libra <oncall+libra@xmail.facebook.com>"]
 publish = false
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 anyhow = "1.0.52"
