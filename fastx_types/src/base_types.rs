@@ -82,7 +82,7 @@ const TRANSACTION_DIGEST_LENGTH: usize = 32;
 pub struct TransactionDigest([u8; TRANSACTION_DIGEST_LENGTH]);
 // Each object has a unique digest
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct ObjectDigest([u8; 32]); // We use SHA3-256 hence 32 bytes here
+pub struct ObjectDigest(pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
 
 // TODO: migrate TxContext type + these constants to a separate file
 /// 0x81D51F48E5DFC02DBC8F6003517274F7
