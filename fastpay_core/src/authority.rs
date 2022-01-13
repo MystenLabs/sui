@@ -494,4 +494,16 @@ impl AuthorityState {
     ) -> Result<Vec<Option<Object>>, FastPayError> {
         self._database.get_objects(_objects)
     }
+
+    /// Returns all parents (object_ref and transaction digests) that match an object_id, at
+    /// any object version, or optionally at a specific version.
+    pub async fn get_parent_iterator(
+        &self,
+        object_id: ObjectID,
+        seq: Option<SequenceNumber>,
+    ) -> Result<Vec<(ObjectRef, TransactionDigest)>, FastPayError> {
+        {
+            self._database.get_parent_iterator(object_id, seq)
+        }
+    }
 }

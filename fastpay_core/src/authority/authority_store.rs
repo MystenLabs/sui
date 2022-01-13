@@ -1,8 +1,9 @@
 use super::*;
 
 use rocksdb::Options;
+use std::collections::BTreeSet;
+use std::convert::TryInto;
 use std::path::Path;
-use std::sync::Mutex;
 use typed_store::rocks::{open_cf, DBMap};
 use typed_store::traits::Map;
 
@@ -14,7 +15,7 @@ pub struct AuthorityStore {
     certificates: DBMap<TransactionDigest, CertifiedOrder>,
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
     signed_effects: DBMap<TransactionDigest, SignedOrderEffects>,
-    check_and_write_lock: Mutex<()>,
+    lock_table: Vec<parking_lot::Mutex<()>>,
 }
 
 impl AuthorityStore {
@@ -42,8 +43,29 @@ impl AuthorityStore {
             certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
             parent_sync: DBMap::reopen(&db, Some("parent_sync")).expect("Cannot open CF."),
             signed_effects: DBMap::reopen(&db, Some("signed_effects")).expect("Cannot open CF."),
-            check_and_write_lock: Mutex::new(()),
+            lock_table: (0..1024)
+                .into_iter()
+                .map(|_| parking_lot::Mutex::new(()))
+                .collect(),
         }
+    }
+
+    /// A function that aquires all locks associated with the objects (in order to avoid deadlocks.)
+    fn aqcuire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
+        let num_locks = self.lock_table.len();
+        // TODO: randomize the lock mapping based on a secet to avoid DoS attacks.
+        let lock_number: BTreeSet<usize> = _input_objects
+            .iter()
+            .map(|(_, _, digest)| {
+                usize::from_le_bytes(digest.0[0..8].try_into().unwrap()) % num_locks
+            })
+            .collect();
+        // Note: we need to iterate over the sorted unique elements, hence the use of a Set
+        //       in order to prevent deadlocks when trying to aquire many locks.
+        lock_number
+            .into_iter()
+            .map(|lock_seq| self.lock_table[lock_seq].lock())
+            .collect()
     }
 
     // Methods to read the store
@@ -142,6 +164,32 @@ impl AuthorityStore {
             .map_err(|_| FastPayError::StorageError)
     }
 
+    /// Returns all parents (object_ref and transaction digests) that match an object_id, at
+    /// any object version, or optionally at a specific version.
+    pub fn get_parent_iterator(
+        &self,
+        object_id: ObjectID,
+        seq: Option<SequenceNumber>,
+    ) -> Result<Vec<(ObjectRef, TransactionDigest)>, FastPayError> {
+        let seq_inner = seq.unwrap_or_else(|| SequenceNumber::from(0));
+        let obj_dig_inner = ObjectDigest::new([0; 32]);
+
+        Ok(self
+            .parent_sync
+            .iter()
+            // The object id [0; 16] is the smallest possible
+            .skip_to(&(object_id, seq_inner, obj_dig_inner))
+            .map_err(|_| FastPayError::StorageError)?
+            .take_while(|((id, iseq, _digest), _txd)| {
+                let mut flag = id == &object_id;
+                if seq.is_some() {
+                    flag &= seq_inner == *iseq;
+                }
+                flag
+            })
+            .collect())
+    }
+
     // Methods to mutate the store
 
     /// Insert an object
@@ -199,10 +247,7 @@ impl AuthorityStore {
         // new locks must be atomic, and not writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
-            let _lock = self
-                .check_and_write_lock
-                .lock()
-                .map_err(|_| FastPayError::StorageError)?;
+            let _mutexes = self.aqcuire_locks(mutable_input_objects);
 
             let locks = self
                 .order_lock
@@ -231,7 +276,7 @@ impl AuthorityStore {
             // Atomic write of all locks
             lock_batch.write().map_err(|_| FastPayError::StorageError)
 
-            // Implicit: drop(_lock);
+            // Implicit: drop(_mutexes);
         } // End of critical region
     }
 
@@ -339,10 +384,7 @@ impl AuthorityStore {
         // new locks must be atomic, and no writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
-            let _lock = self
-                .check_and_write_lock
-                .lock()
-                .map_err(|_| FastPayError::StorageError)?;
+            let _mutexes = self.aqcuire_locks(&active_inputs[..]);
 
             // Check the locks are still active
             // TODO: maybe we could just check if the certificate is there instead?
@@ -359,7 +401,7 @@ impl AuthorityStore {
                 .write()
                 .map_err(|_| FastPayError::StorageError)?;
 
-            // implict: drop(_lock);
+            // implict: drop(_mutexes);
         } // End of critical region
 
         Ok(OrderInfoResponse {

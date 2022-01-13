@@ -3,7 +3,7 @@ name = "fastpay_core"
 version = "0.1.0"
 authors = ["Libra <oncall+libra@xmail.facebook.com>"]
 publish = false
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 rocksdb = "0.17.0"
@@ -14,6 +14,8 @@ futures = "0.3.5"
 rand = "0.7.3"
 serde = { version = "1.0.133", features = ["derive"] }
 tokio = { version = "1.15.0", features = ["full"] }
+parking_lot = "0.11.2"
+itertools = "0.10.3"
 
 fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-framework = { path = "../fastx_programmability/framework" }
