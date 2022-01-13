@@ -1,10 +1,9 @@
 use super::*;
 
 use rocksdb::Options;
-use std::path::Path;
-// use std::sync::Mutex;
-use itertools::Itertools;
+use std::collections::BTreeSet;
 use std::convert::TryInto;
+use std::path::Path;
 use typed_store::rocks::{open_cf, DBMap};
 use typed_store::traits::Map;
 
@@ -55,14 +54,14 @@ impl AuthorityStore {
     fn aqcuire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
         let num_locks = self.lock_table.len();
         // TODO: randomize the lock mapping based on a secet to avoid DoS attacks.
-        let mut lock_number: Vec<usize> = _input_objects
+        let lock_number: BTreeSet<usize> = _input_objects
             .iter()
             .map(|(_, _, digest)| {
                 usize::from_le_bytes(digest.0[0..8].try_into().unwrap()) % num_locks
             })
-            .unique()
             .collect();
-        lock_number.sort_unstable();
+        // Note: we need to iterate over the sorted unique elements, hence the use of a Set
+        //       in order to prevent deadlocks when trying to aquire many locks.
         lock_number
             .into_iter()
             .map(|lock_seq| self.lock_table[lock_seq].lock())
