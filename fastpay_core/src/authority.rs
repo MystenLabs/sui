@@ -301,7 +301,9 @@ impl AuthorityState {
             let parent_iterator = self
                 .get_parent_iterator(request.object_id, Some(seq.increment()?))
                 .await?;
-            let (_, transaction_digest) = parent_iterator.get(0).unwrap();
+            let (_, transaction_digest) = parent_iterator
+                .first()
+                .ok_or(FastPayError::CertificateNotfound)?;
             // Get the cert from the transaction digest
 
             let requested_certificate = Some(
