@@ -223,7 +223,7 @@ impl AccountsConfig {
             .get_mut(&state.address())
             .expect("Updated account should already exist");
         account.object_ids = state.object_ids().clone();
-        account.certificates = state.certificates().clone();
+        account.certificates = state.all_certificates().clone();
     }
 
     pub fn update_for_received_transfer(&mut self, certificate: CertifiedOrder) {
