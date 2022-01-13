@@ -15,7 +15,7 @@ impl AuthorityTemporaryStore {
     ) -> AuthorityTemporaryStore {
         AuthorityTemporaryStore {
             object_store: authority_state._database.clone(),
-            objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
+            objects: _input_objects.iter().map(|v| (v.id, v.clone())).collect(),
             active_inputs: _input_objects
                 .iter()
                 .filter(|v| !v.is_read_only())
@@ -151,7 +151,7 @@ impl Storage for AuthorityTemporaryStore {
     fn write_object(&mut self, object: Object) {
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
-        if let Some(existing_object) = self.read_object(&object.id()) {
+        if let Some(existing_object) = self.read_object(&object.id) {
             if existing_object.is_read_only() {
                 // This is an internal invariant violation. Move only allows us to
                 // mutate objects if they are &mut so they cannot be read-only.
@@ -160,7 +160,7 @@ impl Storage for AuthorityTemporaryStore {
         }
 
         self.written.push(object.to_object_reference());
-        self.objects.insert(object.id(), object);
+        self.objects.insert(object.id, object);
     }
 
     fn delete_object(&mut self, id: &ObjectID) {

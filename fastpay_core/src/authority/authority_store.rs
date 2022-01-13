@@ -147,12 +147,12 @@ impl AuthorityStore {
     /// Insert an object
     pub fn insert_object(&self, object: Object) -> Result<(), FastPayError> {
         self.objects
-            .insert(&object.id(), &object)
+            .insert(&object.id, &object)
             .map_err(|_| FastPayError::StorageError)?;
 
         // Update the index
         self.owner_index
-            .insert(&(object.owner, object.id()), &object.to_object_reference())
+            .insert(&(object.owner, object.id), &object.to_object_reference())
             .map_err(|_| FastPayError::StorageError)?;
 
         Ok(())

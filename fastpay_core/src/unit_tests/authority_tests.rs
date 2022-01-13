@@ -428,7 +428,7 @@ async fn test_handle_move_order() {
         .await
         .unwrap();
     assert_eq!(created_obj.owner, sender,);
-    assert_eq!(created_obj.id(), created_object_id);
+    assert_eq!(created_obj.id, created_object_id);
     assert_eq!(created_obj.version(), SequenceNumber::from(1));
 
     // Check that gas is properly deducted.
@@ -887,7 +887,7 @@ async fn test_authority_persist() {
     let obj2 = authority2.object_state(&object_id).await.unwrap();
 
     // Check the object is present
-    assert_eq!(obj2.id(), object_id);
+    assert_eq!(obj2.id, object_id);
     assert_eq!(obj2.owner, recipient);
 }
 

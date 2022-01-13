@@ -32,7 +32,7 @@ impl InMemoryStorage {
     pub fn new(objects: Vec<Object>) -> Self {
         let mut persistent = BTreeMap::new();
         for o in objects {
-            persistent.insert(o.id(), o);
+            persistent.insert(o.id, o);
         }
         Self {
             persistent,
@@ -90,7 +90,7 @@ impl Storage for InMemoryStorage {
 
     // buffer write to appropriate place in temporary storage
     fn write_object(&mut self, object: Object) {
-        let id = object.id();
+        let id = object.id;
         if self.persistent.contains_key(&id) {
             self.temporary.updated.insert(id, object);
         } else {
@@ -221,7 +221,7 @@ fn test_object_basics() {
     let transferred_obj = storage.read_object(&id1).unwrap();
     assert_eq!(transferred_obj.owner, addr2);
     obj1_seq = obj1_seq.increment().unwrap();
-    assert_eq!(obj1.id(), transferred_obj.id());
+    assert_eq!(obj1.id, transferred_obj.id);
     assert_eq!(transferred_obj.version(), obj1_seq);
     assert_eq!(
         obj1.data.try_as_move().unwrap().type_specific_contents(),

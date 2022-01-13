@@ -167,6 +167,8 @@ pub struct Object {
     pub owner: FastPayAddress,
     /// The digest of the order that created or last mutated this object
     pub previous_transaction: TransactionDigest,
+    /// ID of the object
+    pub id: ObjectID,
 }
 
 impl BcsSignable for Object {}
@@ -178,10 +180,12 @@ impl Object {
         owner: FastPayAddress,
         previous_transaction: TransactionDigest,
     ) -> Self {
+        let id = o.id();
         Object {
             data: Data::Move(o),
             owner,
             previous_transaction,
+            id,
         }
     }
 
@@ -196,6 +200,7 @@ impl Object {
             data: Data::Module(bytes),
             owner,
             previous_transaction,
+            id: *m.self_id().address(),
         }
     }
 
@@ -207,19 +212,7 @@ impl Object {
     }
 
     pub fn to_object_reference(&self) -> ObjectRef {
-        (self.id(), self.version(), self.digest())
-    }
-
-    pub fn id(&self) -> ObjectID {
-        use Data::*;
-
-        match &self.data {
-            Move(v) => v.id(),
-            Module(m) => {
-                // TODO: extract ID by peeking into the bytes instead of deserializing
-                *CompiledModule::deserialize(m).unwrap().self_id().address()
-            }
-        }
+        (self.id, self.version(), self.digest())
     }
 
     pub fn version(&self) -> SequenceNumber {
@@ -273,6 +266,7 @@ impl Object {
             owner,
             data,
             previous_transaction: TransactionDigest::genesis(),
+            id,
         }
     }
 

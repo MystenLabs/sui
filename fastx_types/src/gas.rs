@@ -26,7 +26,7 @@ const MIN_OBJ_TRANSFER_GAS: u64 = 8;
 pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResult {
     match &order.kind {
         OrderKind::Transfer(t) => {
-            debug_assert_eq!(t.gas_payment.0, gas_object.id());
+            debug_assert_eq!(t.gas_payment.0, gas_object.id);
             let balance = get_gas_balance(gas_object)?;
             ok_or_gas_error!(
                 balance >= MIN_OBJ_TRANSFER_GAS,
@@ -37,7 +37,7 @@ pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResul
             )
         }
         OrderKind::Publish(publish) => {
-            debug_assert_eq!(publish.gas_payment.0, gas_object.id());
+            debug_assert_eq!(publish.gas_payment.0, gas_object.id);
             let balance = get_gas_balance(gas_object)?;
             ok_or_gas_error!(
                 balance >= MIN_MOVE_PUBLISH_GAS,
@@ -48,7 +48,7 @@ pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResul
             )
         }
         OrderKind::Call(call) => {
-            debug_assert_eq!(call.gas_payment.0, gas_object.id());
+            debug_assert_eq!(call.gas_payment.0, gas_object.id);
             ok_or_gas_error!(
                 call.gas_budget >= MIN_MOVE_CALL_GAS,
                 format!(

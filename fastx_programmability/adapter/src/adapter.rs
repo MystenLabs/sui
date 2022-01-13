@@ -445,7 +445,7 @@ fn resolve_and_type_check(
                     Type::Struct { .. } => {
                         // TODO(https://github.com/MystenLabs/fastnft/issues/96): check m.mutability
                         type_check_struct(&m.type_, &param_type)?;
-                        let res = by_value_objects.insert(object.id(), object);
+                        let res = by_value_objects.insert(object.id, object);
                         // should always pass due to earlier "no duplicate ID's" check
                         debug_assert!(res.is_none())
                     }
