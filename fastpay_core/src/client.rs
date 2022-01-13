@@ -3,7 +3,6 @@
 
 use crate::downloader::*;
 use anyhow::{bail, ensure};
-use dashmap::DashMap;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
@@ -12,7 +11,7 @@ use move_core_types::account_address::AccountAddress;
 use rand::seq::SliceRandom;
 use std::collections::{btree_map, BTreeMap, BTreeSet, HashMap};
 use std::time::Duration;
-use tokio::runtime::Runtime;
+use tokio::sync::mpsc::{self, Sender};
 use tokio::time::timeout;
 
 #[cfg(test)]
@@ -790,27 +789,31 @@ where
             }
             // Reset object_ids.
             self.object_ids.clear();
-            let authorities: Vec<AuthorityName> =
-                self.authority_clients.clone().into_keys().collect();
+            let (sender, mut receiver) = mpsc::channel(1024);
+            let addr = self.address;
 
-            let dashmap = DashMap::new();
+            for authority in self
+                .authority_clients
+                .iter()
+                .map(|(_pk, client)| client)
+                .cloned()
+            // this clone is all over the place, and probably removable w/DashMap
+            {
+                let sender = sender.clone();
+                tokio::spawn(fetch_obj_ids(authority, addr, sender));
+            }
+            drop(sender); // Drop the extra initial sender that's not in a thread
 
-            for authority_name in authorities {
-                let authority = self.authority_clients.get(&authority_name).unwrap();
-                let addr = self.address;
-                rayon::scope(|s| {
-                    s.spawn(|_| {
-                        for (obj_id, seq_no) in fetch_obj_ids(authority, addr) {
-                            // Evict lower value seq #
-                            if (dashmap.contains_key(&obj_id)
-                                && (*dashmap.get(&obj_id).unwrap() < seq_no))
-                                || !dashmap.contains_key(&obj_id)
-                            {
-                                dashmap.insert(obj_id, seq_no);
-                            }
-                        }
-                    })
-                })
+            while let Some((obj_id, seq_no)) = receiver.recv().await {
+                if self
+                    .object_ids
+                    .get(&obj_id)
+                    // Evict low seq_no
+                    .map(|no| *no < seq_no)
+                    .unwrap_or(true)
+                {
+                    self.object_ids.insert(obj_id, seq_no);
+                }
             }
 
             // Recover missing certificates.
@@ -826,34 +829,31 @@ where
     }
 }
 
-fn fetch_obj_ids(
-    authority_client: &dyn AuthorityClient,
+async fn fetch_obj_ids<A: AuthorityClient>(
+    authority_client: A,
     address: fastx_types::base_types::PublicKeyBytes,
-) -> HashMap<AccountAddress, SequenceNumber> {
-    let mut object_ids_map = HashMap::new();
-
-    let rt = Runtime::new().unwrap();
+    sender: Sender<(AccountAddress, SequenceNumber)>,
+) {
     let request = AccountInfoRequest { account: address };
     // Authority could be byzantine, add timeout to avoid waiting forever.
-    let result = rt
-        .block_on(
-            timeout(
-                AUTHORITY_REQUEST_TIMEOUT,
-                authority_client.handle_account_info_request(request),
-            )
-            .map_err(|_| FastPayError::ErrorWhileRequestingInformation),
-        )
-        .unwrap();
+    let result = timeout(
+        AUTHORITY_REQUEST_TIMEOUT,
+        authority_client.handle_account_info_request(request),
+    )
+    .map_err(|_| FastPayError::ErrorWhileRequestingInformation)
+    .await
+    .expect("Failed to get results from authority !");
 
     if let Ok(AccountInfoResponse {
         object_ids: obj_ids,
         ..
     }) = &result
     {
-        // TODO Could be more efficient?
-        for (object_id, seq_no, _) in obj_ids.clone() {
-            object_ids_map.insert(object_id, seq_no);
+        for (object_id, seq_no, _) in obj_ids.iter() {
+            sender
+                .send((*object_id, *seq_no))
+                .await
+                .expect("can not send objectid on channel");
         }
     };
-    object_ids_map
 }

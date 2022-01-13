@@ -640,8 +640,8 @@ fn test_client_state_sync_with_all_authorities() {
         .collect();
 
     // Simulate data inconsistencies
-    // Skip first 5 values for each authority
-    // Use a lower value of Seq # for the next 5 ObjectIDs
+    // Skip first 5 values for each authority to simulate missing data
+    // Use a randomly generated lower value of Seq # for the next 5 ObjectIDs
     for (auth_idx, authority_client) in authority_clients.iter().enumerate() {
         for (obj_idx, (object_id, seq_no)) in object_ids.iter().enumerate() {
             // Skip the first 5 for this authority
@@ -652,7 +652,7 @@ fn test_client_state_sync_with_all_authorities() {
 
             // Randomize seq # for this authority
             if obj_idx >= ((1 + auth_idx) * 5) && obj_idx < ((2 + auth_idx) * 5) {
-                let max = u64::from(*seq_no);
+                let max = u64::from(*seq_no) + 1;
                 // Pick a random seq up to oen less than the valid one
                 mod_seq_no = SequenceNumber::from(rand::thread_rng().gen_range(0, max));
             }

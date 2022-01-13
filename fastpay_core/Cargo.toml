@@ -14,8 +14,6 @@ futures = "0.3.5"
 rand = "0.7.3"
 serde = { version = "1.0.133", features = ["derive"] }
 tokio = { version = "1.15.0", features = ["full"] }
-rayon = "1.5.1"
-dashmap = "5.0.0"
 
 fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-framework = { path = "../fastx_programmability/framework" }
