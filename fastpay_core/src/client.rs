@@ -185,7 +185,7 @@ impl<A> ClientState<A> {
                     .cloned()
                     .collect()
             })
-            .unwrap_or(Vec::new())
+            .unwrap_or_default()
     }
 
     pub fn all_certificates(&self) -> Vec<CertifiedOrder> {
@@ -593,7 +593,7 @@ where
     fn update_certificates(
         &mut self,
         object_id: &ObjectID,
-        certificates: &Vec<CertifiedOrder>,
+        certificates: &[CertifiedOrder],
     ) -> Result<(), FastPayError> {
         for new_cert in certificates {
             let (_, seq, _) = new_cert
