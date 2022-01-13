@@ -93,7 +93,12 @@ fn init_local_authorities(
         let mut opts = rocksdb::Options::default();
         opts.set_max_open_files(max_files_client_tests());
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
-        let state = AuthorityState::new(committee.clone(), address, secret, store);
+        let state = AuthorityState::new_without_genesis_for_testing(
+            committee.clone(),
+            address,
+            secret,
+            store,
+        );
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
@@ -127,7 +132,12 @@ fn init_local_authorities_bad_1(
         let mut opts = rocksdb::Options::default();
         opts.set_max_open_files(max_files_client_tests());
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
-        let state = AuthorityState::new(committee.clone(), address, secret, store);
+        let state = AuthorityState::new_without_genesis_for_testing(
+            committee.clone(),
+            address,
+            secret,
+            store,
+        );
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)

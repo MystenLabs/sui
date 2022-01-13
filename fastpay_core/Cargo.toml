@@ -26,7 +26,7 @@ move-core-types = { git = "https://github.com/diem/diem", rev="346301f33b3489bb4
 move-vm-runtime = { git = "https://github.com/diem/diem", rev="346301f33b3489bb4e486ae6c0aa5e030223b492" }
 
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "c1ab69f1a4004414bf0dee412f2e5839b71bc8f6" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0ef3f1fedcfbf3dfe0eeea65e05de073b7c25733" }
 
 [dev-dependencies]
 fdlimit = "0.2.1"

@@ -409,10 +409,9 @@ async fn test_handle_move_order() {
         MAX_GAS,
         &sender_key,
     );
-
-    // 36 is for bytecode execution, 24 is for object creation.
+    // 34 is for bytecode execution, 24 is for object creation.
     // If the number changes, we want to verify that the change is intended.
-    let gas_cost = 36 + 24;
+    let gas_cost = 34 + 24;
     let res = send_and_confirm_order(&mut authority_state, order)
         .await
         .unwrap();
@@ -854,7 +853,7 @@ async fn test_authority_persist() {
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
-    let authority = AuthorityState::new(
+    let authority = AuthorityState::new_without_genesis_for_testing(
         committee.clone(),
         authority_address,
         authority_key.copy(),
@@ -879,7 +878,12 @@ async fn test_authority_persist() {
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
-    let authority2 = AuthorityState::new(committee, authority_address, authority_key, store);
+    let authority2 = AuthorityState::new_without_genesis_for_testing(
+        committee,
+        authority_address,
+        authority_key,
+        store,
+    );
     let obj2 = authority2.object_state(&object_id).await.unwrap();
 
     // Check the object is present
@@ -907,7 +911,12 @@ fn init_state() -> AuthorityState {
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
     let store = Arc::new(AuthorityStore::open(path, Some(opts)));
-    AuthorityState::new(committee, authority_address, authority_key, store)
+    AuthorityState::new_without_genesis_for_testing(
+        committee,
+        authority_address,
+        authority_key,
+        store,
+    )
 }
 
 #[cfg(test)]
