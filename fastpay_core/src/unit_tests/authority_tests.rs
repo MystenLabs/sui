@@ -4,18 +4,20 @@
 use super::*;
 use bcs;
 use fastx_adapter::genesis;
-#[cfg(test)]
 use fastx_types::{
     base_types::dbg_addr,
     gas::{calculate_module_publish_cost, get_gas_balance},
+    messages::ExecutionStatus,
 };
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
 };
-use move_core_types::ident_str;
+use move_core_types::{ident_str, identifier::Identifier};
+use move_package::BuildConfig;
 
 use std::fs;
+use std::path::PathBuf;
 use std::{convert::TryInto, env};
 
 pub fn system_maxfiles() -> usize {
@@ -26,7 +28,7 @@ fn max_files_authority_tests() -> i32 {
     (system_maxfiles() / 8).try_into().unwrap()
 }
 
-const MAX_GAS: u64 = 100000;
+const MAX_GAS: u64 = 10000;
 
 #[tokio::test]
 async fn test_handle_transfer_order_bad_signature() {
@@ -1013,6 +1015,251 @@ async fn test_authority_persist() {
     // Check the object is present
     assert_eq!(obj2.id(), object_id);
     assert_eq!(obj2.owner, recipient);
+}
+
+async fn call_move(
+    authority: &mut AuthorityState,
+    gas_object_id: &ObjectID,
+    sender: &PublicKeyBytes,
+    sender_key: &KeyPair,
+    package: &ObjectRef,
+    module: Identifier,
+    function: Identifier,
+    object_arg_ids: Vec<ObjectID>,
+    pure_args: Vec<Vec<u8>>,
+) -> OrderEffects {
+    let gas_object = authority.object_state(gas_object_id).await.unwrap();
+    let gas_object_ref = gas_object.to_object_reference();
+    let mut object_args = vec![];
+    for id in object_arg_ids {
+        object_args.push(
+            authority
+                .object_state(&id)
+                .await
+                .unwrap()
+                .to_object_reference(),
+        );
+    }
+    let order = Order::new_move_call(
+        *sender,
+        *package,
+        module,
+        function,
+        vec![],
+        gas_object_ref,
+        object_args,
+        pure_args,
+        MAX_GAS,
+        sender_key,
+    );
+    let response = send_and_confirm_order(authority, order).await.unwrap();
+    response.signed_effects.unwrap().effects
+}
+
+#[tokio::test]
+async fn test_hero() {
+    // 1. Compile the Hero Move code.
+    let build_config = BuildConfig::default();
+    let mut hero_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    hero_path.push("../fastx_programmability/examples/");
+    let modules = fastx_framework::build_move_package(&hero_path, build_config, false).unwrap();
+
+    // 2. Create an admin account, and a player account.
+    // Using a hard-coded key to match the address in the Move code.
+    // This needs to be hard-coded because the module needs to know the admin's address
+    // in advance.
+    let (admin, admin_key) = get_key_pair_from_bytes(&[
+        10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
+        92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
+        90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
+        105, 254, 59, 163,
+    ]);
+    let admin_gas_object = Object::with_id_owner_for_testing(ObjectID::random(), admin);
+    let admin_gas_object_ref = admin_gas_object.to_object_reference();
+    let (player, player_key) = get_key_pair();
+    let player_gas_object = Object::with_id_owner_for_testing(ObjectID::random(), player);
+    let player_gas_object_ref = player_gas_object.to_object_reference();
+    let mut authority = init_state_with_objects(vec![admin_gas_object, player_gas_object]).await;
+
+    // 3. Publish the Hero modules to FastX.
+    let all_module_bytes = modules
+        .iter()
+        .map(|m| {
+            let mut module_bytes = Vec::new();
+            m.serialize(&mut module_bytes).unwrap();
+            module_bytes
+        })
+        .collect();
+    let order = Order::new_module(admin, admin_gas_object_ref, all_module_bytes, &admin_key);
+    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
+    assert_eq!(
+        response.signed_effects.as_ref().unwrap().effects.status,
+        ExecutionStatus::Success
+    );
+    let package_object = &response
+        .signed_effects
+        .as_ref()
+        .unwrap()
+        .effects
+        .mutated
+        .iter()
+        .find(|r| r.0 .0 != admin_gas_object_ref.0)
+        .unwrap()
+        .0;
+
+    // 4. Init the game by minting the GameAdmin.
+    let effects = call_move(
+        &mut authority,
+        &admin_gas_object_ref.0,
+        &admin,
+        &admin_key,
+        package_object,
+        ident_str!("Hero").to_owned(),
+        ident_str!("init").to_owned(),
+        vec![],
+        vec![],
+    )
+    .await;
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!(effects.mutated.len(), 2); // gas, admin_object
+    let admin_object = effects
+        .mutated
+        .iter()
+        .find(|r| r.0 .0 != admin_gas_object_ref.0)
+        .unwrap()
+        .0;
+    assert_eq!(
+        authority.object_state(&admin_object.0).await.unwrap().owner,
+        admin
+    );
+
+    // 5. Create Trusted Coin Treasury.
+    let effects = call_move(
+        &mut authority,
+        &player_gas_object_ref.0,
+        &player,
+        &player_key,
+        package_object,
+        ident_str!("TrustedCoin").to_owned(),
+        ident_str!("init").to_owned(),
+        vec![],
+        vec![],
+    )
+    .await;
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!(effects.mutated.len(), 2); // gas, cap
+    let cap = effects
+        .mutated
+        .iter()
+        .find(|r| r.0 .0 != player_gas_object_ref.0)
+        .unwrap()
+        .0;
+    assert_eq!(authority.object_state(&cap.0).await.unwrap().owner, player);
+
+    // 6. Mint 500 EXAMPLE TrustedCoin.
+    let effects = call_move(
+        &mut authority,
+        &player_gas_object_ref.0,
+        &player,
+        &player_key,
+        package_object,
+        ident_str!("TrustedCoin").to_owned(),
+        ident_str!("mint").to_owned(),
+        vec![cap.0],
+        vec![bcs::to_bytes(&500_u64).unwrap()],
+    )
+    .await;
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!(effects.mutated.len(), 3); // gas, cap, coin
+    let coin = effects
+        .mutated
+        .iter()
+        .find(|r| r.0 .0 != player_gas_object_ref.0 && r.0 .0 != cap.0)
+        .unwrap()
+        .0;
+    assert_eq!(authority.object_state(&coin.0).await.unwrap().owner, player);
+
+    // 7. Purchase a sword using 500 coin. This sword will have magic = 4, sword_strength = 5.
+    let effects = call_move(
+        &mut authority,
+        &player_gas_object_ref.0,
+        &player,
+        &player_key,
+        package_object,
+        ident_str!("Hero").to_owned(),
+        ident_str!("acquire_hero").to_owned(),
+        vec![coin.0],
+        vec![],
+    )
+    .await;
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!(effects.mutated.len(), 3); // gas, coin, hero
+    let hero = effects
+        .mutated
+        .iter()
+        .find(|r| r.0 .0 != player_gas_object_ref.0 && r.0 .0 != coin.0)
+        .unwrap()
+        .0;
+    assert_eq!(authority.object_state(&hero.0).await.unwrap().owner, player);
+    // The payment goes to the admin.
+    assert_eq!(authority.object_state(&coin.0).await.unwrap().owner, admin);
+
+    // 8. Verify the hero is what we exepct with strength 5.
+    let effects = call_move(
+        &mut authority,
+        &player_gas_object_ref.0,
+        &player,
+        &player_key,
+        package_object,
+        ident_str!("Hero").to_owned(),
+        ident_str!("assert_hero_strength").to_owned(),
+        vec![hero.0],
+        vec![bcs::to_bytes(&5_u64).unwrap()],
+    )
+    .await;
+    assert_eq!(effects.status, ExecutionStatus::Success);
+
+    // 9. Give them a boar!
+    let pure_args = vec![
+        bcs::to_bytes(&10_u64).unwrap(),          // hp
+        bcs::to_bytes(&10_u64).unwrap(),          // strength
+        bcs::to_bytes(&player.to_vec()).unwrap(), // recipient
+    ];
+    let effects = call_move(
+        &mut authority,
+        &admin_gas_object_ref.0,
+        &admin,
+        &admin_key,
+        package_object,
+        ident_str!("Hero").to_owned(),
+        ident_str!("send_boar").to_owned(),
+        vec![admin_object.0],
+        pure_args,
+    )
+    .await;
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    let boar = effects
+        .mutated
+        .iter()
+        .find(|r| r.0 .0 != admin_gas_object_ref.0 && r.0 .0 != admin_object.0)
+        .unwrap()
+        .0;
+    assert_eq!(authority.object_state(&boar.0).await.unwrap().owner, player);
+
+    // 10. Slay the boar!
+    let effects = call_move(
+        &mut authority,
+        &player_gas_object_ref.0,
+        &player,
+        &player_key,
+        package_object,
+        ident_str!("Hero").to_owned(),
+        ident_str!("slay").to_owned(),
+        vec![hero.0, boar.0],
+        vec![],
+    )
+    .await;
+    assert_eq!(effects.status, ExecutionStatus::Success);
 }
 
 // helpers

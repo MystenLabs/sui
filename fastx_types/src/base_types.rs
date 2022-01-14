@@ -29,6 +29,7 @@ pub type VersionNumber = SequenceNumber;
 pub struct UserData(pub Option<[u8; 32]>);
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
+#[derive(Debug)]
 pub struct KeyPair(dalek::Keypair);
 
 #[serde_as]
@@ -183,9 +184,15 @@ impl ObjectDigest {
     }
 }
 
+// TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;
     let keypair = dalek::Keypair::generate(&mut csprng);
+    (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
+}
+
+pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (FastPayAddress, KeyPair) {
+    let keypair = dalek::Keypair::from_bytes(bytes).unwrap();
     (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
 }
 
@@ -243,6 +250,7 @@ impl std::fmt::UpperHex for PublicKeyBytes {
         Ok(())
     }
 }
+
 pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::ser::Serializer,
