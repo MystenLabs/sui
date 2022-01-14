@@ -299,22 +299,6 @@ impl Order {
         self.signature.check(&self.kind, *self.sender())
     }
 
-    // TODO: support orders with multiple objects, each with their own sequence number (https://github.com/MystenLabs/fastnft/issues/8)
-    pub fn sequence_number(&self) -> SequenceNumber {
-        use OrderKind::*;
-        match &self.kind {
-            Transfer(t) => t.object_ref.1,
-            Publish(_) => SequenceNumber::new(), // modules are immutable, seq # is always 0
-            Call(c) => {
-                assert!(
-                    c.object_arguments.is_empty(),
-                    "Unimplemented: non-gas object arguments"
-                );
-                c.gas_payment.1
-            }
-        }
-    }
-
     /// Return the set of input objects for this order
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
     pub fn input_objects(&self) -> Vec<ObjectRef> {
@@ -483,6 +467,18 @@ impl CertifiedOrder {
             std::iter::once(&inner_sig).chain(&self.signatures),
             &committee.expanded_keys,
         )
+    }
+
+    pub fn signed_orders(&self) -> Vec<SignedOrder> {
+        self.signatures
+            .iter()
+            .cloned()
+            .map(|(authority, signature)| SignedOrder {
+                order: self.order.clone(),
+                authority,
+                signature,
+            })
+            .collect()
     }
 }
 

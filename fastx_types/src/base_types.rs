@@ -82,7 +82,8 @@ pub type AuthorityName = PublicKeyBytes;
 // addresses, either by changing Move to allow different address lengths or by decoupling
 // addresses and ID's
 pub type ObjectID = AccountAddress;
-pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
+pub type ObjectRef = (ObjectID, ObjectDigest);
+pub type VersionedObjectRef = (ObjectRef, SequenceNumber);
 
 // We use SHA3-256 hence 32 bytes here
 const TRANSACTION_DIGEST_LENGTH: usize = 32;

@@ -65,7 +65,7 @@ impl AuthorityTemporaryStore {
     /// mutated during the order execution, force mutating them by incrementing the
     /// sequence number. This is required to achieve safety.
     pub fn ensure_active_inputs_mutated(&mut self) {
-        for (id, _seq, _) in self.active_inputs.iter() {
+        for (id, _) in self.active_inputs.iter() {
             if !self.written.contains_key(id) && !self.deleted.contains(id) {
                 let mut object = self.objects[id].clone();
                 // Active input object must be Move object.

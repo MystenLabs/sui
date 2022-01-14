@@ -136,10 +136,8 @@ fn make_benchmark_transfer_orders(
             gas_payment: gas_object_ref,
         };
         debug!("Preparing transfer order: {:?}", transfer);
-        let (object_id, seq, digest) = object_ref;
-        account
-            .object_refs
-            .insert(object_id, (object_id, seq.increment(), digest));
+        let (object_id, digest) = object_ref;
+        account.object_refs.insert(object_id, (object_id, digest));
         next_recipient = account.address;
         let order = Order::new_transfer(transfer.clone(), &account.key);
         orders.push(order.clone());
@@ -313,19 +311,19 @@ fn show_object_effects(order_effects: OrderEffects) {
     if !order_effects.created.is_empty() {
         println!("Created Objects:");
         for (obj, _) in order_effects.created {
-            println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
+            println!("{:?} {:?}", obj.0, obj.1);
         }
     }
     if !order_effects.mutated.is_empty() {
         println!("Mutated Objects:");
-        for (obj, _) in order_effects.mutated {
-            println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
+        for obj in order_effects.mutated {
+            println!("{:?} {:?}", obj.0, obj.1);
         }
     }
     if !order_effects.deleted.is_empty() {
         println!("Deleted Objects:");
         for obj in order_effects.deleted {
-            println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
+            println!("{:?} {:?}", obj.0, obj.1);
         }
     }
 }

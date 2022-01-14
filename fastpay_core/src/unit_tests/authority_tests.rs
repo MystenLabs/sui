@@ -112,34 +112,6 @@ async fn test_handle_transfer_order_unknown_sender() {
         .is_none());
 }
 
-/* FIXME: This tests the submission of out of order certs, but modifies object sequence numbers manually
-   and leaves the authority in an inconsistent state. We should re-code it in a proper way.
-
-#[test]
-fn test_handle_transfer_order_bad_sequence_number() {
-    let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = random_object_id();
-    let recipient = Address::FastPay(dbg_addr(2));
-    let authority_state = init_state_with_object(sender, object_id);
-    let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
-
-    let mut sequence_number_state = authority_state;
-    let sequence_number_state_sender_account =
-        sequence_number_state.objects.get_mut(&object_id).unwrap();
-    sequence_number_state_sender_account.version() =
-        sequence_number_state_sender_account
-            .version()
-            .increment()
-            .unwrap();
-    assert!(sequence_number_state
-        .handle_transfer_order(transfer_order)
-        .is_err());
-
-        let object = sequence_number_state.objects.get(&object_id).unwrap();
-        assert!(sequence_number_state.get_order_lock(object.id, object.version()).unwrap().is_none());
-}
-*/
-
 #[tokio::test]
 async fn test_handle_transfer_order_ok() {
     let (sender, sender_key) = get_key_pair();
@@ -162,14 +134,10 @@ async fn test_handle_transfer_order_ok() {
 
     // Check the initial state of the locks
     assert!(authority_state
-        .get_order_lock(&(object_id, 0.into(), test_object.digest()))
+        .get_order_lock(&(object_id, test_object.digest()))
         .await
         .unwrap()
         .is_none());
-    assert!(authority_state
-        .get_order_lock(&(object_id, 1.into(), test_object.digest()))
-        .await
-        .is_err());
 
     let account_info = authority_state
         .handle_order(transfer_order.clone())
@@ -186,13 +154,13 @@ async fn test_handle_transfer_order_ok() {
 
     // Check the final state of the locks
     assert!(authority_state
-        .get_order_lock(&(object_id, 0.into(), object.digest()))
+        .get_order_lock(&(object_id, object.digest()))
         .await
         .unwrap()
         .is_some());
     assert_eq!(
         authority_state
-            .get_order_lock(&(object_id, 0.into(), object.digest()))
+            .get_order_lock(&(object_id, object.digest()))
             .await
             .unwrap()
             .as_ref()
@@ -216,7 +184,7 @@ async fn test_handle_transfer_zero_balance() {
     let gas_object =
         Object::with_id_owner_gas_for_testing(gas_object_id, SequenceNumber::new(), sender, 0);
     authority_state
-        .init_order_lock((gas_object_id, 0.into(), gas_object.digest()))
+        .init_order_lock((gas_object_id, gas_object.digest()))
         .await;
     let gas_object_ref = gas_object.to_object_reference();
     authority_state.insert_object(gas_object).await;
@@ -559,72 +527,12 @@ async fn test_handle_confirmation_order_unknown_sender() {
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_bad_sequence_number() {
-    // TODO: refactor this test to be less magic:
-    // * Create an explicit state within an authority, by passing objects.
-    // * Create an explicit transfer, and execute it.
-    // * Then try to execute it again.
-
-    let (sender, sender_key) = get_key_pair();
-    let object_id: ObjectID = ObjectID::random();
-    let recipient = dbg_addr(2);
-    let gas_object_id = ObjectID::random();
-    let authority_state =
-        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let object = authority_state.object_state(&object_id).await.unwrap();
-    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
-
-    // Record the old sequence number
-    let old_seq_num;
-    {
-        let old_account = authority_state.object_state(&object_id).await.unwrap();
-        old_seq_num = old_account.version();
-    }
-
-    let certified_transfer_order = init_certified_transfer_order(
-        sender,
-        &sender_key,
-        Address::FastPay(recipient),
-        object.to_object_reference(),
-        gas_object.to_object_reference(),
-        &authority_state,
-    );
-
-    // Increment the sequence number
-    {
-        let mut sender_object = authority_state.object_state(&object_id).await.unwrap();
-        let o = sender_object.data.try_as_move_mut().unwrap();
-        let old_contents = o.contents().to_vec();
-        // update object contents, which will increment the sequence number
-        o.update_contents(old_contents);
-        authority_state.insert_object(sender_object).await;
-    }
-
-    // Explanation: providing an old cert that has already need applied
-    //              returns a Ok(_) with info about the new object states.
-    assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
-        .await
-        .is_ok());
-
-    // Check that the new object is the one recorded.
-    let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(old_seq_num.increment(), new_account.version());
-
-    // No recipient object was created.
-    assert!(authority_state
-        .object_state(&dbg_object_id(2))
-        .await
-        .is_err());
-}
-
-#[tokio::test]
 async fn test_handle_confirmation_order_exceed_balance() {
     let (sender, sender_key) = get_key_pair();
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let recipient = dbg_addr(2);
-    let authority_state =
+    let mut authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let object = authority_state.object_state(&object_id).await.unwrap();
     let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
@@ -637,14 +545,23 @@ async fn test_handle_confirmation_order_exceed_balance() {
         gas_object.to_object_reference(),
         &authority_state,
     );
-    assert!(authority_state
+    let signed_order = certified_transfer_order.signed_orders().pop().unwrap();
+    init_state_with_order_backed_ids(
+        vec![(sender, object_id), (sender, gas_object_id)],
+        signed_order.clone(),
+        &mut authority_state,
+    )
+    .await;
+
+    let info = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .await
-        .is_ok());
+        .unwrap();
+    info.signed_effects.expect("Should have effects");
     let new_account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(OBJECT_START_VERSION, new_account.version());
     assert!(authority_state
-        .parent(&(object_id, new_account.version(), new_account.digest()))
+        .parent(&((object_id, new_account.digest()), new_account.version()))
         .await
         .is_some());
 }
@@ -655,7 +572,7 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let (recipient, _) = get_key_pair();
-    let authority_state = init_state_with_ids(vec![
+    let mut authority_state = init_state_with_ids(vec![
         (sender, object_id),
         (sender, gas_object_id),
         (recipient, ObjectID::random()),
@@ -672,6 +589,17 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
         gas_object.to_object_reference(),
         &authority_state,
     );
+    init_state_with_order_backed_ids(
+        vec![
+            (sender, object_id),
+            (sender, gas_object_id),
+            (recipient, ObjectID::random()),
+        ],
+        certified_transfer_order.signed_orders().pop().unwrap(),
+        &mut authority_state,
+    )
+    .await;
+
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .await
@@ -681,9 +609,8 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
 
     assert!(authority_state
         .parent(&(
-            object_id,
-            new_sender_account.version(),
-            new_sender_account.digest()
+            (object_id, new_sender_account.digest()),
+            new_sender_account.version()
         ))
         .await
         .is_some());
@@ -694,7 +621,7 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
     let (address, key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();
-    let authority_state =
+    let mut authority_state =
         init_state_with_ids(vec![(address, object_id), (address, gas_object_id)]).await;
     let object = authority_state.object_state(&object_id).await.unwrap();
     let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
@@ -707,6 +634,13 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
         gas_object.to_object_reference(),
         &authority_state,
     );
+    init_state_with_order_backed_ids(
+        vec![(address, object_id), (address, gas_object_id)],
+        certified_transfer_order.signed_orders().pop().unwrap(),
+        &mut authority_state,
+    )
+    .await;
+
     assert!(authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .await
@@ -715,7 +649,7 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
     assert_eq!(OBJECT_START_VERSION, account.version());
 
     assert!(authority_state
-        .parent(&(object_id, account.version(), account.digest()))
+        .parent(&((object_id, account.digest()), account.version()))
         .await
         .is_some());
 }
@@ -726,32 +660,43 @@ async fn test_handle_confirmation_order_gas() {
         let (sender, sender_key) = get_key_pair();
         let recipient = dbg_addr(2);
         let object_id = ObjectID::random();
-        let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
-        let object = authority_state.object_state(&object_id).await.unwrap();
-
-        // Create a gas object with insufficient balance.
         let gas_object_id = ObjectID::random();
+
+        let mut authority_state =
+            init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+        let object = authority_state.object_state(&object_id).await.unwrap();
+        // Create a gas object with insufficient balance.
         let gas_object = Object::with_id_owner_gas_for_testing(
             gas_object_id,
             SequenceNumber::new(),
             sender,
             gas,
         );
-        authority_state
-            .init_order_lock((gas_object_id, 0.into(), gas_object.digest()))
-            .await;
         let gas_object_ref = gas_object.to_object_reference();
-        authority_state.insert_object(gas_object).await;
-
         let certified_transfer_order = init_certified_transfer_order(
             sender,
             &sender_key,
             Address::FastPay(recipient),
             object.to_object_reference(),
-            gas_object_ref,
+            gas_object.to_object_reference(),
             &authority_state,
         );
-
+        let signed_order = certified_transfer_order.signed_orders().pop().unwrap();
+        init_state_with_order_backed_ids(
+            vec![(sender, object_id)],
+            signed_order.clone(),
+            &mut authority_state,
+        )
+        .await;
+        authority_state.init_order_lock(gas_object_ref).await;
+        authority_state
+            .init_order_lock((gas_object_id, gas_object.digest()))
+            .await;
+        authority_state
+            .set_order_lock(&[gas_object_ref], signed_order)
+            .await
+            .unwrap();
+        authority_state.insert_object(gas_object).await;
         authority_state
             .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
             .await
@@ -777,7 +722,7 @@ async fn test_handle_confirmation_order_ok() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
-    let authority_state =
+    let mut authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let object = authority_state.object_state(&object_id).await.unwrap();
     let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
@@ -790,6 +735,13 @@ async fn test_handle_confirmation_order_ok() {
         gas_object.to_object_reference(),
         &authority_state,
     );
+    let signed_order = certified_transfer_order.signed_orders().pop().unwrap();
+    init_state_with_order_backed_ids(
+        vec![(sender, object_id), (sender, gas_object_id)],
+        signed_order.clone(),
+        &mut authority_state,
+    )
+    .await;
 
     let old_account = authority_state.object_state(&object_id).await.unwrap();
     let mut next_sequence_number = old_account.version();
@@ -802,13 +754,15 @@ async fn test_handle_confirmation_order_ok() {
     // Key check: the ownership has changed
 
     let new_account = authority_state.object_state(&object_id).await.unwrap();
+    info.signed_effects.expect("Should have effects");
     assert_eq!(recipient, new_account.owner);
     assert_eq!(next_sequence_number, new_account.version());
-    assert_eq!(None, info.signed_order);
+    assert_eq!(Some(signed_order), info.signed_order);
     assert_eq!(
         {
             let refx = authority_state
-                .parent(&(object_id, new_account.version(), new_account.digest()))
+                // TODO: correct seq?
+                .parent(&((object_id, new_account.digest()), SequenceNumber::from(1)))
                 .await
                 .unwrap();
             authority_state.read_certificate(&refx).await.unwrap()
@@ -818,11 +772,11 @@ async fn test_handle_confirmation_order_ok() {
 
     // Check locks are set and archived correctly
     assert!(authority_state
-        .get_order_lock(&(object_id, 0.into(), old_account.digest()))
+        .get_order_lock(&(object_id, old_account.digest()))
         .await
         .is_err());
     assert!(authority_state
-        .get_order_lock(&(object_id, 1.into(), new_account.digest()))
+        .get_order_lock(&(object_id, new_account.digest()))
         .await
         .expect("Exists")
         .is_none());
@@ -831,7 +785,8 @@ async fn test_handle_confirmation_order_ok() {
     assert!(
         authority_state.get_parent_iterator(object_id, None).await
             == Ok(vec![(
-                (object_id, 1.into(), new_account.digest()),
+                // TODO: correct seq?
+                ((object_id, new_account.digest()), SequenceNumber::from(1)),
                 certified_transfer_order.order.digest()
             )])
     );
@@ -843,7 +798,7 @@ async fn test_handle_confirmation_order_idempotent() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
-    let authority_state =
+    let mut authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let object = authority_state.object_state(&object_id).await.unwrap();
     let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
@@ -856,12 +811,18 @@ async fn test_handle_confirmation_order_idempotent() {
         gas_object.to_object_reference(),
         &authority_state,
     );
+    init_state_with_order_backed_ids(
+        vec![(sender, object_id), (sender, gas_object_id)],
+        certified_transfer_order.signed_orders().pop().unwrap(),
+        &mut authority_state,
+    )
+    .await;
 
     let info = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .await
         .unwrap();
-
+    // TODO: fails here, but should work once clients pass object digest
     let info2 = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .await
@@ -966,7 +927,7 @@ async fn test_move_call_mutable_object_not_mutated() {
             .await
             .unwrap()
             .version(),
-        new_object_ref1.1.increment()
+        SequenceNumber::from(2)
     );
     assert_eq!(
         authority_state
@@ -974,7 +935,7 @@ async fn test_move_call_mutable_object_not_mutated() {
             .await
             .unwrap()
             .version(),
-        new_object_ref2.1.increment()
+        SequenceNumber::from(2)
     );
 }
 
@@ -1030,9 +991,7 @@ async fn test_authority_persist() {
     let obj = Object::with_id_owner_for_testing(object_id, recipient);
 
     // Store an object
-    authority
-        .init_order_lock((object_id, 0.into(), obj.digest()))
-        .await;
+    authority.init_order_lock((object_id, obj.digest())).await;
     authority.insert_object(obj).await;
 
     // Close the authority
@@ -1300,12 +1259,29 @@ async fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>
     let state = init_state().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
-        state
-            .init_order_lock((object_id, 0.into(), obj.digest()))
-            .await;
+        state.init_order_lock((object_id, obj.digest())).await;
         state.insert_object(obj).await;
     }
     state
+}
+
+// same as `init_state_with_id`'s, but properly initializes the lock map with `signed_order` for each of `objects`
+#[cfg(test)]
+async fn init_state_with_order_backed_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
+    objects: I,
+    signed_order: SignedOrder,
+    state: &mut AuthorityState,
+) {
+    for (address, object_id) in objects {
+        let obj = Object::with_id_owner_for_testing(object_id, address);
+        let obj_ref = (object_id, obj.digest());
+        state.init_order_lock(obj_ref).await;
+        state
+            .set_order_lock(&[obj_ref], signed_order.clone())
+            .await
+            .unwrap();
+        state.insert_object(obj).await;
+    }
 }
 
 async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
@@ -1342,6 +1318,23 @@ fn init_transfer_order(
 }
 
 #[cfg(test)]
+fn init_signed_transfer_order(
+    sender: FastPayAddress,
+    secret: &KeyPair,
+    recipient: Address,
+    object_ref: ObjectRef,
+    gas_object_ref: ObjectRef,
+    authority_state: &AuthorityState,
+) -> SignedOrder {
+    let transfer_order = init_transfer_order(sender, secret, recipient, object_ref, gas_object_ref);
+    SignedOrder::new(
+        transfer_order,
+        authority_state.name,
+        &authority_state.secret,
+    )
+}
+
+#[cfg(test)]
 fn init_certified_transfer_order(
     sender: FastPayAddress,
     secret: &KeyPair,
@@ -1350,14 +1343,15 @@ fn init_certified_transfer_order(
     gas_object_ref: ObjectRef,
     authority_state: &AuthorityState,
 ) -> CertifiedOrder {
-    let transfer_order = init_transfer_order(sender, secret, recipient, object_ref, gas_object_ref);
-    let vote = SignedOrder::new(
-        transfer_order.clone(),
-        authority_state.name,
-        &authority_state.secret,
+    let vote = init_signed_transfer_order(
+        sender,
+        secret,
+        recipient,
+        object_ref,
+        gas_object_ref,
+        authority_state,
     );
-    let mut builder =
-        SignatureAggregator::try_new(transfer_order, &authority_state.committee).unwrap();
+    let mut builder = SignatureAggregator::try_new(vote.order, &authority_state.committee).unwrap();
     builder
         .append(vote.authority, vote.signature)
         .unwrap()

@@ -80,33 +80,17 @@ impl AuthorityState {
             None
         };
 
-        let ids: Vec<_> = input_objects.iter().map(|(id, _, _)| *id).collect();
+        let ids: Vec<_> = input_objects.iter().map(|(id, _)| *id).collect();
         // Get a copy of the object.
         // TODO: We only need to read the read_only and owner field of the object,
         //      it's a bit wasteful to copy the entire object.
         let objects = self.get_objects(&ids[..]).await?;
         for (object_ref, object) in input_objects.into_iter().zip(objects) {
-            let (object_id, sequence_number, object_digest) = object_ref;
-
-            fp_ensure!(
-                sequence_number <= SequenceNumber::max(),
-                FastPayError::InvalidSequenceNumber
-            );
-
+            let (object_id, object_digest) = object_ref;
             let object = object.ok_or(FastPayError::ObjectNotFound)?;
             fp_ensure!(
                 object.digest() == object_digest,
                 FastPayError::InvalidObjectDigest
-            );
-
-            // Check that the seq number is the same
-            fp_ensure!(
-                object.version() == sequence_number,
-                FastPayError::UnexpectedSequenceNumber {
-                    object_id,
-                    expected_sequence: object.version(),
-                    received_sequence: sequence_number
-                }
             );
 
             if object.is_read_only() {
@@ -142,7 +126,7 @@ impl AuthorityState {
             and returns ConflictingOrder in case there is a lock on a different
             existing order */
 
-            mutable_objects.push((object_id, sequence_number, object_digest));
+            mutable_objects.push((object_id, object_digest));
         }
 
         // We have checked that there is a mutable gas object.
@@ -170,7 +154,7 @@ impl AuthorityState {
         certificate.check(&self.committee)?;
 
         let input_objects = order.input_objects();
-        let ids: Vec<_> = input_objects.iter().map(|(id, _, _)| *id).collect();
+        let ids: Vec<_> = input_objects.iter().map(|(id, _)| *id).collect();
         // Get a copy of the object.
         // TODO: We only need to read the read_only and owner field of the object,
         //      it's a bit wasteful to copy the entire object.
@@ -178,27 +162,42 @@ impl AuthorityState {
 
         let mut inputs = vec![];
         let mut owner_index = HashMap::new();
-        for (object_ref, object) in input_objects.into_iter().zip(objects) {
-            let (input_object_id, input_seq, _input_digest) = object_ref;
+        for (input_object_ref, object) in input_objects.into_iter().zip(objects) {
+            let (input_object_id, object_digest) = input_object_ref;
 
             // If we have a certificate on the confirmation order it means that the input
             // object exists on other honest authorities, but we do not have it.
             let input_object = object.ok_or(FastPayError::ObjectNotFound)?;
-
-            let input_sequence_number = input_object.version();
-
-            // Check that the current object is exactly the right version.
-            if input_sequence_number < input_seq {
-                fp_bail!(FastPayError::MissingEalierConfirmations {
-                    current_sequence_number: input_sequence_number
-                });
-            }
-            if input_sequence_number > input_seq {
-                // Transfer was already confirmed.
-                return self.make_order_info(&transaction_digest).await;
-            }
-
             if !input_object.is_read_only() {
+                let input_object_ref = (input_object_id, object_digest);
+                match self.get_order_lock(&input_object_ref).await {
+                    Ok(Some(s)) => {
+                        // order pending confirmation. fall through
+                        debug_assert_eq!(&s.order, &order);
+                        debug_assert_eq!(s.order.digest(), transaction_digest);
+                    }
+                    Ok(None) => {
+                        // TODO: when can order lock be None? is this only for objects created by the genesis tx?
+                        return self.make_order_info(&transaction_digest).await;
+                    }
+                    Err(FastPayError::OrderLockDoesNotExist) => {
+                        match self.make_order_info(&transaction_digest).await {
+                            Err(FastPayError::StorageError(_)) => {
+                                // lock does not exist, but we were previously able to read the object from the DB, so an object
+                                // with the given ID does exist. we are just missing an earlier confirmation.
+                                fp_bail!(FastPayError::MissingEalierConfirmations {
+                                    missing: transaction_digest
+                                })
+                            }
+                            Err(e) => return Err(e),
+                            Ok(info) => return Ok(info),
+                        }
+                    }
+                    Err(e) => {
+                        // system error from DB (e.g., I/O error)
+                        return Err(e);
+                    }
+                };
                 owner_index.insert(input_object_id, input_object.owner);
             }
 
@@ -480,7 +479,7 @@ impl AuthorityState {
         self._database.read_certificate(digest)
     }
 
-    pub async fn parent(&self, object_ref: &ObjectRef) -> Option<TransactionDigest> {
+    pub async fn parent(&self, object_ref: &VersionedObjectRef) -> Option<TransactionDigest> {
         self._database
             .parent(object_ref)
             .expect("TODO: propagate the error")
@@ -499,7 +498,7 @@ impl AuthorityState {
         &self,
         object_id: ObjectID,
         seq: Option<SequenceNumber>,
-    ) -> Result<Vec<(ObjectRef, TransactionDigest)>, FastPayError> {
+    ) -> Result<Vec<(VersionedObjectRef, TransactionDigest)>, FastPayError> {
         {
             self._database.get_parent_iterator(object_id, seq)
         }

@@ -201,12 +201,8 @@ impl ClientServerBenchmark {
             let gas_object_ref = gas_obj.to_object_reference();
 
             let order = if self.use_move {
-                // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
-                let framework_obj_ref = (
-                    FASTX_FRAMEWORK_ADDRESS,
-                    SequenceNumber::new(),
-                    ObjectDigest::new([0; 32]),
-                );
+                // TODO: authority should not require seq# or digests for package in Move calls. Use dummy values
+                let framework_obj_ref = (FASTX_FRAMEWORK_ADDRESS, ObjectDigest::new([0; 32]));
 
                 Order::new_move_call(
                     *account_addr,

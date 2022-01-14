@@ -16,7 +16,7 @@ use crate::FASTX_FRAMEWORK_ADDRESS;
 use crate::{
     base_types::{
         sha3_hash, BcsSignable, FastPayAddress, ObjectDigest, ObjectID, ObjectRef, SequenceNumber,
-        TransactionDigest,
+        TransactionDigest, VersionedObjectRef,
     },
     gas_coin::GasCoin,
 };
@@ -243,7 +243,11 @@ impl Object {
     }
 
     pub fn to_object_reference(&self) -> ObjectRef {
-        (self.id(), self.version(), self.digest())
+        (self.id(), self.digest())
+    }
+
+    pub fn to_versioned_object_reference(&self) -> VersionedObjectRef {
+        (self.to_object_reference(), self.version())
     }
 
     pub fn id(&self) -> ObjectID {

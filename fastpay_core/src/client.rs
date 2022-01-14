@@ -15,7 +15,7 @@ use move_core_types::language_storage::TypeTag;
 use rand::seq::SliceRandom;
 
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -71,8 +71,6 @@ pub struct ClientState<AuthorityClient> {
     // The remaining fields are used to minimize networking, and may not always be persisted locally.
     /// Known certificates, indexed by TX digest.
     certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
-    /// The known objects with it's sequence number owned by the client.
-    object_sequence_numbers: BTreeMap<ObjectID, SequenceNumber>,
     /// Confirmed objects with it's ref owned by the client.
     object_refs: BTreeMap<ObjectID, ObjectRef>,
     /// Certificate <-> object id linking map.
@@ -147,11 +145,6 @@ impl<A> ClientState<A> {
         certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
         object_refs: BTreeMap<ObjectID, ObjectRef>,
     ) -> Self {
-        let object_seq = object_refs
-            .iter()
-            .map(|(id, (_, seq, _))| (*id, *seq))
-            .collect();
-
         Self {
             address,
             secret,
@@ -159,7 +152,6 @@ impl<A> ClientState<A> {
             authority_clients,
             pending_transfer: None,
             certificates,
-            object_sequence_numbers: object_seq,
             object_refs,
             object_certs: BTreeMap::new(),
         }
@@ -167,17 +159,6 @@ impl<A> ClientState<A> {
 
     pub fn address(&self) -> FastPayAddress {
         self.address
-    }
-
-    pub fn next_sequence_number(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<SequenceNumber, FastPayError> {
-        if self.object_sequence_numbers.contains_key(object_id) {
-            Ok(self.object_sequence_numbers[object_id])
-        } else {
-            Err(FastPayError::ObjectNotFound)
-        }
     }
 
     pub fn object_refs(&self) -> &BTreeMap<ObjectID, ObjectRef> {
@@ -204,8 +185,7 @@ impl<A> ClientState<A> {
     }
 
     pub fn insert_object(&mut self, object_ref: &ObjectRef, digest: &TransactionDigest) {
-        let (object_id, seq, _) = object_ref;
-        self.object_sequence_numbers.insert(*object_id, *seq);
+        let (object_id, _) = object_ref;
         self.object_certs
             .entry(*object_id)
             .or_default()
@@ -214,7 +194,6 @@ impl<A> ClientState<A> {
     }
 
     pub fn remove_object(&mut self, object_id: &ObjectID) {
-        self.object_sequence_numbers.remove(object_id);
         self.object_certs.remove(object_id);
         self.object_refs.remove(object_id);
     }
@@ -224,7 +203,7 @@ impl<A> ClientState<A> {
 struct CertificateRequester<A> {
     committee: Committee,
     authority_clients: Vec<A>,
-    sender: Option<FastPayAddress>,
+    _sender: Option<FastPayAddress>,
     object_id: ObjectID,
 }
 
@@ -238,7 +217,7 @@ impl<A> CertificateRequester<A> {
         Self {
             committee,
             authority_clients,
-            sender,
+            _sender: sender,
             object_id,
         }
     }
@@ -252,7 +231,7 @@ where
     type Key = SequenceNumber;
     type Value = Result<CertifiedOrder, FastPayError>;
 
-    /// Try to find a certificate for the given sender and sequence number.
+    /// Try to find a certificate for the given object ID and sequence number.
     async fn query(
         &mut self,
         sequence_number: SequenceNumber,
@@ -270,14 +249,7 @@ where
             if let Ok(response) = result {
                 let certificate = response.requested_certificate.unwrap();
                 if certificate.check(&self.committee).is_ok() {
-                    let order = &certificate.order;
-                    if let Some(sender) = self.sender {
-                        if order.sender() == &sender && order.sequence_number() == sequence_number {
-                            return Ok(certificate.clone());
-                        }
-                    } else {
-                        return Ok(certificate.clone());
-                    }
+                    return Ok(certificate)
                 }
             }
         }
@@ -432,33 +404,27 @@ where
     ) -> Result<(Vec<OrderInfoResponse>, CertifiedOrder), anyhow::Error> {
         let committee = self.committee.clone();
         let (responses, votes) = self
-            .broadcast_and_execute(
-                sender,
-                object_id,
-                known_certificates,
-                order.sequence_number(),
-                |name, authority| {
-                    let order = order.clone();
-                    let committee = committee.clone();
-                    Box::pin(async move {
-                        match authority.handle_order(order).await {
-                            Ok(OrderInfoResponse {
-                                signed_order: Some(inner_signed_order),
-                                ..
-                            }) => {
-                                fp_ensure!(
-                                    inner_signed_order.authority == name,
-                                    FastPayError::ErrorWhileProcessingTransferOrder
-                                );
-                                inner_signed_order.check(&committee)?;
-                                Ok((inner_signed_order.authority, inner_signed_order.signature))
-                            }
-                            Err(err) => Err(err),
-                            _ => Err(FastPayError::ErrorWhileProcessingTransferOrder),
+            .broadcast_and_execute(sender, object_id, known_certificates, |name, authority| {
+                let order = order.clone();
+                let committee = committee.clone();
+                Box::pin(async move {
+                    match authority.handle_order(order).await {
+                        Ok(OrderInfoResponse {
+                            signed_order: Some(inner_signed_order),
+                            ..
+                        }) => {
+                            fp_ensure!(
+                                inner_signed_order.authority == name,
+                                FastPayError::ErrorWhileProcessingTransferOrder
+                            );
+                            inner_signed_order.check(&committee)?;
+                            Ok((inner_signed_order.authority, inner_signed_order.signature))
                         }
-                    })
-                },
-            )
+                        Err(err) => Err(err),
+                        _ => Err(FastPayError::ErrorWhileProcessingTransferOrder),
+                    }
+                })
+            })
             .await?;
         let certificate = CertifiedOrder {
             order,
@@ -477,23 +443,12 @@ where
         sender: FastPayAddress,
         object_id: ObjectID,
         known_certificates: Vec<CertifiedOrder>,
-        target_sequence_number: SequenceNumber,
         action: F,
     ) -> Result<(Vec<OrderInfoResponse>, Vec<V>), anyhow::Error>
     where
         F: Fn(AuthorityName, &'a mut A) -> AsyncResult<'a, V, FastPayError> + Send + Sync + Copy,
         V: Copy,
     {
-        let next_sequence_number = self.next_sequence_number(&object_id).unwrap_or_default();
-        fp_ensure!(
-            target_sequence_number >= next_sequence_number,
-            FastPayError::UnexpectedSequenceNumber {
-                object_id,
-                expected_sequence: next_sequence_number,
-                received_sequence: target_sequence_number,
-            }
-            .into()
-        );
         let requester = CertificateRequester::new(
             self.committee.clone(),
             self.authority_clients.values().cloned().collect(),
@@ -505,7 +460,9 @@ where
             requester,
             known_certificates.into_iter().filter_map(|cert| {
                 if cert.order.sender() == &sender {
-                    Some((cert.order.sequence_number(), Ok(cert)))
+                    // TODO: how should this work?
+                    let seq = 0.into();
+                    Some((seq, Ok(cert)))
                 } else {
                     None
                 }
@@ -527,7 +484,8 @@ where
                     let current_sequence_number = response.object.version();
                     // Download each missing certificate in reverse order using the downloader.
                     let mut missing_certificates = Vec::new();
-                    let mut number = target_sequence_number.decrement();
+                    // TODO: is this change ok?
+                    let mut number = current_sequence_number.decrement();
                     while let Ok(value) = number {
                         if value < current_sequence_number {
                             break;
@@ -576,15 +534,10 @@ where
         sender: FastPayAddress,
         object_id: ObjectID,
         known_certificates: Vec<CertifiedOrder>,
-        target_sequence_number: SequenceNumber,
     ) -> Result<Vec<OrderInfoResponse>, anyhow::Error> {
-        self.broadcast_and_execute(
-            sender,
-            object_id,
-            known_certificates,
-            target_sequence_number,
-            |_, _| Box::pin(async { Ok(()) }),
-        )
+        self.broadcast_and_execute(sender, object_id, known_certificates, |_, _| {
+            Box::pin(async { Ok(()) })
+        })
         .await
         .map(|(responses, _)| responses)
     }
@@ -595,30 +548,24 @@ where
         &mut self,
     ) -> Result<BTreeMap<ObjectID, Vec<CertifiedOrder>>, FastPayError> {
         let mut sent_certificates: BTreeMap<ObjectID, Vec<CertifiedOrder>> = BTreeMap::new();
-
-        for (object_id, next_sequence_number) in self.object_sequence_numbers.clone() {
-            let known_sequence_numbers: BTreeSet<_> = self
-                .certificates(&object_id)
-                .flat_map(|cert| cert.order.input_objects())
-                .filter_map(|(id, seq, _)| if id == object_id { Some(seq) } else { None })
-                .collect();
-
+        for (object_id, _obj_digest) in &self.object_refs {            
             let mut requester = CertificateRequester::new(
                 self.committee.clone(),
                 self.authority_clients.values().cloned().collect(),
                 None,
-                object_id,
+                *object_id,
             );
 
-            let entry = sent_certificates.entry(object_id).or_default();
-            // TODO: it's inefficient to loop through sequence numbers to retrieve missing cert, rethink this logic when we change certificate storage in client.
-            let mut number = SequenceNumber::from(0);
-            while number < next_sequence_number {
-                if !known_sequence_numbers.contains(&number) {
-                    let certificate = requester.query(number).await?;
+            let entry = sent_certificates.entry(*object_id).or_default();
+            // TODO: it's inefficient to loop to retrieve missing cert, rethink this logic when we change certificate storage in client.
+            let mut number = 0;
+            loop {
+                if let Ok(certificate) = requester.query(SequenceNumber::from(number)).await {
                     entry.push(certificate);
+                } else {
+                    break;                    
                 }
-                number = number.increment();
+                number = number + 1;
             }
         }
         Ok(sent_certificates)
@@ -668,53 +615,15 @@ where
         certificates: &[CertifiedOrder],
     ) -> Result<(), FastPayError> {
         for new_cert in certificates {
-            // Try to get object's last seq number before the mutation, default to 0 for newly created object.
-            let seq = new_cert
-                .order
-                .input_objects()
-                .iter()
-                .find_map(
-                    |(id, seq, _)| {
-                        if object_id == id {
-                            Some(seq)
-                        } else {
-                            None
-                        }
-                    },
-                )
-                .cloned()
-                .unwrap_or_default();
-
-            let mut new_next_sequence_number = self.next_sequence_number(object_id)?;
-            if seq >= new_next_sequence_number {
-                new_next_sequence_number = seq.increment();
-            }
-
             self.certificates
                 .insert(new_cert.order.digest(), new_cert.clone());
-
-            // Atomic update
-            self.object_sequence_numbers
-                .insert(*object_id, new_next_sequence_number);
-
             let certs = self.object_certs.entry(*object_id).or_default();
 
             if !certs.contains(&new_cert.order.digest()) {
                 certs.push(new_cert.order.digest());
             }
         }
-        // Sanity check
-        let certificates_count = self.certificates(object_id).count();
-
-        if certificates_count == usize::from(self.next_sequence_number(object_id)?) {
-            Ok(())
-        } else {
-            Err(FastPayError::UnexpectedSequenceNumber {
-                object_id: *object_id,
-                expected_sequence: SequenceNumber::from(certificates_count as u64),
-                received_sequence: self.next_sequence_number(object_id)?,
-            })
-        }
+        Ok(())
     }
 
     /// Execute (or retry) a transfer order. Update local balance.
@@ -726,10 +635,6 @@ where
         ensure!(
             self.pending_transfer == None || self.pending_transfer.as_ref() == Some(&order),
             "Client state has a different pending transfer",
-        );
-        ensure!(
-            order.sequence_number() == self.next_sequence_number(order.object_id())?,
-            "Unexpected sequence number"
         );
         self.pending_transfer = Some(order.clone());
         let (order_info_responses, new_sent_certificate) = self
@@ -748,7 +653,7 @@ where
 
         // Only valid for object transfer, where input_objects = output_objects
         let new_sent_certificates = vec![new_sent_certificate.clone()];
-        for (object_id, _, _) in order.input_objects() {
+        for (object_id, _) in order.input_objects() {
             self.update_certificates(&object_id, &new_sent_certificates)?;
         }
         for response in order_info_responses {
@@ -762,7 +667,6 @@ where
                     self.address,
                     *order.object_id(),
                     self.certificates(order.object_id()).cloned().collect(),
-                    self.next_sequence_number(order.object_id())?,
                 )
                 .await?;
             for response in order_info_responses {
@@ -811,33 +715,44 @@ where
             self.certificates.insert(digest, cert.clone());
 
             for &(object_ref, owner) in v.effects.all_mutated() {
-                let (object_id, seq, _) = object_ref;
-                let old_seq = self
-                    .object_sequence_numbers
-                    .get(&object_id)
-                    .cloned()
-                    .unwrap_or_default();
-                // only update if data is new
-                if old_seq < seq {
-                    if owner == self.address {
-                        self.insert_object(&object_ref, &digest);
-                    } else {
-                        self.remove_object(&object_id);
+                let (object_id, obj_digest) = object_ref;
+                                // only update if data is new
+                match self
+                .object_refs
+                    .get(&object_id) {
+                        Some((_, old_digest)) => {
+                            if &obj_digest != old_digest {
+                                if owner == self.address {
+                                    self.insert_object(&object_ref, &digest);
+                                } else {
+                                    self.remove_object(&object_id);
+                                }
+                            } else if &obj_digest == old_digest && owner == self.address {
+                                  // ObjectRef can be 1 version behind because it's only updated after confirmation.
+                                self.object_refs.insert(object_id, object_ref);
+                            }
+                        }
+                        None => {
+                            if owner == self.address {
+                                self.insert_object(&object_ref, &digest);
+                            }
+                        }
                     }
-                } else if old_seq == seq && owner == self.address {
-                    // ObjectRef can be 1 version behind because it's only updated after confirmation.
-                    self.object_refs.insert(object_id, object_ref);
-                }
             }
-            for (object_id, seq, _) in &v.effects.deleted {
-                let old_seq = self
-                    .object_sequence_numbers
-                    .get(object_id)
-                    .cloned()
-                    .unwrap_or_default();
-                if old_seq < *seq {
-                    self.remove_object(object_id);
-                }
+
+            for (object_id, digest) in &v.effects.deleted {   
+                                  // only update if data is new
+                                  match self
+                                  .object_refs
+                                      .get(&object_id) {
+                                          Some((_, old_digest)) if old_digest == digest => {
+                                            self.remove_object(object_id);
+                                          }
+                                            _ => {
+                                                // else, nothing to remove
+                                            }
+                                        }
+
             }
             Ok((cert, v.effects))
         } else {
@@ -1040,7 +955,6 @@ where
                         transfer.sender,
                         *certificate.order.object_id(),
                         vec![certificate.clone()],
-                        transfer.object_ref.1.increment(),
                     )
                     .await?;
 
@@ -1051,7 +965,8 @@ where
                 let response = self
                     .get_object_info(ObjectInfoRequest {
                         object_id: *certificate.order.object_id(),
-                        request_sequence_number: Some(transfer.object_ref.1),
+                        // TODO: ok?
+                        request_sequence_number: None,
                         request_received_transfers_excluding_first_nth: None,
                     })
                     .await?;
@@ -1060,8 +975,6 @@ where
 
                 // Everything worked: update the local balance.
                 if let Entry::Vacant(entry) = self.certificates.entry(certificate.order.digest()) {
-                    self.object_sequence_numbers
-                        .insert(transfer.object_ref.0, transfer.object_ref.1.increment());
                     self.object_certs
                         .entry(transfer.object_ref.0)
                         .or_default()
@@ -1113,18 +1026,17 @@ where
                 .await?;
         }
         // update object_ids.
-        self.object_sequence_numbers.clear();
         self.object_refs.clear();
 
         let (authority_name, object_refs) = self.download_own_object_ids().await?;
+        println!("Got own object ids: {:?}", object_refs);
         for object_ref in object_refs {
-            let (object_id, sequence_number, _) = object_ref;
-            self.object_sequence_numbers
-                .insert(object_id, sequence_number);
+            let (object_id, _) = object_ref;
             self.object_refs.insert(object_id, object_ref);
         }
         // Recover missing certificates.
         let new_certificates = self.download_certificates().await?;
+        println!("got {:?} new certs", new_certificates.len());
 
         for (id, certs) in new_certificates {
             self.update_certificates(&id, &certs)?;
@@ -1133,7 +1045,7 @@ where
     }
 
     async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error> {
-        Ok(self.object_sequence_numbers.keys().copied().collect())
+        Ok(self.object_refs.keys().copied().collect())
     }
 
     async fn move_call(

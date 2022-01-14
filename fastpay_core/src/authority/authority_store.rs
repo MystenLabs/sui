@@ -13,7 +13,7 @@ pub struct AuthorityStore {
     owner_index: DBMap<(FastPayAddress, ObjectID), ObjectRef>,
     signed_orders: DBMap<TransactionDigest, SignedOrder>,
     certificates: DBMap<TransactionDigest, CertifiedOrder>,
-    parent_sync: DBMap<ObjectRef, TransactionDigest>,
+    parent_sync: DBMap<VersionedObjectRef, TransactionDigest>,
     signed_effects: DBMap<TransactionDigest, SignedOrderEffects>,
     lock_table: Vec<parking_lot::Mutex<()>>,
 }
@@ -51,14 +51,12 @@ impl AuthorityStore {
     }
 
     /// A function that aquires all locks associated with the objects (in order to avoid deadlocks.)
-    fn aqcuire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
+    fn aqcuire_locks(&self, input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
         let num_locks = self.lock_table.len();
         // TODO: randomize the lock mapping based on a secet to avoid DoS attacks.
-        let lock_number: BTreeSet<usize> = _input_objects
+        let lock_number: BTreeSet<usize> = input_objects
             .iter()
-            .map(|(_, _, digest)| {
-                usize::from_le_bytes(digest.0[0..8].try_into().unwrap()) % num_locks
-            })
+            .map(|(_, digest)| usize::from_le_bytes(digest.0[0..8].try_into().unwrap()) % num_locks)
             .collect();
         // Note: we need to iterate over the sorted unique elements, hence the use of a Set
         //       in order to prevent deadlocks when trying to aquire many locks.
@@ -70,7 +68,6 @@ impl AuthorityStore {
 
     // Methods to read the store
 
-    // TODO: add object owner index to improve performance https://github.com/MystenLabs/fastnft/issues/127
     pub fn get_account_objects(
         &self,
         account: FastPayAddress,
@@ -140,7 +137,7 @@ impl AuthorityStore {
     /// (ie. the transaction that created an object at this version.)
     pub fn parent(
         &self,
-        object_ref: &ObjectRef,
+        object_ref: &VersionedObjectRef,
     ) -> Result<Option<TransactionDigest>, FastPayError> {
         self.parent_sync.get(object_ref).map_err(|e| e.into())
     }
@@ -151,7 +148,7 @@ impl AuthorityStore {
         &self,
         object_id: ObjectID,
         seq: Option<SequenceNumber>,
-    ) -> Result<Vec<(ObjectRef, TransactionDigest)>, FastPayError> {
+    ) -> Result<Vec<(VersionedObjectRef, TransactionDigest)>, FastPayError> {
         let seq_inner = seq.unwrap_or_else(|| SequenceNumber::from(0));
         let obj_dig_inner = ObjectDigest::new([0; 32]);
 
@@ -159,8 +156,8 @@ impl AuthorityStore {
             .parent_sync
             .iter()
             // The object id [0; 16] is the smallest possible
-            .skip_to(&(object_id, seq_inner, obj_dig_inner))?
-            .take_while(|((id, iseq, _digest), _txd)| {
+            .skip_to(&((object_id, obj_dig_inner), seq_inner))?
+            .take_while(|(((id, _digest), iseq), _txd)| {
                 let mut flag = id == &object_id;
                 if seq.is_some() {
                     flag &= seq_inner == *iseq;
@@ -309,9 +306,8 @@ impl AuthorityStore {
             &self.parent_sync,
             written
                 .iter()
-                .map(|(_, object)| (object.to_object_reference(), transaction_digest)),
+                .map(|(_, object)| (object.to_versioned_object_reference(), transaction_digest)),
         )?;
-
         // Create locks for new objects, if they are not immutable
         write_batch = write_batch.insert_batch(
             &self.order_lock,
@@ -344,15 +340,8 @@ impl AuthorityStore {
         // new locks must be atomic, and no writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
+            // TODO: still needed?
             let _mutexes = self.aqcuire_locks(&active_inputs[..]);
-
-            // Check the locks are still active
-            // TODO: maybe we could just check if the certificate is there instead?
-            let locks = self.order_lock.multi_get(&active_inputs[..])?;
-            for object_lock in locks {
-                object_lock.ok_or(FastPayError::OrderLockDoesNotExist)?;
-            }
-
             // Atomic write of all locks & other data
             write_batch.write()?;
 

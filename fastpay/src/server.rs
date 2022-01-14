@@ -49,7 +49,7 @@ fn make_server(
         .await;
         for initial_state_cfg_entry in &initial_accounts_config.config {
             let address = &initial_state_cfg_entry.address;
-            for (object_id, _, _) in &initial_state_cfg_entry.object_refs {
+            for (object_id, _) in &initial_state_cfg_entry.object_refs {
                 let object = Object::with_id_owner_for_testing(*object_id, *address);
 
                 state.init_order_lock(object.to_object_reference()).await;

@@ -17,18 +17,10 @@ fn test_signed_values() {
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        object_ref: (ObjectID::random(), ObjectDigest::new([0; 32])),
         sender: a1,
         recipient: Address::FastPay(a2),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        gas_payment: (ObjectID::random(), ObjectDigest::new([0; 32])),
     };
     let order = Order::new_transfer(transfer.clone(), &sec1);
     let bad_order = Order::new_transfer(transfer, &sec2);
@@ -58,18 +50,10 @@ fn test_certificates() {
     let committee = Committee::new(authorities);
 
     let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        object_ref: (ObjectID::random(), ObjectDigest::new([0; 32])),
         sender: a1,
         recipient: Address::FastPay(a2),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        gas_payment: (ObjectID::random(), ObjectDigest::new([0; 32])),
     };
     let order = Order::new_transfer(transfer.clone(), &sec1);
     let bad_order = Order::new_transfer(transfer, &sec2);

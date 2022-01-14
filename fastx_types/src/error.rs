@@ -40,14 +40,6 @@ pub enum FastPayError {
     // Certificate verification
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
-    #[error(
-        "The given sequence ({received_sequence:?}) number must match the next expected sequence ({expected_sequence:?}) number of the account"
-    )]
-    UnexpectedSequenceNumber {
-        object_id: ObjectID,
-        expected_sequence: SequenceNumber,
-        received_sequence: SequenceNumber,
-    },
     #[error("Conflicting order already received: {pending_confirmation:?}")]
     ConflictingOrder { pending_confirmation: Order },
     #[error("Transfer order was processed but no signature was produced by authority")]
@@ -66,12 +58,8 @@ pub enum FastPayError {
     FailedToCommunicateWithQuorum { err: String },
     #[error("An invalid answer was returned by the authority while requesting information")]
     ErrorWhileRequestingInformation,
-    #[error(
-         "Cannot confirm a transfer while previous transfer orders are still pending confirmation: {current_sequence_number:?}"
-    )]
-    MissingEalierConfirmations {
-        current_sequence_number: VersionNumber,
-    },
+    #[error("Cannot confirm a transfer while previous order has not been confirmed")]
+    MissingEalierConfirmations { missing: TransactionDigest },
     // Synchronization validation
     #[error("Transaction index must increase by one")]
     UnexpectedTransactionIndex,
@@ -82,8 +70,6 @@ pub enum FastPayError {
     UnknownSenderAccount,
     #[error("Signatures in a certificate must be from different authorities.")]
     CertificateAuthorityReuse,
-    #[error("Sequence numbers above the maximal value are not usable for transfers.")]
-    InvalidSequenceNumber,
     #[error("Sequence number overflow.")]
     SequenceOverflow,
     #[error("Sequence number underflow.")]
@@ -96,7 +82,7 @@ pub enum FastPayError {
     InvalidAuthenticator,
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
-    #[error("Invalid Object digest.")]
+    #[error("Object digest contained in ObjRef does not match the digest of the stored object")]
     InvalidObjectDigest,
     #[error("Cannot deserialize.")]
     InvalidDecoding,

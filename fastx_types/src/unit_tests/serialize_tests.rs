@@ -57,18 +57,10 @@ fn test_order() {
     let (sender_name, sender_key) = get_key_pair();
 
     let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        object_ref: (ObjectID::random(), ObjectDigest::new([0; 32])),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        gas_payment: (ObjectID::random(), ObjectDigest::new([0; 32])),
     };
     let transfer_order = Order::new_transfer(transfer, &sender_key);
 
@@ -83,18 +75,10 @@ fn test_order() {
 
     let (sender_name, sender_key) = get_key_pair();
     let transfer2 = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        object_ref: (ObjectID::random(), ObjectDigest::new([0; 32])),
         sender: sender_name,
         recipient: Address::FastPay(dbg_addr(0x20)),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        gas_payment: (ObjectID::random(), ObjectDigest::new([0; 32])),
     };
     let transfer_order2 = Order::new_transfer(transfer2, &sender_key);
 
@@ -112,18 +96,10 @@ fn test_order() {
 fn test_vote() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        object_ref: (ObjectID::random(), ObjectDigest::new([0; 32])),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        gas_payment: (ObjectID::random(), ObjectDigest::new([0; 32])),
     };
     let order = Order::new_transfer(transfer, &sender_key);
 
@@ -144,18 +120,10 @@ fn test_vote() {
 fn test_cert() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        object_ref: (ObjectID::random(), ObjectDigest::new([0; 32])),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        gas_payment: (ObjectID::random(), ObjectDigest::new([0; 32])),
     };
     let order = Order::new_transfer(transfer, &sender_key);
     let mut cert = CertifiedOrder {
@@ -184,18 +152,10 @@ fn test_cert() {
 fn test_info_response() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        object_ref: (ObjectID::random(), ObjectDigest::new([0; 32])),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        gas_payment: (ObjectID::random(), ObjectDigest::new([0; 32])),
     };
     let order = Order::new_transfer(transfer, &sender_key);
 
@@ -251,18 +211,10 @@ fn test_info_response() {
 fn test_time_order() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        object_ref: (ObjectID::random(), ObjectDigest::new([0; 32])),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        gas_payment: (ObjectID::random(), ObjectDigest::new([0; 32])),
     };
 
     let mut buf = Vec::new();
@@ -291,18 +243,10 @@ fn test_time_order() {
 fn test_time_vote() {
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        object_ref: (ObjectID::random(), ObjectDigest::new([0; 32])),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0x20)),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        gas_payment: (ObjectID::random(), ObjectDigest::new([0; 32])),
     };
     let order = Order::new_transfer(transfer, &sender_key);
 
@@ -337,18 +281,10 @@ fn test_time_cert() {
     let count = 100;
     let (sender_name, sender_key) = get_key_pair();
     let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        object_ref: (ObjectID::random(), ObjectDigest::new([0; 32])),
         sender: sender_name,
         recipient: Address::Primary(dbg_addr(0)),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        gas_payment: (ObjectID::random(), ObjectDigest::new([0; 32])),
     };
     let order = Order::new_transfer(transfer, &sender_key);
     let mut cert = CertifiedOrder {
