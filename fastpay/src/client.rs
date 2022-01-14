@@ -466,10 +466,7 @@ fn main() {
                     request_sequence_number: None,
                     request_received_transfers_excluding_first_nth: None,
                 };
-                let obj_info = client_state
-                    .get_object_info(obj_info_req)
-                    .await
-                    .unwrap();
+                let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
                 println!("Owner: {:#?}", obj_info.object.owner);
                 println!("Version: {:#?}", obj_info.object.version().value());
                 println!("ID: {:#?}", obj_info.object.id());
