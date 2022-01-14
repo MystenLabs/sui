@@ -98,3 +98,22 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - uses: EmbarkStudios/cargo-deny-action@v1
+
+  udeps:
+    name: cargo-udeps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install minimal nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - name: Install cargo-udeps
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-udeps
+      - name: run cargo-udeps
+        run: cargo +nightly udeps
