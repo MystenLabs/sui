@@ -398,7 +398,7 @@ impl AuthorityState {
         self._database.get_order_info(transaction_digest)
     }
 
-    /// Make an information summary of an object to help clients
+    /// Make an info summary of an object, and include the raw object for clients
     async fn make_object_info(
         &self,
         object_id: ObjectID,

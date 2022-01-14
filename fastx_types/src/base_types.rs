@@ -186,6 +186,60 @@ pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
 }
 
+pub fn address_as_hex<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::ser::Serializer,
+{
+    serializer.serialize_str(&encode_address_hex(key))
+}
+
+pub fn address_from_hex<'de, D>(deserializer: D) -> Result<PublicKeyBytes, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    let value = decode_address_hex(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
+    Ok(value)
+}
+
+pub fn encode_address_hex(key: &PublicKeyBytes) -> String {
+    hex::encode(&key.0[..])
+}
+
+pub fn decode_address_hex(s: &str) -> Result<PublicKeyBytes, anyhow::Error> {
+    let value = hex::decode(s)?;
+    let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
+    address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
+    Ok(PublicKeyBytes(address))
+}
+
+impl std::fmt::LowerHex for PublicKeyBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+
+        for byte in &self.0 {
+            write!(f, "{:02x}", byte)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl std::fmt::UpperHex for PublicKeyBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+
+        for byte in &self.0 {
+            write!(f, "{:02X}", byte)?;
+        }
+
+        Ok(())
+    }
+}
 pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::ser::Serializer,
@@ -268,7 +322,7 @@ impl std::fmt::Debug for Signature {
 
 impl std::fmt::Debug for PublicKeyBytes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = base64::encode(&self.0);
+        let s = hex::encode(&self.0);
         write!(f, "{}", s)?;
         Ok(())
     }

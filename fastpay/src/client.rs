@@ -284,7 +284,7 @@ fn deserialize_response(response: &[u8]) -> Option<ObjectInfoResponse> {
         }
     }
 }
-fn find_owner_by_object_cache(
+fn find_cached_owner_by_object_id(
     account_config: &AccountsConfig,
     object_id: ObjectID,
 ) -> Option<&PublicKeyBytes> {
@@ -311,8 +311,8 @@ fn show_object_effects(order_effects: OrderEffects) {
     }
 }
 
-fn parse_public_key_bytes(src: &str) -> Result<PublicKeyBytes, base64::DecodeError> {
-    Ok(decode_address(src).expect("Failed to decode recipient's address"))
+fn parse_public_key_bytes(src: &str) -> Result<PublicKeyBytes, hex::FromHexError> {
+    Ok(decode_address_hex(src).expect("Failed to decode address"))
 }
 
 #[derive(StructOpt)]
@@ -487,8 +487,8 @@ fn main() {
 
         ClientCommands::Call { path } => {
             let config = MoveCallConfig::read(&path).unwrap();
-            // Find owner of acc
-            let owner = find_owner_by_object_cache(&accounts_config, config.gas_object_id)
+            // Find owner of gas object
+            let owner = find_cached_owner_by_object_id(&accounts_config, config.gas_object_id)
                 .expect("Cannot find owner for gas object");
 
             let mut client_state = make_client_state(
@@ -624,7 +624,7 @@ fn main() {
             let addr_strings: Vec<_> = accounts_config
                 .addresses()
                 .into_iter()
-                .map(|addr| format!("{:?}", addr).trim_end_matches('=').to_string())
+                .map(|addr| format!("{:X}", addr).trim_end_matches('=').to_string())
                 .collect();
             let addr_text = addr_strings.join("\n");
             println!("{}", addr_text);

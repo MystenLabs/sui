@@ -23,6 +23,7 @@ sha3 = "0.9"
 structopt = "0.3.25"
 thiserror = "1.0.30"
 rocksdb = "0.17.0"
+hex = "0.4.3"
 
 move-binary-format = { git = "https://github.com/diem/move", rev="98ed299a7e3a9223019c9bdf4dd92fea9faef860" }
 move-core-types = { git = "https://github.com/diem/move", rev="98ed299a7e3a9223019c9bdf4dd92fea9faef860" }

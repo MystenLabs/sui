@@ -21,8 +21,8 @@ use std::{
 pub struct AuthorityConfig {
     pub network_protocol: NetworkProtocol,
     #[serde(
-        serialize_with = "address_as_base64",
-        deserialize_with = "address_from_base64"
+        serialize_with = "address_as_hex",
+        deserialize_with = "address_from_hex"
     )]
     pub address: FastPayAddress,
     pub host: String,
@@ -95,8 +95,8 @@ impl CommitteeConfig {
 #[derive(Serialize, Deserialize)]
 pub struct UserAccount {
     #[serde(
-        serialize_with = "address_as_base64",
-        deserialize_with = "address_from_base64"
+        serialize_with = "address_as_hex",
+        deserialize_with = "address_from_hex"
     )]
     pub address: FastPayAddress,
     pub key: KeyPair,
