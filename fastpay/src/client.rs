@@ -6,9 +6,9 @@
 use fastpay::{config::*, network, transport};
 use fastpay_core::client::*;
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
+use move_core_types::transaction_argument::convert_txn_args;
 
 use bytes::Bytes;
-use ed25519_dalek as dalek;
 use futures::stream::StreamExt;
 use log::*;
 use std::{
@@ -541,22 +541,7 @@ fn main() {
                     object_args_refs.push(obj_info.object.to_object_reference());
                 }
 
-                // Pure args
-                let mut pure_args = Vec::new();
-
-                for arg in config.pure_args {
-                    // // HACK to only support addresses or numbers
-                    // // try to convert to account address, else number
-                    let v = if arg.len() < dalek::PUBLIC_KEY_LENGTH {
-                        arg.parse::<u64>().unwrap().to_le_bytes().to_vec()
-                    } else {
-                        match parse_public_key_bytes(&arg) {
-                            Ok(addr) => bcs::to_bytes(&addr.to_vec()).unwrap(),
-                            Err(_) => arg.parse::<u64>().unwrap().to_le_bytes().to_vec(),
-                        }
-                    };
-                    pure_args.push(v);
-                }
+                let pure_args = convert_txn_args(&config.pure_args);
 
                 let call_ret = client_state
                     .move_call(

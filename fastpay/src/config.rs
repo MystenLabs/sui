@@ -8,8 +8,8 @@ use fastx_types::{
     messages::{Address, CertifiedOrder, OrderKind},
 };
 
-use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use move_core_types::{identifier::Identifier, transaction_argument::TransactionArgument};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -125,6 +125,21 @@ impl UserAccount {
     }
 }
 
+pub fn transaction_args_from_str<'de, D>(
+    deserializer: D,
+) -> Result<Vec<TransactionArgument>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+
+    let tokens = s.split(',');
+    let mut result = Vec::new();
+    for tok in tokens {
+        result.push(move_core_types::parser::parse_transaction_argument(tok.trim()).unwrap());
+    }
+    Ok(result)
+}
 #[derive(Serialize, Deserialize)]
 pub struct MoveCallConfig {
     /// Object ID of the package, which contains the module
@@ -137,8 +152,13 @@ pub struct MoveCallConfig {
     pub type_args: Vec<TypeTag>,
     /// Object args object IDs
     pub object_args_ids: Vec<ObjectID>,
+
     /// Pure arguments to the functions, which conform to move_core_types::transaction_argument
-    pub pure_args: Vec<String>,
+    /// Special case formatting rules:
+    /// Use one string with CSV token embedded, for example "54u8,0x43"
+    /// When specifying FastX addresses, specify as vector. Example x\"01FE4E6F9F57935C5150A486B5B78AC2B94E2C5CD9352C132691D99B3E8E095C\"
+    #[serde(deserialize_with = "transaction_args_from_str")]
+    pub pure_args: Vec<TransactionArgument>,
     /// ID of the gas object for gas payment, in 20 bytes Hex string
     pub gas_object_id: ObjectID,
     /// Gas budget for this call
