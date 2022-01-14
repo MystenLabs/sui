@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Mysten Labs
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
@@ -7,7 +7,7 @@ import re
 
 ROOT = os.path.join(os.path.dirname(__file__), "../")
 PATTERN = re.compile(
-    '(\s*)(.+) = { git = "https://github.com/.+/diem", (?:rev|branch)=".+" }(\s*)'
+    '(\s*)(.+) = { git = "https://github.com/.+/move", (?:rev|branch)=".+" }(\s*)'
 )
 
 
@@ -16,7 +16,7 @@ def parse_args():
     subparser = parser.add_subparsers(
         dest="command",
         description="""
-    Automatically manage the dependency path to Diem repository.
+    Automatically manage the dependency path to Move repository.
     Command "local" switches the dependency from git to local path.
     Command "upgrade" upgrades the git revision. A repository can be
     specified if we want to use a fork instead of upstream.
@@ -51,7 +51,7 @@ def scan_files(path, process_line, depth=0):
 
 
 def switch_to_local():
-    # Packages that don't directly map to a directory under diem/language
+    # Packages that don't directly map to a directory under move/language
     # go here as special cases. By default, we just use language/[name].
     path_map = {
         "move-bytecode-utils": "tools/move-bytecode-utils",
@@ -69,7 +69,7 @@ def switch_to_local():
             name = m.group(2)
             postfix = m.group(3)
             go_back = "".join(["../"] * (depth + 1))
-            return '{}{} = {{ path = "{}diem/language/{}" }}{}'.format(
+            return '{}{} = {{ path = "{}move/language/{}" }}{}'.format(
                 prefix, name, go_back, path_map.get(name, name), postfix
             )
         return line
@@ -85,7 +85,7 @@ def upgrade_revision(repo, rev, branch):
             prefix = m.group(1)
             name = m.group(2)
             postfix = m.group(3)
-            return '{}{} = {{ git = "https://github.com/{}/diem", {}="{}" }}{}'.format(
+            return '{}{} = {{ git = "https://github.com/{}/move", {}="{}" }}{}'.format(
                 prefix, name, repo,
                 "branch" if branch else "rev",
                 branch if branch else rev,
