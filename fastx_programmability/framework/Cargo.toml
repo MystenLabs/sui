@@ -23,3 +23,7 @@ move-stdlib = { git = "https://github.com/diem/move", rev="98ed299a7e3a9223019c9
 move-unit-test = { git = "https://github.com/diem/move", rev="98ed299a7e3a9223019c9bdf4dd92fea9faef860" }
 move-vm-runtime = { git = "https://github.com/diem/move", rev="98ed299a7e3a9223019c9bdf4dd92fea9faef860" }
 move-vm-types = { git = "https://github.com/diem/move", rev="98ed299a7e3a9223019c9bdf4dd92fea9faef860" }
+
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["move-cli", "move-unit-test"]
