@@ -359,7 +359,7 @@ def update():
 
 @roles('throughput')
 @parallel
-def tps(tps_shards=65, tps_accounts=1000000, tps_max_in_flight=1000, tps_committee=4, tps_protocol='UDP', log_file=None):
+def tps(tps_shards=65, tps_accounts=1000000, tps_max_in_flight=1000, tps_committee=4, tps_protocol='TCP', log_file=None):
 	shards = int(tps_shards)
 	accounts = int(tps_accounts)
 	max_in_flight = int(tps_max_in_flight)
@@ -378,7 +378,7 @@ tps_shards = range(15, 86, 10) # the machine has 48 physical CPUs
 tps_accounts = 1000000
 tps_in_flights = 1000
 tps_committee = 4
-tps_protocol = 'UDP'
+tps_protocol = 'TCP'
 
 base_tps_log_file = 'tps_logs.txt'
 

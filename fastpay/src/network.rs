@@ -14,7 +14,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::time;
 
 pub struct Server {
-    network_protocol: NetworkProtocol,
     base_address: String,
     base_port: u32,
     state: AuthorityState,
@@ -26,14 +25,12 @@ pub struct Server {
 
 impl Server {
     pub fn new(
-        network_protocol: NetworkProtocol,
         base_address: String,
         base_port: u32,
         state: AuthorityState,
         buffer_size: usize,
     ) -> Self {
         Self {
-            network_protocol,
             base_address,
             base_port,
             state,
@@ -53,16 +50,16 @@ impl Server {
 
     pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
         info!(
-            "Listening to {} traffic on {}:{}",
-            self.network_protocol, self.base_address, self.base_port
+            "Listening to TCP traffic on {}:{}",
+            self.base_address, self.base_port
         );
         let address = format!("{}:{}", self.base_address, self.base_port);
 
         let buffer_size = self.buffer_size;
-        let protocol = self.network_protocol;
+
         let state = RunningServerState { server: self };
         // Launch server for the appropriate protocol.
-        protocol.spawn_server(&address, state, buffer_size).await
+        spawn_server(&address, state, buffer_size).await
     }
 }
 
@@ -148,7 +145,6 @@ impl MessageHandler for RunningServerState {
 
 #[derive(Clone)]
 pub struct Client {
-    network_protocol: NetworkProtocol,
     base_address: String,
     base_port: u32,
     buffer_size: usize,
@@ -158,7 +154,6 @@ pub struct Client {
 
 impl Client {
     pub fn new(
-        network_protocol: NetworkProtocol,
         base_address: String,
         base_port: u32,
         buffer_size: usize,
@@ -166,7 +161,6 @@ impl Client {
         recv_timeout: std::time::Duration,
     ) -> Self {
         Self {
-            network_protocol,
             base_address,
             base_port,
             buffer_size,
@@ -177,10 +171,7 @@ impl Client {
 
     async fn send_recv_bytes_internal(&self, buf: Vec<u8>) -> Result<Vec<u8>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port);
-        let mut stream = self
-            .network_protocol
-            .connect(address, self.buffer_size)
-            .await?;
+        let mut stream = connect(address, self.buffer_size).await?;
         // Send message
         time::timeout(self.send_timeout, stream.write_data(&buf)).await??;
         // Wait for reply
@@ -251,7 +242,6 @@ impl AuthorityClient for Client {
 
 #[derive(Clone)]
 pub struct MassClient {
-    network_protocol: NetworkProtocol,
     base_address: String,
     base_port: u32,
     buffer_size: usize,
@@ -262,7 +252,6 @@ pub struct MassClient {
 
 impl MassClient {
     pub fn new(
-        network_protocol: NetworkProtocol,
         base_address: String,
         base_port: u32,
         buffer_size: usize,
@@ -271,7 +260,6 @@ impl MassClient {
         max_in_flight: u64,
     ) -> Self {
         Self {
-            network_protocol,
             base_address,
             base_port,
             buffer_size,
@@ -283,10 +271,7 @@ impl MassClient {
 
     async fn run_core(&self, requests: Vec<Bytes>) -> Result<Vec<Bytes>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port);
-        let mut stream = self
-            .network_protocol
-            .connect(address, self.buffer_size)
-            .await?;
+        let mut stream = connect(address, self.buffer_size).await?;
         let mut requests = requests.iter();
         let mut in_flight: u64 = 0;
         let mut responses = Vec::new();
@@ -354,16 +339,16 @@ impl MassClient {
             handles.push(
                 tokio::spawn(async move {
                     info!(
-                        "Sending {} requests to {}:{}",
-                        client.network_protocol, client.base_address, client.base_port,
+                        "Sending TCP requests to {}:{}",
+                        client.base_address, client.base_port,
                     );
                     let responses = client
                         .run_core(requests)
                         .await
                         .unwrap_or_else(|_| Vec::new());
                     info!(
-                        "Done sending {} requests to {}:{}",
-                        client.network_protocol, client.base_address, client.base_port,
+                        "Done sending TCP requests to {}:{}",
+                        client.base_address, client.base_port,
                     );
                     responses
                 })

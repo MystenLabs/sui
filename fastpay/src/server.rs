@@ -60,7 +60,6 @@ fn make_server(
     });
 
     network::Server::new(
-        server_config.authority.network_protocol,
         local_ip_addr.to_string(),
         server_config.authority.base_port,
         state,
@@ -104,10 +103,6 @@ enum ServerCommands {
     /// Generate a new server configuration and output its public description
     #[structopt(name = "generate")]
     Generate {
-        /// Chooses a network protocol between Udp and Tcp
-        #[structopt(long, default_value = "Udp")]
-        protocol: transport::NetworkProtocol,
-
         /// Sets the public name of the host
         #[structopt(long)]
         host: String,
@@ -164,14 +159,12 @@ fn main() {
         }
 
         ServerCommands::Generate {
-            protocol,
             host,
             port,
             database_path,
         } => {
             let (address, key) = get_key_pair();
             let authority = AuthorityConfig {
-                network_protocol: protocol,
                 address,
                 host,
                 base_port: port,
