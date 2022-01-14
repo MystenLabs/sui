@@ -676,14 +676,13 @@ where
     ) -> Result<(), FastPayError> {
         // TODO: use the digest and mutated objects
         // https://github.com/MystenLabs/fastnft/issues/175
-        match order_info_resp.signed_effects {
-            Some(v) => {
-                for (obj_id, _, _) in v.effects.deleted {
-                    self.object_ids.remove(&obj_id);
-                }
-                Ok(())
+        if let Some(v) = order_info_resp.signed_effects {
+            for (obj_id, _, _) in v.effects.deleted {
+                self.object_ids.remove(&obj_id);
             }
-            None => Err(FastPayError::ErrorWhileRequestingInformation),
+            Ok(())
+        } else {
+            Err(FastPayError::ErrorWhileRequestingInformation)
         }
     }
     /// TODO/TBD: Formalize how to handle failed transaction orders in FastX
@@ -700,19 +699,19 @@ where
                 let committee = &committee;
                 Box::pin(async move {
                     let result = client.handle_order(order).await;
-                    match result
+                    let s_order = result
                         .as_ref()
-                        .map(|order_info_resp| order_info_resp.signed_order.as_ref())
-                    {
+                        .map(|order_info_resp| order_info_resp.signed_order.as_ref());
+                    match s_order {
                         Ok(Some(signed_order)) => {
                             fp_ensure!(
                                 signed_order.authority == name,
-                                FastPayError::ErrorWhileProcessingTransferOrder
+                                FastPayError::ErrorWhileProcessingTransactionOrder
                             );
                             signed_order.check(committee)?;
                             Ok(signed_order.clone())
                         }
-                        _ => Err(FastPayError::ErrorWhileProcessingTransferOrder),
+                        _ => Err(FastPayError::ErrorWhileProcessingTransactionOrder),
                     }
                 })
             })

@@ -202,12 +202,19 @@ impl AccountsConfig {
         self.accounts.len()
     }
 
+    pub fn nth_account(&self, n: usize) -> Option<&UserAccount> {
+        self.accounts.values().nth(n)
+    }
+
+    pub fn find_account(&self, object_id: &ObjectID) -> Option<&UserAccount> {
+        self.accounts
+            .values()
+            .find(|acc| acc.object_ids.contains_key(object_id))
+    }
     pub fn accounts_mut(&mut self) -> impl Iterator<Item = &mut UserAccount> {
         self.accounts.values_mut()
     }
-    pub fn accounts(&self) -> impl Iterator<Item = &UserAccount> {
-        self.accounts.values()
-    }
+
     pub fn addresses(&mut self) -> impl Iterator<Item = &FastPayAddress> {
         self.accounts.keys()
     }

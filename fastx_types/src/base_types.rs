@@ -206,7 +206,7 @@ pub fn encode_address_hex(key: &PublicKeyBytes) -> String {
     hex::encode(&key.0[..])
 }
 
-pub fn decode_address_hex(s: &str) -> Result<PublicKeyBytes, anyhow::Error> {
+pub fn decode_address_hex(s: &str) -> Result<PublicKeyBytes, hex::FromHexError> {
     let value = hex::decode(s)?;
     let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
     address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);

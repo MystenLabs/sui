@@ -288,12 +288,9 @@ fn find_cached_owner_by_object_id(
     account_config: &AccountsConfig,
     object_id: ObjectID,
 ) -> Option<&PublicKeyBytes> {
-    for acc in account_config.accounts() {
-        if acc.object_ids.contains_key(&object_id) {
-            return Some(&acc.address);
-        }
-    }
-    None
+    account_config
+        .find_account(&object_id)
+        .map(|acc| &acc.address)
 }
 
 fn show_object_effects(order_effects: OrderEffects) {
@@ -312,7 +309,7 @@ fn show_object_effects(order_effects: OrderEffects) {
 }
 
 fn parse_public_key_bytes(src: &str) -> Result<PublicKeyBytes, hex::FromHexError> {
-    Ok(decode_address_hex(src).expect("Failed to decode address"))
+    decode_address_hex(src)
 }
 
 #[derive(StructOpt)]
@@ -442,11 +439,9 @@ fn main() {
 
     match options.cmd {
         ClientCommands::GetObjInfo { obj_id } => {
-            // Pick an account for use
+            // Pick the first (or any) account for use in finding obj info
             let account = accounts_config
-                .accounts()
-                .into_iter()
-                .next()
+                .nth_account(0)
                 .expect("Account config is invalid")
                 .address;
             // Fetch the object ref
