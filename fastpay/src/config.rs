@@ -135,15 +135,8 @@ pub struct MoveCallConfig {
     pub type_args: Vec<TypeTag>,
     /// Object args object IDs
     pub object_args_ids: Vec<ObjectID>,
-
-    /// Pure args
+    /// Pure args 
     pub pure_args: Vec<String>,
-    // TODO: this somehow turns into a Vec<Vec<u8>>, how?
-    /// Pure args
-    //pure_args: String,
-    // // TODO: object args from
-    // /// Pure args
-    // object_args: String,
     /// ID of the gas object for gas payment, in 20 bytes Hex string
     pub gas_object_id: ObjectID,
     /// Gas budget for this call

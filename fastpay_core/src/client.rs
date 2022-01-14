@@ -674,6 +674,7 @@ where
         order_info_resp: OrderInfoResponse,
     ) -> Result<(), FastPayError> {
         // TODO: use the digest and mutated objects
+        // https://github.com/MystenLabs/fastnft/issues/175
         match order_info_resp.signed_effects {
             Some(v) => {
                 for (obj_id, _, _) in v.effects.deleted {
@@ -684,7 +685,8 @@ where
             None => Err(FastPayError::ErrorWhileRequestingInformation),
         }
     }
-    /// TODO/TBD: flesh this out
+    /// TODO/TBD: Formalize how to handle failed transaction orders in FastX
+    /// https://github.com/MystenLabs/fastnft/issues/174
     async fn communicate_transaction_order(
         &mut self,
         order: Order,
@@ -725,7 +727,8 @@ where
         Ok(certificate)
     }
 
-    /// TODO/TBD: flesh this out
+    /// TODO/TBD: Formalize how to handle failed transaction orders in FastX
+    /// https://github.com/MystenLabs/fastnft/issues/174
     async fn communicate_confirmation_order(
         &mut self,
         cert_order: &CertifiedOrder,
@@ -766,7 +769,7 @@ where
 
     /// Execute call order
     /// Need improvement and decoupling from transfer logic
-    /// TODO: any more cert checks?
+    /// TODO: https://github.com/MystenLabs/fastnft/issues/173
     async fn execute_call(
         &mut self,
         order: Order,
@@ -775,6 +778,7 @@ where
         let new_certificate = self.communicate_transaction_order(order).await?;
 
         // TODO: update_certificates relies on orders having sequence numbers/object IDs , which fails for calls with obj args
+        // https://github.com/MystenLabs/fastnft/issues/173
 
         // Confirmation
         let order_info = self
