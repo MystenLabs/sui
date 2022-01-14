@@ -57,7 +57,7 @@ module Examples::Hero {
     }
 
     /// Address of the admin account that receives payment for swords
-    const ADMIN: vector<u8> = b"some_authenticator_here";
+    const ADMIN: vector<u8> = vector[189, 215, 127, 86, 129, 189, 1, 4, 90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181, 105, 254, 59, 163];
     /// Upper bound on player's HP
     const MAX_HP: u64 = 1000;
     /// Upper bound on how magical a sword can be
@@ -76,6 +76,8 @@ module Examples::Hero {
     const EINSUFFICIENT_FUNDS: u64 = 3;
     /// Trying to remove a sword, but the hero does not have one
     const ENO_SWORD: u64 = 4;
+    /// Assertion errors for testing
+    const ASSERT_ERR: u64 = 5;
 
     // --- Initialization
 
@@ -99,7 +101,7 @@ module Examples::Hero {
 
     /// Slay the `boar` with the `hero`'s sword, get experience.
     /// Aborts if the hero has 0 HP or is not strong enough to slay the boar
-    public fun slay(hero: &mut Hero, boar: Boar) {
+    public fun slay(hero: &mut Hero, boar: Boar, _ctx: &mut TxContext) {
         let Boar { id: _, strength: boar_strength, hp } = boar;
         let hero_strength = hero_strength(hero);
         let boar_hp = hp;
@@ -198,20 +200,8 @@ module Examples::Hero {
         }
     }
 
-    // TODO: temporary hack to avoid dealing with Coin<EXAMPLE>
-    public fun create_free_sword(
-        ctx: &mut TxContext,
-    ): Sword {
-        Sword {
-            id: TxContext::new_id(ctx),
-            magic: 0,
-            strength: 0
-        }
-    }
-
-    // TODO: temporary hack to avoid dealing with Coin<Example>
-    public fun acquire_hero(ctx: &mut TxContext) {
-        let sword = create_free_sword(ctx);
+    public fun acquire_hero(payment: Coin<EXAMPLE>, ctx: &mut TxContext) {
+        let sword = create_sword(payment, ctx);
         let hero = create_hero(sword, ctx);
         Transfer::transfer(hero, TxContext::get_signer_address(ctx))
     }
@@ -244,22 +234,27 @@ module Examples::Hero {
 
     /// Admin can create a boar with the given attributes for `recipient`
     public fun send_boar(
+        admin: &mut GameAdmin,
         hp: u64,
         strength: u64,
-        player: Address,
-        admin: &mut GameAdmin,
+        player: vector<u8>,
         ctx: &mut TxContext
     ) {
         admin.boars_created = admin.boars_created + 1;
         // send boars to the designated player
         Transfer::transfer(
             Boar { id: TxContext::new_id(ctx), hp, strength },
-            player
+            Address::new(player)
         )
     }
 
     fun admin(): Address {
         Address::new(ADMIN)
+    }
+
+    // --- Testing functions ---
+    fun assert_hero_strength(hero: &Hero, strength: u64, _: &mut TxContext) {
+        assert!(hero_strength(hero) == strength, ASSERT_ERR);
     }
 
 }
