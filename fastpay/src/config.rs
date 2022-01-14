@@ -135,7 +135,7 @@ pub struct MoveCallConfig {
     pub type_args: Vec<TypeTag>,
     /// Object args object IDs
     pub object_args_ids: Vec<ObjectID>,
-    /// Pure args 
+    /// Pure arguments to the functions, which conform to move_core_types::transaction_argument
     pub pure_args: Vec<String>,
     /// ID of the gas object for gas payment, in 20 bytes Hex string
     pub gas_object_id: ObjectID,
