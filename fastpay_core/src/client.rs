@@ -4,6 +4,7 @@
 use crate::downloader::*;
 use anyhow::{bail, ensure};
 use fastx_types::messages::Address::FastPay;
+use async_trait::async_trait;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
@@ -25,27 +26,28 @@ const AUTHORITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
+#[async_trait]
 pub trait AuthorityClient {
     /// Initiate a new order to a FastPay or Primary account.
-    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, OrderInfoResponse, FastPayError>;
+    async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError>;
 
     /// Confirm an order to a FastPay or Primary account.
-    fn handle_confirmation_order(
+    async fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<'_, OrderInfoResponse, FastPayError>;
+    ) -> Result<OrderInfoResponse, FastPayError>;
 
     /// Handle Account information requests for this account.
-    fn handle_account_info_request(
+    async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
-    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError>;
+    ) -> Result<AccountInfoResponse, FastPayError>;
 
     /// Handle Object information requests for this account.
-    fn handle_object_info_request(
+    async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
-    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError>;
+    ) -> Result<ObjectInfoResponse, FastPayError>;
 }
 
 pub struct ClientState<AuthorityClient> {
@@ -70,39 +72,36 @@ pub struct ClientState<AuthorityClient> {
 }
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
+#[async_trait]
 pub trait Client {
     /// Send object to a FastX account.
-    fn transfer_object(
+    async fn transfer_object(
         &mut self,
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
+    ) -> Result<CertifiedOrder, anyhow::Error>;
 
     /// Receive object from FastX.
-    fn receive_object(&mut self, certificate: CertifiedOrder)
-        -> AsyncResult<'_, (), anyhow::Error>;
+    async fn receive_object(&mut self, certificate: CertifiedOrder) -> Result<(), anyhow::Error>;
 
     /// Send object to a FastX account.
     /// Do not confirm the transaction.
-    fn transfer_to_fastx_unsafe_unconfirmed(
+    async fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
         recipient: FastPayAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
-    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error>;
+    ) -> Result<CertifiedOrder, anyhow::Error>;
 
     /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
     /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
-    fn sync_client_state_with_random_authority(
+    async fn sync_client_state_with_random_authority(
         &mut self,
-    ) -> AsyncResult<'_, AuthorityName, anyhow::Error>;
-
-    /// Get all object we own.
-    fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error>;
+    ) -> Result<AuthorityName, anyhow::Error>;
 
     /// Call move functions in the module in the given package, with args supplied
-    fn move_call(
+    async fn move_call(
         &mut self,
         package_object_ref: ObjectRef,
         module: Identifier,
@@ -112,13 +111,16 @@ pub trait Client {
         object_arguments: Vec<ObjectRef>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-    ) -> AsyncResult<'_, (CertifiedOrder, OrderEffects), anyhow::Error>;
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
 
     /// Get the object information
-    fn get_object_info(
+    async fn get_object_info(
         &mut self,
         object_info_req: ObjectInfoRequest,
-    ) -> AsyncResult<'_, ObjectInfoResponse, anyhow::Error>;
+    ) -> Result<ObjectInfoResponse, anyhow::Error>;
+
+    /// Get all object we own.
+    async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error>;
 }
 
 impl<A> ClientState<A> {
@@ -205,6 +207,7 @@ impl<A> CertificateRequester<A> {
     }
 }
 
+#[async_trait]
 impl<A> Requester for CertificateRequester<A>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
@@ -213,39 +216,35 @@ where
     type Value = Result<CertifiedOrder, FastPayError>;
 
     /// Try to find a certificate for the given sender and sequence number.
-    fn query(
+    async fn query(
         &mut self,
         sequence_number: SequenceNumber,
-    ) -> AsyncResult<'_, CertifiedOrder, FastPayError> {
-        Box::pin(async move {
-            let request = ObjectInfoRequest {
-                object_id: self.object_id,
-                request_sequence_number: Some(sequence_number),
-                request_received_transfers_excluding_first_nth: None,
-            };
-            // Sequentially try each authority in random order.
-            // TODO: Improve shuffle, different authorities might different amount of stake.
-            self.authority_clients.shuffle(&mut rand::thread_rng());
-            for client in self.authority_clients.iter_mut() {
-                let result = client.handle_object_info_request(request.clone()).await;
-                if let Ok(response) = result {
-                    let certificate = response.requested_certificate.unwrap();
-                    if certificate.check(&self.committee).is_ok() {
-                        let order = &certificate.order;
-                        if let Some(sender) = self.sender {
-                            if order.sender() == &sender
-                                && order.sequence_number() == sequence_number
-                            {
-                                return Ok(certificate.clone());
-                            }
-                        } else {
+    ) -> Result<CertifiedOrder, FastPayError> {
+        let request = ObjectInfoRequest {
+            object_id: self.object_id,
+            request_sequence_number: Some(sequence_number),
+            request_received_transfers_excluding_first_nth: None,
+        };
+        // Sequentially try each authority in random order.
+        // TODO: Improve shuffle, different authorities might different amount of stake.
+        self.authority_clients.shuffle(&mut rand::thread_rng());
+        for client in self.authority_clients.iter_mut() {
+            let result = client.handle_object_info_request(request.clone()).await;
+            if let Ok(response) = result {
+                let certificate = response.requested_certificate.unwrap();
+                if certificate.check(&self.committee).is_ok() {
+                    let order = &certificate.order;
+                    if let Some(sender) = self.sender {
+                        if order.sender() == &sender && order.sequence_number() == sequence_number {
                             return Ok(certificate.clone());
                         }
+                    } else {
+                        return Ok(certificate.clone());
                     }
                 }
             }
-            Err(FastPayError::ErrorWhileRequestingCertificate)
-        })
+        }
+        Err(FastPayError::ErrorWhileRequestingCertificate)
     }
 }
 
@@ -895,30 +894,44 @@ where
     }
 }
 
+#[async_trait]
 impl<A> Client for ClientState<A>
 where
     A: AuthorityClient + Send + Sync + Clone + 'static,
 {
-    fn transfer_object(
+    async fn transfer_object(
         &mut self,
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
-        Box::pin(self.transfer(object_id, gas_payment, Address::FastPay(recipient)))
+    ) -> Result<CertifiedOrder, anyhow::Error> {
+        self.transfer(object_id, gas_payment, Address::FastPay(recipient)).await
     }
 
-    fn receive_object(
-        &mut self,
-        certificate: CertifiedOrder,
-    ) -> AsyncResult<'_, (), anyhow::Error> {
-        Box::pin(async move {
-            certificate.check(&self.committee)?;
-            match &certificate.order.kind {
-                OrderKind::Transfer(transfer) => {
-                    ensure!(
-                        transfer.recipient == Address::FastPay(self.address),
-                        "Transfer should be received by us."
+    async fn receive_object(&mut self, certificate: CertifiedOrder) -> Result<(), anyhow::Error> {
+        certificate.check(&self.committee)?;
+        match &certificate.order.kind {
+            OrderKind::Transfer(transfer) => {
+                ensure!(
+                    transfer.recipient == Address::FastPay(self.address),
+                    "Transfer should be received by us."
+                );
+                self.communicate_transfers(
+                    transfer.sender,
+                    *certificate.order.object_id(),
+                    vec![certificate.clone()],
+                    CommunicateAction::SynchronizeNextSequenceNumber(
+                        transfer.object_ref.1.increment()?,
+                    ),
+                )
+                .await?;
+                // Everything worked: update the local balance.
+                if let btree_map::Entry::Vacant(entry) =
+                    self.received_certificates.entry(certificate.order.digest())
+                {
+                    self.object_ids.insert(
+                        transfer.object_ref.0,
+                        transfer.object_ref.1.increment().unwrap(),
                     );
                     self.communicate_transfers(
                         transfer.sender,
@@ -943,20 +956,20 @@ where
                     }
                     Ok(())
                 }
-                OrderKind::Publish(_) | OrderKind::Call(_) => {
-                    unimplemented!("receiving (?) Move call or publish")
-                }
             }
-        })
+            OrderKind::Publish(_) | OrderKind::Call(_) => {
+                unimplemented!("receiving (?) Move call or publish")
+            }
+        }
     }
 
-    fn transfer_to_fastx_unsafe_unconfirmed(
+    async fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
         recipient: FastPayAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
-    ) -> AsyncResult<'_, CertifiedOrder, anyhow::Error> {
-        Box::pin(async move {
+    ) -> Result<CertifiedOrder, anyhow::Error> {
+
             let transfer = Transfer {
                 object_ref: (
                     object_id,
@@ -978,20 +991,19 @@ where
                 .execute_transfer(order, /* with_confirmation */ false)
                 .await?;
             Ok(new_certificate)
-        })
+        
     }
 
-    fn sync_client_state_with_random_authority(
+    async fn sync_client_state_with_random_authority(
         &mut self,
-    ) -> AsyncResult<'_, AuthorityName, anyhow::Error> {
-        Box::pin(async move {
-            if let Some(order) = self.pending_transfer.clone() {
-                // Finish executing the previous transfer.
-                self.execute_transfer(order, /* with_confirmation */ false)
-                    .await?;
-            }
-            // update object_ids.
-            self.object_ids.clear();
+    ) -> Result<AuthorityName, anyhow::Error> {
+        if let Some(order) = self.pending_transfer.clone() {
+            // Finish executing the previous transfer.
+            self.execute_transfer(order, /* with_confirmation */ false)
+                .await?;
+        }
+        // update object_ids.
+        self.object_ids.clear();
 
             let (authority_name, object_ids) = self.download_own_object_ids().await?;
             for (object_id, sequence_number, _) in object_ids {
@@ -1004,11 +1016,11 @@ where
                 self.update_certificates(&id, &certs)?;
             }
             Ok(authority_name)
-        })
+        
     }
 
-    fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error> {
-        Box::pin(async move { Ok(self.object_ids.keys().copied().collect()) })
+    async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error> {
+        Ok(self.object_ids.keys().copied().collect())
     }
 
     fn move_call(
@@ -1021,8 +1033,8 @@ where
         object_arguments: Vec<ObjectRef>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-    ) -> AsyncResult<'_, (CertifiedOrder, OrderEffects), anyhow::Error> {
-        Box::pin(self.call(
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+        self.call(
             package_object_ref,
             module,
             function,
@@ -1031,12 +1043,13 @@ where
             object_arguments,
             pure_arguments,
             gas_budget,
-        ))
+        ).await
     }
-    fn get_object_info(
+
+    async fn get_object_info(
         &mut self,
         object_info_req: ObjectInfoRequest,
-    ) -> AsyncResult<'_, ObjectInfoResponse, anyhow::Error> {
-        Box::pin(self.get_object_info_execute(object_info_req))
+    ) -> Result<ObjectInfoResponse, anyhow::Error> {
+        self.get_object_info_execute(object_info_req).await
     }
 }

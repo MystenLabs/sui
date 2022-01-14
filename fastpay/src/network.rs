@@ -5,6 +5,7 @@ use crate::transport::*;
 use fastpay_core::{authority::*, client::*};
 use fastx_types::{error::*, messages::*, serialize::*};
 
+use async_trait::async_trait;
 use bytes::Bytes;
 use futures::future::FutureExt;
 use log::*;
@@ -208,50 +209,43 @@ impl Client {
     }
 }
 
+#[async_trait]
 impl AuthorityClient for Client {
     /// Initiate a new transfer to a FastPay or Primary account.
-    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
-        Box::pin(async move {
-            self.send_recv_bytes(serialize_order(&order), order_info_deserializer)
-                .await
-        })
+    async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
+        self.send_recv_bytes(serialize_order(&order), order_info_deserializer)
+            .await
     }
 
     /// Confirm a transfer to a FastPay or Primary account.
-    fn handle_confirmation_order(
+    async fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
-        Box::pin(async move {
-            self.send_recv_bytes(serialize_cert(&order.certificate), order_info_deserializer)
-                .await
-        })
+    ) -> Result<OrderInfoResponse, FastPayError> {
+        self.send_recv_bytes(serialize_cert(&order.certificate), order_info_deserializer)
+            .await
     }
 
-    fn handle_account_info_request(
+    async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
-    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
-        Box::pin(async move {
-            self.send_recv_bytes(
-                serialize_account_info_request(&request),
-                account_info_deserializer,
-            )
-            .await
-        })
+    ) -> Result<AccountInfoResponse, FastPayError> {
+        self.send_recv_bytes(
+            serialize_account_info_request(&request),
+            account_info_deserializer,
+        )
+        .await
     }
 
-    fn handle_object_info_request(
+    async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
-    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
-        Box::pin(async move {
-            self.send_recv_bytes(
-                serialize_object_info_request(&request),
-                object_info_deserializer,
-            )
-            .await
-        })
+    ) -> Result<ObjectInfoResponse, FastPayError> {
+        self.send_recv_bytes(
+            serialize_object_info_request(&request),
+            object_info_deserializer,
+        )
+        .await
     }
 }
 
