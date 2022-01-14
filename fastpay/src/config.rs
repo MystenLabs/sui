@@ -127,8 +127,10 @@ impl UserAccount {
 
 #[derive(Serialize, Deserialize)]
 pub struct MoveCallConfig {
-    /// Module object ID
-    pub module_obj_id: ObjectID,
+    /// Object ID of the package, which contains the module
+    pub package_obj_id: ObjectID,
+    /// The name of the module in the package
+    pub module: Identifier,
     /// Function name in module
     pub function: Identifier,
     /// Function name in module

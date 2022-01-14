@@ -33,9 +33,9 @@ fastpay_core = { path = "../fastpay_core" }
 fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-types = { path = "../fastx_types" }
 
-move-package = { git = "https://github.com/diem/diem", rev="346301f33b3489bb4e486ae6c0aa5e030223b492" }
-move-core-types = { git = "https://github.com/diem/diem", rev="346301f33b3489bb4e486ae6c0aa5e030223b492" }
-move-bytecode-verifier = { git = "https://github.com/diem/diem", rev="346301f33b3489bb4e486ae6c0aa5e030223b492" }
+move-package = { git = "https://github.com/diem/move", rev="98ed299a7e3a9223019c9bdf4dd92fea9faef860" }
+move-core-types = { git = "https://github.com/diem/move", rev="98ed299a7e3a9223019c9bdf4dd92fea9faef860" }
+move-bytecode-verifier = { git = "https://github.com/diem/move", rev="98ed299a7e3a9223019c9bdf4dd92fea9faef860" }
 
 [[bin]]
 name = "client"

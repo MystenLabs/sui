@@ -449,7 +449,7 @@ fn main() {
                 .next()
                 .expect("Account config is invalid")
                 .address;
-            // Fetch the module ref
+            // Fetch the object ref
             let mut client_state = make_client_state(
                 &accounts_config,
                 &committee_config,
@@ -460,14 +460,14 @@ fn main() {
             );
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
-                // Fetch the object info for the module
-                let module_obj_info_req = ObjectInfoRequest {
+                // Fetch the object info for the object
+                let obj_info_req = ObjectInfoRequest {
                     object_id: obj_id,
                     request_sequence_number: None,
                     request_received_transfers_excluding_first_nth: None,
                 };
                 let obj_info = client_state
-                    .get_object_info(module_obj_info_req)
+                    .get_object_info(obj_info_req)
                     .await
                     .unwrap();
                 println!("Owner: {:#?}", obj_info.object.owner);
@@ -505,17 +505,17 @@ fn main() {
 
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
-                // Fetch the object info for the module
-                let module_obj_info_req = ObjectInfoRequest {
-                    object_id: config.module_obj_id,
+                // Fetch the object info for the package
+                let package_obj_info_req = ObjectInfoRequest {
+                    object_id: config.package_obj_id,
                     request_sequence_number: None,
                     request_received_transfers_excluding_first_nth: None,
                 };
-                let module_obj_info = client_state
-                    .get_object_info(module_obj_info_req)
+                let package_obj_info = client_state
+                    .get_object_info(package_obj_info_req)
                     .await
                     .unwrap();
-                let module_obj_ref = module_obj_info.object.to_object_reference();
+                let package_obj_ref = package_obj_info.object.to_object_reference();
 
                 // Fetch the object info for the gas obj
                 let gas_obj_info_req = ObjectInfoRequest {
@@ -563,7 +563,8 @@ fn main() {
 
                 let call_ret = client_state
                     .move_call(
-                        module_obj_ref,
+                        package_obj_ref,
+                        config.module,
                         config.function,
                         config.type_args,
                         gas_obj_ref,

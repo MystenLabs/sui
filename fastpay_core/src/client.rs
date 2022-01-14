@@ -101,10 +101,11 @@ pub trait Client {
     /// Get all object we own.
     fn get_owned_objects(&self) -> AsyncResult<'_, Vec<ObjectID>, anyhow::Error>;
 
-    /// Call move functions
+    /// Call move functions in the module in the given package, with args supplied
     fn move_call(
         &mut self,
-        module_object_ref: ObjectRef,
+        package_object_ref: ObjectRef,
+        module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_object_ref: ObjectRef,
@@ -801,7 +802,8 @@ where
 
     async fn call(
         &mut self,
-        module_object_ref: ObjectRef,
+        package_object_ref: ObjectRef,
+        module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_object_ref: ObjectRef,
@@ -811,7 +813,8 @@ where
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         let move_call_order = Order::new_move_call(
             self.address,
-            module_object_ref,
+            package_object_ref,
+            module,
             function,
             type_arguments,
             gas_object_ref,
@@ -967,7 +970,8 @@ where
 
     fn move_call(
         &mut self,
-        module_object_ref: ObjectRef,
+        package_object_ref: ObjectRef,
+        module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_object_ref: ObjectRef,
@@ -976,7 +980,8 @@ where
         gas_budget: u64,
     ) -> AsyncResult<'_, (CertifiedOrder, OrderEffects), anyhow::Error> {
         Box::pin(self.call(
-            module_object_ref,
+            package_object_ref,
+            module,
             function,
             type_arguments,
             gas_object_ref,
