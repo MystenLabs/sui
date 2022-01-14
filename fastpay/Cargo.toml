@@ -49,3 +49,6 @@ path = "src/server.rs"
 [[bin]]
 name = "bench"
 path = "src/bench.rs"
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["net2"]

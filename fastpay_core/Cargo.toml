@@ -10,7 +10,6 @@ edition = "2021"
 rocksdb = "0.17.0"
 anyhow = "1.0.52"
 bcs = "0.1.3"
-failure = "0.1.8"
 futures = "0.3.5"
 rand = "0.7.3"
 serde = { version = "1.0.133", features = ["derive"] }
