@@ -285,12 +285,12 @@ fn deserialize_response(response: &[u8]) -> Option<ObjectInfoResponse> {
     }
 }
 fn find_owner_by_object_cache(
-    account_config: &mut AccountsConfig,
+    account_config: &AccountsConfig,
     object_id: ObjectID,
-) -> Option<PublicKeyBytes> {
+) -> Option<&PublicKeyBytes> {
     for acc in account_config.accounts() {
         if acc.object_ids.contains_key(&object_id) {
-            return Some(acc.address);
+            return Some(&acc.address);
         }
     }
     None
@@ -488,13 +488,13 @@ fn main() {
         ClientCommands::Call { path } => {
             let config = MoveCallConfig::read(&path).unwrap();
             // Find owner of acc
-            let owner = find_owner_by_object_cache(&mut accounts_config, config.gas_object_id)
+            let owner = find_owner_by_object_cache(&accounts_config, config.gas_object_id)
                 .expect("Cannot find owner for gas object");
 
             let mut client_state = make_client_state(
                 &accounts_config,
                 &committee_config,
-                owner,
+                *owner,
                 buffer_size,
                 send_timeout,
                 recv_timeout,
