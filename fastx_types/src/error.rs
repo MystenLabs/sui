@@ -112,6 +112,8 @@ pub enum FastPayError {
     // Move call related errors
     #[error("Function resolution failure: {error:?}.")]
     FunctionNotFound { error: String },
+    #[error("Module not found in package: {module_name:?}.")]
+    ModuleNotFound { module_name: String },
     #[error("Function signature is invalid: {error:?}.")]
     InvalidFunctionSignature { error: String },
     #[error("Type error while binding function arguments: {error:?}.")]

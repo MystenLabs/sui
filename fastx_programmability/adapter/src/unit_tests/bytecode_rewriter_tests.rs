@@ -203,7 +203,7 @@ fn sub_non_existing() {
 
 // Substitution between two module ID's that already exist in the module table.
 // This is currently not supported and should cause a panic
-#[should_panic]
+#[cfg_attr(debug_assertions, should_panic)]
 #[test]
 fn sub_existing() {
     let id1 = make_id(10, ident_str!("Name1"));

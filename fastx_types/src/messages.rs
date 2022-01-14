@@ -33,7 +33,8 @@ pub struct Transfer {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveCall {
     pub sender: FastPayAddress,
-    pub module: ObjectRef,
+    pub package: ObjectRef,
+    pub module: Identifier,
     pub function: Identifier,
     pub type_arguments: Vec<TypeTag>,
     pub gas_payment: ObjectRef,
@@ -204,7 +205,8 @@ impl Order {
     #[allow(clippy::too_many_arguments)]
     pub fn new_move_call(
         sender: FastPayAddress,
-        module: ObjectRef,
+        package: ObjectRef,
+        module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_payment: ObjectRef,
@@ -215,6 +217,7 @@ impl Order {
     ) -> Self {
         let kind = OrderKind::Call(MoveCall {
             sender,
+            package,
             module,
             function,
             type_arguments,
@@ -274,7 +277,7 @@ impl Order {
             OrderKind::Call(c) => {
                 let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
                 call_inputs.extend(c.object_arguments.clone());
-                call_inputs.push(c.module);
+                call_inputs.push(c.package);
                 call_inputs.push(c.gas_payment);
                 call_inputs
             }
