@@ -11,7 +11,7 @@ use crate::{
     error::{FastPayError, FastPayResult},
     id::ID,
     object::{Data, MoveObject, Object},
-    FASTX_FRAMEWORK_OBJECT_ID,
+    FASTX_FRAMEWORK_ADDRESS,
 };
 
 pub const GAS_MODULE_NAME: &IdentStr = ident_str!("GAS");
@@ -32,7 +32,7 @@ impl GasCoin {
 
     pub fn type_() -> StructTag {
         Coin::type_(StructTag {
-            address: FASTX_FRAMEWORK_OBJECT_ID,
+            address: FASTX_FRAMEWORK_ADDRESS,
             name: GAS_STRUCT_NAME.to_owned(),
             module: GAS_MODULE_NAME.to_owned(),
             type_params: Vec::new(),
