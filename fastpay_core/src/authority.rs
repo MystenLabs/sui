@@ -257,6 +257,7 @@ impl AuthorityState {
                 let gas_object = inputs.pop().unwrap();
                 adapter::publish(
                     &mut temporary_store,
+                    self.native_functions.clone(),
                     m.modules,
                     m.sender,
                     &mut tx_ctx,

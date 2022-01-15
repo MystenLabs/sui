@@ -17,7 +17,7 @@ const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
 
 pub fn get_fastx_framework_modules() -> Vec<CompiledModule> {
     let modules = build_framework(".");
-    veirfy_modules(&modules);
+    verify_modules(&modules);
     modules
 }
 
@@ -31,7 +31,7 @@ pub fn get_move_stdlib_modules() -> Vec<CompiledModule> {
         .into_iter()
         .filter(|m| !denylist.contains(&m.self_id().name().to_owned()))
         .collect();
-    veirfy_modules(&modules);
+    verify_modules(&modules);
     modules
 }
 
@@ -88,12 +88,12 @@ pub fn build_move_package(
     }
 }
 
-fn veirfy_modules(modules: &[CompiledModule]) {
+fn verify_modules(modules: &[CompiledModule]) {
     for m in modules {
         move_bytecode_verifier::verify_module(m).unwrap();
         fastx_bytecode_verifier::verify_module(m).unwrap();
-        // TODO(https://github.com/MystenLabs/fastnft/issues/69): Run Move linker
     }
+    // TODO(https://github.com/MystenLabs/fastnft/issues/69): Run Move linker
 }
 
 fn build_framework(sub_dir: &str) -> Vec<CompiledModule> {
@@ -115,7 +115,7 @@ fn get_examples() -> Vec<CompiledModule> {
         ..Default::default()
     };
     let modules = build_move_package(&framework_dir, build_config, true).unwrap();
-    veirfy_modules(&modules);
+    verify_modules(&modules);
     modules
 }
 
