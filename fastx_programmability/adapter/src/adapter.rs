@@ -15,7 +15,7 @@ use fastx_types::{
     },
     object::{Data, MoveObject, Object},
     storage::Storage,
-    FASTX_FRAMEWORK_OBJECT_ID,
+    FASTX_FRAMEWORK_ADDRESS,
 };
 use fastx_verifier::verifier;
 use move_binary_format::{
@@ -148,7 +148,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     state_view.write_object(gas_object);
     // TODO: Keep track the gas deducted so that we could give them to participants.
 
-    let modules = module_bytes
+    let mut modules = module_bytes
         .iter()
         .map(|b| {
             CompiledModule::deserialize(b).map_err(|e| FastPayError::ModuleDeserializationFailure {
@@ -156,51 +156,50 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             })
         })
         .collect::<FastPayResult<Vec<CompiledModule>>>()?;
-    let packages = generate_package_info_map(modules, ctx)?;
+    generate_package_id(&mut modules, ctx)?;
     // verify and link modules, wrap them in objects, write them to the store
-    for (_, modules) in packages.into_values() {
-        for module in modules.iter() {
-            // It is important to do this before running the FastX verifier, since the fastX
-            // verifier may assume well-formedness conditions enforced by the Move verifier hold
-            move_bytecode_verifier::verify_module(module).map_err(|e| {
-                FastPayError::ModuleVerificationFailure {
-                    error: e.to_string(),
-                }
-            })?;
-            // Run FastX bytecode verifier
-            verifier::verify_module(module)?;
+    for module in modules.iter() {
+        // It is important to do this before running the FastX verifier, since the fastX
+        // verifier may assume well-formedness conditions enforced by the Move verifier hold
+        move_bytecode_verifier::verify_module(module).map_err(|e| {
+            FastPayError::ModuleVerificationFailure {
+                error: e.to_string(),
+            }
+        })?;
+        // Run FastX bytecode verifier
+        verifier::verify_module(module)?;
 
-            // TODO(https://github.com/MystenLabs/fastnft/issues/69):
-            // run Move linker using state_view. it currently can only be called through the VM's publish or publish_module_bundle API's,
-            // but we can't use those because they require module.self_address() == sender, which is not true for FastX modules
-        }
-        let package_object = Object::new_package(modules, sender, ctx.digest());
-        state_view.write_object(package_object);
+        // TODO(https://github.com/MystenLabs/fastnft/issues/69):
+        // run Move linker using state_view. it currently can only be called through the VM's publish or publish_module_bundle API's,
+        // but we can't use those because they require module.self_address() == sender, which is not true for FastX modules
     }
+    let package_object = Object::new_package(modules, sender, ctx.digest());
+    state_view.write_object(package_object);
 
     Ok(())
 }
 
-/// Given a list of `modules`, regonize the packages from them (i.e. modules with the same address),
-/// use `ctx` to generate a fresh ID for each of those packages.
+/// Given a list of `modules`, use `ctx` to generate a fresh ID for the new packages.
+/// If `is_framework` is true, then the modules can have arbitrary user-defined address,
+/// otherwise their addresses must be 0.
 /// Mutate each module's self ID to the appropriate fresh ID and update its module handle tables
 /// to reflect the new ID's of its dependencies.
-/// Returns the mapping from the old package addresses to the new addresses.
-/// Note: id and address means the same thing here.
-pub fn generate_package_info_map(
-    modules: Vec<CompiledModule>,
+/// Returns the newly created package ID.
+pub fn generate_package_id(
+    modules: &mut Vec<CompiledModule>,
     ctx: &mut TxContext,
-) -> Result<BTreeMap<AccountAddress, (AccountAddress, Vec<CompiledModule>)>, FastPayError> {
+) -> FastPayResult {
     let mut sub_map = BTreeMap::new();
-    let mut packages = BTreeMap::new();
-    for module in modules {
+    let package_id = ctx.fresh_id();
+    for module in modules.iter() {
         let old_module_id = module.self_id();
         let old_address = *old_module_id.address();
-        let package_info = packages
-            .entry(old_address)
-            .or_insert((ctx.fresh_id(), vec![]));
-        package_info.1.push(module);
-        let new_module_id = ModuleId::new(package_info.0, old_module_id.name().to_owned());
+        if old_address != AccountAddress::ZERO {
+            return Err(FastPayError::ModulePublishFailure {
+                error: "Publishing modules with non-zero address is not allowed".to_string(),
+            });
+        }
+        let new_module_id = ModuleId::new(package_id, old_module_id.name().to_owned());
         if sub_map.insert(old_module_id, new_module_id).is_some() {
             return Err(FastPayError::ModulePublishFailure {
                 error: "Publishing two modules with the same ID".to_string(),
@@ -210,13 +209,11 @@ pub fn generate_package_info_map(
 
     // Safe to unwrap because we checked for duplicate domain entries above, and range entries are fresh ID's
     let rewriter = ModuleHandleRewriter::new(sub_map).unwrap();
-    for (_, modules) in packages.values_mut() {
-        for module in modules.iter_mut() {
-            // rewrite module handles to reflect freshly generated ID's
-            rewriter.sub_module_ids(module);
-        }
+    for module in modules.iter_mut() {
+        // rewrite module handles to reflect freshly generated ID's
+        rewriter.sub_module_ids(module);
     }
-    Ok(packages)
+    Ok(())
 }
 
 type Event = (Vec<u8>, u64, TypeTag, Vec<u8>);
@@ -404,7 +401,7 @@ fn resolve_and_type_check(
             module,
             name,
             type_arguments,
-        } if address == &FASTX_FRAMEWORK_OBJECT_ID
+        } if address == &FASTX_FRAMEWORK_ADDRESS
             && module.as_ident_str() == TX_CONTEXT_MODULE_NAME
             && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME
             && type_arguments.is_empty() => {}
@@ -412,7 +409,7 @@ fn resolve_and_type_check(
             return Err(FastPayError::InvalidFunctionSignature {
                 error: format!(
                     "Expected last parameter of function signature to be &mut {}::{}::{}, but found {}",
-                    FASTX_FRAMEWORK_OBJECT_ID, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, t
+                    FASTX_FRAMEWORK_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, t
                 ),
             })
         }
@@ -421,7 +418,7 @@ fn resolve_and_type_check(
         return Err(FastPayError::InvalidFunctionSignature {
             error: format!(
                 "Expected last parameter of function signature to be &mut {}::{}::{}, but found non-reference_type",
-                FASTX_FRAMEWORK_OBJECT_ID, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME
+                FASTX_FRAMEWORK_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME
             ),
         });
     }

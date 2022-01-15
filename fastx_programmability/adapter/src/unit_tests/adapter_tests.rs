@@ -556,7 +556,7 @@ fn test_transfer_and_freeze() {
         &mut storage,
         &native_functions,
         "set_value",
-        gas_object.clone(),
+        gas_object,
         MAX_GAS,
         vec![obj1],
         pure_args,
