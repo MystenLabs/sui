@@ -17,7 +17,7 @@ use crate::{
     gas_coin::GasCoin,
 };
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
     pub type_: StructTag,
     contents: Vec<u8>,
@@ -119,7 +119,7 @@ impl MoveObject {
 // TODO: Make MovePackage a NewType so that we can implement functions on it.
 pub type MovePackage = BTreeMap<String, Vec<u8>>;
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 #[allow(clippy::large_enum_variant)]
 pub enum Data {
     /// An object whose governing logic lives in a published Move module
@@ -163,7 +163,7 @@ impl Data {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct Object {
     /// The meat of the object
     pub data: Data,

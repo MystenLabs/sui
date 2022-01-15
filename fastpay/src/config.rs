@@ -8,6 +8,8 @@ use fastx_types::{
     messages::{Address, CertifiedOrder, OrderKind},
 };
 
+use move_core_types::language_storage::TypeTag;
+use move_core_types::{identifier::Identifier, transaction_argument::TransactionArgument};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -15,13 +17,12 @@ use std::{
     io::{BufReader, BufWriter, Write},
     iter::FromIterator,
 };
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthorityConfig {
     pub network_protocol: NetworkProtocol,
     #[serde(
-        serialize_with = "address_as_base64",
-        deserialize_with = "address_from_base64"
+        serialize_with = "address_as_hex",
+        deserialize_with = "address_from_hex"
     )]
     pub address: FastPayAddress,
     pub host: String,
@@ -94,8 +95,8 @@ impl CommitteeConfig {
 #[derive(Serialize, Deserialize)]
 pub struct UserAccount {
     #[serde(
-        serialize_with = "address_as_base64",
-        deserialize_with = "address_from_base64"
+        serialize_with = "address_as_hex",
+        deserialize_with = "address_from_hex"
     )]
     pub address: FastPayAddress,
     pub key: KeyPair,
@@ -124,6 +125,66 @@ impl UserAccount {
     }
 }
 
+pub fn transaction_args_from_str<'de, D>(
+    deserializer: D,
+) -> Result<Vec<TransactionArgument>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+
+    let tokens = s.split(',');
+
+    let result: Result<Vec<_>, _> = tokens
+        .map(|tok| move_core_types::parser::parse_transaction_argument(tok.trim()))
+        .collect();
+    result.map_err(serde::de::Error::custom)
+}
+#[derive(Serialize, Deserialize)]
+pub struct MoveCallConfig {
+    /// Object ID of the package, which contains the module
+    pub package_obj_id: ObjectID,
+    /// The name of the module in the package
+    pub module: Identifier,
+    /// Function name in module
+    pub function: Identifier,
+    /// Function name in module
+    pub type_args: Vec<TypeTag>,
+    /// Object args object IDs
+    pub object_args_ids: Vec<ObjectID>,
+
+    /// Pure arguments to the functions, which conform to move_core_types::transaction_argument
+    /// Special case formatting rules:
+    /// Use one string with CSV token embedded, for example "54u8,0x43"
+    /// When specifying FastX addresses, specify as vector. Example x\"01FE4E6F9F57935C5150A486B5B78AC2B94E2C5CD9352C132691D99B3E8E095C\"
+    #[serde(deserialize_with = "transaction_args_from_str")]
+    pub pure_args: Vec<TransactionArgument>,
+    /// ID of the gas object for gas payment, in 20 bytes Hex string
+    pub gas_object_id: ObjectID,
+    /// Gas budget for this call
+    pub gas_budget: u64,
+}
+
+impl MoveCallConfig {
+    pub fn read(path: &str) -> Result<Self, std::io::Error> {
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .read(true)
+            .open(path)?;
+        let reader = BufReader::new(file);
+        Ok(serde_json::from_reader(reader)?)
+    }
+
+    pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
+        let file = OpenOptions::new().write(true).open(path)?;
+        let mut writer = BufWriter::new(file);
+        serde_json::to_writer(&mut writer, self)?;
+        writer.write_all(b"\n")?;
+        Ok(())
+    }
+}
+
 pub struct AccountsConfig {
     accounts: BTreeMap<FastPayAddress, UserAccount>,
 }
@@ -141,6 +202,15 @@ impl AccountsConfig {
         self.accounts.len()
     }
 
+    pub fn nth_account(&self, n: usize) -> Option<&UserAccount> {
+        self.accounts.values().nth(n)
+    }
+
+    pub fn find_account(&self, object_id: &ObjectID) -> Option<&UserAccount> {
+        self.accounts
+            .values()
+            .find(|acc| acc.object_ids.contains_key(object_id))
+    }
     pub fn accounts_mut(&mut self) -> impl Iterator<Item = &mut UserAccount> {
         self.accounts.values_mut()
     }
