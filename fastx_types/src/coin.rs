@@ -12,7 +12,7 @@ use crate::{
     base_types::{ObjectID, SequenceNumber},
     gas_coin::{GAS_MODULE_NAME, GAS_STRUCT_NAME},
     id::ID,
-    FASTX_FRAMEWORK_OBJECT_ID,
+    FASTX_FRAMEWORK_ADDRESS,
 };
 
 pub const COIN_MODULE_NAME: &IdentStr = ident_str!("Coin");
@@ -32,7 +32,7 @@ impl Coin {
 
     pub fn type_(type_param: StructTag) -> StructTag {
         StructTag {
-            address: FASTX_FRAMEWORK_OBJECT_ID,
+            address: FASTX_FRAMEWORK_ADDRESS,
             name: GAS_STRUCT_NAME.to_owned(),
             module: GAS_MODULE_NAME.to_owned(),
             type_params: vec![TypeTag::Struct(type_param)],
