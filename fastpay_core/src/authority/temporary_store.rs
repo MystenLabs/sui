@@ -173,8 +173,7 @@ impl Storage for AuthorityTemporaryStore {
         }
 
         self.written
-            .insert(object.to_object_reference(), object.clone());
-        self.objects.insert(object.id(), object);
+            .insert(object.to_object_reference(), object);
     }
 
     fn delete_object(&mut self, id: &ObjectID) {

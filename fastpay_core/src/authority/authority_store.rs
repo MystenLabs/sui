@@ -294,7 +294,7 @@ impl AuthorityStore {
         // TODO: There is a lot of cloning used -- eliminate it.
 
         // Extract the new state from the execution
-        let (mut objects, active_inputs, written, _deleted) = temporary_store.into_inner();
+        let (_objects, active_inputs, written, deleted) = temporary_store.into_inner();
         let mut write_batch = self.order_lock.batch();
 
         // Archive the old lock.
@@ -323,7 +323,7 @@ impl AuthorityStore {
         write_batch = write_batch
             .delete_batch(
                 &self.objects,
-                _deleted.iter().map(|deleted_ref| deleted_ref.0),
+                deleted.iter().map(|deleted_ref| deleted_ref.0),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -348,7 +348,7 @@ impl AuthorityStore {
                 &self.order_lock,
                 written
                     .iter()
-                    .filter(|(output_ref, _)| !objects[&output_ref.0].is_read_only())
+                    .filter(|(_output_ref, new_object)| !new_object.is_read_only())
                     .map(|(output_ref, _)| (*output_ref, None)),
             )
             .map_err(|_| FastPayError::StorageError)?;
@@ -357,8 +357,8 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.owner_index,
-                written.iter().map(|(output_ref, _)| {
-                    ((objects[&output_ref.0].owner, output_ref.0), *output_ref)
+                written.iter().map(|(output_ref, new_object)| {
+                    ((new_object.owner, output_ref.0), *output_ref)
                 }),
             )
             .map_err(|_| FastPayError::StorageError)?;
@@ -367,12 +367,10 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.objects,
-                written.iter().map(|(output_ref, _)| {
+                written.into_iter().map(|(output_ref, new_object)| {
                     (
                         output_ref.0,
-                        objects
-                            .remove(&output_ref.0)
-                            .expect("By temporary_authority_store invariant object exists."),
+                        new_object,
                     )
                 }),
             )
