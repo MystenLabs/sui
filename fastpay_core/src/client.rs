@@ -753,12 +753,12 @@ where
                         Ok(Some(signed_order)) => {
                             fp_ensure!(
                                 signed_order.authority == name,
-                                FastPayError::ErrorWhileProcessingTransferOrder
+                                FastPayError::ErrorWhileProcessingConfirmationOrder
                             );
                             signed_order.check(committee)?;
                             Ok(result.unwrap())
                         }
-                        _ => Err(FastPayError::ErrorWhileProcessingTransferOrder),
+                        _ => Err(FastPayError::ErrorWhileProcessingConfirmationOrder),
                     }
                 })
             })
@@ -788,15 +788,15 @@ where
         // Update local object view
         self.update_objects_from_order_info(order_info.clone())?;
 
-        Ok((
-            order_info
-                .certified_order
-                .expect("Order for publish not certified"),
-            order_info
-                .signed_effects
-                .expect("Publish did not yield signed effects")
-                .effects,
-        ))
+        let cert = order_info
+            .certified_order
+            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)?;
+        let effects = order_info
+            .signed_effects
+            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)?
+            .effects;
+
+        Ok((cert, effects))
     }
 
     async fn call(
