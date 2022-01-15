@@ -135,7 +135,9 @@ where
 
     let tokens = s.split(',');
     let mut result = Vec::new();
-    let result: Result<Vec<_>, _> = tokens.map(|tok| move_core_types::parser::parse_transaction_argument(tok.trim())).collect();
+    let result: Result<Vec<_>, _> = tokens
+        .map(|tok| move_core_types::parser::parse_transaction_argument(tok.trim()))
+        .collect();
     result
 }
 #[derive(Serialize, Deserialize)]
