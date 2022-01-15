@@ -760,7 +760,11 @@ where
             })
             .await?;
 
-        Ok(votes.get(0).unwrap().clone())
+        votes
+            .get(0)
+            .ok_or("No valid confirmation order votes")
+            .map_err(|err| anyhow::anyhow!(err))
+            .map(|val| val.clone())
     }
 
     /// Execute call order
@@ -832,7 +836,12 @@ where
                 Box::pin(async move { client.handle_object_info_request(req).await })
             })
             .await?;
-        Ok(votes.get(0).unwrap().clone())
+
+        votes
+            .get(0)
+            .ok_or("No valid object info response votes")
+            .map_err(|err| anyhow::anyhow!(err))
+            .map(|val| val.clone())
     }
 }
 

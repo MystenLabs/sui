@@ -134,12 +134,11 @@ where
     let s = String::deserialize(deserializer)?;
 
     let tokens = s.split(',');
-    let mut result = Vec::new();
 
-    for tok in tokens {
-        result.push(move_core_types::parser::parse_transaction_argument(tok.trim()).unwrap());
-    }
-    Ok(result)
+    let result: Result<Vec<_>, _> = tokens
+        .map(|tok| move_core_types::parser::parse_transaction_argument(tok.trim()))
+        .collect();
+    result.map_err(serde::de::Error::custom)
 }
 #[derive(Serialize, Deserialize)]
 pub struct MoveCallConfig {
