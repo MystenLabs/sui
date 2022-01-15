@@ -29,14 +29,6 @@ impl AuthorityTemporaryStore {
         }
     }
 
-    /// Resets any mutations and deletions recorded in the store.
-    pub fn reset(mut self) -> Self {
-        self.active_inputs.clear();
-        self.written.clear();
-        self.deleted.clear();
-        self
-    }
-
     // Helpers to access private fields
 
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
@@ -72,7 +64,7 @@ impl AuthorityTemporaryStore {
         authority_name: &AuthorityName,
         secret: &KeyPair,
         transaction_digest: &TransactionDigest,
-        status: Result<(), FastPayError>,
+        status: ExecutionStatus,
     ) -> SignedOrderEffects {
         let effects = OrderEffects {
             status,
@@ -141,6 +133,14 @@ impl AuthorityTemporaryStore {
 }
 
 impl Storage for AuthorityTemporaryStore {
+
+    /// Resets any mutations and deletions recorded in the store.
+    fn reset(&mut self) {
+        self.active_inputs.clear();
+        self.written.clear();
+        self.deleted.clear();
+    }
+
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
         match self.objects.get(id) {
             Some(x) => Some(x.clone()),

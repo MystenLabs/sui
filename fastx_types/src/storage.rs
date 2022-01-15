@@ -5,6 +5,8 @@ use crate::{base_types::ObjectID, object::Object};
 
 /// An abstraction of the (possibly distributed) store for objects, and (soon) events and transactions
 pub trait Storage {
+    fn reset(&mut self);
+
     fn read_object(&self, id: &ObjectID) -> Option<Object>;
 
     fn write_object(&mut self, object: Object);

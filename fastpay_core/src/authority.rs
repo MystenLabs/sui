@@ -33,6 +33,7 @@ use temporary_store::AuthorityTemporaryStore;
 mod authority_store;
 pub use authority_store::AuthorityStore;
 
+
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -212,7 +213,7 @@ impl AuthorityState {
 
         // Order-specific logic
         let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
-        let status = match order.kind {
+        let status_result = match order.kind {
             OrderKind::Transfer(t) => {
                 debug_assert!(
                     inputs.len() == 2,
@@ -263,6 +264,11 @@ impl AuthorityState {
                     gas_object,
                 )
             }
+        };
+
+        let status = match status_result {
+            Ok(()) => ExecutionStatus::Success,
+            Err(err) => ExecutionStatus::Failure(err),
         };
 
         // Update the database in an atomic manner
