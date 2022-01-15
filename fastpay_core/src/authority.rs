@@ -265,28 +265,6 @@ impl AuthorityState {
             }
         };
 
-        // Make a list of all object that are either deleted or have changed owner, along with their old owner.
-        // This is used to update the owner index.
-        let drop_index_entries = temporary_store
-            .deleted()
-            .iter()
-            .map(|(id, _, _)| (owner_index[id], *id))
-            .chain(
-                temporary_store
-                    .written()
-                    .iter()
-                    .filter_map(|((id, _, _), _new_object)| {
-                        let owner = owner_index.get(id);
-                        if owner.is_some() && *owner.unwrap() != temporary_store.objects()[id].owner
-                        {
-                            Some((owner_index[id], *id))
-                        } else {
-                            None
-                        }
-                    }),
-            )
-            .collect();
-
         // Update the database in an atomic manner
         let to_signed_effects = temporary_store.to_signed_effects(
             &self.name,
@@ -296,7 +274,6 @@ impl AuthorityState {
         );
         self.update_state(
             temporary_store,
-            drop_index_entries,
             certificate,
             to_signed_effects,
         )
@@ -457,13 +434,11 @@ impl AuthorityState {
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
-        expired_object_owners: Vec<(FastPayAddress, ObjectID)>,
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
     ) -> Result<OrderInfoResponse, FastPayError> {
         self._database.update_state(
             temporary_store,
-            expired_object_owners,
             certificate,
             signed_effects,
         )
