@@ -56,7 +56,7 @@ impl Server {
         let address = format!("{}:{}", self.base_address, self.base_port);
         let buffer_size = self.buffer_size;
         let state = RunningServerState { server: self };
-        
+
         // Launch server for the appropriate protocol.
         spawn_server(&address, state, buffer_size).await
     }
