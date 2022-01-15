@@ -1,6 +1,8 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::object::Object;
+
 use super::{base_types::*, committee::Committee, error::*};
 
 #[cfg(test)]
@@ -107,12 +109,9 @@ pub struct AccountInfoResponse {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ObjectInfoResponse {
-    pub object_id: ObjectID,
-    pub owner: FastPayAddress,
-    pub next_sequence_number: SequenceNumber,
     pub requested_certificate: Option<CertifiedOrder>,
     pub pending_confirmation: Option<SignedOrder>,
-    pub requested_received_transfers: Vec<CertifiedOrder>,
+    pub object: Object,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]

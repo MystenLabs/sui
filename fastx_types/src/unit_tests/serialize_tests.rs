@@ -3,7 +3,7 @@
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
 use super::*;
-use crate::base_types::*;
+use crate::{base_types::*, object::Object};
 use std::time::Instant;
 
 #[test]
@@ -215,36 +215,24 @@ fn test_info_response() {
     }
 
     let resp1 = ObjectInfoResponse {
-        object_id: dbg_object_id(0x20),
-        owner: dbg_addr(0x20),
-        next_sequence_number: SequenceNumber::new(),
+        object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
         pending_confirmation: None,
         requested_certificate: None,
-        requested_received_transfers: Vec::new(),
     };
     let resp2 = ObjectInfoResponse {
-        object_id: dbg_object_id(0x20),
-        owner: dbg_addr(0x20),
-        next_sequence_number: SequenceNumber::new(),
+        object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
         pending_confirmation: Some(vote.clone()),
         requested_certificate: None,
-        requested_received_transfers: Vec::new(),
     };
     let resp3 = ObjectInfoResponse {
-        object_id: dbg_object_id(0x20),
-        owner: dbg_addr(0x20),
-        next_sequence_number: SequenceNumber::new(),
+        object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
         pending_confirmation: None,
         requested_certificate: Some(cert.clone()),
-        requested_received_transfers: Vec::new(),
     };
     let resp4 = ObjectInfoResponse {
-        object_id: dbg_object_id(0x20),
-        owner: dbg_addr(0x20),
-        next_sequence_number: SequenceNumber::new(),
+        object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
         pending_confirmation: Some(vote),
         requested_certificate: Some(cert),
-        requested_received_transfers: Vec::new(),
     };
 
     for resp in [resp1, resp2, resp3, resp4].iter() {
