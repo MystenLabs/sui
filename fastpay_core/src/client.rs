@@ -745,19 +745,18 @@ where
                     let _ = &certified_order;
                     let result = client.handle_confirmation_order(certified_order).await;
 
-                    match result
+                    if let Ok(Some(signed_order)) = result
                         .as_ref()
                         .map(|order_info_resp| order_info_resp.signed_order.as_ref())
                     {
-                        Ok(Some(signed_order)) => {
-                            fp_ensure!(
-                                signed_order.authority == name,
-                                FastPayError::ErrorWhileProcessingConfirmationOrder
-                            );
-                            signed_order.check(committee)?;
-                            Ok(result.unwrap())
-                        }
-                        _ => Err(FastPayError::ErrorWhileProcessingConfirmationOrder),
+                        fp_ensure!(
+                            signed_order.authority == name,
+                            FastPayError::ErrorWhileProcessingConfirmationOrder
+                        );
+                        signed_order.check(committee)?;
+                        result
+                    } else {
+                        Err(FastPayError::ErrorWhileProcessingConfirmationOrder)
                     }
                 })
             })
