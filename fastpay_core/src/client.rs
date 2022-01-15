@@ -741,8 +741,6 @@ where
                 };
                 let committee = &committee;
                 Box::pin(async move {
-                    let _ = &certified_order;
-                    let _ = &certified_order;
                     let result = client.handle_confirmation_order(certified_order).await;
 
                     if let Ok(Some(signed_order)) = result
