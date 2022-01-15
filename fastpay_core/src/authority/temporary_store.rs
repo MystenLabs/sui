@@ -4,11 +4,14 @@ pub struct AuthorityTemporaryStore {
     object_store: Arc<AuthorityStore>,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
-    written: Vec<ObjectRef>,       // Objects written
+    written: BTreeMap<ObjectRef, Object>, // Objects written
     deleted: Vec<ObjectRef>,       // Objects actively deleted
 }
 
 impl AuthorityTemporaryStore {
+
+    /// Creates a new store associated with an authority store, and populates it with 
+    /// initial objects.
     pub fn new(
         authority_state: &AuthorityState,
         _input_objects: &'_ [Object],
@@ -21,9 +24,17 @@ impl AuthorityTemporaryStore {
                 .filter(|v| !v.is_read_only())
                 .map(|v| v.to_object_reference())
                 .collect(),
-            written: Vec::new(),
+            written: BTreeMap::new(),
             deleted: Vec::new(),
         }
+    }
+
+    /// Resets any mutations and deletions recorded in the store.
+    pub fn reset(mut self) -> Self {
+        self.active_inputs.clear();
+        self.written.clear();
+        self.deleted.clear();
+        self
     }
 
     // Helpers to access private fields
@@ -32,7 +43,7 @@ impl AuthorityTemporaryStore {
         &self.objects
     }
 
-    pub fn written(&self) -> &Vec<ObjectRef> {
+    pub fn written(&self) -> &BTreeMap<ObjectRef, Object> {
         &self.written
     }
 
@@ -46,7 +57,7 @@ impl AuthorityTemporaryStore {
     ) -> (
         BTreeMap<ObjectID, Object>,
         Vec<ObjectRef>,
-        Vec<ObjectRef>,
+        BTreeMap<ObjectRef, Object>,
         Vec<ObjectRef>,
     ) {
         #[cfg(debug_assertions)]
@@ -66,7 +77,7 @@ impl AuthorityTemporaryStore {
         let effects = OrderEffects {
             status,
             transaction_digest: *transaction_digest,
-            mutated: self.written.clone(),
+            mutated: self.written.keys().cloned().collect(),
             deleted: self.deleted.clone(),
         };
         let signature = Signature::new(&effects, secret);
@@ -81,20 +92,24 @@ impl AuthorityTemporaryStore {
     /// An internal check of the invariants (will only fire in debug)
     #[cfg(debug_assertions)]
     fn check_invariants(&self) {
+        // use std::collections::HashSet;
+
+        /* Now we are using a BTreeMap so by construction this is true.
+
         // Check uniqueness in the 'written' set
         debug_assert!(
             {
-                use std::collections::HashSet;
                 let mut used = HashSet::new();
-                self.written.iter().all(move |elt| used.insert(elt.0))
+                self.written.iter().all(move |(elt, _)| used.insert(elt.0))
             },
             "Duplicate object reference in self.written."
         );
 
+        */
+
         // Check uniqueness in the 'deleted' set
         debug_assert!(
             {
-                use std::collections::HashSet;
                 let mut used = HashSet::new();
                 self.deleted.iter().all(move |elt| used.insert(elt.0))
             },
@@ -104,9 +119,8 @@ impl AuthorityTemporaryStore {
         // Check not both deleted and written
         debug_assert!(
             {
-                use std::collections::HashSet;
                 let mut used = HashSet::new();
-                self.written.iter().all(|elt| used.insert(elt.0));
+                self.written.iter().all(|(elt, _)| used.insert(elt.0));
                 self.deleted.iter().all(move |elt| used.insert(elt.0))
             },
             "Object both written and deleted."
@@ -115,9 +129,8 @@ impl AuthorityTemporaryStore {
         // Check all mutable inputs are either written or deleted
         debug_assert!(
             {
-                use std::collections::HashSet;
                 let mut used = HashSet::new();
-                self.written.iter().all(|elt| used.insert(elt.0));
+                self.written.iter().all(|(elt, _)| used.insert(elt.0));
                 self.deleted.iter().all(|elt| used.insert(elt.0));
 
                 self.active_inputs.iter().all(|elt| !used.insert(elt.0))
@@ -159,7 +172,8 @@ impl Storage for AuthorityTemporaryStore {
             }
         }
 
-        self.written.push(object.to_object_reference());
+        self.written
+            .insert(object.to_object_reference(), object.clone());
         self.objects.insert(object.id(), object);
     }
 

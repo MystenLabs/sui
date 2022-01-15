@@ -271,14 +271,20 @@ impl AuthorityState {
             .deleted()
             .iter()
             .map(|(id, _, _)| (owner_index[id], *id))
-            .chain(temporary_store.written().iter().filter_map(|(id, _, _)| {
-                let owner = owner_index.get(id);
-                if owner.is_some() && *owner.unwrap() != temporary_store.objects()[id].owner {
-                    Some((owner_index[id], *id))
-                } else {
-                    None
-                }
-            }))
+            .chain(
+                temporary_store
+                    .written()
+                    .iter()
+                    .filter_map(|((id, _, _), _new_object)| {
+                        let owner = owner_index.get(id);
+                        if owner.is_some() && *owner.unwrap() != temporary_store.objects()[id].owner
+                        {
+                            Some((owner_index[id], *id))
+                        } else {
+                            None
+                        }
+                    }),
+            )
             .collect();
 
         // Update the database in an atomic manner

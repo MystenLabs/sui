@@ -338,7 +338,7 @@ impl AuthorityStore {
                 &self.parent_sync,
                 written
                     .iter()
-                    .map(|output_ref| (*output_ref, transaction_digest)),
+                    .map(|(output_ref, _)| (*output_ref, transaction_digest)),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -348,8 +348,8 @@ impl AuthorityStore {
                 &self.order_lock,
                 written
                     .iter()
-                    .filter(|output_ref| !objects[&output_ref.0].is_read_only())
-                    .map(|output_ref| (*output_ref, None)),
+                    .filter(|(output_ref, _)| !objects[&output_ref.0].is_read_only())
+                    .map(|(output_ref, _)| (*output_ref, None)),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -357,9 +357,9 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.owner_index,
-                written
-                    .iter()
-                    .map(|output_ref| ((objects[&output_ref.0].owner, output_ref.0), *output_ref)),
+                written.iter().map(|(output_ref, _)| {
+                    ((objects[&output_ref.0].owner, output_ref.0), *output_ref)
+                }),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -367,7 +367,7 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.objects,
-                written.iter().map(|output_ref| {
+                written.iter().map(|(output_ref, _)| {
                     (
                         output_ref.0,
                         objects
