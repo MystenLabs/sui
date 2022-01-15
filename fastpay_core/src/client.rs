@@ -702,16 +702,15 @@ where
                     let s_order = result
                         .as_ref()
                         .map(|order_info_resp| order_info_resp.signed_order.as_ref());
-                    match s_order {
-                        Ok(Some(signed_order)) => {
-                            fp_ensure!(
-                                signed_order.authority == name,
-                                FastPayError::ErrorWhileProcessingTransactionOrder
-                            );
-                            signed_order.check(committee)?;
-                            Ok(signed_order.clone())
-                        }
-                        _ => Err(FastPayError::ErrorWhileProcessingTransactionOrder),
+                    if let Ok(Some(signed_order)) = s_order {
+                        fp_ensure!(
+                            signed_order.authority == name,
+                            FastPayError::ErrorWhileProcessingTransactionOrder
+                        );
+                        signed_order.check(committee)?;
+                        Ok(signed_order.clone())
+                    } else {
+                        Err(FastPayError::ErrorWhileProcessingTransactionOrder)
                     }
                 })
             })
