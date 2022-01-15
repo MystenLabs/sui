@@ -198,7 +198,7 @@ where
     D: serde::de::Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    let value = decode_address_hex(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
+    let value = decode_address_hex(&s).map_err(serde::de::Error::custom)?;
     Ok(value)
 }
 

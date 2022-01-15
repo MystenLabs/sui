@@ -762,9 +762,8 @@ where
 
         votes
             .get(0)
-            .ok_or("No valid confirmation order votes")
-            .map_err(|err| anyhow::anyhow!(err))
-            .map(|val| val.clone())
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("No valid confirmation order votes"))
     }
 
     /// Execute call order
@@ -839,9 +838,8 @@ where
 
         votes
             .get(0)
-            .ok_or("No valid object info response votes")
-            .map_err(|err| anyhow::anyhow!(err))
-            .map(|val| val.clone())
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("No valid confirmation order votes"))
     }
 }
 
