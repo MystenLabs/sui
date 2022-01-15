@@ -58,12 +58,9 @@ fn build(sub_dir: &str) -> Vec<CompiledModule> {
 #[test]
 fn check_that_move_code_can_be_built_verified_tested() {
     get_fastx_framework_modules();
-    // ideally this would be a separate test, but doing so introduces
-    // races because of https://github.com/diem/diem/issues/10102
-    run_move_unit_tests();
 }
 
-#[cfg(test)]
+#[test]
 fn run_move_unit_tests() {
     use fastx_types::{FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS};
     use move_cli::package::cli::{self, UnitTestResult};
