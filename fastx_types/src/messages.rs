@@ -128,7 +128,7 @@ pub struct OrderInfoResponse {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionStatus {
     Success,
-    Failure(FastPayError)
+    Failure(Box<FastPayError>),
 }
 
 /// The response from processing an order or a certified order

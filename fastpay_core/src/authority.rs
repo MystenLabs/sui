@@ -33,7 +33,6 @@ use temporary_store::AuthorityTemporaryStore;
 mod authority_store;
 pub use authority_store::AuthorityStore;
 
-
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -268,7 +267,7 @@ impl AuthorityState {
 
         let status = match status_result {
             Ok(()) => ExecutionStatus::Success,
-            Err(err) => ExecutionStatus::Failure(err),
+            Err(err) => ExecutionStatus::Failure(Box::new(err)),
         };
 
         // Update the database in an atomic manner
@@ -278,12 +277,8 @@ impl AuthorityState {
             &transaction_digest,
             status,
         );
-        self.update_state(
-            temporary_store,
-            certificate,
-            to_signed_effects,
-        )
-        .await // Returns the OrderInfoResponse
+        self.update_state(temporary_store, certificate, to_signed_effects)
+            .await // Returns the OrderInfoResponse
     }
 
     pub async fn handle_account_info_request(
@@ -443,11 +438,8 @@ impl AuthorityState {
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
     ) -> Result<OrderInfoResponse, FastPayError> {
-        self._database.update_state(
-            temporary_store,
-            certificate,
-            signed_effects,
-        )
+        self._database
+            .update_state(temporary_store, certificate, signed_effects)
     }
 
     /// Get a read reference to an object/seq lock

@@ -87,7 +87,6 @@ impl InMemoryStorage {
 }
 
 impl Storage for InMemoryStorage {
-
     fn reset(&mut self) {
         self.temporary = ScratchPad::default();
     }

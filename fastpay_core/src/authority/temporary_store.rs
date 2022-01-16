@@ -1,5 +1,12 @@
 use super::*;
 
+pub type InnerTemporaryStore = (
+    BTreeMap<ObjectID, Object>,
+    Vec<ObjectRef>,
+    BTreeMap<ObjectRef, Object>,
+    Vec<ObjectRef>,
+);
+
 pub struct AuthorityTemporaryStore {
     object_store: Arc<AuthorityStore>,
     objects: BTreeMap<ObjectID, Object>,
@@ -10,8 +17,8 @@ pub struct AuthorityTemporaryStore {
 
 impl AuthorityTemporaryStore {
 
-    /// Creates a new store associated with an authority store, and populates it with 
-    /// initial objects.
+    /// Creates a new store associated with an authority store, and populates it with
+    /// initial objects. 
     pub fn new(
         authority_state: &AuthorityState,
         _input_objects: &'_ [Object],
@@ -46,12 +53,7 @@ impl AuthorityTemporaryStore {
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
     pub fn into_inner(
         self,
-    ) -> (
-        BTreeMap<ObjectID, Object>,
-        Vec<ObjectRef>,
-        BTreeMap<ObjectRef, Object>,
-        Vec<ObjectRef>,
-    ) {
+    ) -> InnerTemporaryStore {
         #[cfg(debug_assertions)]
         {
             self.check_invariants();
@@ -133,7 +135,6 @@ impl AuthorityTemporaryStore {
 }
 
 impl Storage for AuthorityTemporaryStore {
-
     /// Resets any mutations and deletions recorded in the store.
     fn reset(&mut self) {
         self.active_inputs.clear();
@@ -172,8 +173,7 @@ impl Storage for AuthorityTemporaryStore {
             }
         }
 
-        self.written
-            .insert(object.to_object_reference(), object);
+        self.written.insert(object.to_object_reference(), object);
     }
 
     fn delete_object(&mut self, id: &ObjectID) {
