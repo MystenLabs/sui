@@ -1043,7 +1043,8 @@ where
             object_arguments,
             pure_arguments,
             gas_budget,
-        ).await
+        )
+        .await
     }
 
     async fn get_object_info(
