@@ -1023,7 +1023,7 @@ where
         Ok(self.object_ids.keys().copied().collect())
     }
 
-    fn move_call(
+    async fn move_call(
         &mut self,
         package_object_ref: ObjectRef,
         module: Identifier,
