@@ -307,6 +307,35 @@ impl ClientServerBenchmark {
 
             let responses = mass_client.run(orders, connections).concat().await;
             info!("Received {} responses.", responses.len(),);
+            // Check the responses for errors
+            for resp in responses {
+                let reply_message = deserialize_message(&resp[..]);
+                match reply_message {
+                    Ok(SerializedMessage::OrderResp(resp)) =>
+                    {
+                        #[allow(clippy::collapsible_if)]
+                        if resp.signed_effects.is_some() {
+                            if resp
+                                .signed_effects
+                                .as_ref()
+                                .unwrap()
+                                .effects
+                                .status
+                                .is_err()
+                            {
+                                info!(
+                                    "Execution Error {:?}",
+                                    resp.signed_effects.unwrap().effects.status
+                                );
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        info!("Received Error {:?}", err);
+                    }
+                    _ => {}
+                };
+            }
         } else {
             // Use actual client core
             let client = network::Client::new(

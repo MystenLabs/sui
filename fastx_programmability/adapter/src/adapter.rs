@@ -30,9 +30,7 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag, TypeTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
-use move_vm_runtime::{
-    native_functions::NativeFunctionTable, session::ExecutionResult,
-};
+use move_vm_runtime::{native_functions::NativeFunctionTable, session::ExecutionResult};
 use std::{borrow::Borrow, collections::BTreeMap, convert::TryFrom, fmt::Debug, sync::Arc};
 
 pub use move_vm_runtime::move_vm::MoveVM;
@@ -41,8 +39,10 @@ pub use move_vm_runtime::move_vm::MoveVM;
 #[path = "unit_tests/adapter_tests.rs"]
 mod adapter_tests;
 
-pub fn new_move_vm(natives : NativeFunctionTable) -> Result<Arc<MoveVM>, FastPayError> {
-    Ok(Arc::new(MoveVM::new(natives).map_err(|_| FastPayError::ExecutionInvariantViolation)?))
+pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<MoveVM>, FastPayError> {
+    Ok(Arc::new(
+        MoveVM::new(natives).map_err(|_| FastPayError::ExecutionInvariantViolation)?,
+    ))
 }
 
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
@@ -50,9 +50,9 @@ pub fn new_move_vm(natives : NativeFunctionTable) -> Result<Arc<MoveVM>, FastPay
 /// If `gas_budget` is None, runtime metering is disabled and execution may diverge.
 #[allow(clippy::too_many_arguments)]
 pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
-    optional_vm : Option<Arc<MoveVM>>,
+    vm: &MoveVM,
     state_view: &mut S,
-    natives: NativeFunctionTable,
+    _natives: NativeFunctionTable,
     package_object: Object,
     module: &Identifier,
     function: &Identifier,
@@ -78,11 +78,6 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         &ctx,
     )?;
 
-    let vm = match optional_vm {
-        Some(move_vm) => move_vm,
-        None =>  Arc::new(MoveVM::new(natives)
-        .expect("VM creation only fails if natives are invalid, and we created the natives")),
-    };
     // TODO: Update Move gas constants to reflect the gas fee on fastx.
     let mut gas_status =
         get_gas_status(Some(gas_budget)).map_err(|e| FastPayError::GasBudgetTooHigh {

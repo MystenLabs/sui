@@ -143,8 +143,9 @@ fn call(
 ) -> FastPayResult {
     let package = storage.find_package("ObjectBasics").unwrap();
 
+    let vm = adapter::new_move_vm(native_functions.clone()).expect("No errors");
     adapter::execute(
-        None,
+        &vm,
         storage,
         native_functions.clone(),
         package,
