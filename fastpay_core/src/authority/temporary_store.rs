@@ -16,9 +16,8 @@ pub struct AuthorityTemporaryStore {
 }
 
 impl AuthorityTemporaryStore {
-
     /// Creates a new store associated with an authority store, and populates it with
-    /// initial objects. 
+    /// initial objects.
     pub fn new(
         authority_state: &AuthorityState,
         _input_objects: &'_ [Object],
@@ -51,9 +50,7 @@ impl AuthorityTemporaryStore {
     }
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
-    pub fn into_inner(
-        self,
-    ) -> InnerTemporaryStore {
+    pub fn into_inner(self) -> InnerTemporaryStore {
         #[cfg(debug_assertions)]
         {
             self.check_invariants();
