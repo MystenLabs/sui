@@ -61,7 +61,7 @@ pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResul
                 balance >= call.gas_budget,
                 format!(
                     "Gas balance is {}, smaller than the budget {} for move call.",
-                    balance, MIN_MOVE_CALL_GAS
+                    balance, call.gas_budget
                 )
             )
         }
