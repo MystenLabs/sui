@@ -292,32 +292,30 @@ impl AuthorityState {
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, FastPayError> {
-        if let Some(seq) = request.request_sequence_number {
-            // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy
-            // to provide back to the client the object digest for specific objects requested. Probably,
-            // we have to return the full ObjectRef and why not the actual full object here.
+        let requested_certificate = match request.request_sequence_number {
+            Some(seq) => {
+                // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy
+                // to provide back to the client the object digest for specific objects requested. Probably,
+                // we have to return the full ObjectRef and why not the actual full object here.
 
-            // Get the Transaction Digest that created the object
-            let parent_iterator = self
-                .get_parent_iterator(request.object_id, Some(seq.increment()?))
-                .await?;
-            let (_, transaction_digest) = parent_iterator
-                .first()
-                .ok_or(FastPayError::CertificateNotfound)?;
-            // Get the cert from the transaction digest
-
-            let requested_certificate = Some(
-                self.read_certificate(transaction_digest)
-                    .await?
-                    .ok_or(FastPayError::CertificateNotfound)?,
-            );
-            let result = self
-                .make_object_info(request.object_id, requested_certificate)
-                .await;
-            result
-        } else {
-            self.make_object_info(request.object_id, None).await
-        }
+                // Get the Transaction Digest that created the object
+                let parent_iterator = self
+                    .get_parent_iterator(request.object_id, Some(seq.increment()?))
+                    .await?;
+                let (_, transaction_digest) = parent_iterator
+                    .first()
+                    .ok_or(FastPayError::CertificateNotfound)?;
+                // Get the cert from the transaction digest
+                Some(
+                    self.read_certificate(transaction_digest)
+                        .await?
+                        .ok_or(FastPayError::CertificateNotfound)?,
+                )
+            }
+            None => None,
+        };
+        self.make_object_info(request.object_id, requested_certificate)
+            .await
     }
 }
 

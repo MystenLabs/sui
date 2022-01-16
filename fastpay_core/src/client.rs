@@ -175,17 +175,15 @@ impl<A> ClientState<A> {
         &self.pending_transfer
     }
 
-    pub fn certificates(&self, object_id: &ObjectID) -> Vec<CertifiedOrder> {
+    pub fn certificates(&self, object_id: &ObjectID) -> impl Iterator<Item = &CertifiedOrder> {
         self.object_certs
             .get(object_id)
-            .map(|cert_digests| {
+            .into_iter()
+            .flat_map(|cert_digests| {
                 cert_digests
                     .iter()
                     .filter_map(|digest| self.certificates.get(digest))
-                    .cloned()
-                    .collect()
             })
-            .unwrap_or_default()
     }
 
     pub fn all_certificates(&self) -> Vec<CertifiedOrder> {
@@ -520,7 +518,6 @@ where
         for (object_id, next_sequence_number) in self.object_ids.clone() {
             let known_sequence_numbers: BTreeSet<_> = self
                 .certificates(&object_id)
-                .iter()
                 .flat_map(|cert| cert.order.input_objects())
                 .filter(|(id, _, _)| id == &object_id)
                 .map(|(_, seq, _)| seq)
@@ -625,7 +622,7 @@ where
             }
         }
         // Sanity check
-        let certificates_count = self.certificates(object_id).len();
+        let certificates_count = self.certificates(object_id).count();
         assert_eq!(
             certificates_count,
             usize::from(self.next_sequence_number(object_id)?)
@@ -652,7 +649,7 @@ where
             .communicate_transfers(
                 self.address,
                 *order.object_id(),
-                self.certificates(order.object_id()).clone(),
+                self.certificates(order.object_id()).cloned().collect(),
                 CommunicateAction::SendOrder(order.clone()),
             )
             .await?;
@@ -671,7 +668,7 @@ where
             self.communicate_transfers(
                 self.address,
                 *order.object_id(),
-                self.certificates(order.object_id()).clone(),
+                self.certificates(order.object_id()).cloned().collect(),
                 CommunicateAction::SynchronizeNextSequenceNumber(
                     self.next_sequence_number(order.object_id())?,
                 ),
