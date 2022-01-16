@@ -6,9 +6,13 @@
 use bytes::Bytes;
 use fastpay::{network, transport};
 use fastpay_core::authority::*;
+use fastx_types::object::OBJECT_BASICS_MODULE_NAME;
+use fastx_types::FASTX_FRAMEWORK_ADDRESS;
 use fastx_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use futures::stream::StreamExt;
 use log::*;
+use move_core_types::ident_str;
+use rand::Rng;
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
@@ -67,6 +71,9 @@ struct ClientServerBenchmark {
     /// Number of database cpus
     #[structopt(long, default_value = "1")]
     db_cpus: usize,
+    /// Use Move orders
+    #[structopt(long)]
+    use_move: bool,
 }
 #[derive(Debug, Clone, PartialEq, EnumString)]
 enum BenchmarkType {
@@ -160,20 +167,30 @@ impl ClientServerBenchmark {
                 let keypair = get_key_pair();
                 let object_id: ObjectID = ObjectID::random();
 
-                let object = Object::with_id_owner_for_testing(object_id, keypair.0);
+                let object = if self.use_move {
+                    Object::with_id_owner_object_basics_object_for_testing(
+                        ObjectID::random(),
+                        SequenceNumber::new(),
+                        keypair.0,
+                        rand::thread_rng().gen_range(0..0xFFFFFF),
+                    )
+                } else {
+                    Object::with_id_owner_for_testing(object_id, keypair.0)
+                };
+
                 assert!(object.version() == SequenceNumber::from(0));
                 let object_ref = object.to_object_reference();
                 state.init_order_lock(object_ref).await;
+                account_objects.push((keypair.0, object.clone(), keypair.1));
                 state.insert_object(object).await;
-                account_objects.push((keypair.0, object_ref, keypair.1));
 
                 let gas_object_id = ObjectID::random();
                 let gas_object = Object::with_id_owner_for_testing(gas_object_id, keypair.0);
                 assert!(gas_object.version() == SequenceNumber::from(0));
                 let gas_object_ref = gas_object.to_object_reference();
                 state.init_order_lock(gas_object_ref).await;
+                gas_objects.push(gas_object.clone());
                 state.insert_object(gas_object).await;
-                gas_objects.push(gas_object_ref);
             }
             state
         });
@@ -182,15 +199,44 @@ impl ClientServerBenchmark {
         // Make one transaction per account (transfer order + confirmation).
         let mut orders: Vec<Bytes> = Vec::new();
         let mut next_recipient = get_key_pair().0;
-        for ((pubx, object_ref, secx), gas_payment) in account_objects.iter().zip(gas_objects) {
-            let transfer = Transfer {
-                object_ref: *object_ref,
-                sender: *pubx,
-                recipient: Address::FastPay(next_recipient),
-                gas_payment,
+        for ((account_addr, object, secret), gas_obj) in account_objects.iter().zip(gas_objects) {
+            let object_ref = object.to_object_reference();
+            let gas_object_ref = gas_obj.to_object_reference();
+
+            let order = if object.data.try_as_move().unwrap().type_.module
+                == OBJECT_BASICS_MODULE_NAME.to_owned()
+            {
+                // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
+                let framework_obj_ref = (
+                    FASTX_FRAMEWORK_ADDRESS,
+                    SequenceNumber::new(),
+                    ObjectDigest::new([0; 32]),
+                );
+
+                Order::new_move_call(
+                    *account_addr,
+                    framework_obj_ref,
+                    OBJECT_BASICS_MODULE_NAME.to_owned(),
+                    ident_str!("transfer").to_owned(),
+                    Vec::new(),
+                    gas_object_ref,
+                    vec![object_ref],
+                    vec![bcs::to_bytes(&next_recipient.to_vec()).unwrap()],
+                    1000,
+                    secret,
+                )
+            } else {
+                let transfer = Transfer {
+                    sender: *account_addr,
+                    recipient: Address::FastPay(next_recipient),
+                    object_ref,
+                    gas_payment: gas_object_ref,
+                };
+                Order::new_transfer(transfer, secret)
             };
-            next_recipient = *pubx;
-            let order = Order::new_transfer(transfer, secx);
+
+            // Set the next recipient to current
+            next_recipient = *account_addr;
 
             // Serialize order
             let serialized_order = serialize_order(&order);
@@ -210,10 +256,10 @@ impl ClientServerBenchmark {
             let serialized_certificate = serialize_cert(&certificate);
             assert!(!serialized_certificate.is_empty());
 
-            if self.benchmark_type != BenchmarkType::OrdersOnly {
+            if self.benchmark_type != BenchmarkType::CertsOnly {
                 orders.push(serialized_order.into());
             }
-            if self.benchmark_type != BenchmarkType::CertsOnly {
+            if self.benchmark_type != BenchmarkType::OrdersOnly {
                 orders.push(serialized_certificate.into());
             }
         }
