@@ -415,7 +415,7 @@ async fn test_handle_move_order() {
     // Check that effects are reported
     assert!(res.signed_effects.is_some());
     let mutated = res.signed_effects.unwrap().effects.mutated;
-    assert!(mutated.len() == 2);
+    assert_eq!(mutated.len(), 2);
 
     let created_object_id = mutated[0].0; // res.object_id;
                                           // check that order actually created an object with the expected ID, owner, sequence number

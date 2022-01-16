@@ -44,6 +44,7 @@ pub struct AuthorityState {
 
     /// Move native functions that are available to invoke
     native_functions: NativeFunctionTable,
+    move_vm : Arc<adapter::MoveVM>,
     /// The database
     _database: Arc<AuthorityStore>,
 }
@@ -239,6 +240,7 @@ impl AuthorityState {
                 let gas_object = inputs.pop().unwrap();
                 let package = inputs.pop().unwrap();
                 adapter::execute(
+                    Some(self.move_vm.clone()),
                     &mut temporary_store,
                     self.native_functions.clone(),
                     package,
@@ -348,7 +350,8 @@ impl AuthorityState {
             committee,
             name,
             secret,
-            native_functions,
+            native_functions: native_functions.clone(),
+            move_vm: adapter::new_move_vm(native_functions).expect("We defined natives to not fail here"),
             _database: store,
         };
 
@@ -371,11 +374,13 @@ impl AuthorityState {
         secret: KeyPair,
         store: Arc<AuthorityStore>,
     ) -> Self {
+        let native_functions = NativeFunctionTable::new();
         AuthorityState {
             committee,
             name,
             secret,
-            native_functions: NativeFunctionTable::new(),
+            native_functions: native_functions.clone(),
+            move_vm : adapter::new_move_vm(native_functions).expect("Only fails due to natives."),
             _database: store,
         }
     }

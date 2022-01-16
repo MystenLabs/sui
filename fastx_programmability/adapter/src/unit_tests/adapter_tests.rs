@@ -144,6 +144,7 @@ fn call(
     let package = storage.find_package("ObjectBasics").unwrap();
 
     adapter::execute(
+        None,
         storage,
         native_functions.clone(),
         package,

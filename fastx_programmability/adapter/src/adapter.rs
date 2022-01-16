@@ -31,19 +31,26 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::{
-    move_vm::MoveVM, native_functions::NativeFunctionTable, session::ExecutionResult,
+    native_functions::NativeFunctionTable, session::ExecutionResult,
 };
-use std::{borrow::Borrow, collections::BTreeMap, convert::TryFrom, fmt::Debug};
+use std::{borrow::Borrow, collections::BTreeMap, convert::TryFrom, fmt::Debug, sync::Arc};
+
+pub use move_vm_runtime::move_vm::MoveVM;
 
 #[cfg(test)]
 #[path = "unit_tests/adapter_tests.rs"]
 mod adapter_tests;
+
+pub fn new_move_vm(natives : NativeFunctionTable) -> Result<Arc<MoveVM>, FastPayError> {
+    Ok(Arc::new(MoveVM::new(natives).map_err(|_| FastPayError::ExecutionInvariantViolation)?))
+}
 
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
 /// Execution will read from/write to the store in `state_view`.
 /// If `gas_budget` is None, runtime metering is disabled and execution may diverge.
 #[allow(clippy::too_many_arguments)]
 pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
+    optional_vm : Option<Arc<MoveVM>>,
     state_view: &mut S,
     natives: NativeFunctionTable,
     package_object: Object,
@@ -71,8 +78,11 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         &ctx,
     )?;
 
-    let vm = MoveVM::new(natives)
-        .expect("VM creation only fails if natives are invalid, and we created the natives");
+    let vm = match optional_vm {
+        Some(move_vm) => move_vm,
+        None =>  Arc::new(MoveVM::new(natives)
+        .expect("VM creation only fails if natives are invalid, and we created the natives")),
+    };
     // TODO: Update Move gas constants to reflect the gas fee on fastx.
     let mut gas_status =
         get_gas_status(Some(gas_budget)).map_err(|e| FastPayError::GasBudgetTooHigh {
