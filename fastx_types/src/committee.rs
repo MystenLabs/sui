@@ -3,6 +3,8 @@
 
 use super::base_types::*;
 use ed25519_dalek::PublicKey;
+use rand::distributions::{Distribution, Uniform};
+use rand::rngs::OsRng;
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -24,6 +26,21 @@ impl Committee {
             total_votes,
             expanded_keys,
         }
+    }
+
+    /// Samples authorities by weight
+    pub fn sample(&self) -> &AuthorityName {
+        // Uniform number [0, total_votes) non-inclusive of the upper bound
+        let between = Uniform::from(0..self.total_votes);
+        // OsRng implements CryptoRng and is secure
+        let mut _random = between.sample(&mut OsRng);
+        for (auth, weight) in &self.voting_rights {
+            if *weight > _random {
+                return auth;
+            }
+            _random -= *weight;
+        }
+        unreachable!();
     }
 
     pub fn weight(&self, author: &AuthorityName) -> usize {
