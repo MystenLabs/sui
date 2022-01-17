@@ -387,7 +387,8 @@ async fn test_handle_move_order() {
 
     genesis_package_objects.push(gas_payment_object);
     let mut authority_state = init_state_with_objects(genesis_package_objects).await;
-    authority_state.native_functions = native_functions;
+    authority_state._native_functions = native_functions.clone();
+    authority_state.move_vm = adapter::new_move_vm(native_functions).unwrap();
 
     let function = ident_str!("create").to_owned();
     let order = Order::new_move_call(
@@ -414,8 +415,15 @@ async fn test_handle_move_order() {
 
     // Check that effects are reported
     assert!(res.signed_effects.is_some());
+    res.signed_effects
+        .as_ref()
+        .unwrap()
+        .effects
+        .status
+        .as_ref()
+        .unwrap();
     let mutated = res.signed_effects.unwrap().effects.mutated;
-    assert!(mutated.len() == 2);
+    assert_eq!(mutated.len(), 2);
 
     let created_object_id = mutated[0].0; // res.object_id;
                                           // check that order actually created an object with the expected ID, owner, sequence number
@@ -466,7 +474,8 @@ async fn test_handle_move_order_insufficient_budget() {
 
     genesis_package_objects.push(gas_payment_object);
     let mut authority_state = init_state_with_objects(genesis_package_objects).await;
-    authority_state.native_functions = native_functions;
+    authority_state._native_functions = native_functions.clone();
+    authority_state.move_vm = adapter::new_move_vm(native_functions).unwrap();
 
     let function = ident_str!("create").to_owned();
     let order = Order::new_move_call(
