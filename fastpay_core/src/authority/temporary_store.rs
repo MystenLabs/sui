@@ -14,7 +14,7 @@ impl AuthorityTemporaryStore {
         _input_objects: &'_ [Object],
     ) -> AuthorityTemporaryStore {
         AuthorityTemporaryStore {
-            object_store: authority_state._database.clone(),
+            object_store: authority_state.database.clone(),
             objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
             active_inputs: _input_objects
                 .iter()

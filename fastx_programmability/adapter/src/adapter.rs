@@ -52,7 +52,6 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<MoveVM>, FastPayE
 pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     vm: &MoveVM,
     state_view: &mut S,
-    _natives: NativeFunctionTable,
     package_object: Object,
     module: &Identifier,
     function: &Identifier,

@@ -43,10 +43,13 @@ pub struct AuthorityState {
     pub secret: KeyPair,
 
     /// Move native functions that are available to invoke
-    _native_functions: NativeFunctionTable,
+    native_functions: NativeFunctionTable,
+
+    /// An initialized move VM with cached modules
     move_vm: Arc<adapter::MoveVM>,
+
     /// The database
-    _database: Arc<AuthorityStore>,
+    database: Arc<AuthorityStore>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -242,7 +245,6 @@ impl AuthorityState {
                 adapter::execute(
                     &self.move_vm,
                     &mut temporary_store,
-                    self._native_functions.clone(),
                     package,
                     &c.module,
                     &c.function,
@@ -339,6 +341,12 @@ impl AuthorityState {
 }
 
 impl AuthorityState {
+    /// Makes a fresh move VM for the authority with an empty cache.
+    pub fn reload_vm(&mut self) {
+        self.move_vm = adapter::new_move_vm(self.native_functions.clone())
+            .expect("Should not fail with the natives provided.");
+    }
+
     pub async fn new_with_genesis_modules(
         committee: Committee,
         name: AuthorityName,
@@ -350,10 +358,10 @@ impl AuthorityState {
             committee,
             name,
             secret,
-            _native_functions: native_functions.clone(),
+            native_functions: native_functions.clone(),
             move_vm: adapter::new_move_vm(native_functions)
                 .expect("We defined natives to not fail here"),
-            _database: store,
+            database: store,
         };
 
         for genesis_module in genesis_modules {
@@ -380,18 +388,18 @@ impl AuthorityState {
             committee,
             name,
             secret,
-            _native_functions: native_functions.clone(),
+            native_functions: native_functions.clone(),
             move_vm: adapter::new_move_vm(native_functions).expect("Only fails due to natives."),
-            _database: store,
+            database: store,
         }
     }
 
     async fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
-        self._database.object_state(object_id)
+        self.database.object_state(object_id)
     }
 
     pub async fn insert_object(&self, object: Object) {
-        self._database
+        self.database
             .insert_object(object)
             .expect("TODO: propagate the error")
     }
@@ -401,7 +409,7 @@ impl AuthorityState {
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<OrderInfoResponse, FastPayError> {
-        self._database.get_order_info(transaction_digest)
+        self.database.get_order_info(transaction_digest)
     }
 
     /// Make an info summary of an object, and include the raw object for clients
@@ -427,7 +435,7 @@ impl AuthorityState {
         &self,
         account: FastPayAddress,
     ) -> Result<AccountInfoResponse, FastPayError> {
-        self._database
+        self.database
             .get_account_objects(account)
             .map(|object_ids| AccountInfoResponse {
                 object_ids,
@@ -439,7 +447,7 @@ impl AuthorityState {
 
     /// Initialize an order lock for an object/sequence to None
     pub async fn init_order_lock(&self, object_ref: ObjectRef) {
-        self._database
+        self.database
             .init_order_lock(object_ref)
             .expect("TODO: propagate the error")
     }
@@ -450,7 +458,7 @@ impl AuthorityState {
         mutable_input_objects: &[ObjectRef],
         signed_order: SignedOrder,
     ) -> Result<(), FastPayError> {
-        self._database
+        self.database
             .set_order_lock(mutable_input_objects, signed_order)
     }
 
@@ -461,7 +469,7 @@ impl AuthorityState {
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
     ) -> Result<OrderInfoResponse, FastPayError> {
-        self._database.update_state(
+        self.database.update_state(
             temporary_store,
             expired_object_owners,
             certificate,
@@ -474,7 +482,7 @@ impl AuthorityState {
         &self,
         object_ref: &ObjectRef,
     ) -> Result<Option<SignedOrder>, FastPayError> {
-        self._database.get_order_lock(object_ref)
+        self.database.get_order_lock(object_ref)
     }
 
     // Helper functions to manage certificates
@@ -484,11 +492,11 @@ impl AuthorityState {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<CertifiedOrder>, FastPayError> {
-        self._database.read_certificate(digest)
+        self.database.read_certificate(digest)
     }
 
     pub async fn parent(&self, object_ref: &ObjectRef) -> Option<TransactionDigest> {
-        self._database
+        self.database
             .parent(object_ref)
             .expect("TODO: propagate the error")
     }
@@ -497,7 +505,7 @@ impl AuthorityState {
         &self,
         _objects: &[ObjectID],
     ) -> Result<Vec<Option<Object>>, FastPayError> {
-        self._database.get_objects(_objects)
+        self.database.get_objects(_objects)
     }
 
     /// Returns all parents (object_ref and transaction digests) that match an object_id, at
@@ -508,7 +516,7 @@ impl AuthorityState {
         seq: Option<SequenceNumber>,
     ) -> Result<Vec<(ObjectRef, TransactionDigest)>, FastPayError> {
         {
-            self._database.get_parent_iterator(object_id, seq)
+            self.database.get_parent_iterator(object_id, seq)
         }
     }
 }

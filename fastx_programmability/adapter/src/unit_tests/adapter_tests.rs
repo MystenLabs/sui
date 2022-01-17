@@ -147,7 +147,6 @@ fn call(
     adapter::execute(
         &vm,
         storage,
-        native_functions.clone(),
         package,
         &Identifier::new("ObjectBasics").unwrap(),
         &Identifier::new(name).unwrap(),

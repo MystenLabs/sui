@@ -387,8 +387,8 @@ async fn test_handle_move_order() {
 
     genesis_package_objects.push(gas_payment_object);
     let mut authority_state = init_state_with_objects(genesis_package_objects).await;
-    authority_state._native_functions = native_functions.clone();
-    authority_state.move_vm = adapter::new_move_vm(native_functions).unwrap();
+    authority_state.native_functions = native_functions.clone();
+    authority_state.reload_vm();
 
     let function = ident_str!("create").to_owned();
     let order = Order::new_move_call(
@@ -474,8 +474,8 @@ async fn test_handle_move_order_insufficient_budget() {
 
     genesis_package_objects.push(gas_payment_object);
     let mut authority_state = init_state_with_objects(genesis_package_objects).await;
-    authority_state._native_functions = native_functions.clone();
-    authority_state.move_vm = adapter::new_move_vm(native_functions).unwrap();
+    authority_state.native_functions = native_functions.clone();
+    authority_state.reload_vm();
 
     let function = ident_str!("create").to_owned();
     let order = Order::new_move_call(
