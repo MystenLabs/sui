@@ -326,9 +326,9 @@ impl AuthorityStore {
             )
             .map_err(|_| FastPayError::StorageError)?;
 
-        // Make an iterator all object that are either deleted or have changed owner, along with their old owner.
-        // This is used to update the owner index.
-        let expired_object_owners =
+        // Make an iterator over all objects that are either deleted or have changed owner,
+        // along with their old owner.  This is used to update the owner index.
+        let old_object_owners =
             deleted
                 .iter()
                 .map(|(id, _, _)| (objects[id].owner, *id))
@@ -343,7 +343,7 @@ impl AuthorityStore {
 
         // Delete the old owner index entries
         write_batch = write_batch
-            .delete_batch(&self.owner_index, expired_object_owners)
+            .delete_batch(&self.owner_index, old_object_owners)
             .map_err(|_| FastPayError::StorageError)?;
 
         // Index the certificate by the objects created
@@ -360,10 +360,13 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.order_lock,
-                written
-                    .iter()
-                    .filter(|(_output_ref, new_object)| !new_object.is_read_only())
-                    .map(|(output_ref, _)| (*output_ref, None)),
+                written.iter().filter_map(|(output_ref, new_object)| {
+                    if !new_object.is_read_only() {
+                        Some((*output_ref, None))
+                    } else {
+                        None
+                    }
+                }),
             )
             .map_err(|_| FastPayError::StorageError)?;
 

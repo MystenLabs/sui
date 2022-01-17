@@ -83,20 +83,7 @@ impl AuthorityTemporaryStore {
     /// An internal check of the invariants (will only fire in debug)
     #[cfg(debug_assertions)]
     fn check_invariants(&self) {
-        // use std::collections::HashSet;
-
-        /* Now we are using a BTreeMap so by construction this is true.
-
-        // Check uniqueness in the 'written' set
-        debug_assert!(
-            {
-                let mut used = HashSet::new();
-                self.written.iter().all(move |(elt, _)| used.insert(elt.0))
-            },
-            "Duplicate object reference in self.written."
-        );
-
-        */
+        // Now we are using a BTreeMap so by construction items in "written" are unique.
 
         // Check uniqueness in the 'deleted' set
         debug_assert!(
