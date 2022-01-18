@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
+use move_core_types::{
+    ident_str,
+    identifier::IdentStr,
+    language_storage::{StructTag, TypeTag},
+};
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 
@@ -17,6 +21,22 @@ use crate::{
 pub const GAS_MODULE_NAME: &IdentStr = ident_str!("GAS");
 pub const GAS_STRUCT_NAME: &IdentStr = GAS_MODULE_NAME;
 
+pub struct GAS {}
+impl GAS {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: FASTX_FRAMEWORK_ADDRESS,
+            name: GAS_STRUCT_NAME.to_owned(),
+            module: GAS_MODULE_NAME.to_owned(),
+            type_params: Vec::new(),
+        }
+    }
+
+    pub fn type_tag() -> TypeTag {
+        TypeTag::Struct(Self::type_())
+    }
+}
+
 /// Rust version of the Move FastX::Coin::Coin<FastX::GAS::GAS> type
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GasCoin(Coin);
@@ -31,12 +51,7 @@ impl GasCoin {
     }
 
     pub fn type_() -> StructTag {
-        Coin::type_(StructTag {
-            address: FASTX_FRAMEWORK_ADDRESS,
-            name: GAS_STRUCT_NAME.to_owned(),
-            module: GAS_MODULE_NAME.to_owned(),
-            type_params: Vec::new(),
-        })
+        Coin::type_(GAS::type_())
     }
 
     pub fn id(&self) -> &ObjectID {

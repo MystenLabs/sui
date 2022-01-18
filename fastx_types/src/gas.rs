@@ -61,7 +61,7 @@ pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResul
                 balance >= call.gas_budget,
                 format!(
                     "Gas balance is {}, smaller than the budget {} for move call.",
-                    balance, MIN_MOVE_CALL_GAS
+                    balance, call.gas_budget
                 )
             )
         }
@@ -88,7 +88,7 @@ pub fn deduct_gas(gas_object: &mut Object, amount: i128) -> FastPayResult {
     )?;
     let new_gas_coin = GasCoin::new(*gas_coin.id(), gas_object.version(), new_balance as u64);
     let move_object = gas_object.data.try_as_move_mut().unwrap();
-    move_object.update_contents(bcs::to_bytes(&new_gas_coin).unwrap())?;
+    move_object.update_contents(bcs::to_bytes(&new_gas_coin).unwrap());
     Ok(())
 }
 

@@ -265,7 +265,7 @@ async fn test_publish_dependent_module_ok() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let (mut genesis_module_objects, _) = genesis::clone_genesis_data();
+    let (genesis_module_objects, _) = genesis::clone_genesis_data();
     let genesis_module = match &genesis_module_objects[0].data {
         Data::Package(m) => CompiledModule::deserialize(m.values().next().unwrap()).unwrap(),
         _ => unreachable!(),
@@ -277,8 +277,7 @@ async fn test_publish_dependent_module_ok() {
         dependent_module.serialize(&mut bytes).unwrap();
         bytes
     };
-    genesis_module_objects.push(gas_payment_object);
-    let mut authority = init_state_with_objects(genesis_module_objects).await;
+    let mut authority = init_state_with_genesis(vec![gas_payment_object]).await;
 
     let order = Order::new_module(
         sender,
@@ -328,7 +327,7 @@ async fn test_publish_module_no_dependencies_ok() {
     check_gas_object(
         &gas_payment_object,
         gas_balance - gas_cost,
-        gas_seq.increment().unwrap(),
+        gas_seq.increment(),
     )
 }
 
@@ -435,7 +434,7 @@ async fn test_handle_move_order() {
     check_gas_object(
         &gas_payment_object,
         gas_balance - gas_cost,
-        gas_seq.increment().unwrap(),
+        gas_seq.increment(),
     )
 }
 
@@ -569,7 +568,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
         let o = sender_object.data.try_as_move_mut().unwrap();
         let old_contents = o.contents().to_vec();
         // update object contents, which will increment the sequence number
-        o.update_contents(old_contents).unwrap();
+        o.update_contents(old_contents);
         authority_state.insert_object(sender_object).await;
     }
 
@@ -582,7 +581,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
 
     // Check that the new object is the one recorded.
     let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(old_seq_num.increment().unwrap(), new_account.version());
+    assert_eq!(old_seq_num.increment(), new_account.version());
 
     // No recipient object was created.
     assert!(authority_state
@@ -747,7 +746,7 @@ async fn test_handle_confirmation_order_ok() {
 
     let old_account = authority_state.object_state(&object_id).await.unwrap();
     let mut next_sequence_number = old_account.version();
-    next_sequence_number = next_sequence_number.increment().unwrap();
+    next_sequence_number = next_sequence_number.increment();
 
     let info = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
@@ -903,7 +902,7 @@ async fn test_authority_persist() {
 // helpers
 
 #[cfg(test)]
-fn init_state() -> AuthorityState {
+fn init_state_parameters() -> (Committee, PublicKeyBytes, KeyPair, Arc<AuthorityStore>) {
     let (authority_address, authority_key) = get_key_pair();
     let mut authorities = BTreeMap::new();
     authorities.insert(
@@ -920,6 +919,33 @@ fn init_state() -> AuthorityState {
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
     let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+    (committee, authority_address, authority_key, store)
+}
+
+#[cfg(test)]
+async fn init_state_with_genesis<I: IntoIterator<Item = Object>>(
+    genesis_objects: I,
+) -> AuthorityState {
+    let (committee, authority_address, authority_key, store) = init_state_parameters();
+    let state = AuthorityState::new_with_genesis_modules(
+        committee,
+        authority_address,
+        authority_key,
+        store,
+    )
+    .await;
+    for obj in genesis_objects {
+        state
+            .init_order_lock((obj.id(), 0.into(), obj.digest()))
+            .await;
+        state.insert_object(obj).await;
+    }
+    state
+}
+
+#[cfg(test)]
+fn init_state() -> AuthorityState {
+    let (committee, authority_address, authority_key, store) = init_state_parameters();
     AuthorityState::new_without_genesis_for_testing(
         committee,
         authority_address,

@@ -212,7 +212,7 @@ impl AuthorityState {
 
         // Order-specific logic
         let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
-        let status = match order.kind {
+        let status_result = match order.kind {
             OrderKind::Transfer(t) => {
                 debug_assert!(
                     inputs.len() == 2,
@@ -230,7 +230,7 @@ impl AuthorityState {
                 output_object.transfer(match t.recipient {
                     Address::Primary(_) => FastPayAddress::default(),
                     Address::FastPay(addr) => addr,
-                })?;
+                });
                 temporary_store.write_object(output_object);
                 Ok(())
             }
@@ -257,6 +257,7 @@ impl AuthorityState {
                 let gas_object = inputs.pop().unwrap();
                 adapter::publish(
                     &mut temporary_store,
+                    self.native_functions.clone(),
                     m.modules,
                     m.sender,
                     &mut tx_ctx,
@@ -265,21 +266,10 @@ impl AuthorityState {
             }
         };
 
-        // Make a list of all object that are either deleted or have changed owner, along with their old owner.
-        // This is used to update the owner index.
-        let drop_index_entries = temporary_store
-            .deleted()
-            .iter()
-            .map(|(id, _, _)| (owner_index[id], *id))
-            .chain(temporary_store.written().iter().filter_map(|(id, _, _)| {
-                let owner = owner_index.get(id);
-                if owner.is_some() && *owner.unwrap() != temporary_store.objects()[id].owner {
-                    Some((owner_index[id], *id))
-                } else {
-                    None
-                }
-            }))
-            .collect();
+        let status = match status_result {
+            Ok(()) => ExecutionStatus::Success,
+            Err(err) => ExecutionStatus::Failure(Box::new(err)),
+        };
 
         // Update the database in an atomic manner
         let to_signed_effects = temporary_store.to_signed_effects(
@@ -288,13 +278,8 @@ impl AuthorityState {
             &transaction_digest,
             status,
         );
-        self.update_state(
-            temporary_store,
-            drop_index_entries,
-            certificate,
-            to_signed_effects,
-        )
-        .await // Returns the OrderInfoResponse
+        self.update_state(temporary_store, certificate, to_signed_effects)
+            .await // Returns the OrderInfoResponse
     }
 
     pub async fn handle_account_info_request(
@@ -308,31 +293,29 @@ impl AuthorityState {
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, FastPayError> {
-        if let Some(seq) = request.request_sequence_number {
+        let requested_certificate = if let Some(seq) = request.request_sequence_number {
             // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy
             // to provide back to the client the object digest for specific objects requested. Probably,
             // we have to return the full ObjectRef and why not the actual full object here.
-            let obj = self
-                .object_state(&request.object_id)
-                .await
-                .map_err(|_| FastPayError::ObjectNotFound)?;
 
             // Get the Transaction Digest that created the object
-            let transaction_digest = self
-                .parent(&(request.object_id, seq.increment()?, obj.digest()))
-                .await
+            let parent_iterator = self
+                .get_parent_iterator(request.object_id, Some(seq.increment()))
+                .await?;
+            let (_, transaction_digest) = parent_iterator
+                .first()
                 .ok_or(FastPayError::CertificateNotfound)?;
             // Get the cert from the transaction digest
-            let requested_certificate = Some(
-                self.read_certificate(&transaction_digest)
+            Some(
+                self.read_certificate(transaction_digest)
                     .await?
                     .ok_or(FastPayError::CertificateNotfound)?,
-            );
-            self.make_object_info(request.object_id, requested_certificate)
-                .await
+            )
         } else {
-            self.make_object_info(request.object_id, None).await
-        }
+            None
+        };
+        self.make_object_info(request.object_id, requested_certificate)
+            .await
     }
 }
 
@@ -451,16 +434,11 @@ impl AuthorityState {
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
-        expired_object_owners: Vec<(FastPayAddress, ObjectID)>,
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
     ) -> Result<OrderInfoResponse, FastPayError> {
-        self._database.update_state(
-            temporary_store,
-            expired_object_owners,
-            certificate,
-            signed_effects,
-        )
+        self._database
+            .update_state(temporary_store, certificate, signed_effects)
     }
 
     /// Get a read reference to an object/seq lock

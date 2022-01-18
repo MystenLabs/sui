@@ -287,14 +287,13 @@ impl AuthorityStore {
     pub fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
-        expired_object_owners: Vec<(FastPayAddress, ObjectID)>,
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
     ) -> Result<OrderInfoResponse, FastPayError> {
         // TODO: There is a lot of cloning used -- eliminate it.
 
         // Extract the new state from the execution
-        let (mut objects, active_inputs, written, _deleted) = temporary_store.into_inner();
+        let (objects, active_inputs, written, deleted) = temporary_store.into_inner();
         let mut write_batch = self.order_lock.batch();
 
         // Archive the old lock.
@@ -323,13 +322,28 @@ impl AuthorityStore {
         write_batch = write_batch
             .delete_batch(
                 &self.objects,
-                _deleted.iter().map(|deleted_ref| deleted_ref.0),
+                deleted.iter().map(|deleted_ref| deleted_ref.0),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
+        // Make an iterator over all objects that are either deleted or have changed owner,
+        // along with their old owner.  This is used to update the owner index.
+        let old_object_owners =
+            deleted
+                .iter()
+                .map(|(id, _, _)| (objects[id].owner, *id))
+                .chain(written.iter().filter_map(
+                    |((id, _, _), new_object)| match objects.get(id) {
+                        Some(old_object) if old_object.owner != new_object.owner => {
+                            Some((old_object.owner, *id))
+                        }
+                        _ => None,
+                    },
+                ));
+
         // Delete the old owner index entries
         write_batch = write_batch
-            .delete_batch(&self.owner_index, expired_object_owners.into_iter())
+            .delete_batch(&self.owner_index, old_object_owners)
             .map_err(|_| FastPayError::StorageError)?;
 
         // Index the certificate by the objects created
@@ -338,7 +352,7 @@ impl AuthorityStore {
                 &self.parent_sync,
                 written
                     .iter()
-                    .map(|output_ref| (*output_ref, transaction_digest)),
+                    .map(|(output_ref, _)| (*output_ref, transaction_digest)),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -346,10 +360,13 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.order_lock,
-                written
-                    .iter()
-                    .filter(|output_ref| !objects[&output_ref.0].is_read_only())
-                    .map(|output_ref| (*output_ref, None)),
+                written.iter().filter_map(|(output_ref, new_object)| {
+                    if !new_object.is_read_only() {
+                        Some((*output_ref, None))
+                    } else {
+                        None
+                    }
+                }),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -357,9 +374,9 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.owner_index,
-                written
-                    .iter()
-                    .map(|output_ref| ((objects[&output_ref.0].owner, output_ref.0), *output_ref)),
+                written.iter().map(|(output_ref, new_object)| {
+                    ((new_object.owner, output_ref.0), *output_ref)
+                }),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -367,14 +384,9 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.objects,
-                written.iter().map(|output_ref| {
-                    (
-                        output_ref.0,
-                        objects
-                            .remove(&output_ref.0)
-                            .expect("By temporary_authority_store invariant object exists."),
-                    )
-                }),
+                written
+                    .into_iter()
+                    .map(|(output_ref, new_object)| (output_ref.0, new_object)),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
