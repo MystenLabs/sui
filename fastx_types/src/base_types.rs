@@ -342,12 +342,14 @@ impl SequenceNumber {
         self.0
     }
 
-    pub fn increment(self) -> Result<SequenceNumber, FastPayError> {
-        let val = self.0.checked_add(1);
-        match val {
-            None => Err(FastPayError::SequenceOverflow),
-            Some(val) => Ok(Self(val)),
-        }
+    #[must_use]
+    pub fn increment(self) -> SequenceNumber {
+        // TODO: Ensure this never overflow.
+        // Option 1: Freeze the object when sequence number reaches MAX.
+        // Option 2: Reject tx with MAX sequence number.
+        // Issue #182.
+        debug_assert_ne!(self.0, u64::MAX);
+        Self(self.0 + 1)
     }
 
     pub fn decrement(self) -> Result<SequenceNumber, FastPayError> {

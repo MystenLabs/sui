@@ -327,7 +327,7 @@ async fn test_publish_module_no_dependencies_ok() {
     check_gas_object(
         &gas_payment_object,
         gas_balance - gas_cost,
-        gas_seq.increment().unwrap(),
+        gas_seq.increment(),
     )
 }
 
@@ -434,7 +434,7 @@ async fn test_handle_move_order() {
     check_gas_object(
         &gas_payment_object,
         gas_balance - gas_cost,
-        gas_seq.increment().unwrap(),
+        gas_seq.increment(),
     )
 }
 
@@ -568,7 +568,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
         let o = sender_object.data.try_as_move_mut().unwrap();
         let old_contents = o.contents().to_vec();
         // update object contents, which will increment the sequence number
-        o.update_contents(old_contents).unwrap();
+        o.update_contents(old_contents);
         authority_state.insert_object(sender_object).await;
     }
 
@@ -581,7 +581,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
 
     // Check that the new object is the one recorded.
     let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(old_seq_num.increment().unwrap(), new_account.version());
+    assert_eq!(old_seq_num.increment(), new_account.version());
 
     // No recipient object was created.
     assert!(authority_state
@@ -746,7 +746,7 @@ async fn test_handle_confirmation_order_ok() {
 
     let old_account = authority_state.object_state(&object_id).await.unwrap();
     let mut next_sequence_number = old_account.version();
-    next_sequence_number = next_sequence_number.increment().unwrap();
+    next_sequence_number = next_sequence_number.increment();
 
     let info = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
