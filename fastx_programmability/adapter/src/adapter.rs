@@ -532,7 +532,7 @@ fn resolve_and_type_check(
         }
     }
     args.append(&mut pure_args);
-    args.push(ctx.to_bcs_bytes_hack());
+    args.push(ctx.to_vec());
 
     Ok(TypeCheckSuccess {
         module_id,
