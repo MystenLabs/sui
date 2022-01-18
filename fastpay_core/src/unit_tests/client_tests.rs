@@ -628,10 +628,9 @@ fn test_client_state_sync_with_transferred_object() {
     assert_eq!(0, client2.sent_certificates.len());
 }
 
-#[test]
-fn test_move_calls_object_create() {
-    let rt = Runtime::new().unwrap();
-    let (authority_clients, committee) = rt.block_on(init_local_authorities(4));
+#[tokio::test]
+async fn test_move_calls_object_create() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
     let mut client1 = make_client(authority_clients.clone(), committee);
 
     let object_value: u64 = 100;
@@ -651,33 +650,35 @@ fn test_move_calls_object_create() {
         vec![gas_object_id],
         vec![gas_object_id],
     ];
-    let gas_object_ref = rt
-        .block_on(fund_account(
-            authority_clients.values().collect(),
-            &mut client1,
-            authority_objects,
-        ))
-        .iter()
-        .next()
-        .unwrap()
-        .1
-        .to_object_reference();
+    let gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
         object_value.to_le_bytes().to_vec(),
         bcs::to_bytes(&client1.address.to_vec()).unwrap(),
     ];
-    let call_response = rt.block_on(client1.move_call(
-        framework_obj_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        ident_str!("create").to_owned(),
-        Vec::new(),
-        gas_object_ref,
-        Vec::new(),
-        pure_args,
-        GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
-    ));
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
 
     // Check all went well
     assert!(call_response.is_ok());
@@ -696,17 +697,13 @@ fn test_move_calls_object_create() {
         .position(|e| e.0 == gas_object_ref.0);
 
     assert!(gas_obj_idx.is_some());
-    let new_obj_ref = order_effects
-        .mutated
-        .get(gas_obj_idx.unwrap() ^ 1)
-        .unwrap();
+    let new_obj_ref = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
     assert_ne!(gas_object_ref, *new_obj_ref);
 }
 
-#[test]
-fn test_move_calls_object_transfer() {
-    let rt = Runtime::new().unwrap();
-    let (authority_clients, committee) = rt.block_on(init_local_authorities(4));
+#[tokio::test]
+async fn test_move_calls_object_transfer() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let client2 = make_client(authority_clients.clone(), committee);
 
@@ -727,33 +724,35 @@ fn test_move_calls_object_transfer() {
         vec![gas_object_id],
         vec![gas_object_id],
     ];
-    let mut gas_object_ref = rt
-        .block_on(fund_account(
-            authority_clients.values().collect(),
-            &mut client1,
-            authority_objects,
-        ))
-        .iter()
-        .next()
-        .unwrap()
-        .1
-        .to_object_reference();
+    let mut gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
         object_value.to_le_bytes().to_vec(),
         bcs::to_bytes(&client1.address.to_vec()).unwrap(),
     ];
-    let call_response = rt.block_on(client1.move_call(
-        framework_obj_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        ident_str!("create").to_owned(),
-        Vec::new(),
-        gas_object_ref,
-        Vec::new(),
-        pure_args,
-        GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
-    ));
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
 
     let (_, order_effects) = call_response.unwrap();
     let gas_obj_idx = order_effects
@@ -761,40 +760,41 @@ fn test_move_calls_object_transfer() {
         .iter()
         .position(|e| e.0 == gas_object_ref.0);
     // Get the object created from the call
-    let new_obj_ref = order_effects
-        .mutated
-        .get(gas_obj_idx.unwrap() ^ 1)
-        .unwrap();
+    let new_obj_ref = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
     // Fetch the full object
-    let new_obj = rt
-        .block_on(client1.get_object_info(ObjectInfoRequest {
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
-        }))
+        })
+        .await
         .unwrap();
 
-    gas_object_ref = rt
-        .block_on(client1.get_object_info(ObjectInfoRequest {
+    gas_object_ref = client1
+        .get_object_info(ObjectInfoRequest {
             object_id: gas_object_ref.0,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
-        }))
+        })
+        .await
         .unwrap()
         .object
         .to_object_reference();
 
     let pure_args = vec![bcs::to_bytes(&client2.address.to_vec()).unwrap()];
-    let call_response = rt.block_on(client1.move_call(
-        framework_obj_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        ident_str!("transfer").to_owned(),
-        Vec::new(),
-        gas_object_ref,
-        vec![new_obj.object.to_object_reference()],
-        pure_args,
-        GAS_VALUE_FOR_TESTING / 2,
-    ));
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("transfer").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            vec![new_obj.object.to_object_reference()],
+            pure_args,
+            GAS_VALUE_FOR_TESTING / 2,
+        )
+        .await;
 
     // Check all went well
     assert!(call_response.is_ok());
@@ -813,30 +813,27 @@ fn test_move_calls_object_transfer() {
         .position(|e| e.0 == gas_object_ref.0);
 
     assert!(gas_obj_idx.is_some());
-    let transferred_obj_ref = order_effects
-        .mutated
-        .get(gas_obj_idx.unwrap() ^ 1)
-        .unwrap();
+    let transferred_obj_ref = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
     assert_ne!(gas_object_ref, *transferred_obj_ref);
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
 
-    let transferred_obj_info = rt
-        .block_on(client1.get_object_info(ObjectInfoRequest {
+    let transferred_obj_info = client1
+        .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
-        }))
+        })
+        .await
         .unwrap();
 
     // Confirm new owner
     assert_eq!(transferred_obj_info.object.owner, client2.address);
 }
 
-#[test]
-fn test_move_calls_object_transfer_and_freeze() {
-    let rt = Runtime::new().unwrap();
-    let (authority_clients, committee) = rt.block_on(init_local_authorities(4));
+#[tokio::test]
+async fn test_move_calls_object_transfer_and_freeze() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let client2 = make_client(authority_clients.clone(), committee);
 
@@ -857,33 +854,35 @@ fn test_move_calls_object_transfer_and_freeze() {
         vec![gas_object_id],
         vec![gas_object_id],
     ];
-    let mut gas_object_ref = rt
-        .block_on(fund_account(
-            authority_clients.values().collect(),
-            &mut client1,
-            authority_objects,
-        ))
-        .iter()
-        .next()
-        .unwrap()
-        .1
-        .to_object_reference();
+    let mut gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
         object_value.to_le_bytes().to_vec(),
         bcs::to_bytes(&client1.address.to_vec()).unwrap(),
     ];
-    let call_response = rt.block_on(client1.move_call(
-        framework_obj_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        ident_str!("create").to_owned(),
-        Vec::new(),
-        gas_object_ref,
-        Vec::new(),
-        pure_args,
-        GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
-    ));
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
 
     let (_, order_effects) = call_response.unwrap();
     let gas_obj_idx = order_effects
@@ -891,40 +890,41 @@ fn test_move_calls_object_transfer_and_freeze() {
         .iter()
         .position(|e| e.0 == gas_object_ref.0);
     // Get the object created from the call
-    let new_obj_ref = order_effects
-        .mutated
-        .get(gas_obj_idx.unwrap() ^ 1)
-        .unwrap();
+    let new_obj_ref = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
     // Fetch the full object
-    let new_obj = rt
-        .block_on(client1.get_object_info(ObjectInfoRequest {
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
-        }))
+        })
+        .await
         .unwrap();
 
-    gas_object_ref = rt
-        .block_on(client1.get_object_info(ObjectInfoRequest {
+    gas_object_ref = client1
+        .get_object_info(ObjectInfoRequest {
             object_id: gas_object_ref.0,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
-        }))
+        })
+        .await
         .unwrap()
         .object
         .to_object_reference();
 
     let pure_args = vec![bcs::to_bytes(&client2.address.to_vec()).unwrap()];
-    let call_response = rt.block_on(client1.move_call(
-        framework_obj_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        ident_str!("transfer_and_freeze").to_owned(),
-        Vec::new(),
-        gas_object_ref,
-        vec![new_obj.object.to_object_reference()],
-        pure_args,
-        GAS_VALUE_FOR_TESTING / 2,
-    ));
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("transfer_and_freeze").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            vec![new_obj.object.to_object_reference()],
+            pure_args,
+            GAS_VALUE_FOR_TESTING / 2,
+        )
+        .await;
 
     // Check all went well
     assert!(call_response.is_ok());
@@ -951,12 +951,13 @@ fn test_move_calls_object_transfer_and_freeze() {
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
 
-    let transferred_obj_info = rt
-        .block_on(client1.get_object_info(ObjectInfoRequest {
+    let transferred_obj_info = client1
+        .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
-        }))
+        })
+        .await
         .unwrap();
 
     // Confirm new owner
@@ -966,10 +967,9 @@ fn test_move_calls_object_transfer_and_freeze() {
     assert!(transferred_obj_info.object.is_read_only());
 }
 
-#[test]
-fn test_move_calls_object_delete() {
-    let rt = Runtime::new().unwrap();
-    let (authority_clients, committee) = rt.block_on(init_local_authorities(4));
+#[tokio::test]
+async fn test_move_calls_object_delete() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
     let mut client1 = make_client(authority_clients.clone(), committee);
 
     let object_value: u64 = 100;
@@ -989,33 +989,35 @@ fn test_move_calls_object_delete() {
         vec![gas_object_id],
         vec![gas_object_id],
     ];
-    let mut gas_object_ref = rt
-        .block_on(fund_account(
-            authority_clients.values().collect(),
-            &mut client1,
-            authority_objects,
-        ))
-        .iter()
-        .next()
-        .unwrap()
-        .1
-        .to_object_reference();
+    let mut gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
         object_value.to_le_bytes().to_vec(),
         bcs::to_bytes(&client1.address.to_vec()).unwrap(),
     ];
-    let call_response = rt.block_on(client1.move_call(
-        framework_obj_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        ident_str!("create").to_owned(),
-        Vec::new(),
-        gas_object_ref,
-        Vec::new(),
-        pure_args,
-        GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
-    ));
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
 
     let (_, order_effects) = call_response.unwrap();
     let gas_obj_idx = order_effects
@@ -1028,34 +1030,38 @@ fn test_move_calls_object_delete() {
         .get((gas_obj_idx.unwrap() + 1) % 2)
         .unwrap();
     // Fetch the full object
-    let new_obj = rt
-        .block_on(client1.get_object_info(ObjectInfoRequest {
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
-        }))
+        })
+        .await
         .unwrap();
 
-    gas_object_ref = rt
-        .block_on(client1.get_object_info(ObjectInfoRequest {
+    gas_object_ref = client1
+        .get_object_info(ObjectInfoRequest {
             object_id: gas_object_ref.0,
             request_sequence_number: None,
             request_received_transfers_excluding_first_nth: None,
-        }))
+        })
+        .await
         .unwrap()
         .object
         .to_object_reference();
 
-    let call_response = rt.block_on(client1.move_call(
-        framework_obj_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        ident_str!("delete").to_owned(),
-        Vec::new(),
-        gas_object_ref,
-        vec![new_obj.object.to_object_reference()],
-        Vec::new(),
-        GAS_VALUE_FOR_TESTING / 2,
-    ));
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("delete").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            vec![new_obj.object.to_object_reference()],
+            Vec::new(),
+            GAS_VALUE_FOR_TESTING / 2,
+        )
+        .await;
 
     // Check all went well
     assert!(call_response.is_ok());
@@ -1075,11 +1081,13 @@ fn test_move_calls_object_delete() {
 
     assert_eq!(gas_obj_idx.unwrap(), 0);
     // Try to fetch the deleted object
-    let deleted_object_resp = rt.block_on(client1.get_object_info(ObjectInfoRequest {
-        object_id: new_obj_ref.0,
-        request_sequence_number: None,
-        request_received_transfers_excluding_first_nth: None,
-    }));
+    let deleted_object_resp = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await;
 
     assert!(deleted_object_resp.is_err());
 }
