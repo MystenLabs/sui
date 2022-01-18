@@ -172,8 +172,12 @@ impl Storage for AuthorityTemporaryStore {
         }
 
         // Mark it for deletion
-        self.deleted
-            .push(self.objects.get(id).unwrap().to_object_reference());    
+        self.deleted.push(
+            self.objects
+                .get(id)
+                .expect("Internal invariant: object must exist to be deleted.")
+                .to_object_reference(),
+        );   
     }
 }
 
