@@ -698,7 +698,7 @@ fn test_move_calls_object_create() {
     assert!(gas_obj_idx.is_some());
     let new_obj_ref = order_effects
         .mutated
-        .get((gas_obj_idx.unwrap() + 1) % 2)
+        .get(gas_obj_idx.unwrap() ^ 1)
         .unwrap();
     assert_ne!(gas_object_ref, *new_obj_ref);
 }
@@ -763,7 +763,7 @@ fn test_move_calls_object_transfer() {
     // Get the object created from the call
     let new_obj_ref = order_effects
         .mutated
-        .get((gas_obj_idx.unwrap() + 1) % 2)
+        .get(gas_obj_idx.unwrap() ^ 1)
         .unwrap();
     // Fetch the full object
     let new_obj = rt
@@ -815,7 +815,7 @@ fn test_move_calls_object_transfer() {
     assert!(gas_obj_idx.is_some());
     let transferred_obj_ref = order_effects
         .mutated
-        .get((gas_obj_idx.unwrap() + 1) % 2)
+        .get(gas_obj_idx.unwrap() ^ 1)
         .unwrap();
     assert_ne!(gas_object_ref, *transferred_obj_ref);
 
@@ -893,7 +893,7 @@ fn test_move_calls_object_transfer_and_freeze() {
     // Get the object created from the call
     let new_obj_ref = order_effects
         .mutated
-        .get((gas_obj_idx.unwrap() + 1) % 2)
+        .get(gas_obj_idx.unwrap() ^ 1)
         .unwrap();
     // Fetch the full object
     let new_obj = rt
