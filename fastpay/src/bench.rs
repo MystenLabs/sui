@@ -6,7 +6,6 @@
 use bytes::Bytes;
 use fastpay::{network, transport};
 use fastpay_core::authority::*;
-use fastx_types::object::OBJECT_BASICS_MODULE_NAME;
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
 use fastx_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use futures::stream::StreamExt;
@@ -168,7 +167,7 @@ impl ClientServerBenchmark {
                 let object_id: ObjectID = ObjectID::random();
 
                 let object = if self.use_move {
-                    Object::with_id_owner_object_basics_object_for_testing(
+                    Object::with_id_owner_gas_coin_object_for_testing(
                         ObjectID::random(),
                         SequenceNumber::new(),
                         keypair.0,
@@ -203,9 +202,7 @@ impl ClientServerBenchmark {
             let object_ref = object.to_object_reference();
             let gas_object_ref = gas_obj.to_object_reference();
 
-            let order = if object.data.try_as_move().unwrap().type_.module
-                == OBJECT_BASICS_MODULE_NAME.to_owned()
-            {
+            let order = if self.use_move {
                 // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
                 let framework_obj_ref = (
                     FASTX_FRAMEWORK_ADDRESS,
@@ -216,9 +213,14 @@ impl ClientServerBenchmark {
                 Order::new_move_call(
                     *account_addr,
                     framework_obj_ref,
-                    OBJECT_BASICS_MODULE_NAME.to_owned(),
+                    ident_str!("GAS").to_owned(),
                     ident_str!("transfer").to_owned(),
                     Vec::new(),
+                    // Do I really need this TypeArg? Does not make a diff
+
+                    //vec![move_core_types::language_storage::TypeTag::Struct(
+                    //GasCoin::type_(),
+                    //)],
                     gas_object_ref,
                     vec![object_ref],
                     vec![bcs::to_bytes(&next_recipient.to_vec()).unwrap()],

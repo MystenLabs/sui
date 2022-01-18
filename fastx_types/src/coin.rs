@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     base_types::{ObjectID, SequenceNumber},
-    gas_coin::{GAS_MODULE_NAME, GAS_STRUCT_NAME},
     id::ID,
     FASTX_FRAMEWORK_ADDRESS,
 };
@@ -33,8 +32,8 @@ impl Coin {
     pub fn type_(type_param: StructTag) -> StructTag {
         StructTag {
             address: FASTX_FRAMEWORK_ADDRESS,
-            name: GAS_STRUCT_NAME.to_owned(),
-            module: GAS_MODULE_NAME.to_owned(),
+            name: COIN_STRUCT_NAME.to_owned(),
+            module: COIN_MODULE_NAME.to_owned(),
             type_params: vec![TypeTag::Struct(type_param)],
         }
     }

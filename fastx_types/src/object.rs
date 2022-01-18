@@ -39,6 +39,13 @@ pub struct ObjectBasicsObject {
     pub value: u64,
 }
 
+/// Coin in the Framework uses an object of the following format
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CoinObject {
+    pub id: ID,
+    pub value: u64,
+}
+
 /// Byte encoding of a 64 byte unsigned integer in BCS
 type BcsU64 = [u8; 8];
 /// Index marking the end of the object's ID + the beginning of its version
@@ -334,6 +341,31 @@ impl Object {
 
         let data = Data::Move(MoveObject {
             type_: struct_tag,
+            contents: bcs::to_bytes(&obj).unwrap(),
+            read_only: false,
+        });
+        Self {
+            owner,
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+        }
+    }
+
+    /// Create Coin object for use in Move object operation
+    pub fn with_id_owner_gas_coin_object_for_testing(
+        id: ObjectID,
+        version: SequenceNumber,
+        owner: FastPayAddress,
+        value: u64,
+    ) -> Self {
+        // An object in Coin.move is a struct of an ID and a u64 value
+        let obj = CoinObject {
+            id: ID::new(id, version),
+            value,
+        };
+
+        let data = Data::Move(MoveObject {
+            type_: GasCoin::type_(),
             contents: bcs::to_bytes(&obj).unwrap(),
             read_only: false,
         });
