@@ -166,8 +166,9 @@ fn call(
         pure_args,
         gas_budget,
         gas_object,
-        TxContext::random_for_testing_only(),
+        &TxContext::random_for_testing_only(),
     )
+    .0
 }
 
 /// Exercise test functions that create, transfer, read, update, and delete objects
