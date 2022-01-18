@@ -13,6 +13,7 @@ use std::{
 };
 use tokio::runtime::Runtime;
 
+use fastx_types::error::FastPayError::ObjectNotFound;
 use std::env;
 use std::fs;
 
@@ -154,8 +155,7 @@ fn make_client(
         secret,
         committee,
         authority_clients,
-        Vec::new(),
-        Vec::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
     )
 }
@@ -278,8 +278,8 @@ fn test_initiating_valid_transfer() {
         .block_on(sender.transfer_object(object_id_1, gas_object, recipient))
         .unwrap();
     assert_eq!(
-        sender.next_sequence_number(object_id_1),
-        SequenceNumber::from(1)
+        sender.next_sequence_number(&object_id_1),
+        Err(ObjectNotFound)
     );
     assert_eq!(sender.pending_transfer, None);
     assert_eq!(
@@ -319,10 +319,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     let certificate = rt
         .block_on(sender.transfer_object(object_id, gas_object, recipient))
         .unwrap();
-    assert_eq!(
-        sender.next_sequence_number(object_id),
-        SequenceNumber::from(1)
-    );
+    assert_eq!(sender.next_sequence_number(&object_id), Err(ObjectNotFound));
     assert_eq!(sender.pending_transfer, None);
     assert_eq!(
         rt.block_on(sender.get_strong_majority_owner(object_id)),
@@ -354,8 +351,8 @@ fn test_initiating_transfer_low_funds() {
         .is_err());
     // Trying to overspend does not block an account.
     assert_eq!(
-        sender.next_sequence_number(object_id_2),
-        SequenceNumber::from(0)
+        sender.next_sequence_number(&object_id_2),
+        Ok(SequenceNumber::from(0))
     );
     // assert_eq!(sender.pending_transfer, None);
     assert_eq!(
@@ -416,10 +413,6 @@ fn test_bidirectional_transfer() {
         .block_on(client1.transfer_object(object_id, gas_object1, client2.address))
         .unwrap();
 
-    assert_eq!(
-        client1.next_sequence_number(object_id),
-        SequenceNumber::from(1)
-    );
     assert_eq!(client1.pending_transfer, None);
 
     // Confirm client1 lose ownership of the object.
@@ -432,11 +425,7 @@ fn test_bidirectional_transfer() {
         rt.block_on(client2.get_strong_majority_owner(object_id)),
         Some((client2.address, SequenceNumber::from(1)))
     );
-    // Confirm sequence number is consistent between authorities and client.
-    assert_eq!(
-        rt.block_on(client1.get_strong_majority_sequence_number(object_id)),
-        client1.next_sequence_number(object_id)
-    );
+
     // Confirm certificate is consistent between authorities and client.
     assert_eq!(
         rt.block_on(client1.request_certificate(
@@ -461,10 +450,6 @@ fn test_bidirectional_transfer() {
     rt.block_on(client2.transfer_object(object_id, gas_object2, client1.address))
         .unwrap();
 
-    assert_eq!(
-        client2.next_sequence_number(object_id),
-        SequenceNumber::from(2)
-    );
     assert_eq!(client2.pending_transfer, None);
 
     // Confirm client2 lose ownership of the object.
@@ -519,8 +504,8 @@ fn test_receiving_unconfirmed_transfer() {
         ))
         .unwrap();
     assert_eq!(
-        client1.next_sequence_number(object_id),
-        SequenceNumber::from(1)
+        client1.next_sequence_number(&object_id),
+        Ok(SequenceNumber::from(1))
     );
     assert_eq!(client1.pending_transfer, None);
     // ..but not confirmed remotely, hence an unchanged balance and sequence number.
@@ -552,14 +537,14 @@ fn test_client_state_sync() {
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
 
     let old_object_ids = sender.object_ids.clone();
-    let old_sent_certificate = sender.sent_certificates.clone();
+    let old_certificate = sender.certificates.clone();
 
     // Remove all client-side data
     sender.object_ids.clear();
-    sender.sent_certificates.clear();
+    sender.certificates.clear();
     assert!(rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
     assert!(sender.object_ids.is_empty());
-    assert!(sender.sent_certificates.is_empty());
+    assert!(sender.certificates.is_empty());
 
     // Sync client state
     rt.block_on(sender.sync_client_state_with_random_authority())
@@ -568,25 +553,21 @@ fn test_client_state_sync() {
     // Confirm data are the same after sync
     assert!(!rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
     assert_eq!(old_object_ids, sender.object_ids);
-    assert_eq!(old_sent_certificate, sender.sent_certificates);
+    assert_eq!(old_certificate, sender.certificates);
 }
 
 #[test]
 fn test_client_state_sync_with_transferred_object() {
     let rt = Runtime::new().unwrap();
-    let (authority_clients, committee) = init_local_authorities(4);
+    let (authority_clients, committee) = init_local_authorities(1);
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
 
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
 
-    let authority_objects = vec![
-        vec![object_id, gas_object_id],
-        vec![object_id, gas_object_id],
-        vec![object_id, gas_object_id],
-        vec![object_id, gas_object_id],
-    ];
+    let authority_objects = vec![vec![object_id, gas_object_id]];
+
     rt.block_on(fund_account(
         authority_clients.values().collect(),
         &mut client1,
@@ -606,18 +587,105 @@ fn test_client_state_sync_with_transferred_object() {
     // Client 2's local object_id and cert should be empty before sync
     assert!(rt.block_on(client2.get_owned_objects()).unwrap().is_empty());
     assert!(client2.object_ids.is_empty());
-    assert!(client2.received_certificates.is_empty());
-    assert!(client2.sent_certificates.is_empty());
+    assert!(client2.certificates.is_empty());
 
     // Sync client state
-    while client2.object_ids.is_empty() {
-        rt.block_on(client2.sync_client_state_with_random_authority())
-            .unwrap();
-    }
+    rt.block_on(client2.sync_client_state_with_random_authority())
+        .unwrap();
 
     // Confirm client 2 received the new object id and cert
     assert_eq!(1, rt.block_on(client2.get_owned_objects()).unwrap().len());
     assert_eq!(1, client2.object_ids.len());
-    assert_eq!(1, client2.received_certificates.len());
-    assert_eq!(0, client2.sent_certificates.len());
+    assert_eq!(1, client2.certificates.len());
+}
+
+#[test]
+fn test_client_certificate_state() {
+    let rt = Runtime::new().unwrap();
+    let number_of_authorities = 1;
+    let (authority_clients, committee) = init_local_authorities(number_of_authorities);
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let mut client2 = make_client(authority_clients.clone(), committee);
+
+    let object_id_1 = ObjectID::random();
+    let object_id_2 = ObjectID::random();
+    let gas_object_id_1 = ObjectID::random();
+    let gas_object_id_2 = ObjectID::random();
+
+    let client1_objects = vec![object_id_1, object_id_2, gas_object_id_1];
+    let client2_objects = vec![gas_object_id_2];
+
+    let client1_objects: Vec<Vec<ObjectID>> = (0..number_of_authorities)
+        .map(|_| client1_objects.clone())
+        .collect();
+
+    let client2_objects: Vec<Vec<ObjectID>> = (0..number_of_authorities)
+        .map(|_| client2_objects.clone())
+        .collect();
+
+    rt.block_on(fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        client1_objects,
+    ));
+
+    rt.block_on(fund_account(
+        authority_clients.values().collect(),
+        &mut client2,
+        client2_objects,
+    ));
+
+    // Transfer object to client2.
+    rt.block_on(client1.transfer_object(object_id_1, gas_object_id_1, client2.address))
+        .unwrap();
+    rt.block_on(client1.transfer_object(object_id_2, gas_object_id_1, client2.address))
+        .unwrap();
+    // Should have 2 certs after 2 transfer
+    assert_eq!(2, client1.certificates.len());
+    // Only gas_object left in account, so object_certs link should only have 1 entry
+    assert_eq!(1, client1.object_certs.len());
+    // it should have 2 certificates associated with the gas object
+    assert!(client1.object_certs.contains_key(&gas_object_id_1));
+    assert_eq!(2, client1.object_certs.get(&gas_object_id_1).unwrap().len());
+    // Sequence number should be 2 for gas object after 2 mutation.
+    assert_eq!(
+        Ok(SequenceNumber::from(2)),
+        client1.next_sequence_number(&gas_object_id_1)
+    );
+
+    rt.block_on(client2.sync_client_state_with_random_authority())
+        .unwrap();
+
+    // Client 2 should retrieve 2 certificates for the 2 transactions after sync
+    assert_eq!(2, client2.certificates.len());
+    assert!(client2.object_certs.contains_key(&object_id_1));
+    assert!(client2.object_certs.contains_key(&object_id_2));
+    assert_eq!(1, client2.object_certs.get(&object_id_1).unwrap().len());
+    assert_eq!(1, client2.object_certs.get(&object_id_2).unwrap().len());
+    // Sequence number for object 1 and 2 should be 1 after 1 mutation.
+    assert_eq!(
+        Ok(SequenceNumber::from(1)),
+        client2.next_sequence_number(&object_id_1)
+    );
+    assert_eq!(
+        Ok(SequenceNumber::from(1)),
+        client2.next_sequence_number(&object_id_2)
+    );
+    // Transfer object 2 back to client 1.
+    rt.block_on(client2.transfer_object(object_id_2, gas_object_id_2, client1.address))
+        .unwrap();
+
+    assert_eq!(3, client2.certificates.len());
+    assert!(client2.object_certs.contains_key(&object_id_1));
+    assert!(!client2.object_certs.contains_key(&object_id_2));
+    assert!(client2.object_certs.contains_key(&gas_object_id_2));
+    assert_eq!(1, client2.object_certs.get(&object_id_1).unwrap().len());
+    assert_eq!(1, client2.object_certs.get(&gas_object_id_2).unwrap().len());
+
+    rt.block_on(client1.sync_client_state_with_random_authority())
+        .unwrap();
+
+    assert_eq!(3, client1.certificates.len());
+    assert!(client1.object_certs.contains_key(&object_id_2));
+    assert_eq!(2, client1.object_certs.get(&object_id_2).unwrap().len());
 }
