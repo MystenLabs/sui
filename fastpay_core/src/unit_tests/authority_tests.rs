@@ -285,7 +285,7 @@ async fn test_publish_dependent_module_ok() {
         vec![dependent_module_bytes],
         &sender_key,
     );
-    let dependent_module_id = TxContext::new(order.digest()).fresh_id();
+    let dependent_module_id = TxContext::new(&sender, order.digest()).fresh_id();
 
     // Object does not exist
     assert!(authority.object_state(&dependent_module_id).await.is_err());
@@ -313,7 +313,7 @@ async fn test_publish_module_no_dependencies_ok() {
     let module_bytes = vec![module_bytes];
     let gas_cost = calculate_module_publish_cost(&module_bytes);
     let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, &sender_key);
-    let _module_object_id = TxContext::new(order.digest()).fresh_id();
+    let _module_object_id = TxContext::new(&sender, order.digest()).fresh_id();
     let _response = send_and_confirm_order(&mut authority, order).await.unwrap();
 
     // check that the module actually got published

@@ -208,7 +208,7 @@ impl AuthorityState {
 
         // Insert into the certificates map
         let transaction_digest = certificate.order.digest();
-        let mut tx_ctx = TxContext::new(transaction_digest);
+        let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
         // Order-specific logic
         let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
