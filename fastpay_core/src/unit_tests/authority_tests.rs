@@ -415,13 +415,10 @@ async fn test_handle_move_order() {
 
     // Check that effects are reported
     assert!(res.signed_effects.is_some());
-    res.signed_effects
-        .as_ref()
-        .unwrap()
-        .effects
-        .status
-        .as_ref()
-        .unwrap();
+    assert_eq!(
+        res.signed_effects.as_ref().unwrap().effects.status,
+        ExecutionStatus::Success
+    );
     let mutated = res.signed_effects.unwrap().effects.mutated;
     assert_eq!(mutated.len(), 2);
 
