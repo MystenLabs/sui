@@ -43,6 +43,13 @@ impl PublicKeyBytes {
         // to ensure the bytes represent a point on the curve.
         PublicKey::from_bytes(self.as_ref()).map_err(|_| FastPayError::InvalidAuthenticator)
     }
+
+    // for testing
+    pub fn random_for_testing_only() -> Self {
+        use rand::Rng;
+        let random_bytes = rand::thread_rng().gen::<[u8; dalek::PUBLIC_KEY_LENGTH]>();
+        Self(random_bytes)
+    }
 }
 
 impl AsRef<[u8]> for PublicKeyBytes {
@@ -87,25 +94,28 @@ pub struct ObjectDigest(pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct TxContext {
+    /// Signer/sender of the transaction
+    sender: Vec<u8>,
     /// Digest of the current transaction
-    digest: TransactionDigest,
+    digest: Vec<u8>,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
 }
 
 impl TxContext {
-    pub fn new(digest: TransactionDigest) -> Self {
+    pub fn new(sender: &FastPayAddress, digest: TransactionDigest) -> Self {
         Self {
-            digest,
+            sender: sender.to_vec(),
+            digest: digest.0.to_vec(),
             ids_created: 0,
         }
     }
 
     /// Derive a globally unique object ID by hashing self.digest | self.ids_created
     pub fn fresh_id(&mut self) -> ObjectID {
-        let id = self.digest.derive_id(self.ids_created);
+        let id = self.digest().derive_id(self.ids_created);
 
         self.ids_created += 1;
         id
@@ -113,32 +123,20 @@ impl TxContext {
 
     /// Return the transaction digest, to include in new objects
     pub fn digest(&self) -> TransactionDigest {
-        self.digest
+        TransactionDigest::new(self.digest.clone().try_into().unwrap())
     }
 
-    // TODO(https://github.com/MystenLabs/fastnft/issues/89): temporary hack for Move compatibility
-    pub fn to_bcs_bytes_hack(&self) -> Vec<u8> {
-        let sender = FastPayAddress::default();
-        let inputs_hash = self.digest.0.to_vec();
-        let obj = TxContextForMove {
-            sender: sender.to_vec(),
-            inputs_hash,
-            ids_created: self.ids_created,
-        };
-        bcs::to_bytes(&obj).unwrap()
+    pub fn to_vec(&self) -> Vec<u8> {
+        bcs::to_bytes(&self).unwrap()
     }
 
     // for testing
-    pub fn random() -> Self {
-        Self::new(TransactionDigest::random())
+    pub fn random_for_testing_only() -> Self {
+        Self::new(
+            &FastPayAddress::random_for_testing_only(),
+            TransactionDigest::random(),
+        )
     }
-}
-
-#[derive(Serialize)]
-struct TxContextForMove {
-    sender: Vec<u8>,
-    inputs_hash: Vec<u8>,
-    ids_created: u64,
 }
 
 impl TransactionDigest {
