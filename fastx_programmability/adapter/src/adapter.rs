@@ -6,8 +6,7 @@ use anyhow::Result;
 use crate::bytecode_rewriter::ModuleHandleRewriter;
 use fastx_types::{
     base_types::{
-        FastPayAddress, ObjectID, TxContext, TX_CONTEXT_ADDRESS, TX_CONTEXT_MODULE_NAME,
-        TX_CONTEXT_STRUCT_NAME,
+        FastPayAddress, ObjectID, TxContext, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     error::{FastPayError, FastPayResult},
     gas::{
@@ -16,6 +15,7 @@ use fastx_types::{
     },
     object::{Data, MoveObject, Object},
     storage::Storage,
+    FASTX_FRAMEWORK_ADDRESS,
 };
 use fastx_verifier::verifier;
 use move_binary_format::{
@@ -25,6 +25,7 @@ use move_binary_format::{
 
 use move_cli::sandbox::utils::get_gas_status;
 use move_core_types::{
+    account_address::AccountAddress,
     identifier::Identifier,
     language_storage::{ModuleId, StructTag, TypeTag},
     resolver::{ModuleResolver, ResourceResolver},
@@ -45,7 +46,8 @@ mod adapter_tests;
 pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
     natives: NativeFunctionTable,
-    module_object: Object,
+    package_object: Object,
+    module: &Identifier,
     function: &Identifier,
     type_args: Vec<TypeTag>,
     object_args: Vec<Object>,
@@ -60,7 +62,8 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         mutable_ref_objects,
         by_value_objects,
     } = resolve_and_type_check(
-        module_object,
+        package_object,
+        module,
         function,
         &type_args,
         object_args,
@@ -153,60 +156,64 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             })
         })
         .collect::<FastPayResult<Vec<CompiledModule>>>()?;
-    generate_module_ids(&mut modules, ctx)?;
+    generate_package_id(&mut modules, ctx)?;
     // verify and link modules, wrap them in objects, write them to the store
-    for module in modules {
+    for module in modules.iter() {
         // It is important to do this before running the FastX verifier, since the fastX
         // verifier may assume well-formedness conditions enforced by the Move verifier hold
-        move_bytecode_verifier::verify_module(&module).map_err(|e| {
+        move_bytecode_verifier::verify_module(module).map_err(|e| {
             FastPayError::ModuleVerificationFailure {
                 error: e.to_string(),
             }
         })?;
         // Run FastX bytecode verifier
-        verifier::verify_module(&module)?;
+        verifier::verify_module(module)?;
 
         // TODO(https://github.com/MystenLabs/fastnft/issues/69):
         // run Move linker using state_view. it currently can only be called through the VM's publish or publish_module_bundle API's,
         // but we can't use those because they require module.self_address() == sender, which is not true for FastX modules
-        let _ = state_view;
-
-        // Create module objects and write them to the store
-
-        let module_object = Object::new_module(module, sender, ctx.digest());
-        state_view.write_object(module_object);
     }
+    let package_object = Object::new_package(modules, sender, ctx.digest());
+    state_view.write_object(package_object);
 
     Ok(())
 }
 
-/// Use `ctx` to generate fresh ID's for each module in `modules`.
+/// Given a list of `modules`, use `ctx` to generate a fresh ID for the new packages.
+/// If `is_framework` is true, then the modules can have arbitrary user-defined address,
+/// otherwise their addresses must be 0.
 /// Mutate each module's self ID to the appropriate fresh ID and update its module handle tables
-/// to reflect the new ID's of its dependencies
-pub fn generate_module_ids(
+/// to reflect the new ID's of its dependencies.
+/// Returns the newly created package ID.
+pub fn generate_package_id(
     modules: &mut Vec<CompiledModule>,
     ctx: &mut TxContext,
-) -> Result<BTreeMap<ModuleId, ModuleId>, FastPayError> {
+) -> FastPayResult {
     let mut sub_map = BTreeMap::new();
+    let package_id = ctx.fresh_id();
     for module in modules.iter() {
-        // derive a fresh ID's for each module and mutate its self address to the ID.
-        // this ensures that the  module can be uniquely identified/retrieved by its self address
         let old_module_id = module.self_id();
-        let fresh_object_id = ctx.fresh_id();
-        let new_module_id = ModuleId::new(fresh_object_id, old_module_id.name().to_owned());
+        let old_address = *old_module_id.address();
+        if old_address != AccountAddress::ZERO {
+            return Err(FastPayError::ModulePublishFailure {
+                error: "Publishing modules with non-zero address is not allowed".to_string(),
+            });
+        }
+        let new_module_id = ModuleId::new(package_id, old_module_id.name().to_owned());
         if sub_map.insert(old_module_id, new_module_id).is_some() {
             return Err(FastPayError::ModulePublishFailure {
                 error: "Publishing two modules with the same ID".to_string(),
             });
         }
     }
+
     // Safe to unwrap because we checked for duplicate domain entries above, and range entries are fresh ID's
     let rewriter = ModuleHandleRewriter::new(sub_map).unwrap();
     for module in modules.iter_mut() {
         // rewrite module handles to reflect freshly generated ID's
         rewriter.sub_module_ids(module);
     }
-    Ok(rewriter.into_inner())
+    Ok(())
 }
 
 type Event = (Vec<u8>, u64, TypeTag, Vec<u8>);
@@ -306,12 +313,13 @@ struct TypeCheckSuccess {
     mutable_ref_objects: Vec<Object>,
 }
 
-/// - Check that `module_object` and `function` are valid
+/// - Check that `package_object`, `module` and `function` are valid
 /// - Check that the the signature of `function` is well-typed w.r.t `type_args`, `object_args`, and `pure_args`
 /// - Return the ID of the resolved module, a vector of BCS encoded arguments to pass to the VM, and a partitioning
 /// of the input objects into objects passed by value vs by mutable reference
 fn resolve_and_type_check(
-    module_object: Object,
+    package_object: Object,
+    module: &Identifier,
     function: &Identifier,
     type_args: &[TypeTag],
     object_args: Vec<Object>,
@@ -319,9 +327,14 @@ fn resolve_and_type_check(
     ctx: &TxContext,
 ) -> Result<TypeCheckSuccess, FastPayError> {
     // resolve the function we are calling
-    let (function_signature, module_id) = match module_object.data {
-        Data::Module(bytes) => {
-            let m = CompiledModule::deserialize(&bytes).expect(
+    let (function_signature, module_id) = match package_object.data {
+        Data::Package(modules) => {
+            let bytes = modules
+                .get(module.as_str())
+                .ok_or(FastPayError::ModuleNotFound {
+                    module_name: module.to_string(),
+                })?;
+            let m = CompiledModule::deserialize(bytes).expect(
                 "Unwrap safe because FastX serializes/verifies modules before publishing them",
             );
             (
@@ -388,7 +401,7 @@ fn resolve_and_type_check(
             module,
             name,
             type_arguments,
-        } if address == &TX_CONTEXT_ADDRESS
+        } if address == &FASTX_FRAMEWORK_ADDRESS
             && module.as_ident_str() == TX_CONTEXT_MODULE_NAME
             && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME
             && type_arguments.is_empty() => {}
@@ -396,7 +409,7 @@ fn resolve_and_type_check(
             return Err(FastPayError::InvalidFunctionSignature {
                 error: format!(
                     "Expected last parameter of function signature to be &mut {}::{}::{}, but found {}",
-                    TX_CONTEXT_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, t
+                    FASTX_FRAMEWORK_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, t
                 ),
             })
         }
@@ -405,7 +418,7 @@ fn resolve_and_type_check(
         return Err(FastPayError::InvalidFunctionSignature {
             error: format!(
                 "Expected last parameter of function signature to be &mut {}::{}::{}, but found non-reference_type",
-                TX_CONTEXT_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME
+                FASTX_FRAMEWORK_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME
             ),
         });
     }
@@ -473,7 +486,7 @@ fn resolve_and_type_check(
                     }
                 }
             }
-            Data::Module(_) => {
+            Data::Package(_) => {
                 return Err(FastPayError::TypeError {
                     error: format!("Found module argument, but function expects {}", param_type),
                 })

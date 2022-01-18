@@ -265,10 +265,9 @@ async fn test_publish_dependent_module_ok() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis = genesis::GENESIS.lock().unwrap();
-    let mut genesis_module_objects = genesis.objects.clone();
+    let (mut genesis_module_objects, _) = genesis::clone_genesis_data();
     let genesis_module = match &genesis_module_objects[0].data {
-        Data::Module(m) => CompiledModule::deserialize(m).unwrap(),
+        Data::Package(m) => CompiledModule::deserialize(m.values().next().unwrap()).unwrap(),
         _ => unreachable!(),
     };
     // create a module that depends on a genesis module
@@ -371,14 +370,13 @@ async fn test_handle_move_order() {
         Object::with_id_owner_gas_for_testing(gas_payment_object_id, gas_seq, sender, gas_balance);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // find the function Object::create and call it to create a new object
-    let genesis = genesis::GENESIS.lock().unwrap();
-    let mut genesis_module_objects = genesis.objects.clone();
-    let module_object_ref = genesis_module_objects
+    let (mut genesis_package_objects, native_functions) = genesis::clone_genesis_data();
+    let package_object_ref = genesis_package_objects
         .iter()
-        .find_map(|o| match o.data.try_as_module() {
-            Some(m) => {
-                if m.self_id().name() == ident_str!("ObjectBasics") {
-                    Some((*m.self_id().address(), SequenceNumber::new(), o.digest()))
+        .find_map(|o| match o.data.try_as_package() {
+            Some(p) => {
+                if p.keys().any(|name| name == "ObjectBasics") {
+                    Some(o.to_object_reference())
                 } else {
                     None
                 }
@@ -387,17 +385,15 @@ async fn test_handle_move_order() {
         })
         .unwrap();
 
-    genesis_module_objects.push(gas_payment_object);
-    let mut authority_state = init_state_with_objects(genesis_module_objects).await;
-    authority_state.native_functions = genesis.native_functions.clone();
-
-    // Drop lock here in case test fails to not poison lock.
-    drop(genesis);
+    genesis_package_objects.push(gas_payment_object);
+    let mut authority_state = init_state_with_objects(genesis_package_objects).await;
+    authority_state.native_functions = native_functions;
 
     let function = ident_str!("create").to_owned();
     let order = Order::new_move_call(
         sender,
-        module_object_ref,
+        package_object_ref,
+        ident_str!("ObjectBasics").to_owned(),
         function,
         Vec::new(),
         gas_payment_object_ref,
@@ -453,26 +449,30 @@ async fn test_handle_move_order_insufficient_budget() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // find the function Object::create and call it to create a new object
-    let genesis = genesis::GENESIS.lock().unwrap();
-    let mut genesis_module_objects = genesis.objects.clone();
-    let module_object_ref = genesis_module_objects
+    let (mut genesis_package_objects, native_functions) = genesis::clone_genesis_data();
+    let package_object_ref = genesis_package_objects
         .iter()
-        .find_map(|o| match o.data.try_as_module() {
-            Some(m) if m.self_id().name() == ident_str!("ObjectBasics") => {
-                Some((*m.self_id().address(), SequenceNumber::new(), o.digest()))
+        .find_map(|o| match o.data.try_as_package() {
+            Some(p) => {
+                if p.keys().any(|name| name == "ObjectBasics") {
+                    Some(o.to_object_reference())
+                } else {
+                    None
+                }
             }
-            _ => None,
+            None => None,
         })
         .unwrap();
 
-    genesis_module_objects.push(gas_payment_object);
-    let mut authority_state = init_state_with_objects(genesis_module_objects).await;
-    authority_state.native_functions = genesis.native_functions.clone();
+    genesis_package_objects.push(gas_payment_object);
+    let mut authority_state = init_state_with_objects(genesis_package_objects).await;
+    authority_state.native_functions = native_functions;
 
     let function = ident_str!("create").to_owned();
     let order = Order::new_move_call(
         sender,
-        module_object_ref,
+        package_object_ref,
+        ident_str!("ObjectBasics").to_owned(),
         function,
         Vec::new(),
         gas_payment_object_ref,

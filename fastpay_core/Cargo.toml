@@ -2,6 +2,7 @@
 name = "fastpay_core"
 version = "0.1.0"
 authors = ["Libra <oncall+libra@xmail.facebook.com>"]
+license = "Apache-2.0"
 publish = false
 edition = "2021"
 
@@ -9,19 +10,20 @@ edition = "2021"
 rocksdb = "0.17.0"
 anyhow = "1.0.52"
 bcs = "0.1.3"
-failure = "0.1.8"
 futures = "0.3.5"
 rand = "0.7.3"
 serde = { version = "1.0.133", features = ["derive"] }
 tokio = { version = "1.15.0", features = ["full"] }
+parking_lot = "0.11.2"
+itertools = "0.10.3"
 
 fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-framework = { path = "../fastx_programmability/framework" }
 fastx-types = { path = "../fastx_types" }
 
-move-binary-format = { git = "https://github.com/diem/diem", rev="346301f33b3489bb4e486ae6c0aa5e030223b492" }
-move-core-types = { git = "https://github.com/diem/diem", rev="346301f33b3489bb4e486ae6c0aa5e030223b492" }
-move-vm-runtime = { git = "https://github.com/diem/diem", rev="346301f33b3489bb4e486ae6c0aa5e030223b492" }
+move-binary-format = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
+move-core-types = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
+move-vm-runtime = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
 
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0ef3f1fedcfbf3dfe0eeea65e05de073b7c25733" }

@@ -1,6 +1,8 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::object::Object;
+
 use super::{base_types::*, committee::Committee, error::*};
 
 #[cfg(test)]
@@ -31,7 +33,8 @@ pub struct Transfer {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveCall {
     pub sender: FastPayAddress,
-    pub module: ObjectRef,
+    pub package: ObjectRef,
+    pub module: Identifier,
     pub function: Identifier,
     pub type_arguments: Vec<TypeTag>,
     pub gas_payment: ObjectRef,
@@ -106,12 +109,9 @@ pub struct AccountInfoResponse {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ObjectInfoResponse {
-    pub object_id: ObjectID,
-    pub owner: FastPayAddress,
-    pub next_sequence_number: SequenceNumber,
     pub requested_certificate: Option<CertifiedOrder>,
     pub pending_confirmation: Option<SignedOrder>,
-    pub requested_received_transfers: Vec<CertifiedOrder>,
+    pub object: Object,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -205,7 +205,8 @@ impl Order {
     #[allow(clippy::too_many_arguments)]
     pub fn new_move_call(
         sender: FastPayAddress,
-        module: ObjectRef,
+        package: ObjectRef,
+        module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
         gas_payment: ObjectRef,
@@ -216,6 +217,7 @@ impl Order {
     ) -> Self {
         let kind = OrderKind::Call(MoveCall {
             sender,
+            package,
             module,
             function,
             type_arguments,
@@ -275,7 +277,7 @@ impl Order {
             OrderKind::Call(c) => {
                 let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
                 call_inputs.extend(c.object_arguments.clone());
-                call_inputs.push(c.module);
+                call_inputs.push(c.package);
                 call_inputs.push(c.gas_payment);
                 call_inputs
             }

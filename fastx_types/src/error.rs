@@ -52,6 +52,10 @@ pub enum FastPayError {
     ConflictingOrder { pending_confirmation: Order },
     #[error("Transfer order was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransferOrder,
+    #[error("Transaction order processing not properly executed by authority")]
+    ErrorWhileProcessingTransactionOrder,
+    #[error("Invalid response when processing confirmation order by authority")]
+    ErrorWhileProcessingConfirmationOrder,
     #[error("An invalid answer was returned by the authority while requesting a certificate")]
     ErrorWhileRequestingCertificate,
     #[error("An invalid answer was returned by the authority while requesting information")]
@@ -110,6 +114,8 @@ pub enum FastPayError {
     // Move call related errors
     #[error("Function resolution failure: {error:?}.")]
     FunctionNotFound { error: String },
+    #[error("Module not found in package: {module_name:?}.")]
+    ModuleNotFound { module_name: String },
     #[error("Function signature is invalid: {error:?}.")]
     InvalidFunctionSignature { error: String },
     #[error("Type error while binding function arguments: {error:?}.")]

@@ -237,11 +237,12 @@ impl AuthorityState {
             OrderKind::Call(c) => {
                 // unwraps here are safe because we built `inputs`
                 let gas_object = inputs.pop().unwrap();
-                let module = inputs.pop().unwrap();
+                let package = inputs.pop().unwrap();
                 adapter::execute(
                     &mut temporary_store,
                     self.native_functions.clone(),
-                    module,
+                    package,
+                    &c.module,
                     &c.function,
                     c.type_arguments,
                     inputs,
@@ -342,20 +343,18 @@ impl AuthorityState {
         secret: KeyPair,
         store: Arc<AuthorityStore>,
     ) -> Self {
-        let genesis = genesis::GENESIS.lock().unwrap();
-        let genesis_modules = genesis.objects.clone();
+        let (genesis_modules, native_functions) = genesis::clone_genesis_data();
         let state = AuthorityState {
             committee,
             name,
             secret,
-            native_functions: genesis.native_functions.clone(),
+            native_functions,
             _database: store,
         };
-        // Drop the lock asap.
-        drop(genesis);
+
         for genesis_module in genesis_modules {
             #[cfg(debug_assertions)]
-            genesis_module.data.try_as_module().unwrap();
+            genesis_module.data.try_as_package().unwrap();
 
             state
                 .init_order_lock(genesis_module.to_object_reference())
@@ -399,7 +398,7 @@ impl AuthorityState {
         self._database.get_order_info(transaction_digest)
     }
 
-    /// Make an information summary of an object to help clients
+    /// Make an info summary of an object, and include the raw object for clients
     async fn make_object_info(
         &self,
         object_id: ObjectID,
@@ -412,12 +411,9 @@ impl AuthorityState {
             .or::<FastPayError>(Ok(None))?;
 
         Ok(ObjectInfoResponse {
-            object_id: object.id(),
-            owner: object.owner,
-            next_sequence_number: object.version(),
             requested_certificate,
             pending_confirmation: lock,
-            requested_received_transfers: Vec::new(),
+            object,
         })
     }
 

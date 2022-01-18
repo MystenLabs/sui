@@ -4,6 +4,7 @@
 mod common;
 
 pub use common::module_builder::ModuleBuilder;
+use fastx_types::FASTX_FRAMEWORK_ADDRESS;
 use fastx_verifier::struct_with_key_verifier::verify_module;
 use move_binary_format::file_format::*;
 use move_core_types::account_address::AccountAddress;
@@ -110,7 +111,7 @@ fn key_struct_id_field_incorrect_struct_address() {
         AbilitySet::EMPTY | Ability::Key,
         vec![("id", SignatureToken::Struct(fake_id_struct.handle))],
     );
-    assert!(verify_module(module.get_module()).unwrap_err().to_string().contains("First field of struct S must be of type 00000000000000000000000000000002::ID::ID, 01010101010101010101010101010101::ID::ID type found"));
+    assert!(verify_module(module.get_module()).unwrap_err().to_string().contains(&format!("First field of struct S must be of type {}::ID::ID, 01010101010101010101010101010101::ID::ID type found", FASTX_FRAMEWORK_ADDRESS)));
 }
 
 #[test]
@@ -128,7 +129,13 @@ fn key_struct_id_field_incorrect_struct_name() {
         AbilitySet::EMPTY | Ability::Key,
         vec![("id", SignatureToken::Struct(fake_id_struct.handle))],
     );
-    assert!(verify_module(module.get_module()).unwrap_err().to_string().contains("First field of struct S must be of type 00000000000000000000000000000002::ID::ID, 00000000000000000000000000000002::ID::FOO type found"));
+    assert!(verify_module(module.get_module())
+        .unwrap_err()
+        .to_string()
+        .contains(&format!(
+            "First field of struct S must be of type {0}::ID::ID, {0}::ID::FOO type found",
+            FASTX_FRAMEWORK_ADDRESS
+        )));
 }
 
 #[test]

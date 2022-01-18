@@ -6,6 +6,7 @@
 use fastpay::{config::*, network, transport};
 use fastpay_core::client::*;
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
+use move_core_types::transaction_argument::convert_txn_args;
 
 use bytes::Bytes;
 use futures::stream::StreamExt;
@@ -283,6 +284,33 @@ fn deserialize_response(response: &[u8]) -> Option<ObjectInfoResponse> {
         }
     }
 }
+fn find_cached_owner_by_object_id(
+    account_config: &AccountsConfig,
+    object_id: ObjectID,
+) -> Option<&PublicKeyBytes> {
+    account_config
+        .find_account(&object_id)
+        .map(|acc| &acc.address)
+}
+
+fn show_object_effects(order_effects: OrderEffects) {
+    if !order_effects.mutated.is_empty() {
+        println!("Mutated Objects:");
+        for obj in order_effects.mutated {
+            println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
+        }
+    }
+    if !order_effects.deleted.is_empty() {
+        println!("Deleted Objects:");
+        for obj in order_effects.deleted {
+            println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
+        }
+    }
+}
+
+fn parse_public_key_bytes(src: &str) -> Result<PublicKeyBytes, hex::FromHexError> {
+    decode_address_hex(src)
+}
 
 #[derive(StructOpt)]
 #[structopt(
@@ -319,22 +347,30 @@ struct ClientOpt {
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 enum ClientCommands {
+    /// Get obj info
+    #[structopt(name = "get-obj-info")]
+    GetObjInfo { obj_id: ObjectID },
+
+    /// Call Move
+    #[structopt(name = "call")]
+    Call { path: String },
+
     /// Transfer funds
     #[structopt(name = "transfer")]
     Transfer {
         /// Sending address (must be one of our accounts)
-        #[structopt(long)]
-        from: String,
+        #[structopt(long, parse(try_from_str = parse_public_key_bytes))]
+        from: PublicKeyBytes,
 
         /// Recipient address
-        #[structopt(long)]
-        to: String,
+        #[structopt(long, parse(try_from_str = parse_public_key_bytes))]
+        to: PublicKeyBytes,
 
         /// Object to transfer, in 20 bytes Hex string
-        object_id: String,
+        object_id: ObjectID,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
-        gas_object_id: String,
+        gas_object_id: ObjectID,
     },
 
     /// Obtain the Account Addresses
@@ -345,7 +381,8 @@ enum ClientCommands {
     #[structopt(name = "query-objects")]
     QueryObjects {
         /// Address of the account
-        address: String,
+        #[structopt(long, parse(try_from_str = parse_public_key_bytes))]
+        address: PublicKeyBytes,
     },
 
     /// Send one transfer per account in bulk mode
@@ -389,7 +426,6 @@ enum ClientCommands {
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let options = ClientOpt::from_args();
-
     let send_timeout = Duration::from_micros(options.send_timeout);
     let recv_timeout = Duration::from_micros(options.recv_timeout);
     let accounts_config_path = &options.accounts;
@@ -402,23 +438,136 @@ fn main() {
         CommitteeConfig::read(committee_config_path).expect("Unable to read committee config file");
 
     match options.cmd {
+        ClientCommands::GetObjInfo { obj_id } => {
+            // Pick the first (or any) account for use in finding obj info
+            let account = accounts_config
+                .nth_account(0)
+                .expect("Account config is invalid")
+                .address;
+            // Fetch the object ref
+            let mut client_state = make_client_state(
+                &accounts_config,
+                &committee_config,
+                account,
+                buffer_size,
+                send_timeout,
+                recv_timeout,
+            );
+            let rt = Runtime::new().unwrap();
+            rt.block_on(async move {
+                // Fetch the object info for the object
+                let obj_info_req = ObjectInfoRequest {
+                    object_id: obj_id,
+                    request_sequence_number: None,
+                    request_received_transfers_excluding_first_nth: None,
+                };
+                let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
+                println!("Owner: {:#?}", obj_info.object.owner);
+                println!("Version: {:#?}", obj_info.object.version().value());
+                println!("ID: {:#?}", obj_info.object.id());
+                println!("Readonly: {:#?}", obj_info.object.is_read_only());
+                println!(
+                    "Type: {:#?}",
+                    obj_info
+                        .object
+                        .data
+                        .type_()
+                        .map_or("Type Unwrap Failed".to_owned(), |type_| type_
+                            .module
+                            .as_ident_str()
+                            .to_string())
+                );
+            });
+        }
+
+        ClientCommands::Call { path } => {
+            let config = MoveCallConfig::read(&path).unwrap();
+            // Find owner of gas object
+            let owner = find_cached_owner_by_object_id(&accounts_config, config.gas_object_id)
+                .expect("Cannot find owner for gas object");
+
+            let mut client_state = make_client_state(
+                &accounts_config,
+                &committee_config,
+                *owner,
+                buffer_size,
+                send_timeout,
+                recv_timeout,
+            );
+
+            let rt = Runtime::new().unwrap();
+            rt.block_on(async move {
+                // Fetch the object info for the package
+                let package_obj_info_req = ObjectInfoRequest {
+                    object_id: config.package_obj_id,
+                    request_sequence_number: None,
+                    request_received_transfers_excluding_first_nth: None,
+                };
+                let package_obj_info = client_state
+                    .get_object_info(package_obj_info_req)
+                    .await
+                    .unwrap();
+                let package_obj_ref = package_obj_info.object.to_object_reference();
+
+                // Fetch the object info for the gas obj
+                let gas_obj_info_req = ObjectInfoRequest {
+                    object_id: config.gas_object_id,
+                    request_sequence_number: None,
+                    request_received_transfers_excluding_first_nth: None,
+                };
+
+                let gas_obj_info = client_state
+                    .get_object_info(gas_obj_info_req)
+                    .await
+                    .unwrap();
+                let gas_obj_ref = gas_obj_info.object.to_object_reference();
+
+                // Fetch the objects for the object args
+                let mut object_args_refs = Vec::new();
+                for obj_id in config.object_args_ids {
+                    // Fetch the obj ref
+                    let obj_info_req = ObjectInfoRequest {
+                        object_id: obj_id,
+                        request_sequence_number: None,
+                        request_received_transfers_excluding_first_nth: None,
+                    };
+
+                    let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
+                    object_args_refs.push(obj_info.object.to_object_reference());
+                }
+
+                let pure_args = convert_txn_args(&config.pure_args);
+
+                let call_ret = client_state
+                    .move_call(
+                        package_obj_ref,
+                        config.module,
+                        config.function,
+                        config.type_args,
+                        gas_obj_ref,
+                        object_args_refs,
+                        pure_args,
+                        config.gas_budget,
+                    )
+                    .await
+                    .unwrap();
+                println!("Cert: {:?}", call_ret.0);
+                show_object_effects(call_ret.1);
+            });
+        }
+
         ClientCommands::Transfer {
             from,
             to,
             object_id,
             gas_object_id,
         } => {
-            let sender = decode_address(&from).expect("Failed to decode sender's address");
-            let recipient = decode_address(&to).expect("Failed to decode recipient's address");
-            let object_id = ObjectID::from_hex_literal(&object_id).unwrap();
-            let gas_object_id = ObjectID::from_hex_literal(&gas_object_id).unwrap();
-
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 let mut client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
-                    sender,
+                    from,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
@@ -426,7 +575,7 @@ fn main() {
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let cert = client_state
-                    .transfer_object(object_id, gas_object_id, recipient)
+                    .transfer_object(object_id, gas_object_id, to)
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
@@ -437,7 +586,7 @@ fn main() {
                 let mut recipient_client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
-                    recipient,
+                    to,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
@@ -455,21 +604,19 @@ fn main() {
             let addr_strings: Vec<_> = accounts_config
                 .addresses()
                 .into_iter()
-                .map(|addr| format!("{:?}", addr).trim_end_matches('=').to_string())
+                .map(|addr| format!("{:X}", addr).trim_end_matches('=').to_string())
                 .collect();
             let addr_text = addr_strings.join("\n");
             println!("{}", addr_text);
         }
 
         ClientCommands::QueryObjects { address } => {
-            let user_address = decode_address(&address).expect("Failed to decode address");
-
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 let mut client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
-                    user_address,
+                    address,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
@@ -485,7 +632,7 @@ fn main() {
                     .expect("Unable to write user accounts");
 
                 for (obj_id, seq_num) in objects_ids {
-                    println!("{:#x}: {:?}", obj_id, seq_num);
+                    println!("{}: {:?}", obj_id, seq_num);
                 }
             });
         }
@@ -545,7 +692,7 @@ fn main() {
                         .iter()
                         .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
                             Some(info) => {
-                                confirmed.insert(info.object_id);
+                                confirmed.insert(info.object.id());
                                 acc + 1
                             }
                             None => acc,

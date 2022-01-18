@@ -623,7 +623,7 @@ fn test_client_state_sync_with_transferred_object() {
 }
 
 #[test]
-fn test_client_state_sync_with_all_authorities() {
+fn test_client_state_sync_with_all_authorities_uniform_voting_rights() {
     let rt = Runtime::new().unwrap();
     let (authority_clients, committee) = init_local_authorities(4);
     let mut client = make_client(authority_clients.clone(), committee);
@@ -641,21 +641,13 @@ fn test_client_state_sync_with_all_authorities() {
 
     // Simulate data inconsistencies
     // Skip first 5 values for each authority to simulate missing data
-    // Use a randomly generated lower value of Seq # for the next 5 ObjectIDs
     for (auth_idx, authority_client) in authority_clients.iter().enumerate() {
         for (obj_idx, (object_id, seq_no)) in object_ids.iter().enumerate() {
             // Skip the first 5 for this authority
             if (obj_idx >= (auth_idx * 5)) && (obj_idx < ((1 + auth_idx) * 5)) {
                 continue;
             }
-            let mut mod_seq_no = *seq_no;
-
-            // Randomize seq # for this authority
-            if obj_idx >= ((1 + auth_idx) * 5) && obj_idx < ((2 + auth_idx) * 5) {
-                let max = u64::from(*seq_no);
-                // Pick a random seq up to one less than the valid one
-                mod_seq_no = SequenceNumber::from(rand::thread_rng().gen_range(0, max));
-            }
+            let mod_seq_no = *seq_no;
 
             let object = Object::with_id_owner_gas_for_testing(
                 *object_id,
@@ -672,8 +664,6 @@ fn test_client_state_sync_with_all_authorities() {
 
     // Clear all
     client.object_ids.clear();
-
-    //client.sync_client_state_with_random_authority();
 
     match rt.block_on(client.sync_client_state_with_all_authorities()) {
         Ok(_) => (),

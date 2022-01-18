@@ -82,13 +82,8 @@ const TRANSACTION_DIGEST_LENGTH: usize = 32;
 pub struct TransactionDigest([u8; TRANSACTION_DIGEST_LENGTH]);
 // Each object has a unique digest
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct ObjectDigest([u8; 32]); // We use SHA3-256 hence 32 bytes here
+pub struct ObjectDigest(pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
 
-// TODO: migrate TxContext type + these constants to a separate file
-/// 0x81D51F48E5DFC02DBC8F6003517274F7
-pub const TX_CONTEXT_ADDRESS: AccountAddress = AccountAddress::new([
-    0x81, 0xD5, 0x1F, 0x48, 0xE5, 0xDF, 0xC0, 0x2D, 0xBC, 0x8F, 0x60, 0x03, 0x51, 0x72, 0x74, 0xF7,
-]);
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
 
@@ -191,6 +186,60 @@ pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
 }
 
+pub fn address_as_hex<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::ser::Serializer,
+{
+    serializer.serialize_str(&encode_address_hex(key))
+}
+
+pub fn address_from_hex<'de, D>(deserializer: D) -> Result<PublicKeyBytes, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    let value = decode_address_hex(&s).map_err(serde::de::Error::custom)?;
+    Ok(value)
+}
+
+pub fn encode_address_hex(key: &PublicKeyBytes) -> String {
+    hex::encode(&key.0[..])
+}
+
+pub fn decode_address_hex(s: &str) -> Result<PublicKeyBytes, hex::FromHexError> {
+    let value = hex::decode(s)?;
+    let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
+    address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
+    Ok(PublicKeyBytes(address))
+}
+
+impl std::fmt::LowerHex for PublicKeyBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+
+        for byte in &self.0 {
+            write!(f, "{:02x}", byte)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl std::fmt::UpperHex for PublicKeyBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+
+        for byte in &self.0 {
+            write!(f, "{:02X}", byte)?;
+        }
+
+        Ok(())
+    }
+}
 pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::ser::Serializer,
@@ -273,7 +322,7 @@ impl std::fmt::Debug for Signature {
 
 impl std::fmt::Debug for PublicKeyBytes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = base64::encode(&self.0);
+        let s = hex::encode(&self.0);
         write!(f, "{}", s)?;
         Ok(())
     }
