@@ -177,7 +177,7 @@ impl Storage for AuthorityTemporaryStore {
                 .get(id)
                 .expect("Internal invariant: object must exist to be deleted.")
                 .to_object_reference(),
-        );   
+        );
     }
 }
 
