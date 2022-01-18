@@ -360,15 +360,6 @@ fn resolve_and_type_check(
             error: "Invoked function must not return a value".to_string(),
         });
     }
-    if !function_signature
-        .parameters
-        .iter()
-        .all(|ty| ty.is_closed())
-    {
-        return Err(FastPayError::InvalidFunctionSignature {
-            error: "Invoked function must not have an unbound type parameter".to_string(),
-        });
-    }
     // check arity of type and value arguments
     if function_signature.type_parameters.len() != type_args.len() {
         return Err(FastPayError::InvalidFunctionSignature {
