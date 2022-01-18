@@ -230,7 +230,7 @@ impl AuthorityState {
                 output_object.transfer(match t.recipient {
                     Address::Primary(_) => FastPayAddress::default(),
                     Address::FastPay(addr) => addr,
-                })?;
+                });
                 temporary_store.write_object(output_object);
                 Ok(())
             }
@@ -300,7 +300,7 @@ impl AuthorityState {
 
             // Get the Transaction Digest that created the object
             let parent_iterator = self
-                .get_parent_iterator(request.object_id, Some(seq.increment()?))
+                .get_parent_iterator(request.object_id, Some(seq.increment()))
                 .await?;
             let (_, transaction_digest) = parent_iterator
                 .first()
