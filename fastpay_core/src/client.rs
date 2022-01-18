@@ -527,7 +527,7 @@ where
                     let certificate = requester.query(number).await?;
                     entry.push(certificate);
                 }
-                number = number.increment().unwrap_or_else(|_| SequenceNumber::max());
+                number = number.increment();
             }
         }
         Ok(sent_certificates)
@@ -593,8 +593,7 @@ where
             let mut new_next_sequence_number = self.next_sequence_number(object_id)?;
 
             if seq >= new_next_sequence_number {
-                new_next_sequence_number =
-                    seq.increment().unwrap_or_else(|_| SequenceNumber::max());
+                new_next_sequence_number = seq.increment();
             }
 
             self.certificates
@@ -897,7 +896,7 @@ where
                         *certificate.order.object_id(),
                         vec![certificate.clone()],
                         CommunicateAction::SynchronizeNextSequenceNumber(
-                            transfer.object_ref.1.increment()?,
+                            transfer.object_ref.1.increment(),
                         ),
                     )
                     .await?;
@@ -906,7 +905,7 @@ where
                         self.certificates.entry(certificate.order.digest())
                     {
                         self.object_ids
-                            .insert(transfer.object_ref.0, transfer.object_ref.1.increment()?);
+                            .insert(transfer.object_ref.0, transfer.object_ref.1.increment());
                         self.object_certs
                             .entry(transfer.object_ref.0)
                             .or_default()
