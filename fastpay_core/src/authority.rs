@@ -213,7 +213,7 @@ impl AuthorityState {
 
         // Order-specific logic
         let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
-        let status = match order.kind {
+        let status_result = match order.kind {
             OrderKind::Transfer(t) => {
                 debug_assert!(
                     inputs.len() == 2,
@@ -267,21 +267,10 @@ impl AuthorityState {
             }
         };
 
-        // Make a list of all object that are either deleted or have changed owner, along with their old owner.
-        // This is used to update the owner index.
-        let drop_index_entries = temporary_store
-            .deleted()
-            .iter()
-            .map(|(id, _, _)| (owner_index[id], *id))
-            .chain(temporary_store.written().iter().filter_map(|(id, _, _)| {
-                let owner = owner_index.get(id);
-                if owner.is_some() && *owner.unwrap() != temporary_store.objects()[id].owner {
-                    Some((owner_index[id], *id))
-                } else {
-                    None
-                }
-            }))
-            .collect();
+        let status = match status_result {
+            Ok(()) => ExecutionStatus::Success,
+            Err(err) => ExecutionStatus::Failure(Box::new(err)),
+        };
 
         // Update the database in an atomic manner
         let to_signed_effects = temporary_store.to_signed_effects(
@@ -290,13 +279,8 @@ impl AuthorityState {
             &transaction_digest,
             status,
         );
-        self.update_state(
-            temporary_store,
-            drop_index_entries,
-            certificate,
-            to_signed_effects,
-        )
-        .await // Returns the OrderInfoResponse
+        self.update_state(temporary_store, certificate, to_signed_effects)
+            .await // Returns the OrderInfoResponse
     }
 
     pub async fn handle_account_info_request(
@@ -457,16 +441,11 @@ impl AuthorityState {
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
-        expired_object_owners: Vec<(FastPayAddress, ObjectID)>,
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
     ) -> Result<OrderInfoResponse, FastPayError> {
-        self._database.update_state(
-            temporary_store,
-            expired_object_owners,
-            certificate,
-            signed_effects,
-        )
+        self._database
+            .update_state(temporary_store, certificate, signed_effects)
     }
 
     /// Get a read reference to an object/seq lock

@@ -87,6 +87,10 @@ impl InMemoryStorage {
 }
 
 impl Storage for InMemoryStorage {
+    fn reset(&mut self) {
+        self.temporary = ScratchPad::default();
+    }
+
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
         self.persistent.get(id).cloned()
     }
