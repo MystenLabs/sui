@@ -110,6 +110,8 @@ pub enum FastPayError {
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error:?}.")]
     ModulePublishFailure { error: String },
+    #[error("FAiled to build Move modules")]
+    ModuleBuildFailure { error: String },
 
     // Move call related errors
     #[error("Function resolution failure: {error:?}.")]
