@@ -317,13 +317,8 @@ impl ClientServerBenchmark {
                     {
                         #[allow(clippy::collapsible_if)]
                         if resp.signed_effects.is_some() {
-                            if resp
-                                .signed_effects
-                                .as_ref()
-                                .unwrap()
-                                .effects
-                                .status
-                                .is_err()
+                            if resp.signed_effects.as_ref().unwrap().effects.status
+                                != ExecutionStatus::Success
                             {
                                 info!(
                                     "Execution Error {:?}",
