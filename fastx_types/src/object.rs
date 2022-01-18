@@ -17,6 +17,7 @@ use crate::{
     gas_coin::GasCoin,
 };
 
+pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
     pub type_: StructTag,
@@ -292,6 +293,6 @@ impl Object {
 
     pub fn with_id_owner_for_testing(id: ObjectID, owner: FastPayAddress) -> Self {
         // For testing, we provide sufficient gas by default.
-        Self::with_id_owner_gas_for_testing(id, SequenceNumber::new(), owner, 100000_u64)
+        Self::with_id_owner_gas_for_testing(id, SequenceNumber::new(), owner, GAS_VALUE_FOR_TESTING)
     }
 }
