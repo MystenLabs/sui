@@ -155,7 +155,7 @@ fn make_client(
         secret,
         committee,
         authority_clients,
-        Vec::new(),
+        BTreeMap::new(),
         BTreeMap::new(),
     )
 }

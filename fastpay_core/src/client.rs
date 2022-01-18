@@ -127,28 +127,18 @@ impl<A> ClientState<A> {
         secret: KeyPair,
         committee: Committee,
         authority_clients: HashMap<AuthorityName, A>,
-        certificates: Vec<CertifiedOrder>,
+        certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
         object_ids: BTreeMap<ObjectID, SequenceNumber>,
     ) -> Self {
-        let mut certs = BTreeMap::new();
-        let mut object_certs: BTreeMap<ObjectID, Vec<TransactionDigest>> = BTreeMap::new();
-        for cert in certificates {
-            certs.insert(cert.order.digest(), cert.clone());
-            object_certs
-                .entry(*cert.order.object_id())
-                .or_default()
-                .push(cert.order.digest());
-        }
-
         Self {
             address,
             secret,
             committee,
             authority_clients,
             pending_transfer: None,
-            certificates: certs,
+            certificates,
             object_ids,
-            object_certs,
+            object_certs: BTreeMap::new(),
         }
     }
 
@@ -186,8 +176,8 @@ impl<A> ClientState<A> {
             })
     }
 
-    pub fn all_certificates(&self) -> Vec<CertifiedOrder> {
-        self.certificates.values().cloned().collect()
+    pub fn all_certificates(&self) -> &BTreeMap<TransactionDigest, CertifiedOrder> {
+        &self.certificates
     }
 }
 
