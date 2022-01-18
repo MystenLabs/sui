@@ -172,7 +172,8 @@ impl Storage for AuthorityTemporaryStore {
         }
 
         // Mark it for deletion
-        self.deleted.push(removed.to_object_reference());
+        self.deleted
+            .push(self.objects.get(id).unwrap().to_object_reference());    
     }
 }
 
