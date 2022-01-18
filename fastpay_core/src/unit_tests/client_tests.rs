@@ -371,10 +371,9 @@ fn test_initiating_transfer_low_funds() {
     );
 }
 
-#[test]
-fn test_bidirectional_transfer() {
-    let rt = Runtime::new().unwrap();
-    let (authority_clients, committee) = rt.block_on(init_local_authorities(4));
+#[tokio::test]
+async fn test_bidirectional_transfer() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
 
@@ -393,89 +392,93 @@ fn test_bidirectional_transfer() {
         vec![gas_object2],
         vec![gas_object2],
     ];
-    rt.block_on(fund_account(
+    fund_account(
         authority_clients.values().collect(),
         &mut client1,
         authority1_objects,
-    ));
-    rt.block_on(fund_account(
+    )
+    .await;
+    fund_account(
         authority_clients.values().collect(),
         &mut client2,
         authority2_objects,
-    ));
+    )
+    .await;
 
     // Confirm client1 have ownership of the object.
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_owner(object_id)),
+        client1.get_strong_majority_owner(object_id).await,
         Some((client1.address, SequenceNumber::from(0)))
     );
     // Confirm client2 doesn't have ownership of the object.
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        client2.get_strong_majority_owner(object_id).await,
         Some((client1.address, SequenceNumber::from(0)))
     );
     // Transfer object to client2.
-    let certificate = rt
-        .block_on(client1.transfer_object(object_id, gas_object1, client2.address))
+    let certificate = client1
+        .transfer_object(object_id, gas_object1, client2.address)
+        .await
         .unwrap();
 
     assert_eq!(client1.pending_transfer, None);
 
     // Confirm client1 lose ownership of the object.
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_owner(object_id)),
+        client1.get_strong_majority_owner(object_id).await,
         Some((client2.address, SequenceNumber::from(1)))
     );
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        client2.get_strong_majority_owner(object_id).await,
         Some((client2.address, SequenceNumber::from(1)))
     );
 
     // Confirm certificate is consistent between authorities and client.
     assert_eq!(
-        rt.block_on(client1.request_certificate(
-            client1.address,
-            object_id,
-            SequenceNumber::from(0),
-        ))
-        .unwrap(),
+        client1
+            .request_certificate(client1.address, object_id, SequenceNumber::from(0),)
+            .await
+            .unwrap(),
         certificate
     );
 
     // Update client2's local object data.
-    rt.block_on(client2.receive_object(certificate)).unwrap();
+    client2.receive_object(certificate).await.unwrap();
 
     // Confirm sequence number are consistent between clients.
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        client2.get_strong_majority_owner(object_id).await,
         Some((client2.address, SequenceNumber::from(1)))
     );
 
     // Transfer the object back to Client1
-    rt.block_on(client2.transfer_object(object_id, gas_object2, client1.address))
+    client2
+        .transfer_object(object_id, gas_object2, client1.address)
+        .await
         .unwrap();
 
     assert_eq!(client2.pending_transfer, None);
 
     // Confirm client2 lose ownership of the object.
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        client2.get_strong_majority_owner(object_id).await,
         Some((client1.address, SequenceNumber::from(2)))
     );
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_sequence_number(object_id)),
+        client2.get_strong_majority_sequence_number(object_id).await,
         SequenceNumber::from(2)
     );
     // Confirm client1 acquired ownership of the object.
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_owner(object_id)),
+        client1.get_strong_majority_owner(object_id).await,
         Some((client1.address, SequenceNumber::from(2)))
     );
 
     // Should fail if Client 2 double spend the object
-    assert!(rt
-        .block_on(client2.transfer_object(object_id, gas_object2, client1.address,))
+    assert!(client2
+        .transfer_object(object_id, gas_object2, client1.address,)
+        .await
         .is_err());
 }
 
@@ -1026,10 +1029,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
         .position(|e| e.0 == gas_object_ref.0);
 
     assert!(gas_obj_idx.is_some());
-    let transferred_obj_ref = order_effects
-        .mutated
-        .get((gas_obj_idx.unwrap() + 1) % 2)
-        .unwrap();
+    let transferred_obj_ref = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
     assert_ne!(gas_object_ref, *transferred_obj_ref);
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
@@ -1108,10 +1108,7 @@ async fn test_move_calls_object_delete() {
         .iter()
         .position(|e| e.0 == gas_object_ref.0);
     // Get the object created from the call
-    let new_obj_ref = order_effects
-        .mutated
-        .get((gas_obj_idx.unwrap() + 1) % 2)
-        .unwrap();
+    let new_obj_ref = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
     // Fetch the full object
     let new_obj = client1
         .get_object_info(ObjectInfoRequest {
