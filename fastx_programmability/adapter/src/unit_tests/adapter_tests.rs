@@ -5,6 +5,7 @@ use crate::{adapter, genesis};
 use fastx_types::{
     base_types::{self, SequenceNumber},
     error::FastPayResult,
+    gas_coin::GAS,
     storage::Storage,
 };
 use move_binary_format::file_format;
@@ -22,6 +23,7 @@ struct ScratchPad {
     created: BTreeMap<ObjectID, Object>,
     deleted: Vec<ObjectID>,
 }
+
 #[derive(Default, Debug)]
 struct InMemoryStorage {
     persistent: BTreeMap<ObjectID, Object>,
@@ -139,21 +141,23 @@ impl ResourceResolver for InMemoryStorage {
 fn call(
     storage: &mut InMemoryStorage,
     native_functions: &NativeFunctionTable,
-    name: &str,
+    module_name: &str,
+    fun_name: &str,
     gas_object: Object,
     gas_budget: u64,
+    type_args: Vec<TypeTag>,
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
 ) -> FastPayResult {
-    let package = storage.find_package("ObjectBasics").unwrap();
+    let package = storage.find_package(module_name).unwrap();
 
     adapter::execute(
         storage,
         native_functions.clone(),
         package,
-        &Identifier::new("ObjectBasics").unwrap(),
-        &Identifier::new(name).unwrap(),
-        Vec::new(),
+        &Identifier::new(module_name).unwrap(),
+        &Identifier::new(fun_name).unwrap(),
+        type_args,
         object_args,
         pure_args,
         gas_budget,
@@ -188,9 +192,11 @@ fn test_object_basics() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "create",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         Vec::new(),
         pure_args,
     )
@@ -212,9 +218,11 @@ fn test_object_basics() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "transfer",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         vec![obj1.clone()],
         pure_args,
     )
@@ -248,9 +256,11 @@ fn test_object_basics() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "create",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         Vec::new(),
         pure_args,
     )
@@ -267,9 +277,11 @@ fn test_object_basics() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "update",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         vec![obj1.clone(), obj2],
         Vec::new(),
     )
@@ -297,9 +309,11 @@ fn test_object_basics() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "delete",
         gas_object,
         MAX_GAS,
+        Vec::new(),
         vec![obj1],
         Vec::new(),
     )
@@ -334,9 +348,11 @@ fn test_wrap_unwrap() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "create",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         Vec::new(),
         pure_args,
     )
@@ -357,9 +373,11 @@ fn test_wrap_unwrap() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "wrap",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         vec![obj1],
         Vec::new(),
     )
@@ -377,9 +395,11 @@ fn test_wrap_unwrap() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "unwrap",
         gas_object,
         MAX_GAS,
+        Vec::new(),
         vec![obj2],
         Vec::new(),
     )
@@ -428,9 +448,11 @@ fn test_move_call_insufficient_gas() {
     let response = call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "create",
         gas_object,
         20, // This budget is not enough to execute all bytecode.
+        Vec::new(),
         Vec::new(),
         pure_args,
     );
@@ -500,9 +522,11 @@ fn test_transfer_and_freeze() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "create",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         Vec::new(),
         pure_args,
     )
@@ -524,9 +548,11 @@ fn test_transfer_and_freeze() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "transfer_and_freeze",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         vec![obj1],
         pure_args,
     )
@@ -542,9 +568,11 @@ fn test_transfer_and_freeze() {
     let result = call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "transfer",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         vec![obj1],
         pure_args,
     );
@@ -559,9 +587,11 @@ fn test_transfer_and_freeze() {
     let result = call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "set_value",
         gas_object,
         MAX_GAS,
+        Vec::new(),
         vec![obj1],
         pure_args,
     );
@@ -572,3 +602,43 @@ fn test_transfer_and_freeze() {
 }
 
 // TODO(https://github.com/MystenLabs/fastnft/issues/92): tests that exercise all the error codes of the adapter
+
+#[test]
+fn test_transfer() {
+    let addr = base_types::FastPayAddress::default();
+
+    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // 0. Create a gas object for gas payment. Note that we won't really use it because we won't be providing a gas budget.
+    // 1. Create an object to transfer
+    let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), addr);
+    let to_transfer = Object::with_id_owner_for_testing(ObjectID::random(), addr);
+    storage.write_object(gas_object.clone());
+    storage.write_object(to_transfer.clone());
+    storage.flush();
+
+    let addr1 = base_types::get_key_pair().0;
+
+    call(
+        &mut storage,
+        &native_functions,
+        "Coin",
+        "transfer_",
+        gas_object,
+        MAX_GAS,
+        vec![GAS::type_tag()],
+        vec![to_transfer],
+        vec![
+            10u64.to_le_bytes().to_vec(),
+            bcs::to_bytes(&addr1.to_vec()).unwrap(),
+        ],
+    )
+    .unwrap();
+
+    // should update gas object and input coin
+    assert_eq!(storage.updated().len(), 2);
+    // should create one new coin
+    assert_eq!(storage.created().len(), 1);
+}
