@@ -1033,8 +1033,9 @@ where
 
             // Recover missing certificates.
             let new_certificates = self.download_certificates().await?;
-            self.update_certificates(new_certificates)?;
-
+            for (obj_id, certs) in new_certificates {
+                self.update_certificates(&obj_id, &certs)?;
+            }
             Ok(())
         })
     }

@@ -621,6 +621,7 @@ fn main() {
                 );
 
                 // Get strongly consistent view of object ids
+                // Not performant however
                 client_state.sync_client_state_with_all_authorities();
                 let objects_ids = client_state.object_ids();
 

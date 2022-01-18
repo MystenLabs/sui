@@ -1172,10 +1172,9 @@ async fn test_move_calls_object_delete() {
     assert!(deleted_object_resp.is_err());
 }
 
-#[test]
-fn test_client_state_sync_with_all_authorities_uniform_voting_rights() {
-    let rt = Runtime::new().unwrap();
-    let (authority_clients, committee) = init_local_authorities(4);
+#[tokio::test]
+async fn test_client_state_sync_with_all_authorities_uniform_voting_rights() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
     let mut client = make_client(authority_clients.clone(), committee);
     use rand::Rng;
 
@@ -1207,15 +1206,17 @@ fn test_client_state_sync_with_all_authorities_uniform_voting_rights() {
             );
 
             let client_ref = authority_client.1 .0.as_ref().try_lock().unwrap();
-            rt.block_on(client_ref.init_order_lock((*object_id, 0.into(), object.digest())));
-            rt.block_on(client_ref.insert_object(object));
+            client_ref
+                .init_order_lock((*object_id, 0.into(), object.digest()))
+                .await;
+            client_ref.insert_object(object).await;
         }
     }
 
     // Clear all
     client.object_ids.clear();
 
-    match rt.block_on(client.sync_client_state_with_all_authorities()) {
+    match client.sync_client_state_with_all_authorities().await {
         Ok(_) => (),
         // FastPayError::ErrorWhileRequestingCertificate is expected because no certs
         // Gotta be a better way to compare errors?
