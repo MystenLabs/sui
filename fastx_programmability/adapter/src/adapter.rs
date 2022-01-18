@@ -133,21 +133,12 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
 pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
+    natives: NativeFunctionTable,
     module_bytes: Vec<Vec<u8>>,
     sender: FastPayAddress,
     ctx: &mut TxContext,
     mut gas_object: Object,
 ) -> Result<(), FastPayError> {
-    if module_bytes.is_empty() {
-        return Err(FastPayError::ModulePublishFailure {
-            error: "Publishing empty list of modules".to_string(),
-        });
-    }
-    let gas_cost = calculate_module_publish_cost(&module_bytes);
-    deduct_gas(&mut gas_object, gas_cost as i128)?;
-    state_view.write_object(gas_object);
-    // TODO: Keep track the gas deducted so that we could give them to participants.
-
     let mut modules = module_bytes
         .iter()
         .map(|b| {
@@ -156,26 +147,68 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             })
         })
         .collect::<FastPayResult<Vec<CompiledModule>>>()?;
-    generate_package_id(&mut modules, ctx)?;
-    // verify and link modules, wrap them in objects, write them to the store
-    for module in modules.iter() {
-        // It is important to do this before running the FastX verifier, since the fastX
-        // verifier may assume well-formedness conditions enforced by the Move verifier hold
-        move_bytecode_verifier::verify_module(module).map_err(|e| {
-            FastPayError::ModuleVerificationFailure {
-                error: e.to_string(),
-            }
-        })?;
-        // Run FastX bytecode verifier
-        verifier::verify_module(module)?;
+    // TODO: check that all dependencies exist. fail immediately + without charging for gas if not
+    // all pre-validation checks have passed--safe to charge for gas
+    let gas_cost = calculate_module_publish_cost(&module_bytes);
+    deduct_gas(&mut gas_object, gas_cost as i128)?;
+    state_view.write_object(gas_object);
+    // TODO: Keep track the gas deducted so we can return it to participant
 
-        // TODO(https://github.com/MystenLabs/fastnft/issues/69):
-        // run Move linker using state_view. it currently can only be called through the VM's publish or publish_module_bundle API's,
-        // but we can't use those because they require module.self_address() == sender, which is not true for FastX modules
+    // run validation checks
+    if modules.is_empty() {
+        return Err(FastPayError::ModulePublishFailure {
+            error: "Publishing empty list of modules".to_string(),
+        });
     }
+    let package_id = generate_package_id(&mut modules, ctx)?;
+    verify_and_link(state_view, &modules, package_id, natives)?;
+
+    // wrap the modules in an object, write it to the store
     let package_object = Object::new_package(modules, sender, ctx.digest());
     state_view.write_object(package_object);
 
+    Ok(())
+}
+
+/// Rewrite the self_id of `modules`, then verify and link the result
+pub fn verify_and_link<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+>(
+    state_view: &S,
+    modules: &[CompiledModule],
+    package_id: ObjectID,
+    natives: NativeFunctionTable,
+) -> Result<(), FastPayError> {
+    // run the Move bytecode verifier and linker.
+    // It is important to do this before running the FastX verifier, since the fastX
+    // verifier may assume well-formedness conditions enforced by the Move verifier hold
+    let vm = MoveVM::new(natives)
+        .expect("VM creation only fails if natives are invalid, and we created the natives");
+    // Note: VM does not do any gas metering on publish code path, so setting budget to None is fine
+    let mut gas_status = get_gas_status(None)
+        .expect("Can only fail if gas budget is too high, and we didn't supply one");
+    let mut session = vm.new_session(state_view);
+    // TODO(https://github.com/MystenLabs/fastnft/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
+    let new_module_bytes = modules
+        .iter()
+        .map(|m| {
+            let mut bytes = Vec::new();
+            m.serialize(&mut bytes).unwrap();
+            bytes
+        })
+        .collect();
+    session
+        .publish_module_bundle(new_module_bytes, package_id, &mut gas_status)
+        .map_err(|e| FastPayError::ModulePublishFailure {
+            error: e.to_string(),
+        })?;
+
+    // run the FastX verifier
+    for module in modules.iter() {
+        // Run FastX bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed
+        verifier::verify_module(module)?;
+    }
     Ok(())
 }
 
@@ -188,7 +221,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 pub fn generate_package_id(
     modules: &mut Vec<CompiledModule>,
     ctx: &mut TxContext,
-) -> FastPayResult {
+) -> Result<ObjectID, FastPayError> {
     let mut sub_map = BTreeMap::new();
     let package_id = ctx.fresh_id();
     for module in modules.iter() {
@@ -213,7 +246,7 @@ pub fn generate_package_id(
         // rewrite module handles to reflect freshly generated ID's
         rewriter.sub_module_ids(module);
     }
-    Ok(())
+    Ok(package_id)
 }
 
 type Event = (Vec<u8>, u64, TypeTag, Vec<u8>);
@@ -358,15 +391,6 @@ fn resolve_and_type_check(
     if !function_signature.return_.is_empty() {
         return Err(FastPayError::InvalidFunctionSignature {
             error: "Invoked function must not return a value".to_string(),
-        });
-    }
-    if !function_signature
-        .parameters
-        .iter()
-        .all(|ty| ty.is_closed())
-    {
-        return Err(FastPayError::InvalidFunctionSignature {
-            error: "Invoked function must not have an unbound type parameter".to_string(),
         });
     }
     // check arity of type and value arguments
