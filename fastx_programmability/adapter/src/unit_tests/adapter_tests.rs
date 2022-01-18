@@ -166,7 +166,7 @@ fn call(
         pure_args,
         gas_budget,
         gas_object,
-        TxContext::random(),
+        TxContext::random_for_testing_only(),
     )
 }
 
@@ -487,7 +487,7 @@ fn test_publish_module_insufficient_gas() {
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
 
-    let mut tx_context = TxContext::random();
+    let mut tx_context = TxContext::random_for_testing_only();
     let response = adapter::publish(
         &mut storage,
         natives,
@@ -657,7 +657,7 @@ fn test_publish_module_linker_error() {
     dependent_module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
 
-    let mut tx_context = TxContext::random();
+    let mut tx_context = TxContext::random_for_testing_only();
     let response = adapter::publish(
         &mut storage,
         natives,
