@@ -67,12 +67,12 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     /// Network driver allowing to send messages.
     network: SimpleSender,
     /// Keeps the digests of the all certificates for which we sent a sync request,
-    /// along with a timestamp (`u128`) indicating when we sent the request.
+    /// along with a time stamp (`u128`) indicating when we sent the request.
     parent_requests: HashMap<Digest, (Round, u128)>,
-    /// Keeps the digests of the all tx batches for which we sent a sync request,
+    /// Keeps the digests of the all TX batches for which we sent a sync request,
     /// similarly to `header_requests`.
     batch_requests: HashMap<Digest, Round>,
-    /// List of digests (either certificates, headers or tx batch) that are waiting
+    /// List of digests (either certificates, headers or TX batch) that are waiting
     /// to be processed. Their processing will resume when we get all their dependencies.
     pending: HashMap<Digest, (Round, Sender<()>)>,
 }

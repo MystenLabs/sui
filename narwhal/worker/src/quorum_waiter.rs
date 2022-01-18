@@ -15,7 +15,7 @@ pub mod quorum_waiter_tests;
 pub struct QuorumWaiterMessage<PublicKey> {
     /// A serialized `WorkerMessage::Batch` message.
     pub batch: SerializedBatchMessage,
-    /// The cancel handlers to receive the acknowledgements of our broadcast.
+    /// The cancel handlers to receive the acknowledgments of our broadcast.
     pub handlers: Vec<(PublicKey, CancelHandler)>,
 }
 
@@ -27,7 +27,7 @@ pub struct QuorumWaiter<PublicKey: VerifyingKey> {
     stake: Stake,
     /// Input Channel to receive commands.
     rx_message: Receiver<QuorumWaiterMessage<PublicKey>>,
-    /// Channel to deliver batches for which we have enough acknowledgements.
+    /// Channel to deliver batches for which we have enough acknowledgments.
     tx_batch: Sender<SerializedBatchMessage>,
 }
 

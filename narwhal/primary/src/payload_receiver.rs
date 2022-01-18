@@ -8,7 +8,7 @@ use tokio::sync::mpsc::Receiver;
 use crate::primary::PayloadToken;
 
 /// Receives batches' digests of other authorities. These are only needed to verify incoming
-/// headers (ie. make sure we have their payload).
+/// headers (i.e.. make sure we have their payload).
 pub struct PayloadReceiver {
     /// The persistent storage.
     store: Store<(Digest, WorkerId), PayloadToken>,

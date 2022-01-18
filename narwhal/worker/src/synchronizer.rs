@@ -53,7 +53,7 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     round: Round,
     /// Keeps the digests (of batches) that are waiting to be processed by the primary. Their
     /// processing will resume when we get the missing batches in the store or we no longer need them.
-    /// It also keeps the round number and a timestamp (`u128`) of each request we sent.
+    /// It also keeps the round number and a time stamp (`u128`) of each request we sent.
     pending: HashMap<Digest, (Round, Sender<()>, u128)>,
 }
 

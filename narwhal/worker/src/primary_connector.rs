@@ -12,7 +12,7 @@ pub struct PrimaryConnector {
     primary_address: SocketAddr,
     /// Input channel to receive the digests to send to the primary.
     rx_digest: Receiver<SerializedBatchDigestMessage>,
-    /// A network sender to send the baches' digests to the primary.
+    /// A network sender to send the batches' digests to the primary.
     network: SimpleSender,
 }
 

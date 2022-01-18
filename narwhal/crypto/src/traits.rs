@@ -57,7 +57,7 @@ impl<T: ToFromBytes> EncodeDecodeBase64 for T {
     }
 }
 
-/// Trait impl'd by public keys in assymetric cryptography.
+/// Trait impl'd by public keys in asymmetric cryptography.
 ///
 /// The trait bounds are implemented so as to be symmetric and equivalent
 /// to the ones on its associated types for private and signature material.
@@ -90,7 +90,7 @@ pub trait VerifyingKey:
     }
 }
 
-/// Trait impl'd by private (secret) keys in assymetric cryptography.
+/// Trait impl'd by private (secret) keys in asymmetric cryptography.
 ///
 /// The trait bounds are implemented so as to be symmetric and equivalent
 /// to the ones on its associated types for public key and signature material.
@@ -100,7 +100,7 @@ pub trait SigningKey: ToFromBytes + Serialize + DeserializeOwned + Send + Sync +
     type Sig: Authenticator<PrivKey = Self>;
 }
 
-/// Trait impl'd by signatures in assymetric cryptography.
+/// Trait impl'd by signatures in asymmetric cryptography.
 ///
 /// The trait bounds are implemented so as to be symmetric and equivalent
 /// to the ones on its associated types for private key and public key material.
@@ -112,7 +112,7 @@ pub trait Authenticator:
     type PrivKey: SigningKey<Sig = Self>;
 }
 
-/// Trait impl'd by a public / private key pair in assymetric cryptography.
+/// Trait impl'd by a public / private key pair in asymmetric cryptography.
 ///
 pub trait KeyPair {
     type PubKey: VerifyingKey<PrivKey = Self::PrivKey>;

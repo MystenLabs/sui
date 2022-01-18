@@ -97,8 +97,8 @@ impl Primary {
         // Write the parameters to the logs.
         parameters.tracing();
 
-        // Atomic variable use to synchronizer all tasks with the latest consensus round. This is only
-        // used for cleanup. The only tasks that write into this variable is `GarbageCollector`.
+        // Atomic variable use to synchronize all tasks with the latest consensus round. This is only
+        // used for cleanup. The only task that write into this variable is `GarbageCollector`.
         let consensus_round = Arc::new(AtomicU64::new(0));
 
         // Spawn the network receiver listening to messages from the other primaries.
@@ -141,7 +141,7 @@ impl Primary {
             address
         );
 
-        // The `Synchronizer` provides auxiliary methods helping to `Core` to sync.
+        // The `Synchronizer` provides auxiliary methods helping the `Core` to sync.
         let synchronizer = Synchronizer::new(
             name.clone(),
             &committee,
@@ -182,7 +182,7 @@ impl Primary {
         );
 
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
-        // batch digests, it commands the `HeaderWaiter` to synchronizer with other nodes, wait for their reply, and
+        // batch digests, it commands the `HeaderWaiter` to synchronize with other nodes, wait for their reply, and
         // re-schedule execution of the header once we have all missing data.
         HeaderWaiter::spawn(
             name.clone(),
