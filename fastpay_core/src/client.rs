@@ -476,7 +476,7 @@ where
             .await?;
         // Terminate downloader task and retrieve the content of the cache.
         handle.stop().await?;
-        let mut certificates: Vec<_> = task.await.unwrap().filter_map(Result::ok).collect();
+        let mut certificates: Vec<_> = task.await?.filter_map(Result::ok).collect();
         if let CommunicateAction::SendOrder(order) = action {
             let certificate = CertifiedOrder {
                 order,
@@ -509,8 +509,7 @@ where
             let known_sequence_numbers: BTreeSet<_> = self
                 .certificates(&object_id)
                 .flat_map(|cert| cert.order.input_objects())
-                .filter(|(id, _, _)| id == &object_id)
-                .map(|(_, seq, _)| seq)
+                .filter_map(|(id, seq, _)| if id == object_id { Some(seq) } else { None })
                 .collect();
 
             let mut requester = CertificateRequester::new(
@@ -589,8 +588,7 @@ where
                 .iter()
                 .find(|(id, _, _)| object_id == id)
                 .copied()
-                .ok_or::<FastPayError>(FastPayError::ObjectNotFound)
-                .unwrap();
+                .ok_or::<FastPayError>(FastPayError::ObjectNotFound)?;
 
             let mut new_next_sequence_number = self.next_sequence_number(object_id)?;
 
@@ -631,7 +629,7 @@ where
             "Client state has a different pending transfer",
         );
         ensure!(
-            order.sequence_number() == self.next_sequence_number(order.object_id()).unwrap(),
+            order.sequence_number() == self.next_sequence_number(order.object_id())?,
             "Unexpected sequence number"
         );
         self.pending_transfer = Some(order.clone());
@@ -665,6 +663,7 @@ where
             )
             .await?;
         }
+        // the object_certs has been updated by update_certificates above, .last().unwrap() should be safe here.
         Ok(self.certificates(order.object_id()).last().unwrap().clone())
     }
 
@@ -906,10 +905,8 @@ where
                     if let Entry::Vacant(entry) =
                         self.certificates.entry(certificate.order.digest())
                     {
-                        self.object_ids.insert(
-                            transfer.object_ref.0,
-                            transfer.object_ref.1.increment().unwrap(),
-                        );
+                        self.object_ids
+                            .insert(transfer.object_ref.0, transfer.object_ref.1.increment()?);
                         self.object_certs
                             .entry(transfer.object_ref.0)
                             .or_default()
@@ -935,7 +932,7 @@ where
             let transfer = Transfer {
                 object_ref: (
                     object_id,
-                    self.next_sequence_number(&object_id).unwrap(),
+                    self.next_sequence_number(&object_id)?,
                     // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
                     ObjectDigest::new([0; 32]),
                 ),
@@ -943,7 +940,7 @@ where
                 recipient: Address::FastPay(recipient),
                 gas_payment: (
                     gas_payment,
-                    self.next_sequence_number(&gas_payment).unwrap(),
+                    self.next_sequence_number(&gas_payment)?,
                     // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
                     ObjectDigest::new([0; 32]),
                 ),
