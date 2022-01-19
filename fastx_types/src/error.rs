@@ -59,6 +59,8 @@ pub enum FastPayError {
     #[error("An invalid answer was returned by the authority while requesting a certificate")]
     ErrorWhileRequestingCertificate,
     #[error("An invalid answer was returned by the authority while requesting information")]
+    ErrorWhileProcessingPublish,
+    #[error("Module publish failed")]
     ErrorWhileRequestingInformation,
     #[error(
          "Cannot confirm a transfer while previous transfer orders are still pending confirmation: {current_sequence_number:?}"

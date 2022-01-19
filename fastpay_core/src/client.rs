@@ -3,16 +3,20 @@
 
 use crate::downloader::*;
 use anyhow::{bail, ensure};
+use fastx_framework::build_move_package;
 use fastx_types::messages::Address::FastPay;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
 use futures::{future, StreamExt, TryFutureExt};
+use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use move_package::BuildConfig;
 use rand::seq::SliceRandom;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::Path;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -113,6 +117,14 @@ pub trait Client {
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
     ) -> AsyncResult<'_, (CertifiedOrder, OrderEffects), anyhow::Error>;
+
+    /// Publish Move modules
+    fn publish(
+        &mut self,
+        package_source_files_path: String,
+        gas_object_ref: ObjectRef,
+        build_config: BuildConfig,
+    ) -> AsyncResult<'_, (CertifiedOrder, OrderEffects), FastPayError>;
 
     /// Get the object information
     fn get_object_info(
@@ -755,7 +767,7 @@ where
     async fn communicate_confirmation_order(
         &mut self,
         cert_order: &CertifiedOrder,
-    ) -> Result<OrderInfoResponse, anyhow::Error> {
+    ) -> Result<OrderInfoResponse, FastPayError> {
         let committee = self.committee.clone();
 
         let votes = self
@@ -782,12 +794,16 @@ where
                     }
                 })
             })
-            .await?;
+            .await
+            .map_err(|_| FastPayError::ErrorWhileProcessingConfirmationOrder);
 
-        votes
-            .get(0)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("No valid confirmation order votes"))
+        return match votes {
+            Ok(v) => v
+                .get(0)
+                .ok_or(FastPayError::ErrorWhileProcessingConfirmationOrder)
+                .map(|q| (*q).clone()),
+            Err(e) => Err(e),
+        };
     }
 
     /// Execute call order
@@ -799,6 +815,41 @@ where
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         // Transaction order
         let new_certificate = self.communicate_transaction_order(order).await?;
+
+        // TODO: update_certificates relies on orders having sequence numbers/object IDs , which fails for calls with obj args
+        // https://github.com/MystenLabs/fastnft/issues/173
+
+        // Confirmation
+        let order_info = self
+            .communicate_confirmation_order(&new_certificate)
+            .await?;
+
+        // Update local object view
+        self.update_objects_from_order_info(order_info.clone())?;
+
+        let cert = order_info
+            .certified_order
+            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)?;
+        let effects = order_info
+            .signed_effects
+            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)?
+            .effects;
+
+        Ok((cert, effects))
+    }
+
+    /// Execute call order
+    /// Need improvement and decoupling from transfer logic
+    /// TODO: https://github.com/MystenLabs/fastnft/issues/173
+    async fn execute_publish(
+        &mut self,
+        order: Order,
+    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
+        // Transaction order
+        let new_certificate = self
+            .communicate_transaction_order(order)
+            .await
+            .map_err(|_| FastPayError::ErrorWhileProcessingPublish)?;
 
         // TODO: update_certificates relies on orders having sequence numbers/object IDs , which fails for calls with obj args
         // https://github.com/MystenLabs/fastnft/issues/173
@@ -847,6 +898,33 @@ where
         );
 
         Ok(self.execute_call(move_call_order).await?)
+    }
+
+    async fn publish(
+        &mut self,
+        package_source_files_path: String,
+        gas_object_ref: ObjectRef,
+        build_config: BuildConfig,
+    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
+        // Try to compile the modules at the path into a package
+        let compiled_modules =
+            match build_move_package(Path::new(&package_source_files_path), build_config, false) {
+                Ok(modules) => modules
+                    .iter()
+                    .map(|m| {
+                        let mut bytes = Vec::new();
+                        m.serialize(&mut bytes).unwrap();
+                        bytes
+                    })
+                    .collect_vec(),
+
+                Err(err) => return Err(err),
+            };
+
+        let move_publish_order =
+            Order::new_module(self.address, gas_object_ref, compiled_modules, &self.secret);
+
+        Ok(self.execute_publish(move_publish_order).await?)
     }
 
     async fn get_object_info_execute(
@@ -1005,6 +1083,16 @@ where
             gas_budget,
         ))
     }
+
+    fn publish(
+        &mut self,
+        package_source_files_path: String,
+        gas_object_ref: ObjectRef,
+        build_config: BuildConfig,
+    ) -> AsyncResult<'_, (CertifiedOrder, OrderEffects), FastPayError> {
+        Box::pin(self.publish(package_source_files_path, gas_object_ref, build_config))
+    }
+
     fn get_object_info(
         &mut self,
         object_info_req: ObjectInfoRequest,

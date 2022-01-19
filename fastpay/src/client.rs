@@ -11,6 +11,7 @@ use move_core_types::transaction_argument::convert_txn_args;
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
+use move_package::BuildConfig;
 use std::{
     collections::{HashMap, HashSet},
     time::{Duration, Instant},
@@ -348,7 +349,25 @@ struct ClientOpt {
 enum ClientCommands {
     /// Get obj info
     #[structopt(name = "get-obj-info")]
-    GetObjInfo { obj_id: ObjectID },
+    GetObjInfo {
+        /// Object ID of the object to fetch
+        obj_id: ObjectID,
+
+        /// Deep inspection of object
+        #[structopt(long)]
+        deep: bool,
+    },
+
+    /// Publish Move modules
+    #[structopt(name = "publish")]
+    Publish {
+        /// Object ID of the object to fetch
+        path: String,
+
+        /// Deep inspection of object
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        gas_object_id: ObjectID,
+    },
 
     /// Call Move
     #[structopt(name = "call")]
@@ -437,7 +456,63 @@ fn main() {
         CommitteeConfig::read(committee_config_path).expect("Unable to read committee config file");
 
     match options.cmd {
-        ClientCommands::GetObjInfo { obj_id } => {
+        ClientCommands::Publish {
+            path,
+            gas_object_id,
+        } => {
+            let metadata = std::fs::metadata(path.clone()).unwrap();
+
+            if !metadata.is_dir() {
+                error!("Path must be directory containing source code");
+            }
+
+            // Find owner of gas object
+            let owner = find_cached_owner_by_object_id(&accounts_config, gas_object_id)
+                .expect("Cannot find owner for gas object");
+            let mut client_state = make_client_state(
+                &accounts_config,
+                &committee_config,
+                *owner,
+                buffer_size,
+                send_timeout,
+                recv_timeout,
+            );
+
+            let rt = Runtime::new().unwrap();
+            rt.block_on(async move {
+                // Fetch the object info for the gas obj
+                let gas_obj_info_req = ObjectInfoRequest {
+                    object_id: gas_object_id,
+                    request_sequence_number: None,
+                    request_received_transfers_excluding_first_nth: None,
+                };
+
+                let gas_obj_info = client_state
+                    .get_object_info(gas_obj_info_req)
+                    .await
+                    .unwrap();
+                let gas_obj_ref = gas_obj_info.object.to_object_reference();
+                let build_config = BuildConfig {
+                    dev_mode: false,
+                    ..Default::default()
+                };
+
+                let pub_resp = client_state.publish(path, gas_obj_ref, build_config).await;
+
+                match pub_resp {
+                    Ok(resp) => {
+                        if resp.1.status != ExecutionStatus::Success {
+                            error!("Path must be directory containing source code");
+                        }
+                        let (_, effects) = resp;
+                        show_object_effects(effects);
+                    }
+                    Err(err) => error!("{:#?}", err),
+                }
+            });
+        }
+
+        ClientCommands::GetObjInfo { obj_id, deep } => {
             // Pick the first (or any) account for use in finding obj info
             let account = accounts_config
                 .nth_account(0)
@@ -476,6 +551,9 @@ fn main() {
                             .as_ident_str()
                             .to_string())
                 );
+                if deep {
+                    println!("Full Info: {:#?}", obj_info.object);
+                }
             });
         }
 
