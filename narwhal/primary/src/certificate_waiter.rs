@@ -61,8 +61,8 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
         });
     }
 
-    /// Helper function. It waits for particular data to become available in the storage
-    /// and then delivers the specified header.
+    /// Helper function. It waits for particular data to become available in the storage and then
+    /// delivers the specified header.
     async fn waiter(
         missing: Vec<Digest>,
         store: &Store<Digest, Certificate<PublicKey>>,
@@ -92,8 +92,8 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                         continue;
                     }
 
-                    // Add the certificate to the waiter pool. The waiter will return it to us
-                    // when all its parents are in the store.
+                    // Add the certificate to the waiter pool. The waiter will return it to us when
+                    // all its parents are in the store.
                     let wait_for = certificate
                         .header
                         .parents
@@ -115,16 +115,16 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
                 },
             }
 
-            // Cleanup internal state.
+            // Cleanup internal state. Deliver the certificates waiting on garbage collected ancestors.
             let round = self.consensus_round.load(Ordering::Relaxed);
             if round > self.gc_depth {
-                let mut gc_round = round - self.gc_depth;
+                let gc_round = round - self.gc_depth;
                 for (r, handler) in self.pending.values() {
-                    if r <= &gc_round {
+                    if *r <= gc_round + 1 {
                         let _ = handler.send(()).await;
                     }
                 }
-                self.pending.retain(|_, (r, _)| r > &mut gc_round);
+                self.pending.retain(|_, (r, _)| *r > gc_round + 1);
             }
         }
     }

@@ -423,10 +423,10 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
             let round = self.consensus_round.load(Ordering::Relaxed);
             if round > self.gc_depth {
                 let gc_round = round - self.gc_depth;
-                self.last_voted.retain(|k, _| k >= &gc_round);
-                self.processing.retain(|k, _| k >= &gc_round);
-                self.certificates_aggregators.retain(|k, _| k >= &gc_round);
-                self.cancel_handlers.retain(|k, _| k >= &gc_round);
+                self.last_voted.retain(|k, _| k > &gc_round);
+                self.processing.retain(|k, _| k > &gc_round);
+                self.certificates_aggregators.retain(|k, _| k > &gc_round);
+                self.cancel_handlers.retain(|k, _| k > &gc_round);
                 self.gc_round = gc_round;
             }
         }
