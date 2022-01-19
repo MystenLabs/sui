@@ -3,6 +3,7 @@
 
 use move_core_types::ident_str;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, Bytes};
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
@@ -25,9 +26,11 @@ pub const OBJECT_BASICS_OBJECT_TYPE_NAME: &move_core_types::identifier::IdentStr
     ident_str!("Object");
 pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
 
+#[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
     pub type_: StructTag,
+    #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
     read_only: bool,
 }
