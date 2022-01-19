@@ -68,7 +68,11 @@ impl AuthorityTemporaryStore {
         let effects = OrderEffects {
             status,
             transaction_digest: *transaction_digest,
-            mutated: self.written.keys().cloned().collect(),
+            mutated: self
+                .written
+                .iter()
+                .map(|(object_ref, object)| (*object_ref, object.owner))
+                .collect(),
             deleted: self.deleted.clone(),
         };
         let signature = Signature::new(&effects, secret);

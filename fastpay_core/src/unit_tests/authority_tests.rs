@@ -421,8 +421,8 @@ async fn test_handle_move_order() {
     let mutated = res.signed_effects.unwrap().effects.mutated;
     assert_eq!(mutated.len(), 2);
 
-    let created_object_id = mutated[0].0; // res.object_id;
-                                          // check that order actually created an object with the expected ID, owner, sequence number
+    let created_object_id = mutated[0].0 .0; // res.object_id;
+                                             // check that order actually created an object with the expected ID, owner, sequence number
     let created_obj = authority_state
         .object_state(&created_object_id)
         .await
