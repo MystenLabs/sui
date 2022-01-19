@@ -189,7 +189,7 @@ impl Primary {
             committee.clone(),
             header_store,
             payload_store,
-            consensus_round,
+            consensus_round.clone(),
             parameters.gc_depth,
             parameters.sync_retry_delay,
             parameters.sync_retry_nodes,
@@ -201,6 +201,8 @@ impl Primary {
         // `Core` for further processing.
         CertificateWaiter::spawn(
             certificate_store.clone(),
+            consensus_round,
+            parameters.gc_depth,
             /* rx_synchronizer */ rx_sync_certificates,
             /* tx_core */ tx_certificates_loopback,
         );

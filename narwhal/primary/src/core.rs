@@ -156,6 +156,15 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
             .or_insert_with(HashSet::new)
             .insert(header.id.clone());
 
+        // If the following condition is valid, it means we already garbage collected the parents. There is thus
+        // no points in trying to synchronize them or vote for the header. We just need to gather the payload.
+        if self.gc_round > header.round - 1 {
+            if self.synchronizer.missing_payload(header).await? {
+                debug!("Downloading the payload of {}", header);
+            }
+            return Ok(());
+        }
+
         // Ensure we have the parents. If at least one parent is missing, the synchronizer returns an empty
         // vector; it will gather the missing parents (as well as all ancestors) from other nodes and then
         // reschedule processing of this header.
@@ -274,9 +283,11 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
             self.process_header(&certificate.header).await?;
         }
 
-        // Ensure we have all the ancestors of this certificate yet. If we don't, the synchronizer will gather
-        // them and trigger re-processing of this certificate.
-        if !self.synchronizer.deliver_certificate(&certificate).await? {
+        // Ensure we have all the ancestors of this certificate yet (if we didn't already garbage collect them).
+        // If we don't, the synchronizer will gather them and trigger re-processing of this certificate.
+        if certificate.round() > self.gc_round
+            && !self.synchronizer.deliver_certificate(&certificate).await?
+        {
             debug!(
                 "Processing of {:?} suspended: missing ancestors",
                 certificate
@@ -294,7 +305,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
             .certificates_aggregators
             .entry(certificate.round())
             .or_insert_with(|| Box::new(CertificatesAggregator::new()))
-            .append(certificate.clone(), &self.committee)?
+            .append(certificate.clone(), &self.committee)
         {
             // Send it to the `Proposer`.
             self.tx_proposer

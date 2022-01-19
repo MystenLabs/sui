@@ -72,8 +72,8 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     /// Keeps the digests of the all TX batches for which we sent a sync request,
     /// similarly to `header_requests`.
     batch_requests: HashMap<Digest, Round>,
-    /// List of digests (either certificates, headers or TX batch) that are waiting
-    /// to be processed. Their processing will resume when we get all their dependencies.
+    /// List of digests (headers or tx batch) that are waiting to be processed.
+    /// Their processing will resume when we get all their dependencies.
     pending: HashMap<Digest, (Round, Sender<()>)>,
 }
 

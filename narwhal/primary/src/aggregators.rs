@@ -74,20 +74,20 @@ impl<PublicKey: VerifyingKey> CertificatesAggregator<PublicKey> {
         &mut self,
         certificate: Certificate<PublicKey>,
         committee: &Committee<PublicKey>,
-    ) -> DagResult<Option<Vec<Digest>>> {
+    ) -> Option<Vec<Digest>> {
         let origin = certificate.origin();
 
         // Ensure it is the first time this authority votes.
         if !self.used.insert(origin.clone()) {
-            return Ok(None);
+            return None;
         }
 
         self.certificates.push(certificate.digest());
         self.weight += committee.stake(&origin);
         if self.weight >= committee.quorum_threshold() {
             self.weight = 0; // Ensures quorum is only reached once.
-            return Ok(Some(self.certificates.drain(..).collect()));
+            return Some(self.certificates.drain(..).collect());
         }
-        Ok(None)
+        None
     }
 }
