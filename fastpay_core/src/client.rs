@@ -1012,12 +1012,11 @@ where
             self.object_ids.clear();
 
             while let Some((auth_name, obj_id, seq_no)) = receiver.recv().await {
-                let mut freq_map;
-                if full_table.contains_key(&obj_id) {
-                    freq_map = full_table.get(&obj_id).unwrap().clone();
+                let mut freq_map = if full_table.contains_key(&obj_id) {
+                    full_table.get(&obj_id).unwrap().clone()
                 } else {
-                    freq_map = HashMap::new();
-                }
+                    HashMap::new()
+                };
 
                 let new_freq =
                     freq_map.get(&seq_no).unwrap_or(&0_usize) + self.committee.weight(&auth_name);
