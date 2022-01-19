@@ -5,10 +5,14 @@ use crate::{adapter, genesis};
 use fastx_types::{
     base_types::{self, SequenceNumber},
     error::FastPayResult,
+    gas_coin::GAS,
     storage::Storage,
 };
-use move_binary_format::file_format;
-use move_core_types::account_address::AccountAddress;
+use move_binary_format::file_format::{
+    self, AbilitySet, AddressIdentifierIndex, IdentifierIndex, ModuleHandle, ModuleHandleIndex,
+    StructHandle,
+};
+use move_core_types::{account_address::AccountAddress, ident_str};
 use std::mem;
 
 use super::*;
@@ -22,6 +26,7 @@ struct ScratchPad {
     created: BTreeMap<ObjectID, Object>,
     deleted: Vec<ObjectID>,
 }
+
 #[derive(Default, Debug)]
 struct InMemoryStorage {
     persistent: BTreeMap<ObjectID, Object>,
@@ -136,16 +141,19 @@ impl ResourceResolver for InMemoryStorage {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn call(
     storage: &mut InMemoryStorage,
     native_functions: &NativeFunctionTable,
-    name: &str,
+    module_name: &str,
+    fun_name: &str,
     gas_object: Object,
     gas_budget: u64,
+    type_args: Vec<TypeTag>,
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
 ) -> FastPayResult {
-    let package = storage.find_package("ObjectBasics").unwrap();
+    let package = storage.find_package(module_name).unwrap();
 
     let vm = adapter::new_move_vm(native_functions.clone()).expect("No errors");
     adapter::execute(
@@ -153,9 +161,9 @@ fn call(
         storage,
         native_functions.clone(),
         package,
-        &Identifier::new("ObjectBasics").unwrap(),
-        &Identifier::new(name).unwrap(),
-        Vec::new(),
+        &Identifier::new(module_name).unwrap(),
+        &Identifier::new(fun_name).unwrap(),
+        type_args,
         object_args,
         pure_args,
         gas_budget,
@@ -190,9 +198,11 @@ fn test_object_basics() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "create",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         Vec::new(),
         pure_args,
     )
@@ -214,9 +224,11 @@ fn test_object_basics() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "transfer",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         vec![obj1.clone()],
         pure_args,
     )
@@ -250,9 +262,11 @@ fn test_object_basics() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "create",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         Vec::new(),
         pure_args,
     )
@@ -269,9 +283,11 @@ fn test_object_basics() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "update",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         vec![obj1.clone(), obj2],
         Vec::new(),
     )
@@ -299,9 +315,11 @@ fn test_object_basics() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "delete",
         gas_object,
         MAX_GAS,
+        Vec::new(),
         vec![obj1],
         Vec::new(),
     )
@@ -336,9 +354,11 @@ fn test_wrap_unwrap() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "create",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         Vec::new(),
         pure_args,
     )
@@ -359,9 +379,11 @@ fn test_wrap_unwrap() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "wrap",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         vec![obj1],
         Vec::new(),
     )
@@ -379,9 +401,11 @@ fn test_wrap_unwrap() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "unwrap",
         gas_object,
         MAX_GAS,
+        Vec::new(),
         vec![obj2],
         Vec::new(),
     )
@@ -430,9 +454,11 @@ fn test_move_call_insufficient_gas() {
     let response = call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "create",
         gas_object,
         20, // This budget is not enough to execute all bytecode.
+        Vec::new(),
         Vec::new(),
         pure_args,
     );
@@ -444,7 +470,7 @@ fn test_move_call_insufficient_gas() {
 
 #[test]
 fn test_publish_module_insufficient_gas() {
-    let (genesis_objects, _) = genesis::clone_genesis_data();
+    let (genesis_objects, natives) = genesis::clone_genesis_data();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -466,6 +492,7 @@ fn test_publish_module_insufficient_gas() {
     let mut tx_context = TxContext::random();
     let response = adapter::publish(
         &mut storage,
+        natives,
         module_bytes,
         base_types::FastPayAddress::default(),
         &mut tx_context,
@@ -502,9 +529,11 @@ fn test_transfer_and_freeze() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "create",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         Vec::new(),
         pure_args,
     )
@@ -526,9 +555,11 @@ fn test_transfer_and_freeze() {
     call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "transfer_and_freeze",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         vec![obj1],
         pure_args,
     )
@@ -544,9 +575,11 @@ fn test_transfer_and_freeze() {
     let result = call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "transfer",
         gas_object.clone(),
         MAX_GAS,
+        Vec::new(),
         vec![obj1],
         pure_args,
     );
@@ -561,9 +594,11 @@ fn test_transfer_and_freeze() {
     let result = call(
         &mut storage,
         &native_functions,
+        "ObjectBasics",
         "set_value",
         gas_object,
         MAX_GAS,
+        Vec::new(),
         vec![obj1],
         pure_args,
     );
@@ -573,4 +608,111 @@ fn test_transfer_and_freeze() {
         .contains("Argument 0 is expected to be mutable, immutable object found"));
 }
 
+#[test]
+fn test_publish_module_linker_error() {
+    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let id_module = CompiledModule::deserialize(
+        genesis_objects[0]
+            .data
+            .try_as_package()
+            .unwrap()
+            .get("ID")
+            .unwrap(),
+    )
+    .unwrap();
+
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // 0. Create a gas object for gas payment.
+    let gas_object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+    );
+    storage.write_object(gas_object.clone());
+    storage.flush();
+
+    // 1. Create a module that depends on a genesis module that exists, but via an invalid handle
+    let mut dependent_module = file_format::empty_module();
+    // make `dependent_module` depend on `id_module`
+    dependent_module
+        .identifiers
+        .push(id_module.self_id().name().to_owned());
+    dependent_module
+        .address_identifiers
+        .push(*id_module.self_id().address());
+    dependent_module.module_handles.push(ModuleHandle {
+        address: AddressIdentifierIndex((dependent_module.address_identifiers.len() - 1) as u16),
+        name: IdentifierIndex((dependent_module.identifiers.len() - 1) as u16),
+    });
+    // now, the invalid part: add a StructHandle to `dependent_module` that doesn't exist in `m`
+    dependent_module
+        .identifiers
+        .push(ident_str!("DoesNotExist").to_owned());
+    dependent_module.struct_handles.push(StructHandle {
+        module: ModuleHandleIndex((dependent_module.module_handles.len() - 1) as u16),
+        name: IdentifierIndex((dependent_module.identifiers.len() - 1) as u16),
+        abilities: AbilitySet::EMPTY,
+        type_parameters: Vec::new(),
+    });
+
+    let mut module_bytes = Vec::new();
+    dependent_module.serialize(&mut module_bytes).unwrap();
+    let module_bytes = vec![module_bytes];
+
+    let mut tx_context = TxContext::random();
+    let response = adapter::publish(
+        &mut storage,
+        natives,
+        module_bytes,
+        base_types::FastPayAddress::default(),
+        &mut tx_context,
+        gas_object,
+    );
+    let response_str = response.unwrap_err().to_string();
+    // make sure it's a linker error
+    assert!(response_str.contains("VMError with status LOOKUP_FAILED"));
+    // related to failed lookup of a struct handle
+    assert!(response_str.contains("at index 0 for struct handle"))
+}
+
 // TODO(https://github.com/MystenLabs/fastnft/issues/92): tests that exercise all the error codes of the adapter
+
+#[test]
+fn test_transfer() {
+    let addr = base_types::FastPayAddress::default();
+
+    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // 0. Create a gas object for gas payment. Note that we won't really use it because we won't be providing a gas budget.
+    // 1. Create an object to transfer
+    let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), addr);
+    let to_transfer = Object::with_id_owner_for_testing(ObjectID::random(), addr);
+    storage.write_object(gas_object.clone());
+    storage.write_object(to_transfer.clone());
+    storage.flush();
+
+    let addr1 = base_types::get_key_pair().0;
+
+    call(
+        &mut storage,
+        &native_functions,
+        "Coin",
+        "transfer_",
+        gas_object,
+        MAX_GAS,
+        vec![GAS::type_tag()],
+        vec![to_transfer],
+        vec![
+            10u64.to_le_bytes().to_vec(),
+            bcs::to_bytes(&addr1.to_vec()).unwrap(),
+        ],
+    )
+    .unwrap();
+
+    // should update gas object and input coin
+    assert_eq!(storage.updated().len(), 2);
+    // should create one new coin
+    assert_eq!(storage.created().len(), 1);
+}

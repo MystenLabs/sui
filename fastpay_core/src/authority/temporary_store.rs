@@ -171,12 +171,13 @@ impl Storage for AuthorityTemporaryStore {
             }
         }
 
-        // If it exists remove it
-        if let Some(removed) = self.objects.remove(id) {
-            self.deleted.push(removed.to_object_reference());
-        } else {
-            panic!("Internal invariant: object must exist to be deleted.")
-        }
+        // Mark it for deletion
+        self.deleted.push(
+            self.objects
+                .get(id)
+                .expect("Internal invariant: object must exist to be deleted.")
+                .to_object_reference(),
+        );
     }
 }
 

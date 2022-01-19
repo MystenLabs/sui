@@ -259,6 +259,7 @@ impl AuthorityState {
                 let gas_object = inputs.pop().unwrap();
                 adapter::publish(
                     &mut temporary_store,
+                    self.native_functions.clone(),
                     m.modules,
                     m.sender,
                     &mut tx_ctx,
@@ -294,31 +295,29 @@ impl AuthorityState {
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, FastPayError> {
-        if let Some(seq) = request.request_sequence_number {
+        let requested_certificate = if let Some(seq) = request.request_sequence_number {
             // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy
             // to provide back to the client the object digest for specific objects requested. Probably,
             // we have to return the full ObjectRef and why not the actual full object here.
-            let obj = self
-                .object_state(&request.object_id)
-                .await
-                .map_err(|_| FastPayError::ObjectNotFound)?;
 
             // Get the Transaction Digest that created the object
-            let transaction_digest = self
-                .parent(&(request.object_id, seq.increment()?, obj.digest()))
-                .await
+            let parent_iterator = self
+                .get_parent_iterator(request.object_id, Some(seq.increment()?))
+                .await?;
+            let (_, transaction_digest) = parent_iterator
+                .first()
                 .ok_or(FastPayError::CertificateNotfound)?;
             // Get the cert from the transaction digest
-            let requested_certificate = Some(
-                self.read_certificate(&transaction_digest)
+            Some(
+                self.read_certificate(transaction_digest)
                     .await?
                     .ok_or(FastPayError::CertificateNotfound)?,
-            );
-            self.make_object_info(request.object_id, requested_certificate)
-                .await
+            )
         } else {
-            self.make_object_info(request.object_id, None).await
-        }
+            None
+        };
+        self.make_object_info(request.object_id, requested_certificate)
+            .await
     }
 }
 

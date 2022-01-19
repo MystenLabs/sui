@@ -80,8 +80,7 @@ fn make_client_state(
         account.key.copy(),
         committee,
         authority_clients,
-        account.sent_certificates.clone(),
-        account.received_certificates.clone(),
+        account.certificates.clone(),
         account.object_ids.clone(),
     )
 }
