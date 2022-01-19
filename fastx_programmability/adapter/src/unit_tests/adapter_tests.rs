@@ -155,7 +155,9 @@ fn call(
 ) -> FastPayResult {
     let package = storage.find_package(module_name).unwrap();
 
+    let vm = adapter::new_move_vm(native_functions.clone()).expect("No errors");
     adapter::execute(
+        &vm,
         storage,
         native_functions.clone(),
         package,

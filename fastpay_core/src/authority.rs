@@ -43,7 +43,8 @@ pub struct AuthorityState {
     pub secret: KeyPair,
 
     /// Move native functions that are available to invoke
-    native_functions: NativeFunctionTable,
+    _native_functions: NativeFunctionTable,
+    move_vm: Arc<adapter::MoveVM>,
     /// The database
     _database: Arc<AuthorityStore>,
 }
@@ -239,8 +240,9 @@ impl AuthorityState {
                 let gas_object = inputs.pop().unwrap();
                 let package = inputs.pop().unwrap();
                 adapter::execute(
+                    &self.move_vm,
                     &mut temporary_store,
-                    self.native_functions.clone(),
+                    self._native_functions.clone(),
                     package,
                     &c.module,
                     &c.function,
@@ -257,7 +259,7 @@ impl AuthorityState {
                 let gas_object = inputs.pop().unwrap();
                 adapter::publish(
                     &mut temporary_store,
-                    self.native_functions.clone(),
+                    self._native_functions.clone(),
                     m.modules,
                     m.sender,
                     &mut tx_ctx,
@@ -331,7 +333,9 @@ impl AuthorityState {
             committee,
             name,
             secret,
-            native_functions,
+            _native_functions: native_functions.clone(),
+            move_vm: adapter::new_move_vm(native_functions)
+                .expect("We defined natives to not fail here"),
             _database: store,
         };
 
@@ -354,11 +358,13 @@ impl AuthorityState {
         secret: KeyPair,
         store: Arc<AuthorityStore>,
     ) -> Self {
+        let native_functions = NativeFunctionTable::new();
         AuthorityState {
             committee,
             name,
             secret,
-            native_functions: NativeFunctionTable::new(),
+            _native_functions: native_functions.clone(),
+            move_vm: adapter::new_move_vm(native_functions).expect("Only fails due to natives."),
             _database: store,
         }
     }

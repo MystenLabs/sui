@@ -2,6 +2,7 @@
 module FastX::GAS {
     use FastX::Coin;
     use FastX::Transfer;
+    use FastX::Address;
     use FastX::TxContext::{Self, TxContext};
 
     /// Name of the coin
@@ -16,4 +17,10 @@ module FastX::GAS {
         let treasury_cap = Coin::create_currency(GAS{}, ctx);
         Transfer::transfer(treasury_cap, TxContext::get_signer_address(ctx))
     }
+
+    /// Transfer to a recipient
+    public fun transfer(c: Coin::Coin<GAS>, recipient: vector<u8>, _ctx: &mut TxContext) {
+        Coin::transfer(c, Address::new(recipient))
+    }
+
 }
