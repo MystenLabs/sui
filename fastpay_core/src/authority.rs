@@ -18,7 +18,7 @@ use move_core_types::{
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -285,6 +285,7 @@ impl AuthorityState {
             Ok(()) => ExecutionStatus::Success,
             Err(err) => ExecutionStatus::Failure(Box::new(err)),
         };
+        temporary_store.ensure_active_inputs_mutated();
         (temporary_store, status)
     }
 
