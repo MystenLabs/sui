@@ -209,7 +209,7 @@ impl AuthorityState {
 
         // Insert into the certificates map
         let transaction_digest = certificate.order.digest();
-        let mut tx_ctx = TxContext::new(transaction_digest);
+        let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
         // Order-specific logic
         let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
@@ -231,7 +231,7 @@ impl AuthorityState {
                 output_object.transfer(match t.recipient {
                     Address::Primary(_) => FastPayAddress::default(),
                     Address::FastPay(addr) => addr,
-                })?;
+                });
                 temporary_store.write_object(output_object);
                 Ok(())
             }
@@ -259,7 +259,7 @@ impl AuthorityState {
                 let gas_object = inputs.pop().unwrap();
                 adapter::publish(
                     &mut temporary_store,
-                    self.native_functions.clone(),
+                    self._native_functions.clone(),
                     m.modules,
                     m.sender,
                     &mut tx_ctx,
@@ -302,7 +302,7 @@ impl AuthorityState {
 
             // Get the Transaction Digest that created the object
             let parent_iterator = self
-                .get_parent_iterator(request.object_id, Some(seq.increment()?))
+                .get_parent_iterator(request.object_id, Some(seq.increment()))
                 .await?;
             let (_, transaction_digest) = parent_iterator
                 .first()

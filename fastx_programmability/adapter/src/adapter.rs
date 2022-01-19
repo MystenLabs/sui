@@ -279,7 +279,7 @@ fn process_successful_execution<
         obj.data
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
-            .update_contents(new_contents)?;
+            .update_contents(new_contents);
         state_view.write_object(obj);
     }
     // process events to identify transfers, freezes
@@ -303,7 +303,7 @@ fn process_successful_execution<
                 // increment the object version. note that if the transferred object was
                 // freshly created, this means that its version will now be 1.
                 // thus, all objects in the global object pool have version > 0
-                move_obj.increment_version()?;
+                move_obj.increment_version();
                 if should_freeze {
                     move_obj.freeze();
                 }
@@ -537,7 +537,7 @@ fn resolve_and_type_check(
         }
     }
     args.append(&mut pure_args);
-    args.push(ctx.to_bcs_bytes_hack());
+    args.push(ctx.to_vec());
 
     Ok(TypeCheckSuccess {
         module_id,

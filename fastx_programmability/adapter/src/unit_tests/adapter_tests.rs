@@ -168,7 +168,7 @@ fn call(
         pure_args,
         gas_budget,
         gas_object,
-        TxContext::random(),
+        TxContext::random_for_testing_only(),
     )
 }
 
@@ -241,7 +241,7 @@ fn test_object_basics() {
     storage.flush();
     let transferred_obj = storage.read_object(&id1).unwrap();
     assert_eq!(transferred_obj.owner, addr2);
-    obj1_seq = obj1_seq.increment().unwrap();
+    obj1_seq = obj1_seq.increment();
     assert_eq!(obj1.id(), transferred_obj.id());
     assert_eq!(transferred_obj.version(), obj1_seq);
     assert_eq!(
@@ -299,7 +299,7 @@ fn test_object_basics() {
     storage.flush();
     let updated_obj = storage.read_object(&id1).unwrap();
     assert_eq!(updated_obj.owner, addr2);
-    obj1_seq = obj1_seq.increment().unwrap();
+    obj1_seq = obj1_seq.increment();
     assert_eq!(updated_obj.version(), obj1_seq);
     assert_ne!(
         obj1.data.try_as_move().unwrap().type_specific_contents(),
@@ -419,7 +419,7 @@ fn test_wrap_unwrap() {
     assert!(storage.read_object(&id2).is_none());
     let new_obj1 = storage.read_object(&id1).unwrap();
     // sequence # should increase after unwrapping
-    assert_eq!(new_obj1.version(), obj1_version.increment().unwrap());
+    assert_eq!(new_obj1.version(), obj1_version.increment());
     // type-specific contents should not change after unwrapping
     assert_eq!(
         new_obj1
@@ -489,7 +489,7 @@ fn test_publish_module_insufficient_gas() {
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
 
-    let mut tx_context = TxContext::random();
+    let mut tx_context = TxContext::random_for_testing_only();
     let response = adapter::publish(
         &mut storage,
         natives,
@@ -659,7 +659,7 @@ fn test_publish_module_linker_error() {
     dependent_module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
 
-    let mut tx_context = TxContext::random();
+    let mut tx_context = TxContext::random_for_testing_only();
     let response = adapter::publish(
         &mut storage,
         natives,

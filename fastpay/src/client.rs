@@ -119,10 +119,9 @@ fn make_benchmark_transfer_orders(
             ),
         };
         debug!("Preparing transfer order: {:?}", transfer);
-        account.object_ids.insert(
-            object_id,
-            account.object_ids[&object_id].increment().unwrap(),
-        );
+        account
+            .object_ids
+            .insert(object_id, account.object_ids[&object_id].increment());
         next_recipient = account.address;
         let order = Order::new_transfer(transfer.clone(), &account.key);
         orders.push(order.clone());

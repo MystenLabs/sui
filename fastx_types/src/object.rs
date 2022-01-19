@@ -16,7 +16,6 @@ use crate::{
         sha3_hash, BcsSignable, FastPayAddress, ObjectDigest, ObjectID, ObjectRef, SequenceNumber,
         TransactionDigest,
     },
-    error::{FastPayError, FastPayResult},
     gas_coin::GasCoin,
 };
 
@@ -24,6 +23,7 @@ pub const OBJECT_BASICS_MODULE_NAME: &move_core_types::identifier::IdentStr =
     ident_str!("ObjectBasics");
 pub const OBJECT_BASICS_OBJECT_TYPE_NAME: &move_core_types::identifier::IdentStr =
     ident_str!("Object");
+pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
@@ -83,7 +83,7 @@ impl MoveObject {
     }
 
     /// Update the contents of this object and increment its version
-    pub fn update_contents(&mut self, new_contents: Vec<u8>) -> FastPayResult<()> {
+    pub fn update_contents(&mut self, new_contents: Vec<u8>) {
         #[cfg(debug_assertions)]
         let old_id = self.id();
         #[cfg(debug_assertions)]
@@ -98,17 +98,15 @@ impl MoveObject {
             debug_assert_eq!(self.version(), old_version);
         }
 
-        self.increment_version()?;
-        Ok(())
+        self.increment_version();
     }
 
     /// Increase the version of this object by one
-    pub fn increment_version(&mut self) -> FastPayResult<()> {
-        let new_version = self.version().increment()?;
+    pub fn increment_version(&mut self) {
+        let new_version = self.version().increment();
         // TODO: better bit tricks are probably possible here. for now, just do the obvious thing
         self.version_bytes_mut()
             .copy_from_slice(bcs::to_bytes(&new_version).unwrap().as_slice());
-        Ok(())
     }
 
     fn version_bytes(&self) -> &BcsU64 {
@@ -276,7 +274,7 @@ impl Object {
     }
 
     /// Change the owner of `self` to `new_owner`
-    pub fn transfer(&mut self, new_owner: FastPayAddress) -> Result<(), FastPayError> {
+    pub fn transfer(&mut self, new_owner: FastPayAddress) {
         // TODO: these should be raised FastPayError's instead of panic's
         assert!(!self.is_read_only(), "Cannot transfer an immutable object");
         match &mut self.data {
@@ -287,8 +285,7 @@ impl Object {
                 );
 
                 self.owner = new_owner;
-                m.increment_version()?;
-                Ok(())
+                m.increment_version();
             }
             Data::Package(_) => panic!("Cannot transfer a module object"),
         }
@@ -314,7 +311,7 @@ impl Object {
 
     pub fn with_id_owner_for_testing(id: ObjectID, owner: FastPayAddress) -> Self {
         // For testing, we provide sufficient gas by default.
-        Self::with_id_owner_gas_for_testing(id, SequenceNumber::new(), owner, 100000_u64)
+        Self::with_id_owner_gas_for_testing(id, SequenceNumber::new(), owner, GAS_VALUE_FOR_TESTING)
     }
 
     /// Create ObjectBasics object for use in Move object operation
