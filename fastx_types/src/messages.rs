@@ -131,6 +131,26 @@ pub enum ExecutionStatus {
     Failure(Box<FastPayError>),
 }
 
+impl ExecutionStatus {
+    pub fn unwrap(&self) {
+        match self {
+            ExecutionStatus::Success => (),
+            ExecutionStatus::Failure(_) => {
+                panic!("Unable to unwrap() on {:?}", self);
+            }
+        }
+    }
+
+    pub fn unwrap_err(&self) -> &FastPayError {
+        match self {
+            ExecutionStatus::Success => {
+                panic!("Unable to unwrap() on {:?}", self);
+            }
+            ExecutionStatus::Failure(err) => err,
+        }
+    }
+}
+
 /// The response from processing an order or a certified order
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct OrderEffects {

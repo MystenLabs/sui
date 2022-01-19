@@ -5,9 +5,8 @@ use fastx_adapter::{adapter, genesis};
 use fastx_types::{
     base_types::*,
     committee::Committee,
-    error::FastPayError,
-    fp_bail, fp_ensure,
-    gas::{calculate_object_transfer_cost, check_gas_requirement, deduct_gas},
+    error::{FastPayError, FastPayResult},
+    fp_bail, fp_ensure, gas,
     messages::*,
     object::{Data, Object},
     storage::Storage,
@@ -137,7 +136,7 @@ impl AuthorityState {
             );
 
             if &object_id == order.gas_payment_object_id() {
-                check_gas_requirement(&order, &object)?;
+                gas::check_gas_requirement(&order, &object)?;
             }
 
             /* The call to self.set_order_lock checks the lock is not conflicting,
@@ -211,33 +210,41 @@ impl AuthorityState {
         let transaction_digest = certificate.order.digest();
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
-        // Order-specific logic
-        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
-        let status_result = match order.kind {
-            OrderKind::Transfer(t) => {
-                debug_assert!(
-                    inputs.len() == 2,
-                    "Expecting two inputs: gas and object to be transferred"
-                );
-                // unwraps here are safe because we built `inputs`
-                let mut gas_object = inputs.pop().unwrap();
-                deduct_gas(
-                    &mut gas_object,
-                    calculate_object_transfer_cost(&inputs[0]) as i128,
-                )?;
-                temporary_store.write_object(gas_object);
+        let (temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx);
 
-                let mut output_object = inputs.pop().unwrap();
-                output_object.transfer(match t.recipient {
-                    Address::Primary(_) => FastPayAddress::default(),
-                    Address::FastPay(addr) => addr,
-                });
-                temporary_store.write_object(output_object);
-                Ok(())
+        // Update the database in an atomic manner
+        let to_signed_effects = temporary_store.to_signed_effects(
+            &self.name,
+            &self.secret,
+            &transaction_digest,
+            status,
+        );
+        self.update_state(temporary_store, certificate, to_signed_effects)
+            .await // Returns the OrderInfoResponse
+    }
+
+    fn execute_order(
+        &self,
+        order: Order,
+        mut inputs: Vec<Object>,
+        tx_ctx: &mut TxContext,
+    ) -> (AuthorityTemporaryStore, ExecutionStatus) {
+        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
+        // unwraps here are safe because we built `inputs`
+        let mut gas_object = inputs.pop().unwrap();
+
+        let (result, fail_gas) = match order.kind {
+            OrderKind::Transfer(t) => {
+                let result = AuthorityState::transfer(
+                    &mut temporary_store,
+                    inputs,
+                    t.recipient,
+                    gas_object.clone(),
+                );
+                (result, gas::MIN_OBJ_TRANSFER_GAS)
             }
             OrderKind::Call(c) => {
                 // unwraps here are safe because we built `inputs`
-                let gas_object = inputs.pop().unwrap();
                 let package = inputs.pop().unwrap();
                 adapter::execute(
                     &self.move_vm,
@@ -250,38 +257,54 @@ impl AuthorityState {
                     inputs,
                     c.pure_arguments,
                     c.gas_budget,
-                    gas_object,
+                    gas_object.clone(),
                     tx_ctx,
                 )
             }
-
             OrderKind::Publish(m) => {
-                let gas_object = inputs.pop().unwrap();
-                adapter::publish(
+                let result = adapter::publish(
                     &mut temporary_store,
                     self._native_functions.clone(),
                     m.modules,
                     m.sender,
-                    &mut tx_ctx,
-                    gas_object,
-                )
+                    tx_ctx,
+                    gas_object.clone(),
+                );
+                (result, gas::MIN_MOVE_PUBLISH_GAS)
             }
         };
+        if result.is_err() {
+            // Roll back the temporary store if execution or gas deduction failed.
+            temporary_store.reset();
+            // This gas deduction cannot fail.
+            gas::deduct_gas(&mut gas_object, fail_gas);
+            temporary_store.write_object(gas_object);
+        }
 
-        let status = match status_result {
+        let status = match result {
             Ok(()) => ExecutionStatus::Success,
             Err(err) => ExecutionStatus::Failure(Box::new(err)),
         };
+        (temporary_store, status)
+    }
 
-        // Update the database in an atomic manner
-        let to_signed_effects = temporary_store.to_signed_effects(
-            &self.name,
-            &self.secret,
-            &transaction_digest,
-            status,
-        );
-        self.update_state(temporary_store, certificate, to_signed_effects)
-            .await // Returns the OrderInfoResponse
+    fn transfer(
+        temporary_store: &mut AuthorityTemporaryStore,
+        mut inputs: Vec<Object>,
+        recipient: Address,
+        mut gas_object: Object,
+    ) -> FastPayResult {
+        let gas_used = gas::calculate_object_transfer_cost(&inputs[0]);
+        gas::try_deduct_gas(&mut gas_object, gas_used)?;
+        temporary_store.write_object(gas_object);
+
+        let mut output_object = inputs.pop().unwrap();
+        output_object.transfer(match recipient {
+            Address::Primary(_) => FastPayAddress::default(),
+            Address::FastPay(addr) => addr,
+        });
+        temporary_store.write_object(output_object);
+        Ok(())
     }
 
     pub async fn handle_account_info_request(

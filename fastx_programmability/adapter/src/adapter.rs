@@ -9,10 +9,7 @@ use fastx_types::{
         FastPayAddress, ObjectID, TxContext, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     error::{FastPayError, FastPayResult},
-    gas::{
-        calculate_module_publish_cost, calculate_object_creation_cost,
-        calculate_object_deletion_refund, deduct_gas,
-    },
+    gas,
     object::{Data, MoveObject, Object},
     storage::Storage,
     FASTX_FRAMEWORK_ADDRESS,
@@ -47,7 +44,7 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<MoveVM>, FastPayE
 
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
 /// Execution will read from/write to the store in `state_view`.
-/// If `gas_budget` is None, runtime metering is disabled and execution may diverge.
+/// Returns both the execution result, and the amount of gas used (even in the case of error).
 #[allow(clippy::too_many_arguments)]
 pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     vm: &MoveVM,
@@ -61,28 +58,38 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     pure_args: Vec<Vec<u8>>,
     gas_budget: u64,
     mut gas_object: Object,
-    ctx: TxContext,
-) -> Result<(), FastPayError> {
+    ctx: &TxContext,
+) -> (FastPayResult, u64) {
     let TypeCheckSuccess {
         module_id,
         args,
         mutable_ref_objects,
         by_value_objects,
-    } = resolve_and_type_check(
+    } = match resolve_and_type_check(
         package_object,
         module,
         function,
         &type_args,
         object_args,
         pure_args,
-        &ctx,
-    )?;
+        ctx,
+    ) {
+        Ok(ok) => ok,
+        Err(err) => {
+            return (Err(err), 0);
+        }
+    };
 
     // TODO: Update Move gas constants to reflect the gas fee on fastx.
     let mut gas_status =
-        get_gas_status(Some(gas_budget)).map_err(|e| FastPayError::GasBudgetTooHigh {
+        match get_gas_status(Some(gas_budget)).map_err(|e| FastPayError::GasBudgetTooHigh {
             error: e.to_string(),
-        })?;
+        }) {
+            Ok(ok) => ok,
+            Err(err) => {
+                return (Err(err), 0);
+            }
+        };
     let session = vm.new_session(state_view);
     match session.execute_function_for_effects(
         &module_id,
@@ -105,34 +112,34 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             debug_assert!(change_set.accounts().is_empty());
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
             debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
+            debug_assert!(gas_used <= gas_budget);
             // discard the &mut TxContext arg
             mutable_ref_values.pop().unwrap();
             let mutable_refs = mutable_ref_objects
                 .into_iter()
                 .zip(mutable_ref_values.into_iter());
-            process_successful_execution(
+            let (extra_gas_used, gas_refund) = process_successful_execution(
                 state_view,
                 by_value_objects,
                 mutable_refs,
                 events,
-                gas_object,
-                gas_used,
-                gas_budget,
-                &ctx,
-            )?;
-
-            Ok(())
+                ctx,
+            );
+            let total_gas = gas::aggregate_gas(gas_used + extra_gas_used, gas_refund);
+            match gas::try_deduct_gas(&mut gas_object, total_gas) {
+                Ok(()) => {
+                    state_view.write_object(gas_object);
+                    (Ok(()), total_gas)
+                }
+                Err(err) => (Err(err), gas_budget),
+            }
         }
-        ExecutionResult::Fail { error, gas_used } => {
-            // Need to deduct gas even if the execution failed.
-            deduct_gas(&mut gas_object, gas_used as i128)?;
-            state_view.write_object(gas_object);
-            // TODO: Keep track the gas deducted so that we could give them to participants.
-
+        ExecutionResult::Fail { error, gas_used } => (
             Err(FastPayError::AbortedExecution {
                 error: error.to_string(),
-            })
-        }
+            }),
+            gas_used,
+        ),
     }
 }
 
@@ -143,7 +150,12 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     sender: FastPayAddress,
     ctx: &mut TxContext,
     mut gas_object: Object,
-) -> Result<(), FastPayError> {
+) -> FastPayResult {
+    // Deduct gas upfront, if not enough balance, bail out early.
+    let gas_cost = gas::calculate_module_publish_cost(&module_bytes);
+    gas::try_deduct_gas(&mut gas_object, gas_cost)?;
+    state_view.write_object(gas_object);
+
     let mut modules = module_bytes
         .iter()
         .map(|b| {
@@ -152,12 +164,6 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             })
         })
         .collect::<FastPayResult<Vec<CompiledModule>>>()?;
-    // TODO: check that all dependencies exist. fail immediately + without charging for gas if not
-    // all pre-validation checks have passed--safe to charge for gas
-    let gas_cost = calculate_module_publish_cost(&module_bytes);
-    deduct_gas(&mut gas_object, gas_cost as i128)?;
-    state_view.write_object(gas_object);
-    // TODO: Keep track the gas deducted so we can return it to participant
 
     // run validation checks
     if modules.is_empty() {
@@ -260,6 +266,7 @@ type Event = (Vec<u8>, u64, TypeTag, Vec<u8>);
 /// - Look for each input in `by_value_objects` to determine whether the object was transferred, frozen, or deleted
 /// - Update objects passed via a mutable reference in `mutable_refs` to their new values
 /// - Process creation of new objects and user-emittd events in `events`
+/// - Returns (amount of extra gas used, amount of gas refund)
 #[allow(clippy::too_many_arguments)]
 fn process_successful_execution<
     E: Debug,
@@ -269,11 +276,8 @@ fn process_successful_execution<
     mut by_value_objects: BTreeMap<ObjectID, Object>,
     mutable_refs: impl Iterator<Item = (Object, Vec<u8>)>,
     events: Vec<Event>,
-    mut gas_object: Object,
-    mut gas_used: u64,
-    gas_budget: u64,
     ctx: &TxContext,
-) -> Result<(), FastPayError> {
+) -> (u64, u64) {
     for (mut obj, new_contents) in mutable_refs {
         // update contents and increment sequence number
         obj.data
@@ -283,6 +287,7 @@ fn process_successful_execution<
         state_view.write_object(obj);
     }
     // process events to identify transfers, freezes
+    let mut gas_used = 0;
     for e in events {
         let (recipient, should_freeze, type_, event_bytes) = e;
         debug_assert!(!recipient.is_empty() && should_freeze < 2);
@@ -310,21 +315,14 @@ fn process_successful_execution<
                 let obj = Object::new_move(move_obj, recipient, ctx.digest());
                 if old_object.is_none() {
                     // Charge extra gas based on object size if we are creating a new object.
-                    gas_used += calculate_object_creation_cost(&obj);
+                    gas_used += gas::calculate_object_creation_cost(&obj);
                 }
                 state_view.write_object(obj);
             }
             _ => unreachable!("Only structs can be transferred"),
         }
     }
-    if gas_used > gas_budget {
-        return Err(FastPayError::InsufficientGas {
-            error: format!(
-                "Gas budget is {}, not enough to pay for cost {}",
-                gas_budget, gas_used
-            ),
-        });
-    }
+
     // any object left in `by_value_objects` is an input passed by value that was not transferred or frozen.
     // this means that either the object was (1) deleted from the FastX system altogether, or
     // (2) wrapped inside another object that is in the FastX object pool
@@ -332,16 +330,10 @@ fn process_successful_execution<
     let mut gas_refund: u64 = 0;
     for (id, object) in by_value_objects.iter() {
         state_view.delete_object(id);
-        gas_refund += calculate_object_deletion_refund(object);
+        gas_refund += gas::calculate_object_deletion_refund(object);
     }
 
-    // TODO: In the current approach, we basically can use refund gas to pay for current transaction.
-    // Is this allowed?
-    deduct_gas(&mut gas_object, (gas_used as i128) - (gas_refund as i128))?;
-    state_view.write_object(gas_object);
-    // TODO: Keep track the gas deducted so that we could give them to participants.
-
-    Ok(())
+    (gas_used, gas_refund)
 }
 
 struct TypeCheckSuccess {
