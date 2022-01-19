@@ -277,7 +277,7 @@ async fn test_publish_dependent_module_ok() {
         dependent_module.serialize(&mut bytes).unwrap();
         bytes
     };
-    let mut authority = init_state_with_genesis(vec![gas_payment_object]).await;
+    let mut authority = init_state_with_objects(vec![gas_payment_object]).await;
 
     let order = Order::new_module(
         sender,
@@ -516,7 +516,7 @@ async fn test_handle_transfer_order_double_spend() {
 async fn test_handle_confirmation_order_unknown_sender() {
     let recipient = dbg_addr(2);
     let (sender, sender_key) = get_key_pair();
-    let authority_state = init_state();
+    let authority_state = init_state().await;
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
@@ -923,42 +923,17 @@ fn init_state_parameters() -> (Committee, PublicKeyBytes, KeyPair, Arc<Authority
 }
 
 #[cfg(test)]
-async fn init_state_with_genesis<I: IntoIterator<Item = Object>>(
-    genesis_objects: I,
-) -> AuthorityState {
+async fn init_state() -> AuthorityState {
     let (committee, authority_address, authority_key, store) = init_state_parameters();
-    let state = AuthorityState::new_with_genesis_modules(
-        committee,
-        authority_address,
-        authority_key,
-        store,
-    )
-    .await;
-    for obj in genesis_objects {
-        state
-            .init_order_lock((obj.id(), 0.into(), obj.digest()))
-            .await;
-        state.insert_object(obj).await;
-    }
-    state
-}
-
-#[cfg(test)]
-fn init_state() -> AuthorityState {
-    let (committee, authority_address, authority_key, store) = init_state_parameters();
-    AuthorityState::new_without_genesis_for_testing(
-        committee,
-        authority_address,
-        authority_key,
-        store,
-    )
+    AuthorityState::new_with_genesis_modules(committee, authority_address, authority_key, store)
+        .await
 }
 
 #[cfg(test)]
 async fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
     objects: I,
 ) -> AuthorityState {
-    let state = init_state();
+    let state = init_state().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
         state
@@ -970,7 +945,7 @@ async fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>
 }
 
 async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
-    let state = init_state();
+    let state = init_state().await;
 
     for o in objects {
         let obj_ref = o.to_object_reference();
