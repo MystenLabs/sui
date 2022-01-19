@@ -3,6 +3,7 @@
 
 use move_core_types::ident_str;
 use serde::{Deserialize, Serialize};
+use serde_bytes::ByteBuf;
 use serde_with::{serde_as, Bytes};
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
@@ -140,7 +141,8 @@ impl MoveObject {
 }
 
 // TODO: Make MovePackage a NewType so that we can implement functions on it.
-pub type MovePackage = BTreeMap<String, Vec<u8>>;
+// serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
+pub type MovePackage = BTreeMap<String, ByteBuf>;
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 #[allow(clippy::large_enum_variant)]
@@ -222,7 +224,7 @@ impl Object {
             .map(|module| {
                 let mut bytes = Vec::new();
                 module.serialize(&mut bytes).unwrap();
-                (module.self_id().name().to_string(), bytes)
+                (module.self_id().name().to_string(), ByteBuf::from(bytes))
             })
             .collect();
         Object {
