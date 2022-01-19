@@ -159,7 +159,7 @@ pub struct OrderEffects {
     // The transaction digest
     pub transaction_digest: TransactionDigest,
     // ObjectRefs containing mutated or new objects
-    pub mutated: Vec<ObjectRef>,
+    pub mutated: Vec<(ObjectRef, FastPayAddress)>,
     // Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
     // TODO: add events here too.

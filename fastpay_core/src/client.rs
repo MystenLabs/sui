@@ -582,16 +582,24 @@ where
         certificates: &[CertifiedOrder],
     ) -> Result<(), FastPayError> {
         for new_cert in certificates {
-            let (_, seq, _) = new_cert
+            // Try to get object's last seq number before the mutation, default to 0 for newly created object.
+            let seq = new_cert
                 .order
                 .input_objects()
                 .iter()
-                .find(|(id, _, _)| object_id == id)
-                .copied()
-                .ok_or::<FastPayError>(FastPayError::ObjectNotFound)?;
+                .find_map(
+                    |(id, seq, _)| {
+                        if object_id == id {
+                            Some(seq)
+                        } else {
+                            None
+                        }
+                    },
+                )
+                .cloned()
+                .unwrap_or_default();
 
             let mut new_next_sequence_number = self.next_sequence_number(object_id)?;
-
             if seq >= new_next_sequence_number {
                 new_next_sequence_number = seq.increment();
             }
@@ -697,11 +705,35 @@ where
         &mut self,
         order_info_resp: OrderInfoResponse,
     ) -> Result<(), FastPayError> {
-        // TODO: use the digest and mutated objects
-        // https://github.com/MystenLabs/fastnft/issues/175
         if let Some(v) = order_info_resp.signed_effects {
+            // The cert should be included in the response
+            let cert = order_info_resp.certified_order.unwrap();
+            let digest = cert.order.digest();
+            self.certificates.insert(digest, cert);
+
+            for ((object_id, seq, _), owner) in v.effects.mutated {
+                let old_seq = self.object_ids.get(&object_id).cloned().unwrap_or_default();
+                fp_ensure!(
+                    old_seq < seq,
+                    FastPayError::UnexpectedSequenceNumber {
+                        object_id,
+                        expected_sequence: old_seq.increment(),
+                        received_sequence: seq,
+                    }
+                );
+
+                if owner == self.address {
+                    self.object_ids.insert(object_id, seq);
+                    self.object_certs.entry(object_id).or_default().push(digest);
+                } else {
+                    self.object_ids.remove(&object_id);
+                    self.object_certs.remove(&object_id);
+                }
+            }
+
             for (obj_id, _, _) in v.effects.deleted {
                 self.object_ids.remove(&obj_id);
+                self.object_certs.remove(&obj_id);
             }
             Ok(())
         } else {
@@ -798,9 +830,6 @@ where
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         // Transaction order
         let new_certificate = self.communicate_transaction_order(order).await?;
-
-        // TODO: update_certificates relies on orders having sequence numbers/object IDs , which fails for calls with obj args
-        // https://github.com/MystenLabs/fastnft/issues/173
 
         // Confirmation
         let order_info = self
