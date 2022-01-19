@@ -11,6 +11,7 @@ use fastx_types::{base_types::*, committee::*, messages::*, object::Object, seri
 use futures::stream::StreamExt;
 use log::*;
 use move_core_types::ident_str;
+use rand::rngs::StdRng;
 use rand::Rng;
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
@@ -162,16 +163,16 @@ impl ClientServerBenchmark {
                 store,
             )
             .await;
+            let mut rnd = <StdRng as rand::SeedableRng>::seed_from_u64(0);
             for _ in 0..self.num_accounts {
                 let keypair = get_key_pair();
                 let object_id: ObjectID = ObjectID::random();
-
                 let object = if self.use_move {
                     Object::with_id_owner_gas_coin_object_for_testing(
                         ObjectID::random(),
                         SequenceNumber::new(),
                         keypair.0,
-                        rand::thread_rng().gen_range(0..0xFFFFFF),
+                        rnd.gen::<u64>(),
                     )
                 } else {
                     Object::with_id_owner_for_testing(object_id, keypair.0)
@@ -216,11 +217,6 @@ impl ClientServerBenchmark {
                     ident_str!("GAS").to_owned(),
                     ident_str!("transfer").to_owned(),
                     Vec::new(),
-                    // Do I really need this TypeArg? Does not make a diff
-
-                    //vec![move_core_types::language_storage::TypeTag::Struct(
-                    //GasCoin::type_(),
-                    //)],
                     gas_object_ref,
                     vec![object_ref],
                     vec![bcs::to_bytes(&next_recipient.to_vec()).unwrap()],
@@ -310,20 +306,13 @@ impl ClientServerBenchmark {
             let responses = mass_client.run(orders, connections).concat().await;
             info!("Received {} responses.", responses.len(),);
             // Check the responses for errors
-            for resp in responses {
+            for resp in &responses {
                 let reply_message = deserialize_message(&resp[..]);
                 match reply_message {
-                    Ok(SerializedMessage::OrderResp(resp)) =>
-                    {
-                        #[allow(clippy::collapsible_if)]
-                        if resp.signed_effects.is_some() {
-                            if resp.signed_effects.as_ref().unwrap().effects.status
-                                != ExecutionStatus::Success
-                            {
-                                info!(
-                                    "Execution Error {:?}",
-                                    resp.signed_effects.unwrap().effects.status
-                                );
+                    Ok(SerializedMessage::OrderResp(res)) => {
+                        if let Some(e) = res.signed_effects {
+                            if e.effects.status != ExecutionStatus::Success {
+                                info!("Execution Error {:?}", e.effects.status);
                             }
                         }
                     }
