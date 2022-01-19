@@ -123,7 +123,7 @@ impl ModuleResolver for InMemoryStorage {
         Ok(self
             .read_object(module_id.address())
             .map(|o| match &o.data {
-                Data::Package(m) => m[module_id.name().as_str()].clone(),
+                Data::Package(m) => m[module_id.name().as_str()].clone().into_vec(),
                 Data::Move(_) => panic!("Type error"),
             }))
     }
