@@ -11,6 +11,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
 
 #[cfg(test)]
@@ -30,8 +31,9 @@ pub struct UserData(pub Option<[u8; 32]>);
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 pub struct KeyPair(dalek::Keypair);
 
+#[serde_as]
 #[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct PublicKeyBytes([u8; dalek::PUBLIC_KEY_LENGTH]);
+pub struct PublicKeyBytes(#[serde_as(as = "Bytes")] [u8; dalek::PUBLIC_KEY_LENGTH]);
 
 impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
@@ -85,11 +87,14 @@ pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 const TRANSACTION_DIGEST_LENGTH: usize = 32;
 
 /// A transaction will have a (unique) digest.
+
+#[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct TransactionDigest([u8; TRANSACTION_DIGEST_LENGTH]);
+pub struct TransactionDigest(#[serde_as(as = "Bytes")] [u8; TRANSACTION_DIGEST_LENGTH]);
 // Each object has a unique digest
+#[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct ObjectDigest(pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
+pub struct ObjectDigest(#[serde_as(as = "Bytes")] pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
