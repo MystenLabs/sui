@@ -158,7 +158,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
 
         // If the following condition is valid, it means we already garbage collected the parents. There is thus
         // no points in trying to synchronize them or vote for the header. We just need to gather the payload.
-        if self.gc_round > header.round - 1 {
+        if self.gc_round >= header.round {
             if self.synchronizer.missing_payload(header).await? {
                 debug!("Downloading the payload of {}", header);
             }
@@ -285,7 +285,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
 
         // Ensure we have all the ancestors of this certificate yet (if we didn't already garbage collect them).
         // If we don't, the synchronizer will gather them and trigger re-processing of this certificate.
-        if certificate.round() > self.gc_round
+        if certificate.round() > self.gc_round + 1
             && !self.synchronizer.deliver_certificate(&certificate).await?
         {
             debug!(
@@ -327,7 +327,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
 
     fn sanitize_header(&mut self, header: &Header<PublicKey>) -> DagResult<()> {
         ensure!(
-            self.gc_round <= header.round,
+            self.gc_round < header.round,
             DagError::TooOld(header.id.clone(), header.round)
         );
 
@@ -359,7 +359,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
 
     fn sanitize_certificate(&mut self, certificate: &Certificate<PublicKey>) -> DagResult<()> {
         ensure!(
-            self.gc_round <= certificate.round(),
+            self.gc_round < certificate.round(),
             DagError::TooOld(certificate.digest(), certificate.round())
         );
 
