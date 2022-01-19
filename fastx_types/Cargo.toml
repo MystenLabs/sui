@@ -19,6 +19,7 @@ serde-name = "0.2.0"
 sha3 = "0.9"
 thiserror = "1.0.30"
 hex = "0.4.3"
+serde_with = "1.11.0"
 
 
 move-binary-format = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
