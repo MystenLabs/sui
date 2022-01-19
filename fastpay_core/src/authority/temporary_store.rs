@@ -190,7 +190,10 @@ impl ModuleResolver for AuthorityTemporaryStore {
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         match self.read_object(module_id.address()) {
             Some(o) => match &o.data {
-                Data::Package(c) => Ok(c.get(module_id.name().as_str()).cloned()),
+                Data::Package(c) => Ok(c
+                    .get(module_id.name().as_str())
+                    .cloned()
+                    .map(|m| m.into_vec())),
                 _ => Err(FastPayError::BadObjectType {
                     error: "Expected module object".to_string(),
                 }),
