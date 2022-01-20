@@ -248,14 +248,6 @@ where
     }
 }
 
-/// Used for communicate_transfers
-#[derive(Clone)]
-#[allow(clippy::large_enum_variant)]
-enum CommunicateAction {
-    SendOrder(Order),
-    SynchronizeNextSequenceNumber(SequenceNumber),
-}
-
 impl<A> ClientState<A>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
@@ -390,19 +382,68 @@ where
         sender: FastPayAddress,
         object_id: ObjectID,
         known_certificates: Vec<CertifiedOrder>,
-        action: CommunicateAction,
-    ) -> Result<Vec<CertifiedOrder>, anyhow::Error> {
-        let target_sequence_number = match &action {
-            CommunicateAction::SendOrder(order) => order.sequence_number(),
-            CommunicateAction::SynchronizeNextSequenceNumber(seq) => *seq,
+        order: &Order,
+    ) -> Result<(Vec<OrderInfoResponse>, CertifiedOrder), anyhow::Error> {
+        let committee = self.committee.clone();
+        let (responses, votes) = self
+            .sync_next_sequence_number(
+                sender,
+                object_id,
+                known_certificates,
+                order.sequence_number(),
+                |name, authority| {
+                    let order = order.clone();
+                    let committee = committee.clone();
+                    Box::pin(async move {
+                        match authority.handle_order(order).await {
+                            Ok(OrderInfoResponse {
+                                signed_order: Some(inner_signed_order),
+                                ..
+                            }) => {
+                                fp_ensure!(
+                                    inner_signed_order.authority == name,
+                                    FastPayError::ErrorWhileProcessingTransferOrder
+                                );
+                                inner_signed_order.check(&committee)?;
+                                Ok((inner_signed_order.authority, inner_signed_order.signature))
+                            }
+                            Err(err) => Err(err),
+                            _ => Err(FastPayError::ErrorWhileProcessingTransferOrder),
+                        }
+                    })
+                },
+            )
+            .await?;
+        let certificate = CertifiedOrder {
+            order: order.clone(),
+            signatures: votes,
         };
+        // Certificate is valid because
+        // * `communicate_with_quorum` ensured a sufficient "weight" of (non-error) answers were returned by authorities.
+        // * each answer is a vote signed by the expected authority.
+        Ok((responses, certificate))
+    }
+
+    async fn sync_next_sequence_number<'a, V, F: 'a>(
+        &'a mut self,
+        sender: FastPayAddress,
+        object_id: ObjectID,
+        known_certificates: Vec<CertifiedOrder>,
+        target_sequence_number: SequenceNumber,
+        action: F,
+    ) -> Result<(Vec<OrderInfoResponse>, Vec<V>), anyhow::Error>
+    where
+        F: Fn(AuthorityName, &'a mut A) -> AsyncResult<'a, V, FastPayError> + Send + Sync + Copy,
+        V: Copy,
+    {
         let requester = CertificateRequester::new(
             self.committee.clone(),
             self.authority_clients.values().cloned().collect(),
             Some(sender),
             object_id,
         );
-        let (task, mut handle) = Downloader::start(
+
+        let (_, mut handle) = Downloader::start(
             requester,
             known_certificates.into_iter().filter_map(|cert| {
                 if cert.order.sender() == &sender {
@@ -412,13 +453,11 @@ where
                 }
             }),
         );
-        let committee = self.committee.clone();
-        let votes = self
+        let result = self
             .communicate_with_quorum(|name, client| {
                 let mut handle = handle.clone();
-                let action = action.clone();
-                let committee = &committee;
                 Box::pin(async move {
+                    // Sync certificate with authority
                     // Figure out which certificates this authority is missing.
                     let request = ObjectInfoRequest {
                         object_id,
@@ -444,57 +483,32 @@ where
                     }
                     // Send all missing confirmation orders.
                     missing_certificates.reverse();
+
+                    let mut responses = Vec::new();
                     for certificate in missing_certificates {
-                        client
-                            .handle_confirmation_order(ConfirmationOrder::new(certificate))
-                            .await?;
+                        responses.push(
+                            client
+                                .handle_confirmation_order(ConfirmationOrder::new(certificate))
+                                .await?,
+                        );
                     }
-                    // Send the transfer order (if any) and return a vote.
-                    if let CommunicateAction::SendOrder(order) = action {
-                        let result: Result<OrderInfoResponse, FastPayError> =
-                            client.handle_order(order).await;
-                        return match result {
-                            Ok(OrderInfoResponse {
-                                signed_order: Some(inner_signed_order),
-                                ..
-                            }) => {
-                                fp_ensure!(
-                                    inner_signed_order.authority == name,
-                                    FastPayError::ErrorWhileProcessingTransferOrder
-                                );
-                                inner_signed_order.check(committee)?;
-                                Ok(Some(inner_signed_order))
-                            }
-                            Err(err) => Err(err),
-                            _ => Err(FastPayError::ErrorWhileProcessingTransferOrder),
-                        };
-                    }
-                    Ok(None)
+                    Ok((responses, action(name, client).await?))
                 })
             })
             .await?;
         // Terminate downloader task and retrieve the content of the cache.
         handle.stop().await?;
-        let mut certificates: Vec<_> = task.await?.filter_map(Result::ok).collect();
-        if let CommunicateAction::SendOrder(order) = action {
-            let certificate = CertifiedOrder {
-                order,
-                signatures: votes
-                    .into_iter()
-                    .filter_map(|vote| match vote {
-                        Some(signed_order) => {
-                            Some((signed_order.authority, signed_order.signature))
-                        }
-                        None => None,
-                    })
-                    .collect(),
-            };
-            // Certificate is valid because
-            // * `communicate_with_quorum` ensured a sufficient "weight" of (non-error) answers were returned by authorities.
-            // * each answer is a vote signed by the expected authority.
-            certificates.push(certificate);
-        }
-        Ok(certificates)
+
+        let action_results = result.iter().map(|(_, result)| *result).collect();
+
+        // All responses should be the same, pick the first one.
+        let order_response = result
+            .iter()
+            .map(|(response, _)| response.clone())
+            .next()
+            .unwrap_or_default();
+
+        Ok((order_response, action_results))
     }
 
     /// Make sure we have all our certificates with sequence number
@@ -639,33 +653,34 @@ where
             "Unexpected sequence number"
         );
         self.pending_transfer = Some(order.clone());
-        let new_sent_certificates = self
+        let (_, new_sent_certificate) = self
             .communicate_transfers(
                 self.address,
                 *order.object_id(),
                 self.certificates(order.object_id()).cloned().collect(),
-                CommunicateAction::SendOrder(order.clone()),
+                &order,
             )
             .await?;
-        assert_eq!(new_sent_certificates.last().unwrap().order, order);
+        assert_eq!(&new_sent_certificate.order, &order);
         // Clear `pending_transfer` and update `sent_certificates`,
         // and `next_sequence_number`. (Note that if we were using persistent
         // storage, we should ensure update atomicity in the eventuality of a crash.)
         self.pending_transfer = None;
 
         // Only valid for object transfer, where input_objects = output_objects
+        let new_sent_certificates = vec![new_sent_certificate];
         for (object_id, _, _) in order.input_objects() {
             self.update_certificates(&object_id, &new_sent_certificates)?;
         }
+
         // Confirm last transfer certificate if needed.
         if with_confirmation {
-            self.communicate_transfers(
+            self.sync_next_sequence_number(
                 self.address,
                 *order.object_id(),
                 self.certificates(order.object_id()).cloned().collect(),
-                CommunicateAction::SynchronizeNextSequenceNumber(
-                    self.next_sequence_number(order.object_id())?,
-                ),
+                self.next_sequence_number(order.object_id())?,
+                |_, _| Box::pin(async { Ok(()) }),
             )
             .await?;
         }
@@ -917,15 +932,16 @@ where
                     transfer.recipient == Address::FastPay(self.address),
                     "Transfer should be received by us."
                 );
-                self.communicate_transfers(
+
+                self.sync_next_sequence_number(
                     transfer.sender,
                     *certificate.order.object_id(),
                     vec![certificate.clone()],
-                    CommunicateAction::SynchronizeNextSequenceNumber(
-                        transfer.object_ref.1.increment(),
-                    ),
+                    transfer.object_ref.1.increment(),
+                    |_, _| Box::pin(async { Ok(()) }),
                 )
                 .await?;
+
                 // Everything worked: update the local balance.
                 if let Entry::Vacant(entry) = self.certificates.entry(certificate.order.digest()) {
                     self.object_ids
