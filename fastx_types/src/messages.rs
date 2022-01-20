@@ -128,25 +128,30 @@ pub struct OrderInfoResponse {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionStatus {
     Success,
-    Failure(Box<FastPayError>),
+    // Gas used in the failed case, and the error.
+    // TODO: Eventually we should return gas_used in both cases.
+    Failure {
+        gas_used: u64,
+        error: Box<FastPayError>,
+    },
 }
 
 impl ExecutionStatus {
     pub fn unwrap(&self) {
         match self {
             ExecutionStatus::Success => (),
-            ExecutionStatus::Failure(_) => {
+            ExecutionStatus::Failure { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
         }
     }
 
-    pub fn unwrap_err(&self) -> &FastPayError {
+    pub fn unwrap_err(&self) -> (u64, &FastPayError) {
         match self {
             ExecutionStatus::Success => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
-            ExecutionStatus::Failure(err) => err,
+            ExecutionStatus::Failure { gas_used, error } => (*gas_used, error),
         }
     }
 }

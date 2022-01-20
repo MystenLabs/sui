@@ -152,7 +152,7 @@ fn call(
     type_args: Vec<TypeTag>,
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
-) -> FastPayResult {
+) -> FastPayResult<ExecutionStatus> {
     let package = storage.find_package(module_name).unwrap();
 
     let vm = adapter::new_move_vm(native_functions.clone()).expect("No errors");
@@ -170,7 +170,6 @@ fn call(
         gas_object,
         &TxContext::random_for_testing_only(),
     )
-    .0
 }
 
 /// Exercise test functions that create, transfer, read, update, and delete objects
@@ -464,7 +463,9 @@ fn test_move_call_insufficient_gas() {
         pure_args,
     );
     assert!(response
+        .unwrap()
         .unwrap_err()
+        .1
         .to_string()
         .contains("VMError with status OUT_OF_GAS"));
 }
@@ -500,7 +501,9 @@ fn test_publish_module_insufficient_gas() {
         gas_object,
     );
     assert!(response
+        .unwrap()
         .unwrap_err()
+        .1
         .to_string()
         .contains("Gas balance is 30, not enough to pay 58"));
 }
@@ -585,7 +588,9 @@ fn test_transfer_and_freeze() {
         pure_args,
     );
     assert!(result
+        .unwrap()
         .unwrap_err()
+        .1
         .to_string()
         .contains("Argument 0 is expected to be mutable, immutable object found"));
 
@@ -604,7 +609,9 @@ fn test_transfer_and_freeze() {
         pure_args,
     );
     assert!(result
+        .unwrap()
         .unwrap_err()
+        .1
         .to_string()
         .contains("Argument 0 is expected to be mutable, immutable object found"));
 }
