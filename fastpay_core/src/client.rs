@@ -3,8 +3,8 @@
 
 use crate::downloader::*;
 use anyhow::{bail, ensure};
-use fastx_types::messages::Address::FastPay;
 use async_trait::async_trait;
+use fastx_types::messages::Address::FastPay;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
@@ -905,7 +905,8 @@ where
         gas_payment: ObjectID,
         recipient: FastPayAddress,
     ) -> Result<CertifiedOrder, anyhow::Error> {
-        self.transfer(object_id, gas_payment, Address::FastPay(recipient)).await
+        self.transfer(object_id, gas_payment, Address::FastPay(recipient))
+            .await
     }
 
     async fn receive_object(&mut self, certificate: CertifiedOrder) -> Result<(), anyhow::Error> {
@@ -921,41 +922,21 @@ where
                     *certificate.order.object_id(),
                     vec![certificate.clone()],
                     CommunicateAction::SynchronizeNextSequenceNumber(
-                        transfer.object_ref.1.increment()?,
+                        transfer.object_ref.1.increment(),
                     ),
                 )
                 .await?;
                 // Everything worked: update the local balance.
-                if let btree_map::Entry::Vacant(entry) =
-                    self.received_certificates.entry(certificate.order.digest())
-                {
-                    self.object_ids.insert(
-                        transfer.object_ref.0,
-                        transfer.object_ref.1.increment().unwrap(),
-                    );
-                    self.communicate_transfers(
-                        transfer.sender,
-                        *certificate.order.object_id(),
-                        vec![certificate.clone()],
-                        CommunicateAction::SynchronizeNextSequenceNumber(
-                            transfer.object_ref.1.increment(),
-                        ),
-                    )
-                    .await?;
-                    // Everything worked: update the local balance.
-                    if let Entry::Vacant(entry) =
-                        self.certificates.entry(certificate.order.digest())
-                    {
-                        self.object_ids
-                            .insert(transfer.object_ref.0, transfer.object_ref.1.increment());
-                        self.object_certs
-                            .entry(transfer.object_ref.0)
-                            .or_default()
-                            .push(certificate.order.digest());
-                        entry.insert(certificate);
-                    }
-                    Ok(())
+                if let Entry::Vacant(entry) = self.certificates.entry(certificate.order.digest()) {
+                    self.object_ids
+                        .insert(transfer.object_ref.0, transfer.object_ref.1.increment());
+                    self.object_certs
+                        .entry(transfer.object_ref.0)
+                        .or_default()
+                        .push(certificate.order.digest());
+                    entry.insert(certificate);
                 }
+                Ok(())
             }
             OrderKind::Publish(_) | OrderKind::Call(_) => {
                 unimplemented!("receiving (?) Move call or publish")
@@ -969,29 +950,27 @@ where
         object_id: ObjectID,
         gas_payment: ObjectID,
     ) -> Result<CertifiedOrder, anyhow::Error> {
-
-            let transfer = Transfer {
-                object_ref: (
-                    object_id,
-                    self.next_sequence_number(&object_id)?,
-                    // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
-                    ObjectDigest::new([0; 32]),
-                ),
-                sender: self.address,
-                recipient: Address::FastPay(recipient),
-                gas_payment: (
-                    gas_payment,
-                    self.next_sequence_number(&gas_payment)?,
-                    // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
-                    ObjectDigest::new([0; 32]),
-                ),
-            };
-            let order = Order::new_transfer(transfer, &self.secret);
-            let new_certificate = self
-                .execute_transfer(order, /* with_confirmation */ false)
-                .await?;
-            Ok(new_certificate)
-        
+        let transfer = Transfer {
+            object_ref: (
+                object_id,
+                self.next_sequence_number(&object_id)?,
+                // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
+                ObjectDigest::new([0; 32]),
+            ),
+            sender: self.address,
+            recipient: Address::FastPay(recipient),
+            gas_payment: (
+                gas_payment,
+                self.next_sequence_number(&gas_payment)?,
+                // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
+                ObjectDigest::new([0; 32]),
+            ),
+        };
+        let order = Order::new_transfer(transfer, &self.secret);
+        let new_certificate = self
+            .execute_transfer(order, /* with_confirmation */ false)
+            .await?;
+        Ok(new_certificate)
     }
 
     async fn sync_client_state_with_random_authority(
@@ -1005,18 +984,17 @@ where
         // update object_ids.
         self.object_ids.clear();
 
-            let (authority_name, object_ids) = self.download_own_object_ids().await?;
-            for (object_id, sequence_number, _) in object_ids {
-                self.object_ids.insert(object_id, sequence_number);
-            }
-            // Recover missing certificates.
-            let new_certificates = self.download_certificates().await?;
+        let (authority_name, object_ids) = self.download_own_object_ids().await?;
+        for (object_id, sequence_number, _) in object_ids {
+            self.object_ids.insert(object_id, sequence_number);
+        }
+        // Recover missing certificates.
+        let new_certificates = self.download_certificates().await?;
 
-            for (id, certs) in new_certificates {
-                self.update_certificates(&id, &certs)?;
-            }
-            Ok(authority_name)
-        
+        for (id, certs) in new_certificates {
+            self.update_certificates(&id, &certs)?;
+        }
+        Ok(authority_name)
     }
 
     async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error> {
