@@ -100,24 +100,24 @@ pub struct UserAccount {
     )]
     pub address: FastPayAddress,
     pub key: KeyPair,
-    pub object_ids: BTreeMap<ObjectID, SequenceNumber>,
+    pub object_refs: BTreeMap<ObjectID, ObjectRef>,
     pub gas_object_ids: BTreeSet<ObjectID>, // Every id in gas_object_ids should also be in object_ids.
     #[serde_as(as = "Vec<(_, _)>")]
     pub certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
 }
 
 impl UserAccount {
-    pub fn new(object_ids: Vec<ObjectID>, gas_object_ids: Vec<ObjectID>) -> Self {
+    pub fn new(object_refs: Vec<ObjectRef>, gas_object_ids: Vec<ObjectID>) -> Self {
         let (address, key) = get_key_pair();
-        let object_ids = object_ids
+        let object_refs = object_refs
             .into_iter()
-            .map(|object_id| (object_id, SequenceNumber::new()))
+            .map(|object_ref| (object_ref.0, object_ref))
             .collect();
         let gas_object_ids = BTreeSet::from_iter(gas_object_ids);
         Self {
             address,
             key,
-            object_ids,
+            object_refs,
             gas_object_ids,
             certificates: BTreeMap::new(),
         }
@@ -208,7 +208,7 @@ impl AccountsConfig {
     pub fn find_account(&self, object_id: &ObjectID) -> Option<&UserAccount> {
         self.accounts
             .values()
-            .find(|acc| acc.object_ids.contains_key(object_id))
+            .find(|acc| acc.object_refs.contains_key(object_id))
     }
     pub fn accounts_mut(&mut self) -> impl Iterator<Item = &mut UserAccount> {
         self.accounts.values_mut()
@@ -223,7 +223,7 @@ impl AccountsConfig {
             .accounts
             .get_mut(&state.address())
             .expect("Updated account should already exist");
-        account.object_ids = state.object_ids().clone();
+        account.object_refs = state.object_refs().clone();
         account.certificates = state.all_certificates().clone();
     }
 
@@ -275,7 +275,7 @@ impl AccountsConfig {
 #[derive(Serialize, Deserialize)]
 pub struct InitialStateConfigEntry {
     pub address: FastPayAddress,
-    pub object_ids: Vec<ObjectID>,
+    pub object_refs: Vec<ObjectRef>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct InitialStateConfig {
