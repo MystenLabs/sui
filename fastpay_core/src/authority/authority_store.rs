@@ -320,10 +320,7 @@ impl AuthorityStore {
 
         // Delete objects
         write_batch = write_batch
-            .delete_batch(
-                &self.objects,
-                deleted.iter().map(|deleted_ref| deleted_ref.0),
-            )
+            .delete_batch(&self.objects, deleted.clone().into_iter())
             .map_err(|_| FastPayError::StorageError)?;
 
         // Make an iterator over all objects that are either deleted or have changed owner,
@@ -331,15 +328,17 @@ impl AuthorityStore {
         let old_object_owners =
             deleted
                 .iter()
-                .map(|(id, _, _)| (objects[id].owner, *id))
-                .chain(written.iter().filter_map(
-                    |((id, _, _), new_object)| match objects.get(id) {
-                        Some(old_object) if old_object.owner != new_object.owner => {
-                            Some((old_object.owner, *id))
-                        }
-                        _ => None,
-                    },
-                ));
+                .map(|id| (objects[id].owner, *id))
+                .chain(
+                    written
+                        .iter()
+                        .filter_map(|(id, new_object)| match objects.get(id) {
+                            Some(old_object) if old_object.owner != new_object.owner => {
+                                Some((old_object.owner, *id))
+                            }
+                            _ => None,
+                        }),
+                );
 
         // Delete the old owner index entries
         write_batch = write_batch
@@ -352,7 +351,7 @@ impl AuthorityStore {
                 &self.parent_sync,
                 written
                     .iter()
-                    .map(|(output_ref, _)| (*output_ref, transaction_digest)),
+                    .map(|(_, object)| (object.to_object_reference(), transaction_digest)),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
@@ -360,9 +359,9 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.order_lock,
-                written.iter().filter_map(|(output_ref, new_object)| {
+                written.iter().filter_map(|(_, new_object)| {
                     if !new_object.is_read_only() {
-                        Some((*output_ref, None))
+                        Some((new_object.to_object_reference(), None))
                     } else {
                         None
                     }
@@ -374,8 +373,8 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.owner_index,
-                written.iter().map(|(output_ref, new_object)| {
-                    ((new_object.owner, output_ref.0), *output_ref)
+                written.iter().map(|(id, new_object)| {
+                    ((new_object.owner, *id), new_object.to_object_reference())
                 }),
             )
             .map_err(|_| FastPayError::StorageError)?;
@@ -384,9 +383,7 @@ impl AuthorityStore {
         write_batch = write_batch
             .insert_batch(
                 &self.objects,
-                written
-                    .into_iter()
-                    .map(|(output_ref, new_object)| (output_ref.0, new_object)),
+                written.into_iter().map(|(id, new_object)| (id, new_object)),
             )
             .map_err(|_| FastPayError::StorageError)?;
 
