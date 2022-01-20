@@ -375,8 +375,6 @@ where
         bail!("Failed to communicate with a quorum of authorities (multiple errors)");
     }
 
-    /// Broadcast confirmation orders and optionally one more transfer order.
-    /// The corresponding sequence numbers should be consecutive and increasing.
     async fn communicate_transfers(
         &mut self,
         sender: FastPayAddress,
@@ -386,7 +384,7 @@ where
     ) -> Result<(Vec<OrderInfoResponse>, CertifiedOrder), anyhow::Error> {
         let committee = self.committee.clone();
         let (responses, votes) = self
-            .sync_next_sequence_number(
+            .broadcast_and_execute(
                 sender,
                 object_id,
                 known_certificates,
@@ -424,7 +422,9 @@ where
         Ok((responses, certificate))
     }
 
-    async fn sync_next_sequence_number<'a, V, F: 'a>(
+    /// Broadcast confirmation orders and execute provided authority action.
+    /// The corresponding sequence numbers should be consecutive and increasing.
+    async fn broadcast_and_execute<'a, V, F: 'a>(
         &'a mut self,
         sender: FastPayAddress,
         object_id: ObjectID,
@@ -501,7 +501,7 @@ where
 
         let action_results = result.iter().map(|(_, result)| *result).collect();
 
-        // All responses should be the same, pick the first one.
+        // Assume all responses are the same, pick the first one.
         let order_response = result
             .iter()
             .map(|(response, _)| response.clone())
@@ -509,6 +509,26 @@ where
             .unwrap_or_default();
 
         Ok((order_response, action_results))
+    }
+
+    /// Broadcast confirmation orders.
+    /// The corresponding sequence numbers should be consecutive and increasing.
+    async fn broadcast_confirmation_orders(
+        &mut self,
+        sender: FastPayAddress,
+        object_id: ObjectID,
+        known_certificates: Vec<CertifiedOrder>,
+        target_sequence_number: SequenceNumber,
+    ) -> Result<Vec<OrderInfoResponse>, anyhow::Error> {
+        self.broadcast_and_execute(
+            sender,
+            object_id,
+            known_certificates,
+            target_sequence_number,
+            |_, _| Box::pin(async { Ok(()) }),
+        )
+        .await
+        .map(|(responses, _)| responses)
     }
 
     /// Make sure we have all our certificates with sequence number
@@ -675,12 +695,11 @@ where
 
         // Confirm last transfer certificate if needed.
         if with_confirmation {
-            self.sync_next_sequence_number(
+            self.broadcast_confirmation_orders(
                 self.address,
                 *order.object_id(),
                 self.certificates(order.object_id()).cloned().collect(),
                 self.next_sequence_number(order.object_id())?,
-                |_, _| Box::pin(async { Ok(()) }),
             )
             .await?;
         }
@@ -933,12 +952,11 @@ where
                     "Transfer should be received by us."
                 );
 
-                self.sync_next_sequence_number(
+                self.broadcast_confirmation_orders(
                     transfer.sender,
                     *certificate.order.object_id(),
                     vec![certificate.clone()],
                     transfer.object_ref.1.increment(),
-                    |_, _| Box::pin(async { Ok(()) }),
                 )
                 .await?;
 
