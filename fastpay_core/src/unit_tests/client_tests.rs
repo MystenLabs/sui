@@ -33,40 +33,44 @@ fn max_files_client_tests() -> i32 {
 #[derive(Clone)]
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
+#[async_trait]
 impl AuthorityClient for LocalAuthorityClient {
-    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
+    async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_order(order).await })
+        let result = state.lock().await.handle_order(order).await;
+        result
     }
 
-    fn handle_confirmation_order(
+    async fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
+    ) -> Result<OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_confirmation_order(order).await })
+        let result = state.lock().await.handle_confirmation_order(order).await;
+        result
     }
 
-    fn handle_account_info_request(
+    async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
-    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
+    ) -> Result<AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move {
-            state
-                .lock()
-                .await
-                .handle_account_info_request(request)
-                .await
-        })
+
+        let result = state
+            .lock()
+            .await
+            .handle_account_info_request(request)
+            .await;
+        result
     }
 
-    fn handle_object_info_request(
+    async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
-    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
+    ) -> Result<ObjectInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_object_info_request(request).await })
+        let x = state.lock().await.handle_object_info_request(request).await;
+        x
     }
 }
 
