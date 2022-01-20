@@ -32,9 +32,6 @@ use strum_macros::EnumString;
     about = "Local end-to-end test and benchmark of the FastPay protocol"
 )]
 struct ClientServerBenchmark {
-    /// Choose a network protocol between Udp and Tcp
-    #[structopt(long, default_value = "tcp")]
-    protocol: transport::NetworkProtocol,
     /// Hostname
     #[structopt(long, default_value = "127.0.0.1")]
     host: String,
@@ -266,13 +263,7 @@ impl ClientServerBenchmark {
     }
 
     async fn spawn_server(&self, state: AuthorityState) -> transport::SpawnedServer {
-        let server = network::Server::new(
-            self.protocol,
-            self.host.clone(),
-            self.port,
-            state,
-            self.buffer_size,
-        );
+        let server = network::Server::new(self.host.clone(), self.port, state, self.buffer_size);
         server.spawn().await.unwrap()
     }
 
@@ -294,7 +285,6 @@ impl ClientServerBenchmark {
         info!("Sending requests.");
         if self.max_in_flight > 0 {
             let mass_client = network::MassClient::new(
-                self.protocol,
                 self.host.clone(),
                 self.port,
                 self.buffer_size,
@@ -325,7 +315,6 @@ impl ClientServerBenchmark {
         } else {
             // Use actual client core
             let client = network::Client::new(
-                self.protocol,
                 self.host.clone(),
                 self.port,
                 self.buffer_size,
