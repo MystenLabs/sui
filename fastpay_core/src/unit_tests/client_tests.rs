@@ -1242,16 +1242,16 @@ async fn test_move_calls_certs() {
     assert_eq!(2, client1.object_ids.len());
     assert_eq!(2, client1.object_certs.len());
     assert!(client1.object_certs.contains_key(&gas_object_id));
-    assert!(client1.object_certs.contains_key(&new_object_id));
+    assert!(client1.object_certs.contains_key(new_object_id));
     assert_eq!(1, client1.object_certs.get(&gas_object_id).unwrap().len());
-    assert_eq!(1, client1.object_certs.get(&new_object_id).unwrap().len());
+    assert_eq!(1, client1.object_certs.get(new_object_id).unwrap().len());
     assert_eq!(
         SequenceNumber::from(1),
         client1.object_ids.get(&gas_object_id).unwrap().clone()
     );
     assert_eq!(
         SequenceNumber::from(1),
-        client1.object_ids.get(&new_object_id).unwrap().clone()
+        client1.object_ids.get(new_object_id).unwrap().clone()
     );
 
     // Transfer object with move
@@ -1262,8 +1262,8 @@ async fn test_move_calls_certs() {
             ident_str!("ObjectBasics").to_owned(),
             ident_str!("transfer").to_owned(),
             Vec::new(),
-            gas_object_ref.clone(),
-            vec![new_object_ref.clone()],
+            *gas_object_ref,
+            vec![*new_object_ref],
             pure_args,
             GAS_VALUE_FOR_TESTING / 2, // Make sure budget is less than gas value
         )
@@ -1292,10 +1292,10 @@ async fn test_move_calls_certs() {
     assert_eq!(2, client2.certificates.len());
     assert_eq!(1, client2.object_ids.len());
     assert_eq!(1, client2.object_certs.len());
-    assert!(client2.object_certs.contains_key(&new_object_id));
-    assert_eq!(2, client2.object_certs.get(&new_object_id).unwrap().len());
+    assert!(client2.object_certs.contains_key(new_object_id));
+    assert_eq!(2, client2.object_certs.get(new_object_id).unwrap().len());
     assert_eq!(
         SequenceNumber::from(2),
-        client2.object_ids.get(&new_object_id).unwrap().clone()
+        client2.object_ids.get(new_object_id).unwrap().clone()
     );
 }
