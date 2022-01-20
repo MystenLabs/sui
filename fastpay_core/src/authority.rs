@@ -210,7 +210,7 @@ impl AuthorityState {
         let transaction_digest = certificate.order.digest();
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
-        let (temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx);
+        let (temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx)?;
 
         // Update the database in an atomic manner
         let to_signed_effects = temporary_store.to_signed_effects(
@@ -228,21 +228,18 @@ impl AuthorityState {
         order: Order,
         mut inputs: Vec<Object>,
         tx_ctx: &mut TxContext,
-    ) -> (AuthorityTemporaryStore, ExecutionStatus) {
+    ) -> FastPayResult<(AuthorityTemporaryStore, ExecutionStatus)> {
         let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
         // unwraps here are safe because we built `inputs`
         let mut gas_object = inputs.pop().unwrap();
 
-        let (result, fail_gas) = match order.kind {
-            OrderKind::Transfer(t) => {
-                let result = AuthorityState::transfer(
-                    &mut temporary_store,
-                    inputs,
-                    t.recipient,
-                    gas_object.clone(),
-                );
-                (result, gas::MIN_OBJ_TRANSFER_GAS)
-            }
+        let status = match order.kind {
+            OrderKind::Transfer(t) => AuthorityState::transfer(
+                &mut temporary_store,
+                inputs,
+                t.recipient,
+                gas_object.clone(),
+            ),
             OrderKind::Call(c) => {
                 // unwraps here are safe because we built `inputs`
                 let package = inputs.pop().unwrap();
@@ -261,32 +258,24 @@ impl AuthorityState {
                     tx_ctx,
                 )
             }
-            OrderKind::Publish(m) => {
-                let result = adapter::publish(
-                    &mut temporary_store,
-                    self._native_functions.clone(),
-                    m.modules,
-                    m.sender,
-                    tx_ctx,
-                    gas_object.clone(),
-                );
-                (result, gas::MIN_MOVE_PUBLISH_GAS)
-            }
-        };
-        if result.is_err() {
-            // Roll back the temporary store if execution or gas deduction failed.
+            OrderKind::Publish(m) => adapter::publish(
+                &mut temporary_store,
+                self._native_functions.clone(),
+                m.modules,
+                m.sender,
+                tx_ctx,
+                gas_object.clone(),
+            ),
+        }?;
+        if let ExecutionStatus::Failure { gas_used, .. } = &status {
+            // Roll back the temporary store if execution failed.
             temporary_store.reset();
             // This gas deduction cannot fail.
-            gas::deduct_gas(&mut gas_object, fail_gas);
+            gas::deduct_gas(&mut gas_object, *gas_used);
             temporary_store.write_object(gas_object);
         }
-
-        let status = match result {
-            Ok(()) => ExecutionStatus::Success,
-            Err(err) => ExecutionStatus::Failure(Box::new(err)),
-        };
         temporary_store.ensure_active_inputs_mutated();
-        (temporary_store, status)
+        Ok((temporary_store, status))
     }
 
     fn transfer(
@@ -294,9 +283,14 @@ impl AuthorityState {
         mut inputs: Vec<Object>,
         recipient: Address,
         mut gas_object: Object,
-    ) -> FastPayResult {
+    ) -> FastPayResult<ExecutionStatus> {
         let gas_used = gas::calculate_object_transfer_cost(&inputs[0]);
-        gas::try_deduct_gas(&mut gas_object, gas_used)?;
+        if let Err(err) = gas::try_deduct_gas(&mut gas_object, gas_used) {
+            return Ok(ExecutionStatus::Failure {
+                gas_used: gas::MIN_OBJ_TRANSFER_GAS,
+                error: Box::new(err),
+            });
+        }
         temporary_store.write_object(gas_object);
 
         let mut output_object = inputs.pop().unwrap();
@@ -305,7 +299,7 @@ impl AuthorityState {
             Address::FastPay(addr) => addr,
         });
         temporary_store.write_object(output_object);
-        Ok(())
+        Ok(ExecutionStatus::Success)
     }
 
     pub async fn handle_account_info_request(
