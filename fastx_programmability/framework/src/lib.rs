@@ -92,28 +92,35 @@ pub fn build_move_package(
                         ),
                     });
                 }
-                // Collect all module names from the current package to be published.
-                // For each transistive dependent module, if they are not to be published,
-                // they must have a non-zero address (meaning they are already published on-chain).
-                // TODO: Shall we also check if they are really on-chain in the future?
-                let self_modules: HashSet<String> = compiled_modules
-                    .iter_modules()
-                    .iter()
-                    .map(|m| m.self_id().name().to_string())
-                    .collect();
-                if let Some(m) = package
-                    .transitive_compiled_modules()
-                    .iter_modules()
-                    .iter()
-                    .find(|m| {
-                        !self_modules.contains(m.self_id().name().as_str())
-                            && m.self_id().address() == &AccountAddress::ZERO
-                    })
-                {
-                    return Err(FastPayError::ModulePublishFailure { error: format!("Denpendent modules must have already been published on-chain with non-0 addresses. Violated by module {:?}", m.self_id()) });
-                }
             }
-            Ok(compiled_modules.iter_modules_owned())
+            // Collect all module names from the current package to be published.
+            // For each transitive dependent module, if they are not to be published,
+            // they must have a non-zero address (meaning they are already published on-chain).
+            // TODO: Shall we also check if they are really on-chain in the future?
+            let self_modules: HashSet<String> = compiled_modules
+                .iter_modules()
+                .iter()
+                .map(|m| m.self_id().name().to_string())
+                .collect();
+            if let Some(m) = package
+                .transitive_compiled_modules()
+                .iter_modules()
+                .iter()
+                .find(|m| {
+                    !self_modules.contains(m.self_id().name().as_str())
+                        && m.self_id().address() == &AccountAddress::ZERO
+                })
+            {
+                return Err(FastPayError::ModulePublishFailure { error: format!("Denpendent modules must have been published on-chain with non-0 addresses, unlike module {:?}", m.self_id()) });
+            }
+            Ok(package
+                .transitive_compiled_modules()
+                .compute_dependency_graph()
+                .compute_topological_order()
+                .unwrap()
+                .filter(|m| self_modules.contains(m.self_id().name().as_str()))
+                .cloned()
+                .collect())
         }
     }
 }
