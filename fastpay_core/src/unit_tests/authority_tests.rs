@@ -712,6 +712,7 @@ async fn test_handle_confirmation_order_gas() {
         .effects
         .status
         .unwrap_err()
+        .1
         .to_string();
     assert!(err_string.contains("Gas balance is 10, not enough to pay 16"));
     let result = run_test_with_gas(20).await;
