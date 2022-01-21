@@ -3,8 +3,8 @@
 
 use crate::downloader::*;
 use anyhow::{bail, ensure};
-use fastx_framework::build_move_pckage_to_bytes;
 use async_trait::async_trait;
+use fastx_framework::build_move_pckage_to_bytes;
 use fastx_types::messages::Address::FastPay;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
@@ -14,7 +14,6 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig;
 use rand::seq::SliceRandom;
-use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use std::time::Duration;
@@ -117,12 +116,12 @@ pub trait Client {
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
 
     /// Publish Move modules
-    fn publish(
+    async fn publish(
         &mut self,
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
         build_config: BuildConfig,
-    ) -> AsyncResult<'_, (CertifiedOrder, OrderEffects), FastPayError>;
+    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError>;
 
     /// Get the object information
     async fn get_object_info(
@@ -871,8 +870,7 @@ where
         let new_certificate = self
             .communicate_transaction_order(order)
             .await
-            .map_err(|e| FastPayError::ErrorWhileProcessingPublish{err: e.to_string()})?;
-
+            .map_err(|e| FastPayError::ErrorWhileProcessingPublish { err: e.to_string() })?;
 
         // Confirmation
         let order_info = self
@@ -969,7 +967,6 @@ where
     }
 
     async fn receive_object(&mut self, certificate: CertifiedOrder) -> Result<(), anyhow::Error> {
-        certificate.check(&self.committee)?;
         match &certificate.order.kind {
             OrderKind::Transfer(transfer) => {
                 ensure!(
@@ -1084,20 +1081,17 @@ where
         .await
     }
 
-<<<<<<< HEAD
-    fn publish(
+    async fn publish(
         &mut self,
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
         build_config: BuildConfig,
-    ) -> AsyncResult<'_, (CertifiedOrder, OrderEffects), FastPayError> {
-        Box::pin(self.publish(package_source_files_path, gas_object_ref, build_config))
+    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
+        self.publish(package_source_files_path, gas_object_ref, build_config)
+            .await
     }
 
-    fn get_object_info(
-=======
     async fn get_object_info(
->>>>>>> main
         &mut self,
         object_info_req: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, anyhow::Error> {
