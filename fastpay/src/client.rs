@@ -96,7 +96,6 @@ fn make_benchmark_transfer_orders(
     for account in accounts_config.accounts_mut() {
         let gas_object_id = *account.gas_object_ids.iter().next().unwrap();
         let gas_object_ref = *account.object_refs.get(&gas_object_id).unwrap();
-        let (gas_object_id, _, _) = gas_object_ref;
         let object_ref = *account
             .object_refs
             .iter()
