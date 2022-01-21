@@ -53,10 +53,6 @@ enum ServerCommands {
     /// Generate a new server configuration and output its public description
     #[structopt(name = "generate")]
     Generate {
-        /// Chooses a network protocol between Udp and Tcp
-        #[structopt(long, default_value = "Udp")]
-        protocol: transport::NetworkProtocol,
-
         /// Sets the public name of the host
         #[structopt(long)]
         host: String,
@@ -91,7 +87,6 @@ fn main() {
         }
 
         ServerCommands::Generate {
-            protocol,
             host,
             port,
             database_path,
@@ -108,7 +103,6 @@ fn main() {
 
             // The configuration of this authority
             let authority_config = server_api::create_server_configs(
-                protocol,
                 host,
                 port,
                 db_path.to_str().unwrap().to_string(),

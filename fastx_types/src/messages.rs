@@ -131,6 +131,26 @@ pub enum ExecutionStatus {
     Failure(Box<FastPayError>),
 }
 
+impl ExecutionStatus {
+    pub fn unwrap(&self) {
+        match self {
+            ExecutionStatus::Success => (),
+            ExecutionStatus::Failure(_) => {
+                panic!("Unable to unwrap() on {:?}", self);
+            }
+        }
+    }
+
+    pub fn unwrap_err(&self) -> &FastPayError {
+        match self {
+            ExecutionStatus::Success => {
+                panic!("Unable to unwrap() on {:?}", self);
+            }
+            ExecutionStatus::Failure(err) => err,
+        }
+    }
+}
+
 /// The response from processing an order or a certified order
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct OrderEffects {
@@ -139,7 +159,7 @@ pub struct OrderEffects {
     // The transaction digest
     pub transaction_digest: TransactionDigest,
     // ObjectRefs containing mutated or new objects
-    pub mutated: Vec<ObjectRef>,
+    pub mutated: Vec<(ObjectRef, FastPayAddress)>,
     // Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
     // TODO: add events here too.

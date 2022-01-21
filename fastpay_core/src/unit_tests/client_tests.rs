@@ -33,40 +33,44 @@ fn max_files_client_tests() -> i32 {
 #[derive(Clone)]
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
+#[async_trait]
 impl AuthorityClient for LocalAuthorityClient {
-    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
+    async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_order(order).await })
+        let result = state.lock().await.handle_order(order).await;
+        result
     }
 
-    fn handle_confirmation_order(
+    async fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
+    ) -> Result<OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_confirmation_order(order).await })
+        let result = state.lock().await.handle_confirmation_order(order).await;
+        result
     }
 
-    fn handle_account_info_request(
+    async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
-    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
+    ) -> Result<AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move {
-            state
-                .lock()
-                .await
-                .handle_account_info_request(request)
-                .await
-        })
+
+        let result = state
+            .lock()
+            .await
+            .handle_account_info_request(request)
+            .await;
+        result
     }
 
-    fn handle_object_info_request(
+    async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
-    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
+    ) -> Result<ObjectInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_object_info_request(request).await })
+        let x = state.lock().await.handle_object_info_request(request).await;
+        x
     }
 }
 
@@ -780,10 +784,10 @@ async fn test_move_calls_object_create() {
     let gas_obj_idx = order_effects
         .mutated
         .iter()
-        .position(|e| e.0 == gas_object_ref.0);
+        .position(|(e, _)| e.0 == gas_object_ref.0);
 
     assert!(gas_obj_idx.is_some());
-    let new_obj_ref = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    let (new_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
     assert_ne!(gas_object_ref, *new_obj_ref);
 }
 
@@ -844,9 +848,9 @@ async fn test_move_calls_object_transfer() {
     let gas_obj_idx = order_effects
         .mutated
         .iter()
-        .position(|e| e.0 == gas_object_ref.0);
+        .position(|(e, _)| e.0 == gas_object_ref.0);
     // Get the object created from the call
-    let new_obj_ref = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    let (new_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
     // Fetch the full object
     let new_obj = client1
         .get_object_info(ObjectInfoRequest {
@@ -896,10 +900,10 @@ async fn test_move_calls_object_transfer() {
     let gas_obj_idx = order_effects
         .mutated
         .iter()
-        .position(|e| e.0 == gas_object_ref.0);
+        .position(|(e, _)| e.0 == gas_object_ref.0);
 
     assert!(gas_obj_idx.is_some());
-    let transferred_obj_ref = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    let (transferred_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
     assert_ne!(gas_object_ref, *transferred_obj_ref);
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
@@ -974,9 +978,9 @@ async fn test_move_calls_object_transfer_and_freeze() {
     let gas_obj_idx = order_effects
         .mutated
         .iter()
-        .position(|e| e.0 == gas_object_ref.0);
+        .position(|(e, _)| e.0 == gas_object_ref.0);
     // Get the object created from the call
-    let new_obj_ref = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    let (new_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
     // Fetch the full object
     let new_obj = client1
         .get_object_info(ObjectInfoRequest {
@@ -1026,10 +1030,10 @@ async fn test_move_calls_object_transfer_and_freeze() {
     let gas_obj_idx = order_effects
         .mutated
         .iter()
-        .position(|e| e.0 == gas_object_ref.0);
+        .position(|(e, _)| e.0 == gas_object_ref.0);
 
     assert!(gas_obj_idx.is_some());
-    let transferred_obj_ref = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    let (transferred_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
     assert_ne!(gas_object_ref, *transferred_obj_ref);
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
@@ -1106,9 +1110,9 @@ async fn test_move_calls_object_delete() {
     let gas_obj_idx = order_effects
         .mutated
         .iter()
-        .position(|e| e.0 == gas_object_ref.0);
+        .position(|(e, _)| e.0 == gas_object_ref.0);
     // Get the object created from the call
-    let new_obj_ref = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    let (new_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
     // Fetch the full object
     let new_obj = client1
         .get_object_info(ObjectInfoRequest {
@@ -1157,7 +1161,7 @@ async fn test_move_calls_object_delete() {
     let gas_obj_idx = order_effects
         .mutated
         .iter()
-        .position(|e| e.0 == gas_object_ref.0);
+        .position(|(e, _)| e.0 == gas_object_ref.0);
 
     assert_eq!(gas_obj_idx.unwrap(), 0);
     // Try to fetch the deleted object
@@ -1170,4 +1174,132 @@ async fn test_move_calls_object_delete() {
         .await;
 
     assert!(deleted_object_resp.is_err());
+}
+
+#[tokio::test]
+async fn test_move_calls_certs() {
+    let (authority_clients, committee) = init_local_authorities(1).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let mut client2 = make_client(authority_clients.clone(), committee);
+
+    let gas_object_id = ObjectID::random();
+
+    // TODO: authority should not require seq# or digest for package in Move calls. Use dummy values
+    let framework_obj_ref = (
+        FASTX_FRAMEWORK_ADDRESS,
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    );
+
+    // Populate authorities with obj data
+    let authority_objects = vec![vec![gas_object_id]];
+
+    let gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .get(&gas_object_id)
+    .unwrap()
+    .to_object_reference();
+
+    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    let object_value: u64 = 100;
+    let pure_args = vec![
+        object_value.to_le_bytes().to_vec(),
+        bcs::to_bytes(&client1.address.to_vec()).unwrap(),
+    ];
+
+    // Create new object with move
+    let (cert, effect) = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await
+        .unwrap();
+
+    let (new_object_ref, _) = effect
+        .mutated
+        .iter()
+        .find(|((id, _, _), _)| id != &gas_object_id)
+        .unwrap();
+
+    let (gas_object_ref, _) = effect
+        .mutated
+        .iter()
+        .find(|((id, _, _), _)| id == &gas_object_id)
+        .unwrap();
+
+    let (new_object_id, _, _) = new_object_ref;
+
+    // Client 1 should have one certificate, one new object and one gas object, each with one associated certificate.
+    assert!(client1.certificates.contains_key(&cert.order.digest()));
+    assert_eq!(1, client1.certificates.len());
+    assert_eq!(2, client1.object_ids.len());
+    assert_eq!(2, client1.object_certs.len());
+    assert!(client1.object_certs.contains_key(&gas_object_id));
+    assert!(client1.object_certs.contains_key(new_object_id));
+    assert_eq!(1, client1.object_certs.get(&gas_object_id).unwrap().len());
+    assert_eq!(1, client1.object_certs.get(new_object_id).unwrap().len());
+    assert_eq!(
+        SequenceNumber::from(1),
+        client1.object_ids.get(&gas_object_id).unwrap().clone()
+    );
+    assert_eq!(
+        SequenceNumber::from(1),
+        client1.object_ids.get(new_object_id).unwrap().clone()
+    );
+
+    // Transfer object with move
+    let pure_args = vec![bcs::to_bytes(&client2.address.to_vec()).unwrap()];
+    let (cert, _) = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("transfer").to_owned(),
+            Vec::new(),
+            *gas_object_ref,
+            vec![*new_object_ref],
+            pure_args,
+            GAS_VALUE_FOR_TESTING / 2, // Make sure budget is less than gas value
+        )
+        .await
+        .unwrap();
+
+    // Client 1 should have two certificate, one gas object, with two associated certificate.
+    assert!(client1.certificates.contains_key(&cert.order.digest()));
+    assert_eq!(2, client1.certificates.len());
+    assert_eq!(1, client1.object_ids.len());
+    assert_eq!(1, client1.object_certs.len());
+    assert!(client1.object_certs.contains_key(&gas_object_id));
+    assert_eq!(2, client1.object_certs.get(&gas_object_id).unwrap().len());
+    assert_eq!(
+        SequenceNumber::from(2),
+        client1.object_ids.get(&gas_object_id).unwrap().clone()
+    );
+
+    // Sync client 2
+    client2
+        .sync_client_state_with_random_authority()
+        .await
+        .unwrap();
+
+    // Client 2 should have 2 certificate, one new object, with two associated certificate.
+    assert_eq!(2, client2.certificates.len());
+    assert_eq!(1, client2.object_ids.len());
+    assert_eq!(1, client2.object_certs.len());
+    assert!(client2.object_certs.contains_key(new_object_id));
+    assert_eq!(2, client2.object_certs.get(new_object_id).unwrap().len());
+    assert_eq!(
+        SequenceNumber::from(2),
+        client2.object_ids.get(new_object_id).unwrap().clone()
+    );
 }

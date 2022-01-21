@@ -13,10 +13,6 @@ use log::*;
 use std::time::Duration;
 use structopt::StructOpt;
 
-fn parse_public_key_bytes(src: &str) -> Result<PublicKeyBytes, hex::FromHexError> {
-    decode_address_hex(src)
-}
-
 #[derive(StructOpt)]
 #[structopt(
     name = "FastPay Client",
@@ -157,7 +153,7 @@ fn main() {
                 recv_timeout,
                 buffer_size,
             );
-            cli_pretty::format_obj_info_response(&obj_info);
+            cli_pretty::format_obj_info_response(&obj_info).printstd();
         }
 
         ClientCommands::Call { path } => {
@@ -171,7 +167,7 @@ fn main() {
                 recv_timeout,
                 buffer_size,
             );
-            cli_pretty::format_order_effects(&order_effetcs);
+            cli_pretty::format_order_effects(&order_effetcs).printstd();
         }
 
         ClientCommands::Transfer {
@@ -259,11 +255,15 @@ fn main() {
                 .write(initial_state_config_path.as_str())
                 .expect("Unable to write to initial state config file");
 
-            cli_pretty::format_account_configs_create(acc_cfgs);
+            cli_pretty::format_account_configs_create(acc_cfgs).printstd();
         }
     }
 
     accounts_config
         .write(accounts_config_path)
         .expect("Unable to write user accounts");
+}
+
+fn parse_public_key_bytes(src: &str) -> Result<PublicKeyBytes, hex::FromHexError> {
+    decode_address_hex(src)
 }

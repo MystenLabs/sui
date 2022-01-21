@@ -32,24 +32,22 @@ impl MessageHandler for TestService {
     }
 }
 
-async fn test_server(protocol: NetworkProtocol) -> Result<(usize, usize), std::io::Error> {
+async fn test_server() -> Result<(usize, usize), std::io::Error> {
     let address = get_new_local_address().await.unwrap();
 
     let counter = Arc::new(AtomicUsize::new(0));
     let mut received = 0;
 
-    let server = protocol
-        .spawn_server(&address, TestService::new(counter.clone()), 100)
-        .await?;
+    let server = spawn_server(&address, TestService::new(counter.clone()), 100).await?;
 
-    let mut client = protocol.connect(address.clone(), 1000).await?;
+    let mut client = connect(address.clone(), 1000).await?;
     client.write_data(b"abcdef").await?;
     received += client.read_data().await?.len();
     client.write_data(b"abcd").await?;
     received += client.read_data().await?.len();
 
     // Use a second connection (here pooled).
-    let mut pool = protocol.make_outgoing_connection_pool().await?;
+    let mut pool = make_outgoing_connection_pool().await?;
     pool.send_data_to(b"abc", &address).await?;
 
     // Try to read data on the first connection (should fail).
@@ -73,17 +71,9 @@ async fn test_server(protocol: NetworkProtocol) -> Result<(usize, usize), std::i
 }
 
 #[test]
-fn udp_server() {
-    let rt = Runtime::new().unwrap();
-    let (processed, received) = rt.block_on(test_server(NetworkProtocol::Udp)).unwrap();
-    assert_eq!(processed, 13);
-    assert_eq!(received, 10);
-}
-
-#[test]
 fn tcp_server() {
     let rt = Runtime::new().unwrap();
-    let (processed, received) = rt.block_on(test_server(NetworkProtocol::Tcp)).unwrap();
+    let (processed, received) = rt.block_on(test_server()).unwrap();
     // Active TCP connections are allowed to finish before the server is gracefully killed.
     assert_eq!(processed, 17);
     assert_eq!(received, 14);

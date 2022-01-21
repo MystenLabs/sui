@@ -1,7 +1,6 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastpay::transport::NetworkProtocol;
 use fastpay::{config::*, network};
 use fastpay_core::authority::*;
 use fastx_types::{base_types::*, committee::Committee, object::Object};
@@ -12,10 +11,8 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-
 /// Create the configs for a server running one FastX authority
 pub fn create_server_configs(
-    protocol: NetworkProtocol,
     host: String,
     port: u32,
     database_path: String,
@@ -23,7 +20,6 @@ pub fn create_server_configs(
     // Create a keypair for this server
     let (address, key) = get_key_pair();
     let authority = AuthorityConfig {
-        network_protocol: protocol,
         address,
         host,
         base_port: port,
@@ -77,7 +73,6 @@ pub fn run_server(
     });
 
     let server = network::Server::new(
-        server_config.authority.network_protocol,
         local_ip_addr.to_string(),
         server_config.authority.base_port,
         state,

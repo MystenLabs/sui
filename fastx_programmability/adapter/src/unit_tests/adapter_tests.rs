@@ -123,7 +123,7 @@ impl ModuleResolver for InMemoryStorage {
         Ok(self
             .read_object(module_id.address())
             .map(|o| match &o.data {
-                Data::Package(m) => m[module_id.name().as_str()].clone(),
+                Data::Package(m) => m[module_id.name().as_str()].clone().into_vec(),
                 Data::Move(_) => panic!("Type error"),
             }))
     }
@@ -168,8 +168,9 @@ fn call(
         pure_args,
         gas_budget,
         gas_object,
-        TxContext::random_for_testing_only(),
+        &TxContext::random_for_testing_only(),
     )
+    .0
 }
 
 /// Exercise test functions that create, transfer, read, update, and delete objects

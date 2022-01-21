@@ -36,7 +36,7 @@ done
 # Start servers
 for I in 1 2 3 4
 do
-    ./server --server server"$I".json run --initial-accounts initial_accounts.toml --committee committee.json &
+    ./server --server server"$I".json run --initial-accounts initial_accounts.toml --committee committee.json --local-ip 0.0.0.0 &
 done
  
 # Query account addresses
@@ -52,8 +52,14 @@ ACCOUNT2=`./client --committee committee.json --accounts accounts.json query-acc
 ACCOUNT1_OBJECT1=`./client --committee committee.json --accounts accounts.json query-objects --address "$ACCOUNT1" | head -n 1 |  awk -F: '{ print $1 }'`
 # Pick the last item as gas object for Account1
 ACCOUNT1_GAS_OBJECT=`./client --committee committee.json --accounts accounts.json query-objects --address "$ACCOUNT1" | tail -n -1 |  awk -F: '{ print $1 }'`
+
+# Inspect the object
+./client --committee committee.json --accounts accounts.json get-obj-info "$ACCOUNT1_OBJECT1"
+# Inspect the gas object
+./client --committee committee.json --accounts accounts.json get-obj-info "$ACCOUNT1_GAS_OBJECT"
+
 # Transfer object by ObjectID
-./client --committee committee.json --accounts accounts.json transfer "$ACCOUNT1_OBJECT1" "$ACCOUNT1_GAS_OBJECT" --to "$ACCOUNT2"
+./client --committee committee.json --accounts accounts.json transfer "$ACCOUNT1_OBJECT1" "$ACCOUNT1_GAS_OBJECT" --from "$ACCOUNT1" --to "$ACCOUNT2"
 # Query objects again
 ./client --committee committee.json --accounts accounts.json query-objects --address "$ACCOUNT1"
 ./client --committee committee.json --accounts accounts.json query-objects --address "$ACCOUNT2"

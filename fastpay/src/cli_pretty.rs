@@ -33,7 +33,7 @@ pub fn format_obj_info_response(obj_info: &ObjectInfoResponse) -> Table {
 
 pub fn format_order_effects(order_effetcs: &OrderEffects) -> Table {
     let mut tbl = Table::new();
-    tbl.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    tbl.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
     tbl.set_titles(row![
         "Execution Success",
         "Mutated Objects",
@@ -46,7 +46,7 @@ pub fn format_order_effects(order_effetcs: &OrderEffects) -> Table {
     let mut del_table = Table::new();
     del_table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
 
-    mut_table.set_titles(row!["ObjectID", "Version"]);
+    mut_table.set_titles(row!["ObjectID", "Version", "Owner"]);
     del_table.set_titles(row!["ObjectID", "Version"]);
 
     for idx in 0..cmp::max(order_effetcs.deleted.len(), order_effetcs.mutated.len()) {
@@ -58,10 +58,16 @@ pub fn format_order_effects(order_effetcs: &OrderEffects) -> Table {
         let mut_str = order_effetcs
             .mutated
             .get(idx)
-            .map(|w| (format!("{:?}", w.0), format!("{:?}", u64::from(w.1))))
-            .unwrap_or_else(|| ("".to_string(), "".to_string()));
+            .map(|w| {
+                (
+                    format!("{:?}", w.0 .0),
+                    format!("{:?}", u64::from(w.0 .1)),
+                    format!("{:?}", encode_address_hex(&w.1)),
+                )
+            })
+            .unwrap_or_else(|| ("".to_string(), "".to_string(), "".to_string()));
         if !mut_str.0.is_empty() {
-            mut_table.add_row(row![mut_str.0, mut_str.1]);
+            mut_table.add_row(row![mut_str.0, mut_str.1, mut_str.2]);
         }
         if !del_str.0.is_empty() {
             del_table.add_row(row![del_str.0, del_str.1]);
@@ -77,7 +83,7 @@ pub fn format_order_effects(order_effetcs: &OrderEffects) -> Table {
 
 pub fn format_objects(obj_map: &BTreeMap<AccountAddress, SequenceNumber>) -> Table {
     let mut tbl = Table::new();
-    tbl.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    tbl.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
 
     tbl.set_titles(row!["ObjectID", "Version"]);
     for (obj_id, seq_no) in obj_map {

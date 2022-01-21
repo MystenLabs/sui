@@ -27,7 +27,6 @@ pub fn make_authority_clients(
     for config in &committee_config.authorities {
         let config = config.clone();
         let client = network::Client::new(
-            config.network_protocol,
             config.host,
             config.base_port,
             buffer_size,
@@ -49,7 +48,6 @@ pub fn make_authority_mass_clients(
     let mut authority_clients = Vec::new();
     for config in &committee_config.authorities {
         let client = network::MassClient::new(
-            config.network_protocol,
             config.host.clone(),
             config.base_port,
             buffer_size,

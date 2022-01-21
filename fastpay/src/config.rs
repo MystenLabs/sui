@@ -1,7 +1,6 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transport::NetworkProtocol;
 use fastpay_core::client::ClientState;
 use fastx_types::{
     base_types::*,
@@ -21,7 +20,6 @@ use std::{
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthorityConfig {
-    pub network_protocol: NetworkProtocol,
     #[serde(
         serialize_with = "address_as_hex",
         deserialize_with = "address_from_hex"

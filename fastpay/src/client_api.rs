@@ -64,7 +64,7 @@ pub fn get_account_objects(
 
         // Sync with high prio
         for _ in 0..committee_config.authorities.len() {
-            client_state.sync_client_state_with_random_authority();
+            let _ = client_state.sync_client_state_with_random_authority();
         }
         let objects_ids = client_state.object_ids();
         objects_ids.clone()
@@ -114,7 +114,7 @@ pub fn transfer_object(
             .receive_object(cert.clone())
             .await
             .unwrap();
-        println!("{:#?}", client_state.all_certificates());
+        client_state.all_certificates();
 
         accounts_config.update_from_state(&recipient_client_state);
         cert
