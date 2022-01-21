@@ -10,6 +10,7 @@ use fastx_types::{
     },
     error::{FastPayError, FastPayResult},
     gas,
+    messages::ExecutionStatus,
     object::{Data, MoveObject, Object},
     storage::Storage,
     FASTX_FRAMEWORK_ADDRESS,
@@ -44,7 +45,11 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<MoveVM>, FastPayE
 
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
 /// Execution will read from/write to the store in `state_view`.
-/// Returns both the execution result, and the amount of gas used (even in the case of error).
+/// IMPORTANT NOTES on the return value:
+/// The return value indicates whether a system error has occured (i.e. issues with the fastx system, not with user transaction).
+/// As long as there are no system issues we return Ok(ExecutionStatus).
+/// ExecutionStatus indicates the execution result. If execution failed, we wrap both the gas used and the error
+/// into ExecutionStatus::Failure.
 #[allow(clippy::too_many_arguments)]
 pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     vm: &MoveVM,
@@ -59,7 +64,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     gas_budget: u64,
     mut gas_object: Object,
     ctx: &TxContext,
-) -> (FastPayResult, u64) {
+) -> FastPayResult<ExecutionStatus> {
     let TypeCheckSuccess {
         module_id,
         args,
@@ -76,7 +81,10 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     ) {
         Ok(ok) => ok,
         Err(err) => {
-            return (Err(err), 0);
+            return Ok(ExecutionStatus::Failure {
+                gas_used: gas::MIN_MOVE_CALL_GAS,
+                error: Box::new(err),
+            });
         }
     };
 
@@ -87,7 +95,10 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         }) {
             Ok(ok) => ok,
             Err(err) => {
-                return (Err(err), 0);
+                return Ok(ExecutionStatus::Failure {
+                    gas_used: gas::MIN_MOVE_CALL_GAS,
+                    error: Box::new(err),
+                });
             }
         };
     let session = vm.new_session(state_view);
@@ -129,20 +140,25 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             match gas::try_deduct_gas(&mut gas_object, total_gas) {
                 Ok(()) => {
                     state_view.write_object(gas_object);
-                    (Ok(()), total_gas)
+                    Ok(ExecutionStatus::Success)
                 }
-                Err(err) => (Err(err), gas_budget),
+                Err(err) => Ok(ExecutionStatus::Failure {
+                    gas_used: gas_budget,
+                    error: Box::new(err),
+                }),
             }
         }
-        ExecutionResult::Fail { error, gas_used } => (
-            Err(FastPayError::AbortedExecution {
+        ExecutionResult::Fail { error, gas_used } => Ok(ExecutionStatus::Failure {
+            gas_used,
+            error: Box::new(FastPayError::AbortedExecution {
                 error: error.to_string(),
             }),
-            gas_used,
-        ),
+        }),
     }
 }
 
+/// Similar to execute(), only returns Err if there are system issues.
+/// ExecutionStatus contains the actual execution result.
 pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
     natives: NativeFunctionTable,
@@ -150,10 +166,15 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     sender: FastPayAddress,
     ctx: &mut TxContext,
     mut gas_object: Object,
-) -> FastPayResult {
+) -> FastPayResult<ExecutionStatus> {
     // Deduct gas upfront, if not enough balance, bail out early.
     let gas_cost = gas::calculate_module_publish_cost(&module_bytes);
-    gas::try_deduct_gas(&mut gas_object, gas_cost)?;
+    if let Err(err) = gas::try_deduct_gas(&mut gas_object, gas_cost) {
+        return Ok(ExecutionStatus::Failure {
+            gas_used: gas::MIN_MOVE_PUBLISH_GAS,
+            error: Box::new(err),
+        });
+    }
     state_view.write_object(gas_object);
 
     let mut modules = module_bytes
@@ -167,8 +188,11 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
     // run validation checks
     if modules.is_empty() {
-        return Err(FastPayError::ModulePublishFailure {
-            error: "Publishing empty list of modules".to_string(),
+        return Ok(ExecutionStatus::Failure {
+            gas_used: gas::MIN_MOVE_PUBLISH_GAS,
+            error: Box::new(FastPayError::ModulePublishFailure {
+                error: "Publishing empty list of modules".to_string(),
+            }),
         });
     }
     let package_id = generate_package_id(&mut modules, ctx)?;
@@ -178,7 +202,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     let package_object = Object::new_package(modules, sender, ctx.digest());
     state_view.write_object(package_object);
 
-    Ok(())
+    Ok(ExecutionStatus::Success)
 }
 
 /// Rewrite the self_id of `modules`, then verify and link the result
