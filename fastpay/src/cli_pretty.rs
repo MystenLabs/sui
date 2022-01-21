@@ -13,7 +13,7 @@ use prettytable::{cell, format, row, Table};
 
 pub fn format_obj_info_response(obj_info: &ObjectInfoResponse) -> Table {
     let mut tbl = Table::new();
-    tbl.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    tbl.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
 
     let type_str = match obj_info.object.data.type_() {
         Some(v) => format!("{}", v),

@@ -98,7 +98,6 @@ fn main() {
 
     let acc1_obj1 = acc1_objs.get(0).unwrap().0;
     let acc1_gas = acc1_objs.get(1).unwrap().0;
-    println!("{} {}", acc1_obj1, acc1_gas);
 
     let acc2_obj1 = acc2_objs.get(0).unwrap().0;
 
@@ -120,26 +119,11 @@ fn main() {
         buffer_size,
     );
 
-    let o1 = client_api::get_object_info(
-        acc1_obj1.object.id(),
-        &mut acc_cfg,
-        &committee_cfg,
-        send_timeout,
-        recv_timeout,
-        buffer_size,
-    );
-    let o2 = client_api::get_object_info(
-        acc2_obj1.object.id(),
-        &mut acc_cfg,
-        &committee_cfg,
-        send_timeout,
-        recv_timeout,
-        buffer_size,
-    );
+    println!("Before transfer");
 
     // Pretty print the object states
-    cli_pretty::format_obj_info_response(&o1).printstd();
-    cli_pretty::format_obj_info_response(&o2).printstd();
+    cli_pretty::format_obj_info_response(&acc1_obj1).printstd();
+    cli_pretty::format_obj_info_response(&acc2_obj1).printstd();
 
     // Transfer from ACC1 to ACC2
     client_api::transfer_object(
@@ -171,6 +155,8 @@ fn main() {
         recv_timeout,
         buffer_size,
     );
+
+    println!("After transfer");
 
     cli_pretty::format_obj_info_response(&o1).printstd();
     cli_pretty::format_obj_info_response(&o2).printstd();
