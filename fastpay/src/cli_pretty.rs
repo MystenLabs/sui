@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{cmp, collections::BTreeMap};
+use std::cmp;
 
 use fastpay::config::InitialStateConfig;
 use fastx_types::{
@@ -20,8 +20,9 @@ pub fn format_obj_info_response(obj_info: &ObjectInfoResponse) -> Table {
         None => "N/A".to_owned(),
     };
 
-    tbl.set_titles(row!["Owner", "Version", "Type", "Readonly"]);
+    tbl.set_titles(row!["ID", "Owner", "Version", "Type", "Readonly"]);
     tbl.add_row(row![
+        obj_info.object.id(),
         encode_address_hex(&obj_info.object.owner),
         u64::from(obj_info.object.version()),
         type_str,
@@ -81,7 +82,7 @@ pub fn format_order_effects(order_effetcs: &OrderEffects) -> Table {
     tbl
 }
 
-pub fn format_objects(obj_map: &BTreeMap<AccountAddress, SequenceNumber>) -> Table {
+pub fn format_objects(obj_map: &[(AccountAddress, SequenceNumber)]) -> Table {
     let mut tbl = Table::new();
     tbl.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
 

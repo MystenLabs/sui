@@ -5,7 +5,7 @@
 
 mod cli_pretty;
 mod client_api;
-mod client_api_helpers;
+
 use fastpay::{config::*, transport};
 use fastx_types::base_types::*;
 
@@ -177,8 +177,8 @@ fn main() {
             gas_object_id,
         } => {
             let cert = client_api::transfer_object(
-                to,
                 from,
+                to,
                 object_id,
                 gas_object_id,
                 &mut accounts_config,

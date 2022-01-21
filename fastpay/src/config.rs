@@ -59,6 +59,7 @@ impl AuthorityServerConfig {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct CommitteeConfig {
     pub authorities: Vec<AuthorityConfig>,
 }
@@ -89,6 +90,18 @@ impl CommitteeConfig {
             map.insert(authority.address, 1);
         }
         map
+    }
+
+    pub fn new() -> Self {
+        Self {
+            authorities: Vec::new(),
+        }
+    }
+}
+
+impl Default for CommitteeConfig {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -191,6 +204,12 @@ pub struct AccountsConfig {
 }
 
 impl AccountsConfig {
+    pub fn new() -> Self {
+        Self {
+            accounts: BTreeMap::new(),
+        }
+    }
+
     pub fn get(&self, address: &FastPayAddress) -> Option<&UserAccount> {
         self.accounts.get(address)
     }
@@ -274,12 +293,18 @@ impl AccountsConfig {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+impl Default for AccountsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct InitialStateConfigEntry {
     pub address: FastPayAddress,
     pub object_ids_and_gas_vals: Vec<(ObjectID, u64)>,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct InitialStateConfig {
     pub config: Vec<InitialStateConfigEntry>,
 }

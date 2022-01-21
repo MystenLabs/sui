@@ -1,15 +1,16 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastpay::{config::*, network};
+use fastpay::config::*;
+use fastpay::network;
 use fastpay_core::authority::*;
 use fastx_types::{base_types::*, committee::Committee, object::Object};
+use tokio::runtime::Runtime;
 
 use futures::future::join_all;
 use log::*;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::runtime::Runtime;
 
 /// Create the configs for a server running one FastX authority
 pub fn create_server_configs(
@@ -57,7 +58,6 @@ pub fn run_server(
         .await;
         for initial_state_cfg_entry in &initial_accounts_config.config {
             let address = &initial_state_cfg_entry.address;
-            println!("{}", initial_state_cfg_entry.object_ids_and_gas_vals.len());
             for (object_id, gas_val) in &initial_state_cfg_entry.object_ids_and_gas_vals {
                 let object = Object::with_id_owner_gas_for_testing(
                     *object_id,
