@@ -189,6 +189,22 @@ impl<A> ClientState<A> {
     pub fn all_certificates(&self) -> &BTreeMap<TransactionDigest, CertifiedOrder> {
         &self.certificates
     }
+
+    pub fn insert_object(&mut self, object_ref: &ObjectRef, digest: &TransactionDigest) {
+        let (object_id, seq, _) = object_ref;
+        self.object_sequence_numbers.insert(*object_id, *seq);
+        self.object_certs
+            .entry(*object_id)
+            .or_default()
+            .push(*digest);
+        self.object_refs.insert(*object_id, *object_ref);
+    }
+
+    pub fn remove_object(&mut self, object_id: &ObjectID) {
+        self.object_sequence_numbers.remove(object_id);
+        self.object_certs.remove(object_id);
+        self.object_refs.remove(object_id);
+    }
 }
 
 #[derive(Clone)]
@@ -602,9 +618,7 @@ where
             .await?;
         if let FastPay(address) = recipient {
             if address != self.address {
-                self.object_certs.remove(&object_id);
-                self.object_sequence_numbers.remove(&object_id);
-                self.object_refs.remove(&object_id);
+                self.remove_object(&object_id);
             }
         }
 
@@ -772,13 +786,9 @@ where
                 // only update if data is new
                 if old_seq < seq {
                     if owner == self.address {
-                        self.object_sequence_numbers.insert(object_id, seq);
-                        self.object_certs.entry(object_id).or_default().push(digest);
-                        self.object_refs.insert(object_id, object_ref);
+                        self.insert_object(&object_ref, &digest);
                     } else {
-                        self.object_sequence_numbers.remove(&object_id);
-                        self.object_certs.remove(&object_id);
-                        self.object_refs.remove(&object_id);
+                        self.remove_object(&object_id);
                     }
                 } else if old_seq == seq && owner == self.address {
                     // ObjectRef can be 1 version behind because it's only updated after confirmation.
@@ -793,9 +803,7 @@ where
                     .cloned()
                     .unwrap_or_default();
                 if old_seq < seq {
-                    self.object_sequence_numbers.remove(&object_id);
-                    self.object_certs.remove(&object_id);
-                    self.object_refs.remove(&object_id);
+                    self.remove_object(&object_id);
                 }
             }
             Ok(())
