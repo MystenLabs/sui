@@ -727,11 +727,16 @@ async fn test_move_calls_object_create() {
     let gas_object_id = ObjectID::random();
 
     // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
-    let framework_obj_ref = (
-        FASTX_FRAMEWORK_ADDRESS,
-        SequenceNumber::new(),
-        ObjectDigest::new([0; 32]),
-    );
+    let framework_obj_ref = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: FASTX_FRAMEWORK_ADDRESS,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
 
     // Populate authorities with obj data
     let authority_objects = vec![
@@ -801,12 +806,16 @@ async fn test_move_calls_object_transfer() {
     let gas_object_id = ObjectID::random();
 
     // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
-    let framework_obj_ref = (
-        FASTX_FRAMEWORK_ADDRESS,
-        SequenceNumber::new(),
-        ObjectDigest::new([0; 32]),
-    );
-
+    let framework_obj_ref = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: FASTX_FRAMEWORK_ADDRESS,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
     // Populate authorities with obj data
     let authority_objects = vec![
         vec![gas_object_id],
@@ -931,11 +940,16 @@ async fn test_move_calls_object_transfer_and_freeze() {
     let gas_object_id = ObjectID::random();
 
     // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
-    let framework_obj_ref = (
-        FASTX_FRAMEWORK_ADDRESS,
-        SequenceNumber::new(),
-        ObjectDigest::new([0; 32]),
-    );
+    let framework_obj_ref = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: FASTX_FRAMEWORK_ADDRESS,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
 
     // Populate authorities with obj data
     let authority_objects = vec![
@@ -1063,11 +1077,16 @@ async fn test_move_calls_object_delete() {
     let gas_object_id = ObjectID::random();
 
     // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
-    let framework_obj_ref = (
-        FASTX_FRAMEWORK_ADDRESS,
-        SequenceNumber::new(),
-        ObjectDigest::new([0; 32]),
-    );
+    let framework_obj_ref = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: FASTX_FRAMEWORK_ADDRESS,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
 
     // Populate authorities with obj data
     let authority_objects = vec![
@@ -1185,11 +1204,16 @@ async fn test_move_calls_certs() {
     let gas_object_id = ObjectID::random();
 
     // TODO: authority should not require seq# or digest for package in Move calls. Use dummy values
-    let framework_obj_ref = (
-        FASTX_FRAMEWORK_ADDRESS,
-        SequenceNumber::new(),
-        ObjectDigest::new([0; 32]),
-    );
+    let framework_obj_ref = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: FASTX_FRAMEWORK_ADDRESS,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
 
     // Populate authorities with obj data
     let authority_objects = vec![vec![gas_object_id]];

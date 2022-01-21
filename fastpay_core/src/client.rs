@@ -771,12 +771,19 @@ where
                     if let Ok(Some(signed_order)) = s_order {
                         fp_ensure!(
                             signed_order.authority == name,
-                            FastPayError::ErrorWhileProcessingTransactionOrder
+                            FastPayError::ErrorWhileProcessingTransactionOrder {
+                                err: format!(
+                                    "Unexpected authority. Expected {:?}, got {:?}",
+                                    name, signed_order.authority
+                                )
+                            }
                         );
                         signed_order.check(committee)?;
                         Ok(signed_order.clone())
                     } else {
-                        Err(FastPayError::ErrorWhileProcessingTransactionOrder)
+                        Err(FastPayError::ErrorWhileProcessingTransactionOrder {
+                            err: s_order.err().unwrap().to_string(),
+                        })
                     }
                 })
             })
@@ -815,25 +822,35 @@ where
                     {
                         fp_ensure!(
                             signed_order.authority == name,
-                            FastPayError::ErrorWhileProcessingConfirmationOrder
+                            FastPayError::ErrorWhileProcessingConfirmationOrder {
+                                err: format!(
+                                    "Unexpected authority. Expected {:?}, got {:?}",
+                                    name, signed_order.authority
+                                )
+                            }
                         );
                         signed_order.check(committee)?;
                         result
                     } else {
-                        Err(FastPayError::ErrorWhileProcessingConfirmationOrder)
+                        Err(FastPayError::ErrorWhileProcessingConfirmationOrder {
+                            err: result.err().unwrap().to_string(),
+                        })
                     }
                 })
             })
             .await
-            .map_err(|_| FastPayError::ErrorWhileProcessingConfirmationOrder);
+            .map_err(|e| FastPayError::ErrorWhileProcessingConfirmationOrder {
+                err: e.to_string(),
+            });
 
-        return match votes {
-            Ok(v) => v
-                .get(0)
-                .ok_or(FastPayError::ErrorWhileProcessingConfirmationOrder)
-                .map(|q| (*q).clone()),
+        match votes {
+            Ok(mut v) => v
+                .pop()
+                .ok_or(FastPayError::ErrorWhileProcessingConfirmationOrder {
+                    err: "Not enough confirmation votes: ".to_string(),
+                }),
             Err(e) => Err(e),
-        };
+        }
     }
 
     /// Execute call order
@@ -852,12 +869,17 @@ where
         // Update local object view
         self.update_objects_from_order_info(order_info.clone())?;
 
-        let cert = order_info
-            .certified_order
-            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)?;
+        let cert =
+            order_info
+                .certified_order
+                .ok_or(FastPayError::ErrorWhileProcessingMoveCall {
+                    err: "No certified orders returned from Move call operation".to_string(),
+                })?;
         let effects = order_info
             .signed_effects
-            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)?
+            .ok_or(FastPayError::ErrorWhileProcessingMoveCall {
+                err: "No object info returned from Move call operation".to_string(),
+            })?
             .effects;
 
         Ok((cert, effects))
@@ -884,10 +906,14 @@ where
 
         let cert = order_info
             .certified_order
-            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)?;
+            .ok_or(FastPayError::ErrorWhileProcessingPublish {
+                err: "No certified orders returned from publish operation".to_string(),
+            })?;
         let effects = order_info
             .signed_effects
-            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)?
+            .ok_or(FastPayError::ErrorWhileProcessingPublish {
+                err: "No object info returned from publish operation".to_string(),
+            })?
             .effects;
 
         Ok((cert, effects))
