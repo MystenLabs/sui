@@ -1028,21 +1028,20 @@ where
         object_id: ObjectID,
         gas_payment: ObjectID,
     ) -> Result<CertifiedOrder, anyhow::Error> {
+        let object_ref = *self
+            .object_refs
+            .get(&object_id)
+            .ok_or(FastPayError::ObjectNotFound)?;
+        let gas_payment = *self
+            .object_refs
+            .get(&gas_payment)
+            .ok_or(FastPayError::ObjectNotFound)?;
+
         let transfer = Transfer {
-            object_ref: (
-                object_id,
-                self.next_sequence_number(&object_id)?,
-                // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
-                ObjectDigest::new([0; 32]),
-            ),
+            object_ref,
             sender: self.address,
             recipient: Address::FastPay(recipient),
-            gas_payment: (
-                gas_payment,
-                self.next_sequence_number(&gas_payment)?,
-                // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
-                ObjectDigest::new([0; 32]),
-            ),
+            gas_payment,
         };
         let order = Order::new_transfer(transfer, &self.secret);
         let new_certificate = self
