@@ -9,7 +9,7 @@ use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*
 use move_core_types::transaction_argument::convert_txn_args;
 
 use bytes::Bytes;
-use futures::{stream::StreamExt, task::Spawn};
+use futures::stream::StreamExt;
 use log::*;
 use move_package::BuildConfig;
 use std::{
@@ -492,7 +492,7 @@ fn main() {
                 match pub_resp {
                     Ok(resp) => {
                         if resp.1.status != ExecutionStatus::Success {
-                            error!("Error publishing: {:#?}", resp.1.status());
+                            error!("Error publishing: {:#?}", resp.1.status);
                         }
                         let (_, effects) = resp;
                         show_object_effects(effects);

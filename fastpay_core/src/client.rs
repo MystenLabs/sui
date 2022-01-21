@@ -14,6 +14,8 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig;
 use rand::seq::SliceRandom;
+use std::collections::btree_map::Entry;
+
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 use std::time::Duration;
@@ -967,6 +969,7 @@ where
     }
 
     async fn receive_object(&mut self, certificate: CertifiedOrder) -> Result<(), anyhow::Error> {
+        let _ = &certificate;
         match &certificate.order.kind {
             OrderKind::Transfer(transfer) => {
                 ensure!(
