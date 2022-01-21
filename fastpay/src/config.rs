@@ -11,12 +11,14 @@ use fastx_types::{
 use move_core_types::language_storage::TypeTag;
 use move_core_types::{identifier::Identifier, transaction_argument::TransactionArgument};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, read_to_string, File, OpenOptions},
     io::{BufReader, BufWriter, Write},
     iter::FromIterator,
 };
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthorityConfig {
     pub network_protocol: NetworkProtocol,
@@ -92,6 +94,7 @@ impl CommitteeConfig {
     }
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct UserAccount {
     #[serde(
@@ -102,6 +105,8 @@ pub struct UserAccount {
     pub key: KeyPair,
     pub object_ids: BTreeMap<ObjectID, SequenceNumber>,
     pub gas_object_ids: BTreeSet<ObjectID>, // Every id in gas_object_ids should also be in object_ids.
+
+    #[serde_as(as = "Vec<(_, _)>")]
     pub certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
 }
 
@@ -274,7 +279,7 @@ impl AccountsConfig {
 #[derive(Serialize, Deserialize)]
 pub struct InitialStateConfigEntry {
     pub address: FastPayAddress,
-    pub object_ids: Vec<ObjectID>,
+    pub object_ids_and_gas_vals: Vec<(ObjectID, u64)>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct InitialStateConfig {

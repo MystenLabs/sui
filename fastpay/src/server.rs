@@ -3,70 +3,15 @@
 
 #![deny(warnings)]
 
-use fastpay::{config::*, network, transport};
-use fastpay_core::authority::*;
-use fastx_types::{base_types::*, committee::Committee, object::Object};
+use fastpay::{config::*, transport};
+use fastx_types::base_types::*;
+mod server_api;
 
-use futures::future::join_all;
 use log::*;
-use std::path::Path;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use std::{env, fs};
 use structopt::StructOpt;
-use tokio::runtime::Runtime;
-
-#[allow(clippy::too_many_arguments)]
-fn make_server(
-    local_ip_addr: &str,
-    server_config_path: &str,
-    committee_config_path: &str,
-    initial_accounts_config_path: &str,
-    buffer_size: usize,
-) -> network::Server {
-    let server_config =
-        AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
-    let committee_config =
-        CommitteeConfig::read(committee_config_path).expect("Fail to read committee config");
-    let initial_accounts_config = InitialStateConfig::read(initial_accounts_config_path)
-        .expect("Fail to read initial account config");
-
-    let committee = Committee::new(committee_config.voting_rights());
-
-    let store = Arc::new(AuthorityStore::open(
-        Path::new(&server_config.authority.database_path),
-        None,
-    ));
-
-    // Load initial states
-    let rt = Runtime::new().unwrap();
-
-    let state = rt.block_on(async {
-        let state = AuthorityState::new_with_genesis_modules(
-            committee,
-            server_config.authority.address,
-            server_config.key.copy(),
-            store,
-        )
-        .await;
-        for initial_state_cfg_entry in &initial_accounts_config.config {
-            let address = &initial_state_cfg_entry.address;
-            for object_id in &initial_state_cfg_entry.object_ids {
-                let object = Object::with_id_owner_for_testing(*object_id, *address);
-
-                state.init_order_lock(object.to_object_reference()).await;
-                state.insert_object(object).await;
-            }
-        }
-        state
-    });
-
-    network::Server::new(
-        server_config.authority.network_protocol,
-        local_ip_addr.to_string(),
-        server_config.authority.base_port,
-        state,
-        buffer_size,
-    )
-}
 
 #[derive(StructOpt)]
 #[structopt(
@@ -99,6 +44,10 @@ enum ServerCommands {
         /// Path to the file describing the initial user accounts
         #[structopt(long)]
         initial_accounts: String,
+
+        /// Sets the local ip addr
+        #[structopt(long)]
+        local_ip: String,
     },
 
     /// Generate a new server configuration and output its public description
@@ -117,7 +66,7 @@ enum ServerCommands {
         port: u32,
 
         /// Sets the path to the database folder
-        #[structopt(long)]
+        #[structopt(long, default_value = "")]
         database_path: String,
     },
 }
@@ -133,34 +82,12 @@ fn main() {
             buffer_size,
             committee,
             initial_accounts,
+            local_ip,
         } => {
-            // Run the server
+            let (auth_cfg, committee_cfg, init_config) =
+                read_cfg_files(server_config_path, &committee, &initial_accounts);
 
-            let server = make_server(
-                "0.0.0.0", // Allow local IP address to be different from the public one.
-                server_config_path,
-                &committee,
-                &initial_accounts,
-                buffer_size,
-            );
-
-            let rt = Runtime::new().unwrap();
-            let mut handles = Vec::new();
-
-            handles.push(async move {
-                let spawned_server = match server.spawn().await {
-                    Ok(server) => server,
-                    Err(err) => {
-                        error!("Failed to start server: {}", err);
-                        return;
-                    }
-                };
-                if let Err(err) = spawned_server.join().await {
-                    error!("Server ended with an error: {}", err);
-                }
-            });
-
-            rt.block_on(join_all(handles));
+            server_api::run_server(&local_ip, auth_cfg, committee_cfg, init_config, buffer_size);
         }
 
         ServerCommands::Generate {
@@ -169,20 +96,45 @@ fn main() {
             port,
             database_path,
         } => {
-            let (address, key) = get_key_pair();
-            let authority = AuthorityConfig {
-                network_protocol: protocol,
-                address,
-                host,
-                base_port: port,
-                database_path,
+            // Set the path to the DB
+            let db_path_str = if database_path.is_empty() {
+                env::temp_dir().join(format!("DB_{:?}", ObjectID::random()))
+            } else {
+                PathBuf::from_str(&database_path).unwrap()
             };
-            let server = AuthorityServerConfig { authority, key };
-            server
+            let db_path = Path::new(&db_path_str);
+            fs::create_dir(&db_path).unwrap();
+            info!("Will open database on path: {:?}", db_path.as_os_str());
+
+            // The configuration of this authority
+            let authority_config = server_api::create_server_configs(
+                protocol,
+                host,
+                port,
+                db_path.to_str().unwrap().to_string(),
+            );
+
+            // Write to the store
+            authority_config
                 .write(server_config_path)
                 .expect("Unable to write server config file");
             info!("Wrote server config file");
-            server.authority.print();
+            authority_config.authority.print();
         }
     }
+}
+
+fn read_cfg_files(
+    server_config_path: &str,
+    committee_config_path: &str,
+    initial_accounts_config_path: &str,
+) -> (AuthorityServerConfig, CommitteeConfig, InitialStateConfig) {
+    let server_config =
+        AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
+    let committee_config =
+        CommitteeConfig::read(committee_config_path).expect("Fail to read committee config");
+    let initial_accounts_config = InitialStateConfig::read(initial_accounts_config_path)
+        .expect("Fail to read initial account config");
+
+    (server_config, committee_config, initial_accounts_config)
 }
