@@ -6,7 +6,7 @@ num_shards=15
 num_accounts=500000
 max_in_flight=700
 committee_size=4
-protocol=UDP
+protocol=TCP
 
 if [ "$1" != "" ]; then
 	num_shards=$1

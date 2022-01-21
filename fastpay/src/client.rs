@@ -9,7 +9,7 @@ use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*
 use move_core_types::transaction_argument::convert_txn_args;
 
 use bytes::Bytes;
-use futures::stream::StreamExt;
+use futures::{stream::StreamExt, task::Spawn};
 use log::*;
 use move_package::BuildConfig;
 use std::{
@@ -29,7 +29,6 @@ fn make_authority_clients(
     for config in &committee_config.authorities {
         let config = config.clone();
         let client = network::Client::new(
-            config.network_protocol,
             config.host,
             config.base_port,
             buffer_size,
@@ -51,7 +50,6 @@ fn make_authority_mass_clients(
     let mut authority_clients = Vec::new();
     for config in &committee_config.authorities {
         let client = network::MassClient::new(
-            config.network_protocol,
             config.host.clone(),
             config.base_port,
             buffer_size,
@@ -120,10 +118,9 @@ fn make_benchmark_transfer_orders(
             ),
         };
         debug!("Preparing transfer order: {:?}", transfer);
-        account.object_ids.insert(
-            object_id,
-            account.object_ids[&object_id].increment().unwrap(),
-        );
+        account
+            .object_ids
+            .insert(object_id, account.object_ids[&object_id].increment());
         next_recipient = account.address;
         let order = Order::new_transfer(transfer.clone(), &account.key);
         orders.push(order.clone());
@@ -296,7 +293,7 @@ fn find_cached_owner_by_object_id(
 fn show_object_effects(order_effects: OrderEffects) {
     if !order_effects.mutated.is_empty() {
         println!("Mutated Objects:");
-        for obj in order_effects.mutated {
+        for (obj, _) in order_effects.mutated {
             println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
         }
     }
@@ -495,7 +492,7 @@ fn main() {
                 match pub_resp {
                     Ok(resp) => {
                         if resp.1.status != ExecutionStatus::Success {
-                            error!("Error publishing {:#?}", resp);
+                            error!("Error publishing: {:#?}", resp.1.status());
                         }
                         let (_, effects) = resp;
                         show_object_effects(effects);

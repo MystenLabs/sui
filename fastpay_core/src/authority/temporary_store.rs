@@ -3,16 +3,19 @@ use super::*;
 pub type InnerTemporaryStore = (
     BTreeMap<ObjectID, Object>,
     Vec<ObjectRef>,
-    BTreeMap<ObjectRef, Object>,
-    Vec<ObjectRef>,
+    BTreeMap<ObjectID, Object>,
+    BTreeSet<ObjectID>,
 );
 
 pub struct AuthorityTemporaryStore {
     object_store: Arc<AuthorityStore>,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
-    written: BTreeMap<ObjectRef, Object>, // Objects written
-    deleted: Vec<ObjectRef>,       // Objects actively deleted
+    // TODO: We need to study whether it's worth to optimize the lookup of
+    // object reference by caching object reference in the map as well.
+    // Object reference calculation involves hashing which could be expensive.
+    written: BTreeMap<ObjectID, Object>, // Objects written
+    deleted: BTreeSet<ObjectID>,         // Objects actively deleted
 }
 
 impl AuthorityTemporaryStore {
@@ -31,7 +34,7 @@ impl AuthorityTemporaryStore {
                 .map(|v| v.to_object_reference())
                 .collect(),
             written: BTreeMap::new(),
-            deleted: Vec::new(),
+            deleted: BTreeSet::new(),
         }
     }
 
@@ -41,11 +44,11 @@ impl AuthorityTemporaryStore {
         &self.objects
     }
 
-    pub fn written(&self) -> &BTreeMap<ObjectRef, Object> {
+    pub fn written(&self) -> &BTreeMap<ObjectID, Object> {
         &self.written
     }
 
-    pub fn deleted(&self) -> &Vec<ObjectRef> {
+    pub fn deleted(&self) -> &BTreeSet<ObjectID> {
         &self.deleted
     }
 
@@ -58,6 +61,20 @@ impl AuthorityTemporaryStore {
         (self.objects, self.active_inputs, self.written, self.deleted)
     }
 
+    /// For every object from active_inputs (i.e. all mutable objects), if they are not
+    /// mutated during the order execution, force mutating them by incrementing the
+    /// sequence number. This is required to achieve safety.
+    pub fn ensure_active_inputs_mutated(&mut self) {
+        for (id, _seq, _) in self.active_inputs.iter() {
+            if !self.written.contains_key(id) && !self.deleted.contains(id) {
+                let mut object = self.objects[id].clone();
+                // Active input object must be Move object.
+                object.data.try_as_move_mut().unwrap().increment_version();
+                self.written.insert(*id, object);
+            }
+        }
+    }
+
     pub fn to_signed_effects(
         &self,
         authority_name: &AuthorityName,
@@ -68,8 +85,16 @@ impl AuthorityTemporaryStore {
         let effects = OrderEffects {
             status,
             transaction_digest: *transaction_digest,
-            mutated: self.written.keys().cloned().collect(),
-            deleted: self.deleted.clone(),
+            mutated: self
+                .written
+                .iter()
+                .map(|(_, object)| (object.to_object_reference(), object.owner))
+                .collect(),
+            deleted: self
+                .deleted
+                .iter()
+                .map(|id| self.objects[id].to_object_reference())
+                .collect(),
         };
         let signature = Signature::new(&effects, secret);
 
@@ -89,7 +114,7 @@ impl AuthorityTemporaryStore {
         debug_assert!(
             {
                 let mut used = HashSet::new();
-                self.deleted.iter().all(move |elt| used.insert(elt.0))
+                self.deleted.iter().all(move |elt| used.insert(elt))
             },
             "Duplicate object reference in self.deleted."
         );
@@ -98,8 +123,8 @@ impl AuthorityTemporaryStore {
         debug_assert!(
             {
                 let mut used = HashSet::new();
-                self.written.iter().all(|(elt, _)| used.insert(elt.0));
-                self.deleted.iter().all(move |elt| used.insert(elt.0))
+                self.written.iter().all(|(elt, _)| used.insert(elt));
+                self.deleted.iter().all(move |elt| used.insert(elt))
             },
             "Object both written and deleted."
         );
@@ -108,10 +133,10 @@ impl AuthorityTemporaryStore {
         debug_assert!(
             {
                 let mut used = HashSet::new();
-                self.written.iter().all(|(elt, _)| used.insert(elt.0));
-                self.deleted.iter().all(|elt| used.insert(elt.0));
+                self.written.iter().all(|(elt, _)| used.insert(elt));
+                self.deleted.iter().all(|elt| used.insert(elt));
 
-                self.active_inputs.iter().all(|elt| !used.insert(elt.0))
+                self.active_inputs.iter().all(|elt| !used.insert(&elt.0))
             },
             "Mutable input neither written nor deleted."
         );
@@ -157,7 +182,7 @@ impl Storage for AuthorityTemporaryStore {
             }
         }
 
-        self.written.insert(object.to_object_reference(), object);
+        self.written.insert(object.id(), object);
     }
 
     fn delete_object(&mut self, id: &ObjectID) {
@@ -172,12 +197,8 @@ impl Storage for AuthorityTemporaryStore {
         }
 
         // Mark it for deletion
-        self.deleted.push(
-            self.objects
-                .get(id)
-                .expect("Internal invariant: object must exist to be deleted.")
-                .to_object_reference(),
-        );
+        debug_assert!(self.objects.get(id).is_some());
+        self.deleted.insert(*id);
     }
 }
 
@@ -186,7 +207,10 @@ impl ModuleResolver for AuthorityTemporaryStore {
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         match self.read_object(module_id.address()) {
             Some(o) => match &o.data {
-                Data::Package(c) => Ok(c.get(module_id.name().as_str()).cloned()),
+                Data::Package(c) => Ok(c
+                    .get(module_id.name().as_str())
+                    .cloned()
+                    .map(|m| m.into_vec())),
                 _ => Err(FastPayError::BadObjectType {
                     error: "Expected module object".to_string(),
                 }),

@@ -128,7 +128,32 @@ pub struct OrderInfoResponse {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionStatus {
     Success,
-    Failure(Box<FastPayError>),
+    // Gas used in the failed case, and the error.
+    // TODO: Eventually we should return gas_used in both cases.
+    Failure {
+        gas_used: u64,
+        error: Box<FastPayError>,
+    },
+}
+
+impl ExecutionStatus {
+    pub fn unwrap(&self) {
+        match self {
+            ExecutionStatus::Success => (),
+            ExecutionStatus::Failure { .. } => {
+                panic!("Unable to unwrap() on {:?}", self);
+            }
+        }
+    }
+
+    pub fn unwrap_err(&self) -> (u64, &FastPayError) {
+        match self {
+            ExecutionStatus::Success => {
+                panic!("Unable to unwrap() on {:?}", self);
+            }
+            ExecutionStatus::Failure { gas_used, error } => (*gas_used, error),
+        }
+    }
 }
 
 /// The response from processing an order or a certified order
@@ -139,7 +164,7 @@ pub struct OrderEffects {
     // The transaction digest
     pub transaction_digest: TransactionDigest,
     // ObjectRefs containing mutated or new objects
-    pub mutated: Vec<ObjectRef>,
+    pub mutated: Vec<(ObjectRef, FastPayAddress)>,
     // Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
     // TODO: add events here too.

@@ -5,9 +5,8 @@ use fastx_adapter::{adapter, genesis};
 use fastx_types::{
     base_types::*,
     committee::Committee,
-    error::FastPayError,
-    fp_bail, fp_ensure,
-    gas::{calculate_object_transfer_cost, check_gas_requirement, deduct_gas},
+    error::{FastPayError, FastPayResult},
+    fp_bail, fp_ensure, gas,
     messages::*,
     object::{Data, Object},
     storage::Storage,
@@ -19,7 +18,7 @@ use move_core_types::{
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -43,7 +42,8 @@ pub struct AuthorityState {
     pub secret: KeyPair,
 
     /// Move native functions that are available to invoke
-    native_functions: NativeFunctionTable,
+    _native_functions: NativeFunctionTable,
+    move_vm: Arc<adapter::MoveVM>,
     /// The database
     _database: Arc<AuthorityStore>,
 }
@@ -136,7 +136,7 @@ impl AuthorityState {
             );
 
             if &object_id == order.gas_payment_object_id() {
-                check_gas_requirement(&order, &object)?;
+                gas::check_gas_requirement(&order, &object)?;
             }
 
             /* The call to self.set_order_lock checks the lock is not conflicting,
@@ -208,68 +208,9 @@ impl AuthorityState {
 
         // Insert into the certificates map
         let transaction_digest = certificate.order.digest();
-        let mut tx_ctx = TxContext::new(transaction_digest);
+        let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
-        // Order-specific logic
-        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
-        let status_result = match order.kind {
-            OrderKind::Transfer(t) => {
-                debug_assert!(
-                    inputs.len() == 2,
-                    "Expecting two inputs: gas and object to be transferred"
-                );
-                // unwraps here are safe because we built `inputs`
-                let mut gas_object = inputs.pop().unwrap();
-                deduct_gas(
-                    &mut gas_object,
-                    calculate_object_transfer_cost(&inputs[0]) as i128,
-                )?;
-                temporary_store.write_object(gas_object);
-
-                let mut output_object = inputs.pop().unwrap();
-                output_object.transfer(match t.recipient {
-                    Address::Primary(_) => FastPayAddress::default(),
-                    Address::FastPay(addr) => addr,
-                })?;
-                temporary_store.write_object(output_object);
-                Ok(())
-            }
-            OrderKind::Call(c) => {
-                // unwraps here are safe because we built `inputs`
-                let gas_object = inputs.pop().unwrap();
-                let package = inputs.pop().unwrap();
-                adapter::execute(
-                    &mut temporary_store,
-                    self.native_functions.clone(),
-                    package,
-                    &c.module,
-                    &c.function,
-                    c.type_arguments,
-                    inputs,
-                    c.pure_arguments,
-                    c.gas_budget,
-                    gas_object,
-                    tx_ctx,
-                )
-            }
-
-            OrderKind::Publish(m) => {
-                let gas_object = inputs.pop().unwrap();
-                adapter::publish(
-                    &mut temporary_store,
-                    self.native_functions.clone(),
-                    m.modules,
-                    m.sender,
-                    &mut tx_ctx,
-                    gas_object,
-                )
-            }
-        };
-
-        let status = match status_result {
-            Ok(()) => ExecutionStatus::Success,
-            Err(err) => ExecutionStatus::Failure(Box::new(err)),
-        };
+        let (temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx)?;
 
         // Update the database in an atomic manner
         let to_signed_effects = temporary_store.to_signed_effects(
@@ -280,6 +221,85 @@ impl AuthorityState {
         );
         self.update_state(temporary_store, certificate, to_signed_effects)
             .await // Returns the OrderInfoResponse
+    }
+
+    fn execute_order(
+        &self,
+        order: Order,
+        mut inputs: Vec<Object>,
+        tx_ctx: &mut TxContext,
+    ) -> FastPayResult<(AuthorityTemporaryStore, ExecutionStatus)> {
+        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
+        // unwraps here are safe because we built `inputs`
+        let mut gas_object = inputs.pop().unwrap();
+
+        let status = match order.kind {
+            OrderKind::Transfer(t) => AuthorityState::transfer(
+                &mut temporary_store,
+                inputs,
+                t.recipient,
+                gas_object.clone(),
+            ),
+            OrderKind::Call(c) => {
+                // unwraps here are safe because we built `inputs`
+                let package = inputs.pop().unwrap();
+                adapter::execute(
+                    &self.move_vm,
+                    &mut temporary_store,
+                    self._native_functions.clone(),
+                    package,
+                    &c.module,
+                    &c.function,
+                    c.type_arguments,
+                    inputs,
+                    c.pure_arguments,
+                    c.gas_budget,
+                    gas_object.clone(),
+                    tx_ctx,
+                )
+            }
+            OrderKind::Publish(m) => adapter::publish(
+                &mut temporary_store,
+                self._native_functions.clone(),
+                m.modules,
+                m.sender,
+                tx_ctx,
+                gas_object.clone(),
+            ),
+        }?;
+        if let ExecutionStatus::Failure { gas_used, .. } = &status {
+            // Roll back the temporary store if execution failed.
+            temporary_store.reset();
+            // This gas deduction cannot fail.
+            gas::deduct_gas(&mut gas_object, *gas_used);
+            temporary_store.write_object(gas_object);
+        }
+        temporary_store.ensure_active_inputs_mutated();
+        Ok((temporary_store, status))
+    }
+
+    fn transfer(
+        temporary_store: &mut AuthorityTemporaryStore,
+        mut inputs: Vec<Object>,
+        recipient: Address,
+        mut gas_object: Object,
+    ) -> FastPayResult<ExecutionStatus> {
+        let gas_used = gas::calculate_object_transfer_cost(&inputs[0]);
+        if let Err(err) = gas::try_deduct_gas(&mut gas_object, gas_used) {
+            return Ok(ExecutionStatus::Failure {
+                gas_used: gas::MIN_OBJ_TRANSFER_GAS,
+                error: Box::new(err),
+            });
+        }
+        temporary_store.write_object(gas_object);
+
+        let mut output_object = inputs.pop().unwrap();
+        output_object.transfer(match recipient {
+            Address::Primary(_) => FastPayAddress::default(),
+            Address::FastPay(addr) => addr,
+        });
+        temporary_store.write_object(output_object);
+        Ok(ExecutionStatus::Success)
     }
 
     pub async fn handle_account_info_request(
@@ -300,7 +320,7 @@ impl AuthorityState {
 
             // Get the Transaction Digest that created the object
             let parent_iterator = self
-                .get_parent_iterator(request.object_id, Some(seq.increment()?))
+                .get_parent_iterator(request.object_id, Some(seq.increment()))
                 .await?;
             let (_, transaction_digest) = parent_iterator
                 .first()
@@ -331,7 +351,9 @@ impl AuthorityState {
             committee,
             name,
             secret,
-            native_functions,
+            _native_functions: native_functions.clone(),
+            move_vm: adapter::new_move_vm(native_functions)
+                .expect("We defined natives to not fail here"),
             _database: store,
         };
 
@@ -354,11 +376,13 @@ impl AuthorityState {
         secret: KeyPair,
         store: Arc<AuthorityStore>,
     ) -> Self {
+        let native_functions = NativeFunctionTable::new();
         AuthorityState {
             committee,
             name,
             secret,
-            native_functions: NativeFunctionTable::new(),
+            _native_functions: native_functions.clone(),
+            move_vm: adapter::new_move_vm(native_functions).expect("Only fails due to natives."),
             _database: store,
         }
     }

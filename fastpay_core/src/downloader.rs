@@ -1,9 +1,10 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_trait::async_trait;
 use futures::{
     channel::{mpsc, oneshot},
-    future, SinkExt, StreamExt,
+    SinkExt, StreamExt,
 };
 use std::collections::BTreeMap;
 
@@ -24,12 +25,13 @@ pub struct Downloader<R, K, V> {
 }
 
 /// The underlying data-fetching mechanism to be provided by the user.
+#[async_trait]
 pub trait Requester {
     type Key: std::cmp::Ord + Send + Sync + Clone + 'static;
     type Value: std::fmt::Debug + Send + Clone + 'static;
 
     /// Request the value corresponding to the given key.
-    fn query(&mut self, key: Self::Key) -> future::BoxFuture<'_, Self::Value>;
+    async fn query(&mut self, key: Self::Key) -> Self::Value;
 }
 
 /// Channel for using code to send requests and stop the downloader task.

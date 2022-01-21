@@ -19,9 +19,9 @@ macro_rules! ok_or_gas_error {
     };
 }
 
-const MIN_MOVE_CALL_GAS: u64 = 10;
-const MIN_MOVE_PUBLISH_GAS: u64 = 10;
-const MIN_OBJ_TRANSFER_GAS: u64 = 8;
+pub const MIN_MOVE_CALL_GAS: u64 = 10;
+pub const MIN_MOVE_PUBLISH_GAS: u64 = 10;
+pub const MIN_OBJ_TRANSFER_GAS: u64 = 8;
 
 pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResult {
     match &order.kind {
@@ -68,28 +68,34 @@ pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResul
     }
 }
 
-/// Subtract the gas balance of \p gas_object by \p amount.
-/// \p amount being positive means gas deduction; \p amount being negative
-/// means gas refund.
-pub fn deduct_gas(gas_object: &mut Object, amount: i128) -> FastPayResult {
-    let gas_coin = GasCoin::try_from(&*gas_object)?;
-    let balance = gas_coin.value() as i128;
-    let new_balance = balance - amount;
+/// Try subtract the gas balance of \p gas_object by \p amount.
+pub fn try_deduct_gas(gas_object: &mut Object, amount: u64) -> FastPayResult {
+    // The object must be a gas coin as we have checked in order handle phase.
+    let gas_coin = GasCoin::try_from(&*gas_object).unwrap();
+    let balance = gas_coin.value();
     ok_or_gas_error!(
-        new_balance >= 0,
+        balance >= amount,
         format!("Gas balance is {}, not enough to pay {}", balance, amount)
     )?;
-    ok_or_gas_error!(
-        new_balance <= u64::MAX as i128,
-        format!(
-            "Gas balance is {}, overflow after reclaiming {}",
-            balance, -amount
-        )
-    )?;
-    let new_gas_coin = GasCoin::new(*gas_coin.id(), gas_object.version(), new_balance as u64);
+    let new_gas_coin = GasCoin::new(*gas_coin.id(), gas_object.version(), balance - amount);
     let move_object = gas_object.data.try_as_move_mut().unwrap();
-    move_object.update_contents(bcs::to_bytes(&new_gas_coin).unwrap())?;
+    move_object.update_contents(bcs::to_bytes(&new_gas_coin).unwrap());
     Ok(())
+}
+
+pub fn check_gas_balance(gas_object: &Object, amount: u64) -> FastPayResult {
+    let balance = get_gas_balance(gas_object)?;
+    ok_or_gas_error!(
+        balance >= amount,
+        format!("Gas balance is {}, not enough to pay {}", balance, amount)
+    )
+}
+
+/// Subtract the gas balance of \p gas_object by \p amount.
+/// This function should not fail, and should only be called in cases when
+/// we know for sure there is enough balance.
+pub fn deduct_gas(gas_object: &mut Object, amount: u64) {
+    try_deduct_gas(gas_object, amount).unwrap();
 }
 
 pub fn get_gas_balance(gas_object: &Object) -> FastPayResult<u64> {
@@ -115,4 +121,10 @@ pub fn calculate_object_creation_cost(object: &Object) -> u64 {
 pub fn calculate_object_deletion_refund(object: &Object) -> u64 {
     // TODO: Figure out object creation gas formula.
     (object.data.try_as_move().unwrap().contents().len() / 2) as u64
+}
+
+pub fn aggregate_gas(gas_used: u64, gas_refund: u64) -> u64 {
+    // Cap gas refund by half of gas_used.
+    let gas_refund = std::cmp::min(gas_used / 2, gas_refund);
+    gas_used - gas_refund
 }

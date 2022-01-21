@@ -11,6 +11,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
 
 #[cfg(test)]
@@ -30,8 +31,9 @@ pub struct UserData(pub Option<[u8; 32]>);
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 pub struct KeyPair(dalek::Keypair);
 
+#[serde_as]
 #[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct PublicKeyBytes([u8; dalek::PUBLIC_KEY_LENGTH]);
+pub struct PublicKeyBytes(#[serde_as(as = "Bytes")] [u8; dalek::PUBLIC_KEY_LENGTH]);
 
 impl PublicKeyBytes {
     pub fn to_vec(&self) -> Vec<u8> {
@@ -42,6 +44,13 @@ impl PublicKeyBytes {
         // TODO(https://github.com/MystenLabs/fastnft/issues/101): Do better key validation
         // to ensure the bytes represent a point on the curve.
         PublicKey::from_bytes(self.as_ref()).map_err(|_| FastPayError::InvalidAuthenticator)
+    }
+
+    // for testing
+    pub fn random_for_testing_only() -> Self {
+        use rand::Rng;
+        let random_bytes = rand::thread_rng().gen::<[u8; dalek::PUBLIC_KEY_LENGTH]>();
+        Self(random_bytes)
     }
 }
 
@@ -78,34 +87,40 @@ pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 const TRANSACTION_DIGEST_LENGTH: usize = 32;
 
 /// A transaction will have a (unique) digest.
+
+#[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct TransactionDigest([u8; TRANSACTION_DIGEST_LENGTH]);
+pub struct TransactionDigest(#[serde_as(as = "Bytes")] [u8; TRANSACTION_DIGEST_LENGTH]);
 // Each object has a unique digest
+#[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
-pub struct ObjectDigest(pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
+pub struct ObjectDigest(#[serde_as(as = "Bytes")] pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct TxContext {
+    /// Signer/sender of the transaction
+    sender: Vec<u8>,
     /// Digest of the current transaction
-    digest: TransactionDigest,
+    digest: Vec<u8>,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
 }
 
 impl TxContext {
-    pub fn new(digest: TransactionDigest) -> Self {
+    pub fn new(sender: &FastPayAddress, digest: TransactionDigest) -> Self {
         Self {
-            digest,
+            sender: sender.to_vec(),
+            digest: digest.0.to_vec(),
             ids_created: 0,
         }
     }
 
     /// Derive a globally unique object ID by hashing self.digest | self.ids_created
     pub fn fresh_id(&mut self) -> ObjectID {
-        let id = self.digest.derive_id(self.ids_created);
+        let id = self.digest().derive_id(self.ids_created);
 
         self.ids_created += 1;
         id
@@ -113,32 +128,20 @@ impl TxContext {
 
     /// Return the transaction digest, to include in new objects
     pub fn digest(&self) -> TransactionDigest {
-        self.digest
+        TransactionDigest::new(self.digest.clone().try_into().unwrap())
     }
 
-    // TODO(https://github.com/MystenLabs/fastnft/issues/89): temporary hack for Move compatibility
-    pub fn to_bcs_bytes_hack(&self) -> Vec<u8> {
-        let sender = FastPayAddress::default();
-        let inputs_hash = self.digest.0.to_vec();
-        let obj = TxContextForMove {
-            sender: sender.to_vec(),
-            inputs_hash,
-            ids_created: self.ids_created,
-        };
-        bcs::to_bytes(&obj).unwrap()
+    pub fn to_vec(&self) -> Vec<u8> {
+        bcs::to_bytes(&self).unwrap()
     }
 
     // for testing
-    pub fn random() -> Self {
-        Self::new(TransactionDigest::random())
+    pub fn random_for_testing_only() -> Self {
+        Self::new(
+            &FastPayAddress::random_for_testing_only(),
+            TransactionDigest::random(),
+        )
     }
-}
-
-#[derive(Serialize)]
-struct TxContextForMove {
-    sender: Vec<u8>,
-    inputs_hash: Vec<u8>,
-    ids_created: u64,
 }
 
 impl TransactionDigest {
@@ -342,12 +345,14 @@ impl SequenceNumber {
         self.0
     }
 
-    pub fn increment(self) -> Result<SequenceNumber, FastPayError> {
-        let val = self.0.checked_add(1);
-        match val {
-            None => Err(FastPayError::SequenceOverflow),
-            Some(val) => Ok(Self(val)),
-        }
+    #[must_use]
+    pub fn increment(self) -> SequenceNumber {
+        // TODO: Ensure this never overflow.
+        // Option 1: Freeze the object when sequence number reaches MAX.
+        // Option 2: Reject tx with MAX sequence number.
+        // Issue #182.
+        debug_assert_ne!(self.0, u64::MAX);
+        Self(self.0 + 1)
     }
 
     pub fn decrement(self) -> Result<SequenceNumber, FastPayError> {

@@ -4,8 +4,12 @@
 
 use super::*;
 use crate::authority::{AuthorityState, AuthorityStore};
-use fastx_types::object::Object;
+use fastx_types::{
+    object::{Object, GAS_VALUE_FOR_TESTING},
+    FASTX_FRAMEWORK_ADDRESS,
+};
 use futures::lock::Mutex;
+use move_core_types::ident_str;
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
@@ -14,6 +18,7 @@ use std::{
 use tokio::runtime::Runtime;
 
 use fastx_types::error::FastPayError::ObjectNotFound;
+use move_core_types::account_address::AccountAddress;
 use std::env;
 use std::fs;
 
@@ -28,40 +33,44 @@ fn max_files_client_tests() -> i32 {
 #[derive(Clone)]
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
+#[async_trait]
 impl AuthorityClient for LocalAuthorityClient {
-    fn handle_order(&mut self, order: Order) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
+    async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_order(order).await })
+        let result = state.lock().await.handle_order(order).await;
+        result
     }
 
-    fn handle_confirmation_order(
+    async fn handle_confirmation_order(
         &mut self,
         order: ConfirmationOrder,
-    ) -> AsyncResult<'_, OrderInfoResponse, FastPayError> {
+    ) -> Result<OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_confirmation_order(order).await })
+        let result = state.lock().await.handle_confirmation_order(order).await;
+        result
     }
 
-    fn handle_account_info_request(
+    async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
-    ) -> AsyncResult<'_, AccountInfoResponse, FastPayError> {
+    ) -> Result<AccountInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move {
-            state
-                .lock()
-                .await
-                .handle_account_info_request(request)
-                .await
-        })
+
+        let result = state
+            .lock()
+            .await
+            .handle_account_info_request(request)
+            .await;
+        result
     }
 
-    fn handle_object_info_request(
+    async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
-    ) -> AsyncResult<'_, ObjectInfoResponse, FastPayError> {
+    ) -> Result<ObjectInfoResponse, FastPayError> {
         let state = self.0.clone();
-        Box::pin(async move { state.lock().await.handle_object_info_request(request).await })
+        let x = state.lock().await.handle_object_info_request(request).await;
+        x
     }
 }
 
@@ -72,7 +81,7 @@ impl LocalAuthorityClient {
 }
 
 #[cfg(test)]
-fn init_local_authorities(
+async fn init_local_authorities(
     count: usize,
 ) -> (HashMap<AuthorityName, LocalAuthorityClient>, Committee) {
     let mut key_pairs = Vec::new();
@@ -94,12 +103,10 @@ fn init_local_authorities(
         let mut opts = rocksdb::Options::default();
         opts.set_max_open_files(max_files_client_tests());
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
-        let state = AuthorityState::new_without_genesis_for_testing(
-            committee.clone(),
-            address,
-            secret,
-            store,
-        );
+
+        let state =
+            AuthorityState::new_with_genesis_modules(committee.clone(), address, secret, store)
+                .await;
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
@@ -165,11 +172,13 @@ async fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
     authorities: Vec<&LocalAuthorityClient>,
     client: &mut ClientState<LocalAuthorityClient>,
     object_ids: I,
-) {
+) -> HashMap<AccountAddress, Object> {
+    let mut created_objects = HashMap::new();
     for (authority, object_ids) in authorities.into_iter().zip(object_ids.into_iter()) {
         for object_id in object_ids {
             let object = Object::with_id_owner_for_testing(object_id, client.address);
             let client_ref = authority.0.as_ref().try_lock().unwrap();
+            created_objects.insert(object_id, object.clone());
 
             client_ref
                 .init_order_lock((object_id, 0.into(), object.digest()))
@@ -178,13 +187,14 @@ async fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
             client.object_ids.insert(object_id, SequenceNumber::new());
         }
     }
+    created_objects
 }
 
 #[cfg(test)]
 async fn init_local_client_state(
     object_ids: Vec<Vec<ObjectID>>,
 ) -> ClientState<LocalAuthorityClient> {
-    let (authority_clients, committee) = init_local_authorities(object_ids.len());
+    let (authority_clients, committee) = init_local_authorities(object_ids.len()).await;
     let mut client = make_client(authority_clients.clone(), committee);
     fund_account(
         authority_clients.values().collect(),
@@ -365,10 +375,9 @@ fn test_initiating_transfer_low_funds() {
     );
 }
 
-#[test]
-fn test_bidirectional_transfer() {
-    let rt = Runtime::new().unwrap();
-    let (authority_clients, committee) = init_local_authorities(4);
+#[tokio::test]
+async fn test_bidirectional_transfer() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
 
@@ -387,96 +396,100 @@ fn test_bidirectional_transfer() {
         vec![gas_object2],
         vec![gas_object2],
     ];
-    rt.block_on(fund_account(
+    fund_account(
         authority_clients.values().collect(),
         &mut client1,
         authority1_objects,
-    ));
-    rt.block_on(fund_account(
+    )
+    .await;
+    fund_account(
         authority_clients.values().collect(),
         &mut client2,
         authority2_objects,
-    ));
+    )
+    .await;
 
     // Confirm client1 have ownership of the object.
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_owner(object_id)),
+        client1.get_strong_majority_owner(object_id).await,
         Some((client1.address, SequenceNumber::from(0)))
     );
     // Confirm client2 doesn't have ownership of the object.
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        client2.get_strong_majority_owner(object_id).await,
         Some((client1.address, SequenceNumber::from(0)))
     );
     // Transfer object to client2.
-    let certificate = rt
-        .block_on(client1.transfer_object(object_id, gas_object1, client2.address))
+    let certificate = client1
+        .transfer_object(object_id, gas_object1, client2.address)
+        .await
         .unwrap();
 
     assert_eq!(client1.pending_transfer, None);
 
     // Confirm client1 lose ownership of the object.
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_owner(object_id)),
+        client1.get_strong_majority_owner(object_id).await,
         Some((client2.address, SequenceNumber::from(1)))
     );
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        client2.get_strong_majority_owner(object_id).await,
         Some((client2.address, SequenceNumber::from(1)))
     );
 
     // Confirm certificate is consistent between authorities and client.
     assert_eq!(
-        rt.block_on(client1.request_certificate(
-            client1.address,
-            object_id,
-            SequenceNumber::from(0),
-        ))
-        .unwrap(),
+        client1
+            .request_certificate(client1.address, object_id, SequenceNumber::from(0),)
+            .await
+            .unwrap(),
         certificate
     );
 
     // Update client2's local object data.
-    rt.block_on(client2.receive_object(certificate)).unwrap();
+    client2.receive_object(certificate).await.unwrap();
 
     // Confirm sequence number are consistent between clients.
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        client2.get_strong_majority_owner(object_id).await,
         Some((client2.address, SequenceNumber::from(1)))
     );
 
     // Transfer the object back to Client1
-    rt.block_on(client2.transfer_object(object_id, gas_object2, client1.address))
+    client2
+        .transfer_object(object_id, gas_object2, client1.address)
+        .await
         .unwrap();
 
     assert_eq!(client2.pending_transfer, None);
 
     // Confirm client2 lose ownership of the object.
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        client2.get_strong_majority_owner(object_id).await,
         Some((client1.address, SequenceNumber::from(2)))
     );
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_sequence_number(object_id)),
+        client2.get_strong_majority_sequence_number(object_id).await,
         SequenceNumber::from(2)
     );
     // Confirm client1 acquired ownership of the object.
     assert_eq!(
-        rt.block_on(client1.get_strong_majority_owner(object_id)),
+        client1.get_strong_majority_owner(object_id).await,
         Some((client1.address, SequenceNumber::from(2)))
     );
 
     // Should fail if Client 2 double spend the object
-    assert!(rt
-        .block_on(client2.transfer_object(object_id, gas_object2, client1.address,))
+    assert!(client2
+        .transfer_object(object_id, gas_object2, client1.address,)
+        .await
         .is_err());
 }
 
 #[test]
 fn test_receiving_unconfirmed_transfer() {
     let rt = Runtime::new().unwrap();
-    let (authority_clients, committee) = init_local_authorities(4);
+    let (authority_clients, committee) = rt.block_on(init_local_authorities(4));
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
 
@@ -556,10 +569,9 @@ fn test_client_state_sync() {
     assert_eq!(old_certificate, sender.certificates);
 }
 
-#[test]
-fn test_client_state_sync_with_transferred_object() {
-    let rt = Runtime::new().unwrap();
-    let (authority_clients, committee) = init_local_authorities(1);
+#[tokio::test]
+async fn test_client_state_sync_with_transferred_object() {
+    let (authority_clients, committee) = init_local_authorities(1).await;
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
 
@@ -568,42 +580,46 @@ fn test_client_state_sync_with_transferred_object() {
 
     let authority_objects = vec![vec![object_id, gas_object_id]];
 
-    rt.block_on(fund_account(
+    fund_account(
         authority_clients.values().collect(),
         &mut client1,
         authority_objects,
-    ));
+    )
+    .await;
 
     // Transfer object to client2.
-    rt.block_on(client1.transfer_object(object_id, gas_object_id, client2.address))
+    client1
+        .transfer_object(object_id, gas_object_id, client2.address)
+        .await
         .unwrap();
 
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
-        rt.block_on(client2.get_strong_majority_owner(object_id)),
+        client2.get_strong_majority_owner(object_id).await,
         Some((client2.address, SequenceNumber::from(1)))
     );
 
     // Client 2's local object_id and cert should be empty before sync
-    assert!(rt.block_on(client2.get_owned_objects()).unwrap().is_empty());
+    assert!(client2.get_owned_objects().await.unwrap().is_empty());
     assert!(client2.object_ids.is_empty());
     assert!(client2.certificates.is_empty());
 
     // Sync client state
-    rt.block_on(client2.sync_client_state_with_random_authority())
+    client2
+        .sync_client_state_with_random_authority()
+        .await
         .unwrap();
 
     // Confirm client 2 received the new object id and cert
-    assert_eq!(1, rt.block_on(client2.get_owned_objects()).unwrap().len());
+    assert_eq!(1, client2.get_owned_objects().await.unwrap().len());
     assert_eq!(1, client2.object_ids.len());
     assert_eq!(1, client2.certificates.len());
 }
 
-#[test]
-fn test_client_certificate_state() {
-    let rt = Runtime::new().unwrap();
+#[tokio::test]
+async fn test_client_certificate_state() {
     let number_of_authorities = 1;
-    let (authority_clients, committee) = init_local_authorities(number_of_authorities);
+    let (authority_clients, committee) = init_local_authorities(number_of_authorities).await;
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
     let mut client2 = make_client(authority_clients.clone(), committee);
 
@@ -623,22 +639,28 @@ fn test_client_certificate_state() {
         .map(|_| client2_objects.clone())
         .collect();
 
-    rt.block_on(fund_account(
+    fund_account(
         authority_clients.values().collect(),
         &mut client1,
         client1_objects,
-    ));
+    )
+    .await;
 
-    rt.block_on(fund_account(
+    fund_account(
         authority_clients.values().collect(),
         &mut client2,
         client2_objects,
-    ));
+    )
+    .await;
 
     // Transfer object to client2.
-    rt.block_on(client1.transfer_object(object_id_1, gas_object_id_1, client2.address))
+    client1
+        .transfer_object(object_id_1, gas_object_id_1, client2.address)
+        .await
         .unwrap();
-    rt.block_on(client1.transfer_object(object_id_2, gas_object_id_1, client2.address))
+    client1
+        .transfer_object(object_id_2, gas_object_id_1, client2.address)
+        .await
         .unwrap();
     // Should have 2 certs after 2 transfer
     assert_eq!(2, client1.certificates.len());
@@ -653,7 +675,9 @@ fn test_client_certificate_state() {
         client1.next_sequence_number(&gas_object_id_1)
     );
 
-    rt.block_on(client2.sync_client_state_with_random_authority())
+    client2
+        .sync_client_state_with_random_authority()
+        .await
         .unwrap();
 
     // Client 2 should retrieve 2 certificates for the 2 transactions after sync
@@ -672,7 +696,9 @@ fn test_client_certificate_state() {
         client2.next_sequence_number(&object_id_2)
     );
     // Transfer object 2 back to client 1.
-    rt.block_on(client2.transfer_object(object_id_2, gas_object_id_2, client1.address))
+    client2
+        .transfer_object(object_id_2, gas_object_id_2, client1.address)
+        .await
         .unwrap();
 
     assert_eq!(3, client2.certificates.len());
@@ -682,10 +708,598 @@ fn test_client_certificate_state() {
     assert_eq!(1, client2.object_certs.get(&object_id_1).unwrap().len());
     assert_eq!(1, client2.object_certs.get(&gas_object_id_2).unwrap().len());
 
-    rt.block_on(client1.sync_client_state_with_random_authority())
+    client1
+        .sync_client_state_with_random_authority()
+        .await
         .unwrap();
 
     assert_eq!(3, client1.certificates.len());
     assert!(client1.object_certs.contains_key(&object_id_2));
     assert_eq!(2, client1.object_certs.get(&object_id_2).unwrap().len());
+}
+
+#[tokio::test]
+async fn test_move_calls_object_create() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee);
+
+    let object_value: u64 = 100;
+    let gas_object_id = ObjectID::random();
+
+    // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
+    let framework_obj_ref = (
+        FASTX_FRAMEWORK_ADDRESS,
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    );
+
+    // Populate authorities with obj data
+    let authority_objects = vec![
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+    ];
+    let gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    let pure_args = vec![
+        object_value.to_le_bytes().to_vec(),
+        bcs::to_bytes(&client1.address.to_vec()).unwrap(),
+    ];
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
+
+    // Check all went well
+    assert!(call_response.is_ok());
+    // Check effects are good
+    let (_, order_effects) = call_response.unwrap();
+    // Status flag should be success
+    assert_eq!(order_effects.status, ExecutionStatus::Success);
+    // Nothing should be deleted during a creation
+    assert!(order_effects.deleted.is_empty());
+    // Two items should be mutated during a creation (gas and new object)
+    assert_eq!(order_effects.mutated.len(), 2);
+    // Confirm the items
+    let gas_obj_idx = order_effects
+        .mutated
+        .iter()
+        .position(|(e, _)| e.0 == gas_object_ref.0);
+
+    assert!(gas_obj_idx.is_some());
+    let (new_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    assert_ne!(gas_object_ref, *new_obj_ref);
+}
+
+#[tokio::test]
+async fn test_move_calls_object_transfer() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let client2 = make_client(authority_clients.clone(), committee);
+
+    let object_value: u64 = 100;
+    let gas_object_id = ObjectID::random();
+
+    // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
+    let framework_obj_ref = (
+        FASTX_FRAMEWORK_ADDRESS,
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    );
+
+    // Populate authorities with obj data
+    let authority_objects = vec![
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+    ];
+    let mut gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    let pure_args = vec![
+        object_value.to_le_bytes().to_vec(),
+        bcs::to_bytes(&client1.address.to_vec()).unwrap(),
+    ];
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
+
+    let (_, order_effects) = call_response.unwrap();
+    let gas_obj_idx = order_effects
+        .mutated
+        .iter()
+        .position(|(e, _)| e.0 == gas_object_ref.0);
+    // Get the object created from the call
+    let (new_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    // Fetch the full object
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap();
+
+    gas_object_ref = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: gas_object_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
+
+    let pure_args = vec![bcs::to_bytes(&client2.address.to_vec()).unwrap()];
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("transfer").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            vec![new_obj.object.to_object_reference()],
+            pure_args,
+            GAS_VALUE_FOR_TESTING / 2,
+        )
+        .await;
+
+    // Check all went well
+    assert!(call_response.is_ok());
+    // Check effects are good
+    let (_, order_effects) = call_response.unwrap();
+    // Status flag should be success
+    assert_eq!(order_effects.status, ExecutionStatus::Success);
+    // Nothing should be deleted during a transfer
+    assert!(order_effects.deleted.is_empty());
+    // Two items should be mutated during a transfer (gas and object being transferred)
+    assert_eq!(order_effects.mutated.len(), 2);
+    // Confirm the items
+    let gas_obj_idx = order_effects
+        .mutated
+        .iter()
+        .position(|(e, _)| e.0 == gas_object_ref.0);
+
+    assert!(gas_obj_idx.is_some());
+    let (transferred_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    assert_ne!(gas_object_ref, *transferred_obj_ref);
+
+    assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
+
+    let transferred_obj_info = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap();
+
+    // Confirm new owner
+    assert_eq!(transferred_obj_info.object.owner, client2.address);
+}
+
+#[tokio::test]
+async fn test_move_calls_object_transfer_and_freeze() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let client2 = make_client(authority_clients.clone(), committee);
+
+    let object_value: u64 = 100;
+    let gas_object_id = ObjectID::random();
+
+    // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
+    let framework_obj_ref = (
+        FASTX_FRAMEWORK_ADDRESS,
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    );
+
+    // Populate authorities with obj data
+    let authority_objects = vec![
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+    ];
+    let mut gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    let pure_args = vec![
+        object_value.to_le_bytes().to_vec(),
+        bcs::to_bytes(&client1.address.to_vec()).unwrap(),
+    ];
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
+
+    let (_, order_effects) = call_response.unwrap();
+    let gas_obj_idx = order_effects
+        .mutated
+        .iter()
+        .position(|(e, _)| e.0 == gas_object_ref.0);
+    // Get the object created from the call
+    let (new_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    // Fetch the full object
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap();
+
+    gas_object_ref = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: gas_object_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
+
+    let pure_args = vec![bcs::to_bytes(&client2.address.to_vec()).unwrap()];
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("transfer_and_freeze").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            vec![new_obj.object.to_object_reference()],
+            pure_args,
+            GAS_VALUE_FOR_TESTING / 2,
+        )
+        .await;
+
+    // Check all went well
+    assert!(call_response.is_ok());
+    // Check effects are good
+    let (_, order_effects) = call_response.unwrap();
+    // Status flag should be success
+    assert_eq!(order_effects.status, ExecutionStatus::Success);
+    // Nothing should be deleted during a transfer
+    assert!(order_effects.deleted.is_empty());
+    // Two items should be mutated during a transfer (gas and object being transferred)
+    assert_eq!(order_effects.mutated.len(), 2);
+    // Confirm the items
+    let gas_obj_idx = order_effects
+        .mutated
+        .iter()
+        .position(|(e, _)| e.0 == gas_object_ref.0);
+
+    assert!(gas_obj_idx.is_some());
+    let (transferred_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    assert_ne!(gas_object_ref, *transferred_obj_ref);
+
+    assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
+
+    let transferred_obj_info = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap();
+
+    // Confirm new owner
+    assert_eq!(transferred_obj_info.object.owner, client2.address);
+
+    // Confirm read only
+    assert!(transferred_obj_info.object.is_read_only());
+}
+
+#[tokio::test]
+async fn test_move_calls_object_delete() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee);
+
+    let object_value: u64 = 100;
+    let gas_object_id = ObjectID::random();
+
+    // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
+    let framework_obj_ref = (
+        FASTX_FRAMEWORK_ADDRESS,
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    );
+
+    // Populate authorities with obj data
+    let authority_objects = vec![
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+    ];
+    let mut gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    let pure_args = vec![
+        object_value.to_le_bytes().to_vec(),
+        bcs::to_bytes(&client1.address.to_vec()).unwrap(),
+    ];
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
+
+    let (_, order_effects) = call_response.unwrap();
+    let gas_obj_idx = order_effects
+        .mutated
+        .iter()
+        .position(|(e, _)| e.0 == gas_object_ref.0);
+    // Get the object created from the call
+    let (new_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    // Fetch the full object
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap();
+
+    gas_object_ref = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: gas_object_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
+
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("delete").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            vec![new_obj.object.to_object_reference()],
+            Vec::new(),
+            GAS_VALUE_FOR_TESTING / 2,
+        )
+        .await;
+
+    // Check all went well
+    assert!(call_response.is_ok());
+    // Check effects are good
+    let (_, order_effects) = call_response.unwrap();
+    // Status flag should be success
+    assert_eq!(order_effects.status, ExecutionStatus::Success);
+    // Object be deleted during a delete
+    assert_eq!(order_effects.deleted.len(), 1);
+    // One item should be mutated during a delete (gas)
+    assert_eq!(order_effects.mutated.len(), 1);
+    // Confirm the items
+    let gas_obj_idx = order_effects
+        .mutated
+        .iter()
+        .position(|(e, _)| e.0 == gas_object_ref.0);
+
+    assert_eq!(gas_obj_idx.unwrap(), 0);
+    // Try to fetch the deleted object
+    let deleted_object_resp = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await;
+
+    assert!(deleted_object_resp.is_err());
+}
+
+#[tokio::test]
+async fn test_move_calls_certs() {
+    let (authority_clients, committee) = init_local_authorities(1).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let mut client2 = make_client(authority_clients.clone(), committee);
+
+    let gas_object_id = ObjectID::random();
+
+    // TODO: authority should not require seq# or digest for package in Move calls. Use dummy values
+    let framework_obj_ref = (
+        FASTX_FRAMEWORK_ADDRESS,
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    );
+
+    // Populate authorities with obj data
+    let authority_objects = vec![vec![gas_object_id]];
+
+    let gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .get(&gas_object_id)
+    .unwrap()
+    .to_object_reference();
+
+    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    let object_value: u64 = 100;
+    let pure_args = vec![
+        object_value.to_le_bytes().to_vec(),
+        bcs::to_bytes(&client1.address.to_vec()).unwrap(),
+    ];
+
+    // Create new object with move
+    let (cert, effect) = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await
+        .unwrap();
+
+    let (new_object_ref, _) = effect
+        .mutated
+        .iter()
+        .find(|((id, _, _), _)| id != &gas_object_id)
+        .unwrap();
+
+    let (gas_object_ref, _) = effect
+        .mutated
+        .iter()
+        .find(|((id, _, _), _)| id == &gas_object_id)
+        .unwrap();
+
+    let (new_object_id, _, _) = new_object_ref;
+
+    // Client 1 should have one certificate, one new object and one gas object, each with one associated certificate.
+    assert!(client1.certificates.contains_key(&cert.order.digest()));
+    assert_eq!(1, client1.certificates.len());
+    assert_eq!(2, client1.object_ids.len());
+    assert_eq!(2, client1.object_certs.len());
+    assert!(client1.object_certs.contains_key(&gas_object_id));
+    assert!(client1.object_certs.contains_key(new_object_id));
+    assert_eq!(1, client1.object_certs.get(&gas_object_id).unwrap().len());
+    assert_eq!(1, client1.object_certs.get(new_object_id).unwrap().len());
+    assert_eq!(
+        SequenceNumber::from(1),
+        client1.object_ids.get(&gas_object_id).unwrap().clone()
+    );
+    assert_eq!(
+        SequenceNumber::from(1),
+        client1.object_ids.get(new_object_id).unwrap().clone()
+    );
+
+    // Transfer object with move
+    let pure_args = vec![bcs::to_bytes(&client2.address.to_vec()).unwrap()];
+    let (cert, _) = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("transfer").to_owned(),
+            Vec::new(),
+            *gas_object_ref,
+            vec![*new_object_ref],
+            pure_args,
+            GAS_VALUE_FOR_TESTING / 2, // Make sure budget is less than gas value
+        )
+        .await
+        .unwrap();
+
+    // Client 1 should have two certificate, one gas object, with two associated certificate.
+    assert!(client1.certificates.contains_key(&cert.order.digest()));
+    assert_eq!(2, client1.certificates.len());
+    assert_eq!(1, client1.object_ids.len());
+    assert_eq!(1, client1.object_certs.len());
+    assert!(client1.object_certs.contains_key(&gas_object_id));
+    assert_eq!(2, client1.object_certs.get(&gas_object_id).unwrap().len());
+    assert_eq!(
+        SequenceNumber::from(2),
+        client1.object_ids.get(&gas_object_id).unwrap().clone()
+    );
+
+    // Sync client 2
+    client2
+        .sync_client_state_with_random_authority()
+        .await
+        .unwrap();
+
+    // Client 2 should have 2 certificate, one new object, with two associated certificate.
+    assert_eq!(2, client2.certificates.len());
+    assert_eq!(1, client2.object_ids.len());
+    assert_eq!(1, client2.object_certs.len());
+    assert!(client2.object_certs.contains_key(new_object_id));
+    assert_eq!(2, client2.object_certs.get(new_object_id).unwrap().len());
+    assert_eq!(
+        SequenceNumber::from(2),
+        client2.object_ids.get(new_object_id).unwrap().clone()
+    );
 }

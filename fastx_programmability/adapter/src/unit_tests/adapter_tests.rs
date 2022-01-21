@@ -123,7 +123,7 @@ impl ModuleResolver for InMemoryStorage {
         Ok(self
             .read_object(module_id.address())
             .map(|o| match &o.data {
-                Data::Package(m) => m[module_id.name().as_str()].clone(),
+                Data::Package(m) => m[module_id.name().as_str()].clone().into_vec(),
                 Data::Move(_) => panic!("Type error"),
             }))
     }
@@ -152,10 +152,12 @@ fn call(
     type_args: Vec<TypeTag>,
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
-) -> FastPayResult {
+) -> FastPayResult<ExecutionStatus> {
     let package = storage.find_package(module_name).unwrap();
 
+    let vm = adapter::new_move_vm(native_functions.clone()).expect("No errors");
     adapter::execute(
+        &vm,
         storage,
         native_functions.clone(),
         package,
@@ -166,7 +168,7 @@ fn call(
         pure_args,
         gas_budget,
         gas_object,
-        TxContext::random(),
+        &TxContext::random_for_testing_only(),
     )
 }
 
@@ -239,7 +241,7 @@ fn test_object_basics() {
     storage.flush();
     let transferred_obj = storage.read_object(&id1).unwrap();
     assert_eq!(transferred_obj.owner, addr2);
-    obj1_seq = obj1_seq.increment().unwrap();
+    obj1_seq = obj1_seq.increment();
     assert_eq!(obj1.id(), transferred_obj.id());
     assert_eq!(transferred_obj.version(), obj1_seq);
     assert_eq!(
@@ -297,7 +299,7 @@ fn test_object_basics() {
     storage.flush();
     let updated_obj = storage.read_object(&id1).unwrap();
     assert_eq!(updated_obj.owner, addr2);
-    obj1_seq = obj1_seq.increment().unwrap();
+    obj1_seq = obj1_seq.increment();
     assert_eq!(updated_obj.version(), obj1_seq);
     assert_ne!(
         obj1.data.try_as_move().unwrap().type_specific_contents(),
@@ -417,7 +419,7 @@ fn test_wrap_unwrap() {
     assert!(storage.read_object(&id2).is_none());
     let new_obj1 = storage.read_object(&id1).unwrap();
     // sequence # should increase after unwrapping
-    assert_eq!(new_obj1.version(), obj1_version.increment().unwrap());
+    assert_eq!(new_obj1.version(), obj1_version.increment());
     // type-specific contents should not change after unwrapping
     assert_eq!(
         new_obj1
@@ -461,7 +463,9 @@ fn test_move_call_insufficient_gas() {
         pure_args,
     );
     assert!(response
+        .unwrap()
         .unwrap_err()
+        .1
         .to_string()
         .contains("VMError with status OUT_OF_GAS"));
 }
@@ -487,7 +491,7 @@ fn test_publish_module_insufficient_gas() {
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
 
-    let mut tx_context = TxContext::random();
+    let mut tx_context = TxContext::random_for_testing_only();
     let response = adapter::publish(
         &mut storage,
         natives,
@@ -497,7 +501,9 @@ fn test_publish_module_insufficient_gas() {
         gas_object,
     );
     assert!(response
+        .unwrap()
         .unwrap_err()
+        .1
         .to_string()
         .contains("Gas balance is 30, not enough to pay 58"));
 }
@@ -582,7 +588,9 @@ fn test_transfer_and_freeze() {
         pure_args,
     );
     assert!(result
+        .unwrap()
         .unwrap_err()
+        .1
         .to_string()
         .contains("Argument 0 is expected to be mutable, immutable object found"));
 
@@ -601,7 +609,9 @@ fn test_transfer_and_freeze() {
         pure_args,
     );
     assert!(result
+        .unwrap()
         .unwrap_err()
+        .1
         .to_string()
         .contains("Argument 0 is expected to be mutable, immutable object found"));
 }
@@ -657,7 +667,7 @@ fn test_publish_module_linker_error() {
     dependent_module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
 
-    let mut tx_context = TxContext::random();
+    let mut tx_context = TxContext::random_for_testing_only();
     let response = adapter::publish(
         &mut storage,
         natives,

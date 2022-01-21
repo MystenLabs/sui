@@ -58,8 +58,8 @@ pub enum FastPayError {
     ErrorWhileProcessingConfirmationOrder,
     #[error("An invalid answer was returned by the authority while requesting a certificate")]
     ErrorWhileRequestingCertificate,
-    #[error("Module publish failed")]
-    ErrorWhileProcessingPublish,
+    #[error("Module publish failed: {err}")]
+    ErrorWhileProcessingPublish { err: String },
     #[error("An invalid answer was returned by the authority while requesting information")]
     ErrorWhileRequestingInformation,
     #[error(

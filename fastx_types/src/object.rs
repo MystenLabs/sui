@@ -1,27 +1,53 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::ident_str;
 use serde::{Deserialize, Serialize};
+use serde_bytes::ByteBuf;
+use serde_with::{serde_as, Bytes};
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
 use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 
+use crate::id::ID;
+use crate::FASTX_FRAMEWORK_ADDRESS;
 use crate::{
     base_types::{
         sha3_hash, BcsSignable, FastPayAddress, ObjectDigest, ObjectID, ObjectRef, SequenceNumber,
         TransactionDigest,
     },
-    error::{FastPayError, FastPayResult},
     gas_coin::GasCoin,
 };
 
+pub const OBJECT_BASICS_MODULE_NAME: &move_core_types::identifier::IdentStr =
+    ident_str!("ObjectBasics");
+pub const OBJECT_BASICS_OBJECT_TYPE_NAME: &move_core_types::identifier::IdentStr =
+    ident_str!("Object");
+pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
+
+#[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MoveObject {
     pub type_: StructTag,
+    #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
     read_only: bool,
+}
+
+/// ObjectBasics in the Framework uses an object of the following format
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ObjectBasicsObject {
+    pub id: ID,
+    pub value: u64,
+}
+
+/// Coin in the Framework uses an object of the following format
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CoinObject {
+    pub id: ID,
+    pub value: u64,
 }
 
 /// Byte encoding of a 64 byte unsigned integer in BCS
@@ -61,7 +87,7 @@ impl MoveObject {
     }
 
     /// Update the contents of this object and increment its version
-    pub fn update_contents(&mut self, new_contents: Vec<u8>) -> FastPayResult<()> {
+    pub fn update_contents(&mut self, new_contents: Vec<u8>) {
         #[cfg(debug_assertions)]
         let old_id = self.id();
         #[cfg(debug_assertions)]
@@ -76,17 +102,15 @@ impl MoveObject {
             debug_assert_eq!(self.version(), old_version);
         }
 
-        self.increment_version()?;
-        Ok(())
+        self.increment_version();
     }
 
     /// Increase the version of this object by one
-    pub fn increment_version(&mut self) -> FastPayResult<()> {
-        let new_version = self.version().increment()?;
+    pub fn increment_version(&mut self) {
+        let new_version = self.version().increment();
         // TODO: better bit tricks are probably possible here. for now, just do the obvious thing
         self.version_bytes_mut()
             .copy_from_slice(bcs::to_bytes(&new_version).unwrap().as_slice());
-        Ok(())
     }
 
     fn version_bytes(&self) -> &BcsU64 {
@@ -117,7 +141,8 @@ impl MoveObject {
 }
 
 // TODO: Make MovePackage a NewType so that we can implement functions on it.
-pub type MovePackage = BTreeMap<String, Vec<u8>>;
+// serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
+pub type MovePackage = BTreeMap<String, ByteBuf>;
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 #[allow(clippy::large_enum_variant)]
@@ -199,7 +224,7 @@ impl Object {
             .map(|module| {
                 let mut bytes = Vec::new();
                 module.serialize(&mut bytes).unwrap();
-                (module.self_id().name().to_string(), bytes)
+                (module.self_id().name().to_string(), ByteBuf::from(bytes))
             })
             .collect();
         Object {
@@ -254,7 +279,7 @@ impl Object {
     }
 
     /// Change the owner of `self` to `new_owner`
-    pub fn transfer(&mut self, new_owner: FastPayAddress) -> Result<(), FastPayError> {
+    pub fn transfer(&mut self, new_owner: FastPayAddress) {
         // TODO: these should be raised FastPayError's instead of panic's
         assert!(!self.is_read_only(), "Cannot transfer an immutable object");
         match &mut self.data {
@@ -265,8 +290,7 @@ impl Object {
                 );
 
                 self.owner = new_owner;
-                m.increment_version()?;
-                Ok(())
+                m.increment_version();
             }
             Data::Package(_) => panic!("Cannot transfer a module object"),
         }
@@ -292,6 +316,65 @@ impl Object {
 
     pub fn with_id_owner_for_testing(id: ObjectID, owner: FastPayAddress) -> Self {
         // For testing, we provide sufficient gas by default.
-        Self::with_id_owner_gas_for_testing(id, SequenceNumber::new(), owner, 100000_u64)
+        Self::with_id_owner_gas_for_testing(id, SequenceNumber::new(), owner, GAS_VALUE_FOR_TESTING)
+    }
+
+    /// Create ObjectBasics object for use in Move object operation
+    pub fn with_id_owner_object_basics_object_for_testing(
+        id: ObjectID,
+        version: SequenceNumber,
+        owner: FastPayAddress,
+        value: u64,
+    ) -> Self {
+        // Check ObjectBasics.move in Framework for details
+        // Create struct tag for ObjectBasics object
+        let struct_tag = StructTag {
+            address: FASTX_FRAMEWORK_ADDRESS,
+            name: OBJECT_BASICS_OBJECT_TYPE_NAME.to_owned(),
+            module: OBJECT_BASICS_MODULE_NAME.to_owned(),
+            type_params: Vec::new(),
+        };
+
+        // An object in ObjectBasics is a struct of an ID and a u64 value
+        let obj = ObjectBasicsObject {
+            id: ID::new(id, version),
+            value,
+        };
+
+        let data = Data::Move(MoveObject {
+            type_: struct_tag,
+            contents: bcs::to_bytes(&obj).unwrap(),
+            read_only: false,
+        });
+        Self {
+            owner,
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+        }
+    }
+
+    /// Create Coin object for use in Move object operation
+    pub fn with_id_owner_gas_coin_object_for_testing(
+        id: ObjectID,
+        version: SequenceNumber,
+        owner: FastPayAddress,
+        value: u64,
+    ) -> Self {
+        // An object in Coin.move is a struct of an ID and a u64 value
+        let obj = CoinObject {
+            id: ID::new(id, version),
+            value,
+        };
+
+        let data = Data::Move(MoveObject {
+            type_: GasCoin::type_(),
+            contents: bcs::to_bytes(&obj).unwrap(),
+            read_only: false,
+        });
+        Self {
+            owner,
+            data,
+            previous_transaction: TransactionDigest::genesis(),
+        }
     }
 }

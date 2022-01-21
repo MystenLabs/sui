@@ -277,7 +277,7 @@ async fn test_publish_dependent_module_ok() {
         dependent_module.serialize(&mut bytes).unwrap();
         bytes
     };
-    let mut authority = init_state_with_genesis(vec![gas_payment_object]).await;
+    let mut authority = init_state_with_objects(vec![gas_payment_object]).await;
 
     let order = Order::new_module(
         sender,
@@ -285,7 +285,7 @@ async fn test_publish_dependent_module_ok() {
         vec![dependent_module_bytes],
         &sender_key,
     );
-    let dependent_module_id = TxContext::new(order.digest()).fresh_id();
+    let dependent_module_id = TxContext::new(&sender, order.digest()).fresh_id();
 
     // Object does not exist
     assert!(authority.object_state(&dependent_module_id).await.is_err());
@@ -313,7 +313,7 @@ async fn test_publish_module_no_dependencies_ok() {
     let module_bytes = vec![module_bytes];
     let gas_cost = calculate_module_publish_cost(&module_bytes);
     let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, &sender_key);
-    let _module_object_id = TxContext::new(order.digest()).fresh_id();
+    let _module_object_id = TxContext::new(&sender, order.digest()).fresh_id();
     let _response = send_and_confirm_order(&mut authority, order).await.unwrap();
 
     // check that the module actually got published
@@ -327,7 +327,7 @@ async fn test_publish_module_no_dependencies_ok() {
     check_gas_object(
         &gas_payment_object,
         gas_balance - gas_cost,
-        gas_seq.increment().unwrap(),
+        gas_seq.increment(),
     )
 }
 
@@ -370,23 +370,13 @@ async fn test_handle_move_order() {
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // find the function Object::create and call it to create a new object
     let (mut genesis_package_objects, native_functions) = genesis::clone_genesis_data();
-    let package_object_ref = genesis_package_objects
-        .iter()
-        .find_map(|o| match o.data.try_as_package() {
-            Some(p) => {
-                if p.keys().any(|name| name == "ObjectBasics") {
-                    Some(o.to_object_reference())
-                } else {
-                    None
-                }
-            }
-            None => None,
-        })
-        .unwrap();
+    let package_object_ref =
+        get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
 
     genesis_package_objects.push(gas_payment_object);
     let mut authority_state = init_state_with_objects(genesis_package_objects).await;
-    authority_state.native_functions = native_functions;
+    authority_state._native_functions = native_functions.clone();
+    authority_state.move_vm = adapter::new_move_vm(native_functions).unwrap();
 
     let function = ident_str!("create").to_owned();
     let order = Order::new_move_call(
@@ -413,11 +403,15 @@ async fn test_handle_move_order() {
 
     // Check that effects are reported
     assert!(res.signed_effects.is_some());
+    assert_eq!(
+        res.signed_effects.as_ref().unwrap().effects.status,
+        ExecutionStatus::Success
+    );
     let mutated = res.signed_effects.unwrap().effects.mutated;
-    assert!(mutated.len() == 2);
+    assert_eq!(mutated.len(), 2);
 
-    let created_object_id = mutated[0].0; // res.object_id;
-                                          // check that order actually created an object with the expected ID, owner, sequence number
+    let created_object_id = mutated[0].0 .0; // res.object_id;
+                                             // check that order actually created an object with the expected ID, owner, sequence number
     let created_obj = authority_state
         .object_state(&created_object_id)
         .await
@@ -434,7 +428,7 @@ async fn test_handle_move_order() {
     check_gas_object(
         &gas_payment_object,
         gas_balance - gas_cost,
-        gas_seq.increment().unwrap(),
+        gas_seq.increment(),
     )
 }
 
@@ -449,23 +443,13 @@ async fn test_handle_move_order_insufficient_budget() {
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // find the function Object::create and call it to create a new object
     let (mut genesis_package_objects, native_functions) = genesis::clone_genesis_data();
-    let package_object_ref = genesis_package_objects
-        .iter()
-        .find_map(|o| match o.data.try_as_package() {
-            Some(p) => {
-                if p.keys().any(|name| name == "ObjectBasics") {
-                    Some(o.to_object_reference())
-                } else {
-                    None
-                }
-            }
-            None => None,
-        })
-        .unwrap();
+    let package_object_ref =
+        get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
 
     genesis_package_objects.push(gas_payment_object);
     let mut authority_state = init_state_with_objects(genesis_package_objects).await;
-    authority_state.native_functions = native_functions;
+    authority_state._native_functions = native_functions.clone();
+    authority_state.move_vm = adapter::new_move_vm(native_functions).unwrap();
 
     let function = ident_str!("create").to_owned();
     let order = Order::new_move_call(
@@ -516,7 +500,7 @@ async fn test_handle_transfer_order_double_spend() {
 async fn test_handle_confirmation_order_unknown_sender() {
     let recipient = dbg_addr(2);
     let (sender, sender_key) = get_key_pair();
-    let authority_state = init_state();
+    let authority_state = init_state().await;
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
@@ -568,7 +552,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
         let o = sender_object.data.try_as_move_mut().unwrap();
         let old_contents = o.contents().to_vec();
         // update object contents, which will increment the sequence number
-        o.update_contents(old_contents).unwrap();
+        o.update_contents(old_contents);
         authority_state.insert_object(sender_object).await;
     }
 
@@ -581,7 +565,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
 
     // Check that the new object is the one recorded.
     let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(old_seq_num.increment().unwrap(), new_account.version());
+    assert_eq!(old_seq_num.increment(), new_account.version());
 
     // No recipient object was created.
     assert!(authority_state
@@ -721,7 +705,15 @@ async fn test_handle_confirmation_order_gas() {
             .await
     };
     let result = run_test_with_gas(10).await;
-    let err_string = result.unwrap_err().to_string();
+    let err_string = result
+        .unwrap()
+        .signed_effects
+        .unwrap()
+        .effects
+        .status
+        .unwrap_err()
+        .1
+        .to_string();
     assert!(err_string.contains("Gas balance is 10, not enough to pay 16"));
     let result = run_test_with_gas(20).await;
     assert!(result.is_ok());
@@ -746,7 +738,7 @@ async fn test_handle_confirmation_order_ok() {
 
     let old_account = authority_state.object_state(&object_id).await.unwrap();
     let mut next_sequence_number = old_account.version();
-    next_sequence_number = next_sequence_number.increment().unwrap();
+    next_sequence_number = next_sequence_number.increment();
 
     let info = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
@@ -820,6 +812,130 @@ async fn test_handle_confirmation_order_idempotent() {
     assert_eq!(info, info2);
     assert!(info2.certified_order.is_some());
     assert!(info2.signed_effects.is_some());
+}
+
+#[tokio::test]
+async fn test_move_call_mutable_object_not_mutated() {
+    let (sender, sender_key) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let mut authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+
+    let (genesis_package_objects, _) = genesis::clone_genesis_data();
+    let package_object_ref =
+        get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
+
+    let gas_object_ref = authority_state
+        .object_state(&gas_object_id)
+        .await
+        .unwrap()
+        .to_object_reference();
+    let order = Order::new_move_call(
+        sender,
+        package_object_ref,
+        ident_str!("ObjectBasics").to_owned(),
+        ident_str!("create").to_owned(),
+        Vec::new(),
+        gas_object_ref,
+        Vec::new(),
+        vec![
+            16u64.to_le_bytes().to_vec(),
+            bcs::to_bytes(&sender.to_vec()).unwrap(),
+        ],
+        1000,
+        &sender_key,
+    );
+    let effects = send_and_confirm_order(&mut authority_state, order)
+        .await
+        .unwrap()
+        .signed_effects
+        .unwrap()
+        .effects;
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!(effects.mutated.len(), 2);
+    let new_object_ref1 = effects
+        .mutated
+        .iter()
+        .find(|((id, _, _), _)| id != &gas_object_id)
+        .unwrap()
+        .0;
+
+    let gas_object_ref = authority_state
+        .object_state(&gas_object_id)
+        .await
+        .unwrap()
+        .to_object_reference();
+    let order = Order::new_move_call(
+        sender,
+        package_object_ref,
+        ident_str!("ObjectBasics").to_owned(),
+        ident_str!("create").to_owned(),
+        Vec::new(),
+        gas_object_ref,
+        Vec::new(),
+        vec![
+            16u64.to_le_bytes().to_vec(),
+            bcs::to_bytes(&sender.to_vec()).unwrap(),
+        ],
+        1000,
+        &sender_key,
+    );
+    let effects = send_and_confirm_order(&mut authority_state, order)
+        .await
+        .unwrap()
+        .signed_effects
+        .unwrap()
+        .effects;
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!(effects.mutated.len(), 2);
+    let new_object_ref2 = effects
+        .mutated
+        .iter()
+        .find(|((id, _, _), _)| id != &gas_object_id)
+        .unwrap()
+        .0;
+
+    let gas_object_ref = authority_state
+        .object_state(&gas_object_id)
+        .await
+        .unwrap()
+        .to_object_reference();
+    let order = Order::new_move_call(
+        sender,
+        package_object_ref,
+        ident_str!("ObjectBasics").to_owned(),
+        ident_str!("update").to_owned(),
+        Vec::new(),
+        gas_object_ref,
+        vec![new_object_ref1, new_object_ref2],
+        vec![],
+        1000,
+        &sender_key,
+    );
+    let effects = send_and_confirm_order(&mut authority_state, order)
+        .await
+        .unwrap()
+        .signed_effects
+        .unwrap()
+        .effects;
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!(effects.mutated.len(), 3); // gas, new_object_ref1, new_object_ref2.
+                                          // Verify that both objects' version increased, even though only one object was updated.
+    assert_eq!(
+        authority_state
+            .object_state(&new_object_ref1.0)
+            .await
+            .unwrap()
+            .version(),
+        new_object_ref1.1.increment()
+    );
+    assert_eq!(
+        authority_state
+            .object_state(&new_object_ref2.0)
+            .await
+            .unwrap()
+            .version(),
+        new_object_ref2.1.increment()
+    );
 }
 
 #[tokio::test]
@@ -923,42 +1039,17 @@ fn init_state_parameters() -> (Committee, PublicKeyBytes, KeyPair, Arc<Authority
 }
 
 #[cfg(test)]
-async fn init_state_with_genesis<I: IntoIterator<Item = Object>>(
-    genesis_objects: I,
-) -> AuthorityState {
+async fn init_state() -> AuthorityState {
     let (committee, authority_address, authority_key, store) = init_state_parameters();
-    let state = AuthorityState::new_with_genesis_modules(
-        committee,
-        authority_address,
-        authority_key,
-        store,
-    )
-    .await;
-    for obj in genesis_objects {
-        state
-            .init_order_lock((obj.id(), 0.into(), obj.digest()))
-            .await;
-        state.insert_object(obj).await;
-    }
-    state
-}
-
-#[cfg(test)]
-fn init_state() -> AuthorityState {
-    let (committee, authority_address, authority_key, store) = init_state_parameters();
-    AuthorityState::new_without_genesis_for_testing(
-        committee,
-        authority_address,
-        authority_key,
-        store,
-    )
+    AuthorityState::new_with_genesis_modules(committee, authority_address, authority_key, store)
+        .await
 }
 
 #[cfg(test)]
 async fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
     objects: I,
 ) -> AuthorityState {
-    let state = init_state();
+    let state = init_state().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
         state
@@ -970,7 +1061,7 @@ async fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>
 }
 
 async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
-    let state = init_state();
+    let state = init_state().await;
 
     for o in objects {
         let obj_ref = o.to_object_reference();
@@ -1027,5 +1118,21 @@ fn init_certified_transfer_order(
     builder
         .append(vote.authority, vote.signature)
         .unwrap()
+        .unwrap()
+}
+
+fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> ObjectRef {
+    genesis_objects
+        .iter()
+        .find_map(|o| match o.data.try_as_package() {
+            Some(p) => {
+                if p.keys().any(|name| name == module) {
+                    Some(o.to_object_reference())
+                } else {
+                    None
+                }
+            }
+            None => None,
+        })
         .unwrap()
 }
