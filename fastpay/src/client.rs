@@ -361,10 +361,9 @@ enum ClientCommands {
     /// Publish Move modules
     #[structopt(name = "publish")]
     Publish {
-        /// Object ID of the object to fetch
+        /// Path of confirmant move project
         path: String,
 
-        /// Deep inspection of object
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         gas_object_id: ObjectID,
     },
@@ -460,12 +459,6 @@ fn main() {
             path,
             gas_object_id,
         } => {
-            let metadata = std::fs::metadata(path.clone()).unwrap();
-
-            if !metadata.is_dir() {
-                error!("Path must be directory containing source code");
-            }
-
             // Find owner of gas object
             let owner = find_cached_owner_by_object_id(&accounts_config, gas_object_id)
                 .expect("Cannot find owner for gas object");
@@ -502,7 +495,7 @@ fn main() {
                 match pub_resp {
                     Ok(resp) => {
                         if resp.1.status != ExecutionStatus::Success {
-                            error!("Path must be directory containing source code");
+                            error!("Error publishing {:#?}", resp);
                         }
                         let (_, effects) = resp;
                         show_object_effects(effects);

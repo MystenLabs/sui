@@ -58,9 +58,9 @@ pub enum FastPayError {
     ErrorWhileProcessingConfirmationOrder,
     #[error("An invalid answer was returned by the authority while requesting a certificate")]
     ErrorWhileRequestingCertificate,
-    #[error("An invalid answer was returned by the authority while requesting information")]
-    ErrorWhileProcessingPublish,
     #[error("Module publish failed")]
+    ErrorWhileProcessingPublish,
+    #[error("An invalid answer was returned by the authority while requesting information")]
     ErrorWhileRequestingInformation,
     #[error(
          "Cannot confirm a transfer while previous transfer orders are still pending confirmation: {current_sequence_number:?}"
@@ -112,7 +112,7 @@ pub enum FastPayError {
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error:?}.")]
     ModulePublishFailure { error: String },
-    #[error("FAiled to build Move modules")]
+    #[error("Failed to build Move modules")]
     ModuleBuildFailure { error: String },
 
     // Move call related errors

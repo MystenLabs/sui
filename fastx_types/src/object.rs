@@ -241,7 +241,7 @@ impl Object {
 
         match &self.data {
             Move(v) => v.version(),
-            Package(_) => SequenceNumber::from(0), // modules are immutable, version is always 0
+            Package(_) => SequenceNumber::from(1), // modules are immutable, version is always 1
         }
     }
 

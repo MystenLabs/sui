@@ -3,13 +3,12 @@
 
 use crate::downloader::*;
 use anyhow::{bail, ensure};
-use fastx_framework::build_move_package;
+use fastx_framework::build_move_pckage_to_bytes;
 use fastx_types::messages::Address::FastPay;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
 use futures::{future, StreamExt, TryFutureExt};
-use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig;
@@ -807,17 +806,12 @@ where
     }
 
     /// Execute call order
-    /// Need improvement and decoupling from transfer logic
-    /// TODO: https://github.com/MystenLabs/fastnft/issues/173
     async fn execute_call(
         &mut self,
         order: Order,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         // Transaction order
         let new_certificate = self.communicate_transaction_order(order).await?;
-
-        // TODO: update_certificates relies on orders having sequence numbers/object IDs , which fails for calls with obj args
-        // https://github.com/MystenLabs/fastnft/issues/173
 
         // Confirmation
         let order_info = self
@@ -838,9 +832,7 @@ where
         Ok((cert, effects))
     }
 
-    /// Execute call order
-    /// Need improvement and decoupling from transfer logic
-    /// TODO: https://github.com/MystenLabs/fastnft/issues/173
+    /// Execute module publish
     async fn execute_publish(
         &mut self,
         order: Order,
@@ -850,9 +842,6 @@ where
             .communicate_transaction_order(order)
             .await
             .map_err(|_| FastPayError::ErrorWhileProcessingPublish)?;
-
-        // TODO: update_certificates relies on orders having sequence numbers/object IDs , which fails for calls with obj args
-        // https://github.com/MystenLabs/fastnft/issues/173
 
         // Confirmation
         let order_info = self
@@ -908,19 +897,7 @@ where
     ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
         // Try to compile the modules at the path into a package
         let compiled_modules =
-            match build_move_package(Path::new(&package_source_files_path), build_config, false) {
-                Ok(modules) => modules
-                    .iter()
-                    .map(|m| {
-                        let mut bytes = Vec::new();
-                        m.serialize(&mut bytes).unwrap();
-                        bytes
-                    })
-                    .collect_vec(),
-
-                Err(err) => return Err(err),
-            };
-
+            build_move_pckage_to_bytes(Path::new(&package_source_files_path), build_config, false)?;
         let move_publish_order =
             Order::new_module(self.address, gas_object_ref, compiled_modules, &self.secret);
 

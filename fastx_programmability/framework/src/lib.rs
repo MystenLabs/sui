@@ -17,7 +17,7 @@ const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
 
 pub fn get_fastx_framework_modules() -> Vec<CompiledModule> {
     let modules = build_framework(".");
-    verify_modules(&modules);
+    veirfy_modules(&modules);
     modules
 }
 
@@ -31,8 +31,28 @@ pub fn get_move_stdlib_modules() -> Vec<CompiledModule> {
         .into_iter()
         .filter(|m| !denylist.contains(&m.self_id().name().to_owned()))
         .collect();
-    verify_modules(&modules);
+    veirfy_modules(&modules);
     modules
+}
+
+/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as Vec<Vec<u8>>.
+/// This is useful for when publishing
+/// If we are building the FastX framework, `is_framework` will be true;
+/// Otherwise `is_framework` should be false (e.g. calling from client).
+pub fn build_move_pckage_to_bytes(
+    path: &Path,
+    build_config: BuildConfig,
+    is_framework: bool,
+) -> Result<Vec<Vec<u8>>, FastPayError> {
+    build_move_package(path, build_config, is_framework).map(|mods| {
+        mods.iter()
+            .map(|m| {
+                let mut bytes = Vec::new();
+                m.serialize(&mut bytes).unwrap();
+                bytes
+            })
+            .collect::<Vec<_>>()
+    })
 }
 
 /// Given a `path` and a `build_config`, build the package in that path.
@@ -43,6 +63,16 @@ pub fn build_move_package(
     build_config: BuildConfig,
     is_framework: bool,
 ) -> FastPayResult<Vec<CompiledModule>> {
+    let dir_metadata = std::fs::metadata(path).map_err(|err| FastPayError::ModuleBuildFailure {
+        error: err.to_string(),
+    })?;
+
+    if !dir_metadata.is_dir() {
+        return Err(FastPayError::ModuleBuildFailure {
+            error: "Package file path is not a directory".to_string(),
+        });
+    }
+
     match build_config.compile_package(path, &mut Vec::new()) {
         Err(error) => Err(FastPayError::ModuleBuildFailure {
             error: error.to_string(),
@@ -88,12 +118,12 @@ pub fn build_move_package(
     }
 }
 
-fn verify_modules(modules: &[CompiledModule]) {
+fn veirfy_modules(modules: &[CompiledModule]) {
     for m in modules {
         move_bytecode_verifier::verify_module(m).unwrap();
         fastx_bytecode_verifier::verify_module(m).unwrap();
+        // TODO(https://github.com/MystenLabs/fastnft/issues/69): Run Move linker
     }
-    // TODO(https://github.com/MystenLabs/fastnft/issues/69): Run Move linker
 }
 
 fn build_framework(sub_dir: &str) -> Vec<CompiledModule> {
@@ -115,7 +145,7 @@ fn get_examples() -> Vec<CompiledModule> {
         ..Default::default()
     };
     let modules = build_move_package(&framework_dir, build_config, true).unwrap();
-    verify_modules(&modules);
+    veirfy_modules(&modules);
     modules
 }
 
