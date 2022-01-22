@@ -1330,19 +1330,13 @@ async fn test_module_publish_and_call_good() {
 
     let (_, published_effects) = pub_res.unwrap();
 
-    // Gas module is mutated, along with published obj ref
-    assert_eq!(published_effects.mutated.len(), 2);
+    // Only package obj should be created
+    assert_eq!(published_effects.created.len(), 1);
 
-    let gas_obj_idx = published_effects
-        .mutated
-        .iter()
-        .position(|(e, _)| e.0 == gas_object_ref.0);
+    // Verif gas obj
+    assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
 
-    assert!(gas_obj_idx.is_some());
-    let (new_obj_ref, _) = published_effects
-        .mutated
-        .get(gas_obj_idx.unwrap() ^ 1)
-        .unwrap();
+    let (new_obj_ref, _) = published_effects.created.get(0).unwrap();
     assert_ne!(gas_object_ref, *new_obj_ref);
 
     // We now have the module obj ref
@@ -1402,7 +1396,7 @@ async fn test_module_publish_and_call_good() {
     let tres_cap_ref = call_resp
         .unwrap()
         .1
-        .mutated
+        .created
         .iter()
         .find(|r| r.0 .0 != gas_object_ref.0)
         .unwrap()
@@ -1462,19 +1456,13 @@ async fn test_module_publish_file_path() {
 
     let (_, published_effects) = pub_resp.unwrap();
 
-    // Gas module is mutated, along with published obj ref
-    assert_eq!(published_effects.mutated.len(), 2);
+    // Only package obj should be created
+    assert_eq!(published_effects.created.len(), 1);
 
-    let gas_obj_idx = published_effects
-        .mutated
-        .iter()
-        .position(|(e, _)| e.0 == gas_object_ref.0);
+    // Verif gas
+    assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
 
-    assert!(gas_obj_idx.is_some());
-    let (new_obj_ref, _) = published_effects
-        .mutated
-        .get(gas_obj_idx.unwrap() ^ 1)
-        .unwrap();
+    let (new_obj_ref, _) = published_effects.created.get(0).unwrap();
     assert_ne!(gas_object_ref, *new_obj_ref);
 
     // We now have the module obj ref
