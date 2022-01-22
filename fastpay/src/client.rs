@@ -290,6 +290,12 @@ fn find_cached_owner_by_object_id(
 }
 
 fn show_object_effects(order_effects: OrderEffects) {
+    if !order_effects.created.is_empty() {
+        println!("Created Objects:");
+        for (obj, _) in order_effects.created {
+            println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
+        }
+    }
     if !order_effects.mutated.is_empty() {
         println!("Mutated Objects:");
         for (obj, _) in order_effects.mutated {
