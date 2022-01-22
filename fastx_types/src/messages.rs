@@ -163,11 +163,28 @@ pub struct OrderEffects {
     pub status: ExecutionStatus,
     // The transaction digest
     pub transaction_digest: TransactionDigest,
-    // ObjectRefs containing mutated or new objects
+    // ObjectRef and owner of new objects created.
+    pub created: Vec<(ObjectRef, FastPayAddress)>,
+    // ObjectRef and owner of mutated objects.
+    // mutated does not include gas object or created objects.
     pub mutated: Vec<(ObjectRef, FastPayAddress)>,
     // Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
+    // The updated gas object reference.
+    pub gas_object: (ObjectRef, FastPayAddress),
     // TODO: add events here too.
+}
+
+impl OrderEffects {
+    /// Return an iterator that iterates throguh all mutated objects,
+    /// including all from mutated, created and the gas_object.
+    /// It doesn't include deleted.
+    pub fn all_mutated(&self) -> impl Iterator<Item = &(ObjectRef, FastPayAddress)> {
+        self.mutated
+            .iter()
+            .chain(self.created.iter())
+            .chain(std::iter::once(&self.gas_object))
+    }
 }
 
 impl BcsSignable for OrderEffects {}

@@ -778,17 +778,12 @@ async fn test_move_calls_object_create() {
     assert_eq!(order_effects.status, ExecutionStatus::Success);
     // Nothing should be deleted during a creation
     assert!(order_effects.deleted.is_empty());
-    // Two items should be mutated during a creation (gas and new object)
-    assert_eq!(order_effects.mutated.len(), 2);
-    // Confirm the items
-    let gas_obj_idx = order_effects
-        .mutated
-        .iter()
-        .position(|(e, _)| e.0 == gas_object_ref.0);
-
-    assert!(gas_obj_idx.is_some());
-    let (new_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
-    assert_ne!(gas_object_ref, *new_obj_ref);
+    // A new object is created.
+    assert_eq!(
+        (order_effects.created.len(), order_effects.mutated.len()),
+        (1, 0)
+    );
+    assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 }
 
 #[tokio::test]
@@ -845,12 +840,10 @@ async fn test_move_calls_object_transfer() {
         .await;
 
     let (_, order_effects) = call_response.unwrap();
-    let gas_obj_idx = order_effects
-        .mutated
-        .iter()
-        .position(|(e, _)| e.0 == gas_object_ref.0);
+    assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
+
     // Get the object created from the call
-    let (new_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    let (new_obj_ref, _) = order_effects.created[0];
     // Fetch the full object
     let new_obj = client1
         .get_object_info(ObjectInfoRequest {
@@ -894,17 +887,13 @@ async fn test_move_calls_object_transfer() {
     assert_eq!(order_effects.status, ExecutionStatus::Success);
     // Nothing should be deleted during a transfer
     assert!(order_effects.deleted.is_empty());
-    // Two items should be mutated during a transfer (gas and object being transferred)
-    assert_eq!(order_effects.mutated.len(), 2);
+    // The object being transfered will be in mutated.
+    assert_eq!(order_effects.mutated.len(), 1);
     // Confirm the items
-    let gas_obj_idx = order_effects
-        .mutated
-        .iter()
-        .position(|(e, _)| e.0 == gas_object_ref.0);
+    assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
-    assert!(gas_obj_idx.is_some());
-    let (transferred_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
-    assert_ne!(gas_object_ref, *transferred_obj_ref);
+    let (transferred_obj_ref, _) = order_effects.mutated[0];
+    assert_ne!(gas_object_ref, transferred_obj_ref);
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
 
@@ -975,12 +964,8 @@ async fn test_move_calls_object_transfer_and_freeze() {
         .await;
 
     let (_, order_effects) = call_response.unwrap();
-    let gas_obj_idx = order_effects
-        .mutated
-        .iter()
-        .position(|(e, _)| e.0 == gas_object_ref.0);
     // Get the object created from the call
-    let (new_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    let (new_obj_ref, _) = order_effects.created[0];
     // Fetch the full object
     let new_obj = client1
         .get_object_info(ObjectInfoRequest {
@@ -1024,17 +1009,11 @@ async fn test_move_calls_object_transfer_and_freeze() {
     assert_eq!(order_effects.status, ExecutionStatus::Success);
     // Nothing should be deleted during a transfer
     assert!(order_effects.deleted.is_empty());
-    // Two items should be mutated during a transfer (gas and object being transferred)
-    assert_eq!(order_effects.mutated.len(), 2);
-    // Confirm the items
-    let gas_obj_idx = order_effects
-        .mutated
-        .iter()
-        .position(|(e, _)| e.0 == gas_object_ref.0);
+    // Item being transfered is mutated.
+    assert_eq!(order_effects.mutated.len(), 1);
 
-    assert!(gas_obj_idx.is_some());
-    let (transferred_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
-    assert_ne!(gas_object_ref, *transferred_obj_ref);
+    let (transferred_obj_ref, _) = order_effects.mutated[0];
+    assert_ne!(gas_object_ref, transferred_obj_ref);
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
 
@@ -1107,12 +1086,8 @@ async fn test_move_calls_object_delete() {
         .await;
 
     let (_, order_effects) = call_response.unwrap();
-    let gas_obj_idx = order_effects
-        .mutated
-        .iter()
-        .position(|(e, _)| e.0 == gas_object_ref.0);
     // Get the object created from the call
-    let (new_obj_ref, _) = order_effects.mutated.get(gas_obj_idx.unwrap() ^ 1).unwrap();
+    let (new_obj_ref, _) = order_effects.created[0];
     // Fetch the full object
     let new_obj = client1
         .get_object_info(ObjectInfoRequest {
@@ -1155,15 +1130,11 @@ async fn test_move_calls_object_delete() {
     assert_eq!(order_effects.status, ExecutionStatus::Success);
     // Object be deleted during a delete
     assert_eq!(order_effects.deleted.len(), 1);
-    // One item should be mutated during a delete (gas)
-    assert_eq!(order_effects.mutated.len(), 1);
+    // No item is mutated.
+    assert_eq!(order_effects.mutated.len(), 0);
     // Confirm the items
-    let gas_obj_idx = order_effects
-        .mutated
-        .iter()
-        .position(|(e, _)| e.0 == gas_object_ref.0);
+    assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
-    assert_eq!(gas_obj_idx.unwrap(), 0);
     // Try to fetch the deleted object
     let deleted_object_resp = client1
         .get_object_info(ObjectInfoRequest {
@@ -1226,19 +1197,11 @@ async fn test_move_calls_certs() {
         .await
         .unwrap();
 
-    let (new_object_ref, _) = effect
-        .mutated
-        .iter()
-        .find(|((id, _, _), _)| id != &gas_object_id)
-        .unwrap();
+    let new_object_ref = &effect.created[0].0;
 
-    let (gas_object_ref, _) = effect
-        .mutated
-        .iter()
-        .find(|((id, _, _), _)| id == &gas_object_id)
-        .unwrap();
+    let gas_object_ref = &effect.gas_object.0;
 
-    let (new_object_id, _, _) = new_object_ref;
+    let (new_object_id, _, _) = &new_object_ref;
 
     // Client 1 should have one certificate, one new object and one gas object, each with one associated certificate.
     assert!(client1.certificates.contains_key(&cert.order.digest()));
