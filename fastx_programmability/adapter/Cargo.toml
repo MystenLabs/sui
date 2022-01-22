@@ -25,13 +25,4 @@ fastx-verifier = { path = "../verifier" }
 fastx-types = { path = "../../fastx_types" }
 
 [dev-dependencies]
-datatest-stable = "0.1.1"
 move-package = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
-
-[[bin]]
-name = "fastx"
-path = "src/main.rs"
-
-[[test]]
-name = "cli_testsuite"
-harness = false
