@@ -11,7 +11,6 @@ use move_core_types::transaction_argument::convert_txn_args;
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use log::*;
-use move_package::BuildConfig;
 use std::{
     collections::{HashMap, HashSet},
     time::{Duration, Instant},
@@ -482,12 +481,8 @@ fn main() {
                     .await
                     .unwrap();
                 let gas_obj_ref = gas_obj_info.object.to_object_reference();
-                let build_config = BuildConfig {
-                    dev_mode: false,
-                    ..Default::default()
-                };
 
-                let pub_resp = client_state.publish(path, gas_obj_ref, build_config).await;
+                let pub_resp = client_state.publish(path, gas_obj_ref).await;
 
                 match pub_resp {
                     Ok(resp) => {

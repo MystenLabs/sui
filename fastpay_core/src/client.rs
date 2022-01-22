@@ -4,7 +4,7 @@
 use crate::downloader::*;
 use anyhow::{bail, ensure};
 use async_trait::async_trait;
-use fastx_framework::build_move_pckage_to_bytes;
+use fastx_framework::build_move_package_to_bytes;
 use fastx_types::messages::Address::FastPay;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
@@ -12,7 +12,6 @@ use fastx_types::{
 use futures::{future, StreamExt, TryFutureExt};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
-use move_package::BuildConfig;
 use rand::seq::SliceRandom;
 use std::collections::btree_map::Entry;
 
@@ -122,7 +121,6 @@ pub trait Client {
         &mut self,
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
-        build_config: BuildConfig,
     ) -> Result<(CertifiedOrder, OrderEffects), FastPayError>;
 
     /// Get the object information
@@ -950,11 +948,10 @@ where
         &mut self,
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
-        build_config: BuildConfig,
     ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
         // Try to compile the modules at the path into a package
         let compiled_modules =
-            build_move_pckage_to_bytes(Path::new(&package_source_files_path), build_config, false)?;
+            build_move_package_to_bytes(Path::new(&package_source_files_path), false)?;
         let move_publish_order =
             Order::new_module(self.address, gas_object_ref, compiled_modules, &self.secret);
 
@@ -1114,9 +1111,8 @@ where
         &mut self,
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
-        build_config: BuildConfig,
     ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
-        self.publish(package_source_files_path, gas_object_ref, build_config)
+        self.publish(package_source_files_path, gas_object_ref)
             .await
     }
 

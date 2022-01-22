@@ -1327,3 +1327,282 @@ async fn test_move_calls_certs() {
         client2.object_ids.get(new_object_id).unwrap().clone()
     );
 }
+
+#[tokio::test]
+async fn test_module_publish_and_call_good() {
+    // Init the states
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee);
+
+    let gas_object_id = ObjectID::random();
+
+    // Populate authorities with gas obj data
+    let authority_objects = vec![
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+    ];
+
+    let gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // Provide path to well formed package sources
+    let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
+    hero_path.push_str("/../fastx_programmability/examples/");
+
+    let pub_res = client1.publish(hero_path, gas_object_ref).await;
+
+    // Check publish success
+    assert!(pub_res.is_ok());
+
+    let (_, published_effects) = pub_res.unwrap();
+
+    // Gas module is mutated, along with published obj ref
+    assert_eq!(published_effects.mutated.len(), 2);
+
+    let gas_obj_idx = published_effects
+        .mutated
+        .iter()
+        .position(|(e, _)| e.0 == gas_object_ref.0);
+
+    assert!(gas_obj_idx.is_some());
+    let (new_obj_ref, _) = published_effects
+        .mutated
+        .get(gas_obj_idx.unwrap() ^ 1)
+        .unwrap();
+    assert_ne!(gas_object_ref, *new_obj_ref);
+
+    // We now have the module obj ref
+    // We can inspect it
+
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap();
+
+    // Version should be 1 for all modules
+    assert_eq!(new_obj.object.version(), SequenceNumber::from(1));
+    // Must be immutable
+    assert!(new_obj.object.is_read_only());
+
+    // StructTag type is not defined for package
+    assert!(new_obj.object.type_().is_none());
+
+    // Data should be castable as a package
+    assert!(new_obj.object.data.try_as_package().is_some());
+
+    // Retrieve latest gas obj spec
+    let gas_object = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: gas_object_id,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object;
+
+    let gas_object_ref = gas_object.to_object_reference();
+
+    //Try to call a function in TrustedCoin module
+    let call_resp = client1
+        .call(
+            new_obj.object.to_object_reference(),
+            ident_str!("TrustedCoin").to_owned(),
+            ident_str!("init").to_owned(),
+            vec![],
+            gas_object_ref,
+            vec![],
+            vec![],
+            1000,
+        )
+        .await;
+    assert!(call_resp.is_ok());
+
+    assert!(call_resp.as_ref().unwrap().1.status == ExecutionStatus::Success);
+
+    // This gets the treasury cap for the coin and gives it to the sender
+    let tres_cap_ref = call_resp
+        .unwrap()
+        .1
+        .mutated
+        .iter()
+        .find(|r| r.0 .0 != gas_object_ref.0)
+        .unwrap()
+        .0;
+
+    // Fetch the full obj info
+    let tres_cap_obj_info = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: tres_cap_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap();
+    // Confirm we own this object
+    assert_eq!(tres_cap_obj_info.object.owner, gas_object.owner);
+}
+
+// Pass a file in a package dir instead of the root. The builder should be able to infer the root
+#[tokio::test]
+async fn test_module_publish_file_path() {
+    // Init the states
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee);
+
+    let gas_object_id = ObjectID::random();
+
+    // Populate authorities with gas obj data
+    let authority_objects = vec![
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+    ];
+
+    let gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // Compile
+    let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
+
+    // Use a path pointing to a different file
+    hero_path.push_str("/../fastx_programmability/examples/Hero.move");
+
+    let pub_resp = client1.publish(hero_path, gas_object_ref).await;
+    // Has to fail
+    assert!(pub_resp.is_ok());
+
+    let (_, published_effects) = pub_resp.unwrap();
+
+    // Gas module is mutated, along with published obj ref
+    assert_eq!(published_effects.mutated.len(), 2);
+
+    let gas_obj_idx = published_effects
+        .mutated
+        .iter()
+        .position(|(e, _)| e.0 == gas_object_ref.0);
+
+    assert!(gas_obj_idx.is_some());
+    let (new_obj_ref, _) = published_effects
+        .mutated
+        .get(gas_obj_idx.unwrap() ^ 1)
+        .unwrap();
+    assert_ne!(gas_object_ref, *new_obj_ref);
+
+    // We now have the module obj ref
+    // We can inspect it
+
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap();
+
+    // Version should be 1 for all modules
+    assert_eq!(new_obj.object.version(), SequenceNumber::from(1));
+    // Must be immutable
+    assert!(new_obj.object.is_read_only());
+
+    // StructTag type is not defined for package
+    assert!(new_obj.object.type_().is_none());
+
+    // Data should be castable as a package
+    assert!(new_obj.object.data.try_as_package().is_some());
+
+    // Retrieve latest gas obj spec
+    let gas_object = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: gas_object_id,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object;
+
+    let gas_object_ref = gas_object.to_object_reference();
+
+    // Even though we provided a path to Hero.move, the builder is able to find the package root
+    // build all in the package, including TrustedCoin module
+    //Try to call a function in TrustedCoin module
+    let call_resp = client1
+        .call(
+            new_obj.object.to_object_reference(),
+            ident_str!("TrustedCoin").to_owned(),
+            ident_str!("init").to_owned(),
+            vec![],
+            gas_object_ref,
+            vec![],
+            vec![],
+            1000,
+        )
+        .await;
+    assert!(call_resp.is_ok());
+}
+
+#[tokio::test]
+async fn test_module_publish_bad_path() {
+    // Init the states
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee);
+
+    let gas_object_id = ObjectID::random();
+
+    // Populate authorities with gas obj data
+    let authority_objects = vec![
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+        vec![gas_object_id],
+    ];
+
+    let gas_object_ref = fund_account(
+        authority_clients.values().collect(),
+        &mut client1,
+        authority_objects,
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // Compile
+    let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
+
+    // Use a bad path
+    hero_path.push_str("/../fastx_____programmability/examples/");
+
+    let pub_resp = client1.publish(hero_path, gas_object_ref).await;
+    // Has to fail
+    assert!(pub_resp.is_err());
+}
