@@ -720,7 +720,7 @@ where
             let digest = cert.order.digest();
             self.certificates.insert(digest, cert);
 
-            for ((object_id, seq, _), owner) in v.effects.mutated {
+            for &((object_id, seq, _), owner) in v.effects.all_mutated() {
                 let old_seq = self.object_ids.get(&object_id).cloned().unwrap_or_default();
                 fp_ensure!(
                     old_seq < seq,
