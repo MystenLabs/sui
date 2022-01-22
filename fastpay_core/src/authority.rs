@@ -210,6 +210,7 @@ impl AuthorityState {
         let transaction_digest = certificate.order.digest();
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
+        let gas_object_id = *order.gas_payment_object_id();
         let (temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx)?;
 
         // Update the database in an atomic manner
@@ -218,6 +219,7 @@ impl AuthorityState {
             &self.secret,
             &transaction_digest,
             status,
+            &gas_object_id,
         );
         self.update_state(temporary_store, certificate, to_signed_effects)
             .await // Returns the OrderInfoResponse
