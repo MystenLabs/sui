@@ -715,7 +715,7 @@ fn main() {
 
             for _ in 0..num_accounts {
                 let mut object_refs = Vec::new();
-
+                let mut gas_object_ids = Vec::new();
                 for _ in 0..gas_objs_per_account {
                     let object = Object::with_id_owner_gas_for_testing(
                         ObjectID::random(),
@@ -724,9 +724,9 @@ fn main() {
                         100000,
                     );
                     object_refs.push(object.to_object_reference());
+                    gas_object_ids.push(object.id())
                 }
 
-                let gas_object_ids = object_refs.iter().map(|(id, _, _)| *id).collect();
                 let account = UserAccount::new(object_refs.clone(), gas_object_ids);
 
                 init_state_cfg.config.push(InitialStateConfigEntry {

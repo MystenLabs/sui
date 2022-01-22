@@ -404,7 +404,7 @@ where
         sender: FastPayAddress,
         object_id: ObjectID,
         known_certificates: Vec<CertifiedOrder>,
-        order: &Order,
+        order: Order,
     ) -> Result<(Vec<OrderInfoResponse>, CertifiedOrder), anyhow::Error> {
         let committee = self.committee.clone();
         let (responses, votes) = self
@@ -437,7 +437,7 @@ where
             )
             .await?;
         let certificate = CertifiedOrder {
-            order: order.clone(),
+            order,
             signatures: votes,
         };
         // Certificate is valid because
@@ -460,6 +460,16 @@ where
         F: Fn(AuthorityName, &'a mut A) -> AsyncResult<'a, V, FastPayError> + Send + Sync + Copy,
         V: Copy,
     {
+        let next_sequence_number = self.next_sequence_number(&object_id).unwrap_or_default();
+        fp_ensure!(
+            target_sequence_number >= next_sequence_number,
+            FastPayError::UnexpectedSequenceNumber {
+                object_id,
+                expected_sequence: next_sequence_number,
+                received_sequence: target_sequence_number,
+            }
+            .into()
+        );
         let requester = CertificateRequester::new(
             self.committee.clone(),
             self.authority_clients.values().cloned().collect(),
@@ -703,7 +713,7 @@ where
                 self.address,
                 *order.object_id(),
                 self.certificates(order.object_id()).cloned().collect(),
-                &order,
+                order.clone(),
             )
             .await?;
         assert_eq!(&new_sent_certificate.order, &order);
