@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::downloader::*;
-use anyhow::{bail, ensure};
+use anyhow::ensure;
 use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
 use fastx_types::messages::Address::FastPay;
@@ -348,7 +348,7 @@ where
     async fn communicate_with_quorum<'a, V, F>(
         &'a mut self,
         execute: F,
-    ) -> Result<Vec<V>, anyhow::Error>
+    ) -> Result<Vec<V>, FastPayError>
     where
         F: Fn(AuthorityName, &'a mut A) -> AsyncResult<'a, V, FastPayError> + Clone,
     {
@@ -381,16 +381,16 @@ where
                     if *entry >= committee.validity_threshold() {
                         // At least one honest node returned this error.
                         // No quorum can be reached, so return early.
-                        bail!(
-                            "Failed to communicate with a quorum of authorities: {}",
-                            err
-                        );
+                        return Err(FastPayError::FailedToCommunicateWithQuorum {
+                            err: "quorum not reached".to_owned(),
+                        });
                     }
                 }
             }
         }
-
-        bail!("Failed to communicate with a quorum of authorities (multiple errors)");
+        Err(FastPayError::FailedToCommunicateWithQuorum {
+            err: "multiple errors".to_string(),
+        })
     }
 
     /// Broadcast confirmation orders and optionally one more transfer order.
@@ -754,7 +754,7 @@ where
     async fn communicate_transaction_order(
         &mut self,
         order: Order,
-    ) -> Result<CertifiedOrder, anyhow::Error> {
+    ) -> Result<CertifiedOrder, FastPayError> {
         let committee = self.committee.clone();
 
         let votes = self
@@ -779,9 +779,7 @@ where
                         signed_order.check(committee)?;
                         Ok(signed_order.clone())
                     } else {
-                        Err(FastPayError::ErrorWhileProcessingTransactionOrder {
-                            err: s_order.err().unwrap().to_string(),
-                        })
+                        Err(s_order.err().unwrap().clone())
                     }
                 })
             })
@@ -830,16 +828,11 @@ where
                         signed_order.check(committee)?;
                         result
                     } else {
-                        Err(FastPayError::ErrorWhileProcessingConfirmationOrder {
-                            err: result.err().unwrap().to_string(),
-                        })
+                        Err(result.err().unwrap())
                     }
                 })
             })
-            .await
-            .map_err(|e| FastPayError::ErrorWhileProcessingConfirmationOrder {
-                err: e.to_string(),
-            });
+            .await;
 
         match votes {
             Ok(mut v) => v
@@ -855,7 +848,7 @@ where
     async fn execute_call(
         &mut self,
         order: Order,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
         // Transaction order
         let new_certificate = self.communicate_transaction_order(order).await?;
 
@@ -889,10 +882,7 @@ where
         order: Order,
     ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
         // Transaction order
-        let new_certificate = self
-            .communicate_transaction_order(order)
-            .await
-            .map_err(|e| FastPayError::ErrorWhileProcessingPublish { err: e.to_string() })?;
+        let new_certificate = self.communicate_transaction_order(order).await?;
 
         // Confirmation
         let order_info = self

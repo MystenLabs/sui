@@ -62,6 +62,8 @@ pub enum FastPayError {
     ErrorWhileProcessingPublish { err: String },
     #[error("Move call failed: {err}")]
     ErrorWhileProcessingMoveCall { err: String },
+    #[error("Failed to communicate with quorum of authorities: {err}")]
+    FailedToCommunicateWithQuorum { err: String },
     #[error("An invalid answer was returned by the authority while requesting information")]
     ErrorWhileRequestingInformation,
     #[error(

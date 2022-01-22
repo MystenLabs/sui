@@ -1467,7 +1467,6 @@ async fn test_module_publish_file_path() {
 
     // We now have the module obj ref
     // We can inspect it
-
     let new_obj = client1
         .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
