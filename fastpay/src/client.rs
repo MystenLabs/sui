@@ -377,10 +377,6 @@ enum ClientCommands {
     /// Transfer funds
     #[structopt(name = "transfer")]
     Transfer {
-        /// Sending address (must be one of our accounts)
-        #[structopt(long, parse(try_from_str = parse_public_key_bytes))]
-        from: PublicKeyBytes,
-
         /// Recipient address
         #[structopt(long, parse(try_from_str = parse_public_key_bytes))]
         to: PublicKeyBytes,
@@ -625,17 +621,18 @@ fn main() {
         }
 
         ClientCommands::Transfer {
-            from,
             to,
             object_id,
             gas_object_id,
         } => {
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
+                let owner = find_cached_owner_by_object_id(&accounts_config, gas_object_id)
+                    .expect("Cannot find owner for gas object");
                 let mut client_state = make_client_state(
                     &accounts_config,
                     &committee_config,
-                    from,
+                    *owner,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
