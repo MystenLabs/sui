@@ -18,6 +18,9 @@ use std::time::Duration;
 use tokio::time::timeout;
 
 #[cfg(test)]
+use fastx_types::FASTX_FRAMEWORK_ADDRESS;
+
+#[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
 mod client_tests;
 
@@ -348,6 +351,17 @@ where
         self.committee.get_strong_majority_lower_bound(
             numbers.filter_map(|x| async move { x }).collect().await,
         )
+    }
+
+    #[cfg(test)]
+    async fn get_framework_object_ref(&mut self) -> Result<ObjectRef, anyhow::Error> {
+        self.get_object_info(ObjectInfoRequest {
+            object_id: FASTX_FRAMEWORK_ADDRESS,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .map(|response| response.object.to_object_reference())
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.
