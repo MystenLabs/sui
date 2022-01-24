@@ -38,8 +38,15 @@ async fn test_handle_transfer_order_bad_signature() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let transfer_order =
-        init_transfer_order(sender, &sender_key, recipient, object_id, gas_object_id);
+    let object = authority_state.object_state(&object_id).await.unwrap();
+    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+    let transfer_order = init_transfer_order(
+        sender,
+        &sender_key,
+        recipient,
+        object.to_object_reference(),
+        gas_object.to_object_reference(),
+    );
     let object_id = *transfer_order.object_id();
     let (_unknown_address, unknown_key) = get_key_pair();
     let mut bad_signature_transfer_order = transfer_order.clone();
@@ -72,12 +79,15 @@ async fn test_handle_transfer_order_unknown_sender() {
     let recipient = Address::FastPay(dbg_addr(2));
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let object = authority_state.object_state(&object_id).await.unwrap();
+    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+
     let transfer_order = init_transfer_order(
         unknown_address,
         &sender_key,
         recipient,
-        object_id,
-        gas_object_id,
+        object.to_object_reference(),
+        gas_object.to_object_reference(),
     );
 
     let unknown_sender_transfer = transfer_order.kind;
@@ -137,8 +147,15 @@ async fn test_handle_transfer_order_ok() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let transfer_order =
-        init_transfer_order(sender, &sender_key, recipient, object_id, gas_object_id);
+    let object = authority_state.object_state(&object_id).await.unwrap();
+    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+    let transfer_order = init_transfer_order(
+        sender,
+        &sender_key,
+        recipient,
+        object.to_object_reference(),
+        gas_object.to_object_reference(),
+    );
 
     let test_object = authority_state.object_state(&object_id).await.unwrap();
 
@@ -191,6 +208,7 @@ async fn test_handle_transfer_zero_balance() {
     let recipient = Address::FastPay(dbg_addr(2));
     let object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+    let object = authority_state.object_state(&object_id).await.unwrap();
 
     // Create a gas object with 0 balance.
     let gas_object_id = ObjectID::random();
@@ -199,10 +217,16 @@ async fn test_handle_transfer_zero_balance() {
     authority_state
         .init_order_lock((gas_object_id, 0.into(), gas_object.digest()))
         .await;
+    let gas_object_ref = gas_object.to_object_reference();
     authority_state.insert_object(gas_object).await;
 
-    let transfer_order =
-        init_transfer_order(sender, &sender_key, recipient, object_id, gas_object_id);
+    let transfer_order = init_transfer_order(
+        sender,
+        &sender_key,
+        recipient,
+        object.to_object_reference(),
+        gas_object_ref,
+    );
 
     let result = authority_state.handle_order(transfer_order.clone()).await;
     assert!(result
@@ -484,8 +508,15 @@ async fn test_handle_transfer_order_double_spend() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let transfer_order =
-        init_transfer_order(sender, &sender_key, recipient, object_id, gas_object_id);
+    let object = authority_state.object_state(&object_id).await.unwrap();
+    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+    let transfer_order = init_transfer_order(
+        sender,
+        &sender_key,
+        recipient,
+        object.to_object_reference(),
+        gas_object.to_object_reference(),
+    );
 
     let signed_order = authority_state
         .handle_order(transfer_order.clone())
@@ -501,12 +532,22 @@ async fn test_handle_confirmation_order_unknown_sender() {
     let recipient = dbg_addr(2);
     let (sender, sender_key) = get_key_pair();
     let authority_state = init_state().await;
+
+    let object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        FastPayAddress::random_for_testing_only(),
+    );
+    let gas_object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        FastPayAddress::random_for_testing_only(),
+    );
+
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
         Address::FastPay(recipient),
-        ObjectID::random(),
-        ObjectID::random(),
+        object.to_object_reference(),
+        gas_object.to_object_reference(),
         &authority_state,
     );
 
@@ -529,6 +570,8 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let object = authority_state.object_state(&object_id).await.unwrap();
+    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
 
     // Record the old sequence number
     let old_seq_num;
@@ -541,8 +584,8 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
         sender,
         &sender_key,
         Address::FastPay(recipient),
-        object_id,
-        gas_object_id,
+        object.to_object_reference(),
+        gas_object.to_object_reference(),
         &authority_state,
     );
 
@@ -582,13 +625,15 @@ async fn test_handle_confirmation_order_exceed_balance() {
     let recipient = dbg_addr(2);
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let object = authority_state.object_state(&object_id).await.unwrap();
+    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
         Address::FastPay(recipient),
-        object_id,
-        gas_object_id,
+        object.to_object_reference(),
+        gas_object.to_object_reference(),
         &authority_state,
     );
     assert!(authority_state
@@ -615,13 +660,15 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
         (recipient, ObjectID::random()),
     ])
     .await;
+    let object = authority_state.object_state(&object_id).await.unwrap();
+    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
         Address::FastPay(recipient),
-        object_id,
-        gas_object_id,
+        object.to_object_reference(),
+        gas_object.to_object_reference(),
         &authority_state,
     );
     assert!(authority_state
@@ -648,13 +695,15 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(address, object_id), (address, gas_object_id)]).await;
+    let object = authority_state.object_state(&object_id).await.unwrap();
+    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
 
     let certified_transfer_order = init_certified_transfer_order(
         address,
         &key,
         Address::FastPay(address),
-        object_id,
-        gas_object_id,
+        object.to_object_reference(),
+        gas_object.to_object_reference(),
         &authority_state,
     );
     assert!(authority_state
@@ -677,6 +726,7 @@ async fn test_handle_confirmation_order_gas() {
         let recipient = dbg_addr(2);
         let object_id = ObjectID::random();
         let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+        let object = authority_state.object_state(&object_id).await.unwrap();
 
         // Create a gas object with insufficient balance.
         let gas_object_id = ObjectID::random();
@@ -689,14 +739,15 @@ async fn test_handle_confirmation_order_gas() {
         authority_state
             .init_order_lock((gas_object_id, 0.into(), gas_object.digest()))
             .await;
+        let gas_object_ref = gas_object.to_object_reference();
         authority_state.insert_object(gas_object).await;
 
         let certified_transfer_order = init_certified_transfer_order(
             sender,
             &sender_key,
             Address::FastPay(recipient),
-            object_id,
-            gas_object_id,
+            object.to_object_reference(),
+            gas_object_ref,
             &authority_state,
         );
 
@@ -727,12 +778,15 @@ async fn test_handle_confirmation_order_ok() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let object = authority_state.object_state(&object_id).await.unwrap();
+    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
         Address::FastPay(recipient),
-        object_id,
-        gas_object_id,
+        object.to_object_reference(),
+        gas_object.to_object_reference(),
         &authority_state,
     );
 
@@ -790,12 +844,15 @@ async fn test_handle_confirmation_order_idempotent() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let object = authority_state.object_state(&object_id).await.unwrap();
+    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
         Address::FastPay(recipient),
-        object_id,
-        gas_object_id,
+        object.to_object_reference(),
+        gas_object.to_object_reference(),
         &authority_state,
     );
 
@@ -1271,19 +1328,14 @@ fn init_transfer_order(
     sender: FastPayAddress,
     secret: &KeyPair,
     recipient: Address,
-    object_id: ObjectID,
-    gas_object_id: ObjectID,
+    object_ref: ObjectRef,
+    gas_object_ref: ObjectRef,
 ) -> Order {
     let transfer = Transfer {
-        // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
-        object_ref: (object_id, SequenceNumber::new(), ObjectDigest::new([0; 32])),
+        object_ref,
         sender,
         recipient,
-        gas_payment: (
-            gas_object_id,
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
+        gas_payment: gas_object_ref,
     };
     Order::new_transfer(transfer, secret)
 }
@@ -1293,11 +1345,11 @@ fn init_certified_transfer_order(
     sender: FastPayAddress,
     secret: &KeyPair,
     recipient: Address,
-    object_id: ObjectID,
-    gas_object_id: ObjectID,
+    object_ref: ObjectRef,
+    gas_object_ref: ObjectRef,
     authority_state: &AuthorityState,
 ) -> CertifiedOrder {
-    let transfer_order = init_transfer_order(sender, secret, recipient, object_id, gas_object_id);
+    let transfer_order = init_transfer_order(sender, secret, recipient, object_ref, gas_object_ref);
     let vote = SignedOrder::new(
         transfer_order.clone(),
         authority_state.name,
