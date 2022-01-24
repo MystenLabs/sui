@@ -1252,6 +1252,33 @@ async fn test_move_calls_certs() {
     );
 }
 
+#[test]
+fn test_transfer_invalid_object_digest() {
+    let rt = Runtime::new().unwrap();
+    let (recipient, _) = get_key_pair();
+    let object_id_1 = ObjectID::random();
+    let gas_object = ObjectID::random();
+    let authority_objects = vec![
+        vec![object_id_1, gas_object],
+        vec![object_id_1, gas_object],
+        vec![object_id_1, gas_object],
+        vec![object_id_1, gas_object],
+    ];
+
+    let mut sender = rt.block_on(init_local_client_state(authority_objects));
+
+    // give object an incorrect object digest
+    sender.object_refs.insert(
+        object_id_1,
+        (object_id_1, SequenceNumber::new(), ObjectDigest([0; 32])),
+    );
+
+    let result = rt.block_on(sender.transfer_object(object_id_1, gas_object, recipient));
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err().downcast_ref(),
+            Some(FastPayError::QuorumCommunicateError {errors}) if matches!(errors.as_slice(), [FastPayError::InvalidObjectDigest, ..])))
+}
+
 #[tokio::test]
 async fn test_module_publish_and_call_good() {
     // Init the states

@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
 use fastx_types::messages::Address::FastPay;
 use fastx_types::{
-    base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
+    base_types::*, committee::Committee, error::FastPayError, fp_bail, fp_ensure, messages::*,
 };
 use futures::{future, StreamExt, TryFutureExt};
 use move_core_types::identifier::Identifier;
@@ -412,16 +412,16 @@ where
                     if *entry >= committee.validity_threshold() {
                         // At least one honest node returned this error.
                         // No quorum can be reached, so return early.
-                        return Err(FastPayError::QuorumNotReachedError {
-                            errors: error_scores.into_keys().collect(),
+                        fp_bail!(FastPayError::QuorumCommunicateError {
+                            errors: error_scores.into_keys().collect()
                         });
                     }
                 }
             }
         }
-        Err(FastPayError::QuorumNotReachedError {
-            errors: error_scores.into_keys().collect(),
-        })
+        fp_bail!(FastPayError::QuorumCommunicateError {
+            errors: error_scores.into_keys().collect()
+        });
     }
 
     async fn communicate_transfers(
