@@ -32,3 +32,4 @@ typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2e829
 
 [dev-dependencies]
 fdlimit = "0.2.1"
+naughty-strings = "0.2.4"

@@ -173,11 +173,7 @@ async fn fund_account_with_same_objects(
     client: &mut ClientState<LocalAuthorityClient>,
     object_ids: Vec<ObjectID>,
 ) -> HashMap<AccountAddress, Object> {
-    let mut objs = Vec::new();
-    for _ in 0..authorities.len() {
-        objs.push(object_ids.clone());
-    }
-
+    let objs: Vec<_> = (0..authorities.len()).map(|_| object_ids.clone()).collect();
     fund_account(authorities, client, objs).await
 }
 
@@ -196,7 +192,7 @@ async fn fund_account(
 
             let object_ref: ObjectRef = (object_id, 0.into(), object.digest());
 
-            client_ref.init_order_lock(object_ref.clone()).await;
+            client_ref.init_order_lock(object_ref).await;
             client_ref.insert_object(object).await;
             client
                 .object_sequence_numbers
@@ -1498,4 +1494,38 @@ async fn test_module_publish_bad_path() {
     let pub_resp = client1.publish(hero_path, gas_object_ref).await;
     // Has to fail
     assert!(pub_resp.is_err());
+}
+
+#[tokio::test]
+async fn test_module_publish_naughty_path() {
+    // Init the states
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee);
+
+    let gas_object_id = ObjectID::random();
+
+    // Populate authorities with gas obj data
+    let gas_object_ref = fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client1,
+        vec![gas_object_id],
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    for ns in naughty_strings::BLNS {
+        // Compile
+        let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
+
+        // Use a bad path
+        hero_path.push_str(&format!("/../{}", ns));
+
+        let pub_resp = client1.publish(hero_path, gas_object_ref).await;
+        // Has to fail
+        assert!(pub_resp.is_err());
+    }
 }
