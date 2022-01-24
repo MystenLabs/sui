@@ -174,7 +174,6 @@ async fn fund_account_with_same_objects(
     object_ids: Vec<ObjectID>,
 ) -> HashMap<AccountAddress, Object> {
     let objs: Vec<_> = (0..authorities.len()).map(|_| object_ids.clone()).collect();
-
     fund_account(authorities, client, objs).await
 }
 

@@ -159,7 +159,7 @@ pub enum FastPayError {
     #[error("Execution invariant violated")]
     ExecutionInvariantViolation,
     #[error("Storage error")]
-    StorageError,
+    StorageError(#[from] typed_store::rocks::TypedStoreError),
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;

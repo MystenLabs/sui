@@ -22,6 +22,7 @@ hex = "0.4.3"
 serde_bytes = "0.11.5"
 serde_with = "1.11.0"
 
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2e829074f40c9ef852ecd6808b80d083174c778b" }
 
 move-binary-format = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
 move-core-types = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
