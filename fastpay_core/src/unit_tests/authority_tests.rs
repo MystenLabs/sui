@@ -8,6 +8,7 @@ use fastx_types::{
     base_types::dbg_addr,
     gas::{calculate_module_publish_cost, get_gas_balance},
     messages::ExecutionStatus,
+    object::OBJECT_START_VERSION,
 };
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
@@ -442,7 +443,7 @@ async fn test_handle_move_order() {
         .unwrap();
     assert_eq!(created_obj.owner, sender,);
     assert_eq!(created_obj.id(), created_object_id);
-    assert_eq!(created_obj.version(), SequenceNumber::from(1));
+    assert_eq!(created_obj.version(), OBJECT_START_VERSION);
 
     // Check that gas is properly deducted.
     let gas_payment_object = authority_state
@@ -641,7 +642,7 @@ async fn test_handle_confirmation_order_exceed_balance() {
         .await
         .is_ok());
     let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(SequenceNumber::from(1), new_account.version());
+    assert_eq!(OBJECT_START_VERSION, new_account.version());
     assert!(authority_state
         .parent(&(object_id, new_account.version(), new_account.digest()))
         .await
@@ -676,7 +677,7 @@ async fn test_handle_confirmation_order_receiver_balance_overflow() {
         .await
         .is_ok());
     let new_sender_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(SequenceNumber::from(1), new_sender_account.version());
+    assert_eq!(OBJECT_START_VERSION, new_sender_account.version());
 
     assert!(authority_state
         .parent(&(
@@ -711,7 +712,7 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
         .await
         .is_ok());
     let account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(SequenceNumber::from(1), account.version());
+    assert_eq!(OBJECT_START_VERSION, account.version());
 
     assert!(authority_state
         .parent(&(object_id, account.version(), account.digest()))

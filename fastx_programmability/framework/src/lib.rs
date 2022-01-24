@@ -35,6 +35,29 @@ pub fn get_move_stdlib_modules() -> Vec<CompiledModule> {
     modules
 }
 
+/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as Vec<Vec<u8>>.
+/// This is useful for when publishing
+/// If we are building the FastX framework, `is_framework` will be true;
+/// Otherwise `is_framework` should be false (e.g. calling from client).
+pub fn build_move_package_to_bytes(path: &Path) -> Result<Vec<Vec<u8>>, FastPayError> {
+    build_move_package(
+        path,
+        BuildConfig {
+            ..Default::default()
+        },
+        false,
+    )
+    .map(|mods| {
+        mods.iter()
+            .map(|m| {
+                let mut bytes = Vec::new();
+                m.serialize(&mut bytes).unwrap();
+                bytes
+            })
+            .collect::<Vec<_>>()
+    })
+}
+
 /// Given a `path` and a `build_config`, build the package in that path.
 /// If we are building the FastX framework, `is_framework` will be true;
 /// Otherwise `is_framework` should be false (e.g. calling from client).
