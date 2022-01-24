@@ -18,6 +18,7 @@ cargo build --release
 cd target/release
 rm -f *.json *.toml
 rm -rf db*
+killall server
 
 # Create DB dirs and configuration files for 4 authorities.
 # * Private server states are stored in `server*.json`.

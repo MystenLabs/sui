@@ -5,7 +5,7 @@
 use super::*;
 use crate::authority::{AuthorityState, AuthorityStore};
 use fastx_types::{
-    object::{Object, GAS_VALUE_FOR_TESTING},
+    object::{Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     FASTX_FRAMEWORK_ADDRESS,
 };
 use futures::lock::Mutex;
@@ -168,10 +168,24 @@ fn make_client(
 }
 
 #[cfg(test)]
-async fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
+async fn fund_account_with_same_objects(
     authorities: Vec<&LocalAuthorityClient>,
     client: &mut ClientState<LocalAuthorityClient>,
-    object_ids: I,
+    object_ids: Vec<ObjectID>,
+) -> HashMap<AccountAddress, Object> {
+    let mut objs = Vec::new();
+    for _ in 0..authorities.len() {
+        objs.push(object_ids.clone());
+    }
+
+    fund_account(authorities, client, objs).await
+}
+
+#[cfg(test)]
+async fn fund_account(
+    authorities: Vec<&LocalAuthorityClient>,
+    client: &mut ClientState<LocalAuthorityClient>,
+    object_ids: Vec<Vec<ObjectID>>,
 ) -> HashMap<AccountAddress, Object> {
     let mut created_objects = HashMap::new();
     for (authority, object_ids) in authorities.into_iter().zip(object_ids.into_iter()) {
@@ -387,28 +401,17 @@ async fn test_bidirectional_transfer() {
     let object_id = ObjectID::random();
     let gas_object1 = ObjectID::random();
     let gas_object2 = ObjectID::random();
-    let authority1_objects = vec![
-        vec![object_id, gas_object1],
-        vec![object_id, gas_object1],
-        vec![object_id, gas_object1],
-        vec![object_id, gas_object1],
-    ];
-    let authority2_objects = vec![
-        vec![gas_object2],
-        vec![gas_object2],
-        vec![gas_object2],
-        vec![gas_object2],
-    ];
-    fund_account(
+
+    fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority1_objects,
+        vec![object_id, gas_object1],
     )
     .await;
-    fund_account(
+    fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client2,
-        authority2_objects,
+        vec![gas_object2],
     )
     .await;
 
@@ -451,7 +454,7 @@ async fn test_bidirectional_transfer() {
     );
 
     // Update client2's local object data.
-    client2.receive_object(certificate).await.unwrap();
+    client2.receive_object(&certificate).await.unwrap();
 
     // Confirm sequence number are consistent between clients.
     assert_eq!(
@@ -498,17 +501,11 @@ fn test_receiving_unconfirmed_transfer() {
 
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
-    let authority_objects = vec![
-        vec![object_id, gas_object_id],
-        vec![object_id, gas_object_id],
-        vec![object_id, gas_object_id],
-        vec![object_id, gas_object_id],
-    ];
 
-    rt.block_on(fund_account(
+    rt.block_on(fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![object_id, gas_object_id],
     ));
     // not updating client1.balance
 
@@ -534,7 +531,7 @@ fn test_receiving_unconfirmed_transfer() {
         SequenceNumber::from(0)
     );
     // Let the receiver confirm in last resort.
-    rt.block_on(client2.receive_object(certificate)).unwrap();
+    rt.block_on(client2.receive_object(&certificate)).unwrap();
     assert_eq!(
         rt.block_on(client2.get_strong_majority_owner(object_id)),
         Some((client2.address, SequenceNumber::from(1)))
@@ -728,20 +725,13 @@ async fn test_move_calls_object_create() {
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
-
     let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
 
     // Populate authorities with obj data
-    let authority_objects = vec![
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-    ];
-    let gas_object_ref = fund_account(
+    let gas_object_ref = fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![gas_object_id],
     )
     .await
     .iter()
@@ -768,8 +758,6 @@ async fn test_move_calls_object_create() {
         )
         .await;
 
-    // Check all went well
-    assert!(call_response.is_ok());
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
     // Status flag should be success
@@ -792,20 +780,13 @@ async fn test_move_calls_object_transfer() {
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
-
     let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
 
     // Populate authorities with obj data
-    let authority_objects = vec![
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-    ];
-    let mut gas_object_ref = fund_account(
+    let mut gas_object_ref = fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![gas_object_id],
     )
     .await
     .iter()
@@ -872,8 +853,6 @@ async fn test_move_calls_object_transfer() {
         )
         .await;
 
-    // Check all went well
-    assert!(call_response.is_ok());
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
     // Status flag should be success
@@ -911,20 +890,13 @@ async fn test_move_calls_object_transfer_and_freeze() {
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
-
     let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
 
     // Populate authorities with obj data
-    let authority_objects = vec![
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-    ];
-    let mut gas_object_ref = fund_account(
+    let mut gas_object_ref = fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![gas_object_id],
     )
     .await
     .iter()
@@ -989,8 +961,6 @@ async fn test_move_calls_object_transfer_and_freeze() {
         )
         .await;
 
-    // Check all went well
-    assert!(call_response.is_ok());
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
     // Status flag should be success
@@ -1028,20 +998,13 @@ async fn test_move_calls_object_delete() {
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
-
     let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
 
     // Populate authorities with obj data
-    let authority_objects = vec![
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-    ];
-    let mut gas_object_ref = fund_account(
+    let mut gas_object_ref = fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![gas_object_id],
     )
     .await
     .iter()
@@ -1105,8 +1068,6 @@ async fn test_move_calls_object_delete() {
         )
         .await;
 
-    // Check all went well
-    assert!(call_response.is_ok());
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
     // Status flag should be success
@@ -1200,7 +1161,7 @@ async fn test_move_calls_certs() {
     assert_eq!(1, client1.object_certs.get(&gas_object_id).unwrap().len());
     assert_eq!(1, client1.object_certs.get(new_object_id).unwrap().len());
     assert_eq!(
-        SequenceNumber::from(1),
+        OBJECT_START_VERSION,
         client1
             .object_sequence_numbers
             .get(&gas_object_id)
@@ -1208,7 +1169,7 @@ async fn test_move_calls_certs() {
             .clone()
     );
     assert_eq!(
-        SequenceNumber::from(1),
+        OBJECT_START_VERSION,
         client1
             .object_sequence_numbers
             .get(new_object_id)
@@ -1298,4 +1259,243 @@ fn test_transfer_invalid_object_digest() {
         "Failed to communicate with a quorum of authorities: Invalid Object digest.",
         result.unwrap_err().to_string()
     );
+}
+
+#[tokio::test]
+async fn test_module_publish_and_call_good() {
+    // Init the states
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee);
+
+    let gas_object_id = ObjectID::random();
+
+    // Populate authorities with gas obj data
+    let gas_object_ref = fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client1,
+        vec![gas_object_id],
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // Provide path to well formed package sources
+    let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
+    hero_path.push_str("/../fastx_programmability/examples/");
+
+    let pub_res = client1.publish(hero_path, gas_object_ref).await;
+
+    let (_, published_effects) = pub_res.unwrap();
+
+    // Only package obj should be created
+    assert_eq!(published_effects.created.len(), 1);
+
+    // Verif gas obj
+    assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
+
+    let (new_obj_ref, _) = published_effects.created.get(0).unwrap();
+    assert_ne!(gas_object_ref, *new_obj_ref);
+
+    // We now have the module obj ref
+    // We can inspect it
+
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap();
+
+    // Version should be 1 for all modules
+    assert_eq!(new_obj.object.version(), OBJECT_START_VERSION);
+    // Must be immutable
+    assert!(new_obj.object.is_read_only());
+
+    // StructTag type is not defined for package
+    assert!(new_obj.object.type_().is_none());
+
+    // Data should be castable as a package
+    assert!(new_obj.object.data.try_as_package().is_some());
+
+    // Retrieve latest gas obj spec
+    let gas_object = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: gas_object_id,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object;
+
+    let gas_object_ref = gas_object.to_object_reference();
+
+    //Try to call a function in TrustedCoin module
+    let call_resp = client1
+        .call(
+            new_obj.object.to_object_reference(),
+            ident_str!("TrustedCoin").to_owned(),
+            ident_str!("init").to_owned(),
+            vec![],
+            gas_object_ref,
+            vec![],
+            vec![],
+            1000,
+        )
+        .await;
+
+    assert!(call_resp.as_ref().unwrap().1.status == ExecutionStatus::Success);
+
+    // This gets the treasury cap for the coin and gives it to the sender
+    let tres_cap_ref = call_resp
+        .unwrap()
+        .1
+        .created
+        .iter()
+        .find(|r| r.0 .0 != gas_object_ref.0)
+        .unwrap()
+        .0;
+
+    // Fetch the full obj info
+    let tres_cap_obj_info = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: tres_cap_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap();
+    // Confirm we own this object
+    assert_eq!(tres_cap_obj_info.object.owner, gas_object.owner);
+}
+
+// Pass a file in a package dir instead of the root. The builder should be able to infer the root
+#[tokio::test]
+async fn test_module_publish_file_path() {
+    // Init the states
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee);
+
+    let gas_object_id = ObjectID::random();
+
+    // Populate authorities with gas obj data
+    let gas_object_ref = fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client1,
+        vec![gas_object_id],
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // Compile
+    let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
+
+    // Use a path pointing to a different file
+    hero_path.push_str("/../fastx_programmability/examples/Hero.move");
+
+    let pub_resp = client1.publish(hero_path, gas_object_ref).await;
+
+    let (_, published_effects) = pub_resp.unwrap();
+
+    // Only package obj should be created
+    assert_eq!(published_effects.created.len(), 1);
+
+    // Verif gas
+    assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
+
+    let (new_obj_ref, _) = published_effects.created.get(0).unwrap();
+    assert_ne!(gas_object_ref, *new_obj_ref);
+
+    // We now have the module obj ref
+    // We can inspect it
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap();
+
+    // Version should be 1 for all modules
+    assert_eq!(new_obj.object.version(), OBJECT_START_VERSION);
+    // Must be immutable
+    assert!(new_obj.object.is_read_only());
+
+    // StructTag type is not defined for package
+    assert!(new_obj.object.type_().is_none());
+
+    // Data should be castable as a package
+    assert!(new_obj.object.data.try_as_package().is_some());
+
+    // Retrieve latest gas obj spec
+    let gas_object = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: gas_object_id,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object;
+
+    let gas_object_ref = gas_object.to_object_reference();
+
+    // Even though we provided a path to Hero.move, the builder is able to find the package root
+    // build all in the package, including TrustedCoin module
+    //Try to call a function in TrustedCoin module
+    let call_resp = client1
+        .call(
+            new_obj.object.to_object_reference(),
+            ident_str!("TrustedCoin").to_owned(),
+            ident_str!("init").to_owned(),
+            vec![],
+            gas_object_ref,
+            vec![],
+            vec![],
+            1000,
+        )
+        .await;
+    assert!(call_resp.is_ok());
+}
+
+#[tokio::test]
+async fn test_module_publish_bad_path() {
+    // Init the states
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee);
+
+    let gas_object_id = ObjectID::random();
+
+    // Populate authorities with gas obj data
+    let gas_object_ref = fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client1,
+        vec![gas_object_id],
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // Compile
+    let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
+
+    // Use a bad path
+    hero_path.push_str("/../fastx_____programmability/examples/");
+
+    let pub_resp = client1.publish(hero_path, gas_object_ref).await;
+    // Has to fail
+    assert!(pub_resp.is_err());
 }

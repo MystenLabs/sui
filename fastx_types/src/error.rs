@@ -52,12 +52,18 @@ pub enum FastPayError {
     ConflictingOrder { pending_confirmation: Order },
     #[error("Transfer order was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransferOrder,
-    #[error("Transaction order processing not properly executed by authority")]
-    ErrorWhileProcessingTransactionOrder,
-    #[error("Invalid response when processing confirmation order by authority")]
-    ErrorWhileProcessingConfirmationOrder,
+    #[error("Transaction order processing failed: {err}")]
+    ErrorWhileProcessingTransactionOrder { err: String },
+    #[error("Confirmation order processing failed: {err}")]
+    ErrorWhileProcessingConfirmationOrder { err: String },
     #[error("An invalid answer was returned by the authority while requesting a certificate")]
     ErrorWhileRequestingCertificate,
+    #[error("Module publish failed: {err}")]
+    ErrorWhileProcessingPublish { err: String },
+    #[error("Move call failed: {err}")]
+    ErrorWhileProcessingMoveCall { err: String },
+    #[error("Failed to communicate with a quorum of authorities: {err}")]
+    FailedToCommunicateWithQuorum { err: String },
     #[error("An invalid answer was returned by the authority while requesting information")]
     ErrorWhileRequestingInformation,
     #[error(
@@ -112,7 +118,7 @@ pub enum FastPayError {
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error:?}.")]
     ModulePublishFailure { error: String },
-    #[error("FAiled to build Move modules")]
+    #[error("Failed to build Move modules")]
     ModuleBuildFailure { error: String },
 
     // Move call related errors

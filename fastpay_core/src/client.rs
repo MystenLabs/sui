@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::downloader::*;
-use anyhow::{bail, ensure};
+use anyhow::ensure;
 use async_trait::async_trait;
+use fastx_framework::build_move_package_to_bytes;
 use fastx_types::messages::Address::FastPay;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
@@ -12,8 +13,10 @@ use futures::{future, StreamExt, TryFutureExt};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use rand::seq::SliceRandom;
+
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::Path;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -88,7 +91,7 @@ pub trait Client {
     ) -> Result<CertifiedOrder, anyhow::Error>;
 
     /// Receive object from FastX.
-    async fn receive_object(&mut self, certificate: CertifiedOrder) -> Result<(), anyhow::Error>;
+    async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error>;
 
     /// Send object to a FastX account.
     /// Do not confirm the transaction.
@@ -117,6 +120,13 @@ pub trait Client {
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
+
+    /// Publish Move modules
+    async fn publish(
+        &mut self,
+        package_source_files_path: String,
+        gas_object_ref: ObjectRef,
+    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError>;
 
     /// Get the object information
     async fn get_object_info(
@@ -368,7 +378,7 @@ where
     async fn communicate_with_quorum<'a, V, F>(
         &'a mut self,
         execute: F,
-    ) -> Result<Vec<V>, anyhow::Error>
+    ) -> Result<Vec<V>, FastPayError>
     where
         F: Fn(AuthorityName, &'a mut A) -> AsyncResult<'a, V, FastPayError> + Clone,
     {
@@ -401,16 +411,16 @@ where
                     if *entry >= committee.validity_threshold() {
                         // At least one honest node returned this error.
                         // No quorum can be reached, so return early.
-                        bail!(
-                            "Failed to communicate with a quorum of authorities: {}",
-                            err
-                        );
+                        return Err(FastPayError::FailedToCommunicateWithQuorum {
+                            err: err.to_string(),
+                        });
                     }
                 }
             }
         }
-
-        bail!("Failed to communicate with a quorum of authorities (multiple errors)");
+        Err(FastPayError::FailedToCommunicateWithQuorum {
+            err: "multiple errors".to_string(),
+        })
     }
 
     async fn communicate_transfers(
@@ -793,12 +803,12 @@ where
     fn update_objects_from_order_info(
         &mut self,
         order_info_resp: OrderInfoResponse,
-    ) -> Result<(), FastPayError> {
+    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
         if let Some(v) = order_info_resp.signed_effects {
             // The cert should be included in the response
             let cert = order_info_resp.certified_order.unwrap();
             let digest = cert.order.digest();
-            self.certificates.insert(digest, cert);
+            self.certificates.insert(digest, cert.clone());
 
             for &(object_ref, owner) in v.effects.all_mutated() {
                 let (object_id, seq, _) = object_ref;
@@ -819,18 +829,17 @@ where
                     self.object_refs.insert(object_id, object_ref);
                 }
             }
-
-            for (object_id, seq, _) in v.effects.deleted {
+            for (object_id, seq, _) in &v.effects.deleted {
                 let old_seq = self
                     .object_sequence_numbers
-                    .get(&object_id)
+                    .get(object_id)
                     .cloned()
                     .unwrap_or_default();
-                if old_seq < seq {
-                    self.remove_object(&object_id);
+                if old_seq < *seq {
+                    self.remove_object(object_id);
                 }
             }
-            Ok(())
+            Ok((cert, v.effects))
         } else {
             Err(FastPayError::ErrorWhileRequestingInformation)
         }
@@ -840,7 +849,7 @@ where
     async fn communicate_transaction_order(
         &mut self,
         order: Order,
-    ) -> Result<CertifiedOrder, anyhow::Error> {
+    ) -> Result<CertifiedOrder, FastPayError> {
         let committee = self.committee.clone();
 
         let votes = self
@@ -855,12 +864,17 @@ where
                     if let Ok(Some(signed_order)) = s_order {
                         fp_ensure!(
                             signed_order.authority == name,
-                            FastPayError::ErrorWhileProcessingTransactionOrder
+                            FastPayError::ErrorWhileProcessingTransactionOrder {
+                                err: format!(
+                                    "Unexpected authority. Expected {:?}, got {:?}",
+                                    name, signed_order.authority
+                                )
+                            }
                         );
                         signed_order.check(committee)?;
                         Ok(signed_order.clone())
                     } else {
-                        Err(FastPayError::ErrorWhileProcessingTransactionOrder)
+                        Err(s_order.err().unwrap().clone())
                     }
                 })
             })
@@ -876,12 +890,28 @@ where
         Ok(certificate)
     }
 
+    async fn process_order(
+        &mut self,
+        order: Order,
+    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
+        // Transaction order
+        let new_certificate = self.communicate_transaction_order(order).await?;
+
+        // Confirmation
+        let order_info = self
+            .communicate_confirmation_order(&new_certificate)
+            .await?;
+
+        // Update local object view
+        self.update_objects_from_order_info(order_info)
+    }
+
     /// TODO/TBD: Formalize how to handle failed transaction orders in FastX
     /// https://github.com/MystenLabs/fastnft/issues/174
     async fn communicate_confirmation_order(
         &mut self,
         cert_order: &CertifiedOrder,
-    ) -> Result<OrderInfoResponse, anyhow::Error> {
+    ) -> Result<OrderInfoResponse, FastPayError> {
         let committee = self.committee.clone();
 
         let votes = self
@@ -899,50 +929,30 @@ where
                     {
                         fp_ensure!(
                             signed_order.authority == name,
-                            FastPayError::ErrorWhileProcessingConfirmationOrder
+                            FastPayError::ErrorWhileProcessingConfirmationOrder {
+                                err: format!(
+                                    "Unexpected authority. Expected {:?}, got {:?}",
+                                    name, signed_order.authority
+                                )
+                            }
                         );
                         signed_order.check(committee)?;
                         result
                     } else {
-                        Err(FastPayError::ErrorWhileProcessingConfirmationOrder)
+                        Err(result.err().unwrap())
                     }
                 })
             })
-            .await?;
+            .await;
 
-        votes
-            .get(0)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("No valid confirmation order votes"))
-    }
-
-    /// Execute call order
-    /// Need improvement and decoupling from transfer logic
-    /// TODO: https://github.com/MystenLabs/fastnft/issues/173
-    async fn execute_call(
-        &mut self,
-        order: Order,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
-        // Transaction order
-        let new_certificate = self.communicate_transaction_order(order).await?;
-
-        // Confirmation
-        let order_info = self
-            .communicate_confirmation_order(&new_certificate)
-            .await?;
-
-        // Update local object view
-        self.update_objects_from_order_info(order_info.clone())?;
-
-        let cert = order_info
-            .certified_order
-            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)?;
-        let effects = order_info
-            .signed_effects
-            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)?
-            .effects;
-
-        Ok((cert, effects))
+        match votes {
+            Ok(mut v) => v
+                .pop()
+                .ok_or(FastPayError::ErrorWhileProcessingConfirmationOrder {
+                    err: "No valid confirmation order votes".to_string(),
+                }),
+            Err(e) => Err(e),
+        }
     }
 
     async fn call(
@@ -969,7 +979,20 @@ where
             &self.secret,
         );
 
-        Ok(self.execute_call(move_call_order).await?)
+        Ok(self.process_order(move_call_order).await?)
+    }
+
+    async fn publish(
+        &mut self,
+        package_source_files_path: String,
+        gas_object_ref: ObjectRef,
+    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
+        // Try to compile the package at the given path
+        let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
+        let move_publish_order =
+            Order::new_module(self.address, gas_object_ref, compiled_modules, &self.secret);
+
+        Ok(self.process_order(move_publish_order).await?)
     }
 
     async fn get_object_info_execute(
@@ -1005,8 +1028,7 @@ where
             .await
     }
 
-    async fn receive_object(&mut self, certificate: CertifiedOrder) -> Result<(), anyhow::Error> {
-        certificate.check(&self.committee)?;
+    async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error> {
         match &certificate.order.kind {
             OrderKind::Transfer(transfer) => {
                 ensure!(
@@ -1044,7 +1066,7 @@ where
                         .entry(transfer.object_ref.0)
                         .or_default()
                         .push(certificate.order.digest());
-                    entry.insert(certificate);
+                    entry.insert(certificate.clone());
                 }
                 Ok(())
             }
@@ -1136,6 +1158,15 @@ where
             gas_budget,
         )
         .await
+    }
+
+    async fn publish(
+        &mut self,
+        package_source_files_path: String,
+        gas_object_ref: ObjectRef,
+    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
+        self.publish(package_source_files_path, gas_object_ref)
+            .await
     }
 
     async fn get_object_info(

@@ -26,6 +26,7 @@ pub const OBJECT_BASICS_MODULE_NAME: &move_core_types::identifier::IdentStr =
 pub const OBJECT_BASICS_OBJECT_TYPE_NAME: &move_core_types::identifier::IdentStr =
     ident_str!("Object");
 pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
+pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
@@ -266,7 +267,7 @@ impl Object {
 
         match &self.data {
             Move(v) => v.version(),
-            Package(_) => SequenceNumber::from(0), // modules are immutable, version is always 0
+            Package(_) => SequenceNumber::from(1), // modules are immutable, version is always 1
         }
     }
 

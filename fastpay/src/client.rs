@@ -62,6 +62,28 @@ fn make_authority_mass_clients(
     authority_clients
 }
 
+async fn make_client_state_and_try_sync(
+    accounts: &AccountsConfig,
+    committee_config: &CommitteeConfig,
+    address: FastPayAddress,
+    buffer_size: usize,
+    send_timeout: std::time::Duration,
+    recv_timeout: std::time::Duration,
+) -> ClientState<network::Client> {
+    let mut c = make_client_state(
+        accounts,
+        committee_config,
+        address,
+        buffer_size,
+        send_timeout,
+        recv_timeout,
+    );
+
+    // Force a sync
+    let _ = c.sync_client_state_with_random_authority();
+    c
+}
+
 fn make_client_state(
     accounts: &AccountsConfig,
     committee_config: &CommitteeConfig,
@@ -288,6 +310,12 @@ fn find_cached_owner_by_object_id(
 }
 
 fn show_object_effects(order_effects: OrderEffects) {
+    if !order_effects.created.is_empty() {
+        println!("Created Objects:");
+        for (obj, _) in order_effects.created {
+            println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
+        }
+    }
     if !order_effects.mutated.is_empty() {
         println!("Mutated Objects:");
         for (obj, _) in order_effects.mutated {
@@ -343,7 +371,24 @@ struct ClientOpt {
 enum ClientCommands {
     /// Get obj info
     #[structopt(name = "get-obj-info")]
-    GetObjInfo { obj_id: ObjectID },
+    GetObjInfo {
+        /// Object ID of the object to fetch
+        obj_id: ObjectID,
+
+        /// Deep inspection of object
+        #[structopt(long)]
+        deep: bool,
+    },
+
+    /// Publish Move modules
+    #[structopt(name = "publish")]
+    Publish {
+        /// Path to directory containing a Move package
+        path: String,
+
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        gas_object_id: ObjectID,
+    },
 
     /// Call Move
     #[structopt(name = "call")]
@@ -428,23 +473,64 @@ fn main() {
         CommitteeConfig::read(committee_config_path).expect("Unable to read committee config file");
 
     match options.cmd {
-        ClientCommands::GetObjInfo { obj_id } => {
+        ClientCommands::Publish {
+            path,
+            gas_object_id,
+        } => {
+            let rt = Runtime::new().unwrap();
+            rt.block_on(async move {
+                // Find owner of gas object
+                let owner = find_cached_owner_by_object_id(&accounts_config, gas_object_id)
+                    .expect("Cannot find owner for gas object");
+                let mut client_state = make_client_state_and_try_sync(
+                    &accounts_config,
+                    &committee_config,
+                    *owner,
+                    buffer_size,
+                    send_timeout,
+                    recv_timeout,
+                )
+                .await;
+
+                let gas_obj_ref = *client_state
+                    .object_refs()
+                    .get(&gas_object_id)
+                    .expect("Gas object not found");
+
+                let pub_resp = client_state.publish(path, gas_obj_ref).await;
+
+                match pub_resp {
+                    Ok(resp) => {
+                        if resp.1.status != ExecutionStatus::Success {
+                            error!("Error publishing module: {:#?}", resp.1.status);
+                        }
+                        let (_, effects) = resp;
+                        show_object_effects(effects);
+                    }
+                    Err(err) => error!("{:#?}", err),
+                }
+            });
+        }
+
+        ClientCommands::GetObjInfo { obj_id, deep } => {
             // Pick the first (or any) account for use in finding obj info
             let account = accounts_config
                 .nth_account(0)
                 .expect("Account config is invalid")
                 .address;
-            // Fetch the object ref
-            let mut client_state = make_client_state(
-                &accounts_config,
-                &committee_config,
-                account,
-                buffer_size,
-                send_timeout,
-                recv_timeout,
-            );
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
+                // Fetch the object ref
+                let mut client_state = make_client_state_and_try_sync(
+                    &accounts_config,
+                    &committee_config,
+                    account,
+                    buffer_size,
+                    send_timeout,
+                    recv_timeout,
+                )
+                .await;
+
                 // Fetch the object info for the object
                 let obj_info_req = ObjectInfoRequest {
                     object_id: obj_id,
@@ -467,26 +553,31 @@ fn main() {
                             .as_ident_str()
                             .to_string())
                 );
+                if deep {
+                    println!("Full Info: {:#?}", obj_info.object);
+                }
             });
         }
 
         ClientCommands::Call { path } => {
             let config = MoveCallConfig::read(&path).unwrap();
-            // Find owner of gas object
-            let owner = find_cached_owner_by_object_id(&accounts_config, config.gas_object_id)
-                .expect("Cannot find owner for gas object");
-
-            let mut client_state = make_client_state(
-                &accounts_config,
-                &committee_config,
-                *owner,
-                buffer_size,
-                send_timeout,
-                recv_timeout,
-            );
 
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
+                // Find owner of gas object
+                let owner = find_cached_owner_by_object_id(&accounts_config, config.gas_object_id)
+                    .expect("Cannot find owner for gas object");
+
+                let mut client_state = make_client_state_and_try_sync(
+                    &accounts_config,
+                    &committee_config,
+                    *owner,
+                    buffer_size,
+                    send_timeout,
+                    recv_timeout,
+                )
+                .await;
+
                 // Fetch the object info for the package
                 let package_obj_info_req = ObjectInfoRequest {
                     object_id: config.package_obj_id,
@@ -500,17 +591,10 @@ fn main() {
                 let package_obj_ref = package_obj_info.object.to_object_reference();
 
                 // Fetch the object info for the gas obj
-                let gas_obj_info_req = ObjectInfoRequest {
-                    object_id: config.gas_object_id,
-                    request_sequence_number: None,
-                    request_received_transfers_excluding_first_nth: None,
-                };
-
-                let gas_obj_info = client_state
-                    .get_object_info(gas_obj_info_req)
-                    .await
-                    .unwrap();
-                let gas_obj_ref = gas_obj_info.object.to_object_reference();
+                let gas_obj_ref = *client_state
+                    .object_refs()
+                    .get(&config.gas_object_id)
+                    .expect("Gas object not found");
 
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
@@ -555,14 +639,15 @@ fn main() {
             rt.block_on(async move {
                 let owner = find_cached_owner_by_object_id(&accounts_config, gas_object_id)
                     .expect("Cannot find owner for gas object");
-                let mut client_state = make_client_state(
+                let mut client_state = make_client_state_and_try_sync(
                     &accounts_config,
                     &committee_config,
                     *owner,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
-                );
+                )
+                .await;
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let cert = client_state
@@ -574,15 +659,16 @@ fn main() {
                 println!("{:?}", cert);
                 accounts_config.update_from_state(&client_state);
                 info!("Updating recipient's local balance");
-                let mut recipient_client_state = make_client_state(
+                let mut recipient_client_state = make_client_state_and_try_sync(
                     &accounts_config,
                     &committee_config,
                     to,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
-                );
-                recipient_client_state.receive_object(cert).await.unwrap();
+                )
+                .await;
+                recipient_client_state.receive_object(&cert).await.unwrap();
                 accounts_config.update_from_state(&recipient_client_state);
                 accounts_config
                     .write(accounts_config_path)
@@ -604,14 +690,15 @@ fn main() {
         ClientCommands::QueryObjects { address } => {
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
-                let client_state = make_client_state(
+                let client_state = make_client_state_and_try_sync(
                     &accounts_config,
                     &committee_config,
                     address,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
-                );
+                )
+                .await;
 
                 let object_refs = client_state.object_refs();
 
