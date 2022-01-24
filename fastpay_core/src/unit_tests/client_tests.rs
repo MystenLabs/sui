@@ -1307,11 +1307,41 @@ fn test_transfer_object_error_cases() {
 
     let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
     assert!(result.is_err());
-    println!("{:?}", result);
     assert!(matches!(result.unwrap_err().downcast_ref(),
-            Some(FastPayError::QuorumNotReachedError {errors}) if matches!(errors.as_slice(), [FastPayError::InvalidObjectDigest, ..])))
+            Some(FastPayError::QuorumNotReachedError {errors}) if matches!(errors.as_slice(), [FastPayError::InvalidObjectDigest, ..])));
 
-    // Test 4: Insufficient gas;
+    // Test 4: Invalid sequence number;
+    let object_id = *objects.next().unwrap();
+
+    // give object an incorrect sequence number
+    sender
+        .object_sequence_numbers
+        .insert(object_id, SequenceNumber::from(2));
+
+    let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err().downcast_ref(),
+        Some(FastPayError::UnexpectedSequenceNumber { .. })
+    ));
+
+    // Test 5: The client does not allow concurrent transfer;
+    let object_id = *objects.next().unwrap();
+    // Fabricate a fake pending transfer
+    let transfer = Transfer {
+        sender: sender.address,
+        recipient: Address::FastPay(FastPayAddress::random_for_testing_only()),
+        object_ref: (object_id, Default::default(), ObjectDigest::new([0; 32])),
+        gas_payment: (gas_object, Default::default(), ObjectDigest::new([0; 32])),
+    };
+    sender.pending_transfer = Some(Order::new(OrderKind::Transfer(transfer), &get_key_pair().1));
+
+    let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err().downcast_ref(),
+        Some(FastPayError::ConcurrentTransferError)
+    ))
 }
 
 #[tokio::test]
