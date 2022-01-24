@@ -137,7 +137,7 @@ pub enum ExecutionStatus {
 }
 
 impl ExecutionStatus {
-    pub fn unwrap(&self) {
+    pub fn unwrap(self) {
         match self {
             ExecutionStatus::Success => (),
             ExecutionStatus::Failure { .. } => {
@@ -146,12 +146,12 @@ impl ExecutionStatus {
         }
     }
 
-    pub fn unwrap_err(&self) -> (u64, &FastPayError) {
+    pub fn unwrap_err(self) -> (u64, FastPayError) {
         match self {
             ExecutionStatus::Success => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
-            ExecutionStatus::Failure { gas_used, error } => (*gas_used, error),
+            ExecutionStatus::Failure { gas_used, error } => (gas_used, *error),
         }
     }
 }
