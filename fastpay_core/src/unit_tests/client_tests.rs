@@ -1248,30 +1248,65 @@ async fn test_move_calls_certs() {
 }
 
 #[test]
-fn test_transfer_invalid_object_digest() {
+fn test_transfer_object_error_cases() {
     let rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
-    let object_id_1 = ObjectID::random();
+
+    let objects: Vec<ObjectID> = (0..10).map(|_| ObjectID::random()).collect();
     let gas_object = ObjectID::random();
-    let authority_objects = vec![
-        vec![object_id_1, gas_object],
-        vec![object_id_1, gas_object],
-        vec![object_id_1, gas_object],
-        vec![object_id_1, gas_object],
-    ];
+    let number_of_authorities = 4;
+
+    let mut all_objects = objects.clone();
+    all_objects.push(gas_object);
+    let authority_objects = (0..number_of_authorities)
+        .map(|_| all_objects.clone())
+        .collect();
 
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
 
-    // give object an incorrect object digest
-    sender.object_refs.insert(
-        object_id_1,
-        (object_id_1, SequenceNumber::new(), ObjectDigest([0; 32])),
-    );
+    let mut objects = objects.iter();
 
-    let result = rt.block_on(sender.transfer_object(object_id_1, gas_object, recipient));
+    // Test 1: Double spend
+    let object_id = *objects.next().unwrap();
+    rt.block_on(sender.transfer_object(object_id, gas_object, recipient))
+        .unwrap();
+    let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
+
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err().downcast_ref(),
+        Some(FastPayError::ObjectNotFound)
+    ));
+
+    // Test 2: Object not known to authorities
+    let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender.address);
+    sender
+        .object_refs
+        .insert(obj.id(), obj.to_object_reference());
+    sender
+        .object_sequence_numbers
+        .insert(obj.id(), SequenceNumber::new());
+    let result = rt.block_on(sender.transfer_object(obj.id(), gas_object, recipient));
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err().downcast_ref(),
-            Some(FastPayError::QuorumCommunicateError {errors}) if matches!(errors.as_slice(), [FastPayError::InvalidObjectDigest, ..])))
+            Some(FastPayError::QuorumNotReachedError {errors}) if matches!(errors.as_slice(), [FastPayError::ObjectNotFound, ..])));
+
+    // Test 3: invalid object digest
+    let object_id = *objects.next().unwrap();
+
+    // give object an incorrect object digest
+    sender.object_refs.insert(
+        object_id,
+        (object_id, SequenceNumber::new(), ObjectDigest([0; 32])),
+    );
+
+    let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
+    assert!(result.is_err());
+    println!("{:?}", result);
+    assert!(matches!(result.unwrap_err().downcast_ref(),
+            Some(FastPayError::QuorumNotReachedError {errors}) if matches!(errors.as_slice(), [FastPayError::InvalidObjectDigest, ..])))
+
+    // Test 4: Insufficient gas;
 }
 
 #[tokio::test]

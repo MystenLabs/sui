@@ -161,8 +161,8 @@ pub enum FastPayError {
     #[error("Storage error")]
     StorageError(#[from] typed_store::rocks::TypedStoreError),
 
-    #[error("Failed to communicate with a quorum of authorities: {:?}", errors)]
-    QuorumCommunicateError { errors: Vec<FastPayError> },
+    #[error("Failed to achieve quorum between authorities: {:?}", errors)]
+    QuorumNotReachedError { errors: Vec<FastPayError> },
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;

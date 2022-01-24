@@ -395,6 +395,8 @@ where
         let mut values = Vec::new();
         let mut value_score = 0;
         let mut error_scores = HashMap::new();
+        let mut quorum_reached = false;
+
         while let Some((name, result)) = responses.next().await {
             match result {
                 Ok(value) => {
@@ -402,7 +404,8 @@ where
                     value_score += committee.weight(&name);
                     if value_score >= committee.quorum_threshold() {
                         // Success!
-                        return Ok(values);
+                        quorum_reached = true;
+                        break;
                     }
                 }
                 Err(err) => {
@@ -411,16 +414,19 @@ where
                     if *entry >= committee.validity_threshold() {
                         // At least one honest node returned this error.
                         // No quorum can be reached, so return early.
-                        fp_bail!(FastPayError::QuorumCommunicateError {
-                            errors: error_scores.into_keys().collect()
-                        });
+                        break;
                     }
                 }
             }
         }
-        fp_bail!(FastPayError::QuorumCommunicateError {
-            errors: error_scores.into_keys().collect()
-        });
+
+        if quorum_reached {
+            Ok(values)
+        } else {
+            fp_bail!(FastPayError::QuorumNotReachedError {
+                errors: error_scores.into_keys().collect()
+            })
+        }
     }
 
     async fn communicate_transfers(
@@ -732,19 +738,21 @@ where
             "Unexpected sequence number"
         );
         self.pending_transfer = Some(order.clone());
-        let (order_info_responses, new_sent_certificate) = self
+        let result = self
             .communicate_transfers(
                 self.address,
                 *order.object_id(),
                 self.certificates(order.object_id()).cloned().collect(),
                 order.clone(),
             )
-            .await?;
-        assert_eq!(&new_sent_certificate.order, &order);
+            .await;
         // Clear `pending_transfer` and update `sent_certificates`,
         // and `next_sequence_number`. (Note that if we were using persistent
         // storage, we should ensure update atomicity in the eventuality of a crash.)
         self.pending_transfer = None;
+
+        let (order_info_responses, new_sent_certificate) = result?;
+        assert_eq!(&new_sent_certificate.order, &order);
 
         // Only valid for object transfer, where input_objects = output_objects
         let new_sent_certificates = vec![new_sent_certificate.clone()];
@@ -1132,10 +1140,6 @@ where
         Ok(authority_name)
     }
 
-    async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error> {
-        Ok(self.object_sequence_numbers.keys().copied().collect())
-    }
-
     async fn move_call(
         &mut self,
         package_object_ref: ObjectRef,
@@ -1174,5 +1178,9 @@ where
         object_info_req: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, anyhow::Error> {
         self.get_object_info_execute(object_info_req).await
+    }
+
+    async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error> {
+        Ok(self.object_sequence_numbers.keys().copied().collect())
     }
 }
