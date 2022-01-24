@@ -9,6 +9,7 @@ use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*
 use move_core_types::transaction_argument::convert_txn_args;
 
 use bytes::Bytes;
+use fastx_types::object::Object;
 use futures::stream::StreamExt;
 use log::*;
 use std::{
@@ -79,7 +80,7 @@ fn make_client_state(
         committee,
         authority_clients,
         account.certificates.clone(),
-        account.object_ids.clone(),
+        account.object_refs.clone(),
     )
 }
 
@@ -94,32 +95,29 @@ fn make_benchmark_transfer_orders(
     let mut next_recipient = get_key_pair().0;
     for account in accounts_config.accounts_mut() {
         let gas_object_id = *account.gas_object_ids.iter().next().unwrap();
-        let gas_object_seq = *account.object_ids.get(&gas_object_id).unwrap();
-        let object_id = *account
-            .object_ids
-            .keys()
-            .find(|key| *key != &gas_object_id)
+        let gas_object_ref = *account.object_refs.get(&gas_object_id).unwrap();
+        let object_ref = *account
+            .object_refs
+            .iter()
+            .find_map(|(key, object_ref)| {
+                if *key != gas_object_id {
+                    Some(object_ref)
+                } else {
+                    None
+                }
+            })
             .unwrap();
         let transfer = Transfer {
-            object_ref: (
-                object_id,
-                account.object_ids[&object_id],
-                // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
-                ObjectDigest::new([0; 32]),
-            ),
+            object_ref,
             sender: account.address,
             recipient: Address::FastPay(next_recipient),
-            gas_payment: (
-                gas_object_id,
-                gas_object_seq,
-                // TODO(https://github.com/MystenLabs/fastnft/issues/123): Include actual object digest here
-                ObjectDigest::new([0; 32]),
-            ),
+            gas_payment: gas_object_ref,
         };
         debug!("Preparing transfer order: {:?}", transfer);
+        let (object_id, seq, digest) = object_ref;
         account
-            .object_ids
-            .insert(object_id, account.object_ids[&object_id].increment());
+            .object_refs
+            .insert(object_id, (object_id, seq.increment(), digest));
         next_recipient = account.address;
         let order = Order::new_transfer(transfer.clone(), &account.key);
         orders.push(order.clone());
@@ -687,15 +685,15 @@ fn main() {
                     recv_timeout,
                 );
 
-                let objects_ids = client_state.object_ids();
+                let object_refs = client_state.object_refs();
 
                 accounts_config.update_from_state(&client_state);
                 accounts_config
                     .write(accounts_config_path)
                     .expect("Unable to write user accounts");
 
-                for (obj_id, seq_num) in objects_ids {
-                    println!("{}: {:?}", obj_id, seq_num);
+                for (obj_id, object_ref) in object_refs {
+                    println!("{}: {:?}", obj_id, object_ref);
                 }
             });
         }
@@ -788,16 +786,24 @@ fn main() {
             let mut init_state_cfg: InitialStateConfig = InitialStateConfig::new();
 
             for _ in 0..num_accounts {
-                let mut obj_ids = Vec::new();
-
+                let mut object_refs = Vec::new();
+                let mut gas_object_ids = Vec::new();
                 for _ in 0..gas_objs_per_account {
-                    obj_ids.push(ObjectID::random());
+                    let object = Object::with_id_owner_gas_for_testing(
+                        ObjectID::random(),
+                        SequenceNumber::default(),
+                        FastPayAddress::random_for_testing_only(),
+                        100000,
+                    );
+                    object_refs.push(object.to_object_reference());
+                    gas_object_ids.push(object.id())
                 }
-                let account = UserAccount::new(obj_ids.clone(), obj_ids.clone());
+
+                let account = UserAccount::new(object_refs.clone(), gas_object_ids);
 
                 init_state_cfg.config.push(InitialStateConfigEntry {
                     address: account.address,
-                    object_ids: obj_ids,
+                    object_refs,
                 });
 
                 accounts_config.insert(account);

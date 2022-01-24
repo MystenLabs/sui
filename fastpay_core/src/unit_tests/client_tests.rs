@@ -194,11 +194,14 @@ async fn fund_account(
             let client_ref = authority.0.as_ref().try_lock().unwrap();
             created_objects.insert(object_id, object.clone());
 
-            client_ref
-                .init_order_lock((object_id, 0.into(), object.digest()))
-                .await;
+            let object_ref: ObjectRef = (object_id, 0.into(), object.digest());
+
+            client_ref.init_order_lock(object_ref.clone()).await;
             client_ref.insert_object(object).await;
-            client.object_ids.insert(object_id, SequenceNumber::new());
+            client
+                .object_sequence_numbers
+                .insert(object_id, SequenceNumber::new());
+            client.object_refs.insert(object_id, object_ref);
         }
     }
     created_objects
@@ -546,14 +549,14 @@ fn test_client_state_sync() {
 
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
 
-    let old_object_ids = sender.object_ids.clone();
+    let old_object_ids = sender.object_sequence_numbers.clone();
     let old_certificate = sender.certificates.clone();
 
     // Remove all client-side data
-    sender.object_ids.clear();
+    sender.object_sequence_numbers.clear();
     sender.certificates.clear();
     assert!(rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
-    assert!(sender.object_ids.is_empty());
+    assert!(sender.object_sequence_numbers.is_empty());
     assert!(sender.certificates.is_empty());
 
     // Sync client state
@@ -562,7 +565,7 @@ fn test_client_state_sync() {
 
     // Confirm data are the same after sync
     assert!(!rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
-    assert_eq!(old_object_ids, sender.object_ids);
+    assert_eq!(old_object_ids, sender.object_sequence_numbers);
     assert_eq!(old_certificate, sender.certificates);
 }
 
@@ -598,7 +601,7 @@ async fn test_client_state_sync_with_transferred_object() {
 
     // Client 2's local object_id and cert should be empty before sync
     assert!(client2.get_owned_objects().await.unwrap().is_empty());
-    assert!(client2.object_ids.is_empty());
+    assert!(client2.object_sequence_numbers.is_empty());
     assert!(client2.certificates.is_empty());
 
     // Sync client state
@@ -609,7 +612,7 @@ async fn test_client_state_sync_with_transferred_object() {
 
     // Confirm client 2 received the new object id and cert
     assert_eq!(1, client2.get_owned_objects().await.unwrap().len());
-    assert_eq!(1, client2.object_ids.len());
+    assert_eq!(1, client2.object_sequence_numbers.len());
     assert_eq!(1, client2.certificates.len());
 }
 
@@ -722,18 +725,7 @@ async fn test_move_calls_object_create() {
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
-
-    // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
-    let framework_obj_ref = client1
-        .get_object_info(ObjectInfoRequest {
-            object_id: FASTX_FRAMEWORK_ADDRESS,
-            request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
-        })
-        .await
-        .unwrap()
-        .object
-        .to_object_reference();
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
 
     // Populate authorities with obj data
     let gas_object_ref = fund_account_with_same_objects(
@@ -788,18 +780,8 @@ async fn test_move_calls_object_transfer() {
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
 
-    // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
-    let framework_obj_ref = client1
-        .get_object_info(ObjectInfoRequest {
-            object_id: FASTX_FRAMEWORK_ADDRESS,
-            request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
-        })
-        .await
-        .unwrap()
-        .object
-        .to_object_reference();
     // Populate authorities with obj data
     let mut gas_object_ref = fund_account_with_same_objects(
         authority_clients.values().collect(),
@@ -908,18 +890,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
-
-    // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
-    let framework_obj_ref = client1
-        .get_object_info(ObjectInfoRequest {
-            object_id: FASTX_FRAMEWORK_ADDRESS,
-            request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
-        })
-        .await
-        .unwrap()
-        .object
-        .to_object_reference();
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
 
     // Populate authorities with obj data
     let mut gas_object_ref = fund_account_with_same_objects(
@@ -1027,18 +998,7 @@ async fn test_move_calls_object_delete() {
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
-
-    // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
-    let framework_obj_ref = client1
-        .get_object_info(ObjectInfoRequest {
-            object_id: FASTX_FRAMEWORK_ADDRESS,
-            request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
-        })
-        .await
-        .unwrap()
-        .object
-        .to_object_reference();
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
 
     // Populate authorities with obj data
     let mut gas_object_ref = fund_account_with_same_objects(
@@ -1139,7 +1099,6 @@ async fn test_move_calls_certs() {
 
     let gas_object_id = ObjectID::random();
 
-    // TODO: authority should not require seq# or digest for package in Move calls. Use dummy values
     let framework_obj_ref = client1
         .get_object_info(ObjectInfoRequest {
             object_id: FASTX_FRAMEWORK_ADDRESS,
@@ -1195,7 +1154,7 @@ async fn test_move_calls_certs() {
     // Client 1 should have one certificate, one new object and one gas object, each with one associated certificate.
     assert!(client1.certificates.contains_key(&cert.order.digest()));
     assert_eq!(1, client1.certificates.len());
-    assert_eq!(2, client1.object_ids.len());
+    assert_eq!(2, client1.object_sequence_numbers.len());
     assert_eq!(2, client1.object_certs.len());
     assert!(client1.object_certs.contains_key(&gas_object_id));
     assert!(client1.object_certs.contains_key(new_object_id));
@@ -1203,11 +1162,19 @@ async fn test_move_calls_certs() {
     assert_eq!(1, client1.object_certs.get(new_object_id).unwrap().len());
     assert_eq!(
         SequenceNumber::from(1),
-        client1.object_ids.get(&gas_object_id).unwrap().clone()
+        client1
+            .object_sequence_numbers
+            .get(&gas_object_id)
+            .unwrap()
+            .clone()
     );
     assert_eq!(
         SequenceNumber::from(1),
-        client1.object_ids.get(new_object_id).unwrap().clone()
+        client1
+            .object_sequence_numbers
+            .get(new_object_id)
+            .unwrap()
+            .clone()
     );
 
     // Transfer object with move
@@ -1229,13 +1196,17 @@ async fn test_move_calls_certs() {
     // Client 1 should have two certificate, one gas object, with two associated certificate.
     assert!(client1.certificates.contains_key(&cert.order.digest()));
     assert_eq!(2, client1.certificates.len());
-    assert_eq!(1, client1.object_ids.len());
+    assert_eq!(1, client1.object_sequence_numbers.len());
     assert_eq!(1, client1.object_certs.len());
     assert!(client1.object_certs.contains_key(&gas_object_id));
     assert_eq!(2, client1.object_certs.get(&gas_object_id).unwrap().len());
     assert_eq!(
         SequenceNumber::from(2),
-        client1.object_ids.get(&gas_object_id).unwrap().clone()
+        client1
+            .object_sequence_numbers
+            .get(&gas_object_id)
+            .unwrap()
+            .clone()
     );
 
     // Sync client 2
@@ -1246,13 +1217,47 @@ async fn test_move_calls_certs() {
 
     // Client 2 should have 2 certificate, one new object, with two associated certificate.
     assert_eq!(2, client2.certificates.len());
-    assert_eq!(1, client2.object_ids.len());
+    assert_eq!(1, client2.object_sequence_numbers.len());
     assert_eq!(1, client2.object_certs.len());
     assert!(client2.object_certs.contains_key(new_object_id));
     assert_eq!(2, client2.object_certs.get(new_object_id).unwrap().len());
     assert_eq!(
         SequenceNumber::from(2),
-        client2.object_ids.get(new_object_id).unwrap().clone()
+        client2
+            .object_sequence_numbers
+            .get(new_object_id)
+            .unwrap()
+            .clone()
+    );
+}
+
+#[test]
+fn test_transfer_invalid_object_digest() {
+    let rt = Runtime::new().unwrap();
+    let (recipient, _) = get_key_pair();
+    let object_id_1 = ObjectID::random();
+    let gas_object = ObjectID::random();
+    let authority_objects = vec![
+        vec![object_id_1, gas_object],
+        vec![object_id_1, gas_object],
+        vec![object_id_1, gas_object],
+        vec![object_id_1, gas_object],
+    ];
+
+    let mut sender = rt.block_on(init_local_client_state(authority_objects));
+
+    // give object an incorrect object digest
+    sender.object_refs.insert(
+        object_id_1,
+        (object_id_1, SequenceNumber::new(), ObjectDigest([0; 32])),
+    );
+
+    let result = rt.block_on(sender.transfer_object(object_id_1, gas_object, recipient));
+    assert!(result.is_err());
+    // TODO: Refactor error handling and check error type instead of string value. https://github.com/MystenLabs/fastnft/issues/187
+    assert_eq!(
+        "Failed to communicate with a quorum of authorities: Invalid Object digest.",
+        result.unwrap_err().to_string()
     );
 }
 

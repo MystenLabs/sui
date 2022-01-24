@@ -62,7 +62,7 @@ pub enum FastPayError {
     ErrorWhileProcessingPublish { err: String },
     #[error("Move call failed: {err}")]
     ErrorWhileProcessingMoveCall { err: String },
-    #[error("Failed to communicate with quorum of authorities: {err}")]
+    #[error("Failed to communicate with a quorum of authorities: {err}")]
     FailedToCommunicateWithQuorum { err: String },
     #[error("An invalid answer was returned by the authority while requesting information")]
     ErrorWhileRequestingInformation,
@@ -96,6 +96,8 @@ pub enum FastPayError {
     InvalidAuthenticator,
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
+    #[error("Invalid Object digest.")]
+    InvalidObjectDigest,
     #[error("Cannot deserialize.")]
     InvalidDecoding,
     #[error("Unexpected message.")]

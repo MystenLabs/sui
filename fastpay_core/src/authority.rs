@@ -86,7 +86,7 @@ impl AuthorityState {
         //      it's a bit wasteful to copy the entire object.
         let objects = self.get_objects(&ids[..]).await?;
         for (object_ref, object) in input_objects.into_iter().zip(objects) {
-            let (object_id, sequence_number, _object_digest) = object_ref;
+            let (object_id, sequence_number, object_digest) = object_ref;
 
             fp_ensure!(
                 sequence_number <= SequenceNumber::max(),
@@ -94,11 +94,10 @@ impl AuthorityState {
             );
 
             let object = object.ok_or(FastPayError::ObjectNotFound)?;
-
-            // TODO(https://github.com/MystenLabs/fastnft/issues/123): This hack substitutes the real
-            // object digest instead of using the one passed in by the client. We need to fix clients and
-            // then use the digest provided, by deleting this line.
-            let object_digest = object.digest();
+            fp_ensure!(
+                object.digest() == object_digest,
+                FastPayError::InvalidObjectDigest
+            );
 
             // Check that the seq number is the same
             fp_ensure!(
@@ -316,10 +315,6 @@ impl AuthorityState {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, FastPayError> {
         let requested_certificate = if let Some(seq) = request.request_sequence_number {
-            // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy
-            // to provide back to the client the object digest for specific objects requested. Probably,
-            // we have to return the full ObjectRef and why not the actual full object here.
-
             // Get the Transaction Digest that created the object
             let parent_iterator = self
                 .get_parent_iterator(request.object_id, Some(seq.increment()))
