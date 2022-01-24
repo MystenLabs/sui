@@ -1270,11 +1270,8 @@ fn test_transfer_invalid_object_digest() {
 
     let result = rt.block_on(sender.transfer_object(object_id_1, gas_object, recipient));
     assert!(result.is_err());
-    // TODO: Refactor error handling and check error type instead of string value. https://github.com/MystenLabs/fastnft/issues/187
-    assert_eq!(
-        "Failed to communicate with a quorum of authorities: Invalid Object digest.",
-        result.unwrap_err().to_string()
-    );
+    assert!(matches!(result.unwrap_err().downcast_ref(),
+            Some(FastPayError::QuorumCommunicateError {errors}) if matches!(errors.as_slice(), [FastPayError::InvalidObjectDigest, ..])))
 }
 
 #[tokio::test]
