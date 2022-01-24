@@ -492,7 +492,10 @@ fn main() {
                 )
                 .await;
 
-                let gas_obj_ref = *client_state.object_refs().get(&gas_object_id).expect("Gas object not found");
+                let gas_obj_ref = *client_state
+                    .object_refs()
+                    .get(&gas_object_id)
+                    .expect("Gas object not found");
 
                 let pub_resp = client_state.publish(path, gas_obj_ref).await;
 
@@ -588,8 +591,10 @@ fn main() {
                 let package_obj_ref = package_obj_info.object.to_object_reference();
 
                 // Fetch the object info for the gas obj
-                let gas_obj_ref = *client_state.object_refs().get(&config.gas_object_id).expect("Gas object not found");
-
+                let gas_obj_ref = *client_state
+                    .object_refs()
+                    .get(&config.gas_object_id)
+                    .expect("Gas object not found");
 
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
