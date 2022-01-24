@@ -5,7 +5,7 @@
 use super::*;
 use crate::authority::{AuthorityState, AuthorityStore};
 use fastx_types::{
-    object::{Object, GAS_VALUE_FOR_TESTING},
+    object::{Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     FASTX_FRAMEWORK_ADDRESS,
 };
 use futures::lock::Mutex;
@@ -1161,7 +1161,7 @@ async fn test_move_calls_certs() {
     assert_eq!(1, client1.object_certs.get(&gas_object_id).unwrap().len());
     assert_eq!(1, client1.object_certs.get(new_object_id).unwrap().len());
     assert_eq!(
-        SequenceNumber::from(1),
+        OBJECT_START_VERSION,
         client1
             .object_sequence_numbers
             .get(&gas_object_id)
@@ -1169,7 +1169,7 @@ async fn test_move_calls_certs() {
             .clone()
     );
     assert_eq!(
-        SequenceNumber::from(1),
+        OBJECT_START_VERSION,
         client1
             .object_sequence_numbers
             .get(new_object_id)
@@ -1312,7 +1312,7 @@ async fn test_module_publish_and_call_good() {
         .unwrap();
 
     // Version should be 1 for all modules
-    assert_eq!(new_obj.object.version(), SequenceNumber::from(1));
+    assert_eq!(new_obj.object.version(), OBJECT_START_VERSION);
     // Must be immutable
     assert!(new_obj.object.is_read_only());
 
@@ -1427,7 +1427,7 @@ async fn test_module_publish_file_path() {
         .unwrap();
 
     // Version should be 1 for all modules
-    assert_eq!(new_obj.object.version(), SequenceNumber::from(1));
+    assert_eq!(new_obj.object.version(), OBJECT_START_VERSION);
     // Must be immutable
     assert!(new_obj.object.is_read_only());
 

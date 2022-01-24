@@ -353,6 +353,10 @@ impl SequenceNumber {
         self.0
     }
 
+    pub const fn from_u64(u: u64) -> Self {
+        SequenceNumber(u)
+    }
+
     #[must_use]
     pub fn increment(self) -> SequenceNumber {
         // TODO: Ensure this never overflow.
