@@ -396,6 +396,8 @@ where
         let mut values = Vec::new();
         let mut value_score = 0;
         let mut error_scores = HashMap::new();
+        let mut quorum_reached = false;
+
         while let Some((name, result)) = responses.next().await {
             match result {
                 Ok(value) => {
@@ -403,7 +405,8 @@ where
                     value_score += committee.weight(&name);
                     if value_score >= committee.quorum_threshold() {
                         // Success!
-                        return Ok(values);
+                        quorum_reached = true;
+                        break;
                     }
                 }
                 Err(err) => {
@@ -412,16 +415,19 @@ where
                     if *entry >= committee.validity_threshold() {
                         // At least one honest node returned this error.
                         // No quorum can be reached, so return early.
-                        fp_bail!(FastPayError::QuorumCommunicateError {
-                            errors: error_scores.into_keys().collect()
-                        });
+                        break;
                     }
                 }
             }
         }
-        fp_bail!(FastPayError::QuorumCommunicateError {
-            errors: error_scores.into_keys().collect()
-        });
+
+        if quorum_reached {
+            Ok(values)
+        } else {
+            fp_bail!(FastPayError::QuorumNotReachedError {
+                errors: error_scores.into_keys().collect()
+            })
+        }
     }
 
     async fn communicate_transfers(
