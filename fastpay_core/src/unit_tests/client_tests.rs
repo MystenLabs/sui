@@ -173,10 +173,7 @@ async fn fund_account_with_same_objects(
     client: &mut ClientState<LocalAuthorityClient>,
     object_ids: Vec<ObjectID>,
 ) -> HashMap<AccountAddress, Object> {
-    let mut objs = Vec::new();
-    for _ in 0..authorities.len() {
-        objs.push(object_ids.clone());
-    }
+    let objs: Vec<_> = (0..authorities.len()).map(|_| object_ids.clone()).collect();
 
     fund_account(authorities, client, objs).await
 }
@@ -196,7 +193,7 @@ async fn fund_account(
 
             let object_ref: ObjectRef = (object_id, 0.into(), object.digest());
 
-            client_ref.init_order_lock(object_ref.clone()).await;
+            client_ref.init_order_lock(object_ref).await;
             client_ref.insert_object(object).await;
             client
                 .object_sequence_numbers
