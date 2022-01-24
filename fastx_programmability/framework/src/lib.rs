@@ -39,16 +39,13 @@ pub fn get_move_stdlib_modules() -> Vec<CompiledModule> {
 /// This is useful for when publishing
 /// If we are building the FastX framework, `is_framework` will be true;
 /// Otherwise `is_framework` should be false (e.g. calling from client).
-pub fn build_move_package_to_bytes(
-    path: &Path,
-    is_framework: bool,
-) -> Result<Vec<Vec<u8>>, FastPayError> {
+pub fn build_move_package_to_bytes(path: &Path) -> Result<Vec<Vec<u8>>, FastPayError> {
     build_move_package(
         path,
         BuildConfig {
             ..Default::default()
         },
-        is_framework,
+        false,
     )
     .map(|mods| {
         mods.iter()

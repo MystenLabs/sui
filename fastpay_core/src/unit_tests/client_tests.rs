@@ -168,10 +168,24 @@ fn make_client(
 }
 
 #[cfg(test)]
-async fn fund_account<I: IntoIterator<Item = Vec<ObjectID>>>(
+async fn fund_account_with_same_objects(
     authorities: Vec<&LocalAuthorityClient>,
     client: &mut ClientState<LocalAuthorityClient>,
-    object_ids: I,
+    object_ids: Vec<ObjectID>,
+) -> HashMap<AccountAddress, Object> {
+    let mut objs = Vec::new();
+    for _ in 0..authorities.len() {
+        objs.push(object_ids.clone());
+    }
+
+    fund_account(authorities, client, objs).await
+}
+
+#[cfg(test)]
+async fn fund_account(
+    authorities: Vec<&LocalAuthorityClient>,
+    client: &mut ClientState<LocalAuthorityClient>,
+    object_ids: Vec<Vec<ObjectID>>,
 ) -> HashMap<AccountAddress, Object> {
     let mut created_objects = HashMap::new();
     for (authority, object_ids) in authorities.into_iter().zip(object_ids.into_iter()) {
@@ -384,28 +398,17 @@ async fn test_bidirectional_transfer() {
     let object_id = ObjectID::random();
     let gas_object1 = ObjectID::random();
     let gas_object2 = ObjectID::random();
-    let authority1_objects = vec![
-        vec![object_id, gas_object1],
-        vec![object_id, gas_object1],
-        vec![object_id, gas_object1],
-        vec![object_id, gas_object1],
-    ];
-    let authority2_objects = vec![
-        vec![gas_object2],
-        vec![gas_object2],
-        vec![gas_object2],
-        vec![gas_object2],
-    ];
-    fund_account(
+
+    fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority1_objects,
+        vec![object_id, gas_object1],
     )
     .await;
-    fund_account(
+    fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client2,
-        authority2_objects,
+        vec![gas_object2],
     )
     .await;
 
@@ -448,7 +451,7 @@ async fn test_bidirectional_transfer() {
     );
 
     // Update client2's local object data.
-    client2.receive_object(certificate).await.unwrap();
+    client2.receive_object(&certificate).await.unwrap();
 
     // Confirm sequence number are consistent between clients.
     assert_eq!(
@@ -495,17 +498,11 @@ fn test_receiving_unconfirmed_transfer() {
 
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
-    let authority_objects = vec![
-        vec![object_id, gas_object_id],
-        vec![object_id, gas_object_id],
-        vec![object_id, gas_object_id],
-        vec![object_id, gas_object_id],
-    ];
 
-    rt.block_on(fund_account(
+    rt.block_on(fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![object_id, gas_object_id],
     ));
     // not updating client1.balance
 
@@ -531,7 +528,7 @@ fn test_receiving_unconfirmed_transfer() {
         SequenceNumber::from(0)
     );
     // Let the receiver confirm in last resort.
-    rt.block_on(client2.receive_object(certificate)).unwrap();
+    rt.block_on(client2.receive_object(&certificate)).unwrap();
     assert_eq!(
         rt.block_on(client2.get_strong_majority_owner(object_id)),
         Some((client2.address, SequenceNumber::from(1)))
@@ -739,16 +736,10 @@ async fn test_move_calls_object_create() {
         .to_object_reference();
 
     // Populate authorities with obj data
-    let authority_objects = vec![
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-    ];
-    let gas_object_ref = fund_account(
+    let gas_object_ref = fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![gas_object_id],
     )
     .await
     .iter()
@@ -775,8 +766,6 @@ async fn test_move_calls_object_create() {
         )
         .await;
 
-    // Check all went well
-    assert!(call_response.is_ok());
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
     // Status flag should be success
@@ -812,16 +801,10 @@ async fn test_move_calls_object_transfer() {
         .object
         .to_object_reference();
     // Populate authorities with obj data
-    let authority_objects = vec![
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-    ];
-    let mut gas_object_ref = fund_account(
+    let mut gas_object_ref = fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![gas_object_id],
     )
     .await
     .iter()
@@ -888,8 +871,6 @@ async fn test_move_calls_object_transfer() {
         )
         .await;
 
-    // Check all went well
-    assert!(call_response.is_ok());
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
     // Status flag should be success
@@ -941,16 +922,10 @@ async fn test_move_calls_object_transfer_and_freeze() {
         .to_object_reference();
 
     // Populate authorities with obj data
-    let authority_objects = vec![
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-    ];
-    let mut gas_object_ref = fund_account(
+    let mut gas_object_ref = fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![gas_object_id],
     )
     .await
     .iter()
@@ -1015,8 +990,6 @@ async fn test_move_calls_object_transfer_and_freeze() {
         )
         .await;
 
-    // Check all went well
-    assert!(call_response.is_ok());
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
     // Status flag should be success
@@ -1068,16 +1041,10 @@ async fn test_move_calls_object_delete() {
         .to_object_reference();
 
     // Populate authorities with obj data
-    let authority_objects = vec![
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-    ];
-    let mut gas_object_ref = fund_account(
+    let mut gas_object_ref = fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![gas_object_id],
     )
     .await
     .iter()
@@ -1141,8 +1108,6 @@ async fn test_move_calls_object_delete() {
         )
         .await;
 
-    // Check all went well
-    assert!(call_response.is_ok());
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
     // Status flag should be success
@@ -1300,17 +1265,10 @@ async fn test_module_publish_and_call_good() {
     let gas_object_id = ObjectID::random();
 
     // Populate authorities with gas obj data
-    let authority_objects = vec![
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-    ];
-
-    let gas_object_ref = fund_account(
+    let gas_object_ref = fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![gas_object_id],
     )
     .await
     .iter()
@@ -1324,9 +1282,6 @@ async fn test_module_publish_and_call_good() {
     hero_path.push_str("/../fastx_programmability/examples/");
 
     let pub_res = client1.publish(hero_path, gas_object_ref).await;
-
-    // Check publish success
-    assert!(pub_res.is_ok());
 
     let (_, published_effects) = pub_res.unwrap();
 
@@ -1388,7 +1343,6 @@ async fn test_module_publish_and_call_good() {
             1000,
         )
         .await;
-    assert!(call_resp.is_ok());
 
     assert!(call_resp.as_ref().unwrap().1.status == ExecutionStatus::Success);
 
@@ -1425,17 +1379,10 @@ async fn test_module_publish_file_path() {
     let gas_object_id = ObjectID::random();
 
     // Populate authorities with gas obj data
-    let authority_objects = vec![
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-    ];
-
-    let gas_object_ref = fund_account(
+    let gas_object_ref = fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![gas_object_id],
     )
     .await
     .iter()
@@ -1451,8 +1398,6 @@ async fn test_module_publish_file_path() {
     hero_path.push_str("/../fastx_programmability/examples/Hero.move");
 
     let pub_resp = client1.publish(hero_path, gas_object_ref).await;
-    // Has to fail
-    assert!(pub_resp.is_ok());
 
     let (_, published_effects) = pub_resp.unwrap();
 
@@ -1527,17 +1472,10 @@ async fn test_module_publish_bad_path() {
     let gas_object_id = ObjectID::random();
 
     // Populate authorities with gas obj data
-    let authority_objects = vec![
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-        vec![gas_object_id],
-    ];
-
-    let gas_object_ref = fund_account(
+    let gas_object_ref = fund_account_with_same_objects(
         authority_clients.values().collect(),
         &mut client1,
-        authority_objects,
+        vec![gas_object_id],
     )
     .await
     .iter()

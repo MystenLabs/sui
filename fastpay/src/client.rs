@@ -363,7 +363,7 @@ enum ClientCommands {
     /// Publish Move modules
     #[structopt(name = "publish")]
     Publish {
-        /// Path of confirmant move project
+        /// Path to directory containing a Move package
         path: String,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
@@ -656,7 +656,7 @@ fn main() {
                     send_timeout,
                     recv_timeout,
                 );
-                recipient_client_state.receive_object(cert).await.unwrap();
+                recipient_client_state.receive_object(&cert).await.unwrap();
                 accounts_config.update_from_state(&recipient_client_state);
                 accounts_config
                     .write(accounts_config_path)
