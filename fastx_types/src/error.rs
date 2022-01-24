@@ -90,6 +90,8 @@ pub enum FastPayError {
     InvalidAuthenticator,
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
+    #[error("Invalid Object digest.")]
+    InvalidObjectDigest,
     #[error("Cannot deserialize.")]
     InvalidDecoding,
     #[error("Unexpected message.")]
