@@ -174,6 +174,9 @@ pub enum FastPayError {
     ConcurrentTransferError,
     #[error("Transfer should be received by us.")]
     IncorrectRecipientError,
+
+    #[error("Transfer should be received by us.")]
+    IncorrectRecipientError,
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;
