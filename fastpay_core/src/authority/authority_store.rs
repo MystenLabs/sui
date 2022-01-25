@@ -100,7 +100,9 @@ impl AuthorityStore {
     pub fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
         self.objects
             .get(object_id)?
-            .ok_or(FastPayError::ObjectNotFound)
+            .ok_or(FastPayError::ObjectNotFound {
+                object_id: *object_id,
+            })
     }
 
     /// Get many objects

@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::downloader::*;
-use anyhow::ensure;
 use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
 use fastx_types::messages::Address::FastPay;
 use fastx_types::{
-    base_types::*, committee::Committee, error::FastPayError, fp_bail, fp_ensure, messages::*,
+    base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
 use futures::{future, StreamExt, TryFutureExt};
 use move_core_types::identifier::Identifier;
@@ -176,7 +175,9 @@ impl<A> ClientState<A> {
         if self.object_sequence_numbers.contains_key(object_id) {
             Ok(self.object_sequence_numbers[object_id])
         } else {
-            Err(FastPayError::ObjectNotFound)
+            Err(FastPayError::ObjectNotFound {
+                object_id: *object_id,
+            })
         }
     }
 
@@ -383,6 +384,7 @@ where
         F: Fn(AuthorityName, &'a mut A) -> AsyncResult<'a, V, FastPayError> + Clone,
     {
         let committee = &self.committee;
+        let number_of_authorities = self.authority_clients.len();
         let authority_clients = &mut self.authority_clients;
         let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
@@ -395,8 +397,6 @@ where
         let mut values = Vec::new();
         let mut value_score = 0;
         let mut error_scores = HashMap::new();
-        let mut quorum_reached = false;
-
         while let Some((name, result)) = responses.next().await {
             match result {
                 Ok(value) => {
@@ -404,8 +404,7 @@ where
                     value_score += committee.weight(&name);
                     if value_score >= committee.quorum_threshold() {
                         // Success!
-                        quorum_reached = true;
-                        break;
+                        return Ok(values);
                     }
                 }
                 Err(err) => {
@@ -414,19 +413,18 @@ where
                     if *entry >= committee.validity_threshold() {
                         // At least one honest node returned this error.
                         // No quorum can be reached, so return early.
-                        break;
+                        return Err(FastPayError::QuorumNotReachedError {
+                            num_of_authorities: number_of_authorities,
+                            errors: error_scores.into_keys().collect(),
+                        });
                     }
                 }
             }
         }
-
-        if quorum_reached {
-            Ok(values)
-        } else {
-            fp_bail!(FastPayError::QuorumNotReachedError {
-                errors: error_scores.into_keys().collect()
-            })
-        }
+        Err(FastPayError::QuorumNotReachedError {
+            num_of_authorities: number_of_authorities,
+            errors: error_scores.into_keys().collect(),
+        })
     }
 
     async fn communicate_transfers(
@@ -639,11 +637,13 @@ where
         let object_ref = self
             .object_refs
             .get(&object_id)
-            .ok_or(FastPayError::ObjectNotFound)?;
-        let gas_payment = self
-            .object_refs
-            .get(&gas_payment)
-            .ok_or(FastPayError::ObjectNotFound)?;
+            .ok_or(FastPayError::ObjectNotFound { object_id })?;
+        let gas_payment =
+            self.object_refs
+                .get(&gas_payment)
+                .ok_or(FastPayError::ObjectNotFound {
+                    object_id: gas_payment,
+                })?;
 
         let transfer = Transfer {
             object_ref: *object_ref,
@@ -1042,9 +1042,9 @@ where
     async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error> {
         match &certificate.order.kind {
             OrderKind::Transfer(transfer) => {
-                ensure!(
+                fp_ensure!(
                     transfer.recipient == Address::FastPay(self.address),
-                    "Transfer should be received by us."
+                    FastPayError::IncorrectRecipientError.into()
                 );
                 let responses = self
                     .broadcast_confirmation_orders(
@@ -1096,11 +1096,14 @@ where
         let object_ref = *self
             .object_refs
             .get(&object_id)
-            .ok_or(FastPayError::ObjectNotFound)?;
-        let gas_payment = *self
-            .object_refs
-            .get(&gas_payment)
-            .ok_or(FastPayError::ObjectNotFound)?;
+            .ok_or(FastPayError::ObjectNotFound { object_id })?;
+        let gas_payment =
+            *self
+                .object_refs
+                .get(&gas_payment)
+                .ok_or(FastPayError::ObjectNotFound {
+                    object_id: gas_payment,
+                })?;
 
         let transfer = Transfer {
             object_ref,

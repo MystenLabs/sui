@@ -1,6 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Debug;
 use thiserror::Error;
 
 use crate::base_types::*;
@@ -146,8 +147,8 @@ pub enum FastPayError {
     OrderLockDoesNotExist,
     #[error("Attempt to reset a set order lock to a different value.")]
     OrderLockReset,
-    #[error("Could not find the referenced object.")]
-    ObjectNotFound,
+    #[error("Could not find the referenced object {:?}.", object_id)]
+    ObjectNotFound { object_id: ObjectID },
     #[error("Object ID did not have the expected type")]
     BadObjectType { error: String },
     #[error("Move Execution failed")]
@@ -159,11 +160,20 @@ pub enum FastPayError {
     #[error("Storage error")]
     StorageError(#[from] typed_store::rocks::TypedStoreError),
 
-    #[error("Failed to achieve quorum between authorities: {:?}", errors)]
-    QuorumNotReachedError { errors: Vec<FastPayError> },
+    #[error(
+    "Failed to achieve quorum between {} authorities, cause by : {:#?}",
+    num_of_authorities,
+    errors.iter().map(| e | e.to_string()).collect::<Vec<String>>()
+    )]
+    QuorumNotReachedError {
+        num_of_authorities: usize,
+        errors: Vec<FastPayError>,
+    },
     // Client side error
     #[error("Client state has a different pending transfer.")]
     ConcurrentTransferError,
+    #[error("Transfer should be received by us.")]
+    IncorrectRecipientError,
 
     #[error("Unknown Error: {:?}", error)]
     UnknownError { error: String },

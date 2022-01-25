@@ -93,7 +93,7 @@ impl AuthorityState {
                 FastPayError::InvalidSequenceNumber
             );
 
-            let object = object.ok_or(FastPayError::ObjectNotFound)?;
+            let object = object.ok_or(FastPayError::ObjectNotFound { object_id })?;
             fp_ensure!(
                 object.digest() == object_digest,
                 FastPayError::InvalidObjectDigest
@@ -183,7 +183,9 @@ impl AuthorityState {
 
             // If we have a certificate on the confirmation order it means that the input
             // object exists on other honest authorities, but we do not have it.
-            let input_object = object.ok_or(FastPayError::ObjectNotFound)?;
+            let input_object = object.ok_or(FastPayError::ObjectNotFound {
+                object_id: input_object_id,
+            })?;
 
             let input_sequence_number = input_object.version();
 

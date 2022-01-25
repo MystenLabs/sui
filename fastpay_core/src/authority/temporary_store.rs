@@ -169,8 +169,8 @@ impl Storage for AuthorityTemporaryStore {
                 let object = self.object_store.object_state(id);
                 match object {
                     Ok(o) => Some(o),
-                    Err(FastPayError::ObjectNotFound) => None,
-                    _ => panic!("Cound not read object"),
+                    Err(FastPayError::ObjectNotFound { .. }) => None,
+                    _ => panic!("Could not read object"),
                 }
             }
         }
