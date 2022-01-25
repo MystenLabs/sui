@@ -316,7 +316,8 @@ async fn test_publish_dependent_module_ok() {
 
     // Object does not exist
     assert!(authority.object_state(&dependent_module_id).await.is_err());
-    let _response = send_and_confirm_order(&mut authority, order).await.unwrap();
+    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
+    response.signed_effects.unwrap().effects.status.unwrap();
 
     // check that the dependent module got published
     assert!(authority.object_state(&dependent_module_id).await.is_ok());
@@ -341,10 +342,11 @@ async fn test_publish_module_no_dependencies_ok() {
     let gas_cost = calculate_module_publish_cost(&module_bytes);
     let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, &sender_key);
     let _module_object_id = TxContext::new(&sender, order.digest()).fresh_id();
-    let _response = send_and_confirm_order(&mut authority, order).await.unwrap();
+    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
+    response.signed_effects.unwrap().effects.status.unwrap();
 
     // check that the module actually got published
-    assert!(_response.certified_order.is_some());
+    assert!(response.certified_order.is_some());
 
     // Check that gas is properly deducted.
     let gas_payment_object = authority
@@ -601,91 +603,21 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
 
     // Explanation: providing an old cert that has already need applied
     //              returns a Ok(_) with info about the new object states.
-    assert!(authority_state
+    let response = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .await
-        .is_ok());
+        .unwrap();
+    assert!(response.signed_effects.is_none());
 
     // Check that the new object is the one recorded.
-    let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(old_seq_num.increment(), new_account.version());
+    let new_object = authority_state.object_state(&object_id).await.unwrap();
+    assert_eq!(old_seq_num.increment(), new_object.version());
 
     // No recipient object was created.
     assert!(authority_state
         .object_state(&dbg_object_id(2))
         .await
         .is_err());
-}
-
-#[tokio::test]
-async fn test_handle_confirmation_order_exceed_balance() {
-    let (sender, sender_key) = get_key_pair();
-    let object_id = ObjectID::random();
-    let gas_object_id = ObjectID::random();
-    let recipient = dbg_addr(2);
-    let authority_state =
-        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let object = authority_state.object_state(&object_id).await.unwrap();
-    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
-
-    let certified_transfer_order = init_certified_transfer_order(
-        sender,
-        &sender_key,
-        Address::FastPay(recipient),
-        object.to_object_reference(),
-        gas_object.to_object_reference(),
-        &authority_state,
-    );
-    assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
-        .await
-        .is_ok());
-    let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(OBJECT_START_VERSION, new_account.version());
-    assert!(authority_state
-        .parent(&(object_id, new_account.version(), new_account.digest()))
-        .await
-        .is_some());
-}
-
-#[tokio::test]
-async fn test_handle_confirmation_order_receiver_balance_overflow() {
-    let (sender, sender_key) = get_key_pair();
-    let object_id = ObjectID::random();
-    let gas_object_id = ObjectID::random();
-    let (recipient, _) = get_key_pair();
-    let authority_state = init_state_with_ids(vec![
-        (sender, object_id),
-        (sender, gas_object_id),
-        (recipient, ObjectID::random()),
-    ])
-    .await;
-    let object = authority_state.object_state(&object_id).await.unwrap();
-    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
-
-    let certified_transfer_order = init_certified_transfer_order(
-        sender,
-        &sender_key,
-        Address::FastPay(recipient),
-        object.to_object_reference(),
-        gas_object.to_object_reference(),
-        &authority_state,
-    );
-    assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
-        .await
-        .is_ok());
-    let new_sender_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(OBJECT_START_VERSION, new_sender_account.version());
-
-    assert!(authority_state
-        .parent(&(
-            object_id,
-            new_sender_account.version(),
-            new_sender_account.digest()
-        ))
-        .await
-        .is_some());
 }
 
 #[tokio::test]
@@ -706,10 +638,11 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
         gas_object.to_object_reference(),
         &authority_state,
     );
-    assert!(authority_state
+    let response = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
         .await
-        .is_ok());
+        .unwrap();
+    response.signed_effects.unwrap().effects.status.unwrap();
     let account = authority_state.object_state(&object_id).await.unwrap();
     assert_eq!(OBJECT_START_VERSION, account.version());
 
@@ -754,20 +687,18 @@ async fn test_handle_confirmation_order_gas() {
         authority_state
             .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
             .await
+            .unwrap()
+            .signed_effects
+            .unwrap()
+            .effects
+            .status
     };
     let result = run_test_with_gas(10).await;
-    let err_string = result
-        .unwrap()
-        .signed_effects
-        .unwrap()
-        .effects
-        .status
-        .unwrap_err()
-        .1
-        .to_string();
+    let err_string = result.unwrap_err().1.to_string();
     assert!(err_string.contains("Gas balance is 10, not enough to pay 18"));
+    // This will execute sufccessfully.
     let result = run_test_with_gas(20).await;
-    assert!(result.is_ok());
+    result.unwrap();
 }
 
 #[tokio::test]
@@ -798,6 +729,7 @@ async fn test_handle_confirmation_order_ok() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .await
         .unwrap();
+    info.signed_effects.unwrap().effects.status.unwrap();
     // Key check: the ownership has changed
 
     let new_account = authority_state.object_state(&object_id).await.unwrap();
@@ -860,11 +792,19 @@ async fn test_handle_confirmation_order_idempotent() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .await
         .unwrap();
+    assert_eq!(
+        info.signed_effects.as_ref().unwrap().effects.status,
+        ExecutionStatus::Success
+    );
 
     let info2 = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .await
         .unwrap();
+    assert_eq!(
+        info2.signed_effects.as_ref().unwrap().effects.status,
+        ExecutionStatus::Success
+    );
 
     assert_eq!(info, info2);
     assert!(info2.certified_order.is_some());
