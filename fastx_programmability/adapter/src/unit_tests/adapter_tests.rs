@@ -505,7 +505,7 @@ fn test_publish_module_insufficient_gas() {
         .unwrap_err()
         .1
         .to_string()
-        .contains("Gas balance is 30, not enough to pay 58"));
+        .contains("Gas balance is 30, not enough to pay"));
 }
 
 #[test]
