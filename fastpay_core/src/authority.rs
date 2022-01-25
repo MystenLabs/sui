@@ -96,7 +96,7 @@ impl AuthorityState {
             let object = object.ok_or(FastPayError::ObjectNotFound { object_id })?;
             fp_ensure!(
                 object.digest() == object_digest,
-                FastPayError::InvalidObjectDigest
+                FastPayError::InvalidObjectDigest { object_id }
             );
 
             // Check that the seq number is the same
