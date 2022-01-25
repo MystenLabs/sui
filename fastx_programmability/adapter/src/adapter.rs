@@ -17,6 +17,7 @@ use fastx_types::{
 };
 use fastx_verifier::verifier;
 use move_binary_format::{
+    errors::PartialVMResult,
     file_format::CompiledModule,
     normalized::{Function, Type},
 };
@@ -32,6 +33,15 @@ use move_vm_runtime::{native_functions::NativeFunctionTable, session::ExecutionR
 use std::{borrow::Borrow, collections::BTreeMap, convert::TryFrom, fmt::Debug, sync::Arc};
 
 pub use move_vm_runtime::move_vm::MoveVM;
+
+macro_rules! exec_failure {
+    ($gas:expr, $err:expr) => {
+        return Ok(ExecutionStatus::Failure {
+            gas_used: $gas,
+            error: Box::new($err),
+        })
+    };
+}
 
 #[cfg(test)]
 #[path = "unit_tests/adapter_tests.rs"]
@@ -81,10 +91,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     ) {
         Ok(ok) => ok,
         Err(err) => {
-            return Ok(ExecutionStatus::Failure {
-                gas_used: gas::MIN_MOVE_CALL_GAS,
-                error: Box::new(err),
-            });
+            exec_failure!(gas::MIN_MOVE_CALL_GAS, err);
         }
     };
 
@@ -95,10 +102,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         }) {
             Ok(ok) => ok,
             Err(err) => {
-                return Ok(ExecutionStatus::Failure {
-                    gas_used: gas::MIN_MOVE_CALL_GAS,
-                    error: Box::new(err),
-                });
+                exec_failure!(gas::MIN_MOVE_CALL_GAS, err);
             }
         };
     let session = vm.new_session(state_view);
@@ -142,18 +146,15 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
                     state_view.write_object(gas_object);
                     Ok(ExecutionStatus::Success)
                 }
-                Err(err) => Ok(ExecutionStatus::Failure {
-                    gas_used: gas_budget,
-                    error: Box::new(err),
-                }),
+                Err(err) => exec_failure!(gas_budget, err),
             }
         }
-        ExecutionResult::Fail { error, gas_used } => Ok(ExecutionStatus::Failure {
+        ExecutionResult::Fail { error, gas_used } => exec_failure!(
             gas_used,
-            error: Box::new(FastPayError::AbortedExecution {
+            FastPayError::AbortedExecution {
                 error: error.to_string(),
-            }),
-        }),
+            }
+        ),
     }
 }
 
@@ -170,33 +171,42 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     // Deduct gas upfront, if not enough balance, bail out early.
     let gas_cost = gas::calculate_module_publish_cost(&module_bytes);
     if let Err(err) = gas::try_deduct_gas(&mut gas_object, gas_cost) {
-        return Ok(ExecutionStatus::Failure {
-            gas_used: gas::MIN_MOVE_PUBLISH_GAS,
-            error: Box::new(err),
-        });
+        exec_failure!(gas::MIN_MOVE_PUBLISH_GAS, err);
     }
     state_view.write_object(gas_object);
 
-    let mut modules = module_bytes
+    let result = module_bytes
         .iter()
-        .map(|b| {
-            CompiledModule::deserialize(b).map_err(|e| FastPayError::ModuleDeserializationFailure {
-                error: e.to_string(),
-            })
-        })
-        .collect::<FastPayResult<Vec<CompiledModule>>>()?;
+        .map(|b| CompiledModule::deserialize(b))
+        .collect::<PartialVMResult<Vec<CompiledModule>>>();
+    let mut modules = match result {
+        Ok(ok) => ok,
+        Err(err) => {
+            exec_failure!(
+                gas::MIN_MOVE_PUBLISH_GAS,
+                FastPayError::ModuleDeserializationFailure {
+                    error: err.to_string(),
+                }
+            );
+        }
+    };
 
     // run validation checks
     if modules.is_empty() {
-        return Ok(ExecutionStatus::Failure {
-            gas_used: gas::MIN_MOVE_PUBLISH_GAS,
-            error: Box::new(FastPayError::ModulePublishFailure {
+        exec_failure!(
+            gas::MIN_MOVE_PUBLISH_GAS,
+            FastPayError::ModulePublishFailure {
                 error: "Publishing empty list of modules".to_string(),
-            }),
-        });
+            }
+        );
     }
-    let package_id = generate_package_id(&mut modules, ctx)?;
-    verify_and_link(state_view, &modules, package_id, natives)?;
+    let package_id = match generate_package_id(&mut modules, ctx) {
+        Ok(ok) => ok,
+        Err(err) => exec_failure!(gas::MIN_MOVE_PUBLISH_GAS, err),
+    };
+    if let Err(err) = verify_and_link(state_view, &modules, package_id, natives) {
+        exec_failure!(gas::MIN_MOVE_PUBLISH_GAS, err);
+    }
 
     // wrap the modules in an object, write it to the store
     let package_object = Object::new_package(modules, sender, ctx.digest());
@@ -394,7 +404,7 @@ fn resolve_and_type_check(
             (
                 Function::new_from_name(&m, function).ok_or(FastPayError::FunctionNotFound {
                     error: format!(
-                        "Could not resolve function {} in module {}",
+                        "Could not resolve function '{}' in module {}",
                         function,
                         m.self_id()
                     ),
@@ -429,8 +439,9 @@ fn resolve_and_type_check(
     if function_signature.parameters.len() != num_args {
         return Err(FastPayError::InvalidFunctionSignature {
             error: format!(
-                "Expected {:?} arguments, but found {:?}",
+                "Expected {:?} arguments calling function '{}', but found {:?}",
                 function_signature.parameters.len(),
+                function,
                 num_args
             ),
         });
