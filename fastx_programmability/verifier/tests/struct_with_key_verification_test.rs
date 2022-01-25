@@ -97,8 +97,8 @@ fn key_struct_id_field_incorrect_type() {
 #[test]
 fn key_struct_id_field_incorrect_struct_address() {
     let (mut module, _) = ModuleBuilder::default();
-    let new_module_idx =
-        module.add_module(AccountAddress::new([1u8; AccountAddress::LENGTH]), "ID");
+    let addr = AccountAddress::new([1u8; AccountAddress::LENGTH]);
+    let new_module_idx = module.add_module(addr, "ID");
     let fake_id_struct = module.add_struct(
         new_module_idx,
         "ID",
@@ -111,7 +111,11 @@ fn key_struct_id_field_incorrect_struct_address() {
         AbilitySet::EMPTY | Ability::Key,
         vec![("id", SignatureToken::Struct(fake_id_struct.handle))],
     );
-    assert!(verify_module(module.get_module()).unwrap_err().to_string().contains(&format!("First field of struct S must be of type {}::ID::ID, 01010101010101010101010101010101::ID::ID type found", FASTX_FRAMEWORK_ADDRESS)));
+    let err_str = verify_module(module.get_module()).unwrap_err().to_string();
+    assert!(err_str.contains(&format!(
+        "First field of struct S must be of type {}::ID::ID, {}::ID::ID type found",
+        FASTX_FRAMEWORK_ADDRESS, addr
+    )));
 }
 
 #[test]
