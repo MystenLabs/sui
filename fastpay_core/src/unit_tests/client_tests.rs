@@ -304,7 +304,7 @@ fn test_initiating_valid_transfer() {
         sender.next_sequence_number(&object_id_1),
         Err(ObjectNotFound)
     );
-    assert_eq!(sender.pending_transfer, None);
+    assert_eq!(sender.store.get_pending_transfer().unwrap(), None);
     assert_eq!(
         rt.block_on(sender.get_strong_majority_owner(object_id_1)),
         Some((recipient, SequenceNumber::from(1)))
@@ -343,7 +343,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
         .block_on(sender.transfer_object(object_id, gas_object, recipient))
         .unwrap();
     assert_eq!(sender.next_sequence_number(&object_id), Err(ObjectNotFound));
-    assert_eq!(sender.pending_transfer, None);
+    assert_eq!(sender.store.get_pending_transfer().unwrap(), None);
     assert_eq!(
         rt.block_on(sender.get_strong_majority_owner(object_id)),
         Some((recipient, SequenceNumber::from(1)))
@@ -427,7 +427,7 @@ async fn test_bidirectional_transfer() {
         .await
         .unwrap();
 
-    assert_eq!(client1.pending_transfer, None);
+    assert_eq!(client1.store.get_pending_transfer().unwrap(), None);
 
     // Confirm client1 lose ownership of the object.
     assert_eq!(
@@ -464,7 +464,7 @@ async fn test_bidirectional_transfer() {
         .await
         .unwrap();
 
-    assert_eq!(client2.pending_transfer, None);
+    assert_eq!(client2.store.get_pending_transfer().unwrap(), None);
 
     // Confirm client2 lose ownership of the object.
     assert_eq!(
@@ -516,7 +516,7 @@ fn test_receiving_unconfirmed_transfer() {
         client1.next_sequence_number(&object_id),
         Ok(SequenceNumber::from(1))
     );
-    assert_eq!(client1.pending_transfer, None);
+    assert_eq!(client1.store.get_pending_transfer().unwrap(), None);
     // ..but not confirmed remotely, hence an unchanged balance and sequence number.
     assert_eq!(
         rt.block_on(client1.get_strong_majority_owner(object_id)),

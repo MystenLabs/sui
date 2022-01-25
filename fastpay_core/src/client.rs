@@ -16,12 +16,18 @@ use rand::seq::SliceRandom;
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::env;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
 
+mod client_store;
+
 #[cfg(test)]
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
+
+use self::client_store::ClientStore;
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -65,8 +71,6 @@ pub struct ClientState<AuthorityClient> {
     committee: Committee,
     /// How to talk to this committee.
     authority_clients: HashMap<AuthorityName, AuthorityClient>,
-    /// Pending transfer.
-    pending_transfer: Option<Order>,
 
     // The remaining fields are used to minimize networking, and may not always be persisted locally.
     /// Known certificates, indexed by TX digest.
@@ -77,6 +81,9 @@ pub struct ClientState<AuthorityClient> {
     object_refs: BTreeMap<ObjectID, ObjectRef>,
     /// Certificate <-> object id linking map.
     object_certs: BTreeMap<ObjectID, Vec<TransactionDigest>>,
+
+    // DB for persistence and state recovery
+    store: Arc<ClientStore>,
 }
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
@@ -151,17 +158,18 @@ impl<A> ClientState<A> {
             .iter()
             .map(|(id, (_, seq, _))| (*id, *seq))
             .collect();
+        let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
 
         Self {
             address,
             secret,
             committee,
             authority_clients,
-            pending_transfer: None,
             certificates,
             object_sequence_numbers: object_seq,
             object_refs,
             object_certs: BTreeMap::new(),
+            store: Arc::new(ClientStore::open(path, None)),
         }
     }
 
@@ -182,10 +190,6 @@ impl<A> ClientState<A> {
 
     pub fn object_refs(&self) -> &BTreeMap<ObjectID, ObjectRef> {
         &self.object_refs
-    }
-
-    pub fn pending_transfer(&self) -> &Option<Order> {
-        &self.pending_transfer
     }
 
     pub fn certificates(&self, object_id: &ObjectID) -> impl Iterator<Item = &CertifiedOrder> {
@@ -724,14 +728,15 @@ where
         with_confirmation: bool,
     ) -> Result<CertifiedOrder, anyhow::Error> {
         ensure!(
-            self.pending_transfer == None || self.pending_transfer.as_ref() == Some(&order),
+            self.store.get_pending_transfer()?.is_none()
+                || self.store.get_pending_transfer()?.unwrap() == order,
             "Client state has a different pending transfer",
         );
         ensure!(
             order.sequence_number() == self.next_sequence_number(order.object_id())?,
             "Unexpected sequence number"
         );
-        self.pending_transfer = Some(order.clone());
+        self.store.set_pending_transfer(&order)?;
         let (order_info_responses, new_sent_certificate) = self
             .communicate_transfers(
                 self.address,
@@ -744,7 +749,7 @@ where
         // Clear `pending_transfer` and update `sent_certificates`,
         // and `next_sequence_number`. (Note that if we were using persistent
         // storage, we should ensure update atomicity in the eventuality of a crash.)
-        self.pending_transfer = None;
+        self.store.clear_pending_transfer()?;
 
         // Only valid for object transfer, where input_objects = output_objects
         let new_sent_certificates = vec![new_sent_certificate.clone()];
@@ -1107,7 +1112,7 @@ where
     async fn sync_client_state_with_random_authority(
         &mut self,
     ) -> Result<AuthorityName, anyhow::Error> {
-        if let Some(order) = self.pending_transfer.clone() {
+        if let Some(order) = self.store.get_pending_transfer()?.clone() {
             // Finish executing the previous transfer.
             self.execute_transfer(order, /* with_confirmation */ false)
                 .await?;
