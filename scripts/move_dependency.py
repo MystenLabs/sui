@@ -7,7 +7,7 @@ import re
 
 ROOT = os.path.join(os.path.dirname(__file__), "../")
 PATTERN = re.compile(
-    '(\s*)(.+) = { git = "https://github.com/.+/move", (?:rev|branch)=".+" }(\s*)'
+    '(\s*)(.+) = { git = "https://github.com/.+/move", (?:rev|branch)=".+"(,.*)? }(\s*)'
 )
 
 
@@ -67,10 +67,11 @@ def switch_to_local():
         if m:
             prefix = m.group(1)
             name = m.group(2)
-            postfix = m.group(3)
+            extra = "" if m.group(3) is None else m.group(3)
+            postfix = m.group(4)
             go_back = "".join(["../"] * (depth + 1))
-            return '{}{} = {{ path = "{}move/language/{}" }}{}'.format(
-                prefix, name, go_back, path_map.get(name, name), postfix
+            return '{}{} = {{ path = "{}move/language/{}"{} }}{}'.format(
+                prefix, name, go_back, path_map.get(name, name), extra, postfix
             )
         return line
 
@@ -84,11 +85,13 @@ def upgrade_revision(repo, rev, branch):
         if m:
             prefix = m.group(1)
             name = m.group(2)
-            postfix = m.group(3)
-            return '{}{} = {{ git = "https://github.com/{}/move", {}="{}" }}{}'.format(
+            extra = "" if m.group(3) is None else m.group(3)
+            postfix = m.group(4)
+            return '{}{} = {{ git = "https://github.com/{}/move", {}="{}"{} }}{}'.format(
                 prefix, name, repo,
                 "branch" if branch else "rev",
                 branch if branch else rev,
+                extra,
                 postfix
             )
         return line
