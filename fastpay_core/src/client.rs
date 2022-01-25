@@ -791,13 +791,12 @@ where
             account: self.address,
         };
         // Sequentially try each authority in random order.
-        let mut authorities: Vec<AuthorityName> =
-            self.authority_clients.clone().into_keys().collect();
+        let mut authorities: Vec<&AuthorityName> = self.authority_clients.keys().collect();
         // TODO: implement sampling according to stake distribution and using secure RNG. https://github.com/MystenLabs/fastnft/issues/128
         authorities.shuffle(&mut rand::thread_rng());
         // Authority could be byzantine, add timeout to avoid waiting forever.
         for authority_name in authorities {
-            let authority = self.authority_clients.get(&authority_name).unwrap();
+            let authority = self.authority_clients.get(authority_name).unwrap();
             let result = timeout(
                 AUTHORITY_REQUEST_TIMEOUT,
                 authority.handle_account_info_request(request.clone()),
@@ -805,7 +804,7 @@ where
             .map_err(|_| FastPayError::ErrorWhileRequestingInformation)
             .await?;
             if let Ok(AccountInfoResponse { object_ids, .. }) = &result {
-                return Ok((authority_name, object_ids.clone()));
+                return Ok((*authority_name, object_ids.clone()));
             }
         }
         Err(FastPayError::ErrorWhileRequestingInformation)
@@ -1040,6 +1039,7 @@ where
     }
 
     async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error> {
+        certificate.check(&self.committee)?;
         match &certificate.order.kind {
             OrderKind::Transfer(transfer) => {
                 fp_ensure!(

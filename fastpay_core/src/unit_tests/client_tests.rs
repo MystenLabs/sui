@@ -1660,5 +1660,34 @@ async fn test_receive_object_error() -> Result<(), anyhow::Error> {
         Some(FastPayError::IncorrectRecipientError)
     ));
 
+    // Test 2: Receive tempered certificate order.
+    let (transfer, sig) = match certificate.order {
+        Order {
+            kind: OrderKind::Transfer(t),
+            signature,
+        } => Some((t, signature)),
+        _ => None,
+    }
+    .unwrap();
+
+    let malformed_order = CertifiedOrder {
+        order: Order {
+            kind: OrderKind::Transfer(Transfer {
+                sender: client1.address,
+                recipient: Address::FastPay(client2.address),
+                object_ref: transfer.object_ref,
+                gas_payment: transfer.gas_payment,
+            }),
+            signature: sig,
+        },
+        signatures: certificate.signatures,
+    };
+
+    let result = client2.receive_object(&malformed_order).await;
+    assert!(matches!(
+        result.unwrap_err().downcast_ref(),
+        Some(FastPayError::InvalidSignature { .. })
+    ));
+
     Ok(())
 }
