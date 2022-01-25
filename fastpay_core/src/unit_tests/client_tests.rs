@@ -22,6 +22,13 @@ use move_core_types::account_address::AccountAddress;
 use std::env;
 use std::fs;
 
+// Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
+fn compare_certified_orders(o1: &CertifiedOrder, o2: &CertifiedOrder) {
+    assert_eq!(o1.order.digest(), o2.order.digest());
+    // in this ser/de context it's relevant to compare signatures
+    assert_eq!(o1.signatures, o2.signatures);
+}
+
 pub fn system_maxfiles() -> usize {
     fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
 }
@@ -313,14 +320,15 @@ fn test_initiating_valid_transfer() {
         rt.block_on(sender.get_strong_majority_owner(object_id_2)),
         Some((sender.address, SequenceNumber::from(0)))
     );
-    assert_eq!(
-        rt.block_on(sender.request_certificate(
+    // valid since our test authority should not update its certificate set
+    compare_certified_orders(
+        &rt.block_on(sender.request_certificate(
             sender.address,
             object_id_1,
             SequenceNumber::from(0),
         ))
         .unwrap(),
-        certificate
+        &certificate,
     );
 }
 
@@ -348,10 +356,15 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
         rt.block_on(sender.get_strong_majority_owner(object_id)),
         Some((recipient, SequenceNumber::from(1)))
     );
-    assert_eq!(
-        rt.block_on(sender.request_certificate(sender.address, object_id, SequenceNumber::from(0)))
-            .unwrap(),
-        certificate
+    // valid since our test authority shouldn't update its certificate set
+    compare_certified_orders(
+        &rt.block_on(sender.request_certificate(
+            sender.address,
+            object_id,
+            SequenceNumber::from(0),
+        ))
+        .unwrap(),
+        &certificate,
     );
 }
 
@@ -441,12 +454,13 @@ async fn test_bidirectional_transfer() {
     );
 
     // Confirm certificate is consistent between authorities and client.
-    assert_eq!(
-        client1
-            .request_certificate(client1.address, object_id, SequenceNumber::from(0),)
+    // valid since our test authority should not update its certificate set
+    compare_certified_orders(
+        &client1
+            .request_certificate(client1.address, object_id, SequenceNumber::from(0))
             .await
             .unwrap(),
-        certificate
+        &certificate,
     );
 
     // Update client2's local object data.
@@ -546,7 +560,7 @@ fn test_client_state_sync() {
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
 
     let old_object_ids = sender.object_sequence_numbers.clone();
-    let old_certificate = sender.certificates.clone();
+    let old_certificates = sender.certificates.clone();
 
     // Remove all client-side data
     sender.object_sequence_numbers.clear();
@@ -562,7 +576,13 @@ fn test_client_state_sync() {
     // Confirm data are the same after sync
     assert!(!rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
     assert_eq!(old_object_ids, sender.object_sequence_numbers);
-    assert_eq!(old_certificate, sender.certificates);
+    for tx_digest in old_certificates.keys() {
+        // valid since our test authority should not lead us to download new certs
+        compare_certified_orders(
+            &old_certificates[tx_digest],
+            &sender.certificates[tx_digest],
+        );
+    }
 }
 
 #[tokio::test]

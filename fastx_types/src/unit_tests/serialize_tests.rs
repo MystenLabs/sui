@@ -6,6 +6,30 @@ use super::*;
 use crate::{base_types::*, object::Object};
 use std::time::Instant;
 
+// Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
+fn compare_certified_orders(o1: &CertifiedOrder, o2: &CertifiedOrder) {
+    assert_eq!(o1.order.digest(), o2.order.digest());
+    // in this ser/de context it's relevant to compare signatures
+    assert_eq!(o1.signatures, o2.signatures);
+}
+
+// Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
+fn compare_object_info_responses(o1: &ObjectInfoResponse, o2: &ObjectInfoResponse) {
+    assert_eq!(o1.object, o2.object);
+    assert_eq!(o1.pending_confirmation, o2.pending_confirmation);
+    match (
+        o1.requested_certificate.as_ref(),
+        o2.requested_certificate.as_ref(),
+    ) {
+        (Some(cert1), Some(cert2)) => {
+            assert_eq!(cert1.order.digest(), cert2.order.digest());
+            assert_eq!(cert1.signatures, cert2.signatures);
+        }
+        (None, None) => (),
+        _ => panic!("certificate structure between responses differs"),
+    }
+}
+
 #[test]
 fn test_error() {
     let err = FastPayError::UnknownSigner;
@@ -174,7 +198,7 @@ fn test_cert() {
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());
     if let SerializedMessage::Cert(o) = result.unwrap() {
-        assert!(*o == cert);
+        compare_certified_orders(o.as_ref(), &cert);
     } else {
         panic!()
     }
@@ -240,7 +264,7 @@ fn test_info_response() {
         let result = deserialize_message(buf.as_slice());
         assert!(result.is_ok());
         if let SerializedMessage::ObjectInfoResp(o) = result.unwrap() {
-            assert_eq!(*o, *resp);
+            compare_object_info_responses(o.as_ref(), resp);
         } else {
             panic!()
         }
