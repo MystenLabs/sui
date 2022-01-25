@@ -174,9 +174,6 @@ pub enum FastPayError {
     ConcurrentTransferError,
     #[error("Transfer should be received by us.")]
     IncorrectRecipientError,
-
-    #[error("Transfer should be received by us.")]
-    IncorrectRecipientError,
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;
@@ -185,18 +182,6 @@ impl std::convert::From<PartialVMError> for FastPayError {
     fn from(error: PartialVMError) -> Self {
         FastPayError::ModuleVerificationFailure {
             error: error.to_string(),
-        }
-    }
-}
-
-// Assuming all errors are FastPayError, wrap all other errors in FastPayError::UnknownError
-impl From<anyhow::Error> for FastPayError {
-    fn from(e: anyhow::Error) -> Self {
-        match e.downcast_ref::<FastPayError>() {
-            Some(e) => e.clone(),
-            _ => FastPayError::UnknownError {
-                error: e.to_string(),
-            },
         }
     }
 }

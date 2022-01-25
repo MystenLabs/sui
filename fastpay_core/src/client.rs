@@ -483,7 +483,7 @@ where
         known_certificates: Vec<CertifiedOrder>,
         target_sequence_number: SequenceNumber,
         action: F,
-    ) -> Result<(Vec<OrderInfoResponse>, Vec<V>), FastPayError>
+    ) -> Result<(Vec<OrderInfoResponse>, Vec<V>), anyhow::Error>
     where
         F: Fn(AuthorityName, &'a mut A) -> AsyncResult<'a, V, FastPayError> + Send + Sync + Copy,
         V: Copy,
@@ -495,6 +495,7 @@ where
                 object_id,
                 expected_sequence: next_sequence_number,
             }
+            .into()
         );
         let requester = CertificateRequester::new(
             self.committee.clone(),
@@ -579,7 +580,7 @@ where
         object_id: ObjectID,
         known_certificates: Vec<CertifiedOrder>,
         target_sequence_number: SequenceNumber,
-    ) -> Result<Vec<OrderInfoResponse>, FastPayError> {
+    ) -> Result<Vec<OrderInfoResponse>, anyhow::Error> {
         self.broadcast_and_execute(
             sender,
             object_id,
@@ -725,7 +726,7 @@ where
         &mut self,
         order: Order,
         with_confirmation: bool,
-    ) -> Result<CertifiedOrder, FastPayError> {
+    ) -> Result<CertifiedOrder, anyhow::Error> {
         fp_ensure!(
             self.pending_transfer == None || self.pending_transfer.as_ref() == Some(&order),
             FastPayError::ConcurrentTransferError.into()
