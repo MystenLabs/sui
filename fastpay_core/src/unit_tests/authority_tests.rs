@@ -31,6 +31,27 @@ fn max_files_authority_tests() -> i32 {
 
 const MAX_GAS: u64 = 10000;
 
+// Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
+fn compare_certified_orders(o1: &CertifiedOrder, o2: &CertifiedOrder) {
+    assert_eq!(o1.order.digest(), o2.order.digest());
+    // in this ser/de context it's relevant to compare signatures
+    assert_eq!(o1.signatures, o2.signatures);
+}
+
+// Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
+fn compare_order_info_responses(o1: &OrderInfoResponse, o2: &OrderInfoResponse) {
+    assert_eq!(o1.signed_order, o2.signed_order);
+    assert_eq!(o1.signed_effects, o2.signed_effects);
+    match (o1.certified_order.as_ref(), o2.certified_order.as_ref()) {
+        (Some(cert1), Some(cert2)) => {
+            assert_eq!(cert1.order.digest(), cert2.order.digest());
+            assert_eq!(cert1.signatures, cert2.signatures);
+        }
+        (None, None) => (),
+        _ => panic!("certificate structure between responses differs"),
+    }
+}
+
 #[tokio::test]
 async fn test_handle_transfer_order_bad_signature() {
     let (sender, sender_key) = get_key_pair();
@@ -524,7 +545,8 @@ async fn test_handle_transfer_order_double_spend() {
         .unwrap();
     // calls to handlers are idempotent -- returns the same.
     let double_spend_signed_order = authority_state.handle_order(transfer_order).await.unwrap();
-    assert_eq!(signed_order, double_spend_signed_order);
+    // this is valid because our test authority should not change its certified order
+    compare_order_info_responses(&signed_order, &double_spend_signed_order);
 }
 
 #[tokio::test]
@@ -804,16 +826,19 @@ async fn test_handle_confirmation_order_ok() {
     assert_eq!(recipient, new_account.owner);
     assert_eq!(next_sequence_number, new_account.version());
     assert_eq!(None, info.signed_order);
-    assert_eq!(
-        {
-            let refx = authority_state
-                .parent(&(object_id, new_account.version(), new_account.digest()))
-                .await
-                .unwrap();
-            authority_state.read_certificate(&refx).await.unwrap()
-        },
-        Some(certified_transfer_order.clone())
-    );
+    let opt_cert = {
+        let refx = authority_state
+            .parent(&(object_id, new_account.version(), new_account.digest()))
+            .await
+            .unwrap();
+        authority_state.read_certificate(&refx).await.unwrap()
+    };
+    if let Some(certified_order) = opt_cert {
+        // valid since our test authority should not update its certificate set
+        compare_certified_orders(&certified_order, &certified_transfer_order);
+    } else {
+        panic!("parent certificate not avaailable from the authority!");
+    }
 
     // Check locks are set and archived correctly
     assert!(authority_state
@@ -866,9 +891,8 @@ async fn test_handle_confirmation_order_idempotent() {
         .await
         .unwrap();
 
-    assert_eq!(info, info2);
-    assert!(info2.certified_order.is_some());
-    assert!(info2.signed_effects.is_some());
+    // this is valid because we're checking the authority state does not change the certificate
+    compare_order_info_responses(&info, &info2);
 }
 
 #[tokio::test]

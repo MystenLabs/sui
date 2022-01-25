@@ -21,6 +21,7 @@ thiserror = "1.0.30"
 hex = "0.4.3"
 serde_bytes = "0.11.5"
 serde_with = "1.11.0"
+static_assertions = "0.3.4"
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2e829074f40c9ef852ecd6808b80d083174c778b" }
 
