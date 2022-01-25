@@ -421,9 +421,8 @@ async fn test_handle_move_order() {
         MAX_GAS,
         &sender_key,
     );
-    // 34 is for bytecode execution, 24 is for object creation.
     // If the number changes, we want to verify that the change is intended.
-    let gas_cost = 34 + 24;
+    let gas_cost = 62;
     let effects = send_and_confirm_order(&mut authority_state, order)
         .await
         .unwrap()
@@ -766,7 +765,7 @@ async fn test_handle_confirmation_order_gas() {
         .unwrap_err()
         .1
         .to_string();
-    assert!(err_string.contains("Gas balance is 10, not enough to pay 16"));
+    assert!(err_string.contains("Gas balance is 10, not enough to pay 18"));
     let result = run_test_with_gas(20).await;
     assert!(result.is_ok());
 }
