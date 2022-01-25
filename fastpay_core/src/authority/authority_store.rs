@@ -79,7 +79,7 @@ impl AuthorityStore {
             .owner_index
             .iter()
             // The object id [0; 16] is the smallest possible
-            .skip_to(&(account, AccountAddress::from([0; 16])))?
+            .skip_to(&(account, AccountAddress::ZERO))?
             .take_while(|((owner, _id), _object_ref)| (owner == &account))
             .map(|((_owner, _id), object_ref)| object_ref)
             .collect())

@@ -54,9 +54,9 @@ pub struct CoinObject {
 /// Byte encoding of a 64 byte unsigned integer in BCS
 type BcsU64 = [u8; 8];
 /// Index marking the end of the object's ID + the beginning of its version
-const ID_END_INDEX: usize = 16;
+const ID_END_INDEX: usize = AccountAddress::LENGTH;
 /// Index marking the end of the object's version + the beginning of type-specific data
-const VERSION_END_INDEX: usize = 24;
+const VERSION_END_INDEX: usize = ID_END_INDEX + 8;
 
 impl MoveObject {
     pub fn new(type_: StructTag, contents: Vec<u8>) -> Self {
