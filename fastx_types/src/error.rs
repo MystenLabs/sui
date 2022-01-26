@@ -1,6 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Debug;
 use thiserror::Error;
 
 use crate::base_types::*;
@@ -41,12 +42,11 @@ pub enum FastPayError {
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error(
-        "The given sequence ({received_sequence:?}) number must match the next expected sequence ({expected_sequence:?}) number of the account"
+        "The given sequence number must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
     )]
     UnexpectedSequenceNumber {
         object_id: ObjectID,
         expected_sequence: SequenceNumber,
-        received_sequence: SequenceNumber,
     },
     #[error("Conflicting order already received: {pending_confirmation:?}")]
     ConflictingOrder { pending_confirmation: Order },
@@ -62,8 +62,6 @@ pub enum FastPayError {
     ErrorWhileProcessingPublish { err: String },
     #[error("Move call failed: {err}")]
     ErrorWhileProcessingMoveCall { err: String },
-    #[error("Failed to communicate with a quorum of authorities: {err}")]
-    FailedToCommunicateWithQuorum { err: String },
     #[error("An invalid answer was returned by the authority while requesting information")]
     ErrorWhileRequestingInformation,
     #[error(
@@ -96,8 +94,13 @@ pub enum FastPayError {
     InvalidAuthenticator,
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
-    #[error("Invalid Object digest.")]
-    InvalidObjectDigest,
+    #[error(
+        "Invalid Object digest for object {object_id:?}. Expected digest : {expected_digest:?}."
+    )]
+    InvalidObjectDigest {
+        object_id: ObjectID,
+        expected_digest: ObjectDigest,
+    },
     #[error("Cannot deserialize.")]
     InvalidDecoding,
     #[error("Unexpected message.")]
@@ -148,8 +151,8 @@ pub enum FastPayError {
     OrderLockDoesNotExist,
     #[error("Attempt to reset a set order lock to a different value.")]
     OrderLockReset,
-    #[error("Could not find the referenced object.")]
-    ObjectNotFound,
+    #[error("Could not find the referenced object {:?}.", object_id)]
+    ObjectNotFound { object_id: ObjectID },
     #[error("Object ID did not have the expected type")]
     BadObjectType { error: String },
     #[error("Move Execution failed")]
@@ -160,6 +163,17 @@ pub enum FastPayError {
     ExecutionInvariantViolation,
     #[error("Storage error")]
     StorageError(#[from] typed_store::rocks::TypedStoreError),
+
+    #[error(
+    "Failed to achieve quorum between authorities, cause by : {:#?}",
+    errors.iter().map(| e | e.to_string()).collect::<Vec<String>>()
+    )]
+    QuorumNotReachedError { errors: Vec<FastPayError> },
+    // Client side error
+    #[error("Client state has a different pending transfer.")]
+    ConcurrentTransferError,
+    #[error("Transfer should be received by us.")]
+    IncorrectRecipientError,
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;
