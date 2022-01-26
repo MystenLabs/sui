@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::downloader::*;
-use anyhow::ensure;
 use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
 use fastx_types::messages::Address::FastPay;
@@ -176,7 +175,9 @@ impl<A> ClientState<A> {
         if self.object_sequence_numbers.contains_key(object_id) {
             Ok(self.object_sequence_numbers[object_id])
         } else {
-            Err(FastPayError::ObjectNotFound)
+            Err(FastPayError::ObjectNotFound {
+                object_id: *object_id,
+            })
         }
     }
 
@@ -411,15 +412,15 @@ where
                     if *entry >= committee.validity_threshold() {
                         // At least one honest node returned this error.
                         // No quorum can be reached, so return early.
-                        return Err(FastPayError::FailedToCommunicateWithQuorum {
-                            err: err.to_string(),
+                        return Err(FastPayError::QuorumNotReachedError {
+                            errors: error_scores.into_keys().collect(),
                         });
                     }
                 }
             }
         }
-        Err(FastPayError::FailedToCommunicateWithQuorum {
-            err: "multiple errors".to_string(),
+        Err(FastPayError::QuorumNotReachedError {
+            errors: error_scores.into_keys().collect(),
         })
     }
 
@@ -490,7 +491,6 @@ where
             FastPayError::UnexpectedSequenceNumber {
                 object_id,
                 expected_sequence: next_sequence_number,
-                received_sequence: target_sequence_number,
             }
             .into()
         );
@@ -634,11 +634,13 @@ where
         let object_ref = self
             .object_refs
             .get(&object_id)
-            .ok_or(FastPayError::ObjectNotFound)?;
-        let gas_payment = self
-            .object_refs
-            .get(&gas_payment)
-            .ok_or(FastPayError::ObjectNotFound)?;
+            .ok_or(FastPayError::ObjectNotFound { object_id })?;
+        let gas_payment =
+            self.object_refs
+                .get(&gas_payment)
+                .ok_or(FastPayError::ObjectNotFound {
+                    object_id: gas_payment,
+                })?;
 
         let transfer = Transfer {
             object_ref: *object_ref,
@@ -712,7 +714,6 @@ where
             Err(FastPayError::UnexpectedSequenceNumber {
                 object_id: *object_id,
                 expected_sequence: SequenceNumber::from(certificates_count as u64),
-                received_sequence: self.next_sequence_number(object_id)?,
             })
         }
     }
@@ -723,28 +724,34 @@ where
         order: Order,
         with_confirmation: bool,
     ) -> Result<CertifiedOrder, anyhow::Error> {
-        ensure!(
+        fp_ensure!(
             self.pending_transfer == None || self.pending_transfer.as_ref() == Some(&order),
-            "Client state has a different pending transfer",
+            FastPayError::ConcurrentTransferError.into()
         );
-        ensure!(
+        fp_ensure!(
             order.sequence_number() == self.next_sequence_number(order.object_id())?,
-            "Unexpected sequence number"
+            FastPayError::UnexpectedSequenceNumber {
+                object_id: *order.object_id(),
+                expected_sequence: self.next_sequence_number(order.object_id())?,
+            }
+            .into()
         );
         self.pending_transfer = Some(order.clone());
-        let (order_info_responses, new_sent_certificate) = self
+        let result = self
             .communicate_transfers(
                 self.address,
                 *order.object_id(),
                 self.certificates(order.object_id()).cloned().collect(),
                 order.clone(),
             )
-            .await?;
-        assert_eq!(&new_sent_certificate.order, &order);
+            .await;
         // Clear `pending_transfer` and update `sent_certificates`,
         // and `next_sequence_number`. (Note that if we were using persistent
         // storage, we should ensure update atomicity in the eventuality of a crash.)
         self.pending_transfer = None;
+
+        let (order_info_responses, new_sent_certificate) = result?;
+        assert_eq!(&new_sent_certificate.order, &order);
 
         // Only valid for object transfer, where input_objects = output_objects
         let new_sent_certificates = vec![new_sent_certificate.clone()];
@@ -780,13 +787,12 @@ where
             account: self.address,
         };
         // Sequentially try each authority in random order.
-        let mut authorities: Vec<AuthorityName> =
-            self.authority_clients.clone().into_keys().collect();
+        let mut authorities: Vec<&AuthorityName> = self.authority_clients.keys().collect();
         // TODO: implement sampling according to stake distribution and using secure RNG. https://github.com/MystenLabs/fastnft/issues/128
         authorities.shuffle(&mut rand::thread_rng());
         // Authority could be byzantine, add timeout to avoid waiting forever.
         for authority_name in authorities {
-            let authority = self.authority_clients.get(&authority_name).unwrap();
+            let authority = self.authority_clients.get(authority_name).unwrap();
             let result = timeout(
                 AUTHORITY_REQUEST_TIMEOUT,
                 authority.handle_account_info_request(request.clone()),
@@ -794,7 +800,7 @@ where
             .map_err(|_| FastPayError::ErrorWhileRequestingInformation)
             .await?;
             if let Ok(AccountInfoResponse { object_ids, .. }) = &result {
-                return Ok((authority_name, object_ids.clone()));
+                return Ok((*authority_name, object_ids.clone()));
             }
         }
         Err(FastPayError::ErrorWhileRequestingInformation)
@@ -1029,11 +1035,12 @@ where
     }
 
     async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error> {
+        certificate.check(&self.committee)?;
         match &certificate.order.kind {
             OrderKind::Transfer(transfer) => {
-                ensure!(
+                fp_ensure!(
                     transfer.recipient == Address::FastPay(self.address),
-                    "Transfer should be received by us."
+                    FastPayError::IncorrectRecipientError.into()
                 );
                 let responses = self
                     .broadcast_confirmation_orders(
@@ -1085,11 +1092,14 @@ where
         let object_ref = *self
             .object_refs
             .get(&object_id)
-            .ok_or(FastPayError::ObjectNotFound)?;
-        let gas_payment = *self
-            .object_refs
-            .get(&gas_payment)
-            .ok_or(FastPayError::ObjectNotFound)?;
+            .ok_or(FastPayError::ObjectNotFound { object_id })?;
+        let gas_payment =
+            *self
+                .object_refs
+                .get(&gas_payment)
+                .ok_or(FastPayError::ObjectNotFound {
+                    object_id: gas_payment,
+                })?;
 
         let transfer = Transfer {
             object_ref,
@@ -1132,10 +1142,6 @@ where
         Ok(authority_name)
     }
 
-    async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error> {
-        Ok(self.object_sequence_numbers.keys().copied().collect())
-    }
-
     async fn move_call(
         &mut self,
         package_object_ref: ObjectRef,
@@ -1174,5 +1180,9 @@ where
         object_info_req: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, anyhow::Error> {
         self.get_object_info_execute(object_info_req).await
+    }
+
+    async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error> {
+        Ok(self.object_sequence_numbers.keys().copied().collect())
     }
 }

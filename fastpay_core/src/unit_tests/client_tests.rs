@@ -309,7 +309,9 @@ fn test_initiating_valid_transfer() {
         .unwrap();
     assert_eq!(
         sender.next_sequence_number(&object_id_1),
-        Err(ObjectNotFound)
+        Err(FastPayError::ObjectNotFound {
+            object_id: object_id_1
+        })
     );
     assert_eq!(sender.pending_transfer, None);
     assert_eq!(
@@ -350,7 +352,10 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     let certificate = rt
         .block_on(sender.transfer_object(object_id, gas_object, recipient))
         .unwrap();
-    assert_eq!(sender.next_sequence_number(&object_id), Err(ObjectNotFound));
+    assert_eq!(
+        sender.next_sequence_number(&object_id),
+        Err(ObjectNotFound { object_id })
+    );
     assert_eq!(sender.pending_transfer, None);
     assert_eq!(
         rt.block_on(sender.get_strong_majority_owner(object_id)),
@@ -1247,36 +1252,6 @@ async fn test_move_calls_certs() {
     );
 }
 
-#[test]
-fn test_transfer_invalid_object_digest() {
-    let rt = Runtime::new().unwrap();
-    let (recipient, _) = get_key_pair();
-    let object_id_1 = ObjectID::random();
-    let gas_object = ObjectID::random();
-    let authority_objects = vec![
-        vec![object_id_1, gas_object],
-        vec![object_id_1, gas_object],
-        vec![object_id_1, gas_object],
-        vec![object_id_1, gas_object],
-    ];
-
-    let mut sender = rt.block_on(init_local_client_state(authority_objects));
-
-    // give object an incorrect object digest
-    sender.object_refs.insert(
-        object_id_1,
-        (object_id_1, SequenceNumber::new(), ObjectDigest([0; 32])),
-    );
-
-    let result = rt.block_on(sender.transfer_object(object_id_1, gas_object, recipient));
-    assert!(result.is_err());
-    // TODO: Refactor error handling and check error type instead of string value. https://github.com/MystenLabs/fastnft/issues/187
-    assert_eq!(
-        "Failed to communicate with a quorum of authorities: Invalid Object digest.",
-        result.unwrap_err().to_string()
-    );
-}
-
 #[tokio::test]
 async fn test_module_publish_and_call_good() {
     // Init the states
@@ -1548,4 +1523,172 @@ async fn test_module_publish_naughty_path() {
         // Has to fail
         assert!(pub_resp.is_err());
     }
+}
+
+#[test]
+fn test_transfer_object_error() {
+    let rt = Runtime::new().unwrap();
+    let (recipient, _) = get_key_pair();
+
+    let objects: Vec<ObjectID> = (0..10).map(|_| ObjectID::random()).collect();
+    let gas_object = ObjectID::random();
+    let number_of_authorities = 4;
+
+    let mut all_objects = objects.clone();
+    all_objects.push(gas_object);
+    let authority_objects = (0..number_of_authorities)
+        .map(|_| all_objects.clone())
+        .collect();
+
+    let mut sender = rt.block_on(init_local_client_state(authority_objects));
+
+    let mut objects = objects.iter();
+
+    // Test 1: Double spend
+    let object_id = *objects.next().unwrap();
+    rt.block_on(sender.transfer_object(object_id, gas_object, recipient))
+        .unwrap();
+    let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
+
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err().downcast_ref(),
+        Some(FastPayError::ObjectNotFound { .. })
+    ));
+
+    // Test 2: Object not known to authorities
+    let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender.address);
+    sender
+        .object_refs
+        .insert(obj.id(), obj.to_object_reference());
+    sender
+        .object_sequence_numbers
+        .insert(obj.id(), SequenceNumber::new());
+    let result = rt.block_on(sender.transfer_object(obj.id(), gas_object, recipient));
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err().downcast_ref(),
+            Some(FastPayError::QuorumNotReachedError {errors, ..}) if matches!(errors.as_slice(), [FastPayError::ObjectNotFound{..}, ..])));
+
+    // Test 3: invalid object digest
+    let object_id = *objects.next().unwrap();
+
+    // give object an incorrect object digest
+    sender.object_refs.insert(
+        object_id,
+        (object_id, SequenceNumber::new(), ObjectDigest([0; 32])),
+    );
+
+    let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
+    assert!(result.is_err());
+    println!("{:?}", result);
+    assert!(matches!(result.unwrap_err().downcast_ref(),
+            Some(FastPayError::QuorumNotReachedError {errors, ..}) if matches!(errors.as_slice(), [FastPayError::InvalidObjectDigest{..}, ..])));
+
+    // Test 4: Invalid sequence number;
+    let object_id = *objects.next().unwrap();
+
+    // give object an incorrect sequence number
+    sender
+        .object_sequence_numbers
+        .insert(object_id, SequenceNumber::from(2));
+
+    let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err().downcast_ref(),
+        Some(FastPayError::UnexpectedSequenceNumber { .. })
+    ));
+
+    // Test 5: The client does not allow concurrent transfer;
+    let object_id = *objects.next().unwrap();
+    // Fabricate a fake pending transfer
+    let transfer = Transfer {
+        sender: sender.address,
+        recipient: Address::FastPay(FastPayAddress::random_for_testing_only()),
+        object_ref: (object_id, Default::default(), ObjectDigest::new([0; 32])),
+        gas_payment: (gas_object, Default::default(), ObjectDigest::new([0; 32])),
+    };
+    sender.pending_transfer = Some(Order::new(OrderKind::Transfer(transfer), &get_key_pair().1));
+
+    let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err().downcast_ref(),
+        Some(FastPayError::ConcurrentTransferError)
+    ))
+}
+
+#[tokio::test]
+async fn test_receive_object_error() -> Result<(), anyhow::Error> {
+    let number_of_authorities = 4;
+    let (authority_clients, committee) = init_local_authorities(number_of_authorities).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let mut client2 = make_client(authority_clients.clone(), committee);
+
+    let objects: Vec<ObjectID> = (0..10).map(|_| ObjectID::random()).collect();
+    let gas_object = ObjectID::random();
+    let gas_object_2 = ObjectID::random();
+    let mut all_objects = objects.clone();
+    all_objects.push(gas_object);
+    fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client1,
+        all_objects,
+    )
+    .await;
+    fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client2,
+        vec![gas_object_2],
+    )
+    .await;
+
+    let mut objects = objects.iter();
+    // Test 1: Recipient is not us.
+    let object_id = *objects.next().unwrap();
+    let certificate = client1
+        .transfer_object(
+            object_id,
+            gas_object,
+            FastPayAddress::random_for_testing_only(),
+        )
+        .await?;
+
+    let result = client2.receive_object(&certificate).await;
+
+    assert!(matches!(
+        result.unwrap_err().downcast_ref(),
+        Some(FastPayError::IncorrectRecipientError)
+    ));
+
+    // Test 2: Receive tempered certificate order.
+    let (transfer, sig) = match certificate.order {
+        Order {
+            kind: OrderKind::Transfer(t),
+            signature,
+        } => Some((t, signature)),
+        _ => None,
+    }
+    .unwrap();
+
+    let malformed_order = CertifiedOrder {
+        order: Order {
+            kind: OrderKind::Transfer(Transfer {
+                sender: client1.address,
+                recipient: Address::FastPay(client2.address),
+                object_ref: transfer.object_ref,
+                gas_payment: transfer.gas_payment,
+            }),
+            signature: sig,
+        },
+        signatures: certificate.signatures,
+    };
+
+    let result = client2.receive_object(&malformed_order).await;
+    assert!(matches!(
+        result.unwrap_err().downcast_ref(),
+        Some(FastPayError::InvalidSignature { .. })
+    ));
+
+    Ok(())
 }
