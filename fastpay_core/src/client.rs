@@ -4,7 +4,6 @@
 use crate::downloader::*;
 use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
-use fastx_types::messages::Address::FastPay;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
@@ -420,7 +419,7 @@ where
         })
     }
 
-    /// Broadcast confirmation orders and execute handle order .
+    /// Broadcast confirmation orders and execute handle order.
     async fn broadcast_and_handle_order(
         &mut self,
         sender: FastPayAddress,
@@ -627,43 +626,6 @@ where
         Ok(sent_certificates)
     }
 
-    /// Transfers an object to a recipient address.
-    async fn transfer(
-        &mut self,
-        object_id: ObjectID,
-        gas_payment: ObjectID,
-        recipient: Address,
-    ) -> Result<CertifiedOrder, anyhow::Error> {
-        let object_ref = self
-            .object_refs
-            .get(&object_id)
-            .ok_or(FastPayError::ObjectNotFound { object_id })?;
-        let gas_payment =
-            self.object_refs
-                .get(&gas_payment)
-                .ok_or(FastPayError::ObjectNotFound {
-                    object_id: gas_payment,
-                })?;
-
-        let transfer = Transfer {
-            object_ref: *object_ref,
-            sender: self.address,
-            recipient,
-            gas_payment: *gas_payment,
-        };
-        let order = Order::new_transfer(transfer, &self.secret);
-        let (certificate, _) = self
-            .execute_transaction(order, /* with_confirmation */ true)
-            .await?;
-        if let FastPay(address) = recipient {
-            if address != self.address {
-                self.remove_object(&object_id);
-            }
-        }
-
-        Ok(certificate)
-    }
-
     /// Update our view of certificates. Update the object_id and the next sequence number accordingly.
     /// NOTE: This is only useful in the eventuality of missing local data.
     /// We assume certificates to be valid and sent by us, and their sequence numbers to be unique.
@@ -725,8 +687,35 @@ where
     async fn execute_transaction(
         &mut self,
         order: Order,
-        with_confirmation: bool,
-    ) -> Result<(CertifiedOrder, Option<OrderEffects>), anyhow::Error> {
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+        let new_certificate = self.execute_transaction_without_confirmation(order).await?;
+
+        // Confirm last transfer certificate if needed.
+        let responses = self
+            .broadcast_confirmation_orders(
+                self.address,
+                new_certificate.order.input_objects(),
+                vec![new_certificate.clone()],
+            )
+            .await?;
+
+        // Find response for the current order from all the returned order responses.
+        let (_, response) = responses
+            .into_iter()
+            .find(|(cert, _)| cert == &new_certificate)
+            .ok_or(FastPayError::ErrorWhileRequestingInformation)?;
+
+        // Update local data using new order response.
+        self.update_objects_from_order_info(response.clone())?;
+
+        Ok((new_certificate, response.signed_effects.unwrap().effects))
+    }
+
+    /// Execute (or retry) a order. Update local balance.
+    async fn execute_transaction_without_confirmation(
+        &mut self,
+        order: Order,
+    ) -> Result<CertifiedOrder, anyhow::Error> {
         fp_ensure!(
             self.pending_transfer == None || self.pending_transfer.as_ref() == Some(&order),
             FastPayError::ConcurrentTransactionError.into()
@@ -741,50 +730,14 @@ where
         self.pending_transfer = None;
 
         // order_info_response contains response from broadcasting old unconfirmed order, if any.
-        let (mut order_info_responses, new_sent_certificate) = result?;
+        let (order_info_responses, new_sent_certificate) = result?;
         assert_eq!(&new_sent_certificate.order, &order);
 
-        // Confirm last transfer certificate if needed.
-        if with_confirmation {
-            let responses = self
-                .broadcast_confirmation_orders(
-                    self.address,
-                    order.input_objects(),
-                    vec![new_sent_certificate.clone()],
-                )
-                .await?;
-            // Add new confirmed order info to the old ones.
-            order_info_responses.extend(responses);
-        } else {
-            // The new cert will not be updated by order effect without confirmation, the new unconfirmed cert need to be added temporally.
-            if let OrderKind::Transfer(_) = order.kind {
-                // Only valid for object transfer, where input_objects = output_objects
-                let new_sent_certificates = vec![new_sent_certificate.clone()];
-                for (object_id, _, _) in order.input_objects() {
-                    self.update_certificates(&object_id, &new_sent_certificates)?;
-                }
-            }
-        }
-
         // Update local data using all order response.
-        for (_, response) in order_info_responses.clone() {
+        for (_, response) in order_info_responses {
             self.update_objects_from_order_info(response)?;
         }
-
-        // Find order effect for the current order from all the returned order response.
-        let order_effect = order_info_responses
-            .into_iter()
-            .find_map(|(cert, response)| {
-                if cert == new_sent_certificate {
-                    response
-                        .signed_effects
-                        .map(|signed_effect| signed_effect.effects)
-                } else {
-                    None
-                }
-            });
-
-        Ok((new_sent_certificate, order_effect))
+        Ok(new_sent_certificate)
     }
 
     async fn download_own_object_ids(
@@ -887,8 +840,32 @@ where
         gas_payment: ObjectID,
         recipient: FastPayAddress,
     ) -> Result<CertifiedOrder, anyhow::Error> {
-        self.transfer(object_id, gas_payment, Address::FastPay(recipient))
-            .await
+        let object_ref = self
+            .object_refs
+            .get(&object_id)
+            .ok_or(FastPayError::ObjectNotFound { object_id })?;
+        let gas_payment =
+            self.object_refs
+                .get(&gas_payment)
+                .ok_or(FastPayError::ObjectNotFound {
+                    object_id: gas_payment,
+                })?;
+
+        let transfer = Transfer {
+            object_ref: *object_ref,
+            sender: self.address,
+            recipient: Address::FastPay(recipient),
+            gas_payment: *gas_payment,
+        };
+        let order = Order::new_transfer(transfer, &self.secret);
+        let (certificate, _) = self.execute_transaction(order).await?;
+
+        // remove object from local storage if the recipient is not us.
+        if recipient != self.address {
+            self.remove_object(&object_id);
+        }
+
+        Ok(certificate)
     }
 
     async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error> {
@@ -964,9 +941,14 @@ where
             gas_payment,
         };
         let order = Order::new_transfer(transfer, &self.secret);
-        let (new_certificate, _) = self
-            .execute_transaction(order, /* with_confirmation */ false)
-            .await?;
+        let new_certificate = self.execute_transaction_without_confirmation(order).await?;
+
+        // The new cert will not be updated by order effect without confirmation, the new unconfirmed cert need to be added temporally.
+        let new_sent_certificates = vec![new_certificate.clone()];
+        for (object_id, _, _) in new_certificate.order.input_objects() {
+            self.update_certificates(&object_id, &new_sent_certificates)?;
+        }
+
         Ok(new_certificate)
     }
 
@@ -975,8 +957,7 @@ where
     ) -> Result<AuthorityName, anyhow::Error> {
         if let Some(order) = self.pending_transfer.clone() {
             // Finish executing the previous transfer.
-            self.execute_transaction(order, /* with_confirmation */ false)
-                .await?;
+            self.execute_transaction(order).await?;
         }
         // update object_ids.
         self.object_sequence_numbers.clear();
@@ -1021,9 +1002,7 @@ where
             gas_budget,
             &self.secret,
         );
-        let (cert, effect) = self.execute_transaction(move_call_order, true).await?;
-        let effect = effect.ok_or(FastPayError::UnexpectedMessage)?;
-        Ok((cert, effect))
+        self.execute_transaction(move_call_order).await
     }
 
     async fn publish(
@@ -1035,9 +1014,7 @@ where
         let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
         let move_publish_order =
             Order::new_module(self.address, gas_object_ref, compiled_modules, &self.secret);
-        let (cert, effect) = self.execute_transaction(move_publish_order, true).await?;
-        let effect = effect.ok_or(FastPayError::UnexpectedMessage)?;
-        Ok((cert, effect))
+        self.execute_transaction(move_publish_order).await
     }
 
     async fn get_object_info(
