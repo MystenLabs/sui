@@ -503,18 +503,15 @@ where
         );
 
         let known_certificates = inputs.iter().flat_map(|(object_id, seq, _)| {
-            let certs = self
-                .certificates(object_id)
+            self.certificates(object_id)
                 .cloned()
-                .collect::<Vec<CertifiedOrder>>();
-
-            certs.into_iter().filter_map(move |cert| {
-                if cert.order.sender() == &sender {
-                    Some(((*object_id, *seq), Ok(cert)))
-                } else {
-                    None
-                }
-            })
+                .filter_map(move |cert| {
+                    if cert.order.sender() == &sender {
+                        Some(((*object_id, *seq), Ok(cert)))
+                    } else {
+                        None
+                    }
+                })
         });
 
         let (_, mut handle) = Downloader::start(requester, known_certificates);
