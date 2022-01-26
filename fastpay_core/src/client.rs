@@ -491,7 +491,6 @@ where
             FastPayError::UnexpectedSequenceNumber {
                 object_id,
                 expected_sequence: next_sequence_number,
-                received_sequence: target_sequence_number,
             }
             .into()
         );
@@ -715,7 +714,6 @@ where
             Err(FastPayError::UnexpectedSequenceNumber {
                 object_id: *object_id,
                 expected_sequence: SequenceNumber::from(certificates_count as u64),
-                received_sequence: self.next_sequence_number(object_id)?,
             })
         }
     }
@@ -735,7 +733,6 @@ where
             FastPayError::UnexpectedSequenceNumber {
                 object_id: *order.object_id(),
                 expected_sequence: self.next_sequence_number(order.object_id())?,
-                received_sequence: order.sequence_number()
             }
             .into()
         );

@@ -108,7 +108,6 @@ impl AuthorityState {
                 FastPayError::UnexpectedSequenceNumber {
                     object_id,
                     expected_sequence: object.version(),
-                    received_sequence: sequence_number
                 }
             );
 
