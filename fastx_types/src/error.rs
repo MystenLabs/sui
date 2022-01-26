@@ -42,12 +42,11 @@ pub enum FastPayError {
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error(
-        "The given sequence ({received_sequence:?}) number must match the next expected sequence ({expected_sequence:?}) number of the account"
+        "The given sequence number must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
     )]
     UnexpectedSequenceNumber {
         object_id: ObjectID,
         expected_sequence: SequenceNumber,
-        received_sequence: SequenceNumber,
     },
     #[error("Conflicting order already received: {pending_confirmation:?}")]
     ConflictingOrder { pending_confirmation: Order },
@@ -95,8 +94,13 @@ pub enum FastPayError {
     InvalidAuthenticator,
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
-    #[error("Invalid Object digest for object {object_id:?}.")]
-    InvalidObjectDigest { object_id: ObjectID },
+    #[error(
+        "Invalid Object digest for object {object_id:?}. Expected digest : {expected_digest:?}."
+    )]
+    InvalidObjectDigest {
+        object_id: ObjectID,
+        expected_digest: ObjectDigest,
+    },
     #[error("Cannot deserialize.")]
     InvalidDecoding,
     #[error("Unexpected message.")]
@@ -161,14 +165,10 @@ pub enum FastPayError {
     StorageError(#[from] typed_store::rocks::TypedStoreError),
 
     #[error(
-    "Failed to achieve quorum between {} authorities, cause by : {:#?}",
-    num_of_authorities,
+    "Failed to achieve quorum between authorities, cause by : {:#?}",
     errors.iter().map(| e | e.to_string()).collect::<Vec<String>>()
     )]
-    QuorumNotReachedError {
-        num_of_authorities: usize,
-        errors: Vec<FastPayError>,
-    },
+    QuorumNotReachedError { errors: Vec<FastPayError> },
     // Client side error
     #[error("Client state has a different pending transfer.")]
     ConcurrentTransferError,
