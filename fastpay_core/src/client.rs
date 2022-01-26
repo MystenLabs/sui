@@ -384,7 +384,6 @@ where
         F: Fn(AuthorityName, &'a mut A) -> AsyncResult<'a, V, FastPayError> + Clone,
     {
         let committee = &self.committee;
-        let number_of_authorities = self.authority_clients.len();
         let authority_clients = &mut self.authority_clients;
         let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
             .iter_mut()
@@ -414,7 +413,6 @@ where
                         // At least one honest node returned this error.
                         // No quorum can be reached, so return early.
                         return Err(FastPayError::QuorumNotReachedError {
-                            num_of_authorities: number_of_authorities,
                             errors: error_scores.into_keys().collect(),
                         });
                     }
@@ -422,7 +420,6 @@ where
             }
         }
         Err(FastPayError::QuorumNotReachedError {
-            num_of_authorities: number_of_authorities,
             errors: error_scores.into_keys().collect(),
         })
     }
