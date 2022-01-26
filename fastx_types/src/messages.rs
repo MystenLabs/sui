@@ -78,13 +78,32 @@ pub struct SignedOrder {
 }
 
 /// An order signed by a quorum of authorities
-#[derive(Eq, Clone, Debug, Serialize, Deserialize)]
+///
+/// Note: the signature set of this data structure is not necessarily unique in the system,
+/// i.e. there can be several valid certificates per transaction.
+///
+/// As a consequence, we check this struct does not implement Hash or Eq, see the note below.
+///
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CertifiedOrder {
     pub order: Order,
     pub signatures: Vec<(AuthorityName, Signature)>,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+// Note: if you meet an error due to this line it may be because you need an Eq implementation for `CertifiedOrder`,
+// or one of the structs that include it, i.e. `ConfirmationOrder`, `OrderInforResponse` or `ObjectInforResponse`.
+//
+// Please note that any such implementation must be agnostic to the exact set of signatures in the certificate, as
+// clients are allowed to equivocate on the exact nature of valid certificates they send to the system. This assertion
+// is a simple tool to make sure certifcates are accounted for correctly - should you remove it, you're on your own to
+// maintain the invariant that valid certificates with distinct signatures are equivalent, but yet-unchecked
+// certificates that differ on signers aren't.
+//
+// see also https://github.com/MystenLabs/fastnft/issues/266
+//
+static_assertions::assert_not_impl_any!(idem_orders; CertifiedOrder, Hash, Eq, PartialEq);
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfirmationOrder {
     pub certificate: CertifiedOrder,
 }
@@ -107,14 +126,14 @@ pub struct AccountInfoResponse {
     pub owner: FastPayAddress,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectInfoResponse {
     pub requested_certificate: Option<CertifiedOrder>,
     pub pending_confirmation: Option<SignedOrder>,
     pub object: Object,
 }
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OrderInfoResponse {
     // The signed order response to handle_order
     pub signed_order: Option<SignedOrder>,
@@ -219,28 +238,6 @@ impl Hash for SignedOrder {
 impl PartialEq for SignedOrder {
     fn eq(&self, other: &Self) -> bool {
         self.order == other.order && self.authority == other.authority
-    }
-}
-
-impl Hash for CertifiedOrder {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.order.hash(state);
-        self.signatures.len().hash(state);
-        for (name, _) in self.signatures.iter() {
-            name.hash(state);
-        }
-    }
-}
-
-impl PartialEq for CertifiedOrder {
-    fn eq(&self, other: &Self) -> bool {
-        self.order == other.order
-            && self.signatures.len() == other.signatures.len()
-            && self
-                .signatures
-                .iter()
-                .map(|(name, _)| name)
-                .eq(other.signatures.iter().map(|(name, _)| name))
     }
 }
 
