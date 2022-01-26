@@ -40,7 +40,11 @@ fn main() {
     }
 
     // Create accounts with starting values
-    let initial_state_cfg = client_api::create_account_configs(&mut acc_cfg, 5, 20000, 3);
+    let initial_state_cfg = client_api::create_account_configs(
+        &mut acc_cfg, 
+        5, 
+        20000, 
+        3);
 
     let acc1 = initial_state_cfg.config.get(0).unwrap().address;
     let acc2 = initial_state_cfg.config.get(1).unwrap().address;
@@ -68,7 +72,12 @@ fn main() {
             s.authority.address, s.authority.host, s.authority.base_port
         );
         thrs.push(thread::spawn(move || {
-            server_api::run_server("0.0.0.0", auth, cfg, init_cfg, buffer_size)
+            server_api::run_server(
+                "0.0.0.0", 
+                auth, 
+                cfg, 
+                init_cfg, 
+                buffer_size)
         }));
     }
 
@@ -120,27 +129,6 @@ fn main() {
         buffer_size,
     );
 
-    let o1 = client_api::get_object_info(
-        acc1_obj1.object.id(),
-        &mut acc_cfg,
-        &committee_cfg,
-        send_timeout,
-        recv_timeout,
-        buffer_size,
-    );
-    let o2 = client_api::get_object_info(
-        acc2_obj1.object.id(),
-        &mut acc_cfg,
-        &committee_cfg,
-        send_timeout,
-        recv_timeout,
-        buffer_size,
-    );
-
-    // Pretty print the object states
-    cli_pretty::format_obj_info_response(&o1).printstd();
-    cli_pretty::format_obj_info_response(&o2).printstd();
-
     // Transfer from ACC1 to ACC2
     client_api::transfer_object(
         acc1,
@@ -171,6 +159,8 @@ fn main() {
         recv_timeout,
         buffer_size,
     );
+
+    println!("Object States after transfer:\n");
 
     cli_pretty::format_obj_info_response(&o1).printstd();
     cli_pretty::format_obj_info_response(&o2).printstd();

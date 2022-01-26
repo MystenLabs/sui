@@ -7,13 +7,18 @@ publish = false
 edition = "2021"
 
 [dependencies]
+
 anyhow = "1.0.52"
 bytes = "1.1.0"
 clap = "2"
+dropshot = "0.6.0"
 env_logger = "0.9.0"
 futures = "0.3.5"
+http = "0.2.6"
+hyper = "0.14.16"
 log = "0.4.14"
 net2 = "0.2.37"
+mime_guess = "2.0.3"
 serde = { version = "1.0.133", features = ["derive"] }
 serde_json = "1.0.74"
 structopt = "0.3.25"
@@ -21,8 +26,10 @@ tempfile = "3.3.0"
 tokio = { version = "1.15.0", features = ["full"] }
 rand = "0.8.4"
 toml = "0.5.8"
+schemars = "0.8.8"
 strum = "0.23.0"
 strum_macros = "0.23.1"
+threadpool = "1.8.1"
 num_cpus = "1.13.1"
 base64 = "0.13.0"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
@@ -56,6 +63,10 @@ path = "src/bench.rs"
 [[bin]]
 name = "api_demo"
 path = "src/api_demo.rs"
+
+[[bin]]
+name = "rest_client"
+path = "src/rest_client.rs"
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["net2"]
