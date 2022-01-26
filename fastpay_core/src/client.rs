@@ -179,6 +179,11 @@ impl<A> ClientState<A> {
             })
         }
     }
+    pub fn object_ref(&self, object_id: ObjectID) -> Result<&ObjectRef, FastPayError> {
+        self.object_refs
+            .get(&object_id)
+            .ok_or(FastPayError::ObjectNotFound { object_id })
+    }
 
     pub fn object_refs(&self) -> &BTreeMap<ObjectID, ObjectRef> {
         &self.object_refs
@@ -702,7 +707,7 @@ where
         // Find response for the current order from all the returned order responses.
         let (_, response) = responses
             .into_iter()
-            .find(|(cert, _)| cert == &new_certificate)
+            .find(|(cert, _)| cert.order == new_certificate.order)
             .ok_or(FastPayError::ErrorWhileRequestingInformation)?;
 
         // Update local data using new order response.
@@ -922,17 +927,8 @@ where
         object_id: ObjectID,
         gas_payment: ObjectID,
     ) -> Result<CertifiedOrder, anyhow::Error> {
-        let object_ref = *self
-            .object_refs
-            .get(&object_id)
-            .ok_or(FastPayError::ObjectNotFound { object_id })?;
-        let gas_payment =
-            *self
-                .object_refs
-                .get(&gas_payment)
-                .ok_or(FastPayError::ObjectNotFound {
-                    object_id: gas_payment,
-                })?;
+        let object_ref = *self.object_ref(object_id)?;
+        let gas_payment = *self.object_ref(gas_payment)?;
 
         let transfer = Transfer {
             object_ref,
