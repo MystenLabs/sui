@@ -42,7 +42,7 @@ pub enum FastPayError {
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error(
-        "The given sequence number ({received_sequence:?}) for object ({object_id:?}) must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
+        "The given sequence number must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
     )]
     UnexpectedSequenceNumber {
         object_id: ObjectID,

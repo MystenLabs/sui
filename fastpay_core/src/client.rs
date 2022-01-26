@@ -442,7 +442,6 @@ where
                 FastPayError::UnexpectedSequenceNumber {
                     object_id: *object_id,
                     expected_sequence: next_sequence_number,
-                    received_sequence: *target_sequence_number,
                 }
                 .into()
             );
