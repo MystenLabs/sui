@@ -42,7 +42,7 @@ pub enum FastPayError {
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error(
-        "The given sequence number must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
+        "The given sequence number ({received_sequence:?}) for object ({object_id:?}) must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
     )]
     UnexpectedSequenceNumber {
         object_id: ObjectID,
@@ -168,10 +168,10 @@ pub enum FastPayError {
     "Failed to achieve quorum between authorities, cause by : {:#?}",
     errors.iter().map(| e | e.to_string()).collect::<Vec<String>>()
     )]
-    QuorumNotReachedError { errors: Vec<FastPayError> },
+    QuorumNotReached { errors: Vec<FastPayError> },
     // Client side error
-    #[error("Client state has a different pending transfer.")]
-    ConcurrentTransferError,
+    #[error("Client state has a different pending transaction.")]
+    ConcurrentTransactionError,
     #[error("Transfer should be received by us.")]
     IncorrectRecipientError,
 }
