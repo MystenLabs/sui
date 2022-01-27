@@ -616,7 +616,7 @@ where
     async fn get_strong_majority_owner(
         &self,
         object_id: ObjectID,
-    ) -> Option<(FastPayAddress, SequenceNumber)> {
+    ) -> Option<(Authenticator, SequenceNumber)> {
         let request = ObjectInfoRequest {
             object_id,
             request_sequence_number: None,
@@ -1073,12 +1073,12 @@ where
                     .unwrap_or_default();
                 // only update if data is new
                 if old_seq < seq {
-                    if owner == self.address {
+                    if owner.is_address(&self.address) {
                         self.insert_object(&object_ref, &digest);
                     } else {
                         self.remove_object(&object_id);
                     }
-                } else if old_seq == seq && owner == self.address {
+                } else if old_seq == seq && owner.is_address(&self.address) {
                     // ObjectRef can be 1 version behind because it's only updated after confirmation.
                     self.object_refs.insert(object_id, object_ref);
                 }

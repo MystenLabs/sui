@@ -15,8 +15,8 @@ use crate::id::ID;
 use crate::FASTX_FRAMEWORK_ADDRESS;
 use crate::{
     base_types::{
-        sha3_hash, BcsSignable, FastPayAddress, ObjectDigest, ObjectID, ObjectRef, SequenceNumber,
-        TransactionDigest,
+        sha3_hash, Authenticator, BcsSignable, FastPayAddress, ObjectDigest, ObjectID, ObjectRef,
+        SequenceNumber, TransactionDigest,
     },
     gas_coin::GasCoin,
 };
@@ -186,8 +186,8 @@ impl Data {
 pub struct Object {
     /// The meat of the object
     pub data: Data,
-    /// The authenticator that unlocks this object (eg. public key, or other)
-    pub owner: FastPayAddress,
+    /// The authenticator that unlocks this object (eg. public key, or object id)
+    pub owner: Authenticator,
     /// The digest of the order that created or last mutated this object
     pub previous_transaction: TransactionDigest,
 }
@@ -198,7 +198,7 @@ impl Object {
     /// Create a new Move object
     pub fn new_move(
         o: MoveObject,
-        owner: FastPayAddress,
+        owner: Authenticator,
         previous_transaction: TransactionDigest,
     ) -> Self {
         Object {
@@ -210,7 +210,7 @@ impl Object {
 
     pub fn new_package(
         modules: Vec<CompiledModule>,
-        owner: FastPayAddress,
+        owner: Authenticator,
         previous_transaction: TransactionDigest,
     ) -> Self {
         let serialized: MovePackage = modules
@@ -273,7 +273,7 @@ impl Object {
     }
 
     /// Change the owner of `self` to `new_owner`
-    pub fn transfer(&mut self, new_owner: FastPayAddress) {
+    pub fn transfer(&mut self, new_owner: Authenticator) {
         // TODO: these should be raised FastPayError's instead of panic's
         assert!(!self.is_read_only(), "Cannot transfer an immutable object");
         match &mut self.data {
@@ -302,7 +302,7 @@ impl Object {
             read_only: false,
         });
         Self {
-            owner,
+            owner: Authenticator::Address(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
@@ -341,7 +341,7 @@ impl Object {
             read_only: false,
         });
         Self {
-            owner,
+            owner: Authenticator::Address(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
@@ -362,7 +362,7 @@ impl Object {
             read_only: false,
         });
         Self {
-            owner,
+            owner: Authenticator::Address(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
