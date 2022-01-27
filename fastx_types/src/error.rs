@@ -168,10 +168,10 @@ pub enum FastPayError {
     "Failed to achieve quorum between authorities, cause by : {:#?}",
     errors.iter().map(| e | e.to_string()).collect::<Vec<String>>()
     )]
-    QuorumNotReachedError { errors: Vec<FastPayError> },
+    QuorumNotReached { errors: Vec<FastPayError> },
     // Client side error
-    #[error("Client state has a different pending transfer.")]
-    ConcurrentTransferError,
+    #[error("Client state has a different pending transaction.")]
+    ConcurrentTransactionError,
     #[error("Transfer should be received by us.")]
     IncorrectRecipientError,
 }
