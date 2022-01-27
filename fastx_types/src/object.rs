@@ -44,13 +44,6 @@ pub struct ObjectBasicsObject {
     pub value: u64,
 }
 
-/// Coin in the Framework uses an object of the following format
-#[derive(Debug, Deserialize, Serialize)]
-pub struct CoinObject {
-    pub id: ID,
-    pub value: u64,
-}
-
 /// Byte encoding of a 64 byte unsigned integer in BCS
 type BcsU64 = [u8; 8];
 /// Index marking the end of the object's ID + the beginning of its version
@@ -361,11 +354,7 @@ impl Object {
         owner: FastPayAddress,
         value: u64,
     ) -> Self {
-        // An object in Coin.move is a struct of an ID and a u64 value
-        let obj = CoinObject {
-            id: ID::new(id, version),
-            value,
-        };
+        let obj = GasCoin::new(id, version, value);
 
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
