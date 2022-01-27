@@ -171,6 +171,12 @@ impl AuthorityState {
         // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
+        // Ensure an idempotent answer
+        let order_info = self.make_order_info(&transaction_digest).await?;
+        if order_info.certified_order.is_some() {
+            return Ok(order_info);
+        }
+
         let input_objects = order.input_objects();
         let ids: Vec<_> = input_objects.iter().map(|(id, _, _)| *id).collect();
         // Get a copy of the object.
@@ -197,6 +203,10 @@ impl AuthorityState {
                     current_sequence_number: input_sequence_number
                 });
             }
+
+            // Note: this should never be true in prod, but some tests
+            // (test_handle_confirmation_order_bad_sequence_number) do
+            // a poor job of setting up the DB.
             if input_sequence_number > input_seq {
                 // Transfer was already confirmed.
                 return self.make_order_info(&transaction_digest).await;
@@ -210,7 +220,6 @@ impl AuthorityState {
         }
 
         // Insert into the certificates map
-        let transaction_digest = certificate.order.digest();
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
         let gas_object_id = *order.gas_payment_object_id();

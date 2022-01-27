@@ -161,6 +161,8 @@ pub enum FastPayError {
     InsufficientObjectNumber,
     #[error("Execution invariant violated")]
     ExecutionInvariantViolation,
+    #[error("Authority did not return the information it is expected to have.")]
+    AuthorityInformationUnavailability,
     #[error("Storage error")]
     StorageError(#[from] typed_store::rocks::TypedStoreError),
 

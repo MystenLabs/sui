@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env;
 use std::path::Path;
 use std::time::Duration;
+use std::collections::HashSet;
 use tokio::time::timeout;
 
 mod client_store;
@@ -334,6 +335,84 @@ impl<A> ClientState<A>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
 {
+    /// Sync a certificate and all its dependencies to a destination authority, using a
+    /// source authority to get information about parent certificates.
+    ///
+    /// Note: Both source and destination may be byzantine, therefore one should always
+    /// time limit the call to this function to avoid byzantine authorities consuming
+    /// and unbounded amount of resources.
+    pub async fn sync_authority_source_to_destination(
+        &self,
+        cert: ConfirmationOrder,
+        source_authority: AuthorityName,
+        destination_authority: AuthorityName,
+    ) -> Result<(), FastPayError> {
+
+        let source_client = self.authority_clients[&source_authority].clone();
+        let mut destination_client = self.authority_clients[&destination_authority].clone();
+
+        // This represents a stack of certificates that we need to register with the 
+        // destination authority. 
+        let mut missing_certificates: Vec<_> = vec![cert.clone()];
+
+        // We keep a list of certificates already processed to avoid
+        let mut requested_certificates: HashSet<TransactionDigest> =
+            vec![cert.certificate.order.digest()].into_iter().collect();
+
+        while missing_certificates.len() != 0 {
+            let target_cert: ConfirmationOrder = missing_certificates
+                .pop()
+                .expect("Just checked Vec not empty");
+
+            match destination_client
+                .handle_confirmation_order(target_cert.clone())
+                .await
+            {
+                Ok(_) => continue,
+                Err(FastPayError::ObjectNotFound { .. })
+                | Err(FastPayError::MissingEalierConfirmations { .. }) => {}
+                Err(e) => return Err(e),
+            }
+
+            // If we are here it means that the destination authority is missing
+            // the previous certificates, so we need to read them from the either
+            // a cache OR the source authority.
+
+            let input_objects = target_cert.certificate.order.input_objects();
+
+            // Put back the target cert
+            missing_certificates.push(target_cert);
+
+            for object_ref in input_objects {
+                
+                // Request the parent certificate from the authority.
+                let object_info = source_client
+                    .handle_object_info_request(ObjectInfoRequest {
+                        object_id: object_ref.0,
+                        request_sequence_number: Some(object_ref.1),
+                        request_received_transfers_excluding_first_nth: None,
+                    })
+                    .await?;
+
+                let returned_certificate = object_info
+                    .requested_certificate
+                    .ok_or(FastPayError::AuthorityInformationUnavailability)?;
+                let returned_digest = returned_certificate.order.digest();
+                if !requested_certificates.contains(&returned_digest) {
+
+                    // We have not confirmed the authority has this one
+                    requested_certificates.insert(returned_digest);
+
+                    // Check & Add it to the list of certificates to sync
+                    returned_certificate.check(&self.committee)?;
+                    missing_certificates.push(ConfirmationOrder::new(returned_certificate));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     #[cfg(test)]
     async fn request_certificate(
         &mut self,
