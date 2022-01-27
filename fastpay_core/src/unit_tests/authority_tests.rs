@@ -515,7 +515,7 @@ async fn test_handle_move_order() {
         .object_state(&created_object_id)
         .await
         .unwrap();
-    assert_eq!(created_obj.owner, sender,);
+    assert!(created_obj.owner.is_address(&sender));
     assert_eq!(created_obj.id(), created_object_id);
     assert_eq!(created_obj.version(), OBJECT_START_VERSION);
 
@@ -808,7 +808,7 @@ async fn test_handle_confirmation_order_ok() {
     // Key check: the ownership has changed
 
     let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(recipient, new_account.owner);
+    assert!(new_account.owner.is_address(&recipient));
     assert_eq!(next_sequence_number, new_account.version());
     assert_eq!(None, info.signed_order);
     let opt_cert = {
@@ -1068,7 +1068,7 @@ async fn test_authority_persist() {
 
     // Check the object is present
     assert_eq!(obj2.id(), object_id);
-    assert_eq!(obj2.owner, recipient);
+    assert!(obj2.owner.is_address(&recipient));
 }
 
 async fn call_move(
@@ -1169,7 +1169,7 @@ async fn test_hero() {
     .await;
     assert_eq!(effects.status, ExecutionStatus::Success);
     let (admin_object, admin_object_owner) = effects.created[0];
-    assert_eq!(admin_object_owner, admin);
+    assert!(admin_object_owner.is_address(&admin));
 
     // 5. Create Trusted Coin Treasury.
     let effects = call_move(
@@ -1186,7 +1186,7 @@ async fn test_hero() {
     .await;
     assert_eq!(effects.status, ExecutionStatus::Success);
     let (cap, cap_owner) = effects.created[0];
-    assert_eq!(cap_owner, player);
+    assert!(cap_owner.is_address(&player));
 
     // 6. Mint 500 EXAMPLE TrustedCoin.
     let effects = call_move(
@@ -1204,7 +1204,7 @@ async fn test_hero() {
     assert_eq!(effects.status, ExecutionStatus::Success);
     assert_eq!(effects.mutated.len(), 1); // cap
     let (coin, coin_owner) = effects.created[0];
-    assert_eq!(coin_owner, player);
+    assert!(coin_owner.is_address(&player));
 
     // 7. Purchase a sword using 500 coin. This sword will have magic = 4, sword_strength = 5.
     let effects = call_move(
@@ -1222,9 +1222,9 @@ async fn test_hero() {
     assert_eq!(effects.status, ExecutionStatus::Success);
     assert_eq!(effects.mutated.len(), 1); // coin
     let (hero, hero_owner) = effects.created[0];
-    assert_eq!(hero_owner, player);
+    assert!(hero_owner.is_address(&player));
     // The payment goes to the admin.
-    assert_eq!(effects.mutated[0].1, admin);
+    assert!(effects.mutated[0].1.is_address(&admin));
 
     // 8. Verify the hero is what we exepct with strength 5.
     let effects = call_move(
@@ -1261,7 +1261,7 @@ async fn test_hero() {
     .await;
     assert_eq!(effects.status, ExecutionStatus::Success);
     let (boar, boar_owner) = effects.created[0];
-    assert_eq!(boar_owner, player);
+    assert!(boar_owner.is_address(&player));
 
     // 10. Slay the boar!
     let effects = call_move(
