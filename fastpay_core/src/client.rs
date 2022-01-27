@@ -13,11 +13,11 @@ use move_core_types::language_storage::TypeTag;
 use rand::seq::SliceRandom;
 use typed_store::rocks::open_cf;
 
+use std::collections::HashSet;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::env;
 use std::path::Path;
 use std::time::Duration;
-use std::collections::HashSet;
 use tokio::time::timeout;
 
 mod client_store;
@@ -347,19 +347,18 @@ where
         source_authority: AuthorityName,
         destination_authority: AuthorityName,
     ) -> Result<(), FastPayError> {
-
         let source_client = self.authority_clients[&source_authority].clone();
         let mut destination_client = self.authority_clients[&destination_authority].clone();
 
-        // This represents a stack of certificates that we need to register with the 
-        // destination authority. 
+        // This represents a stack of certificates that we need to register with the
+        // destination authority.
         let mut missing_certificates: Vec<_> = vec![cert.clone()];
 
         // We keep a list of certificates already processed to avoid
         let mut requested_certificates: HashSet<TransactionDigest> =
             vec![cert.certificate.order.digest()].into_iter().collect();
 
-        while missing_certificates.len() != 0 {
+        while !missing_certificates.is_empty() {
             let target_cert: ConfirmationOrder = missing_certificates
                 .pop()
                 .expect("Just checked Vec not empty");
@@ -384,7 +383,6 @@ where
             missing_certificates.push(target_cert);
 
             for object_ref in input_objects {
-                
                 // Request the parent certificate from the authority.
                 let object_info = source_client
                     .handle_object_info_request(ObjectInfoRequest {
@@ -399,7 +397,6 @@ where
                     .ok_or(FastPayError::AuthorityInformationUnavailability)?;
                 let returned_digest = returned_certificate.order.digest();
                 if !requested_certificates.contains(&returned_digest) {
-
                     // We have not confirmed the authority has this one
                     requested_certificates.insert(returned_digest);
 
