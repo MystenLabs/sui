@@ -215,7 +215,9 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     Ok(ExecutionStatus::Success)
 }
 
-/// Rewrite the self_id of `modules`, then verify and link the result
+/// Given a list of `modules`, links each module against its
+/// dependencies and runs each module with both the Move VM verifier
+/// and the FastX verifier.
 pub fn verify_and_link<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
@@ -225,7 +227,7 @@ pub fn verify_and_link<
     package_id: ObjectID,
     natives: NativeFunctionTable,
 ) -> Result<(), FastPayError> {
-    // run the Move bytecode verifier and linker.
+    // Run the Move bytecode verifier and linker.
     // It is important to do this before running the FastX verifier, since the fastX
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
     let vm = MoveVM::new(natives)
@@ -251,7 +253,7 @@ pub fn verify_and_link<
 
     // run the FastX verifier
     for module in modules.iter() {
-        // Run FastX bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed
+        // Run FastX bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
         verifier::verify_module(module)?;
     }
     Ok(())
