@@ -223,7 +223,7 @@ impl AccountsConfig {
             .accounts
             .get_mut(&state.address())
             .expect("Updated account should already exist");
-        account.object_refs = state.object_refs().clone();
+        account.object_refs = state.get_object_refs().clone();
         account.certificates = state.all_certificates().clone();
     }
 

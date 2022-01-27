@@ -493,7 +493,7 @@ fn main() {
                 .await;
 
                 let gas_obj_ref = *client_state
-                    .object_refs()
+                    .get_object_refs()
                     .get(&gas_object_id)
                     .expect("Gas object not found");
 
@@ -592,7 +592,7 @@ fn main() {
 
                 // Fetch the object info for the gas obj
                 let gas_obj_ref = *client_state
-                    .object_refs()
+                    .get_object_refs()
                     .get(&config.gas_object_id)
                     .expect("Gas object not found");
 
@@ -700,7 +700,7 @@ fn main() {
                 )
                 .await;
 
-                let object_refs = client_state.object_refs();
+                let object_refs = client_state.get_object_refs();
 
                 accounts_config.update_from_state(&client_state);
                 accounts_config
