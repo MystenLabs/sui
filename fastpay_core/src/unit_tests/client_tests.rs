@@ -1328,7 +1328,7 @@ async fn test_module_publish_and_call_good() {
 
     //Try to call a function in TrustedCoin module
     let call_resp = client1
-        .call(
+        .move_call(
             new_obj.object.to_object_reference(),
             ident_str!("TrustedCoin").to_owned(),
             ident_str!("init").to_owned(),
@@ -1445,7 +1445,7 @@ async fn test_module_publish_file_path() {
     // build all in the package, including TrustedCoin module
     //Try to call a function in TrustedCoin module
     let call_resp = client1
-        .call(
+        .move_call(
             new_obj.object.to_object_reference(),
             ident_str!("TrustedCoin").to_owned(),
             ident_str!("init").to_owned(),
@@ -1567,7 +1567,7 @@ fn test_transfer_object_error() {
     let result = rt.block_on(sender.transfer_object(obj.id(), gas_object, recipient));
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err().downcast_ref(),
-            Some(FastPayError::QuorumNotReachedError {errors, ..}) if matches!(errors.as_slice(), [FastPayError::ObjectNotFound{..}, ..])));
+            Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::ObjectNotFound{..}, ..])));
 
     // Test 3: invalid object digest
     let object_id = *objects.next().unwrap();
@@ -1580,9 +1580,8 @@ fn test_transfer_object_error() {
 
     let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
     assert!(result.is_err());
-    println!("{:?}", result);
     assert!(matches!(result.unwrap_err().downcast_ref(),
-            Some(FastPayError::QuorumNotReachedError {errors, ..}) if matches!(errors.as_slice(), [FastPayError::InvalidObjectDigest{..}, ..])));
+            Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::InvalidObjectDigest{..}, ..])));
 
     // Test 4: Invalid sequence number;
     let object_id = *objects.next().unwrap();
@@ -1614,7 +1613,7 @@ fn test_transfer_object_error() {
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err().downcast_ref(),
-        Some(FastPayError::ConcurrentTransferError)
+        Some(FastPayError::ConcurrentTransactionError)
     ))
 }
 
