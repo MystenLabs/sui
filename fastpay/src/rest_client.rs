@@ -10,6 +10,8 @@
 mod client_api;
 mod server_api;
 
+use crossbeam::thread as cb_thread;
+
 use dropshot::endpoint;
 use dropshot::ApiDescription;
 use dropshot::ConfigDropshot;
@@ -85,9 +87,9 @@ async fn main() -> Result<(), String> {
     // Use mpsc channels to send terminating message and kill thread
     // api.register(stop).unwrap();
     api.register(get_accounts).unwrap();
-    // api.register(get_account_objects).unwrap();
-    // api.register(get_object_info).unwrap();
-    // api.register(transfer_object).unwrap();
+    api.register(get_account_objects).unwrap();
+    api.register(get_object_info).unwrap();
+    api.register(transfer_object).unwrap();
 
     /*
      * The functions that implement our API endpoints will share this context.
@@ -262,7 +264,7 @@ async fn start(
 
         status.push(status_string);
 
-        let (tx, rx) = mpsc::channel();
+        // let (tx, rx) = mpsc::channel();
 
         thrs.push(thread::spawn(move || {
 
@@ -275,19 +277,19 @@ async fn start(
                 init_cfg, 
                 buffer_size);
 
-            println!("Working...");
+            // println!("Working...");
 
-            loop {
-                thread::sleep(Duration::from_millis(500));
-                match rx.try_recv() {
-                    Ok(_) | Err(TryRecvError::Disconnected) => {
-                        println!("Terminating.");
-                        break;
-                    }
-                    Err(TryRecvError::Empty) => {}
-                }
-            }
-            tx.send("Terminate".to_string());
+            // loop {
+            //     thread::sleep(Duration::from_millis(500));
+            //     match rx.try_recv() {
+            //         Ok(_) | Err(TryRecvError::Disconnected) => {
+            //             println!("Terminating.");
+            //             break;
+            //         }
+            //         Err(TryRecvError::Empty) => {}
+            //     }
+            // }
+            // tx.send("Terminate".to_string());
             }
         ));
     }
@@ -339,69 +341,170 @@ struct Account {
 
 
 /**
- * `Objects` represents the value of the objects on the network.
+ * `Object` represents the value of the objects on the network.
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct Object {
-    account_address: String,
-    sequence_number: String,
+    object_address: String,
+    sequence_number: Option<String>,
 }
 
 /**
- * `Objects` represents the value of the objects on the network.
+ * `Objects` is a collection of Object
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct Objects {
     objects: Vec<Object>,
 }
 
-
-// /**
-//  * [CLIENT] Return all objects for a specified account. 
-//  */
-// #[endpoint {
-//     method = GET,
-//     path = "/client/account_objects",
-// }]
-// async fn get_account_objects(
-//     rqctx: Arc<RequestContext<ServerContext>>,
-//     account: TypedBody<Account>,
-// ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+/**
+ * [CLIENT] Return all objects for a specified account. 
+ */
+#[endpoint {
+    method = GET,
+    path = "/client/account_objects",
+}]
+async fn get_account_objects(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    account: TypedBody<Account>,
+) -> Result<HttpResponseOk<Objects>, HttpError> {
     
-//     let server_context = rqctx.context();
+    let server_context = rqctx.context();
 
-//     println!("before get account objects...");
+    let send_timeout = *server_context.send_timeout.lock().unwrap();
+    let recv_timeout = *server_context.recv_timeout.lock().unwrap();
+    let buffer_size = server_context.buffer_size.clone();
+    let account_config = &mut *server_context.acc_cfg.lock().unwrap();
+    let committee_config = &*server_context.committee_cfg.lock().unwrap();
 
-//     let send_timeout = *server_context.send_timeout.lock().unwrap();
-//     let recv_timeout = *server_context.recv_timeout.lock().unwrap();
-//     let buffer_size = server_context.buffer_size.clone();
-//     let account_config = &mut *server_context.acc_cfg.lock().unwrap();
-//     let committee_config = &*server_context.committee_cfg.lock().unwrap();
+    let acc_objs = cb_thread::scope(|scope| {
+        scope.spawn(|_| {
+            // Get the objects for account
+            client_api::get_account_objects(
+                decode_address_hex(account.into_inner().account_address.as_str()).unwrap(),
+                send_timeout,
+                recv_timeout,
+                buffer_size,
+                account_config,
+                committee_config,
+            )
+        }).join().unwrap()
+    }).unwrap();
 
-//     tokio::task::spawn_blocking(move|| {
-//         // Get the objects for account
-//         let acc_objs = client_api::get_account_objects(
-//             decode_address_hex(account.into_inner().account_address.as_str()).unwrap(),
-//             send_timeout,
-//             recv_timeout,
-//             buffer_size,
-//             account_config,
-//             committee_config,
-//         );
-//     }).await.unwrap();
+    Ok(HttpResponseOk(Objects{ objects: 
+        acc_objs
+            .into_iter()
+            .map(|e| Object{ object_address: e.0.to_string(), sequence_number: Some(format!("{:?}", e.1)) })
+            .collect::<Vec<Object>>()
+    }))
+}
 
-//     println!("after get account objects...");
 
-//     // let acc1_obj1 = acc_objs.get(0).unwrap().0;
-//     // let acc1_gas = acc_objs.get(1).unwrap().0;
-//     // println!("{} {}", acc1_obj1, acc1_gas);
+/**
+* `ObjectInfo` represents the object info on the network.
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct ObjectInfo {
+   requested_certificate: String,
+   pending_confirmation: String,
+   object: String,
+}
 
-//     Ok(HttpResponseUpdatedNoContent())
+/**
+ * [CLIENT] Return object info. 
+ */
+#[endpoint {
+    method = GET,
+    path = "/client/object_info",
+}]
+async fn get_object_info(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    object: TypedBody<Object>,
+) -> Result<HttpResponseOk<ObjectInfo>, HttpError> {
+    
+    let server_context = rqctx.context();
 
-//     // Ok(HttpResponseOk(Objects{ objects: vec!(
-//     //     // acc_objs
-//     //     //     .iter()
-//     //     //     .map(|e| Object{ account_address: e.0.to_string(), sequence_number: format!("{:?}", e.1) })
-//     //     //     .collect()
-//     // )}))
-// }
+    let send_timeout = *server_context.send_timeout.lock().unwrap();
+    let recv_timeout = *server_context.recv_timeout.lock().unwrap();
+    let buffer_size = server_context.buffer_size.clone();
+    let mut account_config = &mut *server_context.acc_cfg.lock().unwrap();
+    let committee_config = &*server_context.committee_cfg.lock().unwrap();
+
+    let acc_obj_info = cb_thread::scope(|scope| {
+        scope.spawn(|_| {
+            // Get the object info
+            client_api::get_object_info(
+                AccountAddress::try_from(object.into_inner().object_address).unwrap(),
+                &mut account_config,
+                &committee_config,
+                send_timeout,
+                recv_timeout,
+                buffer_size,
+            )
+        }).join().unwrap()
+    }).unwrap();
+
+    Ok(HttpResponseOk(ObjectInfo{ 
+        requested_certificate: format!("{:?}", acc_obj_info.requested_certificate),
+        pending_confirmation: format!("{:?}", acc_obj_info.pending_confirmation),
+        object: format!("{:?}", acc_obj_info.object),
+    }))
+}
+
+/**
+* [Input] `TransferOrder` represents the transaction to be sent to the network.
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct TransferOrder {
+    object_address: String,
+    from_account: String,
+    to_account: String,
+    gas_address: String   
+ }
+
+/**
+ * [CLIENT] Transfer object. 
+ */
+#[endpoint {
+    method = PATCH,
+    path = "/client/transfer",
+}]
+async fn transfer_object(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    transfer_order_body: TypedBody<TransferOrder>,
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    
+    let server_context = rqctx.context();
+    let transfer_order = transfer_order_body.into_inner();
+
+    let send_timeout = *server_context.send_timeout.lock().unwrap();
+    let recv_timeout = *server_context.recv_timeout.lock().unwrap();
+    let buffer_size = server_context.buffer_size.clone();
+    let mut account_config = &mut *server_context.acc_cfg.lock().unwrap();
+    let committee_config = &*server_context.committee_cfg.lock().unwrap();
+
+    let from_account = decode_address_hex(transfer_order.from_account.as_str()).unwrap();
+    let to_account = decode_address_hex(transfer_order.to_account.as_str()).unwrap();
+
+    let object_id = AccountAddress::try_from(transfer_order.object_address).unwrap();
+    let gas_object_id = AccountAddress::try_from(transfer_order.gas_address).unwrap();
+
+    let acc_obj_info = cb_thread::scope(|scope| {
+        scope.spawn(|_| {
+            // Transfer from ACC1 to ACC2
+            client_api::transfer_object(
+                from_account,
+                to_account,
+                object_id,
+                gas_object_id,
+                &mut account_config,
+                &committee_config,
+                send_timeout,
+                recv_timeout,
+                buffer_size,
+            )
+        }).join().unwrap()
+    }).unwrap();
+
+    Ok(HttpResponseUpdatedNoContent())
+}

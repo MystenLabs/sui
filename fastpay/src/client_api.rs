@@ -79,8 +79,6 @@ pub fn get_account_objects(
             recv_timeout,
         );
 
-        println!("Can I get information from here?");
-
         // Sync with high prio
         for _ in 0..committee_config.authorities.len() {
             let _ = client_state.sync_client_state_with_random_authority();
