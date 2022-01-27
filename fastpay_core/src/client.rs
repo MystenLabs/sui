@@ -254,7 +254,7 @@ where
     type Key = (ObjectID, SequenceNumber);
     type Value = Result<CertifiedOrder, FastPayError>;
 
-    /// Try to find a certificate for the given sender and sequence number.
+    /// Try to find a certificate for the given sender, object_id and sequence number.
     async fn query(
         &mut self,
         (object_id, sequence_number): (ObjectID, SequenceNumber),
@@ -424,7 +424,7 @@ where
         })
     }
 
-    /// Broadcast confirmation orders and execute handle order.
+    /// Broadcast missing confirmation orders and invoke handle_order on each authority client.
     async fn broadcast_and_handle_order(
         &mut self,
         sender: FastPayAddress,
@@ -486,8 +486,7 @@ where
         Ok((responses, certificate))
     }
 
-    /// Broadcast confirmation orders and execute provided authority action.
-    /// The corresponding sequence numbers should be consecutive and increasing.
+    /// Broadcast missing confirmation orders and execute provided authority action on each authority.
     async fn broadcast_and_execute<'a, V, F: 'a>(
         &'a mut self,
         sender: FastPayAddress,
@@ -687,7 +686,8 @@ where
         }
     }
 
-    /// Execute (or retry) a order. Update local balance.
+    /// Execute (or retry) an order and subsequently execute the Confirmation Order.
+    /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
     async fn execute_transaction(
         &mut self,
         order: Order,
@@ -715,7 +715,7 @@ where
         Ok((new_certificate, response.signed_effects.unwrap().effects))
     }
 
-    /// Execute (or retry) a order. Update local balance.
+    /// Execute (or retry) an order without confirmation. Update local object states using newly created certificate.
     async fn execute_transaction_without_confirmation(
         &mut self,
         order: Order,
