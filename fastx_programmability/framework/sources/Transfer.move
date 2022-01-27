@@ -1,6 +1,6 @@
 module FastX::Transfer {
     use FastX::Address::{Self, Address};
-    //use FastX::ID::IDBytes;
+    use FastX::ID::{Self, IDBytes};
 
     /// Transfers are implemented by emitting a
     /// special `TransferEvent` that the fastX adapter
@@ -33,11 +33,12 @@ module FastX::Transfer {
 
     native fun transfer_internal<T: key>(obj: T, recipient: vector<u8>, should_freeze: bool);
 
-    /*/// Transfer ownership of `obj` to another object `id`. Afterward, `obj`
-    /// can only be used in a transaction that also includes the object with
-    /// `id`.
-    /// WARNING: Use with caution. Improper use can create ownership cycles
-    /// between objects, which will cause all objects involved in the cycle to
-    /// be locked.
-    public native fun transfer_to_id<T: key>(obj: T, id: IDBytes);*/
+    /// Transfer ownership of `obj` to another object `owner`.
+    // TODO: Add option to freeze after transfer.
+    public fun transfer_to_object<T: key, R: key>(obj: T, owner: &mut R) {
+        transfer_to_object_id(obj, *ID::get_id_bytes(owner));
+    }
+
+    /// Transfer ownership of `obj` to another object with `id`.
+    native fun transfer_to_object_id<T: key>(obj: T, id: IDBytes);
 }
