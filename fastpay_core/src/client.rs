@@ -175,27 +175,34 @@ impl<A> ClientState<A> {
         self.address
     }
 
-    /// TODO: Better way to handle errors?
-    pub fn next_sequence_number(
+    /// Get the sequence number for this object
+    /// TODO: what do we do if reading from storage throws?
+    pub fn get_sequence_number(
         &self,
         object_id: &ObjectID,
     ) -> Result<SequenceNumber, FastPayError> {
         match self.store.get_sequence_number(*object_id) {
-            Ok(v) => Ok(v.unwrap()),
-            Err(e) => Err(e),
+            Ok(seq_no_opt) => match seq_no_opt {
+                Some(seq_no) => Ok(seq_no),
+                None => Err(FastPayError::ObjectNotFound {
+                    object_id: *object_id,
+                }),
+            },
+            Err(err) => Err(err),
         }
     }
 
+    /// Get the object id to object refs mapping
     pub fn get_object_refs(&self) -> BTreeMap<ObjectID, ObjectRef> {
         // TODO: fail?
         self.store.get_all_object_refs().unwrap()
     }
-
+    /// Get the state of the pending transfer if any
     pub fn pending_transfer(&self) -> Option<Order> {
         self.store.get_pending_transfer().unwrap()
     }
-
-    pub fn certificates(&self, object_id: &ObjectID) -> Vec<CertifiedOrder> {
+    /// Get the certified orders for the object id
+    pub fn get_certified_orders(&self, object_id: &ObjectID) -> Vec<CertifiedOrder> {
         let mut cert_orders = Vec::new();
         for tx_digest in self.store.get_tx_digests(object_id).unwrap() {
             if let Some(v) = self.store.get_certified_order(tx_digest).unwrap() {
@@ -204,11 +211,13 @@ impl<A> ClientState<A> {
         }
         cert_orders
     }
-
-    pub fn all_certificates(&self) -> BTreeMap<TransactionDigest, CertifiedOrder> {
+    /// Get all transaction order <-> certified order mappings
+    pub fn get_all_certified_orders(&self) -> BTreeMap<TransactionDigest, CertifiedOrder> {
         self.store.get_all_certified_orders().unwrap()
     }
 
+    /// Insert an object's info.
+    /// TODO: extend to save the actual object
     pub fn insert_object(
         &mut self,
         object_ref: &ObjectRef,
@@ -221,6 +230,8 @@ impl<A> ClientState<A> {
         Ok(())
     }
 
+    /// Remove an objects info
+    /// TODO: Extend to remove the actual object
     pub fn remove_object(&mut self, object_id: &ObjectID) -> Result<(), FastPayError> {
         self.store.remove_sequence_number(object_id)?;
         self.store.remove_tx_digests(object_id)?;
@@ -493,7 +504,7 @@ where
         F: Fn(AuthorityName, &'a mut A) -> AsyncResult<'a, V, FastPayError> + Send + Sync + Copy,
         V: Copy,
     {
-        let next_sequence_number = self.next_sequence_number(&object_id).unwrap_or_default();
+        let next_sequence_number = self.get_sequence_number(&object_id).unwrap_or_default();
         fp_ensure!(
             target_sequence_number >= next_sequence_number,
             FastPayError::UnexpectedSequenceNumber {
@@ -606,7 +617,7 @@ where
 
         for (object_id, next_sequence_number) in self.store.get_all_sequence_numbers()?.clone() {
             let known_sequence_numbers: BTreeSet<_> = self
-                .certificates(&object_id)
+                .get_certified_orders(&object_id)
                 .iter()
                 .flat_map(|cert| cert.order.input_objects())
                 .filter_map(|(id, seq, _)| if id == object_id { Some(seq) } else { None })
@@ -696,7 +707,7 @@ where
                 .cloned()
                 .unwrap_or_default();
 
-            let mut new_next_sequence_number = self.next_sequence_number(object_id)?;
+            let mut new_next_sequence_number = self.get_sequence_number(object_id)?;
             if seq >= new_next_sequence_number {
                 new_next_sequence_number = seq.increment();
             }
@@ -707,14 +718,15 @@ where
             // Atomic update
             self.store
                 .insert_sequence_number(&*object_id, &new_next_sequence_number)?;
-
             self.store
                 .insert_tx_digest(object_id, &new_cert.order.digest())?;
         }
         // Sanity check
-        let certificates_count = self.certificates(object_id).len();
+        let certificates_count = self.get_certified_orders(object_id).len();
 
-        if certificates_count == usize::from(self.next_sequence_number(object_id)?) {
+        //let sq = usize::from(self.get_sequence_number(object_id)?);
+
+        if certificates_count == usize::from(self.get_sequence_number(object_id)?) {
             Ok(())
         } else {
             Err(FastPayError::UnexpectedSequenceNumber {
@@ -736,10 +748,10 @@ where
             FastPayError::ConcurrentTransferError.into()
         );
         fp_ensure!(
-            order.sequence_number() == self.next_sequence_number(order.object_id())?,
+            order.sequence_number() == self.get_sequence_number(order.object_id())?,
             FastPayError::UnexpectedSequenceNumber {
                 object_id: *order.object_id(),
-                expected_sequence: self.next_sequence_number(order.object_id())?,
+                expected_sequence: self.get_sequence_number(order.object_id())?,
             }
             .into()
         );
@@ -748,7 +760,7 @@ where
             .communicate_transfers(
                 self.address,
                 *order.object_id(),
-                self.certificates(order.object_id()),
+                self.get_certified_orders(order.object_id()),
                 order.clone(),
             )
             .await;
@@ -775,8 +787,8 @@ where
                 .broadcast_confirmation_orders(
                     self.address,
                     *order.object_id(),
-                    self.certificates(order.object_id()),
-                    self.next_sequence_number(order.object_id())?,
+                    self.get_certified_orders(order.object_id()),
+                    self.get_sequence_number(order.object_id())?,
                 )
                 .await?;
             for response in order_info_responses {
@@ -1073,7 +1085,7 @@ where
                 )?;
 
                 // Everything worked: update the local balance.
-                if let Entry::Vacant(entry) = self
+                if let Entry::Vacant(_) = self
                     .store
                     .get_all_certified_orders()?
                     .entry(certificate.order.digest())
@@ -1084,7 +1096,8 @@ where
                     )?;
                     self.store
                         .insert_tx_digest(&transfer.object_ref.0, &certificate.order.digest())?;
-                    entry.insert(certificate.clone());
+                    self.store
+                        .insert_certified_order(&certificate.order.digest(), certificate)?;
                 }
                 Ok(())
             }

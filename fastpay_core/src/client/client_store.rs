@@ -1,26 +1,11 @@
 use super::*;
 
 use rocksdb::Options;
-use serde::{Deserialize, Serialize};
-
 use std::path::Path;
 use typed_store::rocks::{open_cf, DBMap};
 use typed_store::traits::Map;
 
 const PENDING_TRANSFER_KEY: &str = "PENDING_TRANSFER_KEY";
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AuthorityConfigStore {
-    #[serde(
-        serialize_with = "address_as_hex",
-        deserialize_with = "address_from_hex"
-    )]
-    pub address: FastPayAddress,
-    pub host: String,
-    pub base_port: u32,
-    pub database_path: String,
-    pub voting_rights: usize,
-}
 
 pub struct ClientStore {
     /// Confirmed objects with it's ref owned by the client.
@@ -65,10 +50,6 @@ impl ClientStore {
         }
     }
 
-    ///
-    /// For dealing with transaction digests
-    ///
-
     /// Get the transcation digest for a given object
     pub fn get_tx_digests(
         &self,
@@ -79,26 +60,33 @@ impl ClientStore {
             None => Vec::new(),
         })
     }
+    /// Remove the transcation digest for a given object
     pub fn remove_tx_digests(&self, object_id: &ObjectID) -> Result<(), FastPayError> {
         // If removal fails, still fail?
         Ok(self.object_id_to_tx_digests.remove(object_id)?)
     }
+    /// Insert the transcation digest for a given object
     pub fn insert_tx_digest(
         &self,
         object_id: &ObjectID,
         digest: &TransactionDigest,
     ) -> Result<(), FastPayError> {
-        let mut d = self.get_tx_digests(object_id)?;
+        let mut digests = self.get_tx_digests(object_id)?;
         // We should probably use a set if possible, not a vec
-        if !d.contains(digest) {
-            d.push(*digest);
+        if !digests.contains(digest) {
+            digests.push(*digest);
         }
-        Ok(self.object_id_to_tx_digests.insert(object_id, &d)?)
+        Ok(self.object_id_to_tx_digests.insert(object_id, &digests)?)
     }
-
-    ///
-    /// For dealing with object refs
-    ///
+    /// Get all transcation digests
+    #[cfg(test)]
+    pub fn get_all_tx_digests(
+        &self,
+    ) -> Result<BTreeMap<ObjectID, Vec<TransactionDigest>>, FastPayError> {
+        let v: BTreeMap<ObjectID, Vec<TransactionDigest>> =
+            self.object_id_to_tx_digests.iter().collect();
+        Ok(v)
+    }
 
     /// Get the object refs for a given object
     pub fn get_object_ref(&self, object_id: ObjectID) -> Result<Option<ObjectRef>, FastPayError> {
@@ -109,10 +97,12 @@ impl ClientStore {
         let v: BTreeMap<ObjectID, ObjectRef> = self.object_id_to_object_ref.iter().collect();
         Ok(v)
     }
+    /// Remove the object refs for the given object
     pub fn remove_object_ref(&self, object_id: &ObjectID) -> Result<(), FastPayError> {
         // If removal fails, still fail?
         Ok(self.object_id_to_object_ref.remove(object_id)?)
     }
+    /// Clear all object refs
     pub fn clear_object_refs(&self) -> Result<(), FastPayError> {
         // Need to delete by range. No easy way to do this
         // TODO: need to implement https://github.com/MystenLabs/mysten-infra/issues/7
@@ -121,6 +111,7 @@ impl ClientStore {
         batch = batch.delete_batch(&self.object_id_to_object_ref, keys)?;
         batch.write().map_err(|e| e.into())
     }
+    /// Insert an object ref for the object
     pub fn insert_object_ref(
         &self,
         object_id: &ObjectID,
@@ -128,10 +119,6 @@ impl ClientStore {
     ) -> Result<(), FastPayError> {
         Ok(self.object_id_to_object_ref.insert(object_id, object_ref)?)
     }
-
-    ///
-    /// For dealing with sequence numbers
-    ///
 
     /// Get the sequence numbers for a given object
     pub fn get_sequence_number(
@@ -148,10 +135,12 @@ impl ClientStore {
             self.object_id_to_sequence_number.iter().collect();
         Ok(v)
     }
+    /// Remove the sequence numbers for the given object
     pub fn remove_sequence_number(&self, object_id: &ObjectID) -> Result<(), FastPayError> {
         // If removal fails, still fail?
         Ok(self.object_id_to_sequence_number.remove(object_id)?)
     }
+    /// Insert an sequence numbers for the object
     pub fn insert_sequence_number(
         &self,
         object_id: &ObjectID,
@@ -161,6 +150,7 @@ impl ClientStore {
             .object_id_to_sequence_number
             .insert(object_id, seq_no)?)
     }
+    /// Clear all sequence numbers
     pub fn clear_sequence_numbers(&self) -> Result<(), FastPayError> {
         // Need to delete by range. No easy way to do this
         // TODO: need to implement https://github.com/MystenLabs/mysten-infra/issues/7
@@ -174,14 +164,14 @@ impl ClientStore {
     /// For dealing with transaction digests and certs
     ///
 
-    /// Get the sequence numbers for a given object
+    /// Get the certified order for a given tx digest
     pub fn get_certified_order(
         &self,
         digest: TransactionDigest,
     ) -> Result<Option<CertifiedOrder>, FastPayError> {
         Ok(self.tx_digest_to_cert_order.get(&digest)?)
     }
-    /// Get all sequence numbers
+    /// Get all certified orders
     pub fn get_all_certified_orders(
         &self,
     ) -> Result<BTreeMap<TransactionDigest, CertifiedOrder>, FastPayError> {
@@ -189,10 +179,7 @@ impl ClientStore {
             self.tx_digest_to_cert_order.iter().collect();
         Ok(v)
     }
-    pub fn _remove_certified_order(&self, digest: &TransactionDigest) -> Result<(), FastPayError> {
-        // If removal fails, still fail?
-        Ok(self.tx_digest_to_cert_order.remove(digest)?)
-    }
+    /// Insert a certified order
     pub fn insert_certified_order(
         &self,
         digest: &TransactionDigest,
@@ -200,23 +187,30 @@ impl ClientStore {
     ) -> Result<(), FastPayError> {
         Ok(self.tx_digest_to_cert_order.insert(digest, seq_no)?)
     }
+    /// Clear all certified orders
+    #[cfg(test)]
+    pub fn clear_all_certified_orders(&self) -> Result<(), FastPayError> {
+        // Need to delete by range. No easy way to do this
+        // TODO: need to implement https://github.com/MystenLabs/mysten-infra/issues/7
+        let keys = self.tx_digest_to_cert_order.keys();
+        let mut batch = self.tx_digest_to_cert_order.batch();
+        batch = batch.delete_batch(&self.tx_digest_to_cert_order, keys)?;
+        batch.write().map_err(|e| e.into())
+    }
 
-    ///
-    /// For dealing with pending transfers
-    ///
-
-    // Get the pending tx if any
+    /// Gets the pending tx flag
     pub fn get_pending_transfer(&self) -> Result<Option<Order>, FastPayError> {
         self.pending_transfer
             .get(&PENDING_TRANSFER_KEY.to_string())
             .map_err(|e| e.into())
     }
-    // Set the pending tx if any
+    /// Sets the pending tx flag (overwrites previous)
     pub fn set_pending_transfer(&self, order: &Order) -> Result<(), FastPayError> {
         self.pending_transfer
             .insert(&PENDING_TRANSFER_KEY.to_string(), order)
             .map_err(|e| e.into())
     }
+    /// Clears the pending tx flag
     pub fn clear_pending_transfer(&self) -> Result<(), FastPayError> {
         self.pending_transfer
             .remove(&PENDING_TRANSFER_KEY.to_string())
