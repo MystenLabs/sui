@@ -94,13 +94,6 @@ impl AuthorityState {
             );
 
             let object = object.ok_or(FastPayError::ObjectNotFound { object_id })?;
-            fp_ensure!(
-                object.digest() == object_digest,
-                FastPayError::InvalidObjectDigest {
-                    object_id,
-                    expected_digest: object_digest
-                }
-            );
 
             // Check that the seq number is the same
             fp_ensure!(
@@ -108,6 +101,15 @@ impl AuthorityState {
                 FastPayError::UnexpectedSequenceNumber {
                     object_id,
                     expected_sequence: object.version(),
+                }
+            );
+
+            // Check the digest matches
+            fp_ensure!(
+                object.digest() == object_digest,
+                FastPayError::InvalidObjectDigest {
+                    object_id,
+                    expected_digest: object_digest
                 }
             );
 
@@ -332,9 +334,13 @@ impl AuthorityState {
             let parent_iterator = self
                 .get_parent_iterator(request.object_id, Some(seq))
                 .await?;
-            let (_, transaction_digest) = parent_iterator
-                .first()
-                .ok_or(FastPayError::ParentNotfound {object_id: request.object_id, sequence: seq })?;
+            let (_, transaction_digest) =
+                parent_iterator
+                    .first()
+                    .ok_or(FastPayError::ParentNotfound {
+                        object_id: request.object_id,
+                        sequence: seq,
+                    })?;
             // Get the cert from the transaction digest
             Some(
                 self.read_certificate(transaction_digest)

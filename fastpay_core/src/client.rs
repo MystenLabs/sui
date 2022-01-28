@@ -302,12 +302,11 @@ where
         &mut self,
         (object_id, sequence_number): (ObjectID, SequenceNumber),
     ) -> Result<CertifiedOrder, FastPayError> {
-
-        // BUG(https://github.com/MystenLabs/fastnft/issues/290): This function assumes that requesting the parent cert of object seq+1 will give the cert of 
+        // BUG(https://github.com/MystenLabs/fastnft/issues/290): This function assumes that requesting the parent cert of object seq+1 will give the cert of
         //        that creates the object. This is not true, as objects may be deleted and may not have a seq+1
         //        to look up.
         //
-        //        The authority `handle_object_info_request` is now fixed to return the parent at seq, and not 
+        //        The authority `handle_object_info_request` is now fixed to return the parent at seq, and not
         //        seq+1. But a lot of the client code makes the above wrong assumption, and the line above reverts
         //        query to the old (incorrect) behavious to not break tests everywhere.
         let inner_sequence_number = sequence_number.increment();
@@ -331,7 +330,7 @@ where
                     /*
                     let order = &certificate.order;
                     if let Some(sender) = self.sender {
-                        
+
                         if order.sender() == &sender && order.sequence_number() == inner_sequence_number {
                             return Ok(certificate.clone());
                         }
@@ -339,7 +338,7 @@ where
                         return Ok(certificate.clone());
                     }
                     */
-                    return Ok(certificate.clone());
+                    return Ok(certificate);
                 }
             }
         }
@@ -378,7 +377,6 @@ where
         let mut candidate_certificates: HashSet<TransactionDigest> =
             vec![digest].into_iter().collect();
         let mut attempted_certificates: HashSet<TransactionDigest> = HashSet::new();
-        
 
         while let Some(target_cert) = missing_certificates.pop() {
             match destination_client
@@ -390,7 +388,6 @@ where
                 | Err(FastPayError::MissingEalierConfirmations { .. }) => {}
                 Err(e) => return Err(e),
             }
-            
 
             // If we are here it means that the destination authority is missing
             // the previous certificates, so we need to read them from the source
@@ -404,7 +401,6 @@ where
                 return Err(FastPayError::AuthorityInformationUnavailable);
             }
             attempted_certificates.insert(cert_digest);
-
 
             // TODO: Eventually the client will store more information, and we could
             // first try to read certificates and parents from a local cache before
@@ -427,11 +423,10 @@ where
                 let object_info = match object_info_response {
                     Ok(object_info) => object_info,
                     // Here we cover the case the object genuinely has no parent.
-                    Err(FastPayError::ParentNotfound { .. }) => 
-                    {
+                    Err(FastPayError::ParentNotfound { .. }) => {
                         continue;
-                    },
-                    Err(e) =>  return Err(e),
+                    }
+                    Err(e) => return Err(e),
                 };
 
                 let returned_certificate = object_info
@@ -1141,12 +1136,12 @@ where
                 let response = self
                     .get_object_info(ObjectInfoRequest {
                         object_id: *certificate.order.object_id(),
-                        // BUG(https://github.com/MystenLabs/fastnft/issues/290): 
-                        //        This function assumes that requesting the parent cert of object seq+1 will give the cert of 
+                        // BUG(https://github.com/MystenLabs/fastnft/issues/290):
+                        //        This function assumes that requesting the parent cert of object seq+1 will give the cert of
                         //        that creates the object. This is not true, as objects may be deleted and may not have a seq+1
                         //        to look up.
                         //
-                        //        The authority `handle_object_info_request` is now fixed to return the parent at seq, and not 
+                        //        The authority `handle_object_info_request` is now fixed to return the parent at seq, and not
                         //        seq+1. But a lot of the client code makes the above wrong assumption, and the line above reverts
                         //        query to the old (incorrect) behavious to not break tests everywhere.
                         request_sequence_number: Some(transfer.object_ref.1.increment()),

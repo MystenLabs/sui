@@ -77,7 +77,10 @@ pub enum FastPayError {
     #[error("No certificate for this account and sequence number")]
     CertificateNotfound,
     #[error("No parent for object {object_id:?} at this sequence number {sequence:?}")]
-    ParentNotfound {object_id: ObjectID, sequence: SequenceNumber },
+    ParentNotfound {
+        object_id: ObjectID,
+        sequence: SequenceNumber,
+    },
     #[error("Unknown sender's account")]
     UnknownSenderAccount,
     #[error("Signatures in a certificate must be from different authorities.")]
