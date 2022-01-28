@@ -33,7 +33,13 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::{native_functions::NativeFunctionTable, session::ExecutionResult};
-use std::{borrow::Borrow, collections::BTreeMap, convert::TryFrom, fmt::Debug, sync::Arc};
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, HashMap},
+    convert::TryFrom,
+    fmt::Debug,
+    sync::Arc,
+};
 
 pub use move_vm_runtime::move_vm::MoveVM;
 
@@ -78,6 +84,12 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     mut gas_object: Object,
     ctx: &TxContext,
 ) -> FastPayResult<ExecutionStatus> {
+    let mut object_owner_map = HashMap::new();
+    for object in object_args.iter().filter(|obj| !obj.is_read_only()) {
+        if let Authenticator::Object(owner_object_id) = object.owner {
+            object_owner_map.insert(object.id(), owner_object_id);
+        }
+    }
     let TypeCheckSuccess {
         module_id,
         args,
@@ -136,14 +148,19 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             let mutable_refs = mutable_ref_objects
                 .into_iter()
                 .zip(mutable_ref_values.into_iter());
-            let (extra_gas_used, gas_refund) = process_successful_execution(
+            let (extra_gas_used, gas_refund, result) = process_successful_execution(
                 state_view,
                 by_value_objects,
                 mutable_refs,
                 events,
                 ctx,
+                object_owner_map,
             );
             let total_gas = gas::aggregate_gas(gas_used + extra_gas_used, gas_refund);
+            if let Err(err) = result {
+                // Cap total_gas by gas_budget in the fail case.
+                exec_failure!(std::cmp::min(total_gas, gas_budget), err);
+            }
             match gas::try_deduct_gas(&mut gas_object, total_gas) {
                 Ok(()) => {
                     state_view.write_object(gas_object);
@@ -316,7 +333,8 @@ fn process_successful_execution<
     mutable_refs: impl Iterator<Item = (Object, Vec<u8>)>,
     events: Vec<MoveEvent>,
     ctx: &TxContext,
-) -> (u64, u64) {
+    mut object_owner_map: HashMap<ObjectID, ObjectID>,
+) -> (u64, u64, FastPayResult) {
     for (mut obj, new_contents) in mutable_refs {
         // update contents and increment sequence number
         obj.data
@@ -330,7 +348,7 @@ fn process_successful_execution<
     let tx_digest = ctx.digest();
     for e in events {
         let (recipient, event_type, type_, event_bytes) = e;
-        match EventType::try_from(event_type as u8)
+        let result = match EventType::try_from(event_type as u8)
             .expect("Safe because event_type is derived from an EventType enum")
         {
             EventType::TransferToAddress => handle_transfer(
@@ -342,6 +360,7 @@ fn process_successful_execution<
                 &mut by_value_objects,
                 &mut gas_used,
                 state_view,
+                &mut object_owner_map,
             ),
             EventType::TransferToAddressAndFreeze => handle_transfer(
                 Authenticator::Address(FastPayAddress::try_from(recipient.borrow()).unwrap()),
@@ -352,6 +371,7 @@ fn process_successful_execution<
                 &mut by_value_objects,
                 &mut gas_used,
                 state_view,
+                &mut object_owner_map,
             ),
             EventType::TransferToObject => handle_transfer(
                 Authenticator::Object(ObjectID::try_from(recipient.borrow()).unwrap()),
@@ -362,13 +382,20 @@ fn process_successful_execution<
                 &mut by_value_objects,
                 &mut gas_used,
                 state_view,
+                &mut object_owner_map,
             ),
-            EventType::User => match type_ {
-                TypeTag::Struct(s) => state_view.log_event(Event::new(s, event_bytes)),
-                _ => unreachable!(
-                    "Native function emit_event<T> ensures that T is always bound to structs"
-                ),
-            },
+            EventType::User => {
+                match type_ {
+                    TypeTag::Struct(s) => state_view.log_event(Event::new(s, event_bytes)),
+                    _ => unreachable!(
+                        "Native function emit_event<T> ensures that T is always bound to structs"
+                    ),
+                };
+                Ok(())
+            }
+        };
+        if result.is_err() {
+            return (gas_used, 0, result);
         }
     }
 
@@ -382,7 +409,7 @@ fn process_successful_execution<
         gas_refund += gas::calculate_object_deletion_refund(object);
     }
 
-    (gas_used, gas_refund)
+    (gas_used, gas_refund, Ok(()))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -398,7 +425,8 @@ fn handle_transfer<
     by_value_objects: &mut BTreeMap<ObjectID, Object>,
     gas_used: &mut u64,
     state_view: &mut S,
-) {
+    object_owner_map: &mut HashMap<ObjectID, ObjectID>,
+) -> FastPayResult {
     match type_ {
         TypeTag::Struct(s_type) => {
             let mut move_obj = MoveObject::new(s_type, contents);
@@ -421,10 +449,30 @@ fn handle_transfer<
                 // Charge extra gas based on object size if we are creating a new object.
                 *gas_used += gas::calculate_object_creation_cost(&obj);
             }
+            let obj_id = obj.id();
+            // Below we check whether the transfer introduced any circular ownership.
+            // We know that for any mutable object, all its ancenstors (if it was owned by another object)
+            // must be in the input as well. Prior to this we have recored the original ownership mapping
+            // in object_owner_map. For any new transfer, we trace the new owner through the ownership
+            // chain to see if a cycle is detected.
+            // TODO: Set a constant upper bound to the depth of the new ownership chain.
+            object_owner_map.remove(&obj_id);
+            if let Authenticator::Object(owner_object_id) = recipient {
+                let mut parent = owner_object_id;
+                while parent != obj_id && object_owner_map.contains_key(&parent) {
+                    parent = *object_owner_map.get(&parent).unwrap();
+                }
+                if parent == obj_id {
+                    return Err(FastPayError::CircularObjectOwnership);
+                }
+                object_owner_map.insert(obj_id, owner_object_id);
+            }
+
             state_view.write_object(obj);
         }
         _ => unreachable!("Only structs can be transferred"),
     }
+    Ok(())
 }
 
 struct TypeCheckSuccess {
