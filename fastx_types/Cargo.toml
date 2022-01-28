@@ -23,7 +23,7 @@ serde_bytes = "0.11.5"
 serde_with = "1.11.0"
 static_assertions = "0.3.4"
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "2e829074f40c9ef852ecd6808b80d083174c778b" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "232c44e88e69eb54fe80dab247adcd1b643aeb8c" }
 
 move-binary-format = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }
 move-core-types = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2", features=["address20"] }

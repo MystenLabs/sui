@@ -211,7 +211,7 @@ impl AuthorityStore {
                 &self.order_lock,
                 mutable_input_objects
                     .iter()
-                    .map(|obj_ref| (*obj_ref, Some(tx_digest))),
+                    .map(|obj_ref| (obj_ref, Some(tx_digest))),
             )?
             .insert_batch(
                 &self.signed_orders,
@@ -261,30 +261,28 @@ impl AuthorityStore {
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
     ) -> Result<OrderInfoResponse, FastPayError> {
-        // TODO: There is a lot of cloning used -- eliminate it.
-
         // Extract the new state from the execution
         let (objects, active_inputs, written, deleted) = temporary_store.into_inner();
         let mut write_batch = self.order_lock.batch();
 
         // Archive the old lock.
-        write_batch = write_batch.delete_batch(&self.order_lock, active_inputs.iter().cloned())?;
+        write_batch = write_batch.delete_batch(&self.order_lock, active_inputs.iter())?;
 
         // Store the certificate indexed by transaction digest
         let transaction_digest: TransactionDigest = certificate.order.digest();
         write_batch = write_batch.insert_batch(
             &self.certificates,
-            std::iter::once((transaction_digest, certificate.clone())),
+            std::iter::once((transaction_digest, &certificate)),
         )?;
 
         // Store the signed effects of the order
         write_batch = write_batch.insert_batch(
             &self.signed_effects,
-            std::iter::once((transaction_digest, signed_effects.clone())),
+            std::iter::once((transaction_digest, &signed_effects)),
         )?;
 
         // Delete objects
-        write_batch = write_batch.delete_batch(&self.objects, deleted.clone().into_iter())?;
+        write_batch = write_batch.delete_batch(&self.objects, deleted.iter())?;
 
         // Make an iterator over all objects that are either deleted or have changed owner,
         // along with their old owner.  This is used to update the owner index.
@@ -335,10 +333,7 @@ impl AuthorityStore {
         )?;
 
         // Insert each output object into the stores
-        write_batch = write_batch.insert_batch(
-            &self.objects,
-            written.into_iter().map(|(id, new_object)| (id, new_object)),
-        )?;
+        write_batch = write_batch.insert_batch(&self.objects, written.iter())?;
 
         // Update the indexes of the objects written
 
