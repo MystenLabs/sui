@@ -165,6 +165,10 @@ pub enum FastPayError {
     AuthorityInformationUnavailable,
     #[error("Failed to update authority.")]
     AuthorityUpdateFailure,
+    #[error(
+        "We have received cryptographic level of evidence that authority {authority:?} is faulty in a Byzantine manner."
+    )]
+    ByzantineAuthoritySuspicion { authority: AuthorityName },
     #[error("Storage error")]
     StorageError(#[from] typed_store::rocks::TypedStoreError),
 

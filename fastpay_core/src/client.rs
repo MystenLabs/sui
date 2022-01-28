@@ -408,7 +408,11 @@ where
                     requested_certificates.insert(returned_digest);
 
                     // Check & Add it to the list of certificates to sync
-                    returned_certificate.check(&self.committee)?;
+                    returned_certificate.check(&self.committee).map_err(|_| {
+                        FastPayError::ByzantineAuthoritySuspicion {
+                            authority: source_authority,
+                        }
+                    })?;
                     missing_certificates.push(ConfirmationOrder::new(returned_certificate));
                 }
             }
@@ -468,7 +472,8 @@ where
                     destination_authority,
                 ),
             )
-            .await.is_ok()
+            .await
+            .is_ok()
             {
                 // If the updates suceeds we return, since there is no need
                 // to try other sources.
