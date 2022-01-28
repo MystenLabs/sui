@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
+mod event;
 mod id;
 mod transfer;
 mod tx_context;
@@ -13,6 +14,7 @@ pub fn all_natives(
     fastx_framework_addr: AccountAddress,
 ) -> NativeFunctionTable {
     const FASTX_NATIVES: &[(&str, &str, NativeFunction)] = &[
+        ("Event", "emit", event::emit),
         ("ID", "bytes_to_address", id::bytes_to_address),
         ("Transfer", "transfer_internal", transfer::transfer_internal),
         ("TxContext", "fresh_id", tx_context::fresh_id),
