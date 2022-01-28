@@ -16,7 +16,9 @@ pub struct AuthorityStore {
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the order that they are lock on for use by this specific authority. Where an object
     /// lock exists for an object version, but no order has been seen using it the lock is set
-    /// to None.
+    /// to None. The safety of consistent broadcast depend on each honest authority never changing
+    /// the lock once it is set. After a certificate for this object is processed it can be 
+    /// forgotten.
     order_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
