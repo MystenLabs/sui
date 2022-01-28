@@ -156,7 +156,7 @@ impl<A> ClientState<A> {
             Err(_) => env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
         };
 
-        // Open colum families
+        // Open column families
         let db = client_store::init_store(
             path,
             vec![
