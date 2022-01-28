@@ -196,7 +196,9 @@ impl<A> ClientState<A> {
             .populate_from_btree_map(object_refs.clone());
         self.certificates.populate_from_btree_map(certificates);
 
-        object_refs.iter().for_each(|(id, ref_)| self.object_sequence_numbers.insert(*id, ref_.1));
+        object_refs
+            .iter()
+            .for_each(|(id, ref_)| self.object_sequence_numbers.insert(*id, ref_.1));
     }
 
     pub fn address(&self) -> FastPayAddress {
@@ -208,7 +210,10 @@ impl<A> ClientState<A> {
         object_id: &ObjectID,
     ) -> Result<SequenceNumber, FastPayError> {
         if self.object_sequence_numbers.contains_key(object_id) {
-            Ok(self.object_sequence_numbers.get(object_id).expect("Unable to get sequence number"))
+            Ok(self
+                .object_sequence_numbers
+                .get(object_id)
+                .expect("Unable to get sequence number"))
         } else {
             Err(FastPayError::ObjectNotFound {
                 object_id: *object_id,
@@ -306,7 +311,9 @@ where
         for client in self.authority_clients.iter_mut() {
             let result = client.handle_object_info_request(request.clone()).await;
             if let Ok(response) = result {
-                let certificate = response.requested_certificate.expect("Unable to get certificate");
+                let certificate = response
+                    .requested_certificate
+                    .expect("Unable to get certificate");
                 if certificate.check(&self.committee).is_ok() {
                     let order = &certificate.order;
                     if let Some(sender) = self.sender {
