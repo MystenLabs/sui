@@ -375,8 +375,10 @@ where
         let mut missing_certificates: Vec<_> = vec![cert.clone()];
 
         // We keep a list of certificates already processed to avoid duplicates
-        let mut requested_certificates: HashSet<TransactionDigest> =
+        let mut candidate_certificates: HashSet<TransactionDigest> =
             vec![digest].into_iter().collect();
+        let mut attempted_certificates: HashSet<TransactionDigest> = HashSet::new();
+        
 
         while let Some(target_cert) = missing_certificates.pop() {
             match destination_client
@@ -388,11 +390,22 @@ where
                 | Err(FastPayError::MissingEalierConfirmations { .. }) => {}
                 Err(e) => return Err(e),
             }
+            
 
             // If we are here it means that the destination authority is missing
             // the previous certificates, so we need to read them from the source
             // authority.
-            //
+
+            // The first time we cannot find the cert from the destination authority
+            // we try to get its dependencies. But the second time we have already tried
+            // to update its dependencies, so we should just admit failure.
+            let cert_digest = target_cert.certificate.order.digest();
+            if attempted_certificates.contains(&cert_digest) {
+                return Err(FastPayError::AuthorityInformationUnavailable);
+            }
+            attempted_certificates.insert(cert_digest);
+
+
             // TODO: Eventually the client will store more information, and we could
             // first try to read certificates and parents from a local cache before
             // asking an authority.
@@ -429,9 +442,9 @@ where
                 // We check that we are not processing twice the same certificate, as
                 // it would be common if two objects used by one order, were also both
                 // mutated by the same preceeding order.
-                if !requested_certificates.contains(&returned_digest) {
+                if !candidate_certificates.contains(&returned_digest) {
                     // Add this cert to the set we have processed
-                    requested_certificates.insert(returned_digest);
+                    candidate_certificates.insert(returned_digest);
 
                     // Check & Add it to the list of certificates to sync
                     returned_certificate.check(&self.committee).map_err(|_| {

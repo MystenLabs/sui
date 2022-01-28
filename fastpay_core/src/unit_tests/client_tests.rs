@@ -1041,6 +1041,21 @@ async fn test_move_calls_chain_many() {
     assert_eq!(zero_seq.1, SequenceNumber::from(0));
 
     // This is (finally) the function we want to test
+
+    // If we try to sync from the authority that does not have the data to the one 
+    // that does we fail.
+    let result = client1
+        .sync_authority_source_to_destination(
+            ConfirmationOrder::new(last_certificate.clone()),
+            authorities[3].0,
+            authorities[3].0,
+        )
+        .await;
+
+    assert!(result.is_err());
+
+    // If we try to sync from the authority that does have the data to the one 
+    // that does not we succeed.
     let result = client1
         .sync_authority_source_to_destination(
             ConfirmationOrder::new(last_certificate),
@@ -1049,10 +1064,8 @@ async fn test_move_calls_chain_many() {
         )
         .await;
 
-    if let Err(x) = &result {
-        println!("Result: {:?}", x)
-    }
     assert!(result.is_ok());
+    
 }
 
 #[tokio::test]
