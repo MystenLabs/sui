@@ -17,6 +17,7 @@ tokio = { version = "1.15.0", features = ["full"] }
 parking_lot = "0.11.2"
 itertools = "0.10.3"
 async-trait = "0.1.52"
+tempfile = "3.3.0"
 
 fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-framework = { path = "../fastx_programmability/framework" }

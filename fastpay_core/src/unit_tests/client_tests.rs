@@ -564,8 +564,8 @@ fn test_client_state_sync() {
 
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
 
-    let old_object_ids = sender.object_sequence_numbers.clone();
-    let old_certificates = sender.certificates.clone();
+    let old_object_ids = sender.object_sequence_numbers.copy_as_btree_map();
+    let old_certificates = sender.certificates.copy_as_btree_map();
 
     // Remove all client-side data
     sender.object_sequence_numbers.clear();
@@ -580,12 +580,15 @@ fn test_client_state_sync() {
 
     // Confirm data are the same after sync
     assert!(!rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
-    assert_eq!(old_object_ids, sender.object_sequence_numbers);
+    assert_eq!(
+        old_object_ids,
+        sender.object_sequence_numbers.copy_as_btree_map()
+    );
     for tx_digest in old_certificates.keys() {
         // valid since our test authority should not lead us to download new certs
         compare_certified_orders(
             &old_certificates[tx_digest],
-            &sender.certificates[tx_digest],
+            &sender.certificates.get(tx_digest).unwrap(),
         );
     }
 }
@@ -1690,4 +1693,74 @@ async fn test_receive_object_error() -> Result<(), anyhow::Error> {
     ));
 
     Ok(())
+}
+
+#[test]
+fn test_client_store() {
+    let path = match tempfile::tempdir() {
+        Ok(p) => p.into_path(),
+        Err(_) => env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
+    };
+    let bt_a: BTreeMap<i32, ObjectID> = [
+        (1, ObjectID::random()),
+        (2, ObjectID::random()),
+        (3, ObjectID::random()),
+        (4, ObjectID::random()),
+    ]
+    .iter()
+    .cloned()
+    .collect();
+
+    let bt_b: BTreeMap<i32, ObjectID> = [
+        (8, ObjectID::random()),
+        (9, ObjectID::random()),
+        (0, ObjectID::random()),
+        (12, ObjectID::random()),
+        (19, ObjectID::random()),
+    ]
+    .iter()
+    .cloned()
+    .collect();
+
+    let db = client_store::init_store(path, vec!["la", "lb"]);
+    let dba: ClientStoreMap<i32, ObjectID> = ClientStoreMap::new(&db, "la");
+    let dbb: ClientStoreMap<i32, ObjectID> = ClientStoreMap::new(&db, "lb");
+
+    // Check that they're empty
+    assert_eq!(dba.len(), 0);
+    assert_eq!(dbb.len(), 0);
+    assert!(dba.is_empty());
+    assert!(dbb.is_empty());
+
+    // Populate from/to BTreeMap
+    dba.populate_from_btree_map(bt_a.clone());
+    dbb.populate_from_btree_map(bt_b.clone());
+    assert_eq!(dba.copy_as_btree_map(), bt_a);
+    assert_eq!(dbb.copy_as_btree_map(), bt_b);
+
+    // Test insert & get
+    let first = dba.get(&1).unwrap();
+    dba.insert(1000, first);
+    assert_eq!(dba.len(), bt_a.len() + 1);
+
+    // Test remove
+    assert!(dba.contains_key(&1));
+    dba.remove(&1);
+    assert!(!dba.contains_key(&1));
+    assert_eq!(dba.len(), bt_a.len());
+
+    // Test clear
+    dba.clear();
+    assert!(dba.is_empty());
+
+    // Test repopulate after clear
+    dba.populate_from_btree_map(bt_a.clone());
+    assert_eq!(dba.copy_as_btree_map(), bt_a);
+
+    // Test key list
+    let mut keys_bt: Vec<i32> = bt_a.keys().copied().collect();
+    let mut keys_db = dba.key_list();
+    keys_bt.sort_unstable();
+    keys_db.sort_unstable();
+    assert_eq!(keys_db, keys_bt)
 }
