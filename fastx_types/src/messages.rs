@@ -1,7 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::object::Object;
+use crate::object::{Object, OBJECT_START_VERSION};
 
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 
@@ -9,10 +9,11 @@ use super::{base_types::*, committee::Committee, error::*, event::Event};
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
 
+use move_binary_format::{access::ModuleAccess, CompiledModule};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
+    collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
 
@@ -27,6 +28,7 @@ pub struct Transfer {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveCall {
     pub sender: FastPayAddress,
+    // TODO: For package object, we only need object id, as it's always read-only.
     pub package: ObjectRef,
     pub module: Identifier,
     pub function: Identifier,
@@ -236,6 +238,35 @@ impl PartialEq for SignedOrder {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InputObjectKind {
+    MovePackage(ObjectID),
+    MoveObject(ObjectRef),
+}
+
+impl InputObjectKind {
+    pub fn object_id(&self) -> ObjectID {
+        match self {
+            Self::MovePackage(id) => *id,
+            Self::MoveObject((id, _, _)) => *id,
+        }
+    }
+
+    pub fn version(&self) -> SequenceNumber {
+        match self {
+            Self::MovePackage(_) => OBJECT_START_VERSION,
+            Self::MoveObject((_, version, _)) => *version,
+        }
+    }
+
+    pub fn object_not_found_error(&self) -> FastPayError {
+        match *self {
+            Self::MovePackage(package_id) => FastPayError::DependentPackageNotFound { package_id },
+            Self::MoveObject((object_id, _, _)) => FastPayError::ObjectNotFound { object_id },
+        }
+    }
+}
+
 impl Order {
     pub fn new(kind: OrderKind, secret: &KeyPair) -> Self {
         let signature = Signature::new(&kind, secret);
@@ -307,22 +338,63 @@ impl Order {
         }
     }
 
-    /// Return the set of input objects for this order
+    /// Return the metadata of each of the input objects for the order.
+    /// For a Move object, we attach the object reference;
+    /// for a Move package, we provide the object id only since they never change on chain.
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
-    pub fn input_objects(&self) -> Vec<ObjectRef> {
+    pub fn input_objects(&self) -> Vec<InputObjectKind> {
         match &self.kind {
             OrderKind::Transfer(t) => {
-                vec![t.object_ref, t.gas_payment]
+                vec![
+                    InputObjectKind::MoveObject(t.object_ref),
+                    InputObjectKind::MoveObject(t.gas_payment),
+                ]
             }
             OrderKind::Call(c) => {
                 let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
-                call_inputs.extend(c.object_arguments.clone());
-                call_inputs.push(c.package);
-                call_inputs.push(c.gas_payment);
+                call_inputs.extend(
+                    c.object_arguments
+                        .clone()
+                        .into_iter()
+                        .map(InputObjectKind::MoveObject)
+                        .collect::<Vec<_>>(),
+                );
+                call_inputs.push(InputObjectKind::MovePackage(c.package.0));
+                call_inputs.push(InputObjectKind::MoveObject(c.gas_payment));
                 call_inputs
             }
             OrderKind::Publish(m) => {
-                vec![m.gas_payment]
+                // For module publishing, all the dependent packages are implicit input objects
+                // because they must all be on-chain in order for the package to publish.
+                // All authorities must have the same view of those dependencies in order
+                // to achieve consistent publish results.
+                let mut dependent_packages = BTreeSet::new();
+                for bytes in m.modules.iter() {
+                    let module = match CompiledModule::deserialize(bytes) {
+                        Ok(m) => m,
+                        Err(_) => {
+                            // We will ignore this error here and simply let latter execution
+                            // to discover this error again and fail the transaction.
+                            // It's preferrable to let transaction fail and charge gas when
+                            // malformed package is provided.
+                            continue;
+                        }
+                    };
+                    for handle in module.module_handles.iter() {
+                        let address = *module.address_identifier_at(handle.address);
+                        if address != ObjectID::ZERO {
+                            dependent_packages.insert(address);
+                        }
+                    }
+                }
+                // We don't care about the digest of the dependent packages.
+                // They are all read-only on-chain and their digest never changes.
+                let mut publish_inputs = dependent_packages
+                    .into_iter()
+                    .map(InputObjectKind::MovePackage)
+                    .collect::<Vec<_>>();
+                publish_inputs.push(InputObjectKind::MoveObject(m.gas_payment));
+                publish_inputs
             }
         }
     }

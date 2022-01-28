@@ -381,6 +381,58 @@ async fn test_publish_module_no_dependencies_ok() {
     )
 }
 
+#[tokio::test]
+async fn test_publish_non_existing_dependent_module() {
+    let (sender, sender_key) = get_key_pair();
+    let gas_payment_object_id = ObjectID::random();
+    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
+    let gas_payment_object_ref = gas_payment_object.to_object_reference();
+    // create a genesis state that contains the gas object and genesis modules
+    let (genesis_module_objects, _) = genesis::clone_genesis_data();
+    let genesis_module = match &genesis_module_objects[0].data {
+        Data::Package(m) => CompiledModule::deserialize(m.values().next().unwrap()).unwrap(),
+        _ => unreachable!(),
+    };
+    // create a module that depends on a genesis module
+    let mut dependent_module = make_dependent_module(&genesis_module);
+    // Add another dependent module that points to a random address, hence does not exist on-chain.
+    dependent_module
+        .address_identifiers
+        .push(AccountAddress::random());
+    dependent_module.module_handles.push(ModuleHandle {
+        address: AddressIdentifierIndex((dependent_module.address_identifiers.len() - 1) as u16),
+        name: IdentifierIndex(0),
+    });
+    let dependent_module_bytes = {
+        let mut bytes = Vec::new();
+        dependent_module.serialize(&mut bytes).unwrap();
+        bytes
+    };
+    let authority = init_state_with_objects(vec![gas_payment_object]).await;
+
+    let order = Order::new_module(
+        sender,
+        gas_payment_object_ref,
+        vec![dependent_module_bytes],
+        &sender_key,
+    );
+
+    let response = authority.handle_order(order).await;
+    assert!(response
+        .unwrap_err()
+        .to_string()
+        .contains("DependentPackageNotFound"));
+    // Check that gas was not charged.
+    assert_eq!(
+        authority
+            .object_state(&gas_payment_object_id)
+            .await
+            .unwrap()
+            .version(),
+        gas_payment_object_ref.1
+    );
+}
+
 // Test the case when the gas provided is less than minimum requirement during module publish.
 // Note that the case where gas is insufficient to publish the module is tested
 // separately in the adapter tests.

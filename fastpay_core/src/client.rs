@@ -450,12 +450,12 @@ where
             // Put back the target cert
             missing_certificates.push(target_cert);
 
-            for object_ref in input_objects {
+            for object_kind in input_objects {
                 // Request the parent certificate from the authority.
                 let object_info_response = source_client
                     .handle_object_info_request(ObjectInfoRequest {
-                        object_id: object_ref.0,
-                        request_sequence_number: Some(object_ref.1),
+                        object_id: object_kind.object_id(),
+                        request_sequence_number: Some(object_kind.version()),
                         request_received_transfers_excluding_first_nth: None,
                     })
                     .await;
@@ -706,17 +706,13 @@ where
         sender: FastPayAddress,
         order: Order,
     ) -> Result<(Vec<(CertifiedOrder, OrderInfoResponse)>, CertifiedOrder), anyhow::Error> {
-        let mut input_objects = Vec::new();
-        for (object_id, seq, _) in &order.input_objects() {
-            input_objects.push((*object_id, *seq));
-        }
-
-        for (object_id, target_sequence_number, _) in &order.input_objects() {
-            let next_sequence_number = self.next_sequence_number(object_id).unwrap_or_default();
+        for object_kind in &order.input_objects() {
+            let object_id = object_kind.object_id();
+            let next_sequence_number = self.next_sequence_number(&object_id).unwrap_or_default();
             fp_ensure!(
-                target_sequence_number >= &next_sequence_number,
+                object_kind.version() >= next_sequence_number,
                 FastPayError::UnexpectedSequenceNumber {
-                    object_id: *object_id,
+                    object_id,
                     expected_sequence: next_sequence_number,
                 }
                 .into()
@@ -770,7 +766,7 @@ where
     async fn broadcast_and_execute<'a, V, F: 'a>(
         &'a mut self,
         sender: FastPayAddress,
-        inputs: Vec<ObjectRef>,
+        inputs: Vec<InputObjectKind>,
         certificates_to_broadcast: Vec<CertifiedOrder>,
         action: F,
     ) -> Result<(Vec<(CertifiedOrder, OrderInfoResponse)>, Vec<V>), anyhow::Error>
@@ -784,14 +780,15 @@ where
             Some(sender),
         );
 
-        let known_certificates = inputs.iter().flat_map(|(object_id, seq, _)| {
-            self.certificates(object_id).filter_map(move |cert| {
-                if cert.order.sender() == &sender {
-                    Some(((*object_id, *seq), Ok(cert)))
-                } else {
-                    None
-                }
-            })
+        let known_certificates = inputs.iter().flat_map(|input_kind| {
+            self.certificates(&input_kind.object_id())
+                .filter_map(move |cert| {
+                    if cert.order.sender() == &sender {
+                        Some(((input_kind.object_id(), input_kind.version()), Ok(cert)))
+                    } else {
+                        None
+                    }
+                })
         });
 
         let (_, mut handle) = Downloader::start(requester, known_certificates);
@@ -805,7 +802,9 @@ where
                     // Figure out which certificates this authority is missing.
                     let mut responses = Vec::new();
                     let mut missing_certificates = Vec::new();
-                    for (object_id, target_sequence_number, _) in inputs {
+                    for input_kind in inputs {
+                        let object_id = input_kind.object_id();
+                        let target_sequence_number = input_kind.version();
                         let request = ObjectInfoRequest {
                             object_id,
                             request_sequence_number: None,
@@ -864,7 +863,7 @@ where
     async fn broadcast_confirmation_orders(
         &mut self,
         sender: FastPayAddress,
-        inputs: Vec<ObjectRef>,
+        inputs: Vec<InputObjectKind>,
         certificates_to_broadcast: Vec<CertifiedOrder>,
     ) -> Result<Vec<(CertifiedOrder, OrderInfoResponse)>, anyhow::Error> {
         self.broadcast_and_execute(sender, inputs, certificates_to_broadcast, |_, _| {
@@ -885,7 +884,13 @@ where
             let known_sequence_numbers: BTreeSet<_> = self
                 .certificates(&object_id)
                 .flat_map(|cert| cert.order.input_objects())
-                .filter_map(|(id, seq, _)| if id == object_id { Some(seq) } else { None })
+                .filter_map(|object_kind| {
+                    if object_kind.object_id() == object_id {
+                        Some(object_kind.version())
+                    } else {
+                        None
+                    }
+                })
                 .collect();
 
             let mut requester = CertificateRequester::new(
@@ -922,16 +927,13 @@ where
                 .order
                 .input_objects()
                 .iter()
-                .find_map(
-                    |(id, seq, _)| {
-                        if object_id == id {
-                            Some(seq)
-                        } else {
-                            None
-                        }
-                    },
-                )
-                .cloned()
+                .find_map(|object_kind| {
+                    if object_id == &object_kind.object_id() {
+                        Some(object_kind.version())
+                    } else {
+                        None
+                    }
+                })
                 .unwrap_or_default();
 
             let mut new_next_sequence_number = self.next_sequence_number(object_id)?;
@@ -1234,8 +1236,8 @@ where
 
         // The new cert will not be updated by order effect without confirmation, the new unconfirmed cert need to be added temporally.
         let new_sent_certificates = vec![new_certificate.clone()];
-        for (object_id, _, _) in new_certificate.order.input_objects() {
-            self.update_certificates(&object_id, &new_sent_certificates)?;
+        for object_kind in new_certificate.order.input_objects() {
+            self.update_certificates(&object_kind.object_id(), &new_sent_certificates)?;
         }
 
         Ok(new_certificate)
