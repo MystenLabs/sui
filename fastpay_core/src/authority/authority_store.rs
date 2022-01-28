@@ -264,7 +264,8 @@ impl AuthorityStore {
         // TODO: There is a lot of cloning used -- eliminate it.
 
         // Extract the new state from the execution
-        let (objects, active_inputs, written, deleted) = temporary_store.into_inner();
+        // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
+        let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
         let mut write_batch = self.order_lock.batch();
 
         // Archive the old lock.

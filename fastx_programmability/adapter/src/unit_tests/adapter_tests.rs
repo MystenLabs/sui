@@ -26,6 +26,7 @@ struct ScratchPad {
     updated: BTreeMap<ObjectID, Object>,
     created: BTreeMap<ObjectID, Object>,
     deleted: Vec<ObjectID>,
+    events: Vec<Event>,
 }
 
 #[derive(Default, Debug)]
@@ -87,6 +88,10 @@ impl InMemoryStorage {
         &self.temporary.deleted
     }
 
+    pub fn events(&self) -> &[Event] {
+        &self.temporary.events
+    }
+
     pub fn get_created_keys(&self) -> Vec<ObjectID> {
         self.temporary.created.keys().cloned().collect()
     }
@@ -109,6 +114,10 @@ impl Storage for InMemoryStorage {
         } else {
             self.temporary.created.insert(id, object);
         }
+    }
+
+    fn log_event(&mut self, event: Event) {
+        self.temporary.events.push(event)
     }
 
     // buffer delete
@@ -298,6 +307,12 @@ fn test_object_basics() {
     assert_eq!(storage.updated().len(), 2);
     assert!(storage.created().is_empty());
     assert!(storage.deleted().is_empty());
+    // test than an event was emitted as expected
+    assert_eq!(storage.events().len(), 1);
+    assert_eq!(
+        storage.events()[0].clone().type_.name.to_string(),
+        "NewValueEvent"
+    );
     storage.flush();
     let updated_obj = storage.read_object(&id1).unwrap();
     assert_eq!(updated_obj.owner, addr2);

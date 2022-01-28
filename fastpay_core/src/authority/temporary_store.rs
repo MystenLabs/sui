@@ -1,3 +1,5 @@
+use fastx_types::event::Event;
+
 use super::*;
 
 pub type InnerTemporaryStore = (
@@ -5,6 +7,7 @@ pub type InnerTemporaryStore = (
     Vec<ObjectRef>,
     BTreeMap<ObjectID, Object>,
     BTreeSet<ObjectID>,
+    Vec<Event>,
 );
 
 pub struct AuthorityTemporaryStore {
@@ -16,6 +19,8 @@ pub struct AuthorityTemporaryStore {
     // Object reference calculation involves hashing which could be expensive.
     written: BTreeMap<ObjectID, Object>, // Objects written
     deleted: BTreeSet<ObjectID>,         // Objects actively deleted
+    /// Ordered sequence of events emitted by execution
+    events: Vec<Event>,
 }
 
 impl AuthorityTemporaryStore {
@@ -35,6 +40,7 @@ impl AuthorityTemporaryStore {
                 .collect(),
             written: BTreeMap::new(),
             deleted: BTreeSet::new(),
+            events: Vec::new(),
         }
     }
 
@@ -58,7 +64,13 @@ impl AuthorityTemporaryStore {
         {
             self.check_invariants();
         }
-        (self.objects, self.active_inputs, self.written, self.deleted)
+        (
+            self.objects,
+            self.active_inputs,
+            self.written,
+            self.deleted,
+            self.events,
+        )
     }
 
     /// For every object from active_inputs (i.e. all mutable objects), if they are not
@@ -106,6 +118,7 @@ impl AuthorityTemporaryStore {
                 .map(|id| self.objects[id].to_object_reference())
                 .collect(),
             gas_object: (gas_object.to_object_reference(), gas_object.owner),
+            events: self.events.clone(),
         };
         let signature = Signature::new(&effects, secret);
 
@@ -160,6 +173,7 @@ impl Storage for AuthorityTemporaryStore {
         self.active_inputs.clear();
         self.written.clear();
         self.deleted.clear();
+        self.events.clear();
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
@@ -210,6 +224,10 @@ impl Storage for AuthorityTemporaryStore {
         // Mark it for deletion
         debug_assert!(self.objects.get(id).is_some());
         self.deleted.insert(*id);
+    }
+
+    fn log_event(&mut self, event: Event) {
+        self.events.push(event)
     }
 }
 

@@ -1,6 +1,7 @@
 /// Test CTURD object basics (create, transfer, update, read, delete)
 module FastX::ObjectBasics {
     use FastX::Address;
+    use FastX::Event;
     use FastX::ID::ID;
     use FastX::TxContext::{Self, TxContext};
     use FastX::Transfer;
@@ -13,6 +14,10 @@ module FastX::ObjectBasics {
     struct Wrapper has key {
         id: ID,
         o: Object 
+    }
+
+    struct NewValueEvent has copy, drop {
+        new_value: u64
     }
 
     public fun create(value: u64, recipient: vector<u8>, ctx: &mut TxContext) {
@@ -31,12 +36,14 @@ module FastX::ObjectBasics {
     }
 
     public fun set_value(o: &mut Object, value: u64, _ctx: &mut TxContext) {
-        o.value = value;
+        o.value = value;   
     }
 
     // test that reading o2 and updating o1 works
     public fun update(o1: &mut Object, o2: &Object, _ctx: &mut TxContext) {
-        o1.value = o2.value
+        o1.value = o2.value;
+        // emit an event so the world can see the new value
+        Event::emit(NewValueEvent { new_value: o2.value })
     }
 
     public fun delete(o: Object, _ctx: &mut TxContext) {
