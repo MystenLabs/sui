@@ -35,7 +35,8 @@ pub struct CertificateWaiter<PublicKey: VerifyingKey> {
     /// Loops back to the core certificates for which we got all parents.
     tx_core: Sender<Certificate<PublicKey>>,
     /// List of digests (certificates) that are waiting to be processed. Their processing will
-    /// resume when we get all their dependencies.
+    /// resume when we get all their dependencies. The map holds a cancellation `Sender`
+    /// which we can use to give up on a certificate.
     pending: HashMap<Digest, (Round, Sender<()>)>,
 }
 
@@ -67,7 +68,7 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
         missing: Vec<Digest>,
         store: &Store<Digest, Certificate<PublicKey>>,
         deliver: Certificate<PublicKey>,
-        mut handler: Receiver<()>,
+        mut cancel_handle: Receiver<()>,
     ) -> DagResult<Certificate<PublicKey>> {
         let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
 
@@ -75,7 +76,8 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
             result = try_join_all(waiting) => {
                 result.map(|_| deliver).map_err(DagError::from)
             }
-            _ = handler.recv() => Ok(deliver),
+            // the request for this certificate is obsolete, for instance because its round is obsolete (GC'd).
+            _ = cancel_handle.recv() => Ok(deliver),
         }
     }
 
@@ -119,9 +121,9 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
             let round = self.consensus_round.load(Ordering::Relaxed);
             if round > self.gc_depth {
                 let gc_round = round - self.gc_depth;
-                for (r, handler) in self.pending.values() {
+                for (r, cancel_handle) in self.pending.values() {
                     if *r <= gc_round + 1 {
-                        let _ = handler.send(()).await;
+                        let _ = cancel_handle.send(()).await;
                     }
                 }
                 self.pending.retain(|_, (r, _)| *r > gc_round + 1);
