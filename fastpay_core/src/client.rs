@@ -140,6 +140,10 @@ pub trait Client {
     /// Get all object we own.
     async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error>;
 }
+const CERT_CF_NAME: &str = "certificates";
+const SEQ_NUMBER_CF_NAME: &str = "object_sequence_numbers";
+const OBJ_REF_CF_NAME: &str = "object_refs";
+const TX_DIGEST_TO_CERT_CF_NAME: &str = "object_certs";
 
 impl<A> ClientState<A> {
     pub fn new(
@@ -160,10 +164,10 @@ impl<A> ClientState<A> {
         let db = client_store::init_store(
             path,
             vec![
-                "certificates",
-                "object_sequence_numbers",
-                "object_refs",
-                "object_certs",
+                CERT_CF_NAME,
+                SEQ_NUMBER_CF_NAME,
+                OBJ_REF_CF_NAME,
+                TX_DIGEST_TO_CERT_CF_NAME,
             ],
         );
         let client_state = ClientState {
@@ -172,25 +176,29 @@ impl<A> ClientState<A> {
             committee,
             authority_clients,
             pending_transfer: None,
-            certificates: ClientStoreMap::new(&db, "certificates"),
-            object_sequence_numbers: ClientStoreMap::new(&db, "object_sequence_numbers"),
-            object_refs: ClientStoreMap::new(&db, "object_refs"),
-            object_certs: ClientStoreMap::new(&db, "object_certs"),
+            certificates: ClientStoreMap::new(&db, CERT_CF_NAME),
+            object_sequence_numbers: ClientStoreMap::new(&db, SEQ_NUMBER_CF_NAME),
+            object_refs: ClientStoreMap::new(&db, OBJ_REF_CF_NAME),
+            object_certs: ClientStoreMap::new(&db, TX_DIGEST_TO_CERT_CF_NAME),
         };
 
         // Backfill the DB
+        client_state.populate(object_refs, certificates);
         client_state
-            .object_refs
+    }
+
+    pub fn populate(
+        &self,
+        object_refs: BTreeMap<ObjectID, ObjectRef>,
+        certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
+    ) {
+        self.object_refs
             .populate_from_btree_map(object_refs.clone());
-        client_state
-            .certificates
-            .populate_from_btree_map(certificates);
+        self.certificates.populate_from_btree_map(certificates);
         let _: Vec<_> = object_refs
             .iter()
-            .map(|(id, ref_)| client_state.object_sequence_numbers.insert(*id, ref_.1))
+            .map(|(id, ref_)| self.object_sequence_numbers.insert(*id, ref_.1))
             .collect();
-
-        client_state
     }
 
     pub fn address(&self) -> FastPayAddress {
