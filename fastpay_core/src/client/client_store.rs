@@ -47,10 +47,12 @@ where
     }
     /// Convenience fn to opulate from BTreeMap
     pub fn populate_from_btree_map(&self, b: BTreeMap<K, V>) {
-        let _: Vec<_> = b
-            .iter()
-            .map(|(k, v)| self.insert(k.clone(), v.clone()))
-            .collect();
+        let batch = self
+            .db_map
+            .batch()
+            .insert_batch(&self.db_map, b.into_iter())
+            .expect("batch insertion failure");
+        batch.write().expect("batch execution failure");
     }
     /// Get a copy as a BTreeMap
     pub fn copy_as_btree_map(&self) -> BTreeMap<K, V> {
