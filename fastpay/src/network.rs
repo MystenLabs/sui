@@ -8,10 +8,10 @@ use fastx_types::{error::*, messages::*, serialize::*};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::future::FutureExt;
-use log::*;
 use std::io;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::time;
+use tracing::*;
 
 pub struct Server {
     base_address: String,
