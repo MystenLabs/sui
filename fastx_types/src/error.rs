@@ -36,6 +36,8 @@ pub enum FastPayError {
     LockErrors { errors: Vec<FastPayError> },
     #[error("Attempt to transfer read-only object.")]
     CannotTransferReadOnlyObject,
+    #[error("A move package is expected, instead a move object is passed: {object_id}")]
+    MoveObjectAsPackage { object_id: ObjectID },
 
     // Signature verification
     #[error("Signature is not valid: {}", error)]
@@ -133,6 +135,8 @@ pub enum FastPayError {
     ModulePublishFailure { error: String },
     #[error("Failed to build Move modules")]
     ModuleBuildFailure { error: String },
+    #[error("Dependent package not found on-chain: {package_id:?}")]
+    DependentPackageNotFound { package_id: ObjectID },
 
     // Move call related errors
     #[error("Function resolution failure: {error:?}.")]
