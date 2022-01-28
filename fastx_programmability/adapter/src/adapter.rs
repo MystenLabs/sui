@@ -4,11 +4,14 @@
 use anyhow::Result;
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
+use fastx_framework::EventType;
 use fastx_types::{
     base_types::{
-        FastPayAddress, ObjectID, TxContext, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+        FastPayAddress, ObjectID, TransactionDigest, TxContext, TX_CONTEXT_MODULE_NAME,
+        TX_CONTEXT_STRUCT_NAME,
     },
     error::{FastPayError, FastPayResult},
+    event::Event,
     gas,
     messages::ExecutionStatus,
     object::{Data, MoveObject, Object},
@@ -296,7 +299,7 @@ pub fn generate_package_id(
     Ok(package_id)
 }
 
-type Event = (Vec<u8>, u64, TypeTag, Vec<u8>);
+type MoveEvent = (Vec<u8>, u64, TypeTag, Vec<u8>);
 
 /// Update `state_view` with the effects of successfully executing a transaction:
 /// - Look for each input in `by_value_objects` to determine whether the object was transferred, frozen, or deleted
@@ -311,7 +314,7 @@ fn process_successful_execution<
     state_view: &mut S,
     mut by_value_objects: BTreeMap<ObjectID, Object>,
     mutable_refs: impl Iterator<Item = (Object, Vec<u8>)>,
-    events: Vec<Event>,
+    events: Vec<MoveEvent>,
     ctx: &TxContext,
 ) -> (u64, u64) {
     for (mut obj, new_contents) in mutable_refs {
@@ -324,38 +327,38 @@ fn process_successful_execution<
     }
     // process events to identify transfers, freezes
     let mut gas_used = 0;
+    let tx_digest = ctx.digest();
     for e in events {
-        let (recipient, should_freeze, type_, event_bytes) = e;
-        debug_assert!(!recipient.is_empty() && should_freeze < 2);
-        match type_ {
-            TypeTag::Struct(s_type) => {
-                let contents = event_bytes;
-                let should_freeze = should_freeze != 0;
-                // unwrap safe due to size enforcement in Move code for `Authenticator
-                let recipient = FastPayAddress::try_from(recipient.borrow()).unwrap();
-                let mut move_obj = MoveObject::new(s_type, contents);
-                let old_object = by_value_objects.remove(&move_obj.id());
-
-                #[cfg(debug_assertions)]
-                {
-                    check_transferred_object_invariants(&move_obj, &old_object)
-                }
-
-                // increment the object version. note that if the transferred object was
-                // freshly created, this means that its version will now be 1.
-                // thus, all objects in the global object pool have version > 0
-                move_obj.increment_version();
-                if should_freeze {
-                    move_obj.freeze();
-                }
-                let obj = Object::new_move(move_obj, recipient, ctx.digest());
-                if old_object.is_none() {
-                    // Charge extra gas based on object size if we are creating a new object.
-                    gas_used += gas::calculate_object_creation_cost(&obj);
-                }
-                state_view.write_object(obj);
-            }
-            _ => unreachable!("Only structs can be transferred"),
+        let (recipient, event_type, type_, event_bytes) = e;
+        match EventType::try_from(event_type as u8)
+            .expect("Safe because event_type is derived from an EventType enum")
+        {
+            EventType::Transfer => handle_transfer(
+                recipient,
+                type_,
+                event_bytes,
+                false, /* should_freeze */
+                tx_digest,
+                &mut by_value_objects,
+                &mut gas_used,
+                state_view,
+            ),
+            EventType::TransferAndFreeze => handle_transfer(
+                recipient,
+                type_,
+                event_bytes,
+                true, /* should_freeze */
+                tx_digest,
+                &mut by_value_objects,
+                &mut gas_used,
+                state_view,
+            ),
+            EventType::User => match type_ {
+                TypeTag::Struct(s) => state_view.log_event(Event::new(s, event_bytes)),
+                _ => unreachable!(
+                    "Native function emit_event<T> ensures that T is always bound to structs"
+                ),
+            },
         }
     }
 
@@ -370,6 +373,51 @@ fn process_successful_execution<
     }
 
     (gas_used, gas_refund)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_transfer<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+>(
+    recipient: Vec<u8>,
+    type_: TypeTag,
+    contents: Vec<u8>,
+    should_freeze: bool,
+    tx_digest: TransactionDigest,
+    by_value_objects: &mut BTreeMap<ObjectID, Object>,
+    gas_used: &mut u64,
+    state_view: &mut S,
+) {
+    debug_assert!(!recipient.is_empty());
+    match type_ {
+        TypeTag::Struct(s_type) => {
+            // unwrap safe due to size enforcement in Move code for `Authenticator
+            let recipient = FastPayAddress::try_from(recipient.borrow()).unwrap();
+            let mut move_obj = MoveObject::new(s_type, contents);
+            let old_object = by_value_objects.remove(&move_obj.id());
+
+            #[cfg(debug_assertions)]
+            {
+                check_transferred_object_invariants(&move_obj, &old_object)
+            }
+
+            // increment the object version. note that if the transferred object was
+            // freshly created, this means that its version will now be 1.
+            // thus, all objects in the global object pool have version > 0
+            move_obj.increment_version();
+            if should_freeze {
+                move_obj.freeze();
+            }
+            let obj = Object::new_move(move_obj, recipient, tx_digest);
+            if old_object.is_none() {
+                // Charge extra gas based on object size if we are creating a new object.
+                *gas_used += gas::calculate_object_creation_cost(&obj);
+            }
+            state_view.write_object(obj);
+        }
+        _ => unreachable!("Only structs can be transferred"),
+    }
 }
 
 struct TypeCheckSuccess {

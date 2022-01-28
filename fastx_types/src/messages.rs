@@ -3,7 +3,7 @@
 
 use crate::object::Object;
 
-use super::{base_types::*, committee::Committee, error::*};
+use super::{base_types::*, committee::Committee, error::*, event::Event};
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -191,7 +191,8 @@ pub struct OrderEffects {
     pub deleted: Vec<ObjectRef>,
     // The updated gas object reference.
     pub gas_object: (ObjectRef, FastPayAddress),
-    // TODO: add events here too.
+    /// The events emitted during execution. Note that only successful transactions emit events
+    pub events: Vec<Event>,
 }
 
 impl OrderEffects {
