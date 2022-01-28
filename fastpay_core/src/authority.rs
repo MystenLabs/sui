@@ -330,11 +330,11 @@ impl AuthorityState {
         let requested_certificate = if let Some(seq) = request.request_sequence_number {
             // Get the Transaction Digest that created the object
             let parent_iterator = self
-                .get_parent_iterator(request.object_id, Some(seq.increment()))
+                .get_parent_iterator(request.object_id, Some(seq))
                 .await?;
             let (_, transaction_digest) = parent_iterator
                 .first()
-                .ok_or(FastPayError::CertificateNotfound)?;
+                .ok_or(FastPayError::ParentNotfound {object_id: request.object_id, sequence: seq })?;
             // Get the cert from the transaction digest
             Some(
                 self.read_certificate(transaction_digest)

@@ -267,6 +267,7 @@ impl<A> ClientState<A> {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 struct CertificateRequester<A> {
     committee: Committee,
@@ -301,9 +302,19 @@ where
         &mut self,
         (object_id, sequence_number): (ObjectID, SequenceNumber),
     ) -> Result<CertifiedOrder, FastPayError> {
+
+        // BUG(https://github.com/MystenLabs/fastnft/issues/290): This function assumes that requesting the parent cert of object seq+1 will give the cert of 
+        //        that creates the object. This is not true, as objects may be deleted and may not have a seq+1
+        //        to look up.
+        //
+        //        The authority `handle_object_info_request` is now fixed to return the parent at seq, and not 
+        //        seq+1. But a lot of the client code makes the above wrong assumption, and the line above reverts
+        //        query to the old (incorrect) behavious to not break tests everywhere.
+        let inner_sequence_number = sequence_number.increment();
+
         let request = ObjectInfoRequest {
             object_id,
-            request_sequence_number: Some(sequence_number),
+            request_sequence_number: Some(inner_sequence_number),
             request_received_transfers_excluding_first_nth: None,
         };
         // Sequentially try each authority in random order.
@@ -316,14 +327,19 @@ where
                     .requested_certificate
                     .expect("Unable to get certificate");
                 if certificate.check(&self.committee).is_ok() {
+                    // BUG (https://github.com/MystenLabs/fastnft/issues/290): Orders do not have a sequence number any more, objects do.
+                    /*
                     let order = &certificate.order;
                     if let Some(sender) = self.sender {
-                        if order.sender() == &sender && order.sequence_number() == sequence_number {
+                        
+                        if order.sender() == &sender && order.sequence_number() == inner_sequence_number {
                             return Ok(certificate.clone());
                         }
                     } else {
                         return Ok(certificate.clone());
                     }
+                    */
+                    return Ok(certificate.clone());
                 }
             }
         }
@@ -387,13 +403,23 @@ where
 
             for object_ref in input_objects {
                 // Request the parent certificate from the authority.
-                let object_info = source_client
+                let object_info_response = source_client
                     .handle_object_info_request(ObjectInfoRequest {
                         object_id: object_ref.0,
                         request_sequence_number: Some(object_ref.1),
                         request_received_transfers_excluding_first_nth: None,
                     })
-                    .await?;
+                    .await;
+
+                let object_info = match object_info_response {
+                    Ok(object_info) => object_info,
+                    // Here we cover the case the object genuinely has no parent.
+                    Err(FastPayError::ParentNotfound { .. }) => 
+                    {
+                        continue;
+                    },
+                    Err(e) =>  return Err(e),
+                };
 
                 let returned_certificate = object_info
                     .requested_certificate
@@ -689,6 +715,10 @@ where
     }
 
     /// Broadcast missing confirmation orders and execute provided authority action on each authority.
+    // BUG(https://github.com/MystenLabs/fastnft/issues/290): This logic for
+    // updating an authority that is behind is not correct, since we now have
+    // potentially many dependencies that need to be satisfied, not just a 
+    // list.
     async fn broadcast_and_execute<'a, V, F: 'a>(
         &'a mut self,
         sender: FastPayAddress,
@@ -750,6 +780,7 @@ where
                             number = seq.decrement();
                         }
                     }
+
                     // Send all missing confirmation orders.
                     missing_certificates.reverse();
                     missing_certificates.extend(certificates_to_broadcast.clone());
@@ -1097,7 +1128,15 @@ where
                 let response = self
                     .get_object_info(ObjectInfoRequest {
                         object_id: *certificate.order.object_id(),
-                        request_sequence_number: Some(transfer.object_ref.1),
+                        // BUG(https://github.com/MystenLabs/fastnft/issues/290): 
+                        //        This function assumes that requesting the parent cert of object seq+1 will give the cert of 
+                        //        that creates the object. This is not true, as objects may be deleted and may not have a seq+1
+                        //        to look up.
+                        //
+                        //        The authority `handle_object_info_request` is now fixed to return the parent at seq, and not 
+                        //        seq+1. But a lot of the client code makes the above wrong assumption, and the line above reverts
+                        //        query to the old (incorrect) behavious to not break tests everywhere.
+                        request_sequence_number: Some(transfer.object_ref.1.increment()),
                         request_received_transfers_excluding_first_nth: None,
                     })
                     .await?;
