@@ -725,7 +725,7 @@ where
     /// Broadcast missing confirmation orders and execute provided authority action on each authority.
     // BUG(https://github.com/MystenLabs/fastnft/issues/290): This logic for
     // updating an authority that is behind is not correct, since we now have
-    // potentially many dependencies that need to be satisfied, not just a 
+    // potentially many dependencies that need to be satisfied, not just a
     // list.
     async fn broadcast_and_execute<'a, V, F: 'a>(
         &'a mut self,
