@@ -11,15 +11,20 @@ use futures::{future, StreamExt, TryFutureExt};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use rand::seq::SliceRandom;
+use typed_store::rocks::open_cf;
 
-use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::env;
 use std::path::Path;
 use std::time::Duration;
 use tokio::time::timeout;
 
+mod client_store;
+
 #[cfg(test)]
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
+
+use self::client_store::ClientStoreMap;
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -68,13 +73,13 @@ pub struct ClientState<AuthorityClient> {
 
     // The remaining fields are used to minimize networking, and may not always be persisted locally.
     /// Known certificates, indexed by TX digest.
-    certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
+    certificates: ClientStoreMap<TransactionDigest, CertifiedOrder>,
     /// The known objects with it's sequence number owned by the client.
-    object_sequence_numbers: BTreeMap<ObjectID, SequenceNumber>,
+    object_sequence_numbers: ClientStoreMap<ObjectID, SequenceNumber>,
     /// Confirmed objects with it's ref owned by the client.
-    object_refs: BTreeMap<ObjectID, ObjectRef>,
+    object_refs: ClientStoreMap<ObjectID, ObjectRef>,
     /// Certificate <-> object id linking map.
-    object_certs: BTreeMap<ObjectID, Vec<TransactionDigest>>,
+    object_certs: ClientStoreMap<ObjectID, Vec<TransactionDigest>>,
 }
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
@@ -135,6 +140,10 @@ pub trait Client {
     /// Get all object we own.
     async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error>;
 }
+const CERT_CF_NAME: &str = "certificates";
+const SEQ_NUMBER_CF_NAME: &str = "object_sequence_numbers";
+const OBJ_REF_CF_NAME: &str = "object_refs";
+const TX_DIGEST_TO_CERT_CF_NAME: &str = "object_certs";
 
 impl<A> ClientState<A> {
     pub fn new(
@@ -145,22 +154,51 @@ impl<A> ClientState<A> {
         certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
         object_refs: BTreeMap<ObjectID, ObjectRef>,
     ) -> Self {
-        let object_seq = object_refs
-            .iter()
-            .map(|(id, (_, seq, _))| (*id, *seq))
-            .collect();
+        // TODO: use deterministic path passed in
+        let path = match tempfile::tempdir() {
+            Ok(p) => p.into_path(),
+            Err(_) => env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
+        };
 
-        Self {
+        // Open column families
+        let db = client_store::init_store(
+            path,
+            vec![
+                CERT_CF_NAME,
+                SEQ_NUMBER_CF_NAME,
+                OBJ_REF_CF_NAME,
+                TX_DIGEST_TO_CERT_CF_NAME,
+            ],
+        );
+        let client_state = ClientState {
             address,
             secret,
             committee,
             authority_clients,
             pending_transfer: None,
-            certificates,
-            object_sequence_numbers: object_seq,
-            object_refs,
-            object_certs: BTreeMap::new(),
-        }
+            certificates: ClientStoreMap::new(&db, CERT_CF_NAME),
+            object_sequence_numbers: ClientStoreMap::new(&db, SEQ_NUMBER_CF_NAME),
+            object_refs: ClientStoreMap::new(&db, OBJ_REF_CF_NAME),
+            object_certs: ClientStoreMap::new(&db, TX_DIGEST_TO_CERT_CF_NAME),
+        };
+
+        // Backfill the DB
+        client_state.populate(object_refs, certificates);
+        client_state
+    }
+
+    pub fn populate(
+        &self,
+        object_refs: BTreeMap<ObjectID, ObjectRef>,
+        certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
+    ) {
+        self.object_refs
+            .populate_from_btree_map(object_refs.clone());
+        self.certificates.populate_from_btree_map(certificates);
+
+        object_refs
+            .iter()
+            .for_each(|(id, ref_)| self.object_sequence_numbers.insert(*id, ref_.1));
     }
 
     pub fn address(&self) -> FastPayAddress {
@@ -172,28 +210,31 @@ impl<A> ClientState<A> {
         object_id: &ObjectID,
     ) -> Result<SequenceNumber, FastPayError> {
         if self.object_sequence_numbers.contains_key(object_id) {
-            Ok(self.object_sequence_numbers[object_id])
+            Ok(self
+                .object_sequence_numbers
+                .get(object_id)
+                .expect("Unable to get sequence number"))
         } else {
             Err(FastPayError::ObjectNotFound {
                 object_id: *object_id,
             })
         }
     }
-    pub fn object_ref(&self, object_id: ObjectID) -> Result<&ObjectRef, FastPayError> {
+    pub fn object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, FastPayError> {
         self.object_refs
             .get(&object_id)
             .ok_or(FastPayError::ObjectNotFound { object_id })
     }
 
-    pub fn object_refs(&self) -> &BTreeMap<ObjectID, ObjectRef> {
-        &self.object_refs
+    pub fn object_refs(&self) -> BTreeMap<ObjectID, ObjectRef> {
+        self.object_refs.copy_as_btree_map()
     }
 
     pub fn pending_transfer(&self) -> &Option<Order> {
         &self.pending_transfer
     }
 
-    pub fn certificates(&self, object_id: &ObjectID) -> impl Iterator<Item = &CertifiedOrder> {
+    pub fn certificates(&self, object_id: &ObjectID) -> impl Iterator<Item = CertifiedOrder> + '_ {
         self.object_certs
             .get(object_id)
             .into_iter()
@@ -201,20 +242,20 @@ impl<A> ClientState<A> {
                 cert_digests
                     .iter()
                     .filter_map(|digest| self.certificates.get(digest))
+                    .collect::<Vec<_>>()
             })
     }
 
-    pub fn all_certificates(&self) -> &BTreeMap<TransactionDigest, CertifiedOrder> {
-        &self.certificates
+    pub fn all_certificates(&self) -> BTreeMap<TransactionDigest, CertifiedOrder> {
+        self.certificates.copy_as_btree_map()
     }
 
     pub fn insert_object(&mut self, object_ref: &ObjectRef, digest: &TransactionDigest) {
         let (object_id, seq, _) = object_ref;
         self.object_sequence_numbers.insert(*object_id, *seq);
-        self.object_certs
-            .entry(*object_id)
-            .or_default()
-            .push(*digest);
+        let mut tx_digests = self.object_certs.get(object_id).unwrap_or_default();
+        tx_digests.push(*digest);
+        self.object_certs.insert(*object_id, tx_digests.to_vec());
         self.object_refs.insert(*object_id, *object_ref);
     }
 
@@ -270,7 +311,9 @@ where
         for client in self.authority_clients.iter_mut() {
             let result = client.handle_object_info_request(request.clone()).await;
             if let Ok(response) = result {
-                let certificate = response.requested_certificate.unwrap();
+                let certificate = response
+                    .requested_certificate
+                    .expect("Unable to get certificate");
                 if certificate.check(&self.committee).is_ok() {
                     let order = &certificate.order;
                     if let Some(sender) = self.sender {
@@ -505,15 +548,13 @@ where
         );
 
         let known_certificates = inputs.iter().flat_map(|(object_id, seq, _)| {
-            self.certificates(object_id)
-                .cloned()
-                .filter_map(move |cert| {
-                    if cert.order.sender() == &sender {
-                        Some(((*object_id, *seq), Ok(cert)))
-                    } else {
-                        None
-                    }
-                })
+            self.certificates(object_id).filter_map(move |cert| {
+                if cert.order.sender() == &sender {
+                    Some(((*object_id, *seq), Ok(cert)))
+                } else {
+                    None
+                }
+            })
         });
 
         let (_, mut handle) = Downloader::start(requester, known_certificates);
@@ -602,7 +643,7 @@ where
     ) -> Result<BTreeMap<ObjectID, Vec<CertifiedOrder>>, FastPayError> {
         let mut sent_certificates: BTreeMap<ObjectID, Vec<CertifiedOrder>> = BTreeMap::new();
 
-        for (object_id, next_sequence_number) in self.object_sequence_numbers.clone() {
+        for (object_id, next_sequence_number) in self.object_sequence_numbers.copy_as_btree_map() {
             let known_sequence_numbers: BTreeSet<_> = self
                 .certificates(&object_id)
                 .flat_map(|cert| cert.order.input_objects())
@@ -667,10 +708,14 @@ where
             self.object_sequence_numbers
                 .insert(*object_id, new_next_sequence_number);
 
-            let certs = self.object_certs.entry(*object_id).or_default();
+            let mut certs = match self.object_certs.get(object_id) {
+                Some(c) => c.clone(),
+                None => Vec::new(),
+            };
 
             if !certs.contains(&new_cert.order.digest()) {
                 certs.push(new_cert.order.digest());
+                self.object_certs.insert(*object_id, certs.to_vec())
             }
         }
         // Sanity check
@@ -785,7 +830,6 @@ where
                 let old_seq = self
                     .object_sequence_numbers
                     .get(&object_id)
-                    .cloned()
                     .unwrap_or_default();
                 // only update if data is new
                 if old_seq < seq {
@@ -803,7 +847,6 @@ where
                 let old_seq = self
                     .object_sequence_numbers
                     .get(object_id)
-                    .cloned()
                     .unwrap_or_default();
                 if old_seq < *seq {
                     self.remove_object(object_id);
@@ -856,10 +899,10 @@ where
                 })?;
 
         let transfer = Transfer {
-            object_ref: *object_ref,
+            object_ref,
             sender: self.address,
             recipient: Address::FastPay(recipient),
-            gas_payment: *gas_payment,
+            gas_payment,
         };
         let order = Order::new_transfer(transfer, &self.secret);
         let (certificate, _) = self.execute_transaction(order).await?;
@@ -903,15 +946,20 @@ where
                     .insert(response.object.id(), response.object.to_object_reference());
 
                 // Everything worked: update the local balance.
-                if let Entry::Vacant(entry) = self.certificates.entry(certificate.order.digest()) {
+                if !self.certificates.contains_key(&certificate.order.digest()) {
                     self.object_sequence_numbers
                         .insert(transfer.object_ref.0, transfer.object_ref.1.increment());
+                    let mut tx_digests = match self.object_certs.get(&transfer.object_ref.0) {
+                        Some(c) => c,
+                        None => Vec::new(),
+                    };
+                    tx_digests.push(certificate.order.digest());
                     self.object_certs
-                        .entry(transfer.object_ref.0)
-                        .or_default()
-                        .push(certificate.order.digest());
-                    entry.insert(certificate.clone());
+                        .insert(transfer.object_ref.0, tx_digests.to_vec());
+                    self.certificates
+                        .insert(certificate.order.digest(), certificate.clone());
                 }
+
                 Ok(())
             }
             OrderKind::Publish(_) | OrderKind::Call(_) => {
@@ -926,8 +974,8 @@ where
         object_id: ObjectID,
         gas_payment: ObjectID,
     ) -> Result<CertifiedOrder, anyhow::Error> {
-        let object_ref = *self.object_ref(object_id)?;
-        let gas_payment = *self.object_ref(gas_payment)?;
+        let object_ref = self.object_ref(object_id)?;
+        let gas_payment = self.object_ref(gas_payment)?;
 
         let transfer = Transfer {
             object_ref,
@@ -1020,6 +1068,6 @@ where
     }
 
     async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error> {
-        Ok(self.object_sequence_numbers.keys().copied().collect())
+        Ok(self.object_sequence_numbers.key_list())
     }
 }
