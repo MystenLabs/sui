@@ -162,7 +162,9 @@ pub enum FastPayError {
     #[error("Execution invariant violated")]
     ExecutionInvariantViolation,
     #[error("Authority did not return the information it is expected to have.")]
-    AuthorityInformationUnavailability,
+    AuthorityInformationUnavailable,
+    #[error("Failed to update authority.")]
+    AuthorityUpdateFailure,
     #[error("Storage error")]
     StorageError(#[from] typed_store::rocks::TypedStoreError),
 

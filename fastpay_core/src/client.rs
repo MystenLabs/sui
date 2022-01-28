@@ -340,8 +340,8 @@ where
     ///
     /// Note: Both source and destination may be byzantine, therefore one should always
     /// time limit the call to this function to avoid byzantine authorities consuming
-    /// and unbounded amount of resources.
-    pub async fn sync_authority_source_to_destination(
+    /// an unbounded amount of resources.
+    async fn sync_authority_source_to_destination(
         &self,
         cert: ConfirmationOrder,
         source_authority: AuthorityName,
@@ -351,18 +351,18 @@ where
         let mut destination_client = self.authority_clients[&destination_authority].clone();
 
         // This represents a stack of certificates that we need to register with the
-        // destination authority.
+        // destination authority. The stack is a LIFO queue, and therefore later insertions
+        // represent certificates that earlier insertions depend on. Thus updating an
+        // authority in the order we pop() the certificates from this stack should ensure
+        // certificates are uploaded in causal order.
+        let digest = cert.certificate.order.digest();
         let mut missing_certificates: Vec<_> = vec![cert.clone()];
 
-        // We keep a list of certificates already processed to avoid
+        // We keep a list of certificates already processed to avoid duplicates
         let mut requested_certificates: HashSet<TransactionDigest> =
-            vec![cert.certificate.order.digest()].into_iter().collect();
+            vec![digest].into_iter().collect();
 
-        while !missing_certificates.is_empty() {
-            let target_cert: ConfirmationOrder = missing_certificates
-                .pop()
-                .expect("Just checked Vec not empty");
-
+        while let Some(target_cert) = missing_certificates.pop() {
             match destination_client
                 .handle_confirmation_order(target_cert.clone())
                 .await
@@ -374,9 +374,12 @@ where
             }
 
             // If we are here it means that the destination authority is missing
-            // the previous certificates, so we need to read them from the either
-            // a cache OR the source authority.
-
+            // the previous certificates, so we need to read them from the source
+            // authority.
+            //
+            // TODO: Eventually the client will store more information, and we could
+            // first try to read certificates and parents from a local cache before
+            // asking an authority.
             let input_objects = target_cert.certificate.order.input_objects();
 
             // Put back the target cert
@@ -394,10 +397,14 @@ where
 
                 let returned_certificate = object_info
                     .requested_certificate
-                    .ok_or(FastPayError::AuthorityInformationUnavailability)?;
+                    .ok_or(FastPayError::AuthorityInformationUnavailable)?;
                 let returned_digest = returned_certificate.order.digest();
+
+                // We check that we are not processing twice the same certificate, as
+                // it would be common if two objects used by one order, were also both
+                // mutated by the same preceeding order.
                 if !requested_certificates.contains(&returned_digest) {
-                    // We have not confirmed the authority has this one
+                    // Add this cert to the set we have processed
                     requested_certificates.insert(returned_digest);
 
                     // Check & Add it to the list of certificates to sync
@@ -408,6 +415,77 @@ where
         }
 
         Ok(())
+    }
+
+    /// Sync a certificate to an authority.
+    ///
+    /// This function infers which authorities have the history related to
+    /// a certificate and attempts `retries` number of them, sampled accoding to
+    /// stake, in order to bring the destination authority up to date to accept
+    /// the certificate. The time devoted to each attempt is bounded by
+    /// `timeout_milliseconds`.
+    pub async fn sync_certificate_to_authority_with_timeout(
+        &self,
+        cert: ConfirmationOrder,
+        destination_authority: AuthorityName,
+        timeout_milliseconds: u64,
+        retries: usize,
+    ) -> Result<(), FastPayError> {
+        // Extract the set of authorities that should have this certificate
+        // and its full history. We should be able to use these are source authorities.
+        let mut candidate_source_authorties: HashSet<AuthorityName> = cert
+            .certificate
+            .signatures
+            .iter()
+            .map(|(name, _)| *name)
+            .collect();
+
+        // Sample a `retries` number of distinct authorities by stake.
+        let mut source_authorities: Vec<AuthorityName> = Vec::new();
+        while source_authorities.len() < retries && !candidate_source_authorties.is_empty() {
+            // Here we do rejection sampling.
+            //
+            // TODO: add a filter parameter to sample, so that we can directly
+            //       sample from a subset which is more efficient.
+            let sample_authority = self.committee.sample();
+            if candidate_source_authorties.contains(sample_authority) {
+                candidate_source_authorties.remove(sample_authority);
+                source_authorities.push(*sample_authority);
+            }
+        }
+
+        // Now try to update the destination authority sequentially using
+        // the source authorities we have sampled.
+        for source_authority in source_authorities {
+            // Note: here we could improve this function by passing into the
+            //       `sync_authority_source_to_destination` call a cache of
+            //       certificates and parents to avoid re-downloading them.
+            if timeout(
+                Duration::from_millis(timeout_milliseconds),
+                self.sync_authority_source_to_destination(
+                    cert.clone(),
+                    source_authority,
+                    destination_authority,
+                ),
+            )
+            .await.is_ok()
+            {
+                // If the updates suceeds we return, since there is no need
+                // to try other sources.
+                return Ok(());
+            }
+
+            // If we are here it means that the update failed, either due to the
+            // source being faulty or the destination being faulty.
+            //
+            // TODO: We should probably be keeping a record of suspected faults
+            // upon failure to de-prioritize authorities that we have observed being
+            // less reliable.
+        }
+
+        // Eventually we should add more information to this error about the destination
+        // and maybe event the certificiate.
+        Err(FastPayError::AuthorityUpdateFailure)
     }
 
     #[cfg(test)]
