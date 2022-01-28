@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future;
-use log::*;
 use std::io::ErrorKind;
 use std::{collections::HashMap, convert::TryInto, io, sync::Arc};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -11,6 +10,7 @@ use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::{TcpListener, TcpStream},
 };
+use tracing::*;
 
 #[cfg(test)]
 #[path = "unit_tests/transport_tests.rs"]
