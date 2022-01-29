@@ -3,8 +3,9 @@
 
 #![deny(warnings)]
 
-use fastpay::{config::*, network, transport};
+use fastpay::{config::*, mass_client::MassClient};
 use fastpay_core::client::*;
+use fastx_network::{network, transport};
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
 use move_core_types::transaction_argument::convert_txn_args;
 
@@ -47,10 +48,10 @@ fn make_authority_mass_clients(
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
     max_in_flight: u64,
-) -> Vec<network::MassClient> {
+) -> Vec<MassClient> {
     let mut authority_clients = Vec::new();
     for config in &committee_config.authorities {
-        let client = network::MassClient::new(
+        let client = MassClient::new(
             config.host.clone(),
             config.base_port,
             buffer_size,
