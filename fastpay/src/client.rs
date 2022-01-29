@@ -14,6 +14,8 @@ use futures::stream::StreamExt;
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
+    env,
+    path::PathBuf,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
@@ -63,6 +65,7 @@ fn make_authority_mass_clients(
 }
 
 async fn make_client_state_and_try_sync(
+    path: PathBuf,
     accounts: &AccountsConfig,
     committee_config: &CommitteeConfig,
     address: FastPayAddress,
@@ -71,6 +74,7 @@ async fn make_client_state_and_try_sync(
     recv_timeout: std::time::Duration,
 ) -> ClientState<network::Client> {
     let mut c = make_client_state(
+        path,
         accounts,
         committee_config,
         address,
@@ -85,6 +89,7 @@ async fn make_client_state_and_try_sync(
 }
 
 fn make_client_state(
+    path: PathBuf,
     accounts: &AccountsConfig,
     committee_config: &CommitteeConfig,
     address: FastPayAddress,
@@ -97,6 +102,7 @@ fn make_client_state(
     let authority_clients =
         make_authority_clients(committee_config, buffer_size, send_timeout, recv_timeout);
     ClientState::new(
+        path,
         address,
         account.key.copy(),
         committee,
@@ -104,6 +110,7 @@ fn make_client_state(
         account.certificates.clone(),
         account.object_refs.clone(),
     )
+    .unwrap()
 }
 
 /// Make one transfer order per account, up to `max_orders` transfers.
@@ -364,6 +371,10 @@ struct ClientOpt {
     /// Subcommands. Acceptable values are transfer, query_objects, benchmark, and create_accounts.
     #[structopt(subcommand)]
     cmd: ClientCommands,
+
+    /// Path to directory for client DB
+    #[structopt(long)]
+    path: Option<String>,
 }
 
 #[derive(StructOpt)]
@@ -466,6 +477,10 @@ fn main() {
     let accounts_config_path = &options.accounts;
     let committee_config_path = &options.committee;
     let buffer_size = options.buffer_size;
+    let client_db_path = env::temp_dir().join(format!(
+        "CLIENT_DB_{}",
+        options.path.unwrap_or_else(|| "0".to_string())
+    ));
 
     let mut accounts_config =
         AccountsConfig::read_or_create(accounts_config_path).expect("Unable to read user accounts");
@@ -483,6 +498,7 @@ fn main() {
                 let owner = find_cached_owner_by_object_id(&accounts_config, gas_object_id)
                     .expect("Cannot find owner for gas object");
                 let mut client_state = make_client_state_and_try_sync(
+                    client_db_path,
                     &accounts_config,
                     &committee_config,
                     *owner,
@@ -522,6 +538,7 @@ fn main() {
             rt.block_on(async move {
                 // Fetch the object ref
                 let mut client_state = make_client_state_and_try_sync(
+                    client_db_path,
                     &accounts_config,
                     &committee_config,
                     account,
@@ -569,6 +586,7 @@ fn main() {
                     .expect("Cannot find owner for gas object");
 
                 let mut client_state = make_client_state_and_try_sync(
+                    client_db_path,
                     &accounts_config,
                     &committee_config,
                     *owner,
@@ -640,6 +658,7 @@ fn main() {
                 let owner = find_cached_owner_by_object_id(&accounts_config, gas_object_id)
                     .expect("Cannot find owner for gas object");
                 let mut client_state = make_client_state_and_try_sync(
+                    client_db_path.clone(),
                     &accounts_config,
                     &committee_config,
                     *owner,
@@ -660,6 +679,7 @@ fn main() {
                 accounts_config.update_from_state(&client_state);
                 info!("Updating recipient's local balance");
                 let mut recipient_client_state = make_client_state_and_try_sync(
+                    client_db_path,
                     &accounts_config,
                     &committee_config,
                     to,
@@ -691,6 +711,7 @@ fn main() {
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 let client_state = make_client_state_and_try_sync(
+                    client_db_path,
                     &accounts_config,
                     &committee_config,
                     address,

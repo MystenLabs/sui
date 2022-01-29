@@ -12,19 +12,18 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use rand::seq::SliceRandom;
 use typed_store::rocks::open_cf;
+use typed_store::Map;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::env;
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::time::timeout;
 
 mod client_store;
+use self::client_store::ClientStore;
 
 #[cfg(test)]
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
-
-use self::client_store::ClientStoreMap;
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -68,18 +67,8 @@ pub struct ClientState<AuthorityClient> {
     committee: Committee,
     /// How to talk to this committee.
     authority_clients: HashMap<AuthorityName, AuthorityClient>,
-    /// Pending transfer.
-    pending_transfer: Option<Order>,
-
-    // The remaining fields are used to minimize networking, and may not always be persisted locally.
-    /// Known certificates, indexed by TX digest.
-    certificates: ClientStoreMap<TransactionDigest, CertifiedOrder>,
-    /// The known objects with it's sequence number owned by the client.
-    object_sequence_numbers: ClientStoreMap<ObjectID, SequenceNumber>,
-    /// Confirmed objects with it's ref owned by the client.
-    object_refs: ClientStoreMap<ObjectID, ObjectRef>,
-    /// Certificate <-> object id linking map.
-    object_certs: ClientStoreMap<ObjectID, Vec<TransactionDigest>>,
+    /// Persistent store for client
+    store: ClientStore,
 }
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
@@ -104,6 +93,9 @@ pub trait Client {
         object_id: ObjectID,
         gas_payment: ObjectID,
     ) -> Result<CertifiedOrder, anyhow::Error>;
+
+    /// Try to complete all pending orders once. Return if any fails
+    async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError>;
 
     /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
     /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
@@ -140,65 +132,28 @@ pub trait Client {
     /// Get all object we own.
     async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error>;
 }
-const CERT_CF_NAME: &str = "certificates";
-const SEQ_NUMBER_CF_NAME: &str = "object_sequence_numbers";
-const OBJ_REF_CF_NAME: &str = "object_refs";
-const TX_DIGEST_TO_CERT_CF_NAME: &str = "object_certs";
 
 impl<A> ClientState<A> {
     pub fn new(
+        path: PathBuf,
         address: FastPayAddress,
         secret: KeyPair,
         committee: Committee,
         authority_clients: HashMap<AuthorityName, A>,
         certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
         object_refs: BTreeMap<ObjectID, ObjectRef>,
-    ) -> Self {
-        // TODO: use deterministic path passed in
-        let path = match tempfile::tempdir() {
-            Ok(p) => p.into_path(),
-            Err(_) => env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
-        };
-
-        // Open column families
-        let db = client_store::init_store(
-            path,
-            vec![
-                CERT_CF_NAME,
-                SEQ_NUMBER_CF_NAME,
-                OBJ_REF_CF_NAME,
-                TX_DIGEST_TO_CERT_CF_NAME,
-            ],
-        );
+    ) -> Result<Self, FastPayError> {
         let client_state = ClientState {
             address,
             secret,
             committee,
             authority_clients,
-            pending_transfer: None,
-            certificates: ClientStoreMap::new(&db, CERT_CF_NAME),
-            object_sequence_numbers: ClientStoreMap::new(&db, SEQ_NUMBER_CF_NAME),
-            object_refs: ClientStoreMap::new(&db, OBJ_REF_CF_NAME),
-            object_certs: ClientStoreMap::new(&db, TX_DIGEST_TO_CERT_CF_NAME),
+            store: ClientStore::new(path),
         };
 
         // Backfill the DB
-        client_state.populate(object_refs, certificates);
-        client_state
-    }
-
-    pub fn populate(
-        &self,
-        object_refs: BTreeMap<ObjectID, ObjectRef>,
-        certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
-    ) {
-        self.object_refs
-            .populate_from_btree_map(object_refs.clone());
-        self.certificates.populate_from_btree_map(certificates);
-
-        object_refs
-            .iter()
-            .for_each(|(id, ref_)| self.object_sequence_numbers.insert(*id, ref_.1));
+        client_state.store.populate(object_refs, certificates)?;
+        Ok(client_state)
     }
 
     pub fn address(&self) -> FastPayAddress {
@@ -209,10 +164,11 @@ impl<A> ClientState<A> {
         &self,
         object_id: &ObjectID,
     ) -> Result<SequenceNumber, FastPayError> {
-        if self.object_sequence_numbers.contains_key(object_id) {
+        if self.store.object_sequence_numbers.contains_key(object_id)? {
             Ok(self
+                .store
                 .object_sequence_numbers
-                .get(object_id)
+                .get(object_id)?
                 .expect("Unable to get sequence number"))
         } else {
             Err(FastPayError::ObjectNotFound {
@@ -221,48 +177,56 @@ impl<A> ClientState<A> {
         }
     }
     pub fn object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, FastPayError> {
-        self.object_refs
-            .get(&object_id)
+        self.store
+            .object_refs
+            .get(&object_id)?
             .ok_or(FastPayError::ObjectNotFound { object_id })
     }
 
     pub fn object_refs(&self) -> BTreeMap<ObjectID, ObjectRef> {
-        self.object_refs.copy_as_btree_map()
+        self.store.object_refs.iter().collect()
     }
 
-    pub fn pending_transfer(&self) -> &Option<Order> {
-        &self.pending_transfer
-    }
-
+    /// Need to remove unwraps. Found this tricky due to iterator requirements of downloader and not being able to exit from closure to top fn
     pub fn certificates(&self, object_id: &ObjectID) -> impl Iterator<Item = CertifiedOrder> + '_ {
-        self.object_certs
+        self.store
+            .object_certs
             .get(object_id)
+            .unwrap()
             .into_iter()
             .flat_map(|cert_digests| {
                 cert_digests
                     .iter()
-                    .filter_map(|digest| self.certificates.get(digest))
+                    .filter_map(|digest| self.store.certificates.get(digest).unwrap())
                     .collect::<Vec<_>>()
             })
     }
 
     pub fn all_certificates(&self) -> BTreeMap<TransactionDigest, CertifiedOrder> {
-        self.certificates.copy_as_btree_map()
+        self.store.certificates.iter().collect()
     }
 
-    pub fn insert_object(&mut self, object_ref: &ObjectRef, digest: &TransactionDigest) {
+    pub fn insert_object(
+        &mut self,
+        object_ref: &ObjectRef,
+        digest: &TransactionDigest,
+    ) -> Result<(), FastPayError> {
         let (object_id, seq, _) = object_ref;
-        self.object_sequence_numbers.insert(*object_id, *seq);
-        let mut tx_digests = self.object_certs.get(object_id).unwrap_or_default();
+        self.store.object_sequence_numbers.insert(object_id, seq)?;
+        let mut tx_digests = self.store.object_certs.get(object_id)?.unwrap_or_default();
         tx_digests.push(*digest);
-        self.object_certs.insert(*object_id, tx_digests.to_vec());
-        self.object_refs.insert(*object_id, *object_ref);
+        self.store
+            .object_certs
+            .insert(object_id, &tx_digests.to_vec())?;
+        self.store.object_refs.insert(object_id, object_ref)?;
+        Ok(())
     }
 
-    pub fn remove_object(&mut self, object_id: &ObjectID) {
-        self.object_sequence_numbers.remove(object_id);
-        self.object_certs.remove(object_id);
-        self.object_refs.remove(object_id);
+    pub fn remove_object(&mut self, object_id: &ObjectID) -> Result<(), FastPayError> {
+        self.store.object_sequence_numbers.remove(object_id)?;
+        self.store.object_certs.remove(object_id)?;
+        self.store.object_refs.remove(object_id)?;
+        Ok(())
     }
 }
 
@@ -643,7 +607,7 @@ where
     ) -> Result<BTreeMap<ObjectID, Vec<CertifiedOrder>>, FastPayError> {
         let mut sent_certificates: BTreeMap<ObjectID, Vec<CertifiedOrder>> = BTreeMap::new();
 
-        for (object_id, next_sequence_number) in self.object_sequence_numbers.copy_as_btree_map() {
+        for (object_id, next_sequence_number) in self.store.object_sequence_numbers.iter() {
             let known_sequence_numbers: BTreeSet<_> = self
                 .certificates(&object_id)
                 .flat_map(|cert| cert.order.input_objects())
@@ -701,21 +665,23 @@ where
                 new_next_sequence_number = seq.increment();
             }
 
-            self.certificates
-                .insert(new_cert.order.digest(), new_cert.clone());
+            self.store
+                .certificates
+                .insert(&new_cert.order.digest(), &new_cert.clone())?;
 
             // Atomic update
-            self.object_sequence_numbers
-                .insert(*object_id, new_next_sequence_number);
+            self.store
+                .object_sequence_numbers
+                .insert(object_id, &new_next_sequence_number)?;
 
-            let mut certs = match self.object_certs.get(object_id) {
+            let mut certs = match self.store.object_certs.get(object_id)? {
                 Some(c) => c.clone(),
                 None => Vec::new(),
             };
 
             if !certs.contains(&new_cert.order.digest()) {
                 certs.push(new_cert.order.digest());
-                self.object_certs.insert(*object_id, certs.to_vec())
+                self.store.object_certs.insert(object_id, &certs.to_vec())?
             }
         }
         // Sanity check
@@ -760,23 +726,48 @@ where
         Ok((new_certificate, response.signed_effects.unwrap().effects))
     }
 
+    /// Returns true if this pending order's input objects are locked by another unconfirmed order
+    fn check_no_pending_order_conflict(&self, order: &Order) -> Result<bool, FastPayError> {
+        // Need to make this atomic? At least make more performant
+        for obj in order.input_objects() {
+            if self.store.pending_orders.contains_key(&obj.0)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+    /// Locks the objects for the given order
+    fn lock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
+        ClientStore::multi_insert(
+            &self.store.pending_orders,
+            order.input_objects().iter().map(|e| (e.0, order.clone())),
+        )
+    }
+    /// Unlocks the objects for the given order
+    fn unlock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
+        ClientStore::multi_remove(
+            &self.store.pending_orders,
+            order.input_objects().iter().map(|e| e.0),
+        )
+    }
+
     /// Execute (or retry) an order without confirmation. Update local object states using newly created certificate.
     async fn execute_transaction_without_confirmation(
         &mut self,
         order: Order,
     ) -> Result<CertifiedOrder, anyhow::Error> {
         fp_ensure!(
-            self.pending_transfer == None || self.pending_transfer.as_ref() == Some(&order),
+            self.check_no_pending_order_conflict(&order)?,
             FastPayError::ConcurrentTransactionError.into()
         );
-        self.pending_transfer = Some(order.clone());
+        self.lock_pending_order_objects(&order)?;
         let result = self
             .broadcast_and_handle_order(self.address, order.clone())
             .await;
-        // Clear `pending_transfer` and update `sent_certificates`,
+        // Unlock objects for the pending order and update `sent_certificates`,
         // and `next_sequence_number`. (Note that if we were using persistent
         // storage, we should ensure update atomicity in the eventuality of a crash.)
-        self.pending_transfer = None;
+        self.unlock_pending_order_objects(&order)?;
 
         // order_info_response contains response from broadcasting old unconfirmed order, if any.
         let (order_info_responses, new_sent_certificate) = result?;
@@ -823,33 +814,35 @@ where
             // The cert should be included in the response
             let cert = order_info_resp.certified_order.unwrap();
             let digest = cert.order.digest();
-            self.certificates.insert(digest, cert.clone());
+            self.store.certificates.insert(&digest, &cert)?;
 
             for &(object_ref, owner) in v.effects.all_mutated() {
                 let (object_id, seq, _) = object_ref;
                 let old_seq = self
+                    .store
                     .object_sequence_numbers
-                    .get(&object_id)
+                    .get(&object_id)?
                     .unwrap_or_default();
                 // only update if data is new
                 if old_seq < seq {
                     if owner == self.address {
-                        self.insert_object(&object_ref, &digest);
+                        self.insert_object(&object_ref, &digest)?;
                     } else {
-                        self.remove_object(&object_id);
+                        self.remove_object(&object_id)?;
                     }
                 } else if old_seq == seq && owner == self.address {
                     // ObjectRef can be 1 version behind because it's only updated after confirmation.
-                    self.object_refs.insert(object_id, object_ref);
+                    self.store.object_refs.insert(&object_id, &object_ref)?;
                 }
             }
             for (object_id, seq, _) in &v.effects.deleted {
                 let old_seq = self
+                    .store
                     .object_sequence_numbers
-                    .get(object_id)
+                    .get(object_id)?
                     .unwrap_or_default();
                 if old_seq < *seq {
-                    self.remove_object(object_id);
+                    self.remove_object(object_id)?;
                 }
             }
             Ok((cert, v.effects))
@@ -888,12 +881,14 @@ where
         recipient: FastPayAddress,
     ) -> Result<CertifiedOrder, anyhow::Error> {
         let object_ref = self
+            .store
             .object_refs
-            .get(&object_id)
+            .get(&object_id)?
             .ok_or(FastPayError::ObjectNotFound { object_id })?;
         let gas_payment =
-            self.object_refs
-                .get(&gas_payment)
+            self.store
+                .object_refs
+                .get(&gas_payment)?
                 .ok_or(FastPayError::ObjectNotFound {
                     object_id: gas_payment,
                 })?;
@@ -909,7 +904,7 @@ where
 
         // remove object from local storage if the recipient is not us.
         if recipient != self.address {
-            self.remove_object(&object_id);
+            self.remove_object(&object_id)?;
         }
 
         Ok(certificate)
@@ -942,22 +937,32 @@ where
                         request_received_transfers_excluding_first_nth: None,
                     })
                     .await?;
-                self.object_refs
-                    .insert(response.object.id(), response.object.to_object_reference());
+                self.store.object_refs.insert(
+                    &response.object.id(),
+                    &response.object.to_object_reference(),
+                )?;
 
                 // Everything worked: update the local balance.
-                if !self.certificates.contains_key(&certificate.order.digest()) {
-                    self.object_sequence_numbers
-                        .insert(transfer.object_ref.0, transfer.object_ref.1.increment());
-                    let mut tx_digests = match self.object_certs.get(&transfer.object_ref.0) {
-                        Some(c) => c,
-                        None => Vec::new(),
-                    };
+                if !self
+                    .store
+                    .certificates
+                    .contains_key(&certificate.order.digest())?
+                {
+                    self.store
+                        .object_sequence_numbers
+                        .insert(&transfer.object_ref.0, &transfer.object_ref.1.increment())?;
+                    let mut tx_digests =
+                        match self.store.object_certs.get(&transfer.object_ref.0)? {
+                            Some(c) => c,
+                            None => Vec::new(),
+                        };
                     tx_digests.push(certificate.order.digest());
-                    self.object_certs
-                        .insert(transfer.object_ref.0, tx_digests.to_vec());
-                    self.certificates
-                        .insert(certificate.order.digest(), certificate.clone());
+                    self.store
+                        .object_certs
+                        .insert(&transfer.object_ref.0, &tx_digests.to_vec())?;
+                    self.store
+                        .certificates
+                        .insert(&certificate.order.digest(), certificate)?;
                 }
 
                 Ok(())
@@ -995,23 +1000,41 @@ where
         Ok(new_certificate)
     }
 
+    async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError> {
+        // Orders are idempotent so no need to prevent multiple executions
+        let mut dispatched_orders = HashSet::new();
+        let pending_orders: BTreeMap<_, _> = self.store.pending_orders.iter().collect();
+        // Need some kind of timeout or max_trials here?
+        for (_, order) in pending_orders {
+            if dispatched_orders.contains(&order.clone().digest()) {
+                continue;
+            }
+            self.execute_transaction(order.clone()).await.map_err(|e| {
+                FastPayError::ErrorWhileProcessingTransactionOrder { err: e.to_string() }
+            })?;
+            dispatched_orders.insert(order.digest());
+        }
+        Ok(())
+    }
+
     async fn sync_client_state_with_random_authority(
         &mut self,
     ) -> Result<AuthorityName, anyhow::Error> {
-        if let Some(order) = self.pending_transfer.clone() {
-            // Finish executing the previous transfer.
-            self.execute_transaction(order).await?;
+        if ClientStore::is_empty(&self.store.pending_orders) {
+            // Finish executing the previous orders
+            self.try_complete_pending_orders().await?;
         }
         // update object_ids.
-        self.object_sequence_numbers.clear();
-        self.object_refs.clear();
+        self.store.object_sequence_numbers.clear()?;
+        self.store.object_refs.clear()?;
 
         let (authority_name, object_refs) = self.download_own_object_ids().await?;
         for object_ref in object_refs {
             let (object_id, sequence_number, _) = object_ref;
-            self.object_sequence_numbers
-                .insert(object_id, sequence_number);
-            self.object_refs.insert(object_id, object_ref);
+            self.store
+                .object_sequence_numbers
+                .insert(&object_id, &sequence_number)?;
+            self.store.object_refs.insert(&object_id, &object_ref)?;
         }
         // Recover missing certificates.
         let new_certificates = self.download_certificates().await?;
@@ -1068,6 +1091,6 @@ where
     }
 
     async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error> {
-        Ok(self.object_sequence_numbers.key_list())
+        Ok(self.store.object_sequence_numbers.keys().collect())
     }
 }

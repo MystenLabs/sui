@@ -1,5 +1,4 @@
 use super::*;
-
 use rocksdb::{DBWithThreadMode, MultiThreaded};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -8,82 +7,110 @@ use std::sync::Arc;
 use typed_store::rocks::DBMap;
 use typed_store::traits::Map;
 
-/// Initialize
+const CERT_CF_NAME: &str = "certificates";
+const SEQ_NUMBER_CF_NAME: &str = "object_sequence_numbers";
+const OBJ_REF_CF_NAME: &str = "object_refs";
+const TX_DIGEST_TO_CERT_CF_NAME: &str = "object_certs";
+const PENDING_ORDERS_CF_NAME: &str = "pending_orders";
+
 pub fn init_store(path: PathBuf, names: Vec<&str>) -> Arc<DBWithThreadMode<MultiThreaded>> {
     open_cf(&path, None, &names).expect("Cannot open DB.")
 }
 
-// Wrapper around DBMap for easy compat with other Rust maps
-pub struct ClientStoreMap<K, V> {
-    db_map: DBMap<K, V>,
+pub struct ClientStore {
+    // Table of objects to orders pending on the objects
+    pub pending_orders: DBMap<ObjectID, Order>,
+    // The remaining fields are used to minimize networking, and may not always be persisted locally.
+    /// Known certificates, indexed by TX digest.
+    pub certificates: DBMap<TransactionDigest, CertifiedOrder>,
+    /// The known objects with it's sequence number owned by the client.
+    pub object_sequence_numbers: DBMap<ObjectID, SequenceNumber>,
+    /// Confirmed objects with it's ref owned by the client.
+    pub object_refs: DBMap<ObjectID, ObjectRef>,
+    /// Certificate <-> object id linking map.
+    pub object_certs: DBMap<ObjectID, Vec<TransactionDigest>>,
 }
 
-impl<K, V> ClientStoreMap<K, V>
-where
-    K: Serialize + DeserializeOwned + std::cmp::Ord + std::clone::Clone,
-    V: Serialize + DeserializeOwned + std::clone::Clone,
-{
-    // Reopen a rocks db cf
-    pub fn new(db: &Arc<DBWithThreadMode<MultiThreaded>>, name: &str) -> ClientStoreMap<K, V> {
-        Self {
-            db_map: DBMap::reopen(db, Some(name)).expect(&format!("Cannot open {} CF.", name)[..]),
+impl ClientStore {
+    pub fn new(path: PathBuf) -> Self {
+        // Open column families
+        let db = client_store::init_store(
+            path,
+            vec![
+                PENDING_ORDERS_CF_NAME,
+                CERT_CF_NAME,
+                SEQ_NUMBER_CF_NAME,
+                OBJ_REF_CF_NAME,
+                TX_DIGEST_TO_CERT_CF_NAME,
+            ],
+        );
+
+        ClientStore {
+            pending_orders: DBMap::reopen(&db, Some(PENDING_ORDERS_CF_NAME))
+                .expect(&format!("Cannot open {} CF.", PENDING_ORDERS_CF_NAME)[..]),
+            certificates: DBMap::reopen(&db, Some(CERT_CF_NAME))
+                .expect(&format!("Cannot open {} CF.", CERT_CF_NAME)[..]),
+            object_sequence_numbers: DBMap::reopen(&db, Some(SEQ_NUMBER_CF_NAME))
+                .expect(&format!("Cannot open {} CF.", SEQ_NUMBER_CF_NAME)[..]),
+            object_refs: DBMap::reopen(&db, Some(OBJ_REF_CF_NAME))
+                .expect(&format!("Cannot open {} CF.", OBJ_REF_CF_NAME)[..]),
+            object_certs: DBMap::reopen(&db, Some(TX_DIGEST_TO_CERT_CF_NAME))
+                .expect(&format!("Cannot open {} CF.", TX_DIGEST_TO_CERT_CF_NAME)[..]),
         }
     }
-    /// Insert key,value pair
-    pub fn insert(&self, k: K, v: V) {
-        self.db_map.insert(&k, &v).unwrap();
-    }
-    /// Get value form key
-    pub fn get(&self, k: &K) -> Option<V> {
-        self.db_map.get(k).unwrap()
-    }
-    /// Check if map contains key
-    pub fn contains_key(&self, k: &K) -> bool {
-        self.db_map.contains_key(k).unwrap()
-    }
-    /// Remove key value par
-    pub fn remove(&self, k: &K) {
-        self.db_map.remove(k).unwrap();
-    }
-    /// Convenience fn to opulate from BTreeMap
-    pub fn populate_from_btree_map(&self, b: BTreeMap<K, V>) {
-        let batch = self
-            .db_map
-            .batch()
-            .insert_batch(&self.db_map, b.into_iter())
-            .expect("batch insertion failure");
-        batch.write().expect("batch execution failure");
-    }
-    /// Get a copy as a BTreeMap
-    pub fn copy_as_btree_map(&self) -> BTreeMap<K, V> {
-        let mut b = BTreeMap::new();
-        b.extend(self.db_map.iter());
-        b.clone()
-    }
-    /// Get a list of the keys
-    pub fn key_list(&self) -> Vec<K> {
-        self.db_map.keys().collect::<Vec<K>>()
-    }
-    /// Clear all elems in map
-    /// Need to improve to use CF drop  for atomicity
-    pub fn clear(&self) {
-        // TODO: need to clear properly implement https://github.com/MystenLabs/mysten-infra/issues/7
-        let batch = self
-            .db_map
-            .batch()
-            .delete_batch(&self.db_map, self.key_list().into_iter())
-            .unwrap();
-        let _ = batch.write();
+    /// Populate DB with older state
+    pub fn populate(
+        &self,
+        object_refs: BTreeMap<ObjectID, ObjectRef>,
+        certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
+    ) -> Result<(), FastPayError> {
+        // Solution using iter().for_each does not allows ? for Result type
+        for w in certificates {
+            self.certificates.insert(&w.0, &w.1)?;
+        }
+        for w in object_refs.clone() {
+            self.object_refs.insert(&w.0, &w.1)?;
+        }
+        for w in object_refs {
+            self.object_sequence_numbers.insert(&w.0, &w.1 .1)?;
+        }
+        Ok(())
     }
 
-    /// Get the length of the map
-    #[cfg(test)]
-    pub fn len(&self) -> usize {
-        self.db_map.iter().count()
+    /// Hack to check if DBMap is empty
+    pub fn is_empty<K, V>(map: &DBMap<K, V>) -> bool
+    where
+        K: Serialize + DeserializeOwned + std::cmp::Ord + std::clone::Clone,
+        V: Serialize + DeserializeOwned + std::clone::Clone,
+    {
+        map.iter().count() == 0
     }
-    /// Check if map is empty
-    #[cfg(test)]
-    pub fn is_empty(&self) -> bool {
-        self.db_map.iter().count() == 0
+
+    /// Insert multiple KV pairs atomically
+    pub fn multi_insert<K, V>(
+        map: &DBMap<K, V>,
+        kv: impl IntoIterator<Item = (K, V)>,
+    ) -> Result<(), FastPayError>
+    where
+        K: Serialize + DeserializeOwned + std::cmp::Ord + std::clone::Clone,
+        V: Serialize + DeserializeOwned + std::clone::Clone,
+    {
+        map.batch()
+            .insert_batch(map, kv)?
+            .write()
+            .map_err(|e| e.into())
+    }
+    /// Remove multiple Keys atomically
+    pub fn multi_remove<K, V>(
+        map: &DBMap<K, V>,
+        k: impl IntoIterator<Item = K>,
+    ) -> Result<(), FastPayError>
+    where
+        K: Serialize + DeserializeOwned + std::cmp::Ord + std::clone::Clone,
+    {
+        map.batch()
+            .delete_batch(map, k)?
+            .write()
+            .map_err(|e| e.into())
     }
 }
