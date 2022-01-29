@@ -92,6 +92,7 @@ impl AuthorityTemporaryStore {
         authority_name: &AuthorityName,
         secret: &KeyPair,
         transaction_digest: &TransactionDigest,
+        transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
         gas_object_id: &ObjectID,
     ) -> SignedOrderEffects {
@@ -119,6 +120,7 @@ impl AuthorityTemporaryStore {
                 .collect(),
             gas_object: (gas_object.to_object_reference(), gas_object.owner),
             events: self.events.clone(),
+            dependencies: transaction_dependencies,
         };
         let signature = Signature::new(&effects, secret);
 

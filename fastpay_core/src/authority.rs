@@ -234,6 +234,8 @@ impl AuthorityState {
             .into_iter()
             .map(|(_, object)| object)
             .collect();
+        
+        let transaction_dependencies : BTreeSet <_> = inputs.iter().map(|object| object.previous_transaction ).collect();
 
         // Insert into the certificates map
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
@@ -246,6 +248,7 @@ impl AuthorityState {
             &self.name,
             &self.secret,
             &transaction_digest,
+            transaction_dependencies.into_iter().collect(),
             status,
             &gas_object_id,
         );
