@@ -9,7 +9,6 @@ use fastpay_core::authority::*;
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
 use fastx_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use futures::stream::StreamExt;
-use log::*;
 use move_core_types::ident_str;
 use rand::rngs::StdRng;
 use rand::Rng;
@@ -17,6 +16,9 @@ use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
 use tokio::{runtime::Builder, time};
+use tracing::subscriber::set_global_default;
+use tracing::*;
+use tracing_subscriber::EnvFilter;
 
 use rocksdb::Options;
 use std::env;
@@ -84,7 +86,11 @@ impl std::fmt::Display for BenchmarkType {
     }
 }
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let subscriber_builder =
+        tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
+    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
+    set_global_default(subscriber).expect("Failed to set subscriber");
     let benchmark = ClientServerBenchmark::from_args();
     let (state, orders) = benchmark.make_structures();
 
