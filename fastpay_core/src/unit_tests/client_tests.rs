@@ -1068,6 +1068,7 @@ async fn test_move_calls_chain_many_authority_syncronization() {
             .await;
 
         last_certificate = _call_response.unwrap().0;
+        println!("EXECUTE: {:?}", last_certificate.order.digest());
     }
 
     // For this test to work the client has updated the first 3 authorities but not the last one
@@ -1105,7 +1106,7 @@ async fn test_move_calls_chain_many_authority_syncronization() {
     // This is (finally) the function we want to test
 
     // If we try to sync from the authority that does not have the data to the one
-    // that does we fail.
+    // that does not we fail.
     let result = client1
         .sync_authority_source_to_destination(
             ConfirmationOrder::new(last_certificate.clone()),

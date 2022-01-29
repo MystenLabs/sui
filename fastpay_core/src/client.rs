@@ -462,40 +462,33 @@ where
             // TODO: Eventually the client will store more information, and we could
             // first try to read certificates and parents from a local cache before
             // asking an authority.
-            let input_objects = target_cert.certificate.order.input_objects();
+            // let input_objects = target_cert.certificate.order.input_objects();
+            let order_info = source_client
+                .handle_order_info_request(OrderInfoRequest {
+                    transaction_digest: cert_digest,
+                })
+                .await?;
 
             // Put back the target cert
             missing_certificates.push(target_cert);
+            let signed_effects = &order_info.signed_effects.ok_or(FastPayError::AuthorityInformationUnavailable)?;
 
-            for object_kind in input_objects {
-                // Request the parent certificate from the authority.
-                let object_info_response = source_client
-                    .handle_object_info_request(ObjectInfoRequest {
-                        object_id: object_kind.object_id(),
-                        request_sequence_number: Some(object_kind.version()),
-                    })
-                    .await;
-
-                let object_info = match object_info_response {
-                    Ok(object_info) => object_info,
-                    // Here we cover the case the object genuinely has no parent.
-                    Err(FastPayError::ParentNotfound { .. }) => {
-                        continue;
-                    }
-                    Err(e) => return Err(e),
-                };
-
-                let returned_certificate = object_info
-                    .parent_certificate
-                    .ok_or(FastPayError::AuthorityInformationUnavailable)?;
-                let returned_digest = returned_certificate.order.digest();
+            for returned_digest in &signed_effects.effects.dependencies {
 
                 // We check that we are not processing twice the same certificate, as
                 // it would be common if two objects used by one order, were also both
                 // mutated by the same preceeding order.
                 if !candidate_certificates.contains(&returned_digest) {
                     // Add this cert to the set we have processed
-                    candidate_certificates.insert(returned_digest);
+                    candidate_certificates.insert(*returned_digest);
+
+                    let inner_order_info = source_client
+                        .handle_order_info_request(OrderInfoRequest {
+                            transaction_digest: *returned_digest,
+                        })
+                        .await?;
+                    
+                    let returned_certificate = inner_order_info.certified_order.ok_or(FastPayError::AuthorityInformationUnavailable)?;
 
                     // Check & Add it to the list of certificates to sync
                     returned_certificate.check(&self.committee).map_err(|_| {

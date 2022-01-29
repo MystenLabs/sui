@@ -235,13 +235,16 @@ impl AuthorityState {
             .map(|(_, object)| object)
             .collect();
         
-        let transaction_dependencies : BTreeSet <_> = inputs.iter().map(|object| object.previous_transaction ).collect();
+        let mut transaction_dependencies : BTreeSet <_> = inputs.iter().map(|object| object.previous_transaction ).collect();
 
         // Insert into the certificates map
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
         let gas_object_id = *order.gas_payment_object_id();
         let (temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx)?;
+
+        // Remove from dependencies the generic hash
+        transaction_dependencies.remove(&TransactionDigest::genesis());
 
         // Update the database in an atomic manner
         let to_signed_effects = temporary_store.to_signed_effects(
@@ -262,7 +265,7 @@ impl AuthorityState {
         mut inputs: Vec<Object>,
         tx_ctx: &mut TxContext,
     ) -> FastPayResult<(AuthorityTemporaryStore, ExecutionStatus)> {
-        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
+        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs, tx_ctx.digest());
         // unwraps here are safe because we built `inputs`
         let mut gas_object = inputs.pop().unwrap();
 
