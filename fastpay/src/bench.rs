@@ -230,7 +230,7 @@ impl ClientServerBenchmark {
             } else {
                 let transfer = Transfer {
                     sender: *account_addr,
-                    recipient: Address::FastPay(next_recipient),
+                    recipient: next_recipient,
                     object_ref,
                     gas_payment: gas_object_ref,
                 };

@@ -297,7 +297,7 @@ impl AuthorityState {
     fn transfer(
         temporary_store: &mut AuthorityTemporaryStore,
         mut inputs: Vec<Object>,
-        recipient: Address,
+        recipient: FastPayAddress,
         mut gas_object: Object,
     ) -> FastPayResult<ExecutionStatus> {
         let gas_used = gas::calculate_object_transfer_cost(&inputs[0]);
@@ -310,10 +310,7 @@ impl AuthorityState {
         temporary_store.write_object(gas_object);
 
         let mut output_object = inputs.pop().unwrap();
-        output_object.transfer(match recipient {
-            Address::Primary(_) => FastPayAddress::default(),
-            Address::FastPay(addr) => addr,
-        });
+        output_object.transfer(recipient);
         temporary_store.write_object(output_object);
         Ok(ExecutionStatus::Success)
     }
