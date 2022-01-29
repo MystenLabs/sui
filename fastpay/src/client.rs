@@ -134,7 +134,7 @@ fn make_benchmark_transfer_orders(
         let transfer = Transfer {
             object_ref,
             sender: account.address,
-            recipient: Address::FastPay(next_recipient),
+            recipient: next_recipient,
             gas_payment: gas_object_ref,
         };
         debug!("Preparing transfer order: {:?}", transfer);

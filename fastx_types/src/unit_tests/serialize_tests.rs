@@ -87,7 +87,7 @@ fn test_order() {
             ObjectDigest::new([0; 32]),
         ),
         sender: sender_name,
-        recipient: Address::Primary(dbg_addr(0x20)),
+        recipient: dbg_addr(0x20),
         gas_payment: (
             ObjectID::random(),
             SequenceNumber::new(),
@@ -113,7 +113,7 @@ fn test_order() {
             ObjectDigest::new([0; 32]),
         ),
         sender: sender_name,
-        recipient: Address::FastPay(dbg_addr(0x20)),
+        recipient: dbg_addr(0x20),
         gas_payment: (
             ObjectID::random(),
             SequenceNumber::new(),
@@ -142,7 +142,7 @@ fn test_vote() {
             ObjectDigest::new([0; 32]),
         ),
         sender: sender_name,
-        recipient: Address::Primary(dbg_addr(0x20)),
+        recipient: dbg_addr(0x20),
         gas_payment: (
             ObjectID::random(),
             SequenceNumber::new(),
@@ -174,7 +174,7 @@ fn test_cert() {
             ObjectDigest::new([0; 32]),
         ),
         sender: sender_name,
-        recipient: Address::Primary(dbg_addr(0x20)),
+        recipient: dbg_addr(0x20),
         gas_payment: (
             ObjectID::random(),
             SequenceNumber::new(),
@@ -214,7 +214,7 @@ fn test_info_response() {
             ObjectDigest::new([0; 32]),
         ),
         sender: sender_name,
-        recipient: Address::Primary(dbg_addr(0x20)),
+        recipient: dbg_addr(0x20),
         gas_payment: (
             ObjectID::random(),
             SequenceNumber::new(),
@@ -281,7 +281,7 @@ fn test_time_order() {
             ObjectDigest::new([0; 32]),
         ),
         sender: sender_name,
-        recipient: Address::Primary(dbg_addr(0x20)),
+        recipient: dbg_addr(0x20),
         gas_payment: (
             ObjectID::random(),
             SequenceNumber::new(),
@@ -321,7 +321,7 @@ fn test_time_vote() {
             ObjectDigest::new([0; 32]),
         ),
         sender: sender_name,
-        recipient: Address::Primary(dbg_addr(0x20)),
+        recipient: dbg_addr(0x20),
         gas_payment: (
             ObjectID::random(),
             SequenceNumber::new(),
@@ -367,7 +367,7 @@ fn test_time_cert() {
             ObjectDigest::new([0; 32]),
         ),
         sender: sender_name,
-        recipient: Address::Primary(dbg_addr(0)),
+        recipient: dbg_addr(0),
         gas_payment: (
             ObjectID::random(),
             SequenceNumber::new(),

@@ -1140,7 +1140,7 @@ where
         let transfer = Transfer {
             object_ref,
             sender: self.address,
-            recipient: Address::FastPay(recipient),
+            recipient,
             gas_payment,
         };
         let order = Order::new_transfer(transfer, &self.secret);
@@ -1159,7 +1159,7 @@ where
         match &certificate.order.kind {
             OrderKind::Transfer(transfer) => {
                 fp_ensure!(
-                    transfer.recipient == Address::FastPay(self.address),
+                    transfer.recipient == self.address,
                     FastPayError::IncorrectRecipientError.into()
                 );
                 let responses = self
@@ -1227,7 +1227,7 @@ where
         let transfer = Transfer {
             object_ref,
             sender: self.address,
-            recipient: Address::FastPay(recipient),
+            recipient,
             gas_payment,
         };
         let order = Order::new_transfer(transfer, &self.secret);
