@@ -6,6 +6,7 @@ use fastx_verifier::verifier as fastx_bytecode_verifier;
 use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
+use num_enum::TryFromPrimitive;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -14,6 +15,17 @@ pub mod natives;
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
 #[cfg(test)]
 const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
+
+#[derive(TryFromPrimitive)]
+#[repr(u8)]
+pub enum EventType {
+    /// System event: transfer between addresses
+    Transfer,
+    /// System event: freeze, then transfer between addresses
+    TransferAndFreeze,
+    /// User-defined event
+    User,
+}
 
 pub fn get_fastx_framework_modules() -> Vec<CompiledModule> {
     let modules = build_framework(".");

@@ -1224,6 +1224,10 @@ async fn test_hero() {
     )
     .await;
     assert_eq!(effects.status, ExecutionStatus::Success);
+    let events = effects.events;
+    // should emit one BoarSlainEvent
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].type_.name.to_string(), "BoarSlainEvent")
 }
 
 // helpers

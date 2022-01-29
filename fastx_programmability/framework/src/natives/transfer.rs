@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::EventType;
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
@@ -33,12 +34,18 @@ pub fn transfer_internal(
     let recipient = pop_arg!(args, Vec<u8>);
     let transferred_obj = args.pop_back().unwrap();
 
+    let event_type = if should_freeze {
+        EventType::TransferAndFreeze
+    } else {
+        EventType::Transfer
+    } as u64;
+
     // Charge a constant native gas cost here, since
     // we will charge it properly when processing
     // all the events in adapter.
     // TODO: adjust native_gas cost size base.
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
-    if !context.save_event(recipient, should_freeze as u64, ty, transferred_obj)? {
+    if !context.save_event(recipient, event_type, ty, transferred_obj)? {
         return Ok(NativeResult::err(cost, 0));
     }
 
