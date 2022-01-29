@@ -7,12 +7,12 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.52"
+anyhow = "1.0.53"
 base64 = "0.13.0"
 bcs = "0.1.3"
 bincode = "1.3.3"
 rand = "0.7.3"
-serde = { version = "1.0.133", features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"] }
 ed25519 = "1.3.0"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 serde-name = "0.2.0"
@@ -21,7 +21,7 @@ thiserror = "1.0.30"
 hex = "0.4.3"
 serde_bytes = "0.11.5"
 serde_with = "1.11.0"
-static_assertions = "0.3.4"
+static_assertions = "1.1.0"
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "232c44e88e69eb54fe80dab247adcd1b643aeb8c" }
 
