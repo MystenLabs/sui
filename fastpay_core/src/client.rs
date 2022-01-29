@@ -471,14 +471,16 @@ where
 
             // Put back the target cert
             missing_certificates.push(target_cert);
-            let signed_effects = &order_info.signed_effects.ok_or(FastPayError::AuthorityInformationUnavailable)?;
+            let signed_effects = &order_info
+                .signed_effects
+                .ok_or(FastPayError::AuthorityInformationUnavailable)?;
 
             for returned_digest in &signed_effects.effects.dependencies {
 
                 // We check that we are not processing twice the same certificate, as
                 // it would be common if two objects used by one order, were also both
                 // mutated by the same preceeding order.
-                if !candidate_certificates.contains(&returned_digest) {
+                if !candidate_certificates.contains(returned_digest) {
                     // Add this cert to the set we have processed
                     candidate_certificates.insert(*returned_digest);
 
@@ -487,8 +489,10 @@ where
                             transaction_digest: *returned_digest,
                         })
                         .await?;
-                    
-                    let returned_certificate = inner_order_info.certified_order.ok_or(FastPayError::AuthorityInformationUnavailable)?;
+
+                    let returned_certificate = inner_order_info
+                        .certified_order
+                        .ok_or(FastPayError::AuthorityInformationUnavailable)?;
 
                     // Check & Add it to the list of certificates to sync
                     returned_certificate.check(&self.committee).map_err(|_| {

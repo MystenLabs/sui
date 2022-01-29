@@ -1130,9 +1130,6 @@ async fn test_move_calls_chain_many_authority_syncronization() {
     assert!(result.is_ok());
 }
 
-// BUG(https://github.com/MystenLabs/fastnft/issues/282)
-// We ignore this test due to a known bug.
-#[ignore]
 #[tokio::test]
 async fn test_move_calls_chain_many_delete_authority_synchronization() {
     let (authority_clients, committee) = init_local_authorities(4).await;
