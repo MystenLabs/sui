@@ -8,6 +8,7 @@ use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
 use futures::{future, StreamExt, TryFutureExt};
+use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use rand::seq::SliceRandom;
@@ -188,6 +189,7 @@ impl<A> ClientState<A> {
     }
 
     /// Need to remove unwraps. Found this tricky due to iterator requirements of downloader and not being able to exit from closure to top fn
+    /// https://github.com/MystenLabs/fastnft/issues/307
     pub fn certificates(&self, object_id: &ObjectID) -> impl Iterator<Item = CertifiedOrder> + '_ {
         self.store
             .object_certs
@@ -727,14 +729,14 @@ where
     }
 
     /// Returns true if this pending order's input objects are locked by another unconfirmed order
-    fn check_no_pending_order_conflict(&self, order: &Order) -> Result<bool, FastPayError> {
-        // Need to make this atomic? At least make more performant
-        for obj in order.input_objects() {
-            if self.store.pending_orders.contains_key(&obj.0)? {
-                return Ok(false);
-            }
-        }
-        Ok(true)
+    fn has_pending_order_conflict(&self, order: &Order) -> Result<bool, FastPayError> {
+        // Need to make this more atomic? At least make more performant
+        Ok(self
+            .store
+            .pending_orders
+            .multi_get(&order.input_objects().iter().map(|q| q.0).collect_vec())?
+            .iter()
+            .any(|w| w.is_some()))
     }
     /// Locks the objects for the given order
     fn lock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
@@ -757,7 +759,7 @@ where
         order: Order,
     ) -> Result<CertifiedOrder, anyhow::Error> {
         fp_ensure!(
-            self.check_no_pending_order_conflict(&order)?,
+            !self.has_pending_order_conflict(&order)?,
             FastPayError::ConcurrentTransactionError.into()
         );
         self.lock_pending_order_objects(&order)?;
@@ -1006,13 +1008,14 @@ where
         let pending_orders: BTreeMap<_, _> = self.store.pending_orders.iter().collect();
         // Need some kind of timeout or max_trials here?
         for (_, order) in pending_orders {
-            if dispatched_orders.contains(&order.clone().digest()) {
+            let digest = order.digest();
+            if dispatched_orders.contains(&digest) {
                 continue;
             }
             self.execute_transaction(order.clone()).await.map_err(|e| {
                 FastPayError::ErrorWhileProcessingTransactionOrder { err: e.to_string() }
             })?;
-            dispatched_orders.insert(order.digest());
+            dispatched_orders.insert(digest);
         }
         Ok(())
     }
