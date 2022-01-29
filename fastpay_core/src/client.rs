@@ -59,6 +59,12 @@ pub trait AuthorityClient {
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, FastPayError>;
+
+    /// Handle Object information requests for this account.
+    async fn handle_order_info_request(
+        &self,
+        request: OrderInfoRequest,
+    ) -> Result<OrderInfoResponse, FastPayError>;
 }
 
 #[async_trait]
@@ -96,6 +102,18 @@ impl AuthorityClient for network::Client {
         self.send_recv_bytes(
             serialize_object_info_request(&request),
             object_info_deserializer,
+        )
+        .await
+    }
+
+    /// Handle Object information requests for this account.
+    async fn handle_order_info_request(
+        &self,
+        request: OrderInfoRequest,
+    ) -> Result<OrderInfoResponse, FastPayError> {
+        self.send_recv_bytes(
+            serialize_order_info_request(&request),
+            order_info_deserializer,
         )
         .await
     }

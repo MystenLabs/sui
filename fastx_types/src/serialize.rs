@@ -107,6 +107,10 @@ pub fn serialize_object_info_response(value: &ObjectInfoResponse) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::ObjectInfoResp(value))
 }
 
+pub fn serialize_order_info_request(value: &OrderInfoRequest) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::OrderInfoReq(value))
+}
+
 pub fn serialize_vote(value: &SignedOrder) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Vote(value))
 }

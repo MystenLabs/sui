@@ -79,6 +79,17 @@ impl AuthorityClient for LocalAuthorityClient {
         let x = state.lock().await.handle_object_info_request(request).await;
         x
     }
+
+    /// Handle Object information requests for this account.
+    async fn handle_order_info_request(
+        &self,
+        request: OrderInfoRequest,
+    ) -> Result<OrderInfoResponse, FastPayError> {
+        let state = self.0.clone();
+
+        let result = state.lock().await.handle_order_info_request(request).await;
+        result
+    }
 }
 
 impl LocalAuthorityClient {
