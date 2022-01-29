@@ -20,7 +20,7 @@ use crate::{
     },
     gas_coin::GasCoin,
 };
-
+pub const MOVE_PACKAGE_SIZE: usize = 0;
 pub const OBJECT_BASICS_MODULE_NAME: &move_core_types::identifier::IdentStr =
     ident_str!("ObjectBasics");
 pub const OBJECT_BASICS_OBJECT_TYPE_NAME: &move_core_types::identifier::IdentStr =
@@ -178,6 +178,33 @@ impl Data {
         match self {
             Move(m) => Some(&m.type_),
             Package(_) => None,
+        }
+    }
+}
+
+// Object summary aimed at reducing transferring full objects
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+pub struct Metadata {
+    pub size_bytes: u64,
+    pub version: SequenceNumber,
+    pub type_: Option<StructTag>,
+    pub read_only: bool,
+}
+
+impl Metadata {
+    // Derive metada from an object
+    pub fn new(object: &Object) -> Self {
+        use Data::*;
+        let size = match &object.data {
+            Move(m) => m.contents.len(),
+            // TODO: How do we properly calculate package size?
+            Package(_) => MOVE_PACKAGE_SIZE,
+        } as u64;
+        Self {
+            size_bytes: size,
+            version: object.version(),
+            type_: object.type_().cloned(),
+            read_only: object.is_read_only(),
         }
     }
 }

@@ -825,22 +825,22 @@ where
             let digest = cert.order.digest();
             self.certificates.insert(digest, cert.clone());
 
-            for &(object_ref, owner) in v.effects.all_mutated() {
+            for (object_ref, owner, _metadata) in v.effects.all_mutated() {
                 let (object_id, seq, _) = object_ref;
                 let old_seq = self
                     .object_sequence_numbers
-                    .get(&object_id)
+                    .get(object_id)
                     .unwrap_or_default();
                 // only update if data is new
-                if old_seq < seq {
-                    if owner == self.address {
-                        self.insert_object(&object_ref, &digest);
+                if old_seq < *seq {
+                    if *owner == self.address {
+                        self.insert_object(object_ref, &digest);
                     } else {
-                        self.remove_object(&object_id);
+                        self.remove_object(object_id);
                     }
-                } else if old_seq == seq && owner == self.address {
+                } else if old_seq == *seq && *owner == self.address {
                     // ObjectRef can be 1 version behind because it's only updated after confirmation.
-                    self.object_refs.insert(object_id, object_ref);
+                    self.object_refs.insert(*object_id, *object_ref);
                 }
             }
             for (object_id, seq, _) in &v.effects.deleted {

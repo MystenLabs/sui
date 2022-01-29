@@ -1,4 +1,4 @@
-use fastx_types::event::Event;
+use fastx_types::{event::Event, object::Metadata};
 
 use super::*;
 
@@ -103,21 +103,37 @@ impl AuthorityTemporaryStore {
                 .written
                 .iter()
                 .filter(|(id, _)| !self.objects.contains_key(*id))
-                .map(|(_, object)| (object.to_object_reference(), object.owner))
+                .map(|(_, object)| {
+                    (
+                        object.to_object_reference(),
+                        object.owner,
+                        Metadata::new(object),
+                    )
+                })
                 .collect(),
             mutated: self
                 .written
                 .iter()
                 // Exclude gas_object from the mutated list.
                 .filter(|(id, _)| *id != gas_object_id && self.objects.contains_key(*id))
-                .map(|(_, object)| (object.to_object_reference(), object.owner))
+                .map(|(_, object)| {
+                    (
+                        object.to_object_reference(),
+                        object.owner,
+                        Metadata::new(object),
+                    )
+                })
                 .collect(),
             deleted: self
                 .deleted
                 .iter()
                 .map(|id| self.objects[id].to_object_reference())
                 .collect(),
-            gas_object: (gas_object.to_object_reference(), gas_object.owner),
+            gas_object: (
+                gas_object.to_object_reference(),
+                gas_object.owner,
+                Metadata::new(gas_object),
+            ),
             events: self.events.clone(),
         };
         let signature = Signature::new(&effects, secret);

@@ -841,7 +841,7 @@ async fn test_move_calls_object_transfer() {
     assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
     // Get the object created from the call
-    let (new_obj_ref, _) = order_effects.created[0];
+    let (new_obj_ref, _, created_metadata) = &order_effects.created[0];
     // Fetch the full object
     let new_obj = client1
         .get_object_info(ObjectInfoRequest {
@@ -851,6 +851,9 @@ async fn test_move_calls_object_transfer() {
         })
         .await
         .unwrap();
+
+    assert_eq!(new_obj.object.version(), created_metadata.version);
+    assert_eq!(new_obj.object.is_read_only(), created_metadata.read_only);
 
     gas_object_ref = client1
         .get_object_info(ObjectInfoRequest {
@@ -888,7 +891,7 @@ async fn test_move_calls_object_transfer() {
     // Confirm the items
     assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
-    let (transferred_obj_ref, _) = order_effects.mutated[0];
+    let (transferred_obj_ref, _, _) = order_effects.mutated[0];
     assert_ne!(gas_object_ref, transferred_obj_ref);
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
@@ -949,7 +952,8 @@ async fn test_move_calls_object_transfer_and_freeze() {
 
     let (_, order_effects) = call_response.unwrap();
     // Get the object created from the call
-    let (new_obj_ref, _) = order_effects.created[0];
+    let (new_obj_ref, _, created_metadata) = order_effects.created[0].clone();
+
     // Fetch the full object
     let new_obj = client1
         .get_object_info(ObjectInfoRequest {
@@ -959,6 +963,12 @@ async fn test_move_calls_object_transfer_and_freeze() {
         })
         .await
         .unwrap();
+    assert_eq!(new_obj.object.version(), created_metadata.version);
+    assert_eq!(new_obj.object.is_read_only(), created_metadata.read_only);
+    assert_eq!(
+        *new_obj.object.type_().unwrap(),
+        *created_metadata.type_.as_ref().unwrap()
+    );
 
     gas_object_ref = client1
         .get_object_info(ObjectInfoRequest {
@@ -994,7 +1004,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
     // Item being transfered is mutated.
     assert_eq!(order_effects.mutated.len(), 1);
 
-    let (transferred_obj_ref, _) = order_effects.mutated[0];
+    let (transferred_obj_ref, _, transferred_obj_metadata) = order_effects.mutated[0].clone();
     assert_ne!(gas_object_ref, transferred_obj_ref);
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
@@ -1007,6 +1017,19 @@ async fn test_move_calls_object_transfer_and_freeze() {
         })
         .await
         .unwrap();
+
+    assert_eq!(
+        transferred_obj_info.object.version(),
+        transferred_obj_metadata.version
+    );
+    assert_eq!(
+        transferred_obj_info.object.is_read_only(),
+        transferred_obj_metadata.read_only
+    );
+    assert_eq!(
+        *transferred_obj_info.object.type_().unwrap(),
+        transferred_obj_metadata.type_.unwrap()
+    );
 
     // Confirm new owner
     assert_eq!(transferred_obj_info.object.owner, client2.address);
@@ -1057,7 +1080,7 @@ async fn test_move_calls_object_delete() {
 
     let (_, order_effects) = call_response.unwrap();
     // Get the object created from the call
-    let (new_obj_ref, _) = order_effects.created[0];
+    let (new_obj_ref, _, new_obj_metadata) = order_effects.created[0].clone();
     // Fetch the full object
     let new_obj = client1
         .get_object_info(ObjectInfoRequest {
@@ -1067,6 +1090,12 @@ async fn test_move_calls_object_delete() {
         })
         .await
         .unwrap();
+    assert_eq!(new_obj.object.version(), new_obj_metadata.version);
+    assert_eq!(new_obj.object.is_read_only(), new_obj_metadata.read_only);
+    assert_eq!(
+        *new_obj.object.type_().unwrap(),
+        new_obj_metadata.type_.unwrap()
+    );
 
     gas_object_ref = client1
         .get_object_info(ObjectInfoRequest {
@@ -1290,7 +1319,7 @@ async fn test_module_publish_and_call_good() {
     // Verif gas obj
     assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
 
-    let (new_obj_ref, _) = published_effects.created.get(0).unwrap();
+    let (new_obj_ref, _, new_obj_metadata) = published_effects.created.get(0).unwrap();
     assert_ne!(gas_object_ref, *new_obj_ref);
 
     // We now have the module obj ref
@@ -1304,6 +1333,10 @@ async fn test_module_publish_and_call_good() {
         })
         .await
         .unwrap();
+
+    assert_eq!(new_obj.object.version(), new_obj_metadata.version);
+    assert_eq!(new_obj.object.is_read_only(), new_obj_metadata.read_only);
+    assert_eq!(new_obj.object.type_(), new_obj_metadata.type_.as_ref());
 
     // Version should be 1 for all modules
     assert_eq!(new_obj.object.version(), OBJECT_START_VERSION);
@@ -1406,7 +1439,7 @@ async fn test_module_publish_file_path() {
     // Verif gas
     assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
 
-    let (new_obj_ref, _) = published_effects.created.get(0).unwrap();
+    let (new_obj_ref, _, new_obj_metadata) = published_effects.created.get(0).unwrap();
     assert_ne!(gas_object_ref, *new_obj_ref);
 
     // We now have the module obj ref
@@ -1419,6 +1452,9 @@ async fn test_module_publish_file_path() {
         })
         .await
         .unwrap();
+    assert_eq!(new_obj.object.version(), new_obj_metadata.version);
+    assert_eq!(new_obj.object.is_read_only(), new_obj_metadata.read_only);
+    assert_eq!(new_obj.object.type_(), new_obj_metadata.type_.as_ref());
 
     // Version should be 1 for all modules
     assert_eq!(new_obj.object.version(), OBJECT_START_VERSION);

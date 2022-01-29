@@ -1115,8 +1115,10 @@ async fn test_hero() {
     )
     .await;
     assert_eq!(effects.status, ExecutionStatus::Success);
-    let (admin_object, admin_object_owner) = effects.created[0];
+    let (admin_object, admin_object_owner, admin_metadata) = effects.created[0].clone();
     assert_eq!(admin_object_owner, admin);
+    assert_eq!(admin_metadata.version, OBJECT_START_VERSION);
+    assert!(!admin_metadata.read_only);
 
     // 5. Create Trusted Coin Treasury.
     let effects = call_move(
@@ -1132,8 +1134,10 @@ async fn test_hero() {
     )
     .await;
     assert_eq!(effects.status, ExecutionStatus::Success);
-    let (cap, cap_owner) = effects.created[0];
+    let (cap, cap_owner, cap_metadata) = effects.created[0].clone();
     assert_eq!(cap_owner, player);
+    assert_eq!(cap_metadata.version, OBJECT_START_VERSION);
+    assert!(!cap_metadata.read_only);
 
     // 6. Mint 500 EXAMPLE TrustedCoin.
     let effects = call_move(
@@ -1150,8 +1154,10 @@ async fn test_hero() {
     .await;
     assert_eq!(effects.status, ExecutionStatus::Success);
     assert_eq!(effects.mutated.len(), 1); // cap
-    let (coin, coin_owner) = effects.created[0];
+    let (coin, coin_owner, coin_metadata) = effects.created[0].clone();
     assert_eq!(coin_owner, player);
+    assert_eq!(coin_metadata.version, OBJECT_START_VERSION);
+    assert!(!coin_metadata.read_only);
 
     // 7. Purchase a sword using 500 coin. This sword will have magic = 4, sword_strength = 5.
     let effects = call_move(
@@ -1168,8 +1174,11 @@ async fn test_hero() {
     .await;
     assert_eq!(effects.status, ExecutionStatus::Success);
     assert_eq!(effects.mutated.len(), 1); // coin
-    let (hero, hero_owner) = effects.created[0];
+    let (hero, hero_owner, hero_metadata) = effects.created[0].clone();
     assert_eq!(hero_owner, player);
+    assert_eq!(hero_metadata.version, OBJECT_START_VERSION);
+    assert!(!hero_metadata.read_only);
+
     // The payment goes to the admin.
     assert_eq!(effects.mutated[0].1, admin);
 
@@ -1207,8 +1216,10 @@ async fn test_hero() {
     )
     .await;
     assert_eq!(effects.status, ExecutionStatus::Success);
-    let (boar, boar_owner) = effects.created[0];
+    let (boar, boar_owner, bear_metadata) = effects.created[0].clone();
     assert_eq!(boar_owner, player);
+    assert_eq!(bear_metadata.version, OBJECT_START_VERSION);
+    assert!(!bear_metadata.read_only);
 
     // 10. Slay the boar!
     let effects = call_move(
