@@ -1975,7 +1975,7 @@ fn test_transfer_object_error() {
     // Fabricate a fake pending transfer
     let transfer = Transfer {
         sender: sender.address,
-        recipient: Address::FastPay(FastPayAddress::random_for_testing_only()),
+        recipient: FastPayAddress::random_for_testing_only(),
         object_ref: (object_id, Default::default(), ObjectDigest::new([0; 32])),
         gas_payment: (gas_object, Default::default(), ObjectDigest::new([0; 32])),
     };
@@ -2046,7 +2046,7 @@ async fn test_receive_object_error() -> Result<(), anyhow::Error> {
         order: Order {
             kind: OrderKind::Transfer(Transfer {
                 sender: client1.address,
-                recipient: Address::FastPay(client2.address),
+                recipient: client2.address,
                 object_ref: transfer.object_ref,
                 gas_payment: transfer.gas_payment,
             }),

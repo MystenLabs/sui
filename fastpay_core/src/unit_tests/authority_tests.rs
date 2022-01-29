@@ -55,7 +55,7 @@ fn compare_order_info_responses(o1: &OrderInfoResponse, o2: &OrderInfoResponse) 
 #[tokio::test]
 async fn test_handle_transfer_order_bad_signature() {
     let (sender, sender_key) = get_key_pair();
-    let recipient = Address::FastPay(dbg_addr(2));
+    let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let authority_state =
@@ -98,7 +98,7 @@ async fn test_handle_transfer_order_unknown_sender() {
     let (unknown_address, unknown_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();
-    let recipient = Address::FastPay(dbg_addr(2));
+    let recipient = dbg_addr(2);
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let object = authority_state.object_state(&object_id).await.unwrap();
@@ -164,7 +164,7 @@ fn test_handle_transfer_order_bad_sequence_number() {
 #[tokio::test]
 async fn test_handle_transfer_order_ok() {
     let (sender, sender_key) = get_key_pair();
-    let recipient = Address::FastPay(dbg_addr(2));
+    let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let authority_state =
@@ -227,7 +227,7 @@ async fn test_handle_transfer_order_ok() {
 #[tokio::test]
 async fn test_handle_transfer_zero_balance() {
     let (sender, sender_key) = get_key_pair();
-    let recipient = Address::FastPay(dbg_addr(2));
+    let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
     let object = authority_state.object_state(&object_id).await.unwrap();
@@ -526,7 +526,7 @@ async fn test_handle_move_order_insufficient_budget() {
 #[tokio::test]
 async fn test_handle_transfer_order_double_spend() {
     let (sender, sender_key) = get_key_pair();
-    let recipient = Address::FastPay(dbg_addr(2));
+    let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let authority_state =
@@ -569,7 +569,7 @@ async fn test_handle_confirmation_order_unknown_sender() {
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
-        Address::FastPay(recipient),
+        recipient,
         object.to_object_reference(),
         gas_object.to_object_reference(),
         &authority_state,
@@ -607,7 +607,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
-        Address::FastPay(recipient),
+        recipient,
         object.to_object_reference(),
         gas_object.to_object_reference(),
         &authority_state,
@@ -655,7 +655,7 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
     let certified_transfer_order = init_certified_transfer_order(
         address,
         &key,
-        Address::FastPay(address),
+        address,
         object.to_object_reference(),
         gas_object.to_object_reference(),
         &authority_state,
@@ -700,7 +700,7 @@ async fn test_handle_confirmation_order_gas() {
         let certified_transfer_order = init_certified_transfer_order(
             sender,
             &sender_key,
-            Address::FastPay(recipient),
+            recipient,
             object.to_object_reference(),
             gas_object_ref,
             &authority_state,
@@ -737,7 +737,7 @@ async fn test_handle_confirmation_order_ok() {
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
-        Address::FastPay(recipient),
+        recipient,
         object.to_object_reference(),
         gas_object.to_object_reference(),
         &authority_state,
@@ -807,7 +807,7 @@ async fn test_handle_confirmation_order_idempotent() {
     let certified_transfer_order = init_certified_transfer_order(
         sender,
         &sender_key,
-        Address::FastPay(recipient),
+        recipient,
         object.to_object_reference(),
         gas_object.to_object_reference(),
         &authority_state,
@@ -1295,7 +1295,7 @@ async fn init_state_with_object_id(address: FastPayAddress, object: ObjectID) ->
 fn init_transfer_order(
     sender: FastPayAddress,
     secret: &KeyPair,
-    recipient: Address,
+    recipient: FastPayAddress,
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Order {
@@ -1312,7 +1312,7 @@ fn init_transfer_order(
 fn init_certified_transfer_order(
     sender: FastPayAddress,
     secret: &KeyPair,
-    recipient: Address,
+    recipient: FastPayAddress,
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
     authority_state: &AuthorityState,

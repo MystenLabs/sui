@@ -4,7 +4,7 @@
 use fastpay_core::client::ClientState;
 use fastx_types::{
     base_types::*,
-    messages::{Address, CertifiedOrder, OrderKind},
+    messages::{CertifiedOrder, OrderKind},
 };
 
 use move_core_types::language_storage::TypeTag;
@@ -230,13 +230,11 @@ impl AccountsConfig {
     pub fn update_for_received_transfer(&mut self, certificate: CertifiedOrder) {
         match &certificate.order.kind {
             OrderKind::Transfer(transfer) => {
-                if let Address::FastPay(recipient) = &transfer.recipient {
-                    if let Some(config) = self.accounts.get_mut(recipient) {
-                        config
-                            .certificates
-                            .entry(certificate.order.digest())
-                            .or_insert(certificate);
-                    }
+                if let Some(config) = self.accounts.get_mut(&transfer.recipient) {
+                    config
+                        .certificates
+                        .entry(certificate.order.digest())
+                        .or_insert(certificate);
                 }
             }
             OrderKind::Publish(_) | OrderKind::Call(_) => {

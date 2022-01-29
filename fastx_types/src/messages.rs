@@ -16,16 +16,10 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
-pub enum Address {
-    Primary(PrimaryAddress),
-    FastPay(FastPayAddress),
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Transfer {
     pub sender: FastPayAddress,
-    pub recipient: Address,
+    pub recipient: FastPayAddress,
     pub object_ref: ObjectRef,
     pub gas_payment: ObjectRef,
 }
