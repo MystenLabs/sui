@@ -348,6 +348,13 @@ impl AuthorityState {
         Ok(ExecutionStatus::Success)
     }
 
+    pub async fn handle_order_info_request(
+        &self,
+        request: OrderInfoRequest,
+    ) -> Result<OrderInfoResponse, FastPayError> {
+        self.make_order_info(&request.transaction_digest).await
+    }
+
     pub async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
