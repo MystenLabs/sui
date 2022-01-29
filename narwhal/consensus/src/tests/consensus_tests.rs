@@ -221,7 +221,7 @@ async fn not_enough_support() {
     let mut certificates = VecDeque::new();
 
     // Round 1: Fully connected graph.
-    let nodes: Vec<_> = keys.iter().cloned().take(3).collect();
+    let nodes: Vec<_> = keys.iter().take(3).cloned().collect();
     let (out, parents) = make_optimal_certificates(1, 1, &genesis, &nodes);
     certificates.extend(out);
 
@@ -230,7 +230,7 @@ async fn not_enough_support() {
     let (leader_2_digest, certificate) = mock_certificate(keys[0].clone(), 2, parents.clone());
     certificates.push_back(certificate);
 
-    let nodes: Vec<_> = keys.iter().cloned().skip(1).collect();
+    let nodes: Vec<_> = keys.iter().skip(1).cloned().collect();
     let (out, mut parents) = make_optimal_certificates(2, 2, &parents, &nodes);
     certificates.extend(out);
 
@@ -256,7 +256,7 @@ async fn not_enough_support() {
     parents = next_parents.clone();
 
     // Rounds 4, 5, and 6: Fully connected graph.
-    let nodes: Vec<_> = keys.iter().cloned().take(3).collect();
+    let nodes: Vec<_> = keys.iter().take(3).cloned().collect();
     let (out, parents) = make_optimal_certificates(4, 6, &parents, &nodes);
     certificates.extend(out);
 
@@ -315,7 +315,7 @@ async fn missing_leader() {
     let mut certificates = VecDeque::new();
 
     // Remove the leader for rounds 1 and 2.
-    let nodes: Vec<_> = keys.iter().cloned().skip(1).collect();
+    let nodes: Vec<_> = keys.iter().skip(1).cloned().collect();
     let (out, parents) = make_optimal_certificates(1, 2, &genesis, &nodes);
     certificates.extend(out);
 

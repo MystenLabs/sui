@@ -304,7 +304,7 @@ impl KeyPair for BLS12377KeyPair {
 
     fn generate<R: rand::CryptoRng + rand::RngCore>(rng: &mut R) -> Self {
         let celo_privkey = celo_bls::PrivateKey::generate(&mut rng_wrapper::RngWrapper(rng));
-        let celo_pubkey = (&celo_privkey).into();
+        let celo_pubkey = PublicKey::from(&celo_privkey);
         BLS12377KeyPair {
             name: BLS12377PublicKey {
                 pubkey: celo_pubkey,
