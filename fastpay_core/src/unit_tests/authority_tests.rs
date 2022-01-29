@@ -886,6 +886,16 @@ async fn test_handle_confirmation_order_idempotent() {
 
     // this is valid because we're checking the authority state does not change the certificate
     compare_order_info_responses(&info, &info2);
+
+    // Now check the order info request is also the same
+    let info3 = authority_state
+        .handle_order_info_request(OrderInfoRequest {
+            transaction_digest: certified_transfer_order.order.digest(),
+        })
+        .await
+        .unwrap();
+
+    compare_order_info_responses(&info, &info3);
 }
 
 #[tokio::test]
