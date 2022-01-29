@@ -8,13 +8,48 @@ use typed_store::rocks::{open_cf, DBMap};
 use typed_store::traits::Map;
 
 pub struct AuthorityStore {
+    /// This is a map between the object ID and the latest state of the object, namely the
+    /// state that is needed to process new orders. If an object is deleted its entry is
+    /// removed from this map.
     objects: DBMap<ObjectID, Object>,
+
+    /// This is a map between object references of currently active objects that can be mutated,
+    /// and the order that they are lock on for use by this specific authority. Where an object
+    /// lock exists for an object version, but no order has been seen using it the lock is set
+    /// to None. The safety of consistent broadcast depend on each honest authority never changing
+    /// the lock once it is set. After a certificate for this object is processed it can be
+    /// forgotten.
     order_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
+
+    /// This is a an index of object references to currently existing objects, indexed by the
+    /// composite key of the FastPayAddress of their owner and the object ID of the object.
+    /// This composite index allows an efficient iterator to list all objected currently owned
+    /// by a specific user, and their object reference.
     owner_index: DBMap<(FastPayAddress, ObjectID), ObjectRef>,
+
+    /// This is map between the transaction digest and signed orders found in the `order_lock`.
+    /// NOTE: after a lock is deleted the corresponding entry here could be deleted, but right
+    /// now this is not done. If a certificate is processed (see `certificates`) the signed
+    /// order can also be deleted from this structure.
     signed_orders: DBMap<TransactionDigest, SignedOrder>,
+
+    /// This is a map between the tranbsaction digest and the corresponding certificate for all
+    /// certificates that have been successfully processed by this authority. This set of certificates
+    /// along with the genesis allows the reconstruction of all other state, and a full sync to this
+    /// authority.
     certificates: DBMap<TransactionDigest, CertifiedOrder>,
+
+    /// The map between the object ref of objects processed at all versions and the transaction
+    /// digest of the certificate that lead to the creation of this version of the object.
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
+
+    /// A map between the transaction digest of a certificate that was successfully processed
+    /// (ie in `certificates`) and the effects its execution has on the authority state. This
+    /// structure is used to ensure we do not double process a certificate, and that we can return
+    /// the same response for any call after the first (ie. make certificate processing idempotent).
     signed_effects: DBMap<TransactionDigest, SignedOrderEffects>,
+
+    /// Internal vector of locks to manage concurrent writes to the database
     lock_table: Vec<parking_lot::Mutex<()>>,
 }
 
