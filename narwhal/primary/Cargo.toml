@@ -8,8 +8,8 @@ edition = "2021"
 
 [dependencies]
 futures = "0.3.19"
-serde = { version = "1.0.132", features = ["derive"] }
-tokio = { version = "1.15.0", features = ["sync", "rt", "macros"] }
+serde = { version = "1.0.136", features = ["derive"] }
+tokio = { version = "1.16.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.6.9", features = ["codec"] }
 ed25519-dalek = "1.0.1"
 thiserror = "1.0.30"
@@ -26,7 +26,7 @@ network = { path = "../network" }
 
 [dev-dependencies]
 rand = "0.7.3"
-tempfile = "3.2.0"
+tempfile = "3.3.0"
 
 [features]
 benchmark = []

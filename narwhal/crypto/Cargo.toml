@@ -7,15 +7,15 @@ edition = "2021"
 publish = false
 
 [dependencies]
-base64ct = { version = "1.3.2", features = ["alloc"] }
-tokio = { version = "1.15.0", features = ["sync", "rt", "macros"] }
+base64ct = { version = "1.3.3", features = ["alloc"] }
+tokio = { version = "1.16.1", features = ["sync", "rt", "macros"] }
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
-serde = { version = "1.0.132", features = ["derive"] }
-rand = { version = "0.7", features = ["std"] }
+serde = { version = "1.0.136", features = ["derive"] }
+rand = { version = "0.7.3", features = ["std"] }
 base64 = "0.13.0"
-zeroize = "1.4.3"
-signature = "1.4.0"
-eyre = "0.6.5"
+zeroize = "1.5.1"
+signature = "1.5.0"
+eyre = "0.6.6"
 
 # TODO: switch to https://github.com/celo-org/celo-bls-snark-rs 
 # when https://github.com/celo-org/celo-bls-snark-rs/issues/228 is solved

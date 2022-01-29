@@ -6,8 +6,8 @@ authors = ["Alberto Sonnino <asonnino@fb.com>"]
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.15.0", features = ["sync"] }
-rand = { version = "0.7.3", optional = true}
+tokio = { version = "1.16.1", features = ["sync"] }
+rand = { version = "0.7.3", optional = true }
 crypto = { path = "../crypto" }
 config = { path = "../config" }
 primary = { path = "../primary" }
