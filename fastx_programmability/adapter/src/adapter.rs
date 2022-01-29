@@ -269,7 +269,7 @@ pub fn verify_and_link<
 /// to reflect the new ID's of its dependencies.
 /// Returns the newly created package ID.
 pub fn generate_package_id(
-    modules: &mut Vec<CompiledModule>,
+    modules: &mut [CompiledModule],
     ctx: &mut TxContext,
 ) -> Result<ObjectID, FastPayError> {
     let mut sub_map = BTreeMap::new();
