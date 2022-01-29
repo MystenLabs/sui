@@ -21,6 +21,7 @@ tempfile = "3.3.0"
 
 fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-framework = { path = "../fastx_programmability/framework" }
+fastx-network = { path = "../network_utils" }
 fastx-types = { path = "../fastx_types" }
 
 move-binary-format = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }

@@ -4,8 +4,9 @@
 #![deny(warnings)]
 
 use bytes::Bytes;
-use fastpay::{network, transport};
+use fastpay::{mass_client::MassClient, server_lib};
 use fastpay_core::authority::*;
+use fastx_network::{network, transport};
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
 use fastx_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use futures::stream::StreamExt;
@@ -269,7 +270,7 @@ impl ClientServerBenchmark {
     }
 
     async fn spawn_server(&self, state: AuthorityState) -> transport::SpawnedServer {
-        let server = network::Server::new(self.host.clone(), self.port, state, self.buffer_size);
+        let server = server_lib::Server::new(self.host.clone(), self.port, state, self.buffer_size);
         server.spawn().await.unwrap()
     }
 
@@ -290,7 +291,7 @@ impl ClientServerBenchmark {
 
         info!("Sending requests.");
         if self.max_in_flight > 0 {
-            let mass_client = network::MassClient::new(
+            let mass_client = MassClient::new(
                 self.host.clone(),
                 self.port,
                 self.buffer_size,

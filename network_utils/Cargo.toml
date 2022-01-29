@@ -1,0 +1,20 @@
+[package]
+name = "fastx-network"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+bytes = "1.1.0"
+futures = "0.3.5"
+log = "0.4.14"
+net2 = "0.2.37"
+tokio = { version = "1.15.0", features = ["full"] }
+tracing = { version = "0.1", features = ["log"] }
+
+fastx-types = { path = "../fastx_types" }
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["net2"]
