@@ -94,13 +94,6 @@ impl AuthorityState {
             );
 
             let object = object.ok_or(FastPayError::ObjectNotFound { object_id })?;
-            fp_ensure!(
-                object.digest() == object_digest,
-                FastPayError::InvalidObjectDigest {
-                    object_id,
-                    expected_digest: object_digest
-                }
-            );
 
             // Check that the seq number is the same
             fp_ensure!(
@@ -108,6 +101,15 @@ impl AuthorityState {
                 FastPayError::UnexpectedSequenceNumber {
                     object_id,
                     expected_sequence: object.version(),
+                }
+            );
+
+            // Check the digest matches
+            fp_ensure!(
+                object.digest() == object_digest,
+                FastPayError::InvalidObjectDigest {
+                    object_id,
+                    expected_digest: object_digest
                 }
             );
 
@@ -171,6 +173,12 @@ impl AuthorityState {
         // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
+        // Ensure an idempotent answer
+        let order_info = self.make_order_info(&transaction_digest).await?;
+        if order_info.certified_order.is_some() {
+            return Ok(order_info);
+        }
+
         let input_objects = order.input_objects();
         let ids: Vec<_> = input_objects.iter().map(|(id, _, _)| *id).collect();
         // Get a copy of the object.
@@ -197,6 +205,10 @@ impl AuthorityState {
                     current_sequence_number: input_sequence_number
                 });
             }
+
+            // Note: this should never be true in prod, but some tests
+            // (test_handle_confirmation_order_bad_sequence_number) do
+            // a poor job of setting up the DB.
             if input_sequence_number > input_seq {
                 // Transfer was already confirmed.
                 return self.make_order_info(&transaction_digest).await;
@@ -210,7 +222,6 @@ impl AuthorityState {
         }
 
         // Insert into the certificates map
-        let transaction_digest = certificate.order.digest();
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
         let gas_object_id = *order.gas_payment_object_id();
@@ -321,11 +332,15 @@ impl AuthorityState {
         let requested_certificate = if let Some(seq) = request.request_sequence_number {
             // Get the Transaction Digest that created the object
             let parent_iterator = self
-                .get_parent_iterator(request.object_id, Some(seq.increment()))
+                .get_parent_iterator(request.object_id, Some(seq))
                 .await?;
-            let (_, transaction_digest) = parent_iterator
-                .first()
-                .ok_or(FastPayError::CertificateNotfound)?;
+            let (_, transaction_digest) =
+                parent_iterator
+                    .first()
+                    .ok_or(FastPayError::ParentNotfound {
+                        object_id: request.object_id,
+                        sequence: seq,
+                    })?;
             // Get the cert from the transaction digest
             Some(
                 self.read_certificate(transaction_digest)
