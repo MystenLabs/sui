@@ -101,7 +101,7 @@ pub struct CertifiedOrder {
 //
 // see also https://github.com/MystenLabs/fastnft/issues/266
 //
-static_assertions::assert_not_impl_any!(idem_orders; CertifiedOrder, Hash, Eq, PartialEq);
+static_assertions::assert_not_impl_any!(CertifiedOrder: Hash, Eq, PartialEq);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfirmationOrder {
