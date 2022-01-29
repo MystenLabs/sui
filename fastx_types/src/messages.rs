@@ -199,7 +199,9 @@ impl OrderEffects {
     /// Return an iterator that iterates through all mutated objects,
     /// including all from mutated, created and the gas_object.
     /// It doesn't include deleted.
-    pub fn all_mutated(&self) -> impl Iterator<Item = &(ObjectRef, FastPayAddress, crate::object::Metadata)> {
+    pub fn all_mutated(
+        &self,
+    ) -> impl Iterator<Item = &(ObjectRef, FastPayAddress, crate::object::Metadata)> {
         self.mutated
             .iter()
             .chain(self.created.iter())
