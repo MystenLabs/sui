@@ -76,6 +76,11 @@ pub enum FastPayError {
     // Account access
     #[error("No certificate for this account and sequence number")]
     CertificateNotfound,
+    #[error("No parent for object {object_id:?} at this sequence number {sequence:?}")]
+    ParentNotfound {
+        object_id: ObjectID,
+        sequence: SequenceNumber,
+    },
     #[error("Unknown sender's account")]
     UnknownSenderAccount,
     #[error("Signatures in a certificate must be from different authorities.")]
@@ -161,6 +166,14 @@ pub enum FastPayError {
     InsufficientObjectNumber,
     #[error("Execution invariant violated")]
     ExecutionInvariantViolation,
+    #[error("Authority did not return the information it is expected to have.")]
+    AuthorityInformationUnavailable,
+    #[error("Failed to update authority.")]
+    AuthorityUpdateFailure,
+    #[error(
+        "We have received cryptographic level of evidence that authority {authority:?} is faulty in a Byzantine manner."
+    )]
+    ByzantineAuthoritySuspicion { authority: AuthorityName },
     #[error("Storage error")]
     StorageError(#[from] typed_store::rocks::TypedStoreError),
 
