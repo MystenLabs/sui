@@ -363,7 +363,7 @@ where
             let result = client.handle_object_info_request(request.clone()).await;
             if let Ok(response) = result {
                 let certificate = response
-                    .requested_certificate
+                    .parent_certificate
                     .expect("Unable to get certificate");
                 if certificate.check(&self.committee).is_ok() {
                     // BUG (https://github.com/MystenLabs/fastnft/issues/290): Orders do not have a sequence number any more, objects do.
@@ -468,7 +468,7 @@ where
                 };
 
                 let returned_certificate = object_info
-                    .requested_certificate
+                    .parent_certificate
                     .ok_or(FastPayError::AuthorityInformationUnavailable)?;
                 let returned_digest = returned_certificate.order.digest();
 

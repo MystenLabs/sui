@@ -356,7 +356,7 @@ impl AuthorityState {
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, FastPayError> {
-        let requested_certificate = if let Some(seq) = request.request_sequence_number {
+        let parent_certificate = if let Some(seq) = request.request_sequence_number {
             // Get the Transaction Digest that created the object
             let parent_iterator = self
                 .get_parent_iterator(request.object_id, Some(seq))
@@ -377,7 +377,7 @@ impl AuthorityState {
         } else {
             None
         };
-        self.make_object_info(request.object_id, requested_certificate)
+        self.make_object_info(request.object_id, parent_certificate)
             .await
     }
 }
@@ -452,7 +452,7 @@ impl AuthorityState {
     async fn make_object_info(
         &self,
         object_id: ObjectID,
-        requested_certificate: Option<CertifiedOrder>,
+        parent_certificate: Option<CertifiedOrder>,
     ) -> Result<ObjectInfoResponse, FastPayError> {
         let object = self.object_state(&object_id).await?;
         let lock = self
@@ -461,7 +461,7 @@ impl AuthorityState {
             .or::<FastPayError>(Ok(None))?;
 
         Ok(ObjectInfoResponse {
-            requested_certificate,
+            parent_certificate,
             pending_order: lock,
             object,
         })

@@ -123,7 +123,7 @@ pub struct AccountInfoResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectInfoResponse {
-    pub requested_certificate: Option<CertifiedOrder>,
+    pub parent_certificate: Option<CertifiedOrder>,
     pub pending_order: Option<SignedOrder>,
     pub object: Object,
 }

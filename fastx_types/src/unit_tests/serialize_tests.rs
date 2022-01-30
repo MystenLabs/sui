@@ -18,8 +18,8 @@ fn compare_object_info_responses(o1: &ObjectInfoResponse, o2: &ObjectInfoRespons
     assert_eq!(o1.object, o2.object);
     assert_eq!(o1.pending_order, o2.pending_order);
     match (
-        o1.requested_certificate.as_ref(),
-        o2.requested_certificate.as_ref(),
+        o1.parent_certificate.as_ref(),
+        o2.parent_certificate.as_ref(),
     ) {
         (Some(cert1), Some(cert2)) => {
             assert_eq!(cert1.order.digest(), cert2.order.digest());
@@ -239,22 +239,22 @@ fn test_info_response() {
     let resp1 = ObjectInfoResponse {
         object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
         pending_order: None,
-        requested_certificate: None,
+        parent_certificate: None,
     };
     let resp2 = ObjectInfoResponse {
         object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
         pending_order: Some(vote.clone()),
-        requested_certificate: None,
+        parent_certificate: None,
     };
     let resp3 = ObjectInfoResponse {
         object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
         pending_order: None,
-        requested_certificate: Some(cert.clone()),
+        parent_certificate: Some(cert.clone()),
     };
     let resp4 = ObjectInfoResponse {
         object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
         pending_order: Some(vote),
-        requested_certificate: Some(cert),
+        parent_certificate: Some(cert),
     };
 
     for resp in [resp1, resp2, resp3, resp4].iter() {
