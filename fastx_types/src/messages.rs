@@ -109,9 +109,13 @@ pub struct AccountInfoRequest {
     pub account: FastPayAddress,
 }
 
+/// A request for information about an object and optionally its
+/// parent certificate at a specific version.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ObjectInfoRequest {
+    /// The id of the object to retrieve, at the latest version.
     pub object_id: ObjectID,
+    /// The version of the object for which the parent certificate is sought.
     pub request_sequence_number: Option<SequenceNumber>,
 }
 
@@ -121,10 +125,18 @@ pub struct AccountInfoResponse {
     pub owner: FastPayAddress,
 }
 
+/// This message provides information about the latest object and its lock
+/// as well as the parent certificate of the object at a specific version.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectInfoResponse {
+    /// The certificate that created or mutates the object at a given version.
+    /// If no parent certificate was requested this is set to None.
     pub parent_certificate: Option<CertifiedOrder>,
-    // pub pending_order: Option<SignedOrder>,
+
+    /// The object and its current lock. If the object does not exist
+    /// this is None. If the lock is not set the second item in the
+    /// tuple is set to None, otherwise it is set to the signed order
+    /// locked on.
     pub object_and_lock: Option<(Object, Option<SignedOrder>)>,
 }
 

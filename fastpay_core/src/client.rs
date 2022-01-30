@@ -826,7 +826,7 @@ where
                             .ok_or(FastPayError::ObjectNotFound { object_id })?
                             .0
                             .version();
-                        
+
                         // Download each missing certificate in reverse order using the downloader.
                         let mut number = target_sequence_number.decrement();
                         while let Ok(seq) = number {
@@ -1119,9 +1119,7 @@ where
         let votes = self
             .communicate_with_quorum(|_, client| {
                 let req = object_info_req.clone();
-                Box::pin(async move {
-                    client.handle_object_info_request(req).await
-                })
+                Box::pin(async move { client.handle_object_info_request(req).await })
             })
             .await?;
 
