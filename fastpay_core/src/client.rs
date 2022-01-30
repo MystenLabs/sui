@@ -355,7 +355,6 @@ where
         let request = ObjectInfoRequest {
             object_id,
             request_sequence_number: Some(inner_sequence_number),
-            request_received_transfers_excluding_first_nth: None,
         };
         // Sequentially try each authority in random order.
         // TODO: Improve shuffle, different authorities might different amount of stake.
@@ -456,7 +455,6 @@ where
                     .handle_object_info_request(ObjectInfoRequest {
                         object_id: object_kind.object_id(),
                         request_sequence_number: Some(object_kind.version()),
-                        request_received_transfers_excluding_first_nth: None,
                     })
                     .await;
 
@@ -590,7 +588,6 @@ where
         let request = ObjectInfoRequest {
             object_id,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         };
         let mut authority_clients = self.authority_clients.clone();
         let numbers: futures::stream::FuturesUnordered<_> = authority_clients
@@ -620,7 +617,6 @@ where
         let request = ObjectInfoRequest {
             object_id,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         };
         let authority_clients = self.authority_clients.clone();
         let numbers: futures::stream::FuturesUnordered<_> = authority_clients
@@ -645,7 +641,6 @@ where
         self.get_object_info(ObjectInfoRequest {
             object_id: FASTX_FRAMEWORK_ADDRESS,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .map(|response| response.object.to_object_reference())
@@ -808,7 +803,6 @@ where
                         let request = ObjectInfoRequest {
                             object_id,
                             request_sequence_number: None,
-                            request_received_transfers_excluding_first_nth: None,
                         };
                         let response = client.handle_object_info_request(request).await?;
 
@@ -1187,7 +1181,6 @@ where
                         //        seq+1. But a lot of the client code makes the above wrong assumption, and the line above reverts
                         //        query to the old (incorrect) behavious to not break tests everywhere.
                         request_sequence_number: Some(transfer.object_ref.1.increment()),
-                        request_received_transfers_excluding_first_nth: None,
                     })
                     .await?;
                 self.object_refs

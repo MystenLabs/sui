@@ -48,12 +48,10 @@ fn test_info_request() {
     let req1 = ObjectInfoRequest {
         object_id: dbg_object_id(0x20),
         request_sequence_number: None,
-        request_received_transfers_excluding_first_nth: None,
     };
     let req2 = ObjectInfoRequest {
         object_id: dbg_object_id(0x20),
         request_sequence_number: Some(SequenceNumber::from(129)),
-        request_received_transfers_excluding_first_nth: None,
     };
 
     let buf1 = serialize_object_info_request(&req1);

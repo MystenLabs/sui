@@ -542,7 +542,6 @@ fn main() {
                 let obj_info_req = ObjectInfoRequest {
                     object_id: obj_id,
                     request_sequence_number: None,
-                    request_received_transfers_excluding_first_nth: None,
                 };
                 let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
                 println!("Owner: {:#?}", obj_info.object.owner);
@@ -589,7 +588,6 @@ fn main() {
                 let package_obj_info_req = ObjectInfoRequest {
                     object_id: config.package_obj_id,
                     request_sequence_number: None,
-                    request_received_transfers_excluding_first_nth: None,
                 };
                 let package_obj_info = client_state
                     .get_object_info(package_obj_info_req)
@@ -610,7 +608,6 @@ fn main() {
                     let obj_info_req = ObjectInfoRequest {
                         object_id: obj_id,
                         request_sequence_number: None,
-                        request_received_transfers_excluding_first_nth: None,
                     };
 
                     let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();

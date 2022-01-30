@@ -113,7 +113,6 @@ pub struct AccountInfoRequest {
 pub struct ObjectInfoRequest {
     pub object_id: ObjectID,
     pub request_sequence_number: Option<SequenceNumber>,
-    pub request_received_transfers_excluding_first_nth: Option<usize>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]

@@ -898,7 +898,6 @@ async fn test_move_calls_object_transfer() {
         .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap();
@@ -907,7 +906,6 @@ async fn test_move_calls_object_transfer() {
         .get_object_info(ObjectInfoRequest {
             object_id: gas_object_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap()
@@ -948,7 +946,6 @@ async fn test_move_calls_object_transfer() {
         .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap();
@@ -1013,7 +1010,6 @@ async fn test_move_calls_chain_many_authority_syncronization() {
             .get_object_info(ObjectInfoRequest {
                 object_id: new_obj_ref.0,
                 request_sequence_number: None,
-                request_received_transfers_excluding_first_nth: None,
             })
             .await
             .unwrap();
@@ -1022,7 +1018,6 @@ async fn test_move_calls_chain_many_authority_syncronization() {
             .get_object_info(ObjectInfoRequest {
                 object_id: gas_object_ref.0,
                 request_sequence_number: None,
-                request_received_transfers_excluding_first_nth: None,
             })
             .await
             .unwrap()
@@ -1035,7 +1030,6 @@ async fn test_move_calls_chain_many_authority_syncronization() {
             let single_client_response = auth_client.handle_object_info_request(ObjectInfoRequest {
                 object_id: gas_object_ref.0,
                 request_sequence_number: None,
-                request_received_transfers_excluding_first_nth: None,
             })
             .await
             .unwrap()
@@ -1073,7 +1067,6 @@ async fn test_move_calls_chain_many_authority_syncronization() {
         .handle_object_info_request(ObjectInfoRequest {
             object_id: gas_object_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap()
@@ -1086,7 +1079,6 @@ async fn test_move_calls_chain_many_authority_syncronization() {
         .handle_object_info_request(ObjectInfoRequest {
             object_id: gas_object_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap()
@@ -1177,7 +1169,6 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
             .get_object_info(ObjectInfoRequest {
                 object_id: new_obj_ref.0,
                 request_sequence_number: None,
-                request_received_transfers_excluding_first_nth: None,
             })
             .await
             .unwrap();
@@ -1186,7 +1177,6 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
             .get_object_info(ObjectInfoRequest {
                 object_id: gas_object_ref.0,
                 request_sequence_number: None,
-                request_received_transfers_excluding_first_nth: None,
             })
             .await
             .unwrap()
@@ -1199,7 +1189,6 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
             let single_client_response = auth_client.handle_object_info_request(ObjectInfoRequest {
                 object_id: gas_object_ref.0,
                 request_sequence_number: None,
-                request_received_transfers_excluding_first_nth: None,
             })
             .await
             .unwrap()
@@ -1229,7 +1218,6 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
         .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap()
@@ -1240,7 +1228,6 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
         .get_object_info(ObjectInfoRequest {
             object_id: gas_object_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap()
@@ -1273,7 +1260,6 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
         .handle_object_info_request(ObjectInfoRequest {
             object_id: gas_object_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap()
@@ -1286,7 +1272,6 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
         .handle_object_info_request(ObjectInfoRequest {
             object_id: gas_object_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap()
@@ -1378,7 +1363,6 @@ async fn test_move_calls_object_transfer_and_freeze() {
         .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap();
@@ -1387,7 +1371,6 @@ async fn test_move_calls_object_transfer_and_freeze() {
         .get_object_info(ObjectInfoRequest {
             object_id: gas_object_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap()
@@ -1426,7 +1409,6 @@ async fn test_move_calls_object_transfer_and_freeze() {
         .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap();
@@ -1489,7 +1471,6 @@ async fn test_move_calls_object_delete() {
         .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap();
@@ -1498,7 +1479,6 @@ async fn test_move_calls_object_delete() {
         .get_object_info(ObjectInfoRequest {
             object_id: gas_object_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap()
@@ -1534,7 +1514,6 @@ async fn test_move_calls_object_delete() {
         .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await;
 
@@ -1553,7 +1532,6 @@ async fn test_move_calls_certs() {
         .get_object_info(ObjectInfoRequest {
             object_id: FASTX_FRAMEWORK_ADDRESS,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap()
@@ -1726,7 +1704,6 @@ async fn test_module_publish_and_call_good() {
         .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap();
@@ -1747,7 +1724,6 @@ async fn test_module_publish_and_call_good() {
         .get_object_info(ObjectInfoRequest {
             object_id: gas_object_id,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap()
@@ -1786,7 +1762,6 @@ async fn test_module_publish_and_call_good() {
         .get_object_info(ObjectInfoRequest {
             object_id: tres_cap_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap();
@@ -1841,7 +1816,6 @@ async fn test_module_publish_file_path() {
         .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap();
@@ -1862,7 +1836,6 @@ async fn test_module_publish_file_path() {
         .get_object_info(ObjectInfoRequest {
             object_id: gas_object_id,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         })
         .await
         .unwrap()
