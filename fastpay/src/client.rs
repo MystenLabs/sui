@@ -742,7 +742,7 @@ fn main() {
                 let votes: Vec<_> = responses
                     .into_iter()
                     .filter_map(|buf| {
-                        deserialize_response(&buf[..]).and_then(|info| info.pending_confirmation)
+                        deserialize_response(&buf[..]).and_then(|info| info.pending_order)
                     })
                     .collect();
                 info!("Received {} valid votes.", votes.len());

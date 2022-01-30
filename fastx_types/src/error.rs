@@ -56,8 +56,8 @@ pub enum FastPayError {
         object_id: ObjectID,
         expected_sequence: SequenceNumber,
     },
-    #[error("Conflicting order already received: {pending_confirmation:?}")]
-    ConflictingOrder { pending_confirmation: Order },
+    #[error("Conflicting order already received: {pending_order:?}")]
+    ConflictingOrder { pending_order: Order },
     #[error("Transfer order was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransferOrder,
     #[error("Transaction order processing failed: {err}")]

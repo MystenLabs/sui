@@ -462,7 +462,7 @@ impl AuthorityState {
 
         Ok(ObjectInfoResponse {
             requested_certificate,
-            pending_confirmation: lock,
+            pending_order: lock,
             object,
         })
     }

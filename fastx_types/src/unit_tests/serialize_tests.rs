@@ -16,7 +16,7 @@ fn compare_certified_orders(o1: &CertifiedOrder, o2: &CertifiedOrder) {
 // Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
 fn compare_object_info_responses(o1: &ObjectInfoResponse, o2: &ObjectInfoResponse) {
     assert_eq!(o1.object, o2.object);
-    assert_eq!(o1.pending_confirmation, o2.pending_confirmation);
+    assert_eq!(o1.pending_order, o2.pending_order);
     match (
         o1.requested_certificate.as_ref(),
         o2.requested_certificate.as_ref(),
@@ -238,22 +238,22 @@ fn test_info_response() {
 
     let resp1 = ObjectInfoResponse {
         object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-        pending_confirmation: None,
+        pending_order: None,
         requested_certificate: None,
     };
     let resp2 = ObjectInfoResponse {
         object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-        pending_confirmation: Some(vote.clone()),
+        pending_order: Some(vote.clone()),
         requested_certificate: None,
     };
     let resp3 = ObjectInfoResponse {
         object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-        pending_confirmation: None,
+        pending_order: None,
         requested_certificate: Some(cert.clone()),
     };
     let resp4 = ObjectInfoResponse {
         object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-        pending_confirmation: Some(vote),
+        pending_order: Some(vote),
         requested_certificate: Some(cert),
     };
 
