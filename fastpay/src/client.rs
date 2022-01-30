@@ -610,8 +610,12 @@ fn main() {
                     };
 
                     let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
-                    // BUG: Assumes object is not deleted?
-                    object_args_refs.push(obj_info.object().unwrap().to_object_reference());
+                    object_args_refs.push(
+                        obj_info
+                            .object()
+                            .expect(format!("Could not find object {:?}", obj_id).as_str())
+                            .to_object_reference(),
+                    );
                 }
 
                 let pure_args = convert_txn_args(&config.pure_args);
