@@ -282,9 +282,9 @@ fn mass_update_recipients(
     }
 }
 
-fn deserialize_response(response: &[u8]) -> Option<ObjectInfoResponse> {
+fn deserialize_response(response: &[u8]) -> Option<OrderInfoResponse> {
     match deserialize_message(response) {
-        Ok(SerializedMessage::ObjectInfoResp(info)) => Some(*info),
+        Ok(SerializedMessage::OrderResp(info)) => Some(*info),
         Ok(SerializedMessage::Error(error)) => {
             error!("Received error value: {}", error);
             None
@@ -455,8 +455,7 @@ enum ClientCommands {
 
         /// Gas value per object
         #[structopt(long, default_value = "1000")]
-        #[allow(dead_code)]
-        value_per_per_obj: u32,
+        value_per_obj: u64,
 
         /// Initial state config file path
         #[structopt(name = "init-state-cfg")]
@@ -771,8 +770,7 @@ fn main() {
                 let votes: Vec<_> = responses
                     .into_iter()
                     .filter_map(|buf| {
-                        deserialize_response(&buf[..])
-                            .and_then(|info| info.object_and_lock.unwrap().lock)
+                        deserialize_response(&buf[..]).and_then(|info| info.signed_order)
                     })
                     .collect();
                 info!("Received {} valid votes.", votes.len());
@@ -801,11 +799,14 @@ fn main() {
                     responses
                         .iter()
                         .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
-                            Some(info) => {
-                                confirmed.insert(info.object().unwrap().id());
+                            Some(OrderInfoResponse {
+                                signed_order: Some(order),
+                                ..
+                            }) => {
+                                confirmed.insert(*order.order.object_id());
                                 acc + 1
                             }
-                            None => acc,
+                            _ => acc,
                         });
                 warn!(
                     "Received {} valid confirmations for {} transfers.",
@@ -828,31 +829,34 @@ fn main() {
             num,
             gas_objs_per_account,
             // TODO: Integrate gas logic with https://github.com/MystenLabs/fastnft/pull/97
-            value_per_per_obj: _,
+            value_per_obj,
             initial_state_config_path,
         } => {
-            let num_accounts: u32 = num;
+            let num_of_addresses: u32 = num;
             let mut init_state_cfg: InitialStateConfig = InitialStateConfig::new();
 
-            for _ in 0..num_accounts {
+            for _ in 0..num_of_addresses {
+                let (address, key) = get_key_pair();
+                let mut objects = Vec::new();
                 let mut object_refs = Vec::new();
                 let mut gas_object_ids = Vec::new();
                 for _ in 0..gas_objs_per_account {
                     let object = Object::with_id_owner_gas_for_testing(
                         ObjectID::random(),
                         SequenceNumber::default(),
-                        FastPayAddress::random_for_testing_only(),
-                        100000,
+                        address,
+                        value_per_obj,
                     );
                     object_refs.push(object.to_object_reference());
-                    gas_object_ids.push(object.id())
+                    gas_object_ids.push(object.id());
+                    objects.push(object)
                 }
 
-                let account = UserAccount::new(object_refs.clone(), gas_object_ids);
+                let account = UserAccount::new(address, key, object_refs, gas_object_ids);
 
                 init_state_cfg.config.push(InitialStateConfigEntry {
                     address: account.address,
-                    object_refs,
+                    objects,
                 });
 
                 accounts_config.insert(account);
