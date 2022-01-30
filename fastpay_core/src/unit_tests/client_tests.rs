@@ -909,9 +909,8 @@ async fn test_move_calls_object_transfer() {
         })
         .await
         .unwrap()
-        .object_and_lock
+        .object()
         .unwrap()
-        .0
         .to_object_reference();
 
     let pure_args = vec![bcs::to_bytes(&client2.address.to_vec()).unwrap()];
@@ -922,7 +921,7 @@ async fn test_move_calls_object_transfer() {
             ident_str!("transfer").to_owned(),
             Vec::new(),
             gas_object_ref,
-            vec![new_obj.object_and_lock.unwrap().0.to_object_reference()],
+            vec![new_obj.object().unwrap().to_object_reference()],
             pure_args,
             GAS_VALUE_FOR_TESTING / 2,
         )
@@ -953,7 +952,7 @@ async fn test_move_calls_object_transfer() {
         .unwrap();
 
     // Confirm new owner
-    assert!(transferred_obj_info.object_and_lock.unwrap().0
+    assert!(transferred_obj_info.object().unwrap()
         .owner
         .is_address(&client2.address));
 }
@@ -1022,9 +1021,8 @@ async fn test_move_calls_chain_many_authority_syncronization() {
             })
             .await
             .unwrap()
-            .object_and_lock
+            .object()
             .unwrap()
-            .0
             .to_object_reference();
 
         /* Turn on if you want to observe the sequence numbers */
@@ -1050,7 +1048,7 @@ async fn test_move_calls_chain_many_authority_syncronization() {
                 ident_str!("set_value").to_owned(),
                 Vec::new(),
                 gas_object_ref,
-                vec![new_obj.object_and_lock.unwrap().0.to_object_reference()],
+                vec![new_obj.object().unwrap().to_object_reference()],
                 pure_args,
                 GAS_VALUE_FOR_TESTING / 2,
             )
@@ -1073,9 +1071,8 @@ async fn test_move_calls_chain_many_authority_syncronization() {
         })
         .await
         .unwrap()
-        .object_and_lock
+        .object()
         .unwrap()
-        .0
         .to_object_reference();
     assert_eq!(full_seq.1, SequenceNumber::from(11));
 
@@ -1087,9 +1084,8 @@ async fn test_move_calls_chain_many_authority_syncronization() {
         })
         .await
         .unwrap()
-        .object_and_lock
+        .object()
         .unwrap()
-        .0
         .to_object_reference();
     assert_eq!(zero_seq.1, SequenceNumber::from(0));
 
@@ -1187,9 +1183,8 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
             })
             .await
             .unwrap()
-            .object_and_lock
+            .object()
             .unwrap()
-            .0
             .to_object_reference();
 
         /* Turn on if you want to observe the sequence numbers */
@@ -1215,7 +1210,7 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
                 ident_str!("set_value").to_owned(),
                 Vec::new(),
                 gas_object_ref,
-                vec![new_obj.object_and_lock.unwrap().0.to_object_reference()],
+                vec![new_obj.object().unwrap().to_object_reference()],
                 pure_args,
                 GAS_VALUE_FOR_TESTING / 2,
             )
@@ -1230,9 +1225,8 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
         })
         .await
         .unwrap()
-        .object_and_lock
+        .object()
         .unwrap()
-        .0
         .to_object_reference();
 
     gas_object_ref = client1
@@ -1242,9 +1236,8 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
         })
         .await
         .unwrap()
-        .object_and_lock
+        .object()
         .unwrap()
-        .0
         .to_object_reference();
 
     let call_response = client1
@@ -1276,9 +1269,8 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
         })
         .await
         .unwrap()
-        .object_and_lock
+        .object()
         .unwrap()
-        .0
         .to_object_reference();
     assert_eq!(full_seq.1, SequenceNumber::from(22));
 
@@ -1290,9 +1282,8 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
         })
         .await
         .unwrap()
-        .object_and_lock
+        .object()
         .unwrap()
-        .0
         .to_object_reference();
     assert_eq!(zero_seq.1, SequenceNumber::from(0));
 
@@ -1391,9 +1382,8 @@ async fn test_move_calls_object_transfer_and_freeze() {
         })
         .await
         .unwrap()
-        .object_and_lock
+        .object()
         .unwrap()
-        .0
         .to_object_reference();
 
     let pure_args = vec![bcs::to_bytes(&client2.address.to_vec()).unwrap()];
@@ -1404,7 +1394,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
             ident_str!("transfer_and_freeze").to_owned(),
             Vec::new(),
             gas_object_ref,
-            vec![new_obj.object_and_lock.unwrap().0.to_object_reference()],
+            vec![new_obj.object().unwrap().to_object_reference()],
             pure_args,
             GAS_VALUE_FOR_TESTING / 2,
         )
@@ -1434,20 +1424,12 @@ async fn test_move_calls_object_transfer_and_freeze() {
 
     // Confirm new owner
     assert!(transferred_obj_info
-        .object_and_lock
-            .as_ref()
-            .unwrap()
-            .0
+        .object().unwrap()
         .owner
         .is_address(&client2.address));
 
     // Confirm read only
-    assert!(transferred_obj_info
-        .object_and_lock
-        .as_ref()
-        .unwrap()
-        .0
-        .is_read_only());
+    assert!(transferred_obj_info.object().unwrap().is_read_only());
 }
 
 #[tokio::test]
@@ -1509,9 +1491,8 @@ async fn test_move_calls_object_delete() {
         })
         .await
         .unwrap()
-        .object_and_lock
+        .object()
         .unwrap()
-        .0
         .to_object_reference();
 
     let call_response = client1
@@ -1521,7 +1502,7 @@ async fn test_move_calls_object_delete() {
             ident_str!("delete").to_owned(),
             Vec::new(),
             gas_object_ref,
-            vec![new_obj.object_and_lock.unwrap().0.to_object_reference()],
+            vec![new_obj.object().unwrap().to_object_reference()],
             Vec::new(),
             GAS_VALUE_FOR_TESTING / 2,
         )
@@ -1565,9 +1546,8 @@ async fn test_move_calls_certs() {
         })
         .await
         .unwrap()
-        .object_and_lock
+        .object()
         .unwrap()
-        .0
         .to_object_reference();
 
     // Populate authorities with obj data
@@ -1741,31 +1721,15 @@ async fn test_module_publish_and_call_good() {
         .unwrap();
 
     // Version should be 1 for all modules
-    assert_eq!(
-        new_obj.object_and_lock.as_ref().unwrap().0.version(),
-        OBJECT_START_VERSION
-    );
+    assert_eq!(new_obj.object().unwrap().version(), OBJECT_START_VERSION);
     // Must be immutable
-    assert!(new_obj.object_and_lock.as_ref().unwrap().0.is_read_only());
+    assert!(new_obj.object().unwrap().is_read_only());
 
     // StructTag type is not defined for package
-    assert!(new_obj
-        .object_and_lock
-        .as_ref()
-        .unwrap()
-        .0
-        .type_()
-        .is_none());
+    assert!(new_obj.object().unwrap().type_().is_none());
 
     // Data should be castable as a package
-    assert!(new_obj
-        .object_and_lock
-        .as_ref()
-        .unwrap()
-        .0
-        .data
-        .try_as_package()
-        .is_some());
+    assert!(new_obj.object().unwrap().data.try_as_package().is_some());
 
     // Retrieve latest gas obj spec
     let gas_object = client1
@@ -1775,21 +1739,16 @@ async fn test_module_publish_and_call_good() {
         })
         .await
         .unwrap()
-        .object_and_lock
+        .object()
         .unwrap()
-        .0;
+        .clone();
 
     let gas_object_ref = gas_object.to_object_reference();
 
     //Try to call a function in TrustedCoin module
     let call_resp = client1
         .move_call(
-            new_obj
-                .object_and_lock
-                .as_ref()
-                .unwrap()
-                .0
-                .to_object_reference(),
+            new_obj.object().unwrap().to_object_reference(),
             ident_str!("TrustedCoin").to_owned(),
             ident_str!("init").to_owned(),
             vec![],
@@ -1821,10 +1780,7 @@ async fn test_module_publish_and_call_good() {
         .await
         .unwrap();
     // Confirm we own this object
-    assert_eq!(
-        tres_cap_obj_info.object_and_lock.unwrap().0.owner,
-        gas_object.owner
-    );
+    assert_eq!(tres_cap_obj_info.object().unwrap().owner, gas_object.owner);
 }
 
 // Pass a file in a package dir instead of the root. The builder should be able to infer the root
@@ -1879,31 +1835,15 @@ async fn test_module_publish_file_path() {
         .unwrap();
 
     // Version should be 1 for all modules
-    assert_eq!(
-        new_obj.object_and_lock.as_ref().unwrap().0.version(),
-        OBJECT_START_VERSION
-    );
+    assert_eq!(new_obj.object().unwrap().version(), OBJECT_START_VERSION);
     // Must be immutable
-    assert!(new_obj.object_and_lock.as_ref().unwrap().0.is_read_only());
+    assert!(new_obj.object().unwrap().is_read_only());
 
     // StructTag type is not defined for package
-    assert!(new_obj
-        .object_and_lock
-        .as_ref()
-        .unwrap()
-        .0
-        .type_()
-        .is_none());
+    assert!(new_obj.object().unwrap().type_().is_none());
 
     // Data should be castable as a package
-    assert!(new_obj
-        .object_and_lock
-        .as_ref()
-        .unwrap()
-        .0
-        .data
-        .try_as_package()
-        .is_some());
+    assert!(new_obj.object().unwrap().data.try_as_package().is_some());
 
     // Retrieve latest gas obj spec
     let gas_object = client1
@@ -1913,9 +1853,9 @@ async fn test_module_publish_file_path() {
         })
         .await
         .unwrap()
-        .object_and_lock
+        .object()
         .unwrap()
-        .0;
+        .clone();
 
     let gas_object_ref = gas_object.to_object_reference();
 
@@ -1924,12 +1864,7 @@ async fn test_module_publish_file_path() {
     //Try to call a function in TrustedCoin module
     let call_resp = client1
         .move_call(
-            new_obj
-                .object_and_lock
-                .as_ref()
-                .unwrap()
-                .0
-                .to_object_reference(),
+            new_obj.object().unwrap().to_object_reference(),
             ident_str!("TrustedCoin").to_owned(),
             ident_str!("init").to_owned(),
             vec![],

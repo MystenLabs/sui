@@ -598,7 +598,7 @@ where
                     match fut.await {
                         Ok(info) => {
                             // BUG: This assumes the object is not deleted.
-                            let current_sequence_number = info.object_and_lock.unwrap().0.version();
+                            let current_sequence_number = info.object().unwrap().version();
                             Some((*name, current_sequence_number))
                         }
                         _ => None,
@@ -1205,7 +1205,7 @@ where
                     .await?;
 
                 // BUG: This assumes object is not deleted.
-                let object = &response.object_and_lock.as_ref().unwrap().0;
+                let object = &response.object().unwrap();
                 self.object_refs
                     .insert(object.id(), object.to_object_reference());
 

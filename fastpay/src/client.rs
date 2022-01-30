@@ -544,44 +544,22 @@ fn main() {
                     request_sequence_number: None,
                 };
                 let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
-                println!(
-                    "Owner: {:#?}",
-                    obj_info.object_and_lock.as_ref().unwrap().0.owner
-                );
+                println!("Owner: {:#?}", obj_info.object().unwrap().owner);
                 println!(
                     "Version: {:#?}",
-                    obj_info
-                        .object_and_lock
-                        .as_ref()
-                        .unwrap()
-                        .0
-                        .version()
-                        .value()
+                    obj_info.object().unwrap().version().value()
                 );
-                println!(
-                    "ID: {:#?}",
-                    obj_info.object_and_lock.as_ref().unwrap().0.id()
-                );
-                println!(
-                    "Readonly: {:#?}",
-                    obj_info.object_and_lock.as_ref().unwrap().0.is_read_only()
-                );
+                println!("ID: {:#?}", obj_info.object().unwrap().id());
+                println!("Readonly: {:#?}", obj_info.object().unwrap().is_read_only());
                 println!(
                     "Type: {:#?}",
-                    obj_info
-                        .object_and_lock
-                        .as_ref()
-                        .unwrap()
-                        .0
-                        .data
-                        .type_()
-                        .map_or("Type Unwrap Failed".to_owned(), |type_| type_
-                            .module
-                            .as_ident_str()
-                            .to_string())
+                    obj_info.object().unwrap().data.type_().map_or(
+                        "Type Unwrap Failed".to_owned(),
+                        |type_| type_.module.as_ident_str().to_string()
+                    )
                 );
                 if deep {
-                    println!("Full Info: {:#?}", obj_info.object_and_lock.unwrap().0);
+                    println!("Full Info: {:#?}", obj_info.object().unwrap());
                 }
             });
         }
@@ -614,11 +592,7 @@ fn main() {
                     .get_object_info(package_obj_info_req)
                     .await
                     .unwrap();
-                let package_obj_ref = package_obj_info
-                    .object_and_lock
-                    .unwrap()
-                    .0
-                    .to_object_reference();
+                let package_obj_ref = package_obj_info.object().unwrap().to_object_reference();
 
                 // Fetch the object info for the gas obj
                 let gas_obj_ref = *client_state
@@ -637,8 +611,7 @@ fn main() {
 
                     let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
                     // BUG: Assumes object is not deleted?
-                    object_args_refs
-                        .push(obj_info.object_and_lock.unwrap().0.to_object_reference());
+                    object_args_refs.push(obj_info.object().unwrap().to_object_reference());
                 }
 
                 let pure_args = convert_txn_args(&config.pure_args);
@@ -800,7 +773,7 @@ fn main() {
                         .iter()
                         .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
                             Some(info) => {
-                                confirmed.insert(info.object_and_lock.unwrap().0.id());
+                                confirmed.insert(info.object().unwrap().id());
                                 acc + 1
                             }
                             None => acc,

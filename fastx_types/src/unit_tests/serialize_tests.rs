@@ -15,10 +15,7 @@ fn compare_certified_orders(o1: &CertifiedOrder, o2: &CertifiedOrder) {
 
 // Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
 fn compare_object_info_responses(o1: &ObjectInfoResponse, o2: &ObjectInfoResponse) {
-    assert_eq!(
-        &o1.object_and_lock.as_ref().unwrap().0,
-        &o2.object_and_lock.as_ref().unwrap().0
-    );
+    assert_eq!(&o1.object().unwrap(), &o2.object().unwrap());
     assert_eq!(
         o1.object_and_lock.as_ref().unwrap().1,
         o2.object_and_lock.as_ref().unwrap().1

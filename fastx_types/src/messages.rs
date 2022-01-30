@@ -140,6 +140,15 @@ pub struct ObjectInfoResponse {
     pub object_and_lock: Option<(Object, Option<SignedOrder>)>,
 }
 
+impl ObjectInfoResponse {
+    pub fn object(&self) -> Option<&Object> {
+        match &self.object_and_lock {
+            Some((object, _)) => Some(object),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OrderInfoResponse {
     // The signed order response to handle_order
