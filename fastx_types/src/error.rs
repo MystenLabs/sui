@@ -31,8 +31,8 @@ pub(crate) use fp_ensure;
 
 #[allow(clippy::large_enum_variant)]
 pub enum FastPayError {
-    // Signature verification
-    #[error("Object Lock Errors: {:?}", errors)]
+    // Object misuse issues
+    #[error("Error acquiring lock for object(s): {:?}", errors)]
     LockErrors { errors: Vec<FastPayError> },
     #[error("Attempt to transfer read-only object.")]
     CannotTransferReadOnlyObject,
@@ -167,8 +167,8 @@ pub enum FastPayError {
     BadObjectType { error: String },
     #[error("Move Execution failed")]
     MoveExecutionFailure,
-    #[error("Insufficent input objects")]
-    InsufficientObjectNumber,
+    #[error("Wrong number of parameters for the order.")]
+    ObjectInputArityViolation,
     #[error("Execution invariant violated")]
     ExecutionInvariantViolation,
     #[error("Authority did not return the information it is expected to have.")]

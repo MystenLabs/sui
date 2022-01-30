@@ -58,11 +58,11 @@ pub struct AuthorityState {
 impl AuthorityState {
     /// The logic to check one object against a reference, and return the object if all is well
     /// or an error if not.
-    pub fn check_one_lock(
+    fn check_one_lock(
         &self,
         order: &Order,
         object_ref: ObjectRef,
-        object: Option<Object>,
+        object: Object,
     ) -> Result<(ObjectRef, Object), FastPayError> {
         let (object_id, sequence_number, object_digest) = object_ref;
 
@@ -70,8 +70,6 @@ impl AuthorityState {
             sequence_number <= SequenceNumber::max(),
             FastPayError::InvalidSequenceNumber
         );
-
-        let object = object.ok_or(FastPayError::ObjectNotFound { object_id })?;
 
         // Check that the seq number is the same
         fp_ensure!(
@@ -119,17 +117,14 @@ impl AuthorityState {
 
     /// Check all the objects used in the order against the database, and ensure
     /// that they are all the correct version and number.
-    pub async fn check_locks(
-        &self,
-        order: &Order,
-    ) -> Result<Vec<(ObjectRef, Object)>, FastPayError> {
+    async fn check_locks(&self, order: &Order) -> Result<Vec<(ObjectRef, Object)>, FastPayError> {
         let input_objects = order.input_objects();
         let mut all_objects = Vec::with_capacity(input_objects.len());
 
         // There is at least one input
         fp_ensure!(
             !input_objects.is_empty(),
-            FastPayError::InsufficientObjectNumber
+            FastPayError::ObjectInputArityViolation
         );
         // Ensure that there are no duplicate inputs
         let mut used = HashSet::new();
@@ -142,6 +137,16 @@ impl AuthorityState {
         let objects = self.get_objects(&ids[..]).await?;
         let mut errors = Vec::new();
         for (object_ref, object) in input_objects.into_iter().zip(objects) {
+            let object = match object {
+                Some(object) => object,
+                None => {
+                    errors.push(FastPayError::ObjectNotFound {
+                        object_id: object_ref.0,
+                    });
+                    continue;
+                }
+            };
+
             match self.check_one_lock(order, object_ref, object) {
                 Ok((object_ref, object)) => all_objects.push((object_ref, object)),
                 Err(e) => {
@@ -158,7 +163,7 @@ impl AuthorityState {
 
         fp_ensure!(
             !all_objects.is_empty(),
-            FastPayError::InsufficientObjectNumber
+            FastPayError::ObjectInputArityViolation
         );
 
         Ok(all_objects)
@@ -296,10 +301,10 @@ impl AuthorityState {
         recipient: FastPayAddress,
         mut gas_object: Object,
     ) -> FastPayResult<ExecutionStatus> {
-        if inputs.is_empty() {
+        if !inputs.len() == 1 {
             return Ok(ExecutionStatus::Failure {
                 gas_used: gas::MIN_OBJ_TRANSFER_GAS,
-                error: Box::new(FastPayError::InsufficientObjectNumber),
+                error: Box::new(FastPayError::ObjectInputArityViolation),
             });
         }
 
