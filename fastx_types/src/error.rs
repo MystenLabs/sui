@@ -32,6 +32,12 @@ pub(crate) use fp_ensure;
 #[allow(clippy::large_enum_variant)]
 pub enum FastPayError {
     // Signature verification
+    #[error("Object Lock Errors: {:?}", errors)]
+    LockErrors { errors: Vec<FastPayError> },
+    #[error("Attempt to transfer read-only object.")]
+    CannotTransferReadOnlyObject,
+
+    // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
     #[error("Value was not signed by the correct sender")]
@@ -64,10 +70,9 @@ pub enum FastPayError {
     ErrorWhileProcessingMoveCall { err: String },
     #[error("An invalid answer was returned by the authority while requesting information")]
     ErrorWhileRequestingInformation,
-    #[error(
-         "Cannot confirm a transfer while previous transfer orders are still pending confirmation: {current_sequence_number:?}"
-    )]
+    #[error("Object {object_id:?} at old version: {current_sequence_number:?}")]
     MissingEalierConfirmations {
+        object_id: ObjectID,
         current_sequence_number: VersionNumber,
     },
     // Synchronization validation

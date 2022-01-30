@@ -1953,7 +1953,7 @@ fn test_transfer_object_error() {
     let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err().downcast_ref(),
-            Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::InvalidObjectDigest{..}, ..])));
+            Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::LockErrors{..}, ..])));
 
     // Test 4: Invalid sequence number;
     let object_id = *objects.next().unwrap();
