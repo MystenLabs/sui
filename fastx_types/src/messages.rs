@@ -124,8 +124,8 @@ pub struct AccountInfoResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectInfoResponse {
     pub parent_certificate: Option<CertifiedOrder>,
-    pub pending_order: Option<SignedOrder>,
-    pub object: Object,
+    // pub pending_order: Option<SignedOrder>,
+    pub object_and_lock: Option<(Object, Option<SignedOrder>)>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -454,16 +454,25 @@ impl AuthorityState {
         object_id: ObjectID,
         parent_certificate: Option<CertifiedOrder>,
     ) -> Result<ObjectInfoResponse, FastPayError> {
-        let object = self.object_state(&object_id).await?;
-        let lock = self
-            .get_order_lock(&object.to_object_reference())
-            .await
-            .or::<FastPayError>(Ok(None))?;
+        let object_result = self.object_state(&object_id).await;
+        let object_and_lock = match object_result {
+            Ok(object) => {
+                let lock = if object.is_read_only() {
+                    // Read only objects have no locks.
+                    None
+                } else {
+                    self.get_order_lock(&object.to_object_reference()).await?
+                };
+
+                Some((object, lock))
+            }
+            Err(FastPayError::ObjectNotFound { .. }) => None,
+            Err(e) => return Err(e),
+        };
 
         Ok(ObjectInfoResponse {
             parent_certificate,
-            pending_order: lock,
-            object,
+            object_and_lock,
         })
     }
 

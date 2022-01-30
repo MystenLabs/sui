@@ -596,7 +596,11 @@ where
                 let fut = client.handle_object_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => Some((*name, info.object.version())),
+                        Ok(info) => {
+                            // BUG: This assumes the object is not deleted.
+                            let current_sequence_number = info.object_and_lock.unwrap().0.version();
+                            Some((*name, current_sequence_number))
+                        }
                         _ => None,
                     }
                 }
@@ -625,7 +629,10 @@ where
                 let fut = client.handle_object_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => Some((*name, Some((info.object.owner, info.object.version())))),
+                        Ok(ObjectInfoResponse {
+                            object_and_lock: Some((object, _lock)),
+                            ..
+                        }) => Some((*name, Some((object.owner, object.version())))),
                         _ => None,
                     }
                 }
@@ -638,12 +645,20 @@ where
 
     #[cfg(test)]
     async fn get_framework_object_ref(&mut self) -> Result<ObjectRef, anyhow::Error> {
-        self.get_object_info(ObjectInfoRequest {
-            object_id: FASTX_FRAMEWORK_ADDRESS,
-            request_sequence_number: None,
-        })
-        .await
-        .map(|response| response.object.to_object_reference())
+        let info = self
+            .get_object_info(ObjectInfoRequest {
+                object_id: FASTX_FRAMEWORK_ADDRESS,
+                request_sequence_number: None,
+            })
+            .await?;
+        let reference = info
+            .object_and_lock
+            .ok_or(FastPayError::ObjectNotFound {
+                object_id: FASTX_FRAMEWORK_ADDRESS,
+            })?
+            .0
+            .to_object_reference();
+        Ok(reference)
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.
@@ -806,7 +821,12 @@ where
                         };
                         let response = client.handle_object_info_request(request).await?;
 
-                        let current_sequence_number = response.object.version();
+                        let current_sequence_number = response
+                            .object_and_lock
+                            .ok_or(FastPayError::ObjectNotFound { object_id })?
+                            .0
+                            .version();
+                        println!("{:?}", current_sequence_number);
                         // Download each missing certificate in reverse order using the downloader.
                         let mut number = target_sequence_number.decrement();
                         while let Ok(seq) = number {
@@ -1099,7 +1119,11 @@ where
         let votes = self
             .communicate_with_quorum(|_, client| {
                 let req = object_info_req.clone();
-                Box::pin(async move { client.handle_object_info_request(req).await })
+                Box::pin(async move {
+                    let resp = client.handle_object_info_request(req).await;
+                    println!("Response: {:?}", resp);
+                    resp
+                })
             })
             .await?;
 
@@ -1183,8 +1207,11 @@ where
                         request_sequence_number: Some(transfer.object_ref.1.increment()),
                     })
                     .await?;
+
+                // BUG: This assumes object is not deleted.
+                let object = &response.object_and_lock.as_ref().unwrap().0;
                 self.object_refs
-                    .insert(response.object.id(), response.object.to_object_reference());
+                    .insert(object.id(), object.to_object_reference());
 
                 // Everything worked: update the local balance.
                 if !self.certificates.contains_key(&certificate.order.digest()) {

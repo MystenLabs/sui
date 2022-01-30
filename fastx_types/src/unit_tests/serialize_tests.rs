@@ -15,8 +15,14 @@ fn compare_certified_orders(o1: &CertifiedOrder, o2: &CertifiedOrder) {
 
 // Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
 fn compare_object_info_responses(o1: &ObjectInfoResponse, o2: &ObjectInfoResponse) {
-    assert_eq!(o1.object, o2.object);
-    assert_eq!(o1.pending_order, o2.pending_order);
+    assert_eq!(
+        &o1.object_and_lock.as_ref().unwrap().0,
+        &o2.object_and_lock.as_ref().unwrap().0
+    );
+    assert_eq!(
+        o1.object_and_lock.as_ref().unwrap().1,
+        o2.object_and_lock.as_ref().unwrap().1
+    );
     match (
         o1.parent_certificate.as_ref(),
         o2.parent_certificate.as_ref(),
@@ -237,23 +243,31 @@ fn test_info_response() {
     }
 
     let resp1 = ObjectInfoResponse {
-        object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-        pending_order: None,
+        object_and_lock: Some((
+            Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
+            Some(vote.clone()),
+        )),
         parent_certificate: None,
     };
     let resp2 = ObjectInfoResponse {
-        object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-        pending_order: Some(vote.clone()),
+        object_and_lock: Some((
+            Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
+            Some(vote.clone()),
+        )),
         parent_certificate: None,
     };
     let resp3 = ObjectInfoResponse {
-        object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-        pending_order: None,
+        object_and_lock: Some((
+            Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
+            Some(vote.clone()),
+        )),
         parent_certificate: Some(cert.clone()),
     };
     let resp4 = ObjectInfoResponse {
-        object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-        pending_order: Some(vote),
+        object_and_lock: Some((
+            Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
+            Some(vote.clone()),
+        )),
         parent_certificate: Some(cert),
     };
 
