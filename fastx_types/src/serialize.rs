@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 #[path = "unit_tests/serialize_tests.rs"]
 mod serialize_tests;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub enum SerializedMessage {
     Order(Box<Order>),
     Vote(Box<SignedOrder>),
