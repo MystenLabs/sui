@@ -61,63 +61,75 @@ impl AuthorityState {
     fn check_one_lock(
         &self,
         order: &Order,
-        object_ref: ObjectRef,
-        object: Object,
-    ) -> Result<(ObjectRef, Object), FastPayError> {
-        let (object_id, sequence_number, object_digest) = object_ref;
-
-        fp_ensure!(
-            sequence_number <= SequenceNumber::max(),
-            FastPayError::InvalidSequenceNumber
-        );
-
-        // Check that the seq number is the same
-        fp_ensure!(
-            object.version() == sequence_number,
-            FastPayError::UnexpectedSequenceNumber {
-                object_id,
-                expected_sequence: object.version(),
+        object_kind: InputObjectKind,
+        object: &Object,
+    ) -> FastPayResult {
+        match object_kind {
+            InputObjectKind::MovePackage(package_id) => {
+                fp_ensure!(
+                    object.data.try_as_package().is_some(),
+                    FastPayError::MoveObjectAsPackage {
+                        object_id: package_id
+                    }
+                );
             }
-        );
+            InputObjectKind::MoveObject((object_id, sequence_number, object_digest)) => {
+                fp_ensure!(
+                    sequence_number <= SequenceNumber::max(),
+                    FastPayError::InvalidSequenceNumber
+                );
 
-        // Check the digest matches
-        fp_ensure!(
-            object.digest() == object_digest,
-            FastPayError::InvalidObjectDigest {
-                object_id,
-                expected_digest: object_digest
-            }
-        );
+                // Check that the seq number is the same
+                fp_ensure!(
+                    object.version() == sequence_number,
+                    FastPayError::UnexpectedSequenceNumber {
+                        object_id,
+                        expected_sequence: object.version(),
+                    }
+                );
 
-        if object.is_read_only() {
-            // Gas object must not be immutable.
-            fp_ensure!(
-                &object_id != order.gas_payment_object_id(),
-                FastPayError::InsufficientGas {
-                    error: "Gas object should not be immutable".to_string()
+                // Check the digest matches
+                fp_ensure!(
+                    object.digest() == object_digest,
+                    FastPayError::InvalidObjectDigest {
+                        object_id,
+                        expected_digest: object_digest
+                    }
+                );
+
+                if object.is_read_only() {
+                    // Gas object must not be immutable.
+                    fp_ensure!(
+                        &object_id != order.gas_payment_object_id(),
+                        FastPayError::InsufficientGas {
+                            error: "Gas object should not be immutable".to_string()
+                        }
+                    );
+                    // Checks for read-only objects end here.
+                    return Ok(());
                 }
-            );
-            // Checks for read-only objects end here.
-            return Ok((object_ref, object));
-        }
 
-        // Additional checks for mutable objects
-        // Check the transaction sender is also the object owner
-        fp_ensure!(
-            order.sender() == &object.owner,
-            FastPayError::IncorrectSigner
-        );
+                // Additional checks for mutable objects
+                // Check the transaction sender is also the object owner
+                fp_ensure!(
+                    order.sender() == &object.owner,
+                    FastPayError::IncorrectSigner
+                );
 
-        if &object_id == order.gas_payment_object_id() {
-            gas::check_gas_requirement(order, &object)?;
-        }
-
-        Ok((object_ref, object))
+                if &object_id == order.gas_payment_object_id() {
+                    gas::check_gas_requirement(order, object)?;
+                }
+            }
+        };
+        Ok(())
     }
 
     /// Check all the objects used in the order against the database, and ensure
     /// that they are all the correct version and number.
-    async fn check_locks(&self, order: &Order) -> Result<Vec<(ObjectRef, Object)>, FastPayError> {
+    async fn check_locks(
+        &self,
+        order: &Order,
+    ) -> Result<Vec<(InputObjectKind, Object)>, FastPayError> {
         let input_objects = order.input_objects();
         let mut all_objects = Vec::with_capacity(input_objects.len());
 
@@ -128,27 +140,25 @@ impl AuthorityState {
         );
         // Ensure that there are no duplicate inputs
         let mut used = HashSet::new();
-        if !input_objects.iter().all(|o| used.insert(o)) {
+        if !input_objects.iter().all(|o| used.insert(o.object_id())) {
             return Err(FastPayError::DuplicateObjectRefInput);
         }
 
-        let ids: Vec<_> = input_objects.iter().map(|(id, _, _)| *id).collect();
+        let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
 
         let objects = self.get_objects(&ids[..]).await?;
         let mut errors = Vec::new();
-        for (object_ref, object) in input_objects.into_iter().zip(objects) {
+        for (object_kind, object) in input_objects.into_iter().zip(objects) {
             let object = match object {
                 Some(object) => object,
                 None => {
-                    errors.push(FastPayError::ObjectNotFound {
-                        object_id: object_ref.0,
-                    });
+                    errors.push(object_kind.object_not_found_error());
                     continue;
                 }
             };
 
-            match self.check_one_lock(order, object_ref, object) {
-                Ok((object_ref, object)) => all_objects.push((object_ref, object)),
+            match self.check_one_lock(order, object_kind, &object) {
+                Ok(()) => all_objects.push((object_kind, object)),
                 Err(e) => {
                     errors.push(e);
                 }
@@ -179,11 +189,14 @@ impl AuthorityState {
             .check_locks(&order)
             .await?
             .into_iter()
-            .filter_map(|(object_ref, object)| {
-                if object.is_read_only() {
-                    None
-                } else {
-                    Some(object_ref)
+            .filter_map(|(object_kind, object)| match object_kind {
+                InputObjectKind::MovePackage(_) => None,
+                InputObjectKind::MoveObject(object_ref) => {
+                    if object.is_read_only() {
+                        None
+                    } else {
+                        Some(object_ref)
+                    }
                 }
             })
             .collect();
@@ -219,7 +232,7 @@ impl AuthorityState {
             .check_locks(&order)
             .await?
             .into_iter()
-            .map(|(_object_ref, object)| object)
+            .map(|(_, object)| object)
             .collect();
 
         // Insert into the certificates map
