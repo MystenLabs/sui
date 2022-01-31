@@ -543,23 +543,31 @@ fn main() {
                     object_id: obj_id,
                     request_sequence_number: None,
                 };
-                let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
-                println!("Owner: {:#?}", obj_info.object().unwrap().owner);
-                println!(
-                    "Version: {:#?}",
-                    obj_info.object().unwrap().version().value()
-                );
-                println!("ID: {:#?}", obj_info.object().unwrap().id());
-                println!("Readonly: {:#?}", obj_info.object().unwrap().is_read_only());
-                println!(
-                    "Type: {:#?}",
-                    obj_info.object().unwrap().data.type_().map_or(
-                        "Type Unwrap Failed".to_owned(),
-                        |type_| type_.module.as_ident_str().to_string()
-                    )
-                );
-                if deep {
-                    println!("Full Info: {:#?}", obj_info.object().unwrap());
+                if let Some(object) = client_state
+                    .get_object_info(obj_info_req)
+                    .await
+                    .unwrap()
+                    .object()
+                {
+                    println!("Owner: {:#?}", object.owner);
+                    println!("Version: {:#?}", object.version().value());
+                    println!("ID: {:#?}", object.id());
+                    println!("Readonly: {:#?}", object.is_read_only());
+                    println!(
+                        "Type: {:#?}",
+                        object
+                            .data
+                            .type_()
+                            .map_or("Type Unwrap Failed".to_owned(), |type_| type_
+                                .module
+                                .as_ident_str()
+                                .to_string())
+                    );
+                    if deep {
+                        println!("Full Info: {:#?}", object);
+                    }
+                } else {
+                    panic!("Object with id {:?} not found", obj_id);
                 }
             });
         }

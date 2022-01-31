@@ -597,7 +597,7 @@ where
                 async move {
                     match fut.await {
                         Ok(info) => {
-                            // BUG: This assumes the object is not deleted.
+                            // TODO(https://github.com/MystenLabs/fastnft/issues/323): This assumes the object is not deleted.
                             let current_sequence_number = info.object().unwrap().version();
                             Some((*name, current_sequence_number))
                         }
@@ -1192,7 +1192,7 @@ where
                 let response = self
                     .get_object_info(ObjectInfoRequest {
                         object_id: *certificate.order.object_id(),
-                        // BUG(https://github.com/MystenLabs/fastnft/issues/290):
+                        // TODO(https://github.com/MystenLabs/fastnft/issues/290):
                         //        This function assumes that requesting the parent cert of object seq+1 will give the cert of
                         //        that creates the object. This is not true, as objects may be deleted and may not have a seq+1
                         //        to look up.
@@ -1204,7 +1204,7 @@ where
                     })
                     .await?;
 
-                // BUG: This assumes object is not deleted.
+                // TODO(https://github.com/MystenLabs/fastnft/issues/323): This assumes object is not deleted.
                 let object = &response.object().unwrap();
                 self.object_refs
                     .insert(object.id(), object.to_object_reference());
