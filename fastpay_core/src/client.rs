@@ -464,24 +464,21 @@ where
             // asking an authority.
             // let input_objects = target_cert.certificate.order.input_objects();
 
-            let order_info = if missing_certificates.len() == 0 {
-
-                // Here we cover a corner case due to the nature of using consistent 
-                // broadcast: it is possible for the client to have a certificate 
+            let order_info = if missing_certificates.is_empty() {
+                // Here we cover a corner case due to the nature of using consistent
+                // broadcast: it is possible for the client to have a certificate
                 // signed by some authority, before the authority has processed the
                 // certificate. This can only happen to a certificate for objects
-                // not used in another certificicate, hence it can only be the case 
-                // for the very first certificate we try to sync. For this reason for 
+                // not used in another certificicate, hence it can only be the case
+                // for the very first certificate we try to sync. For this reason for
                 // this one instead of asking for the effects of a previous execution
-                // we send the cert for execution. Since execution is idempotent this 
-                // is ok. 
+                // we send the cert for execution. Since execution is idempotent this
+                // is ok.
 
                 source_client
-                .handle_confirmation_order(target_cert.clone())
-                .await?
-            } 
-            else 
-            {
+                    .handle_confirmation_order(target_cert.clone())
+                    .await?
+            } else {
                 // Unlike the previous case if a certificate created an object that
                 // was involved in the processing of another certificate the previous
                 // cert must have been processed, so here we just ask for the effects
@@ -501,7 +498,6 @@ where
                 .ok_or(FastPayError::AuthorityInformationUnavailable)?;
 
             for returned_digest in &signed_effects.effects.dependencies {
-
                 // We check that we are not processing twice the same certificate, as
                 // it would be common if two objects used by one order, were also both
                 // mutated by the same preceeding order.

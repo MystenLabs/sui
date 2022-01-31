@@ -1359,7 +1359,8 @@ async fn test_move_calls_chain_many_delete_authority_auto_synchronization() {
             })
             .await
             .unwrap()
-            .object().unwrap()
+            .object()
+            .unwrap()
             .to_object_reference();
 
         let pure_args = vec![bcs::to_bytes(&value).unwrap()];
@@ -1385,7 +1386,8 @@ async fn test_move_calls_chain_many_delete_authority_auto_synchronization() {
         })
         .await
         .unwrap()
-        .object().unwrap()
+        .object()
+        .unwrap()
         .to_object_reference();
 
     gas_object_ref = client1
@@ -1395,7 +1397,8 @@ async fn test_move_calls_chain_many_delete_authority_auto_synchronization() {
         })
         .await
         .unwrap()
-        .object().unwrap()
+        .object()
+        .unwrap()
         .to_object_reference();
 
     let call_response = client1
@@ -1427,7 +1430,8 @@ async fn test_move_calls_chain_many_delete_authority_auto_synchronization() {
         })
         .await
         .unwrap()
-        .object().unwrap()
+        .object()
+        .unwrap()
         .to_object_reference();
     assert_eq!(full_seq.1, SequenceNumber::from(22));
 
@@ -1439,7 +1443,8 @@ async fn test_move_calls_chain_many_delete_authority_auto_synchronization() {
         })
         .await
         .unwrap()
-        .object().unwrap()
+        .object()
+        .unwrap()
         .to_object_reference();
     assert_eq!(zero_seq.1, SequenceNumber::from(0));
 

@@ -234,8 +234,11 @@ impl AuthorityState {
             .into_iter()
             .map(|(_, object)| object)
             .collect();
-        
-        let mut transaction_dependencies : BTreeSet <_> = inputs.iter().map(|object| object.previous_transaction ).collect();
+
+        let mut transaction_dependencies: BTreeSet<_> = inputs
+            .iter()
+            .map(|object| object.previous_transaction)
+            .collect();
 
         // Insert into the certificates map
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
