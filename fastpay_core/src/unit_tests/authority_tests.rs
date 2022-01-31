@@ -381,6 +381,58 @@ async fn test_publish_module_no_dependencies_ok() {
     )
 }
 
+#[tokio::test]
+async fn test_publish_non_existing_dependent_module() {
+    let (sender, sender_key) = get_key_pair();
+    let gas_payment_object_id = ObjectID::random();
+    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
+    let gas_payment_object_ref = gas_payment_object.to_object_reference();
+    // create a genesis state that contains the gas object and genesis modules
+    let (genesis_module_objects, _) = genesis::clone_genesis_data();
+    let genesis_module = match &genesis_module_objects[0].data {
+        Data::Package(m) => CompiledModule::deserialize(m.values().next().unwrap()).unwrap(),
+        _ => unreachable!(),
+    };
+    // create a module that depends on a genesis module
+    let mut dependent_module = make_dependent_module(&genesis_module);
+    // Add another dependent module that points to a random address, hence does not exist on-chain.
+    dependent_module
+        .address_identifiers
+        .push(AccountAddress::random());
+    dependent_module.module_handles.push(ModuleHandle {
+        address: AddressIdentifierIndex((dependent_module.address_identifiers.len() - 1) as u16),
+        name: IdentifierIndex(0),
+    });
+    let dependent_module_bytes = {
+        let mut bytes = Vec::new();
+        dependent_module.serialize(&mut bytes).unwrap();
+        bytes
+    };
+    let authority = init_state_with_objects(vec![gas_payment_object]).await;
+
+    let order = Order::new_module(
+        sender,
+        gas_payment_object_ref,
+        vec![dependent_module_bytes],
+        &sender_key,
+    );
+
+    let response = authority.handle_order(order).await;
+    assert!(response
+        .unwrap_err()
+        .to_string()
+        .contains("DependentPackageNotFound"));
+    // Check that gas was not charged.
+    assert_eq!(
+        authority
+            .object_state(&gas_payment_object_id)
+            .await
+            .unwrap()
+            .version(),
+        gas_payment_object_ref.1
+    );
+}
+
 // Test the case when the gas provided is less than minimum requirement during module publish.
 // Note that the case where gas is insufficient to publish the module is tested
 // separately in the adapter tests.
@@ -463,7 +515,7 @@ async fn test_handle_move_order() {
         .object_state(&created_object_id)
         .await
         .unwrap();
-    assert_eq!(created_obj.owner, sender,);
+    assert!(created_obj.owner.is_address(&sender));
     assert_eq!(created_obj.id(), created_object_id);
     assert_eq!(created_obj.version(), OBJECT_START_VERSION);
 
@@ -581,6 +633,7 @@ async fn test_handle_confirmation_order_unknown_sender() {
         .is_err());
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_handle_confirmation_order_bad_sequence_number() {
     // TODO: refactor this test to be less magic:
@@ -755,7 +808,7 @@ async fn test_handle_confirmation_order_ok() {
     // Key check: the ownership has changed
 
     let new_account = authority_state.object_state(&object_id).await.unwrap();
-    assert_eq!(recipient, new_account.owner);
+    assert!(new_account.owner.is_address(&recipient));
     assert_eq!(next_sequence_number, new_account.version());
     assert_eq!(None, info.signed_order);
     let opt_cert = {
@@ -1015,7 +1068,7 @@ async fn test_authority_persist() {
 
     // Check the object is present
     assert_eq!(obj2.id(), object_id);
-    assert_eq!(obj2.owner, recipient);
+    assert!(obj2.owner.is_address(&recipient));
 }
 
 async fn call_move(
@@ -1116,7 +1169,7 @@ async fn test_hero() {
     .await;
     assert_eq!(effects.status, ExecutionStatus::Success);
     let (admin_object, admin_object_owner) = effects.created[0];
-    assert_eq!(admin_object_owner, admin);
+    assert!(admin_object_owner.is_address(&admin));
 
     // 5. Create Trusted Coin Treasury.
     let effects = call_move(
@@ -1133,7 +1186,7 @@ async fn test_hero() {
     .await;
     assert_eq!(effects.status, ExecutionStatus::Success);
     let (cap, cap_owner) = effects.created[0];
-    assert_eq!(cap_owner, player);
+    assert!(cap_owner.is_address(&player));
 
     // 6. Mint 500 EXAMPLE TrustedCoin.
     let effects = call_move(
@@ -1151,7 +1204,7 @@ async fn test_hero() {
     assert_eq!(effects.status, ExecutionStatus::Success);
     assert_eq!(effects.mutated.len(), 1); // cap
     let (coin, coin_owner) = effects.created[0];
-    assert_eq!(coin_owner, player);
+    assert!(coin_owner.is_address(&player));
 
     // 7. Purchase a sword using 500 coin. This sword will have magic = 4, sword_strength = 5.
     let effects = call_move(
@@ -1169,9 +1222,9 @@ async fn test_hero() {
     assert_eq!(effects.status, ExecutionStatus::Success);
     assert_eq!(effects.mutated.len(), 1); // coin
     let (hero, hero_owner) = effects.created[0];
-    assert_eq!(hero_owner, player);
+    assert!(hero_owner.is_address(&player));
     // The payment goes to the admin.
-    assert_eq!(effects.mutated[0].1, admin);
+    assert!(effects.mutated[0].1.is_address(&admin));
 
     // 8. Verify the hero is what we exepct with strength 5.
     let effects = call_move(
@@ -1208,7 +1261,7 @@ async fn test_hero() {
     .await;
     assert_eq!(effects.status, ExecutionStatus::Success);
     let (boar, boar_owner) = effects.created[0];
-    assert_eq!(boar_owner, player);
+    assert!(boar_owner.is_address(&player));
 
     // 10. Slay the boar!
     let effects = call_move(

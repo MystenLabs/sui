@@ -1,12 +1,10 @@
 use super::*;
 use rocksdb::{DBWithThreadMode, MultiThreaded};
-use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::borrow::Borrow;
 use std::path::PathBuf;
 use std::sync::Arc;
 use typed_store::rocks::DBMap;
-use typed_store::traits::Map;
 
 const CERT_CF_NAME: &str = "certificates";
 const SEQ_NUMBER_CF_NAME: &str = "object_sequence_numbers";
@@ -81,15 +79,6 @@ impl ClientStore {
             )?
             .write()?;
         Ok(())
-    }
-
-    /// Hack to check if DBMap is empty
-    pub fn is_empty<K, V>(map: &DBMap<K, V>) -> bool
-    where
-        K: Serialize + DeserializeOwned,
-        V: Serialize + DeserializeOwned,
-    {
-        map.iter().next().is_none()
     }
 
     /// Insert multiple KV pairs atomically

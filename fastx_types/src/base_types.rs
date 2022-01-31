@@ -83,6 +83,28 @@ pub type AuthorityName = PublicKeyBytes;
 pub type ObjectID = AccountAddress;
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
+/// An object can be either owned by an account address, or another object.
+// TODO: A few things to improve:
+// 1. We may want to support multiple signing schemas, rename Authenticator to Address,
+//    and rename the Address enum to Ed25519PublicKey, so that we could add more.
+// 2. We may want to make Authenticator a fix-sized array instead of having different size
+//    for different variants, through hashing.
+// Refer details to https://github.com/MystenLabs/fastnft/pull/292.
+#[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, PartialOrd, Ord, Serialize, Hash)]
+pub enum Authenticator {
+    Address(FastPayAddress),
+    Object(ObjectID),
+}
+
+impl Authenticator {
+    pub fn is_address(&self, address: &FastPayAddress) -> bool {
+        match self {
+            Self::Address(addr) => addr == address,
+            Self::Object(_) => false,
+        }
+    }
+}
+
 // We use SHA3-256 hence 32 bytes here
 const TRANSACTION_DIGEST_LENGTH: usize = 32;
 

@@ -1,7 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::object::Object;
+use crate::object::{Object, OBJECT_START_VERSION};
 
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 
@@ -9,10 +9,11 @@ use super::{base_types::*, committee::Committee, error::*, event::Event};
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
 
+use move_binary_format::{access::ModuleAccess, CompiledModule};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
+    collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
 
@@ -27,6 +28,7 @@ pub struct Transfer {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveCall {
     pub sender: FastPayAddress,
+    // TODO: For package object, we only need object id, as it's always read-only.
     pub package: ObjectRef,
     pub module: Identifier,
     pub function: Identifier,
@@ -107,11 +109,14 @@ pub struct AccountInfoRequest {
     pub account: FastPayAddress,
 }
 
+/// A request for information about an object and optionally its
+/// parent certificate at a specific version.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ObjectInfoRequest {
+    /// The id of the object to retrieve, at the latest version.
     pub object_id: ObjectID,
+    /// The version of the object for which the parent certificate is sought.
     pub request_sequence_number: Option<SequenceNumber>,
-    pub request_received_transfers_excluding_first_nth: Option<usize>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -121,10 +126,36 @@ pub struct AccountInfoResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectInfoResponse {
-    pub requested_certificate: Option<CertifiedOrder>,
-    pub pending_confirmation: Option<SignedOrder>,
+pub struct ObjectResponse {
+    /// Value of the requested object in this authority
     pub object: Object,
+    /// Order the object is locked on in this authority.
+    /// None if the object is not currently locked by this authority.
+    pub lock: Option<SignedOrder>,
+}
+
+/// This message provides information about the latest object and its lock
+/// as well as the parent certificate of the object at a specific version.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ObjectInfoResponse {
+    /// The certificate that created or mutated the object at a given version.
+    /// If no parent certificate was requested this is set to None. If the
+    /// parent was requested and not found a error (ParentNotfound or
+    /// CertificateNotfound) will be returned.
+    pub parent_certificate: Option<CertifiedOrder>,
+
+    /// The object and its current lock. If the object does not exist
+    /// this is None.
+    pub object_and_lock: Option<ObjectResponse>,
+}
+
+impl ObjectInfoResponse {
+    pub fn object(&self) -> Option<&Object> {
+        match &self.object_and_lock {
+            Some(ObjectResponse { object, .. }) => Some(object),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -177,14 +208,14 @@ pub struct OrderEffects {
     // The transaction digest
     pub transaction_digest: TransactionDigest,
     // ObjectRef and owner of new objects created.
-    pub created: Vec<(ObjectRef, FastPayAddress)>,
+    pub created: Vec<(ObjectRef, Authenticator)>,
     // ObjectRef and owner of mutated objects.
     // mutated does not include gas object or created objects.
-    pub mutated: Vec<(ObjectRef, FastPayAddress)>,
+    pub mutated: Vec<(ObjectRef, Authenticator)>,
     // Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
     // The updated gas object reference.
-    pub gas_object: (ObjectRef, FastPayAddress),
+    pub gas_object: (ObjectRef, Authenticator),
     /// The events emitted during execution. Note that only successful transactions emit events
     pub events: Vec<Event>,
 }
@@ -193,7 +224,7 @@ impl OrderEffects {
     /// Return an iterator that iterates throguh all mutated objects,
     /// including all from mutated, created and the gas_object.
     /// It doesn't include deleted.
-    pub fn all_mutated(&self) -> impl Iterator<Item = &(ObjectRef, FastPayAddress)> {
+    pub fn all_mutated(&self) -> impl Iterator<Item = &(ObjectRef, Authenticator)> {
         self.mutated
             .iter()
             .chain(self.created.iter())
@@ -233,6 +264,35 @@ impl Hash for SignedOrder {
 impl PartialEq for SignedOrder {
     fn eq(&self, other: &Self) -> bool {
         self.order == other.order && self.authority == other.authority
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InputObjectKind {
+    MovePackage(ObjectID),
+    MoveObject(ObjectRef),
+}
+
+impl InputObjectKind {
+    pub fn object_id(&self) -> ObjectID {
+        match self {
+            Self::MovePackage(id) => *id,
+            Self::MoveObject((id, _, _)) => *id,
+        }
+    }
+
+    pub fn version(&self) -> SequenceNumber {
+        match self {
+            Self::MovePackage(_) => OBJECT_START_VERSION,
+            Self::MoveObject((_, version, _)) => *version,
+        }
+    }
+
+    pub fn object_not_found_error(&self) -> FastPayError {
+        match *self {
+            Self::MovePackage(package_id) => FastPayError::DependentPackageNotFound { package_id },
+            Self::MoveObject((object_id, _, _)) => FastPayError::ObjectNotFound { object_id },
+        }
     }
 }
 
@@ -307,22 +367,63 @@ impl Order {
         }
     }
 
-    /// Return the set of input objects for this order
+    /// Return the metadata of each of the input objects for the order.
+    /// For a Move object, we attach the object reference;
+    /// for a Move package, we provide the object id only since they never change on chain.
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
-    pub fn input_objects(&self) -> Vec<ObjectRef> {
+    pub fn input_objects(&self) -> Vec<InputObjectKind> {
         match &self.kind {
             OrderKind::Transfer(t) => {
-                vec![t.object_ref, t.gas_payment]
+                vec![
+                    InputObjectKind::MoveObject(t.object_ref),
+                    InputObjectKind::MoveObject(t.gas_payment),
+                ]
             }
             OrderKind::Call(c) => {
                 let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
-                call_inputs.extend(c.object_arguments.clone());
-                call_inputs.push(c.package);
-                call_inputs.push(c.gas_payment);
+                call_inputs.extend(
+                    c.object_arguments
+                        .clone()
+                        .into_iter()
+                        .map(InputObjectKind::MoveObject)
+                        .collect::<Vec<_>>(),
+                );
+                call_inputs.push(InputObjectKind::MovePackage(c.package.0));
+                call_inputs.push(InputObjectKind::MoveObject(c.gas_payment));
                 call_inputs
             }
             OrderKind::Publish(m) => {
-                vec![m.gas_payment]
+                // For module publishing, all the dependent packages are implicit input objects
+                // because they must all be on-chain in order for the package to publish.
+                // All authorities must have the same view of those dependencies in order
+                // to achieve consistent publish results.
+                let mut dependent_packages = BTreeSet::new();
+                for bytes in m.modules.iter() {
+                    let module = match CompiledModule::deserialize(bytes) {
+                        Ok(m) => m,
+                        Err(_) => {
+                            // We will ignore this error here and simply let latter execution
+                            // to discover this error again and fail the transaction.
+                            // It's preferrable to let transaction fail and charge gas when
+                            // malformed package is provided.
+                            continue;
+                        }
+                    };
+                    for handle in module.module_handles.iter() {
+                        let address = *module.address_identifier_at(handle.address);
+                        if address != ObjectID::ZERO {
+                            dependent_packages.insert(address);
+                        }
+                    }
+                }
+                // We don't care about the digest of the dependent packages.
+                // They are all read-only on-chain and their digest never changes.
+                let mut publish_inputs = dependent_packages
+                    .into_iter()
+                    .map(InputObjectKind::MovePackage)
+                    .collect::<Vec<_>>();
+                publish_inputs.push(InputObjectKind::MoveObject(m.gas_payment));
+                publish_inputs
             }
         }
     }
