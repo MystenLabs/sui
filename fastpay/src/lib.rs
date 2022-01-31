@@ -10,5 +10,5 @@
 #![deny(warnings)]
 
 pub mod config;
-pub mod network;
-pub mod transport;
+pub mod mass_client;
+pub mod server_lib;

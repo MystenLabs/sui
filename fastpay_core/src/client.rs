@@ -4,8 +4,9 @@
 use crate::downloader::*;
 use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
+use fastx_network::network;
 use fastx_types::{
-    base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
+    base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*, serialize::*,
 };
 use futures::{future, StreamExt, TryFutureExt};
 use itertools::Itertools;
@@ -57,6 +58,46 @@ pub trait AuthorityClient {
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, FastPayError>;
+}
+
+#[async_trait]
+impl AuthorityClient for network::Client {
+    /// Initiate a new transfer to a FastPay or Primary account.
+    async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
+        self.send_recv_bytes(serialize_order(&order), order_info_deserializer)
+            .await
+    }
+
+    /// Confirm a transfer to a FastPay or Primary account.
+    async fn handle_confirmation_order(
+        &mut self,
+        order: ConfirmationOrder,
+    ) -> Result<OrderInfoResponse, FastPayError> {
+        self.send_recv_bytes(serialize_cert(&order.certificate), order_info_deserializer)
+            .await
+    }
+
+    async fn handle_account_info_request(
+        &self,
+        request: AccountInfoRequest,
+    ) -> Result<AccountInfoResponse, FastPayError> {
+        self.send_recv_bytes(
+            serialize_account_info_request(&request),
+            account_info_deserializer,
+        )
+        .await
+    }
+
+    async fn handle_object_info_request(
+        &self,
+        request: ObjectInfoRequest,
+    ) -> Result<ObjectInfoResponse, FastPayError> {
+        self.send_recv_bytes(
+            serialize_object_info_request(&request),
+            object_info_deserializer,
+        )
+        .await
+    }
 }
 
 pub struct ClientState<AuthorityClient> {
@@ -131,7 +172,7 @@ pub trait Client {
     ) -> Result<ObjectInfoResponse, anyhow::Error>;
 
     /// Get all object we own.
-    async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error>;
+    async fn get_owned_objects(&self) -> Vec<ObjectID>;
 }
 
 impl<A> ClientState<A> {
@@ -197,10 +238,12 @@ impl<A> ClientState<A> {
             .unwrap()
             .into_iter()
             .flat_map(|cert_digests| {
-                cert_digests
-                    .iter()
-                    .filter_map(|digest| self.store.certificates.get(digest).unwrap())
-                    .collect::<Vec<_>>()
+                self.store
+                    .certificates
+                    .multi_get(&cert_digests[..])
+                    .unwrap()
+                    .into_iter()
+                    .flatten()
             })
     }
 
@@ -214,24 +257,50 @@ impl<A> ClientState<A> {
         digest: &TransactionDigest,
     ) -> Result<(), FastPayError> {
         let (object_id, seq, _) = object_ref;
-        self.store.object_sequence_numbers.insert(object_id, seq)?;
         let mut tx_digests = self.store.object_certs.get(object_id)?.unwrap_or_default();
         tx_digests.push(*digest);
-        self.store
-            .object_certs
-            .insert(object_id, &tx_digests.to_vec())?;
-        self.store.object_refs.insert(object_id, object_ref)?;
+
+        // Multi table atomic insert using batches
+        let batch = self
+            .store
+            .object_sequence_numbers
+            .batch()
+            .insert_batch(
+                &self.store.object_sequence_numbers,
+                std::iter::once((object_id, seq)),
+            )?
+            .insert_batch(
+                &self.store.object_certs,
+                std::iter::once((object_id, &tx_digests.to_vec())),
+            )?
+            .insert_batch(
+                &self.store.object_refs,
+                std::iter::once((object_id, object_ref)),
+            )?;
+        // Execute atomic write of opers
+        batch.write()?;
         Ok(())
     }
 
     pub fn remove_object(&mut self, object_id: &ObjectID) -> Result<(), FastPayError> {
-        self.store.object_sequence_numbers.remove(object_id)?;
-        self.store.object_certs.remove(object_id)?;
-        self.store.object_refs.remove(object_id)?;
+        // Multi table atomic delete using batches
+        let batch = self
+            .store
+            .object_sequence_numbers
+            .batch()
+            .delete_batch(
+                &self.store.object_sequence_numbers,
+                std::iter::once(object_id),
+            )?
+            .delete_batch(&self.store.object_certs, std::iter::once(object_id))?
+            .delete_batch(&self.store.object_refs, std::iter::once(object_id))?;
+        // Execute atomic write of opers
+        batch.write()?;
         Ok(())
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 struct CertificateRequester<A> {
     committee: Committee,
@@ -266,9 +335,18 @@ where
         &mut self,
         (object_id, sequence_number): (ObjectID, SequenceNumber),
     ) -> Result<CertifiedOrder, FastPayError> {
+        // BUG(https://github.com/MystenLabs/fastnft/issues/290): This function assumes that requesting the parent cert of object seq+1 will give the cert of
+        //        that creates the object. This is not true, as objects may be deleted and may not have a seq+1
+        //        to look up.
+        //
+        //        The authority `handle_object_info_request` is now fixed to return the parent at seq, and not
+        //        seq+1. But a lot of the client code makes the above wrong assumption, and the line above reverts
+        //        query to the old (incorrect) behavious to not break tests everywhere.
+        let inner_sequence_number = sequence_number.increment();
+
         let request = ObjectInfoRequest {
             object_id,
-            request_sequence_number: Some(sequence_number),
+            request_sequence_number: Some(inner_sequence_number),
             request_received_transfers_excluding_first_nth: None,
         };
         // Sequentially try each authority in random order.
@@ -281,14 +359,19 @@ where
                     .requested_certificate
                     .expect("Unable to get certificate");
                 if certificate.check(&self.committee).is_ok() {
+                    // BUG (https://github.com/MystenLabs/fastnft/issues/290): Orders do not have a sequence number any more, objects do.
+                    /*
                     let order = &certificate.order;
                     if let Some(sender) = self.sender {
-                        if order.sender() == &sender && order.sequence_number() == sequence_number {
+
+                        if order.sender() == &sender && order.sequence_number() == inner_sequence_number {
                             return Ok(certificate.clone());
                         }
                     } else {
                         return Ok(certificate.clone());
                     }
+                    */
+                    return Ok(certificate);
                 }
             }
         }
@@ -300,6 +383,183 @@ impl<A> ClientState<A>
 where
     A: AuthorityClient + Send + Sync + 'static + Clone,
 {
+    /// Sync a certificate and all its dependencies to a destination authority, using a
+    /// source authority to get information about parent certificates.
+    ///
+    /// Note: Both source and destination may be byzantine, therefore one should always
+    /// time limit the call to this function to avoid byzantine authorities consuming
+    /// an unbounded amount of resources.
+    async fn sync_authority_source_to_destination(
+        &self,
+        cert: ConfirmationOrder,
+        source_authority: AuthorityName,
+        destination_authority: AuthorityName,
+    ) -> Result<(), FastPayError> {
+        let source_client = self.authority_clients[&source_authority].clone();
+        let mut destination_client = self.authority_clients[&destination_authority].clone();
+
+        // This represents a stack of certificates that we need to register with the
+        // destination authority. The stack is a LIFO queue, and therefore later insertions
+        // represent certificates that earlier insertions depend on. Thus updating an
+        // authority in the order we pop() the certificates from this stack should ensure
+        // certificates are uploaded in causal order.
+        let digest = cert.certificate.order.digest();
+        let mut missing_certificates: Vec<_> = vec![cert.clone()];
+
+        // We keep a list of certificates already processed to avoid duplicates
+        let mut candidate_certificates: HashSet<TransactionDigest> =
+            vec![digest].into_iter().collect();
+        let mut attempted_certificates: HashSet<TransactionDigest> = HashSet::new();
+
+        while let Some(target_cert) = missing_certificates.pop() {
+            match destination_client
+                .handle_confirmation_order(target_cert.clone())
+                .await
+            {
+                Ok(_) => continue,
+                Err(FastPayError::ObjectNotFound { .. })
+                | Err(FastPayError::MissingEalierConfirmations { .. }) => {}
+                Err(e) => return Err(e),
+            }
+
+            // If we are here it means that the destination authority is missing
+            // the previous certificates, so we need to read them from the source
+            // authority.
+
+            // The first time we cannot find the cert from the destination authority
+            // we try to get its dependencies. But the second time we have already tried
+            // to update its dependencies, so we should just admit failure.
+            let cert_digest = target_cert.certificate.order.digest();
+            if attempted_certificates.contains(&cert_digest) {
+                return Err(FastPayError::AuthorityInformationUnavailable);
+            }
+            attempted_certificates.insert(cert_digest);
+
+            // TODO: Eventually the client will store more information, and we could
+            // first try to read certificates and parents from a local cache before
+            // asking an authority.
+            let input_objects = target_cert.certificate.order.input_objects();
+
+            // Put back the target cert
+            missing_certificates.push(target_cert);
+
+            for object_ref in input_objects {
+                // Request the parent certificate from the authority.
+                let object_info_response = source_client
+                    .handle_object_info_request(ObjectInfoRequest {
+                        object_id: object_ref.0,
+                        request_sequence_number: Some(object_ref.1),
+                        request_received_transfers_excluding_first_nth: None,
+                    })
+                    .await;
+
+                let object_info = match object_info_response {
+                    Ok(object_info) => object_info,
+                    // Here we cover the case the object genuinely has no parent.
+                    Err(FastPayError::ParentNotfound { .. }) => {
+                        continue;
+                    }
+                    Err(e) => return Err(e),
+                };
+
+                let returned_certificate = object_info
+                    .requested_certificate
+                    .ok_or(FastPayError::AuthorityInformationUnavailable)?;
+                let returned_digest = returned_certificate.order.digest();
+
+                // We check that we are not processing twice the same certificate, as
+                // it would be common if two objects used by one order, were also both
+                // mutated by the same preceeding order.
+                if !candidate_certificates.contains(&returned_digest) {
+                    // Add this cert to the set we have processed
+                    candidate_certificates.insert(returned_digest);
+
+                    // Check & Add it to the list of certificates to sync
+                    returned_certificate.check(&self.committee).map_err(|_| {
+                        FastPayError::ByzantineAuthoritySuspicion {
+                            authority: source_authority,
+                        }
+                    })?;
+                    missing_certificates.push(ConfirmationOrder::new(returned_certificate));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Sync a certificate to an authority.
+    ///
+    /// This function infers which authorities have the history related to
+    /// a certificate and attempts `retries` number of them, sampled accoding to
+    /// stake, in order to bring the destination authority up to date to accept
+    /// the certificate. The time devoted to each attempt is bounded by
+    /// `timeout_milliseconds`.
+    pub async fn sync_certificate_to_authority_with_timeout(
+        &self,
+        cert: ConfirmationOrder,
+        destination_authority: AuthorityName,
+        timeout_milliseconds: u64,
+        retries: usize,
+    ) -> Result<(), FastPayError> {
+        // Extract the set of authorities that should have this certificate
+        // and its full history. We should be able to use these are source authorities.
+        let mut candidate_source_authorties: HashSet<AuthorityName> = cert
+            .certificate
+            .signatures
+            .iter()
+            .map(|(name, _)| *name)
+            .collect();
+
+        // Sample a `retries` number of distinct authorities by stake.
+        let mut source_authorities: Vec<AuthorityName> = Vec::new();
+        while source_authorities.len() < retries && !candidate_source_authorties.is_empty() {
+            // Here we do rejection sampling.
+            //
+            // TODO: add a filter parameter to sample, so that we can directly
+            //       sample from a subset which is more efficient.
+            let sample_authority = self.committee.sample();
+            if candidate_source_authorties.contains(sample_authority) {
+                candidate_source_authorties.remove(sample_authority);
+                source_authorities.push(*sample_authority);
+            }
+        }
+
+        // Now try to update the destination authority sequentially using
+        // the source authorities we have sampled.
+        for source_authority in source_authorities {
+            // Note: here we could improve this function by passing into the
+            //       `sync_authority_source_to_destination` call a cache of
+            //       certificates and parents to avoid re-downloading them.
+            if timeout(
+                Duration::from_millis(timeout_milliseconds),
+                self.sync_authority_source_to_destination(
+                    cert.clone(),
+                    source_authority,
+                    destination_authority,
+                ),
+            )
+            .await
+            .is_ok()
+            {
+                // If the updates suceeds we return, since there is no need
+                // to try other sources.
+                return Ok(());
+            }
+
+            // If we are here it means that the update failed, either due to the
+            // source being faulty or the destination being faulty.
+            //
+            // TODO: We should probably be keeping a record of suspected faults
+            // upon failure to de-prioritize authorities that we have observed being
+            // less reliable.
+        }
+
+        // Eventually we should add more information to this error about the destination
+        // and maybe event the certificiate.
+        Err(FastPayError::AuthorityUpdateFailure)
+    }
+
     #[cfg(test)]
     async fn request_certificate(
         &mut self,
@@ -496,6 +756,10 @@ where
     }
 
     /// Broadcast missing confirmation orders and execute provided authority action on each authority.
+    // BUG(https://github.com/MystenLabs/fastnft/issues/290): This logic for
+    // updating an authority that is behind is not correct, since we now have
+    // potentially many dependencies that need to be satisfied, not just a
+    // list.
     async fn broadcast_and_execute<'a, V, F: 'a>(
         &'a mut self,
         sender: FastPayAddress,
@@ -557,6 +821,7 @@ where
                             number = seq.decrement();
                         }
                     }
+
                     // Send all missing confirmation orders.
                     missing_certificates.reverse();
                     missing_certificates.extend(certificates_to_broadcast.clone());
@@ -729,6 +994,7 @@ where
     }
 
     /// Returns true if this pending order's input objects are locked by another unconfirmed order
+    /// The caller has to explcity find which objects are locked
     fn has_pending_order_conflict(&self, order: &Order) -> Result<bool, FastPayError> {
         // Need to make this more atomic? At least make more performant
         Ok(self
@@ -739,6 +1005,9 @@ where
             .any(|w| w.is_some()))
     }
     /// Locks the objects for the given order
+    /// It is important to check that the object is not locked before locking again
+    /// One should call has_pending_order_conflict before locking as this overwites the previous lock
+    /// If the object is already locked, ensure it is unlocked by calling unlock_pending_order_objects
     fn lock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
         ClientStore::multi_insert(
             &self.store.pending_orders,
@@ -746,6 +1015,7 @@ where
         )
     }
     /// Unlocks the objects for the given order
+    /// Unlocking an already unlocked object, is a no-op and does not Err
     fn unlock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
         ClientStore::multi_remove(
             &self.store.pending_orders,
@@ -898,7 +1168,7 @@ where
         let transfer = Transfer {
             object_ref,
             sender: self.address,
-            recipient: Address::FastPay(recipient),
+            recipient,
             gas_payment,
         };
         let order = Order::new_transfer(transfer, &self.secret);
@@ -917,7 +1187,7 @@ where
         match &certificate.order.kind {
             OrderKind::Transfer(transfer) => {
                 fp_ensure!(
-                    transfer.recipient == Address::FastPay(self.address),
+                    transfer.recipient == self.address,
                     FastPayError::IncorrectRecipientError.into()
                 );
                 let responses = self
@@ -935,7 +1205,15 @@ where
                 let response = self
                     .get_object_info(ObjectInfoRequest {
                         object_id: *certificate.order.object_id(),
-                        request_sequence_number: Some(transfer.object_ref.1),
+                        // BUG(https://github.com/MystenLabs/fastnft/issues/290):
+                        //        This function assumes that requesting the parent cert of object seq+1 will give the cert of
+                        //        that creates the object. This is not true, as objects may be deleted and may not have a seq+1
+                        //        to look up.
+                        //
+                        //        The authority `handle_object_info_request` is now fixed to return the parent at seq, and not
+                        //        seq+1. But a lot of the client code makes the above wrong assumption, and the line above reverts
+                        //        query to the old (incorrect) behavious to not break tests everywhere.
+                        request_sequence_number: Some(transfer.object_ref.1.increment()),
                         request_received_transfers_excluding_first_nth: None,
                     })
                     .await?;
@@ -987,7 +1265,7 @@ where
         let transfer = Transfer {
             object_ref,
             sender: self.address,
-            recipient: Address::FastPay(recipient),
+            recipient,
             gas_payment,
         };
         let order = Order::new_transfer(transfer, &self.secret);
@@ -1093,7 +1371,7 @@ where
         self.get_object_info_execute(object_info_req).await
     }
 
-    async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error> {
-        Ok(self.store.object_sequence_numbers.keys().collect())
+    async fn get_owned_objects(&self) -> Vec<ObjectID> {
+        self.store.object_sequence_numbers.keys().collect()
     }
 }

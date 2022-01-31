@@ -23,7 +23,7 @@ fn test_signed_values() {
             ObjectDigest::new([0; 32]),
         ),
         sender: a1,
-        recipient: Address::FastPay(a2),
+        recipient: a2,
         gas_payment: (
             ObjectID::random(),
             SequenceNumber::new(),
@@ -64,7 +64,7 @@ fn test_certificates() {
             ObjectDigest::new([0; 32]),
         ),
         sender: a1,
-        recipient: Address::FastPay(a2),
+        recipient: a2,
         gas_payment: (
             ObjectID::random(),
             SequenceNumber::new(),

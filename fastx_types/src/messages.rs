@@ -16,16 +16,10 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, Serialize, Deserialize)]
-pub enum Address {
-    Primary(PrimaryAddress),
-    FastPay(FastPayAddress),
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Transfer {
     pub sender: FastPayAddress,
-    pub recipient: Address,
+    pub recipient: FastPayAddress,
     pub object_ref: ObjectRef,
     pub gas_payment: ObjectRef,
 }
@@ -101,7 +95,7 @@ pub struct CertifiedOrder {
 //
 // see also https://github.com/MystenLabs/fastnft/issues/266
 //
-static_assertions::assert_not_impl_any!(idem_orders; CertifiedOrder, Hash, Eq, PartialEq);
+static_assertions::assert_not_impl_any!(CertifiedOrder: Hash, Eq, PartialEq);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfirmationOrder {

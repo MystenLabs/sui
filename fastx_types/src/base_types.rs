@@ -73,7 +73,6 @@ impl TryFrom<&[u8]> for PublicKeyBytes {
     }
 }
 
-pub type PrimaryAddress = PublicKeyBytes;
 pub type FastPayAddress = PublicKeyBytes;
 pub type AuthorityName = PublicKeyBytes;
 

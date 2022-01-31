@@ -578,7 +578,7 @@ fn test_client_state_sync() {
     // Remove all client-side data
     sender.store.object_sequence_numbers.clear().unwrap();
     sender.store.certificates.clear().unwrap();
-    assert!(rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
+    assert!(rt.block_on(sender.get_owned_objects()).is_empty());
     assert!(ClientStore::is_empty(&sender.store.object_sequence_numbers));
     assert!(ClientStore::is_empty(&sender.store.certificates));
 
@@ -587,7 +587,7 @@ fn test_client_state_sync() {
         .unwrap();
 
     // Confirm data are the same after sync
-    assert!(!rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
+    assert!(!rt.block_on(sender.get_owned_objects()).is_empty());
     assert_eq!(
         &old_object_ids,
         &sender.store.object_sequence_numbers.iter().collect()
@@ -632,7 +632,7 @@ async fn test_client_state_sync_with_transferred_object() {
     );
 
     // Client 2's local object_id and cert should be empty before sync
-    assert!(client2.get_owned_objects().await.unwrap().is_empty());
+    assert!(client2.get_owned_objects().await.is_empty());
     assert!(ClientStore::is_empty(
         &client2.store.object_sequence_numbers
     ));
@@ -645,7 +645,7 @@ async fn test_client_state_sync_with_transferred_object() {
         .unwrap();
 
     // Confirm client 2 received the new object id and cert
-    assert_eq!(1, client2.get_owned_objects().await.unwrap().len());
+    assert_eq!(1, client2.get_owned_objects().await.len());
     assert_eq!(1, client2.store.object_sequence_numbers.iter().count());
     assert_eq!(1, client2.store.certificates.iter().count());
 }
@@ -996,6 +996,375 @@ async fn test_move_calls_object_transfer() {
 
     // Confirm new owner
     assert_eq!(transferred_obj_info.object.owner, client2.address);
+}
+
+#[tokio::test]
+async fn test_move_calls_chain_many_authority_syncronization() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    // let client2 = make_client(authority_clients.clone(), committee);
+
+    let object_value: u64 = 100;
+    let gas_object_id = ObjectID::random();
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+
+    // Populate authorities with obj data
+    let mut gas_object_ref = fund_account_with_same_objects(
+        authority_clients.clone().values().collect(),
+        &mut client1,
+        vec![gas_object_id],
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    let pure_args = vec![
+        object_value.to_le_bytes().to_vec(),
+        bcs::to_bytes(&client1.address.to_vec()).unwrap(),
+    ];
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
+
+    let (mut last_certificate, order_effects) = call_response.unwrap();
+    assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
+
+    // Get the object created from the call
+    let (new_obj_ref, _) = order_effects.created[0];
+
+    for value in 0u64..10u64 {
+        // Fetch the full object
+        let new_obj = client1
+            .get_object_info(ObjectInfoRequest {
+                object_id: new_obj_ref.0,
+                request_sequence_number: None,
+                request_received_transfers_excluding_first_nth: None,
+            })
+            .await
+            .unwrap();
+
+        gas_object_ref = client1
+            .get_object_info(ObjectInfoRequest {
+                object_id: gas_object_ref.0,
+                request_sequence_number: None,
+                request_received_transfers_excluding_first_nth: None,
+            })
+            .await
+            .unwrap()
+            .object
+            .to_object_reference();
+
+        /* Turn on if you want to observe the sequence numbers */
+        /*
+        for (_auth_name, auth_client) in &authority_clients {
+            let single_client_response = auth_client.handle_object_info_request(ObjectInfoRequest {
+                object_id: gas_object_ref.0,
+                request_sequence_number: None,
+                request_received_transfers_excluding_first_nth: None,
+            })
+            .await
+            .unwrap()
+            .object
+            .to_object_reference();
+            println!("{:?} - {:?}", _auth_name, single_client_response.1);
+        }
+        */
+
+        let pure_args = vec![bcs::to_bytes(&value).unwrap()];
+        let _call_response = client1
+            .move_call(
+                framework_obj_ref,
+                ident_str!("ObjectBasics").to_owned(),
+                ident_str!("set_value").to_owned(),
+                Vec::new(),
+                gas_object_ref,
+                vec![new_obj.object.to_object_reference()],
+                pure_args,
+                GAS_VALUE_FOR_TESTING / 2,
+            )
+            .await;
+
+        last_certificate = _call_response.unwrap().0;
+    }
+
+    // For this test to work the client has updated the first 3 authorities but not the last one
+    // Assert this to catch any changes to the client behaviour that reqire fixing this test to still
+    // test sync.
+
+    let authorities: Vec<_> = authority_clients.clone().into_iter().collect();
+
+    let full_seq = authorities[2]
+        .1
+        .handle_object_info_request(ObjectInfoRequest {
+            object_id: gas_object_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
+    assert_eq!(full_seq.1, SequenceNumber::from(11));
+
+    let zero_seq = authorities[3]
+        .1
+        .handle_object_info_request(ObjectInfoRequest {
+            object_id: gas_object_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
+    assert_eq!(zero_seq.1, SequenceNumber::from(0));
+
+    // This is (finally) the function we want to test
+
+    // If we try to sync from the authority that does not have the data to the one
+    // that does we fail.
+    let result = client1
+        .sync_authority_source_to_destination(
+            ConfirmationOrder::new(last_certificate.clone()),
+            authorities[3].0,
+            authorities[3].0,
+        )
+        .await;
+
+    assert!(result.is_err());
+
+    // If we try to sync from the authority that does have the data to the one
+    // that does not we succeed.
+    let result = client1
+        .sync_authority_source_to_destination(
+            ConfirmationOrder::new(last_certificate),
+            authorities[2].0,
+            authorities[3].0,
+        )
+        .await;
+
+    assert!(result.is_ok());
+}
+
+// BUG(https://github.com/MystenLabs/fastnft/issues/282)
+// We ignore this test due to a known bug.
+#[ignore]
+#[tokio::test]
+async fn test_move_calls_chain_many_delete_authority_synchronization() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    // let client2 = make_client(authority_clients.clone(), committee);
+
+    let object_value: u64 = 100;
+    let gas_object_id = ObjectID::random();
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+
+    // Populate authorities with obj data
+    let mut gas_object_ref = fund_account_with_same_objects(
+        authority_clients.clone().values().collect(),
+        &mut client1,
+        vec![gas_object_id],
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    let pure_args = vec![
+        object_value.to_le_bytes().to_vec(),
+        bcs::to_bytes(&client1.address.to_vec()).unwrap(),
+    ];
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
+
+    let (_, order_effects) = call_response.unwrap();
+    assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
+
+    // Get the object created from the call
+    let (new_obj_ref, _) = order_effects.created[0];
+
+    for value in 0u64..20u64 {
+        // Fetch the full object
+        let new_obj = client1
+            .get_object_info(ObjectInfoRequest {
+                object_id: new_obj_ref.0,
+                request_sequence_number: None,
+                request_received_transfers_excluding_first_nth: None,
+            })
+            .await
+            .unwrap();
+
+        gas_object_ref = client1
+            .get_object_info(ObjectInfoRequest {
+                object_id: gas_object_ref.0,
+                request_sequence_number: None,
+                request_received_transfers_excluding_first_nth: None,
+            })
+            .await
+            .unwrap()
+            .object
+            .to_object_reference();
+
+        /* Turn on if you want to observe the sequence numbers */
+        /*
+        for (_auth_name, auth_client) in &authority_clients {
+            let single_client_response = auth_client.handle_object_info_request(ObjectInfoRequest {
+                object_id: gas_object_ref.0,
+                request_sequence_number: None,
+                request_received_transfers_excluding_first_nth: None,
+            })
+            .await
+            .unwrap()
+            .object
+            .to_object_reference();
+            println!("{:?} - {:?}", _auth_name, single_client_response.1);
+        }
+        */
+
+        let pure_args = vec![bcs::to_bytes(&value).unwrap()];
+        let _call_response = client1
+            .move_call(
+                framework_obj_ref,
+                ident_str!("ObjectBasics").to_owned(),
+                ident_str!("set_value").to_owned(),
+                Vec::new(),
+                gas_object_ref,
+                vec![new_obj.object.to_object_reference()],
+                pure_args,
+                GAS_VALUE_FOR_TESTING / 2,
+            )
+            .await;
+    }
+
+    // Fetch the full object
+    let new_obj_ref = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
+
+    gas_object_ref = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: gas_object_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
+
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("delete").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            vec![new_obj_ref],
+            Vec::new(),
+            GAS_VALUE_FOR_TESTING / 2,
+        )
+        .await;
+
+    let last_certificate = call_response.unwrap().0;
+
+    // For this test to work the client has updated the first 3 authorities but not the last one
+    // Assert this to catch any changes to the client behaviour that reqire fixing this test to still
+    // test sync.
+
+    let authorities: Vec<_> = authority_clients.clone().into_iter().collect();
+
+    let full_seq = authorities[2]
+        .1
+        .handle_object_info_request(ObjectInfoRequest {
+            object_id: gas_object_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
+    assert_eq!(full_seq.1, SequenceNumber::from(22));
+
+    let zero_seq = authorities[3]
+        .1
+        .handle_object_info_request(ObjectInfoRequest {
+            object_id: gas_object_ref.0,
+            request_sequence_number: None,
+            request_received_transfers_excluding_first_nth: None,
+        })
+        .await
+        .unwrap()
+        .object
+        .to_object_reference();
+    assert_eq!(zero_seq.1, SequenceNumber::from(0));
+
+    // This is (finally) the function we want to test
+
+    // If we try to sync from the authority that does not have the data to the one
+    // that does we fail.
+    let result = client1
+        .sync_authority_source_to_destination(
+            ConfirmationOrder::new(last_certificate.clone()),
+            authorities[3].0,
+            authorities[3].0,
+        )
+        .await;
+
+    assert!(result.is_err());
+
+    // If we try to sync from the authority that does have the data to the one
+    // that does not we succeed.
+    let result = client1
+        .sync_authority_source_to_destination(
+            ConfirmationOrder::new(last_certificate),
+            authorities[2].0,
+            authorities[3].0,
+        )
+        .await;
+
+    // BUG(https://github.com/MystenLabs/fastnft/issues/282)
+    //
+    // Here we get:
+    // ERROR: ObjectNotFound { object_id: 258E1B39E8300FB459A6A68785958C142A901D48 }
+    if let Err(e) = &result {
+        println!("ERROR: {:?}", e);
+    }
+
+    assert!(result.is_ok());
 }
 
 #[tokio::test]
@@ -1776,7 +2145,7 @@ fn test_transfer_object_error() {
     // Fabricate a fake pending transfer
     let transfer = Transfer {
         sender: sender.address,
-        recipient: Address::FastPay(FastPayAddress::random_for_testing_only()),
+        recipient: FastPayAddress::random_for_testing_only(),
         object_ref: (object_id, Default::default(), ObjectDigest::new([0; 32])),
         gas_payment: (gas_object, Default::default(), ObjectDigest::new([0; 32])),
     };
@@ -1852,7 +2221,7 @@ async fn test_receive_object_error() -> Result<(), anyhow::Error> {
         order: Order {
             kind: OrderKind::Transfer(Transfer {
                 sender: client1.address,
-                recipient: Address::FastPay(client2.address),
+                recipient: client2.address,
                 object_ref: transfer.object_ref,
                 gas_payment: transfer.gas_payment,
             }),

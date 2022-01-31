@@ -64,16 +64,21 @@ impl ClientStore {
         object_refs: BTreeMap<ObjectID, ObjectRef>,
         certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
     ) -> Result<(), FastPayError> {
-        // Solution using iter().for_each does not allows ? for Result type
-        for w in certificates {
-            self.certificates.insert(&w.0, &w.1)?;
-        }
-        for w in object_refs.clone() {
-            self.object_refs.insert(&w.0, &w.1)?;
-        }
-        for w in object_refs {
-            self.object_sequence_numbers.insert(&w.0, &w.1 .1)?;
-        }
+        self.certificates
+            .batch()
+            .insert_batch(&self.certificates, certificates.iter())?
+            .write()?;
+        self.object_refs
+            .batch()
+            .insert_batch(&self.object_refs, object_refs.iter())?
+            .write()?;
+        self.object_sequence_numbers
+            .batch()
+            .insert_batch(
+                &self.object_sequence_numbers,
+                object_refs.iter().map(|w| (w.0, w.1 .1)),
+            )?
+            .write()?;
         Ok(())
     }
 
@@ -83,7 +88,7 @@ impl ClientStore {
         K: Serialize + DeserializeOwned + std::cmp::Ord + std::clone::Clone,
         V: Serialize + DeserializeOwned + std::clone::Clone,
     {
-        map.iter().count() == 0
+        map.iter().next().is_none()
     }
 
     /// Insert multiple KV pairs atomically

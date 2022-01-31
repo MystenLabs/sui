@@ -3,15 +3,15 @@
 
 #![deny(warnings)]
 
-use fastpay::{config::*, network, transport};
+use fastpay::{config::*, mass_client::MassClient};
 use fastpay_core::client::*;
+use fastx_network::{network, transport};
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
 use move_core_types::transaction_argument::convert_txn_args;
 
 use bytes::Bytes;
 use fastx_types::object::Object;
 use futures::stream::StreamExt;
-use log::*;
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -20,6 +20,8 @@ use std::{
 };
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
+use tracing::{subscriber::set_global_default, *};
+use tracing_subscriber::EnvFilter;
 
 fn make_authority_clients(
     committee_config: &CommitteeConfig,
@@ -48,10 +50,10 @@ fn make_authority_mass_clients(
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
     max_in_flight: u64,
-) -> Vec<network::MassClient> {
+) -> Vec<MassClient> {
     let mut authority_clients = Vec::new();
     for config in &committee_config.authorities {
-        let client = network::MassClient::new(
+        let client = MassClient::new(
             config.host.clone(),
             config.base_port,
             buffer_size,
@@ -139,7 +141,7 @@ fn make_benchmark_transfer_orders(
         let transfer = Transfer {
             object_ref,
             sender: account.address,
-            recipient: Address::FastPay(next_recipient),
+            recipient: next_recipient,
             gas_payment: gas_object_ref,
         };
         debug!("Preparing transfer order: {:?}", transfer);
@@ -470,7 +472,12 @@ enum ClientCommands {
 }
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let subscriber_builder =
+        tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
+    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
+    set_global_default(subscriber).expect("Failed to set subscriber");
+
     let options = ClientOpt::from_args();
     let send_timeout = Duration::from_micros(options.send_timeout);
     let recv_timeout = Duration::from_micros(options.recv_timeout);

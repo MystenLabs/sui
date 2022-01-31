@@ -8,19 +8,20 @@ edition = "2021"
 
 [dependencies]
 rocksdb = "0.17.0"
-anyhow = "1.0.52"
+anyhow = "1.0.53"
 bcs = "0.1.3"
-futures = "0.3.5"
+futures = "0.3.19"
 rand = "0.7.3"
-serde = { version = "1.0.133", features = ["derive"] }
-tokio = { version = "1.15.0", features = ["full"] }
-parking_lot = "0.11.2"
+serde = { version = "1.0.136", features = ["derive"] }
+tokio = { version = "1.16.1", features = ["full"] }
+parking_lot = "0.12.0"
 itertools = "0.10.3"
 async-trait = "0.1.52"
 tempfile = "3.3.0"
 
 fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-framework = { path = "../fastx_programmability/framework" }
+fastx-network = { path = "../network_utils" }
 fastx-types = { path = "../fastx_types" }
 
 move-binary-format = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }

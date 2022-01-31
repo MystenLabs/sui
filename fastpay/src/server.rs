@@ -3,16 +3,19 @@
 
 #![deny(warnings)]
 
-use fastpay::{config::*, network, transport};
+use fastpay::{config::*, server_lib};
 use fastpay_core::authority::*;
+use fastx_network::transport;
 use fastx_types::{base_types::*, committee::Committee, object::Object};
 
 use futures::future::join_all;
-use log::*;
 use std::path::Path;
 use std::sync::Arc;
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
+use tracing::subscriber::set_global_default;
+use tracing::*;
+use tracing_subscriber::EnvFilter;
 
 #[allow(clippy::too_many_arguments)]
 fn make_server(
@@ -21,7 +24,7 @@ fn make_server(
     committee_config_path: &str,
     initial_accounts_config_path: &str,
     buffer_size: usize,
-) -> network::Server {
+) -> server_lib::Server {
     let server_config =
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
     let committee_config =
@@ -59,7 +62,7 @@ fn make_server(
         state
     });
 
-    network::Server::new(
+    server_lib::Server::new(
         local_ip_addr.to_string(),
         server_config.authority.base_port,
         state,
@@ -118,7 +121,12 @@ enum ServerCommands {
 }
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let subscriber_builder =
+        tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
+    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
+    set_global_default(subscriber).expect("Failed to set subscriber");
+
     let options = ServerOpt::from_args();
 
     let server_config_path = &options.server;
