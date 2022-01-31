@@ -30,7 +30,7 @@ move-package = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102
 move-vm-runtime = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }
 
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "232c44e88e69eb54fe80dab247adcd1b643aeb8c" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "5221b8ff87e18a1bff2ffe930711685d54c04062"}
 
 [dev-dependencies]
 fdlimit = "0.2.1"
