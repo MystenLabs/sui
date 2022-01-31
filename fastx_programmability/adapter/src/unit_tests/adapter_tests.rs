@@ -226,7 +226,7 @@ fn test_object_basics() {
     storage.flush();
     let mut obj1 = storage.read_object(&id1).unwrap();
     let mut obj1_seq = SequenceNumber::from(1);
-    assert_eq!(obj1.owner, addr1);
+    assert!(obj1.owner.is_address(&addr1));
     assert_eq!(obj1.version(), obj1_seq);
 
     // 2. Transfer obj1 to addr2
@@ -250,7 +250,7 @@ fn test_object_basics() {
     assert!(storage.deleted().is_empty());
     storage.flush();
     let transferred_obj = storage.read_object(&id1).unwrap();
-    assert_eq!(transferred_obj.owner, addr2);
+    assert!(transferred_obj.owner.is_address(&addr2));
     obj1_seq = obj1_seq.increment();
     assert_eq!(obj1.id(), transferred_obj.id());
     assert_eq!(transferred_obj.version(), obj1_seq);
@@ -315,7 +315,7 @@ fn test_object_basics() {
     );
     storage.flush();
     let updated_obj = storage.read_object(&id1).unwrap();
-    assert_eq!(updated_obj.owner, addr2);
+    assert!(updated_obj.owner.is_address(&addr2));
     obj1_seq = obj1_seq.increment();
     assert_eq!(updated_obj.version(), obj1_seq);
     assert_ne!(
@@ -587,7 +587,7 @@ fn test_transfer_and_freeze() {
     storage.flush();
     let obj1 = storage.read_object(&id1).unwrap();
     assert!(obj1.is_read_only());
-    assert_eq!(obj1.owner, addr2);
+    assert!(obj1.owner.is_address(&addr2));
 
     // 3. Call transfer again and it should fail.
     let pure_args = vec![bcs::to_bytes(&addr1.to_vec()).unwrap()];

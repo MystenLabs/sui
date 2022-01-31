@@ -7,8 +7,8 @@ use crate::bytecode_rewriter::ModuleHandleRewriter;
 use fastx_framework::EventType;
 use fastx_types::{
     base_types::{
-        FastPayAddress, ObjectID, TransactionDigest, TxContext, TX_CONTEXT_MODULE_NAME,
-        TX_CONTEXT_STRUCT_NAME,
+        Authenticator, FastPayAddress, ObjectID, TransactionDigest, TxContext,
+        TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     error::{FastPayError, FastPayResult},
     event::Event,
@@ -212,7 +212,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     }
 
     // wrap the modules in an object, write it to the store
-    let package_object = Object::new_package(modules, sender, ctx.digest());
+    let package_object = Object::new_package(modules, Authenticator::Address(sender), ctx.digest());
     state_view.write_object(package_object);
 
     Ok(ExecutionStatus::Success)
@@ -409,7 +409,7 @@ fn handle_transfer<
             if should_freeze {
                 move_obj.freeze();
             }
-            let obj = Object::new_move(move_obj, recipient, tx_digest);
+            let obj = Object::new_move(move_obj, Authenticator::Address(recipient), tx_digest);
             if old_object.is_none() {
                 // Charge extra gas based on object size if we are creating a new object.
                 *gas_used += gas::calculate_object_creation_cost(&obj);

@@ -112,7 +112,7 @@ impl AuthorityState {
                 // Additional checks for mutable objects
                 // Check the transaction sender is also the object owner
                 fp_ensure!(
-                    order.sender() == &object.owner,
+                    object.owner.is_address(order.sender()),
                     FastPayError::IncorrectSigner
                 );
 
@@ -340,7 +340,7 @@ impl AuthorityState {
             });
         }
 
-        output_object.transfer(recipient);
+        output_object.transfer(Authenticator::Address(recipient));
         temporary_store.write_object(output_object);
         Ok(ExecutionStatus::Success)
     }
