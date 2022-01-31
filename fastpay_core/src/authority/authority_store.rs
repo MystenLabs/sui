@@ -273,7 +273,7 @@ impl AuthorityStore {
 
                         // TODO: modify ConflictingOrder to only return the order digest here.
                         return Err(FastPayError::ConflictingOrder {
-                            pending_confirmation: prev_order.order,
+                            pending_order: prev_order.order,
                         });
                     }
                 }

@@ -15,11 +15,14 @@ fn compare_certified_orders(o1: &CertifiedOrder, o2: &CertifiedOrder) {
 
 // Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
 fn compare_object_info_responses(o1: &ObjectInfoResponse, o2: &ObjectInfoResponse) {
-    assert_eq!(o1.object, o2.object);
-    assert_eq!(o1.pending_confirmation, o2.pending_confirmation);
+    assert_eq!(&o1.object().unwrap(), &o2.object().unwrap());
+    assert_eq!(
+        o1.object_and_lock.as_ref().unwrap().lock,
+        o2.object_and_lock.as_ref().unwrap().lock
+    );
     match (
-        o1.requested_certificate.as_ref(),
-        o2.requested_certificate.as_ref(),
+        o1.parent_certificate.as_ref(),
+        o2.parent_certificate.as_ref(),
     ) {
         (Some(cert1), Some(cert2)) => {
             assert_eq!(cert1.order.digest(), cert2.order.digest());
@@ -48,12 +51,10 @@ fn test_info_request() {
     let req1 = ObjectInfoRequest {
         object_id: dbg_object_id(0x20),
         request_sequence_number: None,
-        request_received_transfers_excluding_first_nth: None,
     };
     let req2 = ObjectInfoRequest {
         object_id: dbg_object_id(0x20),
         request_sequence_number: Some(SequenceNumber::from(129)),
-        request_received_transfers_excluding_first_nth: None,
     };
 
     let buf1 = serialize_object_info_request(&req1);
@@ -239,25 +240,15 @@ fn test_info_response() {
     }
 
     let resp1 = ObjectInfoResponse {
-        object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-        pending_confirmation: None,
-        requested_certificate: None,
+        object_and_lock: Some(ObjectResponse {
+            object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
+            lock: Some(vote.clone()),
+        }),
+        parent_certificate: None,
     };
-    let resp2 = ObjectInfoResponse {
-        object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-        pending_confirmation: Some(vote.clone()),
-        requested_certificate: None,
-    };
-    let resp3 = ObjectInfoResponse {
-        object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-        pending_confirmation: None,
-        requested_certificate: Some(cert.clone()),
-    };
-    let resp4 = ObjectInfoResponse {
-        object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-        pending_confirmation: Some(vote),
-        requested_certificate: Some(cert),
-    };
+    let resp2 = resp1.clone();
+    let resp3 = resp1.clone();
+    let resp4 = resp1.clone();
 
     for resp in [resp1, resp2, resp3, resp4].iter() {
         let buf = serialize_object_info_response(resp);

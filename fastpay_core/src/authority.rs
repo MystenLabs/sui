@@ -356,7 +356,8 @@ impl AuthorityState {
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, FastPayError> {
-        let requested_certificate = if let Some(seq) = request.request_sequence_number {
+        // Only add a certificate if it is requested
+        let parent_certificate = if let Some(seq) = request.request_sequence_number {
             // Get the Transaction Digest that created the object
             let parent_iterator = self
                 .get_parent_iterator(request.object_id, Some(seq))
@@ -377,12 +378,31 @@ impl AuthorityState {
         } else {
             None
         };
-        self.make_object_info(request.object_id, requested_certificate)
-            .await
-    }
-}
 
-impl AuthorityState {
+        // Always attempt to return the latest version of the object and the
+        // current lock if any.
+        let object_result = self.object_state(&request.object_id).await;
+        let object_and_lock = match object_result {
+            Ok(object) => {
+                let lock = if object.is_read_only() {
+                    // Read only objects have no locks.
+                    None
+                } else {
+                    self.get_order_lock(&object.to_object_reference()).await?
+                };
+
+                Some(ObjectResponse { object, lock })
+            }
+            Err(FastPayError::ObjectNotFound { .. }) => None,
+            Err(e) => return Err(e),
+        };
+
+        Ok(ObjectInfoResponse {
+            parent_certificate,
+            object_and_lock,
+        })
+    }
+
     pub async fn new_with_genesis_modules(
         committee: Committee,
         name: AuthorityName,
@@ -446,25 +466,6 @@ impl AuthorityState {
         transaction_digest: &TransactionDigest,
     ) -> Result<OrderInfoResponse, FastPayError> {
         self._database.get_order_info(transaction_digest)
-    }
-
-    /// Make an info summary of an object, and include the raw object for clients
-    async fn make_object_info(
-        &self,
-        object_id: ObjectID,
-        requested_certificate: Option<CertifiedOrder>,
-    ) -> Result<ObjectInfoResponse, FastPayError> {
-        let object = self.object_state(&object_id).await?;
-        let lock = self
-            .get_order_lock(&object.to_object_reference())
-            .await
-            .or::<FastPayError>(Ok(None))?;
-
-        Ok(ObjectInfoResponse {
-            requested_certificate,
-            pending_confirmation: lock,
-            object,
-        })
     }
 
     fn make_account_info(
