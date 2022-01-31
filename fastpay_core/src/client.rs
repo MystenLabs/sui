@@ -1302,6 +1302,7 @@ where
             self.execute_transaction(order.clone()).await.map_err(|e| {
                 FastPayError::ErrorWhileProcessingTransactionOrder { err: e.to_string() }
             })?;
+            self.unlock_pending_order_objects(&order)?;
             dispatched_orders.insert(digest);
         }
         Ok(())
