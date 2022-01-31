@@ -542,26 +542,32 @@ fn main() {
                 let obj_info_req = ObjectInfoRequest {
                     object_id: obj_id,
                     request_sequence_number: None,
-                    request_received_transfers_excluding_first_nth: None,
                 };
-                let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
-                println!("Owner: {:#?}", obj_info.object.owner);
-                println!("Version: {:#?}", obj_info.object.version().value());
-                println!("ID: {:#?}", obj_info.object.id());
-                println!("Readonly: {:#?}", obj_info.object.is_read_only());
-                println!(
-                    "Type: {:#?}",
-                    obj_info
-                        .object
-                        .data
-                        .type_()
-                        .map_or("Type Unwrap Failed".to_owned(), |type_| type_
-                            .module
-                            .as_ident_str()
-                            .to_string())
-                );
-                if deep {
-                    println!("Full Info: {:#?}", obj_info.object);
+                if let Some(object) = client_state
+                    .get_object_info(obj_info_req)
+                    .await
+                    .unwrap()
+                    .object()
+                {
+                    println!("Owner: {:#?}", object.owner);
+                    println!("Version: {:#?}", object.version().value());
+                    println!("ID: {:#?}", object.id());
+                    println!("Readonly: {:#?}", object.is_read_only());
+                    println!(
+                        "Type: {:#?}",
+                        object
+                            .data
+                            .type_()
+                            .map_or("Type Unwrap Failed".to_owned(), |type_| type_
+                                .module
+                                .as_ident_str()
+                                .to_string())
+                    );
+                    if deep {
+                        println!("Full Info: {:#?}", object);
+                    }
+                } else {
+                    panic!("Object with id {:?} not found", obj_id);
                 }
             });
         }
@@ -589,13 +595,12 @@ fn main() {
                 let package_obj_info_req = ObjectInfoRequest {
                     object_id: config.package_obj_id,
                     request_sequence_number: None,
-                    request_received_transfers_excluding_first_nth: None,
                 };
                 let package_obj_info = client_state
                     .get_object_info(package_obj_info_req)
                     .await
                     .unwrap();
-                let package_obj_ref = package_obj_info.object.to_object_reference();
+                let package_obj_ref = package_obj_info.object().unwrap().to_object_reference();
 
                 // Fetch the object info for the gas obj
                 let gas_obj_ref = *client_state
@@ -610,11 +615,15 @@ fn main() {
                     let obj_info_req = ObjectInfoRequest {
                         object_id: obj_id,
                         request_sequence_number: None,
-                        request_received_transfers_excluding_first_nth: None,
                     };
 
                     let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
-                    object_args_refs.push(obj_info.object.to_object_reference());
+                    object_args_refs.push(
+                        obj_info
+                            .object()
+                            .unwrap_or_else(|| panic!("Could not find object {:?}", obj_id))
+                            .to_object_reference(),
+                    );
                 }
 
                 let pure_args = convert_txn_args(&config.pure_args);
@@ -745,7 +754,8 @@ fn main() {
                 let votes: Vec<_> = responses
                     .into_iter()
                     .filter_map(|buf| {
-                        deserialize_response(&buf[..]).and_then(|info| info.pending_confirmation)
+                        deserialize_response(&buf[..])
+                            .and_then(|info| info.object_and_lock.unwrap().lock)
                     })
                     .collect();
                 info!("Received {} valid votes.", votes.len());
@@ -775,7 +785,7 @@ fn main() {
                         .iter()
                         .fold(0, |acc, buf| match deserialize_response(&buf[..]) {
                             Some(info) => {
-                                confirmed.insert(info.object.id());
+                                confirmed.insert(info.object().unwrap().id());
                                 acc + 1
                             }
                             None => acc,

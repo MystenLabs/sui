@@ -355,7 +355,6 @@ where
         let request = ObjectInfoRequest {
             object_id,
             request_sequence_number: Some(inner_sequence_number),
-            request_received_transfers_excluding_first_nth: None,
         };
         // Sequentially try each authority in random order.
         // TODO: Improve shuffle, different authorities might different amount of stake.
@@ -364,7 +363,7 @@ where
             let result = client.handle_object_info_request(request.clone()).await;
             if let Ok(response) = result {
                 let certificate = response
-                    .requested_certificate
+                    .parent_certificate
                     .expect("Unable to get certificate");
                 if certificate.check(&self.committee).is_ok() {
                     // BUG (https://github.com/MystenLabs/fastnft/issues/290): Orders do not have a sequence number any more, objects do.
@@ -456,7 +455,6 @@ where
                     .handle_object_info_request(ObjectInfoRequest {
                         object_id: object_kind.object_id(),
                         request_sequence_number: Some(object_kind.version()),
-                        request_received_transfers_excluding_first_nth: None,
                     })
                     .await;
 
@@ -470,7 +468,7 @@ where
                 };
 
                 let returned_certificate = object_info
-                    .requested_certificate
+                    .parent_certificate
                     .ok_or(FastPayError::AuthorityInformationUnavailable)?;
                 let returned_digest = returned_certificate.order.digest();
 
@@ -590,7 +588,6 @@ where
         let request = ObjectInfoRequest {
             object_id,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         };
         let mut authority_clients = self.authority_clients.clone();
         let numbers: futures::stream::FuturesUnordered<_> = authority_clients
@@ -599,7 +596,11 @@ where
                 let fut = client.handle_object_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => Some((*name, info.object.version())),
+                        Ok(info) => {
+                            // TODO(https://github.com/MystenLabs/fastnft/issues/323): This assumes the object is not deleted.
+                            let current_sequence_number = info.object().unwrap().version();
+                            Some((*name, current_sequence_number))
+                        }
                         _ => None,
                     }
                 }
@@ -620,7 +621,6 @@ where
         let request = ObjectInfoRequest {
             object_id,
             request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
         };
         let authority_clients = self.authority_clients.clone();
         let numbers: futures::stream::FuturesUnordered<_> = authority_clients
@@ -629,7 +629,10 @@ where
                 let fut = client.handle_object_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => Some((*name, Some((info.object.owner, info.object.version())))),
+                        Ok(ObjectInfoResponse {
+                            object_and_lock: Some(ObjectResponse { object, .. }),
+                            ..
+                        }) => Some((*name, Some((object.owner, object.version())))),
                         _ => None,
                     }
                 }
@@ -642,13 +645,20 @@ where
 
     #[cfg(test)]
     async fn get_framework_object_ref(&mut self) -> Result<ObjectRef, anyhow::Error> {
-        self.get_object_info(ObjectInfoRequest {
-            object_id: FASTX_FRAMEWORK_ADDRESS,
-            request_sequence_number: None,
-            request_received_transfers_excluding_first_nth: None,
-        })
-        .await
-        .map(|response| response.object.to_object_reference())
+        let info = self
+            .get_object_info(ObjectInfoRequest {
+                object_id: FASTX_FRAMEWORK_ADDRESS,
+                request_sequence_number: None,
+            })
+            .await?;
+        let reference = info
+            .object_and_lock
+            .ok_or(FastPayError::ObjectNotFound {
+                object_id: FASTX_FRAMEWORK_ADDRESS,
+            })?
+            .object
+            .to_object_reference();
+        Ok(reference)
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.
@@ -808,11 +818,15 @@ where
                         let request = ObjectInfoRequest {
                             object_id,
                             request_sequence_number: None,
-                            request_received_transfers_excluding_first_nth: None,
                         };
                         let response = client.handle_object_info_request(request).await?;
 
-                        let current_sequence_number = response.object.version();
+                        let current_sequence_number = response
+                            .object_and_lock
+                            .ok_or(FastPayError::ObjectNotFound { object_id })?
+                            .object
+                            .version();
+
                         // Download each missing certificate in reverse order using the downloader.
                         let mut number = target_sequence_number.decrement();
                         while let Ok(seq) = number {
@@ -1178,7 +1192,7 @@ where
                 let response = self
                     .get_object_info(ObjectInfoRequest {
                         object_id: *certificate.order.object_id(),
-                        // BUG(https://github.com/MystenLabs/fastnft/issues/290):
+                        // TODO(https://github.com/MystenLabs/fastnft/issues/290):
                         //        This function assumes that requesting the parent cert of object seq+1 will give the cert of
                         //        that creates the object. This is not true, as objects may be deleted and may not have a seq+1
                         //        to look up.
@@ -1187,11 +1201,13 @@ where
                         //        seq+1. But a lot of the client code makes the above wrong assumption, and the line above reverts
                         //        query to the old (incorrect) behavious to not break tests everywhere.
                         request_sequence_number: Some(transfer.object_ref.1.increment()),
-                        request_received_transfers_excluding_first_nth: None,
                     })
                     .await?;
+
+                // TODO(https://github.com/MystenLabs/fastnft/issues/323): This assumes object is not deleted.
+                let object = &response.object().unwrap();
                 self.object_refs
-                    .insert(response.object.id(), response.object.to_object_reference());
+                    .insert(object.id(), object.to_object_reference());
 
                 // Everything worked: update the local balance.
                 if !self.certificates.contains_key(&certificate.order.digest()) {
