@@ -12,6 +12,7 @@ pub type InnerTemporaryStore = (
 
 pub struct AuthorityTemporaryStore {
     object_store: Arc<AuthorityStore>,
+    tx_digest: TransactionDigest,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
     // TODO: We need to study whether it's worth to optimize the lookup of
@@ -29,9 +30,11 @@ impl AuthorityTemporaryStore {
     pub fn new(
         authority_state: &AuthorityState,
         _input_objects: &'_ [Object],
+        tx_digest: TransactionDigest,
     ) -> AuthorityTemporaryStore {
         AuthorityTemporaryStore {
             object_store: authority_state._database.clone(),
+            tx_digest,
             objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
             active_inputs: _input_objects
                 .iter()
@@ -92,6 +95,7 @@ impl AuthorityTemporaryStore {
         authority_name: &AuthorityName,
         secret: &KeyPair,
         transaction_digest: &TransactionDigest,
+        transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
         gas_object_id: &ObjectID,
     ) -> SignedOrderEffects {
@@ -119,6 +123,7 @@ impl AuthorityTemporaryStore {
                 .collect(),
             gas_object: (gas_object.to_object_reference(), gas_object.owner),
             events: self.events.clone(),
+            dependencies: transaction_dependencies,
         };
         let signature = Signature::new(&effects, secret);
 
@@ -196,7 +201,7 @@ impl Storage for AuthorityTemporaryStore {
         caller.
     */
 
-    fn write_object(&mut self, object: Object) {
+    fn write_object(&mut self, mut object: Object) {
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
         if let Some(existing_object) = self.read_object(&object.id()) {
@@ -207,6 +212,9 @@ impl Storage for AuthorityTemporaryStore {
             }
         }
 
+        // The adapter is not very disciplined at filling in the correct
+        // previous transaction digest, so we ensure it is correct here.
+        object.previous_transaction = self.tx_digest;
         self.written.insert(object.id(), object);
     }
 
