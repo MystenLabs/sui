@@ -145,9 +145,7 @@ pub struct ObjectInfoResponse {
     pub parent_certificate: Option<CertifiedOrder>,
 
     /// The object and its current lock. If the object does not exist
-    /// this is None. If the lock is not set the second item in the
-    /// tuple is set to None, otherwise it is set to the signed order
-    /// locked on.
+    /// this is None.
     pub object_and_lock: Option<ObjectResponse>,
 }
 
