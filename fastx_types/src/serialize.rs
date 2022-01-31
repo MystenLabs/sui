@@ -22,6 +22,7 @@ pub enum SerializedMessage {
     ObjectInfoReq(Box<ObjectInfoRequest>),
     ObjectInfoResp(Box<ObjectInfoResponse>),
     OrderResp(Box<OrderInfoResponse>),
+    OrderInfoReq(Box<OrderInfoRequest>),
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.
@@ -39,6 +40,7 @@ enum ShallowSerializedMessage<'a> {
     ObjectInfoReq(&'a ObjectInfoRequest),
     ObjectInfoResp(&'a ObjectInfoResponse),
     OrderResp(&'a OrderInfoResponse),
+    OrderInfoReq(&'a OrderInfoRequest),
 }
 
 fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), anyhow::Error>
@@ -103,6 +105,10 @@ pub fn serialize_object_info_request(value: &ObjectInfoRequest) -> Vec<u8> {
 
 pub fn serialize_object_info_response(value: &ObjectInfoResponse) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::ObjectInfoResp(value))
+}
+
+pub fn serialize_order_info_request(value: &OrderInfoRequest) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::OrderInfoReq(value))
 }
 
 pub fn serialize_vote(value: &SignedOrder) -> Vec<u8> {

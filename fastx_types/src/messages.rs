@@ -158,6 +158,11 @@ impl ObjectInfoResponse {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct OrderInfoRequest {
+    pub transaction_digest: TransactionDigest,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OrderInfoResponse {
     // The signed order response to handle_order
@@ -218,6 +223,8 @@ pub struct OrderEffects {
     pub gas_object: (ObjectRef, Authenticator),
     /// The events emitted during execution. Note that only successful transactions emit events
     pub events: Vec<Event>,
+    /// The set of transaction digests this order depends on.
+    pub dependencies: Vec<TransactionDigest>,
 }
 
 impl OrderEffects {
