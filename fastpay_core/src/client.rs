@@ -425,8 +425,7 @@ where
                 .await
             {
                 Ok(_) => continue,
-                Err(FastPayError::ObjectNotFound { .. })
-                | Err(FastPayError::MissingEalierConfirmations { .. }) => {}
+                Err(FastPayError::LockErrors { .. }) => {}
                 Err(e) => return Err(e),
             }
 

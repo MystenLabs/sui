@@ -581,6 +581,7 @@ async fn test_handle_confirmation_order_unknown_sender() {
         .is_err());
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_handle_confirmation_order_bad_sequence_number() {
     // TODO: refactor this test to be less magic:
