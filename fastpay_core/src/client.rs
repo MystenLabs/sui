@@ -932,24 +932,32 @@ where
                 new_next_sequence_number = seq.increment();
             }
 
-            self.store
-                .certificates
-                .insert(&new_cert.order.digest(), &new_cert.clone())?;
-
-            // Atomic update
-            self.store
+            // Multi table atomic insert using batches
+            let mut batch = self
+                .store
                 .object_sequence_numbers
-                .insert(object_id, &new_next_sequence_number)?;
-
+                .batch()
+                .insert_batch(
+                    &self.store.object_sequence_numbers,
+                    std::iter::once((object_id, new_next_sequence_number)),
+                )?
+                .insert_batch(
+                    &self.store.certificates,
+                    std::iter::once((&new_cert.order.digest(), &new_cert.clone())),
+                )?;
             let mut certs = match self.store.object_certs.get(object_id)? {
                 Some(c) => c.clone(),
                 None => Vec::new(),
             };
-
             if !certs.contains(&new_cert.order.digest()) {
                 certs.push(new_cert.order.digest());
-                self.store.object_certs.insert(object_id, &certs.to_vec())?
+                batch = batch.insert_batch(
+                    &self.store.object_certs,
+                    std::iter::once((object_id, certs)),
+                )?;
             }
+            // Execute atomic write of opers
+            batch.write()?;
         }
         // Sanity check
         let certificates_count = self.certificates(object_id).count();
@@ -995,7 +1003,7 @@ where
 
     /// Returns true if this pending order's input objects are locked by another unconfirmed order
     /// The caller has to explcity find which objects are locked
-    /// TODO: lock only objects that are read-only: https://github.com/MystenLabs/fastnft/issues/305
+    /// TODO: lock only objects that are mutable: https://github.com/MystenLabs/fastnft/issues/305
     fn has_pending_order_conflict(&self, order: &Order) -> Result<bool, FastPayError> {
         // Need to make this more atomic? At least make more performant
         Ok(self

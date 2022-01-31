@@ -86,8 +86,8 @@ impl ClientStore {
     /// Hack to check if DBMap is empty
     pub fn is_empty<K, V>(map: &DBMap<K, V>) -> bool
     where
-        K: Serialize + DeserializeOwned + std::cmp::Ord + std::clone::Clone,
-        V: Serialize + DeserializeOwned + std::clone::Clone,
+        K: Serialize + DeserializeOwned,
+        V: Serialize + DeserializeOwned,
     {
         map.iter().next().is_none()
     }
@@ -100,8 +100,8 @@ impl ClientStore {
     where
         J: Borrow<K>,
         U: Borrow<V>,
-        K: Serialize + DeserializeOwned + std::cmp::Ord + std::clone::Clone,
-        V: Serialize + DeserializeOwned + std::clone::Clone,
+        K: Serialize,
+        V: Serialize,
     {
         map.batch()
             .insert_batch(map, kv)?
@@ -115,7 +115,7 @@ impl ClientStore {
     ) -> Result<(), FastPayError>
     where
         J: Borrow<K>,
-        K: Serialize + DeserializeOwned + std::cmp::Ord + std::clone::Clone,
+        K: Serialize,
     {
         map.batch()
             .delete_batch(map, k)?

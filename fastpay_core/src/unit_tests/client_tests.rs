@@ -578,9 +578,8 @@ fn test_client_state_sync() {
     // Remove all client-side data
     sender.store.object_sequence_numbers.clear().unwrap();
     sender.store.certificates.clear().unwrap();
+    sender.store.object_refs.clear().unwrap();
     assert!(rt.block_on(sender.get_owned_objects()).is_empty());
-    assert!(ClientStore::is_empty(&sender.store.object_sequence_numbers));
-    assert!(ClientStore::is_empty(&sender.store.certificates));
 
     // Sync client state
     rt.block_on(sender.sync_client_state_with_random_authority())
