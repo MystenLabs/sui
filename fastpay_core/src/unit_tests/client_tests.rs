@@ -952,7 +952,9 @@ async fn test_move_calls_object_transfer() {
         .unwrap();
 
     // Confirm new owner
-    assert!(transferred_obj_info.object().unwrap()
+    assert!(transferred_obj_info
+        .object()
+        .unwrap()
         .owner
         .is_address(&client2.address));
 }
@@ -1424,7 +1426,8 @@ async fn test_move_calls_object_transfer_and_freeze() {
 
     // Confirm new owner
     assert!(transferred_obj_info
-        .object().unwrap()
+        .object()
+        .unwrap()
         .owner
         .is_address(&client2.address));
 
