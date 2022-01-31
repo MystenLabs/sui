@@ -25,7 +25,7 @@ pub struct AuthorityStore {
     /// composite key of the FastPayAddress of their owner and the object ID of the object.
     /// This composite index allows an efficient iterator to list all objected currently owned
     /// by a specific user, and their object reference.
-    owner_index: DBMap<(FastPayAddress, ObjectID), ObjectRef>,
+    owner_index: DBMap<(Authenticator, ObjectID), ObjectRef>,
 
     /// This is map between the transaction digest and signed orders found in the `order_lock`.
     /// NOTE: after a lock is deleted the corresponding entry here could be deleted, but right
@@ -105,17 +105,17 @@ impl AuthorityStore {
 
     // Methods to read the store
 
-    // TODO: add object owner index to improve performance https://github.com/MystenLabs/fastnft/issues/127
     pub fn get_account_objects(
         &self,
         account: FastPayAddress,
     ) -> Result<Vec<ObjectRef>, FastPayError> {
+        let auth = Authenticator::Address(account);
         Ok(self
             .owner_index
             .iter()
-            // The object id [0; 16] is the smallest possible
-            .skip_to(&(account, AccountAddress::ZERO))?
-            .take_while(|((owner, _id), _object_ref)| (owner == &account))
+            // The object id 0 is the smallest possible
+            .skip_to(&(auth, ObjectID::ZERO))?
+            .take_while(|((owner, _id), _object_ref)| (owner == &auth))
             .map(|((_owner, _id), object_ref)| object_ref)
             .collect())
     }
