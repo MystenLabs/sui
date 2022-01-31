@@ -1041,6 +1041,7 @@ where
             !self.has_pending_order_conflict(&order)?,
             FastPayError::ConcurrentTransactionError.into()
         );
+        // Lock the objects in this order
         self.lock_pending_order_objects(&order)?;
         let result = self
             .broadcast_and_handle_order(self.address, order.clone())
