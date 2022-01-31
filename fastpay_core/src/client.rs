@@ -630,7 +630,7 @@ where
                 async move {
                     match fut.await {
                         Ok(ObjectInfoResponse {
-                            object_and_lock: Some((object, _lock)),
+                            object_and_lock: Some(ObjectResponse { object, .. }),
                             ..
                         }) => Some((*name, Some((object.owner, object.version())))),
                         _ => None,
@@ -656,7 +656,7 @@ where
             .ok_or(FastPayError::ObjectNotFound {
                 object_id: FASTX_FRAMEWORK_ADDRESS,
             })?
-            .0
+            .object
             .to_object_reference();
         Ok(reference)
     }
@@ -824,7 +824,7 @@ where
                         let current_sequence_number = response
                             .object_and_lock
                             .ok_or(FastPayError::ObjectNotFound { object_id })?
-                            .0
+                            .object
                             .version();
 
                         // Download each missing certificate in reverse order using the downloader.

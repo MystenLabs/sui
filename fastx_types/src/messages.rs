@@ -125,25 +125,36 @@ pub struct AccountInfoResponse {
     pub owner: FastPayAddress,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ObjectResponse {
+    /// Value of the requested object in this authority
+    pub object: Object,
+    /// Order the object is locked on in this authority.
+    /// None if the object is not currently locked by this authority.
+    pub lock: Option<SignedOrder>,
+}
+
 /// This message provides information about the latest object and its lock
 /// as well as the parent certificate of the object at a specific version.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectInfoResponse {
-    /// The certificate that created or mutates the object at a given version.
-    /// If no parent certificate was requested this is set to None.
+    /// The certificate that created or mutated the object at a given version.
+    /// If no parent certificate was requested this is set to None. If the
+    /// parent was requested and not found a error (ParentNotfound or
+    /// CertificateNotfound) will be returned.
     pub parent_certificate: Option<CertifiedOrder>,
 
     /// The object and its current lock. If the object does not exist
     /// this is None. If the lock is not set the second item in the
     /// tuple is set to None, otherwise it is set to the signed order
     /// locked on.
-    pub object_and_lock: Option<(Object, Option<SignedOrder>)>,
+    pub object_and_lock: Option<ObjectResponse>,
 }
 
 impl ObjectInfoResponse {
     pub fn object(&self) -> Option<&Object> {
         match &self.object_and_lock {
-            Some((object, _)) => Some(object),
+            Some(ObjectResponse { object, .. }) => Some(object),
             _ => None,
         }
     }

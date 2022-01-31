@@ -391,7 +391,7 @@ impl AuthorityState {
                     self.get_order_lock(&object.to_object_reference()).await?
                 };
 
-                Some((object, lock))
+                Some(ObjectResponse { object, lock })
             }
             Err(FastPayError::ObjectNotFound { .. }) => None,
             Err(e) => return Err(e),
@@ -402,9 +402,7 @@ impl AuthorityState {
             object_and_lock,
         })
     }
-}
 
-impl AuthorityState {
     pub async fn new_with_genesis_modules(
         committee: Committee,
         name: AuthorityName,

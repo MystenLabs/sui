@@ -17,8 +17,8 @@ fn compare_certified_orders(o1: &CertifiedOrder, o2: &CertifiedOrder) {
 fn compare_object_info_responses(o1: &ObjectInfoResponse, o2: &ObjectInfoResponse) {
     assert_eq!(&o1.object().unwrap(), &o2.object().unwrap());
     assert_eq!(
-        o1.object_and_lock.as_ref().unwrap().1,
-        o2.object_and_lock.as_ref().unwrap().1
+        o1.object_and_lock.as_ref().unwrap().lock,
+        o2.object_and_lock.as_ref().unwrap().lock
     );
     match (
         o1.parent_certificate.as_ref(),
@@ -240,33 +240,15 @@ fn test_info_response() {
     }
 
     let resp1 = ObjectInfoResponse {
-        object_and_lock: Some((
-            Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-            Some(vote.clone()),
-        )),
+        object_and_lock: Some(ObjectResponse {
+            object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
+            lock: Some(vote.clone()),
+        }),
         parent_certificate: None,
     };
-    let resp2 = ObjectInfoResponse {
-        object_and_lock: Some((
-            Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-            Some(vote.clone()),
-        )),
-        parent_certificate: None,
-    };
-    let resp3 = ObjectInfoResponse {
-        object_and_lock: Some((
-            Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-            Some(vote.clone()),
-        )),
-        parent_certificate: Some(cert.clone()),
-    };
-    let resp4 = ObjectInfoResponse {
-        object_and_lock: Some((
-            Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-            Some(vote.clone()),
-        )),
-        parent_certificate: Some(cert),
-    };
+    let resp2 = resp1.clone();
+    let resp3 = resp1.clone();
+    let resp4 = resp1.clone();
 
     for resp in [resp1, resp2, resp3, resp4].iter() {
         let buf = serialize_object_info_response(resp);

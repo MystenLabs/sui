@@ -613,7 +613,7 @@ fn main() {
                     object_args_refs.push(
                         obj_info
                             .object()
-                            .expect(format!("Could not find object {:?}", obj_id).as_str())
+                            .unwrap_or_else(|| panic!("Could not find object {:?}", obj_id))
                             .to_object_reference(),
                     );
                 }
@@ -747,7 +747,7 @@ fn main() {
                     .into_iter()
                     .filter_map(|buf| {
                         deserialize_response(&buf[..])
-                            .and_then(|info| info.object_and_lock.unwrap().1)
+                            .and_then(|info| info.object_and_lock.unwrap().lock)
                     })
                     .collect();
                 info!("Received {} valid votes.", votes.len());
