@@ -20,9 +20,11 @@ const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
 #[repr(u8)]
 pub enum EventType {
     /// System event: transfer between addresses
-    Transfer,
+    TransferToAddress,
     /// System event: freeze, then transfer between addresses
-    TransferAndFreeze,
+    TransferToAddressAndFreeze,
+    /// System event: transfer object to another object
+    TransferToObject,
     /// User-defined event
     User,
 }
