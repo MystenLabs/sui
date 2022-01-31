@@ -995,6 +995,7 @@ where
 
     /// Returns true if this pending order's input objects are locked by another unconfirmed order
     /// The caller has to explcity find which objects are locked
+    /// TODO: lock only objects that are read-only: https://github.com/MystenLabs/fastnft/issues/305
     fn has_pending_order_conflict(&self, order: &Order) -> Result<bool, FastPayError> {
         // Need to make this more atomic? At least make more performant
         Ok(self

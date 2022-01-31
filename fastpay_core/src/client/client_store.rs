@@ -2,6 +2,7 @@ use super::*;
 use rocksdb::{DBWithThreadMode, MultiThreaded};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::borrow::Borrow;
 use std::path::PathBuf;
 use std::sync::Arc;
 use typed_store::rocks::DBMap;
@@ -92,11 +93,13 @@ impl ClientStore {
     }
 
     /// Insert multiple KV pairs atomically
-    pub fn multi_insert<K, V>(
+    pub fn multi_insert<J, U, K, V>(
         map: &DBMap<K, V>,
-        kv: impl IntoIterator<Item = (K, V)>,
+        kv: impl IntoIterator<Item = (J, U)>,
     ) -> Result<(), FastPayError>
     where
+        J: Borrow<K>,
+        U: Borrow<V>,
         K: Serialize + DeserializeOwned + std::cmp::Ord + std::clone::Clone,
         V: Serialize + DeserializeOwned + std::clone::Clone,
     {
@@ -106,11 +109,12 @@ impl ClientStore {
             .map_err(|e| e.into())
     }
     /// Remove multiple Keys atomically
-    pub fn multi_remove<K, V>(
+    pub fn multi_remove<J, K, V>(
         map: &DBMap<K, V>,
-        k: impl IntoIterator<Item = K>,
+        k: impl IntoIterator<Item = J>,
     ) -> Result<(), FastPayError>
     where
+        J: Borrow<K>,
         K: Serialize + DeserializeOwned + std::cmp::Ord + std::clone::Clone,
     {
         map.batch()
