@@ -101,7 +101,7 @@ impl LocalAuthorityClient {
 #[cfg(test)]
 async fn init_local_authorities(
     count: usize,
-) -> (HashMap<AuthorityName, LocalAuthorityClient>, Committee) {
+) -> (BTreeMap<AuthorityName, LocalAuthorityClient>, Committee) {
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for _ in 0..count {
@@ -111,7 +111,7 @@ async fn init_local_authorities(
     }
     let committee = Committee::new(voting_rights);
 
-    let mut clients = HashMap::new();
+    let mut clients = BTreeMap::new();
     for (address, secret) in key_pairs {
         // Random directory for the DB
         let dir = env::temp_dir();
@@ -133,7 +133,7 @@ async fn init_local_authorities(
 #[cfg(test)]
 fn init_local_authorities_bad_1(
     count: usize,
-) -> (HashMap<AuthorityName, LocalAuthorityClient>, Committee) {
+) -> (BTreeMap<AuthorityName, LocalAuthorityClient>, Committee) {
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for i in 0..count {
@@ -148,7 +148,7 @@ fn init_local_authorities_bad_1(
     }
     let committee = Committee::new(voting_rights);
 
-    let mut clients = HashMap::new();
+    let mut clients = BTreeMap::new();
     for (address, secret) in key_pairs {
         // Random directory
         let dir = env::temp_dir();
@@ -171,7 +171,7 @@ fn init_local_authorities_bad_1(
 
 #[cfg(test)]
 fn make_client(
-    authority_clients: HashMap<AuthorityName, LocalAuthorityClient>,
+    authority_clients: BTreeMap<AuthorityName, LocalAuthorityClient>,
     committee: Committee,
 ) -> ClientState<LocalAuthorityClient> {
     let (address, secret) = get_key_pair();
@@ -2491,7 +2491,7 @@ async fn test_object_store() {
     }
     // Try to download objects which are not already in storage
     client1
-        .download_own_objects_from_all_authorities()
+        .download_owned_objects_from_all_authorities()
         .await
         .unwrap();
 
@@ -2579,11 +2579,11 @@ async fn test_object_store_transfer() {
 
     // Try to download objects which are not already in storage
     client1
-        .download_own_objects_from_all_authorities()
+        .download_owned_objects_from_all_authorities()
         .await
         .unwrap();
     client2
-        .download_own_objects_from_all_authorities()
+        .download_owned_objects_from_all_authorities()
         .await
         .unwrap();
 

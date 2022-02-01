@@ -13,7 +13,7 @@ use bytes::Bytes;
 use fastx_types::object::Object;
 use futures::stream::StreamExt;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     env,
     path::PathBuf,
     time::{Duration, Instant},
@@ -28,8 +28,8 @@ fn make_authority_clients(
     buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
-) -> HashMap<AuthorityName, AuthorityClient> {
-    let mut authority_clients = HashMap::new();
+) -> BTreeMap<AuthorityName, AuthorityClient> {
+    let mut authority_clients = BTreeMap::new();
     for config in &committee_config.authorities {
         let config = config.clone();
         let client = AuthorityClient::new(NetworkClient::new(
@@ -197,7 +197,7 @@ fn make_benchmark_certificates_from_votes(
     votes: Vec<SignedOrder>,
 ) -> Vec<(ObjectID, Bytes)> {
     let committee = Committee::new(committee_config.voting_rights());
-    let mut aggregators = HashMap::new();
+    let mut aggregators = BTreeMap::new();
     let mut certificates = Vec::new();
     let mut done_senders = HashSet::new();
     for vote in votes {

@@ -51,19 +51,17 @@ impl ClientStore {
         );
 
         ClientStore {
-            pending_orders: DBMap::reopen(&db, Some(PENDING_ORDERS_CF_NAME))
-                .expect(&format!("Cannot open {} CF.", PENDING_ORDERS_CF_NAME)[..]),
-            certificates: DBMap::reopen(&db, Some(CERT_CF_NAME))
-                .expect(&format!("Cannot open {} CF.", CERT_CF_NAME)[..]),
-            object_sequence_numbers: DBMap::reopen(&db, Some(SEQ_NUMBER_CF_NAME))
-                .expect(&format!("Cannot open {} CF.", SEQ_NUMBER_CF_NAME)[..]),
-            object_refs: DBMap::reopen(&db, Some(OBJ_REF_CF_NAME))
-                .expect(&format!("Cannot open {} CF.", OBJ_REF_CF_NAME)[..]),
-            object_certs: DBMap::reopen(&db, Some(TX_DIGEST_TO_CERT_CF_NAME))
-                .expect(&format!("Cannot open {} CF.", TX_DIGEST_TO_CERT_CF_NAME)[..]),
-            objects: DBMap::reopen(&db, Some(OBJECT_CF_NAME))
-                .expect(&format!("Cannot open {} CF.", OBJECT_CF_NAME)[..]),
+            pending_orders: ClientStore::open_db(&db, PENDING_ORDERS_CF_NAME),
+            certificates: ClientStore::open_db(&db, CERT_CF_NAME),
+            object_sequence_numbers: ClientStore::open_db(&db, SEQ_NUMBER_CF_NAME),
+            object_refs: ClientStore::open_db(&db, OBJ_REF_CF_NAME),
+            object_certs: ClientStore::open_db(&db, TX_DIGEST_TO_CERT_CF_NAME),
+            objects: ClientStore::open_db(&db, OBJECT_CF_NAME),
         }
+    }
+
+    fn open_db<K, V>(db: &Arc<DBWithThreadMode<MultiThreaded>>, name: &str) -> DBMap<K, V> {
+        DBMap::reopen(db, Some(name)).expect(&format!("Cannot open {} CF.", name)[..])
     }
     /// Populate DB with older state
     pub fn populate(
