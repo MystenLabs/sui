@@ -4,9 +4,9 @@
 #![deny(warnings)]
 
 use bytes::Bytes;
-use fastpay::{mass_client::MassClient, server_lib};
+use fastpay::server_lib;
 use fastpay_core::authority::*;
-use fastx_network::{network, transport};
+use fastx_network::{network::NetworkClient, transport};
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
 use fastx_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use futures::stream::StreamExt;
@@ -291,16 +291,18 @@ impl ClientServerBenchmark {
 
         info!("Sending requests.");
         if self.max_in_flight > 0 {
-            let mass_client = MassClient::new(
+            let mass_client = NetworkClient::new(
                 self.host.clone(),
                 self.port,
                 self.buffer_size,
                 Duration::from_micros(self.send_timeout_us),
                 Duration::from_micros(self.recv_timeout_us),
-                max_in_flight as u64,
             );
 
-            let responses = mass_client.run(orders, connections).concat().await;
+            let responses = mass_client
+                .batch_send(orders, connections, max_in_flight as u64)
+                .concat()
+                .await;
             info!("Received {} responses.", responses.len(),);
             // Check the responses for errors
             for resp in &responses {
@@ -321,7 +323,7 @@ impl ClientServerBenchmark {
             }
         } else {
             // Use actual client core
-            let client = network::Client::new(
+            let client = NetworkClient::new(
                 self.host.clone(),
                 self.port,
                 self.buffer_size,
@@ -335,8 +337,9 @@ impl ClientServerBenchmark {
                 }
                 let order = orders.pop().unwrap();
                 let status = client
-                    .send_recv_bytes(order.to_vec(), object_info_deserializer)
-                    .await;
+                    .send_recv_bytes(order.to_vec())
+                    .await
+                    .and_then(deserialize_object_info);
                 match status {
                     Ok(info) => {
                         debug!("Query response: {:?}", info);

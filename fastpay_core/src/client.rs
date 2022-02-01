@@ -4,7 +4,7 @@
 use crate::downloader::*;
 use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
-use fastx_network::network;
+use fastx_network::network::NetworkClient;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*, serialize::*,
 };
@@ -68,11 +68,11 @@ pub trait AuthorityClient {
 }
 
 #[async_trait]
-impl AuthorityClient for network::Client {
+impl AuthorityClient for NetworkClient {
     /// Initiate a new transfer to a FastPay or Primary account.
     async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
-        self.send_recv_bytes(serialize_order(&order), order_info_deserializer)
-            .await
+        let response = self.send_recv_bytes(serialize_order(&order)).await?;
+        deserialize_order_info(response)
     }
 
     /// Confirm a transfer to a FastPay or Primary account.
@@ -80,30 +80,30 @@ impl AuthorityClient for network::Client {
         &mut self,
         order: ConfirmationOrder,
     ) -> Result<OrderInfoResponse, FastPayError> {
-        self.send_recv_bytes(serialize_cert(&order.certificate), order_info_deserializer)
-            .await
+        let response = self
+            .send_recv_bytes(serialize_cert(&order.certificate))
+            .await?;
+        deserialize_order_info(response)
     }
 
     async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, FastPayError> {
-        self.send_recv_bytes(
-            serialize_account_info_request(&request),
-            account_info_deserializer,
-        )
-        .await
+        let response = self
+            .send_recv_bytes(serialize_account_info_request(&request))
+            .await?;
+        deserialize_account_info(response)
     }
 
     async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, FastPayError> {
-        self.send_recv_bytes(
-            serialize_object_info_request(&request),
-            object_info_deserializer,
-        )
-        .await
+        let response = self
+            .send_recv_bytes(serialize_object_info_request(&request))
+            .await?;
+        deserialize_object_info(response)
     }
 
     /// Handle Object information requests for this account.
@@ -111,11 +111,10 @@ impl AuthorityClient for network::Client {
         &self,
         request: OrderInfoRequest,
     ) -> Result<OrderInfoResponse, FastPayError> {
-        self.send_recv_bytes(
-            serialize_order_info_request(&request),
-            order_info_deserializer,
-        )
-        .await
+        let response = self
+            .send_recv_bytes(serialize_order_info_request(&request))
+            .await?;
+        deserialize_order_info(response)
     }
 }
 
