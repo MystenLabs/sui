@@ -185,9 +185,9 @@ impl Storage for AuthorityTemporaryStore {
         match self.objects.get(id) {
             Some(x) => Some(x.clone()),
             None => {
-                let object = self.object_store.object_state(id);
+                let object = self.object_store.get_object(id);
                 match object {
-                    Ok(o) => Some(o),
+                    Ok(o) => o,
                     Err(FastPayError::ObjectNotFound { .. }) => None,
                     _ => panic!("Could not read object"),
                 }

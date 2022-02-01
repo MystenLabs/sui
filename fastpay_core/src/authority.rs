@@ -418,9 +418,9 @@ impl AuthorityState {
 
         // Always attempt to return the latest version of the object and the
         // current lock if any.
-        let object_result = self.object_state(&request.object_id).await;
+        let object_result = self.get_object(&request.object_id).await;
         let object_and_lock = match object_result {
-            Ok(object) => {
+            Ok(Some(object)) => {
                 let lock = if object.is_read_only() {
                     // Read only objects have no locks.
                     None
@@ -430,8 +430,8 @@ impl AuthorityState {
 
                 Some(ObjectResponse { object, lock })
             }
-            Err(FastPayError::ObjectNotFound { .. }) => None,
             Err(e) => return Err(e),
+            _ => None,
         };
 
         Ok(ObjectInfoResponse {
@@ -487,8 +487,8 @@ impl AuthorityState {
         }
     }
 
-    async fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
-        self._database.object_state(object_id)
+    async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, FastPayError> {
+        self._database.get_object(object_id)
     }
 
     pub async fn insert_object(&self, object: Object) {

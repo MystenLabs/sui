@@ -60,8 +60,16 @@ async fn test_handle_transfer_order_bad_signature() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let object = authority_state.object_state(&object_id).await.unwrap();
-    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
     let transfer_order = init_transfer_order(
         sender,
         &sender_key,
@@ -78,7 +86,11 @@ async fn test_handle_transfer_order_bad_signature() {
         .await
         .is_err());
 
-    let object = authority_state.object_state(&object_id).await.unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
         .await
@@ -101,8 +113,16 @@ async fn test_handle_transfer_order_unknown_sender() {
     let recipient = dbg_addr(2);
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let object = authority_state.object_state(&object_id).await.unwrap();
-    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
 
     let transfer_order = init_transfer_order(
         unknown_address,
@@ -119,7 +139,11 @@ async fn test_handle_transfer_order_unknown_sender() {
         .await
         .is_err());
 
-    let object = authority_state.object_state(&object_id).await.unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(authority_state
         .get_order_lock(&object.to_object_reference())
         .await
@@ -169,8 +193,16 @@ async fn test_handle_transfer_order_ok() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let object = authority_state.object_state(&object_id).await.unwrap();
-    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
     let transfer_order = init_transfer_order(
         sender,
         &sender_key,
@@ -179,7 +211,11 @@ async fn test_handle_transfer_order_ok() {
         gas_object.to_object_reference(),
     );
 
-    let test_object = authority_state.object_state(&object_id).await.unwrap();
+    let test_object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
 
     // Check the initial state of the locks
     assert!(authority_state
@@ -197,7 +233,11 @@ async fn test_handle_transfer_order_ok() {
         .await
         .unwrap();
 
-    let object = authority_state.object_state(&object_id).await.unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
     let pending_confirmation = authority_state
         .get_order_lock(&object.to_object_reference())
         .await
@@ -230,7 +270,11 @@ async fn test_handle_transfer_zero_balance() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
-    let object = authority_state.object_state(&object_id).await.unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
 
     // Create a gas object with 0 balance.
     let gas_object_id = ObjectID::random();
@@ -336,12 +380,16 @@ async fn test_publish_dependent_module_ok() {
     let dependent_module_id = TxContext::new(&sender, order.digest()).fresh_id();
 
     // Object does not exist
-    assert!(authority.object_state(&dependent_module_id).await.is_err());
+    assert!(authority
+        .get_object(&dependent_module_id)
+        .await
+        .unwrap()
+        .is_none());
     let response = send_and_confirm_order(&mut authority, order).await.unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
 
     // check that the dependent module got published
-    assert!(authority.object_state(&dependent_module_id).await.is_ok());
+    assert!(authority.get_object(&dependent_module_id).await.is_ok());
 }
 
 // Test that publishing a module with no dependencies works
@@ -371,8 +419,9 @@ async fn test_publish_module_no_dependencies_ok() {
 
     // Check that gas is properly deducted.
     let gas_payment_object = authority
-        .object_state(&gas_payment_object_id)
+        .get_object(&gas_payment_object_id)
         .await
+        .unwrap()
         .unwrap();
     check_gas_object(
         &gas_payment_object,
@@ -425,8 +474,9 @@ async fn test_publish_non_existing_dependent_module() {
     // Check that gas was not charged.
     assert_eq!(
         authority
-            .object_state(&gas_payment_object_id)
+            .get_object(&gas_payment_object_id)
             .await
+            .unwrap()
             .unwrap()
             .version(),
         gas_payment_object_ref.1
@@ -512,8 +562,9 @@ async fn test_handle_move_order() {
     let created_object_id = effects.created[0].0 .0;
     // check that order actually created an object with the expected ID, owner, sequence number
     let created_obj = authority_state
-        .object_state(&created_object_id)
+        .get_object(&created_object_id)
         .await
+        .unwrap()
         .unwrap();
     assert!(created_obj.owner.is_address(&sender));
     assert_eq!(created_obj.id(), created_object_id);
@@ -521,8 +572,9 @@ async fn test_handle_move_order() {
 
     // Check that gas is properly deducted.
     let gas_payment_object = authority_state
-        .object_state(&gas_payment_object_id)
+        .get_object(&gas_payment_object_id)
         .await
+        .unwrap()
         .unwrap();
     check_gas_object(
         &gas_payment_object,
@@ -583,8 +635,16 @@ async fn test_handle_transfer_order_double_spend() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let object = authority_state.object_state(&object_id).await.unwrap();
-    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
     let transfer_order = init_transfer_order(
         sender,
         &sender_key,
@@ -647,13 +707,25 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let object = authority_state.object_state(&object_id).await.unwrap();
-    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
 
     // Record the old sequence number
     let old_seq_num;
     {
-        let old_account = authority_state.object_state(&object_id).await.unwrap();
+        let old_account = authority_state
+            .get_object(&object_id)
+            .await
+            .unwrap()
+            .unwrap();
         old_seq_num = old_account.version();
     }
 
@@ -668,7 +740,11 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
 
     // Increment the sequence number
     {
-        let mut sender_object = authority_state.object_state(&object_id).await.unwrap();
+        let mut sender_object = authority_state
+            .get_object(&object_id)
+            .await
+            .unwrap()
+            .unwrap();
         let o = sender_object.data.try_as_move_mut().unwrap();
         let old_contents = o.contents().to_vec();
         // update object contents, which will increment the sequence number
@@ -685,14 +761,15 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
     assert!(response.signed_effects.is_none());
 
     // Check that the new object is the one recorded.
-    let new_object = authority_state.object_state(&object_id).await.unwrap();
+    let new_object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(old_seq_num.increment(), new_object.version());
 
     // No recipient object was created.
-    assert!(authority_state
-        .object_state(&dbg_object_id(2))
-        .await
-        .is_err());
+    assert!(authority_state.get_object(&dbg_object_id(2)).await.is_err());
 }
 
 #[tokio::test]
@@ -702,8 +779,16 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(address, object_id), (address, gas_object_id)]).await;
-    let object = authority_state.object_state(&object_id).await.unwrap();
-    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
 
     let certified_transfer_order = init_certified_transfer_order(
         address,
@@ -718,7 +803,11 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
         .await
         .unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
-    let account = authority_state.object_state(&object_id).await.unwrap();
+    let account = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(OBJECT_START_VERSION, account.version());
 
     assert!(authority_state
@@ -734,7 +823,11 @@ async fn test_handle_confirmation_order_gas() {
         let recipient = dbg_addr(2);
         let object_id = ObjectID::random();
         let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
-        let object = authority_state.object_state(&object_id).await.unwrap();
+        let object = authority_state
+            .get_object(&object_id)
+            .await
+            .unwrap()
+            .unwrap();
 
         // Create a gas object with insufficient balance.
         let gas_object_id = ObjectID::random();
@@ -784,8 +877,16 @@ async fn test_handle_confirmation_order_ok() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let object = authority_state.object_state(&object_id).await.unwrap();
-    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
@@ -796,7 +897,11 @@ async fn test_handle_confirmation_order_ok() {
         &authority_state,
     );
 
-    let old_account = authority_state.object_state(&object_id).await.unwrap();
+    let old_account = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
     let mut next_sequence_number = old_account.version();
     next_sequence_number = next_sequence_number.increment();
 
@@ -807,7 +912,11 @@ async fn test_handle_confirmation_order_ok() {
     info.signed_effects.unwrap().effects.status.unwrap();
     // Key check: the ownership has changed
 
-    let new_account = authority_state.object_state(&object_id).await.unwrap();
+    let new_account = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(new_account.owner.is_address(&recipient));
     assert_eq!(next_sequence_number, new_account.version());
     assert_eq!(None, info.signed_order);
@@ -854,8 +963,16 @@ async fn test_handle_confirmation_order_idempotent() {
     let gas_object_id = ObjectID::random();
     let authority_state =
         init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
-    let object = authority_state.object_state(&object_id).await.unwrap();
-    let gas_object = authority_state.object_state(&gas_object_id).await.unwrap();
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
 
     let certified_transfer_order = init_certified_transfer_order(
         sender,
@@ -909,8 +1026,9 @@ async fn test_move_call_mutable_object_not_mutated() {
         get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
 
     let gas_object_ref = authority_state
-        .object_state(&gas_object_id)
+        .get_object(&gas_object_id)
         .await
+        .unwrap()
         .unwrap()
         .to_object_reference();
     let order = Order::new_move_call(
@@ -988,16 +1106,18 @@ async fn test_move_call_mutable_object_not_mutated() {
     // Verify that both objects' version increased, even though only one object was updated.
     assert_eq!(
         authority_state
-            .object_state(&new_object_ref1.0)
+            .get_object(&new_object_ref1.0)
             .await
+            .unwrap()
             .unwrap()
             .version(),
         new_object_ref1.1.increment()
     );
     assert_eq!(
         authority_state
-            .object_state(&new_object_ref2.0)
+            .get_object(&new_object_ref2.0)
             .await
+            .unwrap()
             .unwrap()
             .version(),
         new_object_ref2.1.increment()
@@ -1010,7 +1130,11 @@ async fn test_account_state_ok() {
     let object_id = dbg_object_id(1);
 
     let authority_state = init_state_with_object_id(sender, object_id).await;
-    authority_state.object_state(&object_id).await.unwrap();
+    authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
 }
 
 #[tokio::test]
@@ -1019,9 +1143,10 @@ async fn test_account_state_unknown_account() {
     let unknown_address = dbg_object_id(99);
     let authority_state = init_state_with_object_id(sender, ObjectID::random()).await;
     assert!(authority_state
-        .object_state(&unknown_address)
+        .get_object(&unknown_address)
         .await
-        .is_err());
+        .unwrap()
+        .is_none());
 }
 
 #[tokio::test]
@@ -1074,7 +1199,7 @@ async fn test_authority_persist() {
         authority_key,
         store,
     );
-    let obj2 = authority2.object_state(&object_id).await.unwrap();
+    let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
 
     // Check the object is present
     assert_eq!(obj2.id(), object_id);
@@ -1092,14 +1217,15 @@ async fn call_move(
     object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
 ) -> OrderEffects {
-    let gas_object = authority.object_state(gas_object_id).await.unwrap();
-    let gas_object_ref = gas_object.to_object_reference();
+    let gas_object = authority.get_object(gas_object_id).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().to_object_reference();
     let mut object_args = vec![];
     for id in object_arg_ids {
         object_args.push(
             authority
-                .object_state(&id)
+                .get_object(&id)
                 .await
+                .unwrap()
                 .unwrap()
                 .to_object_reference(),
         );
