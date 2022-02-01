@@ -72,6 +72,8 @@ pub enum FastPayError {
     ErrorWhileProcessingMoveCall { err: String },
     #[error("An invalid answer was returned by the authority while requesting information")]
     ErrorWhileRequestingInformation,
+    #[error("Object fetch failed for {object_id:?}, err {err:?}.")]
+    ObjectFetchFailed { object_id: ObjectID, err: String },
     #[error("Object {object_id:?} at old version: {current_sequence_number:?}")]
     MissingEalierConfirmations {
         object_id: ObjectID,

@@ -5,6 +5,7 @@ use crate::downloader::*;
 use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
 use fastx_network::network;
+use fastx_types::object::Object;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*, serialize::*,
 };
@@ -173,6 +174,11 @@ pub trait Client {
 
     /// Get all object we own.
     async fn get_owned_objects(&self) -> Vec<ObjectID>;
+
+    async fn fetch_and_insert_objects(
+        &self,
+        object_refs: Vec<ObjectRef>,
+    ) -> Result<HashSet<ObjectID>, FastPayError>;
 }
 
 impl<A> ClientState<A> {
@@ -184,7 +190,10 @@ impl<A> ClientState<A> {
         authority_clients: HashMap<AuthorityName, A>,
         certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
         object_refs: BTreeMap<ObjectID, ObjectRef>,
-    ) -> Result<Self, FastPayError> {
+    ) -> Result<Self, FastPayError>
+    where
+        A: AuthorityClient + std::marker::Send + Sync + Clone + 'static,
+    {
         let client_state = ClientState {
             address,
             secret,
@@ -195,6 +204,16 @@ impl<A> ClientState<A> {
 
         // Backfill the DB
         client_state.store.populate(object_refs, certificates)?;
+        // Try to download all objects needed
+        // TODO: Need to find a way to run runtime within runtime
+
+        // let rt = Runtime::new().unwrap();
+        // Ok(rt.block_on(async move {
+        //     let _ = client_state
+        //         .fetch_and_insert_objects(object_refs.iter().map(|(_, q)| *q).collect::<Vec<_>>())
+        //         .await;
+        //     client_state
+        // }))
         Ok(client_state)
     }
 
@@ -251,7 +270,7 @@ impl<A> ClientState<A> {
         self.store.certificates.iter().collect()
     }
 
-    pub fn insert_object(
+    pub fn insert_object_info(
         &mut self,
         object_ref: &ObjectRef,
         digest: &TransactionDigest,
@@ -282,7 +301,7 @@ impl<A> ClientState<A> {
         Ok(())
     }
 
-    pub fn remove_object(&mut self, object_id: &ObjectID) -> Result<(), FastPayError> {
+    pub fn remove_object_info(&mut self, object_id: &ObjectID) -> Result<(), FastPayError> {
         // Multi table atomic delete using batches
         let batch = self
             .store
@@ -1011,7 +1030,8 @@ where
             .ok_or(FastPayError::ErrorWhileRequestingInformation)?;
 
         // Update local data using new order response.
-        self.update_objects_from_order_info(response.clone())?;
+        self.update_objects_from_order_info(response.clone())
+            .await?;
 
         Ok((new_certificate, response.signed_effects.unwrap().effects))
     }
@@ -1081,7 +1101,7 @@ where
 
         // Update local data using all order response.
         for (_, response) in order_info_responses {
-            self.update_objects_from_order_info(response)?;
+            self.update_objects_from_order_info(response).await?;
         }
         Ok(new_sent_certificate)
     }
@@ -1112,7 +1132,7 @@ where
         Err(FastPayError::ErrorWhileRequestingInformation)
     }
 
-    fn update_objects_from_order_info(
+    async fn update_objects_from_order_info(
         &mut self,
         order_info_resp: OrderInfoResponse,
     ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
@@ -1121,6 +1141,8 @@ where
             let cert = order_info_resp.certified_order.unwrap();
             let digest = cert.order.digest();
             self.store.certificates.insert(&digest, &cert)?;
+
+            let mut objs_to_download = Vec::new();
 
             for &(object_ref, owner) in v.effects.all_mutated() {
                 let (object_id, seq, _) = object_ref;
@@ -1132,15 +1154,20 @@ where
                 // only update if data is new
                 if old_seq < seq {
                     if owner.is_address(&self.address) {
-                        self.insert_object(&object_ref, &digest)?;
+                        self.insert_object_info(&object_ref, &digest)?;
+                        objs_to_download.push(object_ref);
                     } else {
-                        self.remove_object(&object_id)?;
+                        self.remove_object_info(&object_id)?;
                     }
                 } else if old_seq == seq && owner.is_address(&self.address) {
                     // ObjectRef can be 1 version behind because it's only updated after confirmation.
                     self.store.object_refs.insert(&object_id, &object_ref)?;
                 }
             }
+
+            // TODO: decide what to do with failed object downloads
+            let _failed = self.fetch_and_insert_objects(objs_to_download).await?;
+
             for (object_id, seq, _) in &v.effects.deleted {
                 let old_seq = self
                     .store
@@ -1148,7 +1175,7 @@ where
                     .get(object_id)?
                     .unwrap_or_default();
                 if old_seq < *seq {
-                    self.remove_object(object_id)?;
+                    self.remove_object_info(object_id)?;
                 }
             }
             Ok((cert, v.effects))
@@ -1172,6 +1199,100 @@ where
             .get(0)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("No valid confirmation order votes"))
+    }
+
+    /// Fetch the objects at the given object id, which do not already exist in the db
+    /// This always returns the latest object known to the authorities
+    /// How it works: this function finds all object refs that are not in the DB
+    /// then it runs a downloader and submits download requests
+    /// Afterwards it persists objects returned by the downloader
+    /// It returns a set of the object ids which failed to download
+    /// TODO: return failed download errors along with the object if
+    async fn fetch_and_insert_objects(
+        &self,
+        object_refs: Vec<ObjectRef>,
+    ) -> Result<HashSet<ObjectID>, FastPayError> {
+        // Check the DB
+        // This could be expensive. Might want to use object_ref table
+        // We want items that are NOT in the table
+        let fresh_object_ids = self
+            .store
+            .objects
+            .multi_get(&object_refs)?
+            .iter()
+            .zip(object_refs)
+            .filter_map(|(object, ref_)| match object {
+                Some(_) => None,
+                None => Some(ref_.0),
+            })
+            .collect::<HashSet<_>>();
+
+        // Send request to download
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(4096);
+
+        // Now that we have all the fresh ids, dispatch fetches
+        for object_id in fresh_object_ids.clone() {
+            let sender = sender.clone();
+            tokio::spawn(ClientState::fetch_and_store_object(
+                self.authority_clients.clone(),
+                self.committee.clone(),
+                object_id,
+                AUTHORITY_REQUEST_TIMEOUT,
+                sender,
+            ));
+        }
+        drop(sender);
+        let mut err_object_ids = fresh_object_ids.clone();
+        // Receive from the downloader
+        while let Some(resp) = receiver.recv().await {
+            // Persists them to disk
+            if let Ok(o) = resp {
+                self.store.objects.insert(&o.to_object_reference(), &o)?;
+                err_object_ids.remove(&o.to_object_reference().0);
+            }
+        }
+        Ok(err_object_ids)
+    }
+
+    /// This function fetches one object at a time, and send back the result over the channel
+    /// The object ids are also returned so the caller can determine which fetches failed
+    /// NOTE: This function assumes all authorities are honest
+    async fn fetch_and_store_object(
+        authority_clients: HashMap<PublicKeyBytes, A>,
+        committee: Committee,
+        object_id: ObjectID,
+        timeout: Duration,
+        sender: tokio::sync::mpsc::Sender<Result<Object, FastPayError>>,
+    ) {
+        // Prepare the request
+        let request = ObjectInfoRequest {
+            object_id,
+            request_sequence_number: None,
+        };
+
+        // Pick a random authority, sampled by stake
+        let authority_name = committee.sample();
+        let authority_client = authority_clients.get(authority_name).unwrap();
+
+        let ret = match tokio::time::timeout(timeout, {
+            authority_client.handle_object_info_request(request.clone())
+        })
+        .await
+        {
+            Ok(res) => match res {
+                Ok(resp) => Ok(resp.object_and_lock.unwrap().object),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(FastPayError::ObjectFetchFailed {
+                object_id,
+                err: e.to_string(),
+            }),
+        };
+
+        sender
+            .send(ret)
+            .await
+            .expect("Cannot send object on channel after object fetch attempt");
     }
 }
 
@@ -1210,7 +1331,7 @@ where
 
         // remove object from local storage if the recipient is not us.
         if recipient != self.address {
-            self.remove_object(&object_id)?;
+            self.remove_object_info(&object_id)?;
         }
 
         Ok(certificate)
@@ -1233,7 +1354,7 @@ where
                     .await?;
 
                 for (_, response) in responses {
-                    self.update_objects_from_order_info(response)?;
+                    self.update_objects_from_order_info(response).await?;
                 }
 
                 let response = self
@@ -1414,5 +1535,12 @@ where
 
     async fn get_owned_objects(&self) -> Vec<ObjectID> {
         self.store.object_sequence_numbers.keys().collect()
+    }
+
+    async fn fetch_and_insert_objects(
+        &self,
+        object_refs: Vec<ObjectRef>,
+    ) -> Result<HashSet<ObjectID>, FastPayError> {
+        self.fetch_and_insert_objects(object_refs).await
     }
 }

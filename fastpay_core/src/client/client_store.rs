@@ -1,4 +1,5 @@
 use super::*;
+use fastx_types::object::Object;
 use rocksdb::{DBWithThreadMode, MultiThreaded};
 use serde::Serialize;
 use std::borrow::Borrow;
@@ -11,6 +12,7 @@ const SEQ_NUMBER_CF_NAME: &str = "object_sequence_numbers";
 const OBJ_REF_CF_NAME: &str = "object_refs";
 const TX_DIGEST_TO_CERT_CF_NAME: &str = "object_certs";
 const PENDING_ORDERS_CF_NAME: &str = "pending_orders";
+const OBJECT_CF_NAME: &str = "objects";
 
 pub fn init_store(path: PathBuf, names: Vec<&str>) -> Arc<DBWithThreadMode<MultiThreaded>> {
     open_cf(&path, None, &names).expect("Cannot open DB.")
@@ -28,6 +30,10 @@ pub struct ClientStore {
     pub object_refs: DBMap<ObjectID, ObjectRef>,
     /// Certificate <-> object id linking map.
     pub object_certs: DBMap<ObjectID, Vec<TransactionDigest>>,
+    /// Map from object ref to actual object to tracj object history
+    /// There can be duplicates
+    /// Lookup of refs can be tricky since we have to know the digest...
+    pub objects: DBMap<ObjectRef, Object>,
 }
 
 impl ClientStore {
@@ -41,6 +47,7 @@ impl ClientStore {
                 SEQ_NUMBER_CF_NAME,
                 OBJ_REF_CF_NAME,
                 TX_DIGEST_TO_CERT_CF_NAME,
+                OBJECT_CF_NAME,
             ],
         );
 
@@ -55,6 +62,8 @@ impl ClientStore {
                 .expect(&format!("Cannot open {} CF.", OBJ_REF_CF_NAME)[..]),
             object_certs: DBMap::reopen(&db, Some(TX_DIGEST_TO_CERT_CF_NAME))
                 .expect(&format!("Cannot open {} CF.", TX_DIGEST_TO_CERT_CF_NAME)[..]),
+            objects: DBMap::reopen(&db, Some(OBJECT_CF_NAME))
+                .expect(&format!("Cannot open {} CF.", OBJECT_CF_NAME)[..]),
         }
     }
     /// Populate DB with older state
