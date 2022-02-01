@@ -132,12 +132,8 @@ impl AuthorityStore {
     }
 
     /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
-    pub fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
-        self.objects
-            .get(object_id)?
-            .ok_or(FastPayError::ObjectNotFound {
-                object_id: *object_id,
-            })
+    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, FastPayError> {
+        self.objects.get(object_id).map_err(|e| e.into())
     }
 
     /// Get many objects
