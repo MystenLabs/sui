@@ -1,68 +1,48 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastpay_core::authority::*;
-use fastx_network::transport::*;
+use crate::authority::AuthorityState;
+use fastx_network::{
+    network::NetworkServer,
+    transport::{spawn_server, MessageHandler, SpawnedServer},
+};
 use fastx_types::{error::*, messages::*, serialize::*};
 
 use std::io;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::*;
 
-pub struct Server {
-    base_address: String,
-    base_port: u32,
+pub struct AuthorityServer {
+    server: NetworkServer,
     state: AuthorityState,
-    buffer_size: usize,
-    // Stats
-    packets_processed: AtomicUsize,
-    user_errors: AtomicUsize,
 }
 
-impl Server {
+impl AuthorityServer {
     pub fn new(
         base_address: String,
         base_port: u32,
-        state: AuthorityState,
         buffer_size: usize,
+        state: AuthorityState,
     ) -> Self {
         Self {
-            base_address,
-            base_port,
+            server: NetworkServer::new(base_address, base_port, buffer_size),
             state,
-            buffer_size,
-            packets_processed: AtomicUsize::new(0),
-            user_errors: AtomicUsize::new(0),
         }
-    }
-
-    pub fn packets_processed(&self) -> usize {
-        self.packets_processed.load(Ordering::Relaxed)
-    }
-
-    pub fn user_errors(&self) -> usize {
-        self.user_errors.load(Ordering::Relaxed)
     }
 
     pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
         info!(
             "Listening to TCP traffic on {}:{}",
-            self.base_address, self.base_port
+            self.server.base_address, self.server.base_port
         );
-        let address = format!("{}:{}", self.base_address, self.base_port);
-        let buffer_size = self.buffer_size;
-        let state = RunningServerState { server: self };
+        let address = format!("{}:{}", self.server.base_address, self.server.base_port);
+        let buffer_size = self.server.buffer_size;
 
         // Launch server for the appropriate protocol.
-        spawn_server(&address, state, buffer_size).await
+        spawn_server(&address, self, buffer_size).await
     }
 }
 
-struct RunningServerState {
-    server: Server,
-}
-
-impl MessageHandler for RunningServerState {
+impl MessageHandler for AuthorityServer {
     fn handle_message<'a>(
         &'a self,
         buffer: &'a [u8],
@@ -74,7 +54,6 @@ impl MessageHandler for RunningServerState {
                 Ok(result) => {
                     match result {
                         SerializedMessage::Order(message) => self
-                            .server
                             .state
                             .handle_order(*message)
                             .await
@@ -84,7 +63,6 @@ impl MessageHandler for RunningServerState {
                                 certificate: message.as_ref().clone(),
                             };
                             match self
-                                .server
                                 .state
                                 .handle_confirmation_order(confirmation_order)
                                 .await
@@ -97,19 +75,16 @@ impl MessageHandler for RunningServerState {
                             }
                         }
                         SerializedMessage::AccountInfoReq(message) => self
-                            .server
                             .state
                             .handle_account_info_request(*message)
                             .await
                             .map(|info| Some(serialize_account_info_response(&info))),
                         SerializedMessage::ObjectInfoReq(message) => self
-                            .server
                             .state
                             .handle_object_info_request(*message)
                             .await
                             .map(|info| Some(serialize_object_info_response(&info))),
                         SerializedMessage::OrderInfoReq(message) => self
-                            .server
                             .state
                             .handle_order_info_request(*message)
                             .await
@@ -119,9 +94,7 @@ impl MessageHandler for RunningServerState {
                 }
             };
 
-            self.server
-                .packets_processed
-                .fetch_add(1, Ordering::Relaxed);
+            self.server.increment_packets_processed();
 
             if self.server.packets_processed() % 5000 == 0 {
                 info!(
@@ -136,7 +109,7 @@ impl MessageHandler for RunningServerState {
                 Ok(x) => x,
                 Err(error) => {
                     warn!("User query failed: {}", error);
-                    self.server.user_errors.fetch_add(1, Ordering::Relaxed);
+                    self.server.increment_user_errors();
                     Some(serialize_error(&error))
                 }
             }

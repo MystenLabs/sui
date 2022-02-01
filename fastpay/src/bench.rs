@@ -4,8 +4,7 @@
 #![deny(warnings)]
 
 use bytes::Bytes;
-use fastpay::server_lib;
-use fastpay_core::authority::*;
+use fastpay_core::{authority::*, authority_server::AuthorityServer};
 use fastx_network::{network::NetworkClient, transport};
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
 use fastx_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
@@ -270,7 +269,7 @@ impl ClientServerBenchmark {
     }
 
     async fn spawn_server(&self, state: AuthorityState) -> transport::SpawnedServer {
-        let server = server_lib::Server::new(self.host.clone(), self.port, state, self.buffer_size);
+        let server = AuthorityServer::new(self.host.clone(), self.port, self.buffer_size, state);
         server.spawn().await.unwrap()
     }
 

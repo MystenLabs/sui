@@ -18,6 +18,7 @@ parking_lot = "0.12.0"
 itertools = "0.10.3"
 async-trait = "0.1.52"
 tempfile = "3.3.0"
+tracing = { version = "0.1", features = ["log"] }
 
 fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-framework = { path = "../fastx_programmability/framework" }

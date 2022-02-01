@@ -3,8 +3,8 @@
 
 #![deny(warnings)]
 
-use fastpay::{config::*, server_lib};
-use fastpay_core::authority::*;
+use fastpay::config::*;
+use fastpay_core::{authority::*, authority_server::AuthorityServer};
 use fastx_network::transport;
 use fastx_types::{base_types::*, committee::Committee, object::Object};
 
@@ -24,7 +24,7 @@ fn make_server(
     committee_config_path: &str,
     initial_accounts_config_path: &str,
     buffer_size: usize,
-) -> server_lib::Server {
+) -> AuthorityServer {
     let server_config =
         AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
     let committee_config =
@@ -62,11 +62,11 @@ fn make_server(
         state
     });
 
-    server_lib::Server::new(
+    AuthorityServer::new(
         local_ip_addr.to_string(),
         server_config.authority.base_port,
-        state,
         buffer_size,
+        state,
     )
 }
 
