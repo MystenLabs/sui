@@ -5,6 +5,7 @@ use crate::transport::*;
 use bytes::Bytes;
 use fastx_types::{error::*, serialize::*};
 use futures::future::FutureExt;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::*;
 
 use std::io;
@@ -154,5 +155,42 @@ impl NetworkClient {
         }
 
         handles
+    }
+}
+
+pub struct NetworkServer {
+    pub base_address: String,
+    pub base_port: u32,
+    pub buffer_size: usize,
+    // Stats
+    packets_processed: AtomicUsize,
+    user_errors: AtomicUsize,
+}
+
+impl NetworkServer {
+    pub fn new(base_address: String, base_port: u32, buffer_size: usize) -> Self {
+        Self {
+            base_address,
+            base_port,
+            buffer_size,
+            packets_processed: AtomicUsize::new(0),
+            user_errors: AtomicUsize::new(0),
+        }
+    }
+
+    pub fn packets_processed(&self) -> usize {
+        self.packets_processed.load(Ordering::Relaxed)
+    }
+
+    pub fn increment_packets_processed(&self) {
+        self.packets_processed.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn user_errors(&self) -> usize {
+        self.user_errors.load(Ordering::Relaxed)
+    }
+
+    pub fn increment_user_errors(&self) {
+        self.user_errors.fetch_add(1, Ordering::Relaxed);
     }
 }
