@@ -1231,16 +1231,22 @@ where
             })
         }
 
-        let mut ret: Result<Object, FastPayError> = Err(FastPayError::ObjectFetchFailed {
+        let mut ret_val: Result<Object, FastPayError> = Err(FastPayError::ObjectFetchFailed {
             object_id: object_ref.0,
             err: "No authority returned object".to_string(),
         });
         // Find the first non-error value
-        for res in results {
-            ret = match res {
+        // There are multiple reasons why we might not have an object
+        // We can timeout, or the authority returns an error or simply no object
+        // When we get an object back, it also might not match the digest we want
+        for result in results {
+            // Check if the result of the call is successful
+            ret_val = match result {
                 Ok(res) => match res {
+                    // Check if the authority actually had an object
                     Ok(resp) => match resp.object_and_lock {
                         Some(o) => {
+                            // Check if this is the the object we want
                             if o.object.digest() == object_ref.2 {
                                 Ok(o.object)
                             } else {
@@ -1249,16 +1255,19 @@ where
                         }
                         None => obj_fetch_err(object_id, "object_and_lock is None"),
                     },
+                    // Something in FastX failed
                     Err(e) => Err(e),
                 },
+                // Took too long
                 Err(e) => obj_fetch_err(object_id, e.to_string().as_str()),
             };
-            if ret.is_ok() {
+            // We found a value
+            if ret_val.is_ok() {
                 break;
             }
         }
         sender
-            .send(ret)
+            .send(ret_val)
             .await
             .expect("Cannot send object on channel after object fetch attempt");
     }
