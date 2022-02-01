@@ -143,7 +143,7 @@ where
     bincode::deserialize_from(reader).map_err(|err| format_err!("{}", err))
 }
 
-pub fn object_info_deserializer(
+pub fn deserialize_object_info(
     message: SerializedMessage,
 ) -> Result<ObjectInfoResponse, FastPayError> {
     match message {
@@ -153,7 +153,7 @@ pub fn object_info_deserializer(
     }
 }
 
-pub fn account_info_deserializer(
+pub fn deserialize_account_info(
     message: SerializedMessage,
 ) -> Result<AccountInfoResponse, FastPayError> {
     match message {
@@ -163,7 +163,7 @@ pub fn account_info_deserializer(
     }
 }
 
-pub fn order_info_deserializer(
+pub fn deserialize_order_info(
     message: SerializedMessage,
 ) -> Result<OrderInfoResponse, FastPayError> {
     match message {
