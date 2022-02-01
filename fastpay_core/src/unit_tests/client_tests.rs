@@ -41,7 +41,7 @@ fn max_files_client_tests() -> i32 {
 struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
 #[async_trait]
-impl AuthorityClient for LocalAuthorityClient {
+impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
         let result = state.lock().await.handle_order(order).await;

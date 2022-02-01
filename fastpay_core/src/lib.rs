@@ -2,5 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod authority;
+pub mod authority_client;
 pub mod client;
 pub mod downloader;
