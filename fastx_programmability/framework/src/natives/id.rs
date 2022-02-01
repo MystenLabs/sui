@@ -9,7 +9,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::{native_gas, NativeResult},
     pop_arg,
-    values::Value,
+    values::{StructRef, Value},
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -33,4 +33,21 @@ pub fn bytes_to_address(
     let cost = native_gas(context.cost_table(), NativeCostIndex::CREATE_SIGNER, 0);
 
     Ok(NativeResult::ok(cost, smallvec![Value::address(addr)]))
+}
+
+pub fn get_id(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 1);
+
+    let obj = pop_arg!(args, StructRef);
+    let id_field = obj.borrow_field(0)?;
+
+    // TODO: what should the cost of this be?
+    let cost = native_gas(context.cost_table(), NativeCostIndex::SIGNER_BORROW, 0);
+
+    Ok(NativeResult::ok(cost, smallvec![id_field]))
 }
