@@ -4,7 +4,7 @@
 #![deny(warnings)]
 
 use fastpay::config::*;
-use fastpay_core::client::*;
+use fastpay_core::{authority_client::AuthorityClient, client::*};
 use fastx_network::{network::NetworkClient, transport};
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
 use move_core_types::transaction_argument::convert_txn_args;
@@ -28,17 +28,17 @@ fn make_authority_clients(
     buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
-) -> HashMap<AuthorityName, NetworkClient> {
+) -> HashMap<AuthorityName, AuthorityClient> {
     let mut authority_clients = HashMap::new();
     for config in &committee_config.authorities {
         let config = config.clone();
-        let client = NetworkClient::new(
+        let client = AuthorityClient::new(NetworkClient::new(
             config.host,
             config.base_port,
             buffer_size,
             send_timeout,
             recv_timeout,
-        );
+        ));
         authority_clients.insert(config.address, client);
     }
     authority_clients
@@ -72,7 +72,7 @@ async fn make_client_state_and_try_sync(
     buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
-) -> ClientState<NetworkClient> {
+) -> ClientState<AuthorityClient> {
     let mut c = make_client_state(
         path,
         accounts,
@@ -96,7 +96,7 @@ fn make_client_state(
     buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
-) -> ClientState<NetworkClient> {
+) -> ClientState<AuthorityClient> {
     let account = accounts.get(&address).expect("Unknown account");
     let committee = Committee::new(committee_config.voting_rights());
     let authority_clients =

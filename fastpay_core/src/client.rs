@@ -1,13 +1,13 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::downloader::*;
+use crate::authority_client::AuthorityClient;
+use crate::{authority_client::AuthorityAPI, downloader::*};
 use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
-use fastx_network::network::NetworkClient;
 use fastx_types::object::Object;
 use fastx_types::{
-    base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*, serialize::*,
+    base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
 use futures::{future, StreamExt, TryFutureExt};
 use itertools::Itertools;
@@ -38,88 +38,7 @@ const AUTHORITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
-#[async_trait]
-pub trait AuthorityClient {
-    /// Initiate a new order to a FastPay or Primary account.
-    async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError>;
-
-    /// Confirm an order to a FastPay or Primary account.
-    async fn handle_confirmation_order(
-        &mut self,
-        order: ConfirmationOrder,
-    ) -> Result<OrderInfoResponse, FastPayError>;
-
-    /// Handle Account information requests for this account.
-    async fn handle_account_info_request(
-        &self,
-        request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, FastPayError>;
-
-    /// Handle Object information requests for this account.
-    async fn handle_object_info_request(
-        &self,
-        request: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, FastPayError>;
-
-    /// Handle Object information requests for this account.
-    async fn handle_order_info_request(
-        &self,
-        request: OrderInfoRequest,
-    ) -> Result<OrderInfoResponse, FastPayError>;
-}
-
-#[async_trait]
-impl AuthorityClient for NetworkClient {
-    /// Initiate a new transfer to a FastPay or Primary account.
-    async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
-        let response = self.send_recv_bytes(serialize_order(&order)).await?;
-        deserialize_order_info(response)
-    }
-
-    /// Confirm a transfer to a FastPay or Primary account.
-    async fn handle_confirmation_order(
-        &mut self,
-        order: ConfirmationOrder,
-    ) -> Result<OrderInfoResponse, FastPayError> {
-        let response = self
-            .send_recv_bytes(serialize_cert(&order.certificate))
-            .await?;
-        deserialize_order_info(response)
-    }
-
-    async fn handle_account_info_request(
-        &self,
-        request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, FastPayError> {
-        let response = self
-            .send_recv_bytes(serialize_account_info_request(&request))
-            .await?;
-        deserialize_account_info(response)
-    }
-
-    async fn handle_object_info_request(
-        &self,
-        request: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, FastPayError> {
-        let response = self
-            .send_recv_bytes(serialize_object_info_request(&request))
-            .await?;
-        deserialize_object_info(response)
-    }
-
-    /// Handle Object information requests for this account.
-    async fn handle_order_info_request(
-        &self,
-        request: OrderInfoRequest,
-    ) -> Result<OrderInfoResponse, FastPayError> {
-        let response = self
-            .send_recv_bytes(serialize_order_info_request(&request))
-            .await?;
-        deserialize_order_info(response)
-    }
-}
-
-pub struct ClientState<AuthorityClient> {
+pub struct ClientState<AuthorityAPI> {
     /// Our FastPay address.
     address: FastPayAddress,
     /// Our signature key.
@@ -127,7 +46,7 @@ pub struct ClientState<AuthorityClient> {
     /// Our FastPay committee.
     committee: Committee,
     /// How to talk to this committee.
-    authority_clients: HashMap<AuthorityName, AuthorityClient>,
+    authority_clients: HashMap<AuthorityName, AuthorityAPI>,
     /// Persistent store for client
     store: ClientStore,
 }
@@ -211,10 +130,7 @@ impl<A> ClientState<A> {
         authority_clients: HashMap<AuthorityName, A>,
         certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
         object_refs: BTreeMap<ObjectID, ObjectRef>,
-    ) -> Result<Self, FastPayError>
-    where
-        A: AuthorityClient + std::marker::Send + Sync + Clone + 'static,
-    {
+    ) -> Result<Self, FastPayError> {
         let client_state = ClientState {
             address,
             secret,
@@ -355,7 +271,7 @@ impl<A> CertificateRequester<A> {
 #[async_trait]
 impl<A> Requester for CertificateRequester<A>
 where
-    A: AuthorityClient + Send + Sync + 'static + Clone,
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     type Key = (ObjectID, SequenceNumber);
     type Value = Result<CertifiedOrder, FastPayError>;
@@ -410,7 +326,7 @@ where
 
 impl<A> ClientState<A>
 where
-    A: AuthorityClient + Send + Sync + 'static + Clone,
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     /// Sync a certificate and all its dependencies to a destination authority, using a
     /// source authority to get information about parent certificates.
@@ -1353,7 +1269,7 @@ where
 #[async_trait]
 impl<A> Client for ClientState<A>
 where
-    A: AuthorityClient + Send + Sync + Clone + 'static,
+    A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     async fn transfer_object(
         &mut self,
