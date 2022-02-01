@@ -3,9 +3,9 @@
 
 #![deny(warnings)]
 
-use fastpay::{config::*, mass_client::MassClient};
+use fastpay::config::*;
 use fastpay_core::client::*;
-use fastx_network::{network, transport};
+use fastx_network::{network::NetworkClient, transport};
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
 use move_core_types::transaction_argument::convert_txn_args;
 
@@ -26,11 +26,11 @@ fn make_authority_clients(
     buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
-) -> HashMap<AuthorityName, network::Client> {
+) -> HashMap<AuthorityName, NetworkClient> {
     let mut authority_clients = HashMap::new();
     for config in &committee_config.authorities {
         let config = config.clone();
-        let client = network::Client::new(
+        let client = NetworkClient::new(
             config.host,
             config.base_port,
             buffer_size,
@@ -47,17 +47,15 @@ fn make_authority_mass_clients(
     buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
-    max_in_flight: u64,
-) -> Vec<MassClient> {
+) -> Vec<NetworkClient> {
     let mut authority_clients = Vec::new();
     for config in &committee_config.authorities {
-        let client = MassClient::new(
+        let client = NetworkClient::new(
             config.host.clone(),
             config.base_port,
             buffer_size,
             send_timeout,
             recv_timeout,
-            max_in_flight,
         );
         authority_clients.push(client);
     }
@@ -71,7 +69,7 @@ async fn make_client_state_and_try_sync(
     buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
-) -> ClientState<network::Client> {
+) -> ClientState<NetworkClient> {
     let mut c = make_client_state(
         accounts,
         committee_config,
@@ -93,7 +91,7 @@ fn make_client_state(
     buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
-) -> ClientState<network::Client> {
+) -> ClientState<NetworkClient> {
     let account = accounts.get(&address).expect("Unknown account");
     let committee = Committee::new(committee_config.voting_rights());
     let authority_clients =
@@ -241,20 +239,15 @@ async fn mass_broadcast_orders(
 ) -> Vec<Bytes> {
     let time_start = Instant::now();
     info!("Broadcasting {} {} orders", orders.len(), phase);
-    let authority_clients = make_authority_mass_clients(
-        committee_config,
-        buffer_size,
-        send_timeout,
-        recv_timeout,
-        max_in_flight,
-    );
+    let authority_clients =
+        make_authority_mass_clients(committee_config, buffer_size, send_timeout, recv_timeout);
     let mut streams = Vec::new();
     for client in authority_clients {
         let mut requests = Vec::new();
         for (_object_id, buf) in &orders {
             requests.push(buf.clone());
         }
-        streams.push(client.run(requests, 1));
+        streams.push(client.batch_send(requests, 1, max_in_flight));
     }
     let responses = futures::stream::select_all(streams).concat().await;
     let time_elapsed = time_start.elapsed();
