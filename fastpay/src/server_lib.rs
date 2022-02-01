@@ -108,6 +108,12 @@ impl MessageHandler for RunningServerState {
                             .handle_object_info_request(*message)
                             .await
                             .map(|info| Some(serialize_object_info_response(&info))),
+                        SerializedMessage::OrderInfoReq(message) => self
+                            .server
+                            .state
+                            .handle_order_info_request(*message)
+                            .await
+                            .map(|info| Some(serialize_order_info(&info))),
                         _ => Err(FastPayError::UnexpectedMessage),
                     }
                 }

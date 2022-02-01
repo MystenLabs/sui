@@ -242,7 +242,7 @@ fn test_info_response() {
     let resp1 = ObjectInfoResponse {
         object_and_lock: Some(ObjectResponse {
             object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
-            lock: Some(vote.clone()),
+            lock: Some(vote),
         }),
         parent_certificate: None,
     };

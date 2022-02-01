@@ -153,6 +153,8 @@ pub enum FastPayError {
     AbortedExecution { error: String },
     #[error("Invalid move event: {error:?}.")]
     InvalidMoveEvent { error: String },
+    #[error("Circular object ownership detected")]
+    CircularObjectOwnership,
 
     // Gas related errors
     #[error("Gas budget set higher than max: {error:?}.")]

@@ -63,6 +63,7 @@ impl AuthorityState {
         order: &Order,
         object_kind: InputObjectKind,
         object: &Object,
+        mutable_object_ids: &HashSet<ObjectID>,
     ) -> FastPayResult {
         match object_kind {
             InputObjectKind::MovePackage(package_id) => {
@@ -111,10 +112,20 @@ impl AuthorityState {
 
                 // Additional checks for mutable objects
                 // Check the transaction sender is also the object owner
-                fp_ensure!(
-                    object.owner.is_address(order.sender()),
-                    FastPayError::IncorrectSigner
-                );
+                // If the object is owned by another object, we make sure the owner object
+                // is also a mutable input to this order.
+                match &object.owner {
+                    // TODO: More detailed error message for IncorrectSigner.
+                    Authenticator::Address(addr) => {
+                        fp_ensure!(order.sender() == addr, FastPayError::IncorrectSigner);
+                    }
+                    Authenticator::Object(id) => {
+                        fp_ensure!(
+                            mutable_object_ids.contains(id),
+                            FastPayError::IncorrectSigner
+                        );
+                    }
+                };
 
                 if &object_id == order.gas_payment_object_id() {
                     gas::check_gas_requirement(order, object)?;
@@ -147,6 +158,13 @@ impl AuthorityState {
         let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
 
         let objects = self.get_objects(&ids[..]).await?;
+        let mutable_object_ids: HashSet<_> = objects
+            .iter()
+            .flat_map(|opt_obj| match opt_obj {
+                Some(obj) if !obj.is_read_only() => Some(obj.id()),
+                _ => None,
+            })
+            .collect();
         let mut errors = Vec::new();
         for (object_kind, object) in input_objects.into_iter().zip(objects) {
             let object = match object {
@@ -157,7 +175,7 @@ impl AuthorityState {
                 }
             };
 
-            match self.check_one_lock(order, object_kind, &object) {
+            match self.check_one_lock(order, object_kind, &object, &mutable_object_ids) {
                 Ok(()) => all_objects.push((object_kind, object)),
                 Err(e) => {
                     errors.push(e);
@@ -204,6 +222,9 @@ impl AuthorityState {
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
 
         // Check and write locks, to signed order, into the database
+        // The call to self.set_order_lock checks the lock is not conflicting,
+        // and returns ConflictingOrder error in case there is a lock on a different
+        // existing order.
         self.set_order_lock(&mutable_objects, signed_order).await?;
 
         // Return the signed Order or maybe a cert.
@@ -235,17 +256,26 @@ impl AuthorityState {
             .map(|(_, object)| object)
             .collect();
 
+        let mut transaction_dependencies: BTreeSet<_> = inputs
+            .iter()
+            .map(|object| object.previous_transaction)
+            .collect();
+
         // Insert into the certificates map
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
         let gas_object_id = *order.gas_payment_object_id();
         let (temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx)?;
 
+        // Remove from dependencies the generic hash
+        transaction_dependencies.remove(&TransactionDigest::genesis());
+
         // Update the database in an atomic manner
         let to_signed_effects = temporary_store.to_signed_effects(
             &self.name,
             &self.secret,
             &transaction_digest,
+            transaction_dependencies.into_iter().collect(),
             status,
             &gas_object_id,
         );
@@ -259,7 +289,7 @@ impl AuthorityState {
         mut inputs: Vec<Object>,
         tx_ctx: &mut TxContext,
     ) -> FastPayResult<(AuthorityTemporaryStore, ExecutionStatus)> {
-        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
+        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs, tx_ctx.digest());
         // unwraps here are safe because we built `inputs`
         let mut gas_object = inputs.pop().unwrap();
 
@@ -343,6 +373,13 @@ impl AuthorityState {
         output_object.transfer(Authenticator::Address(recipient));
         temporary_store.write_object(output_object);
         Ok(ExecutionStatus::Success)
+    }
+
+    pub async fn handle_order_info_request(
+        &self,
+        request: OrderInfoRequest,
+    ) -> Result<OrderInfoResponse, FastPayError> {
+        self.make_order_info(&request.transaction_digest).await
     }
 
     pub async fn handle_account_info_request(

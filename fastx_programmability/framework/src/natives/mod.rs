@@ -17,6 +17,11 @@ pub fn all_natives(
         ("Event", "emit", event::emit),
         ("ID", "bytes_to_address", id::bytes_to_address),
         ("Transfer", "transfer_internal", transfer::transfer_internal),
+        (
+            "Transfer",
+            "transfer_to_object_id",
+            transfer::transfer_to_object_id,
+        ),
         ("TxContext", "fresh_id", tx_context::fresh_id),
     ];
     FASTX_NATIVES
