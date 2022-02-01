@@ -30,9 +30,8 @@ pub struct ClientStore {
     pub object_refs: DBMap<ObjectID, ObjectRef>,
     /// Certificate <-> object id linking map.
     pub object_certs: DBMap<ObjectID, Vec<TransactionDigest>>,
-    /// Map from object ref to actual object to tracj object history
-    /// There can be duplicates
-    /// Lookup of refs can be tricky since we have to know the digest...
+    /// Map from object ref to actual object to track object history
+    /// There can be duplicates and we never delete objects
     pub objects: DBMap<ObjectRef, Object>,
 }
 

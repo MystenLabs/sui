@@ -175,13 +175,14 @@ pub trait Client {
     /// Get all object we own.
     async fn get_owned_objects(&self) -> Vec<ObjectID>;
 
-    async fn fetch_and_insert_objects(
+    async fn fetch_and_store_objects(
         &self,
         object_refs: Vec<ObjectRef>,
     ) -> Result<HashSet<ObjectID>, FastPayError>;
 }
 
 impl<A> ClientState<A> {
+    // It is recommended that one call sync after constructure to fetch missing info form authorities
     pub fn new(
         path: PathBuf,
         address: FastPayAddress,
@@ -204,16 +205,6 @@ impl<A> ClientState<A> {
 
         // Backfill the DB
         client_state.store.populate(object_refs, certificates)?;
-        // Try to download all objects needed
-        // TODO: Need to find a way to run runtime within runtime
-
-        // let rt = Runtime::new().unwrap();
-        // Ok(rt.block_on(async move {
-        //     let _ = client_state
-        //         .fetch_and_insert_objects(object_refs.iter().map(|(_, q)| *q).collect::<Vec<_>>())
-        //         .await;
-        //     client_state
-        // }))
         Ok(client_state)
     }
 
@@ -1166,7 +1157,7 @@ where
             }
 
             // TODO: decide what to do with failed object downloads
-            let _failed = self.fetch_and_insert_objects(objs_to_download).await?;
+            let _failed = self.fetch_and_store_objects(objs_to_download).await?;
 
             for (object_id, seq, _) in &v.effects.deleted {
                 let old_seq = self
@@ -1208,7 +1199,7 @@ where
     /// Afterwards it persists objects returned by the downloader
     /// It returns a set of the object ids which failed to download
     /// TODO: return failed download errors along with the object if
-    async fn fetch_and_insert_objects(
+    async fn fetch_and_store_objects(
         &self,
         object_refs: Vec<ObjectRef>,
     ) -> Result<HashSet<ObjectID>, FastPayError> {
@@ -1228,7 +1219,7 @@ where
             .collect::<HashSet<_>>();
 
         // Send request to download
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(4096);
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
         // Now that we have all the fresh ids, dispatch fetches
         for object_id in fresh_object_ids.clone() {
@@ -1262,7 +1253,7 @@ where
         committee: Committee,
         object_id: ObjectID,
         timeout: Duration,
-        sender: tokio::sync::mpsc::Sender<Result<Object, FastPayError>>,
+        sender: tokio::sync::mpsc::UnboundedSender<Result<Object, FastPayError>>,
     ) {
         // Prepare the request
         let request = ObjectInfoRequest {
@@ -1291,7 +1282,6 @@ where
 
         sender
             .send(ret)
-            .await
             .expect("Cannot send object on channel after object fetch attempt");
     }
 }
@@ -1537,10 +1527,10 @@ where
         self.store.object_sequence_numbers.keys().collect()
     }
 
-    async fn fetch_and_insert_objects(
+    async fn fetch_and_store_objects(
         &self,
         object_refs: Vec<ObjectRef>,
     ) -> Result<HashSet<ObjectID>, FastPayError> {
-        self.fetch_and_insert_objects(object_refs).await
+        self.fetch_and_store_objects(object_refs).await
     }
 }
