@@ -1,7 +1,6 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_client::AuthorityClient;
 use crate::{authority_client::AuthorityAPI, downloader::*};
 use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
