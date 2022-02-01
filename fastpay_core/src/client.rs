@@ -193,14 +193,13 @@ pub trait Client {
     /// Get all object we own.
     async fn get_owned_objects(&self) -> Vec<ObjectID>;
 
-    async fn fetch_and_store_objects(
+    async fn download_objects_from_all_authorities(
         &self,
-        object_refs: Vec<ObjectRef>,
     ) -> Result<HashSet<ObjectID>, FastPayError>;
 }
 
 impl<A> ClientState<A> {
-    // It is recommended that one call sync after constructure to fetch missing info form authorities
+    // It is recommended that one call sync and download_objects_from_all_authorities after constructor to fetch missing info form authorities
     pub fn new(
         path: PathBuf,
         address: FastPayAddress,
@@ -1067,7 +1066,6 @@ where
     /// The caller has to explcity find which objects are locked
     /// TODO: lock only objects that are mutable: https://github.com/MystenLabs/fastnft/issues/305
     fn has_pending_order_conflict(&self, order: &Order) -> Result<bool, FastPayError> {
-        // Need to make this more atomic? At least make more performant
         Ok(self
             .store
             .pending_orders
@@ -1193,7 +1191,9 @@ where
             }
 
             // TODO: decide what to do with failed object downloads
-            let _failed = self.fetch_and_store_objects(objs_to_download).await?;
+            let _failed = self
+                .download_objects_from_all_authorities_helper(objs_to_download)
+                .await?;
 
             for (object_id, seq, _) in &v.effects.deleted {
                 let old_seq = self
@@ -1229,13 +1229,14 @@ where
     }
 
     /// Fetch the objects at the given object id, which do not already exist in the db
+    /// All authorities are polled for each object and their all assumed to be honest
     /// This always returns the latest object known to the authorities
     /// How it works: this function finds all object refs that are not in the DB
     /// then it runs a downloader and submits download requests
     /// Afterwards it persists objects returned by the downloader
     /// It returns a set of the object ids which failed to download
     /// TODO: return failed download errors along with the object if
-    async fn fetch_and_store_objects(
+    async fn download_objects_from_all_authorities_helper(
         &self,
         object_refs: Vec<ObjectRef>,
     ) -> Result<HashSet<ObjectID>, FastPayError> {
@@ -1268,6 +1269,7 @@ where
                 sender,
             ));
         }
+        // Close unused channel
         drop(sender);
         let mut err_object_ids = fresh_object_ids.clone();
         // Receive from the downloader
@@ -1281,12 +1283,12 @@ where
         Ok(err_object_ids)
     }
 
-    /// This function fetches one object at a time, and send back the result over the channel
+    /// This function fetches one object at a time, and sends back the result over the channel
     /// The object ids are also returned so the caller can determine which fetches failed
     /// NOTE: This function assumes all authorities are honest
     async fn fetch_and_store_object(
         authority_clients: HashMap<PublicKeyBytes, A>,
-        committee: Committee,
+        _committee: Committee,
         object_id: ObjectID,
         timeout: Duration,
         sender: tokio::sync::mpsc::UnboundedSender<Result<Object, FastPayError>>,
@@ -1297,25 +1299,38 @@ where
             request_sequence_number: None,
         };
 
-        // Pick a random authority, sampled by stake
-        let authority_name = committee.sample();
-        let authority_client = authority_clients.get(authority_name).unwrap();
+        // Try all authorities. Assume they're all honest
+        let results = future::join_all(authority_clients.iter().map(|(_, ac)| {
+            tokio::time::timeout(timeout, ac.handle_object_info_request(request.clone()))
+        }))
+        .await;
 
-        let ret = match tokio::time::timeout(timeout, {
-            authority_client.handle_object_info_request(request.clone())
-        })
-        .await
-        {
-            Ok(res) => match res {
-                Ok(resp) => Ok(resp.object_and_lock.unwrap().object),
-                Err(e) => Err(e),
-            },
-            Err(e) => Err(FastPayError::ObjectFetchFailed {
-                object_id,
-                err: e.to_string(),
-            }),
-        };
-
+        let mut ret: Result<Object, FastPayError> = Err(FastPayError::ObjectFetchFailed {
+            object_id,
+            err: "No authority returned object".to_string(),
+        });
+        // Find the first non-error value
+        for res in results {
+            ret = match res {
+                Ok(res) => match res {
+                    Ok(resp) => match resp.object_and_lock {
+                        Some(o) => Ok(o.object),
+                        None => Err(FastPayError::ObjectFetchFailed {
+                            object_id,
+                            err: "object_and_lock not returned from authority".to_string(),
+                        }),
+                    },
+                    Err(e) => Err(e),
+                },
+                Err(e) => Err(FastPayError::ObjectFetchFailed {
+                    object_id,
+                    err: e.to_string(),
+                }),
+            };
+            if ret.is_ok() {
+                break;
+            }
+        }
         sender
             .send(ret)
             .expect("Cannot send object on channel after object fetch attempt");
@@ -1563,10 +1578,11 @@ where
         self.store.object_sequence_numbers.keys().collect()
     }
 
-    async fn fetch_and_store_objects(
+    async fn download_objects_from_all_authorities(
         &self,
-        object_refs: Vec<ObjectRef>,
     ) -> Result<HashSet<ObjectID>, FastPayError> {
-        self.fetch_and_store_objects(object_refs).await
+        let object_refs = self.store.object_refs.iter().map(|q| q.1).collect();
+        self.download_objects_from_all_authorities_helper(object_refs)
+            .await
     }
 }

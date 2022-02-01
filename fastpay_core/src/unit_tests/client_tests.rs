@@ -2424,9 +2424,200 @@ async fn test_receive_object_error() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-/// TODO: More ClientStore tests
 #[test]
 fn test_client_store() {
-    let _ = ClientStore::new(env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())));
-    // Need to add more tests
+    let store =
+        ClientStore::new(env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())));
+
+    // Make random sequence numbers
+    let keys_vals = (0..100)
+        .map(|i| (ObjectID::random(), SequenceNumber::from(i)))
+        .collect::<Vec<_>>();
+    // Try insert batch
+    ClientStore::multi_insert(
+        &store.object_sequence_numbers,
+        keys_vals.clone().into_iter(),
+    )
+    .unwrap();
+
+    // Check the size
+    assert_eq!(store.object_sequence_numbers.iter().count(), 100);
+
+    // Check that the items are all correct
+    keys_vals.iter().for_each(|(k, v)| {
+        assert_eq!(*v, store.object_sequence_numbers.get(k).unwrap().unwrap());
+    });
+
+    // Check that are removed
+    ClientStore::multi_remove(
+        &store.object_sequence_numbers,
+        keys_vals.into_iter().map(|(k, _)| k),
+    )
+    .unwrap();
+
+    assert!(store.object_sequence_numbers.is_empty().unwrap());
+}
+
+#[tokio::test]
+async fn test_object_store() {
+    // Init the states
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+
+    let gas_object_id = ObjectID::random();
+
+    // Populate authorities with gas obj data
+    let gas_object = fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client1,
+        vec![gas_object_id],
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .clone();
+    let gas_object_ref = gas_object.clone().to_object_reference();
+    // Ensure that object store is empty
+    assert!(client1.store.objects.is_empty().unwrap());
+
+    // Run a few syncs to retrieve objects ids
+    for _ in 0..4 {
+        let _ = client1
+            .sync_client_state_with_random_authority()
+            .await
+            .unwrap();
+    }
+    // Try to download objects which are not already in storage
+    client1
+        .download_objects_from_all_authorities()
+        .await
+        .unwrap();
+
+    // Gas object should be in storage now
+    assert_eq!(client1.store.objects.iter().count(), 1);
+
+    // Verify that we indeed have the object
+    let gas_obj_from_store = client1.store.objects.get(&gas_object_ref).unwrap().unwrap();
+    assert_eq!(gas_obj_from_store, gas_object);
+
+    // Provide path to well formed package sources
+    let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
+    hero_path.push_str("/../fastx_programmability/examples/");
+
+    let pub_res = client1.publish(hero_path, gas_object_ref).await;
+
+    let (_, published_effects) = pub_res.unwrap();
+
+    // Only package obj should be created
+    assert_eq!(published_effects.created.len(), 1);
+
+    // Verif gas obj
+    assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
+
+    let (new_obj_ref, _) = published_effects.created.get(0).unwrap();
+    assert_ne!(gas_object_ref, *new_obj_ref);
+
+    // We now have the module obj ref
+    // We can inspect it
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+        })
+        .await
+        .unwrap();
+
+    // Published object should be in storage now
+    // But also the new gas object should be in storage, so 2 new items, plus 1 from before
+    assert_eq!(client1.store.objects.iter().count(), 3);
+
+    // Verify that we indeed have the new module object
+    let mod_obj_from_store = client1.store.objects.get(new_obj_ref).unwrap().unwrap();
+    assert_eq!(mod_obj_from_store, *new_obj.object().unwrap());
+}
+
+#[tokio::test]
+async fn test_object_store_transfer() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let mut client2 = make_client(authority_clients.clone(), committee);
+
+    let object_id = ObjectID::random();
+    let gas_object1 = ObjectID::random();
+    let gas_object2 = ObjectID::random();
+
+    fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client1,
+        vec![object_id, gas_object1],
+    )
+    .await;
+    fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client2,
+        vec![gas_object2],
+    )
+    .await;
+
+    // Clients should not have retrieved objects
+    assert_eq!(client1.store.objects.iter().count(), 0);
+    assert_eq!(client2.store.objects.iter().count(), 0);
+
+    // Run a few syncs to populate object ids
+    for _ in 0..4 {
+        let _ = client1
+            .sync_client_state_with_random_authority()
+            .await
+            .unwrap();
+        let _ = client2
+            .sync_client_state_with_random_authority()
+            .await
+            .unwrap();
+    }
+
+    // Try to download objects which are not already in storage
+    client1
+        .download_objects_from_all_authorities()
+        .await
+        .unwrap();
+    client2
+        .download_objects_from_all_authorities()
+        .await
+        .unwrap();
+
+    // Gas object and another object should be in storage now for client 1
+    assert_eq!(client1.store.objects.iter().count(), 2);
+
+    // Only gas object should be in storage now for client 2
+    assert_eq!(client2.store.objects.iter().count(), 1);
+
+    // Transfer object to client2.
+    let certificate = client1
+        .transfer_object(object_id, gas_object1, client2.address)
+        .await
+        .unwrap();
+
+    // Update client2's local object data.
+    client2.receive_object(&certificate).await.unwrap();
+
+    // Client 1 should not have lost its objects
+    // Plus it should have a new gas object
+    assert_eq!(client1.store.objects.iter().count(), 3);
+    // Client 2 should now have the new object
+    assert_eq!(client2.store.objects.iter().count(), 2);
+
+    // Transfer the object back to Client1
+    let certificate = client2
+        .transfer_object(object_id, gas_object2, client1.address)
+        .await
+        .unwrap();
+    // Update client1's local object data.
+    client1.receive_object(&certificate).await.unwrap();
+
+    // Client 1 should have a new version of the object back
+    assert_eq!(client1.store.objects.iter().count(), 4);
+    // Client 2 should have new gas object version
+    assert_eq!(client2.store.objects.iter().count(), 3);
 }
