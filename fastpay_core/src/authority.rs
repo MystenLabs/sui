@@ -394,26 +394,35 @@ impl AuthorityState {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, FastPayError> {
         // Only add a certificate if it is requested
-        let parent_certificate = if let Some(seq) = request.request_sequence_number {
+        let ref_and_digest = if let Some(seq) = request.request_sequence_number {
             // Get the Transaction Digest that created the object
             let parent_iterator = self
                 .get_parent_iterator(request.object_id, Some(seq))
                 .await?;
-            let (_, transaction_digest) =
-                parent_iterator
-                    .first()
-                    .ok_or(FastPayError::ParentNotfound {
-                        object_id: request.object_id,
-                        sequence: seq,
-                    })?;
-            // Get the cert from the transaction digest
-            Some(
-                self.read_certificate(transaction_digest)
-                    .await?
-                    .ok_or(FastPayError::CertificateNotfound)?,
-            )
+
+            parent_iterator
+                .first()
+                .map(|(object_ref, tx_digest)| (*object_ref, *tx_digest))
         } else {
-            None
+            // Or get the latest object_reference and transaction entry.
+            self.get_latest_parent_entry(request.object_id).await?
+        };
+
+        let (requested_object_reference, parent_certificate) = match ref_and_digest {
+            Some((object_ref, transaction_digest)) => (
+                Some(object_ref),
+                if transaction_digest == TransactionDigest::genesis() {
+                    None
+                } else {
+                    // Get the cert from the transaction digest
+                    Some(self.read_certificate(&transaction_digest).await?.ok_or(
+                        FastPayError::CertificateNotfound {
+                            certificate_digest: transaction_digest,
+                        },
+                    )?)
+                },
+            ),
+            None => (None, None),
         };
 
         // Always attempt to return the latest version of the object and the
@@ -436,6 +445,7 @@ impl AuthorityState {
 
         Ok(ObjectInfoResponse {
             parent_certificate,
+            requested_object_reference,
             object_and_lock,
         })
     }
@@ -587,5 +597,12 @@ impl AuthorityState {
         {
             self._database.get_parent_iterator(object_id, seq)
         }
+    }
+
+    pub async fn get_latest_parent_entry(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<(ObjectRef, TransactionDigest)>, FastPayError> {
+        self._database.get_latest_parent_entry(object_id)
     }
 }

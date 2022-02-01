@@ -108,14 +108,18 @@ impl Authenticator {
 // We use SHA3-256 hence 32 bytes here
 const TRANSACTION_DIGEST_LENGTH: usize = 32;
 
+pub const SEQUENCE_NUMBER_MAX: SequenceNumber = SequenceNumber(0x7fff_ffff_ffff_ffff);
+pub const OBJECT_DIGEST_MAX: ObjectDigest = ObjectDigest([255; 32]);
+pub const OBJECT_DIGEST_DELETED: ObjectDigest = ObjectDigest([99; 32]);
+
 /// A transaction will have a (unique) digest.
 
 #[serde_as]
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 pub struct TransactionDigest(#[serde_as(as = "Bytes")] [u8; TRANSACTION_DIGEST_LENGTH]);
 // Each object has a unique digest
 #[serde_as]
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 pub struct ObjectDigest(#[serde_as(as = "Bytes")] pub [u8; 32]); // We use SHA3-256 hence 32 bytes here
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("TxContext");
@@ -171,7 +175,9 @@ impl TransactionDigest {
         Self(bytes)
     }
 
-    /// Get the mock digest of the genesis transaction
+    /// A digest we use to signify the parent transaction was the genesis,
+    /// ie. for an object there is no parent digest.
+    ///
     /// TODO(https://github.com/MystenLabs/fastnft/issues/65): we can pick anything here    
     pub fn genesis() -> Self {
         Self::new([0; 32])
@@ -202,6 +208,11 @@ impl TransactionDigest {
 impl ObjectDigest {
     pub fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
+    }
+
+    /// A marker that signifies the object is deleted.
+    pub fn deleted() -> Self {
+        OBJECT_DIGEST_DELETED
     }
 }
 
@@ -355,7 +366,23 @@ impl std::fmt::Debug for Signature {
 impl std::fmt::Debug for PublicKeyBytes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let s = hex::encode(&self.0);
-        write!(f, "{}", s)?;
+        write!(f, "k#{}", s)?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for ObjectDigest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let s = hex::encode(&self.0);
+        write!(f, "o#{}", s)?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for TransactionDigest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let s = hex::encode(&self.0);
+        write!(f, "t#{}", s)?;
         Ok(())
     }
 }
@@ -367,7 +394,7 @@ impl SequenceNumber {
     }
 
     pub fn max() -> Self {
-        SequenceNumber(0x7fff_ffff_ffff_ffff)
+        SEQUENCE_NUMBER_MAX
     }
 
     pub fn value(&self) -> u64 {
