@@ -10,5 +10,4 @@
 #![deny(warnings)]
 
 pub mod config;
-pub mod mass_client;
 pub mod server_lib;
