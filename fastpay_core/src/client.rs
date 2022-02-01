@@ -997,8 +997,12 @@ where
     /// It is important to check that the object is not locked before locking again
     /// One should call has_pending_order_conflict before locking as this overwites the previous lock
     /// If the object is already locked, ensure it is unlocked by calling unlock_pending_order_objects
+    /// Client runs sequentially right now so access to this is safe
     /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/fastnft/issues/335
     fn lock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
+        if self.has_pending_order_conflict(order)? {
+            return Err(FastPayError::ConcurrentTransactionError);
+        }
         ClientStore::multi_insert(
             &self.store.pending_orders,
             order
