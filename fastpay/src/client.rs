@@ -369,7 +369,7 @@ struct ClientOpt {
 
     /// Path to directory for client DB
     #[structopt(long)]
-    path: Option<String>,
+    db_path: Option<String>,
 }
 
 #[derive(StructOpt)]
@@ -477,10 +477,9 @@ fn main() {
     let accounts_config_path = &options.accounts;
     let committee_config_path = &options.committee;
     let buffer_size = options.buffer_size;
-    let client_db_path = env::temp_dir().join(format!(
-        "CLIENT_DB_{}",
-        options.path.unwrap_or_else(|| "0".to_string())
-    ));
+    let client_db_path = options
+        .db_path
+        .map_or(env::temp_dir().join("CLIENT_DB_0"), PathBuf::from);
 
     let mut accounts_config =
         AccountsConfig::read_or_create(accounts_config_path).expect("Unable to read user accounts");
@@ -687,8 +686,12 @@ fn main() {
                 println!("{:?}", cert);
                 accounts_config.update_from_state(&client_state);
                 info!("Updating recipient's local balance");
+
+                let client2_db_path = env::temp_dir().join("CLIENT_DB_1");
+                // TODO: client should manage multiple addresses instead of each addr having DBs
+                // https://github.com/MystenLabs/fastnft/issues/332
                 let mut recipient_client_state = make_client_state_and_try_sync(
-                    client_db_path,
+                    client2_db_path,
                     &accounts_config,
                     &committee_config,
                     to,

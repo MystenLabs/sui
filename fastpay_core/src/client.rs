@@ -24,6 +24,7 @@ use tokio::time::timeout;
 
 mod client_store;
 use self::client_store::ClientStore;
+const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
 
 #[cfg(test)]
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
@@ -192,13 +193,16 @@ pub trait Client {
     /// Get all object we own.
     async fn get_owned_objects(&self) -> Vec<ObjectID>;
 
-    async fn download_objects_from_all_authorities(
+    async fn download_own_objects_from_all_authorities(
         &self,
-    ) -> Result<HashSet<ObjectID>, FastPayError>;
+    ) -> Result<HashSet<ObjectRef>, FastPayError>;
 }
 
 impl<A> ClientState<A> {
-    // It is recommended that one call sync and download_objects_from_all_authorities after constructor to fetch missing info form authorities
+    /// It is recommended that one call sync and download_own_objects_from_all_authorities
+    /// right after constructor to fetch missing info form authorities
+    /// TODO: client should manage multiple addresses instead of each addr having DBs
+    /// https://github.com/MystenLabs/fastnft/issues/332
     pub fn new(
         path: PathBuf,
         address: FastPayAddress,
@@ -280,11 +284,11 @@ impl<A> ClientState<A> {
     pub fn insert_object_info(
         &mut self,
         object_ref: &ObjectRef,
-        digest: &TransactionDigest,
+        parent_tx_digest: &TransactionDigest,
     ) -> Result<(), FastPayError> {
         let (object_id, seq, _) = object_ref;
         let mut tx_digests = self.store.object_certs.get(object_id)?.unwrap_or_default();
-        tx_digests.push(*digest);
+        tx_digests.push(*parent_tx_digest);
 
         // Multi table atomic insert using batches
         let batch = self
@@ -632,11 +636,7 @@ where
                 let fut = client.handle_object_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => {
-                            // TODO(https://github.com/MystenLabs/fastnft/issues/323): This assumes the object is not deleted.
-                            let current_sequence_number = info.object().unwrap().version();
-                            Some((*name, current_sequence_number))
-                        }
+                        Ok(info) => info.object().map(|obj| (*name, obj.version())),
                         _ => None,
                     }
                 }
@@ -1165,8 +1165,8 @@ where
         if let Some(v) = order_info_resp.signed_effects {
             // The cert should be included in the response
             let cert = order_info_resp.certified_order.unwrap();
-            let digest = cert.order.digest();
-            self.store.certificates.insert(&digest, &cert)?;
+            let parent_tx_digest = cert.order.digest();
+            self.store.certificates.insert(&parent_tx_digest, &cert)?;
 
             let mut objs_to_download = Vec::new();
 
@@ -1180,7 +1180,7 @@ where
                 // only update if data is new
                 if old_seq < seq {
                     if owner.is_address(&self.address) {
-                        self.insert_object_info(&object_ref, &digest)?;
+                        self.insert_object_info(&object_ref, &parent_tx_digest)?;
                         objs_to_download.push(object_ref);
                     } else {
                         self.remove_object_info(&object_id)?;
@@ -1193,7 +1193,7 @@ where
 
             // TODO: decide what to do with failed object downloads
             let _failed = self
-                .download_objects_from_all_authorities_helper(objs_to_download)
+                .download_own_objects_from_all_authorities_helper(objs_to_download)
                 .await?;
 
             for (object_id, seq, _) in &v.effects.deleted {
@@ -1237,14 +1237,14 @@ where
     /// Afterwards it persists objects returned by the downloader
     /// It returns a set of the object ids which failed to download
     /// TODO: return failed download errors along with the object if
-    async fn download_objects_from_all_authorities_helper(
+    async fn download_own_objects_from_all_authorities_helper(
         &self,
         object_refs: Vec<ObjectRef>,
-    ) -> Result<HashSet<ObjectID>, FastPayError> {
+    ) -> Result<HashSet<ObjectRef>, FastPayError> {
         // Check the DB
         // This could be expensive. Might want to use object_ref table
         // We want items that are NOT in the table
-        let fresh_object_ids = self
+        let fresh_object_refs = self
             .store
             .objects
             .multi_get(&object_refs)?
@@ -1252,35 +1252,35 @@ where
             .zip(object_refs)
             .filter_map(|(object, ref_)| match object {
                 Some(_) => None,
-                None => Some(ref_.0),
+                None => Some(ref_),
             })
             .collect::<HashSet<_>>();
 
         // Send request to download
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(OBJECT_DOWNLOAD_CHANNEL_BOUND);
 
         // Now that we have all the fresh ids, dispatch fetches
-        for object_id in fresh_object_ids.clone() {
+        for object_ref in fresh_object_refs.clone() {
             let sender = sender.clone();
             tokio::spawn(ClientState::fetch_and_store_object(
                 self.authority_clients.clone(),
-                object_id,
+                object_ref,
                 AUTHORITY_REQUEST_TIMEOUT,
                 sender,
             ));
         }
         // Close unused channel
         drop(sender);
-        let mut err_object_ids = fresh_object_ids.clone();
+        let mut err_object_refs = fresh_object_refs.clone();
         // Receive from the downloader
         while let Some(resp) = receiver.recv().await {
             // Persists them to disk
             if let Ok(o) = resp {
                 self.store.objects.insert(&o.to_object_reference(), &o)?;
-                err_object_ids.remove(&o.to_object_reference().0);
+                err_object_refs.remove(&o.to_object_reference());
             }
         }
-        Ok(err_object_ids)
+        Ok(err_object_refs)
     }
 
     /// This function fetches one object at a time, and sends back the result over the channel
@@ -1288,24 +1288,27 @@ where
     /// NOTE: This function assumes all authorities are honest
     async fn fetch_and_store_object(
         authority_clients: HashMap<PublicKeyBytes, A>,
-        object_id: ObjectID,
+        object_ref: ObjectRef,
         timeout: Duration,
-        sender: tokio::sync::mpsc::UnboundedSender<Result<Object, FastPayError>>,
+        sender: tokio::sync::mpsc::Sender<Result<Object, FastPayError>>,
     ) {
+        let object_id = object_ref.0;
         // Prepare the request
         let request = ObjectInfoRequest {
             object_id,
             request_sequence_number: None,
         };
 
-        // Try all authorities. Assume they're all honest
+        // For now assume all authorities. Assume they're all honest
+        // This assumption is woeful, and should be fixed
+        // TODO: https://github.com/MystenLabs/fastnft/issues/320
         let results = future::join_all(authority_clients.iter().map(|(_, ac)| {
             tokio::time::timeout(timeout, ac.handle_object_info_request(request.clone()))
         }))
         .await;
 
         let mut ret: Result<Object, FastPayError> = Err(FastPayError::ObjectFetchFailed {
-            object_id,
+            object_id: object_ref.0,
             err: "No authority returned object".to_string(),
         });
         // Find the first non-error value
@@ -1313,7 +1316,17 @@ where
             ret = match res {
                 Ok(res) => match res {
                     Ok(resp) => match resp.object_and_lock {
-                        Some(o) => Ok(o.object),
+                        Some(o) => {
+                            if o.object.digest() == object_ref.2 {
+                                Ok(o.object)
+                            } else {
+                                Err(FastPayError::ObjectFetchFailed {
+                                    object_id,
+                                    err: "Proper object digest not returned from authority"
+                                        .to_string(),
+                                })
+                            }
+                        }
                         None => Err(FastPayError::ObjectFetchFailed {
                             object_id,
                             err: "object_and_lock not returned from authority".to_string(),
@@ -1332,6 +1345,7 @@ where
         }
         sender
             .send(ret)
+            .await
             .expect("Cannot send object on channel after object fetch attempt");
     }
 }
@@ -1412,7 +1426,6 @@ where
                     })
                     .await?;
 
-                // TODO(https://github.com/MystenLabs/fastnft/issues/323): This assumes object is not deleted.
                 let object = &response
                     .object_and_lock
                     .ok_or(FastPayError::ObjectNotFound {
@@ -1490,6 +1503,7 @@ where
             .map(|(_, ord)| ord)
             .collect();
         // Need some kind of timeout or max_trials here?
+        // TODO: https://github.com/MystenLabs/fastnft/issues/330
         for order in unique_pending_orders {
             self.execute_transaction(order.clone()).await.map_err(|e| {
                 FastPayError::ErrorWhileProcessingTransactionOrder { err: e.to_string() }
@@ -1576,11 +1590,11 @@ where
         self.store.object_sequence_numbers.keys().collect()
     }
 
-    async fn download_objects_from_all_authorities(
+    async fn download_own_objects_from_all_authorities(
         &self,
-    ) -> Result<HashSet<ObjectID>, FastPayError> {
+    ) -> Result<HashSet<ObjectRef>, FastPayError> {
         let object_refs = self.store.object_refs.iter().map(|q| q.1).collect();
-        self.download_objects_from_all_authorities_helper(object_refs)
+        self.download_own_objects_from_all_authorities_helper(object_refs)
             .await
     }
 }

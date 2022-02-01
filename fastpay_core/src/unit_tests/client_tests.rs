@@ -1360,7 +1360,7 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
     // This is (finally) the function we want to test
 
     // If we try to sync from the authority that does not have the data to the one
-    // that does we fail.
+    // that does not have the data we fail.
     let result = client1
         .sync_authority_source_to_destination(
             ConfirmationOrder::new(last_certificate.clone()),
@@ -2491,7 +2491,7 @@ async fn test_object_store() {
     }
     // Try to download objects which are not already in storage
     client1
-        .download_objects_from_all_authorities()
+        .download_own_objects_from_all_authorities()
         .await
         .unwrap();
 
@@ -2579,11 +2579,11 @@ async fn test_object_store_transfer() {
 
     // Try to download objects which are not already in storage
     client1
-        .download_objects_from_all_authorities()
+        .download_own_objects_from_all_authorities()
         .await
         .unwrap();
     client2
-        .download_objects_from_all_authorities()
+        .download_own_objects_from_all_authorities()
         .await
         .unwrap();
 
