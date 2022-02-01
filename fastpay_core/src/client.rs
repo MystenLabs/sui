@@ -1106,6 +1106,8 @@ where
         &mut self,
         order: Order,
     ) -> Result<CertifiedOrder, anyhow::Error> {
+        // Return error if conflict
+        // Ideally the caller should be notified
         fp_ensure!(
             !self.has_pending_order_conflict(&order)?,
             FastPayError::ConcurrentTransactionError.into()
@@ -1263,7 +1265,6 @@ where
             let sender = sender.clone();
             tokio::spawn(ClientState::fetch_and_store_object(
                 self.authority_clients.clone(),
-                self.committee.clone(),
                 object_id,
                 AUTHORITY_REQUEST_TIMEOUT,
                 sender,
@@ -1288,7 +1289,6 @@ where
     /// NOTE: This function assumes all authorities are honest
     async fn fetch_and_store_object(
         authority_clients: HashMap<PublicKeyBytes, A>,
-        _committee: Committee,
         object_id: ObjectID,
         timeout: Duration,
         sender: tokio::sync::mpsc::UnboundedSender<Result<Object, FastPayError>>,
@@ -1484,19 +1484,18 @@ where
 
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError> {
         // Orders are idempotent so no need to prevent multiple executions
-        let mut dispatched_orders = HashSet::new();
-        let pending_orders: BTreeMap<_, _> = self.store.pending_orders.iter().collect();
+        let unique_pending_orders: HashSet<_> = self
+            .store
+            .pending_orders
+            .iter()
+            .map(|(_, ord)| ord)
+            .collect();
         // Need some kind of timeout or max_trials here?
-        for (_, order) in pending_orders {
-            let digest = order.digest();
-            if dispatched_orders.contains(&digest) {
-                continue;
-            }
+        for order in unique_pending_orders {
             self.execute_transaction(order.clone()).await.map_err(|e| {
                 FastPayError::ErrorWhileProcessingTransactionOrder { err: e.to_string() }
             })?;
             self.unlock_pending_order_objects(&order)?;
-            dispatched_orders.insert(digest);
         }
         Ok(())
     }
