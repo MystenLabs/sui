@@ -65,7 +65,11 @@ module FastX::ID {
     /// Get the ID for `obj`. Safe because fastX has an extra
     /// bytecode verifier pass that forces every struct with
     /// the `key` ability to have a distinguished `ID` field.
-    public native fun get_id<T: key>(obj: &T): &ID;
+    //public native fun get_id<T: key>(obj: &T): &ID;
+    public fun get_id<T: key>(_obj: &T): &ID {
+        // TODO: implement native function for this.
+        abort(0)
+    }
 
     public native fun bytes_to_address(bytes: vector<u8>): address;
 }
