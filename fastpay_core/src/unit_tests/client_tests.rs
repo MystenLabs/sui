@@ -101,7 +101,7 @@ impl LocalAuthorityClient {
 #[cfg(test)]
 async fn init_local_authorities(
     count: usize,
-) -> (HashMap<AuthorityName, LocalAuthorityClient>, Committee) {
+) -> (BTreeMap<AuthorityName, LocalAuthorityClient>, Committee) {
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for _ in 0..count {
@@ -111,7 +111,7 @@ async fn init_local_authorities(
     }
     let committee = Committee::new(voting_rights);
 
-    let mut clients = HashMap::new();
+    let mut clients = BTreeMap::new();
     for (address, secret) in key_pairs {
         // Random directory for the DB
         let dir = env::temp_dir();
@@ -133,7 +133,7 @@ async fn init_local_authorities(
 #[cfg(test)]
 fn init_local_authorities_bad_1(
     count: usize,
-) -> (HashMap<AuthorityName, LocalAuthorityClient>, Committee) {
+) -> (BTreeMap<AuthorityName, LocalAuthorityClient>, Committee) {
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for i in 0..count {
@@ -148,7 +148,7 @@ fn init_local_authorities_bad_1(
     }
     let committee = Committee::new(voting_rights);
 
-    let mut clients = HashMap::new();
+    let mut clients = BTreeMap::new();
     for (address, secret) in key_pairs {
         // Random directory
         let dir = env::temp_dir();
@@ -171,11 +171,12 @@ fn init_local_authorities_bad_1(
 
 #[cfg(test)]
 fn make_client(
-    authority_clients: HashMap<AuthorityName, LocalAuthorityClient>,
+    authority_clients: BTreeMap<AuthorityName, LocalAuthorityClient>,
     committee: Committee,
 ) -> ClientState<LocalAuthorityClient> {
     let (address, secret) = get_key_pair();
     ClientState::new(
+        env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
         address,
         secret,
         committee,
@@ -183,6 +184,7 @@ fn make_client(
         BTreeMap::new(),
         BTreeMap::new(),
     )
+    .unwrap()
 }
 
 #[cfg(test)]
@@ -213,9 +215,15 @@ async fn fund_account(
             client_ref.init_order_lock(object_ref).await;
             client_ref.insert_object(object).await;
             client
+                .store
                 .object_sequence_numbers
-                .insert(object_id, SequenceNumber::new());
-            client.object_refs.insert(object_id, object_ref);
+                .insert(&object_id, &SequenceNumber::new())
+                .unwrap();
+            client
+                .store
+                .object_refs
+                .insert(&object_id, &object_ref)
+                .unwrap();
         }
     }
     created_objects
@@ -339,7 +347,7 @@ fn test_initiating_valid_transfer() {
             object_id: object_id_1
         })
     );
-    assert_eq!(sender.pending_transfer, None);
+    assert!(sender.store.pending_orders.is_empty().unwrap());
     assert_eq!(
         rt.block_on(sender.get_strong_majority_owner(object_id_1)),
         Some((Authenticator::Address(recipient), SequenceNumber::from(1)))
@@ -385,7 +393,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
         sender.next_sequence_number(&object_id),
         Err(ObjectNotFound { object_id })
     );
-    assert_eq!(sender.pending_transfer, None);
+    assert!(sender.store.pending_orders.is_empty().unwrap());
     assert_eq!(
         rt.block_on(sender.get_strong_majority_owner(object_id)),
         Some((Authenticator::Address(recipient), SequenceNumber::from(1)))
@@ -483,8 +491,7 @@ async fn test_bidirectional_transfer() {
         .await
         .unwrap();
 
-    assert_eq!(client1.pending_transfer, None);
-
+    assert!(client1.store.pending_orders.is_empty().unwrap());
     // Confirm client1 lose ownership of the object.
     assert_eq!(
         client1.get_strong_majority_owner(object_id).await,
@@ -530,7 +537,7 @@ async fn test_bidirectional_transfer() {
         .await
         .unwrap();
 
-    assert_eq!(client2.pending_transfer, None);
+    assert!((client2.store.pending_orders.is_empty().unwrap()));
 
     // Confirm client2 lose ownership of the object.
     assert_eq!(
@@ -588,7 +595,8 @@ fn test_receiving_unconfirmed_transfer() {
         client1.next_sequence_number(&object_id),
         Ok(SequenceNumber::from(1))
     );
-    assert_eq!(client1.pending_transfer, None);
+
+    assert!((client1.store.pending_orders.is_empty().unwrap()));
     // ..but not confirmed remotely, hence an unchanged balance and sequence number.
     assert_eq!(
         rt.block_on(client1.get_strong_majority_owner(object_id)),
@@ -623,31 +631,30 @@ fn test_client_state_sync() {
 
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
 
-    let old_object_ids = sender.object_sequence_numbers.copy_as_btree_map();
-    let old_certificates = sender.certificates.copy_as_btree_map();
+    let old_object_ids: BTreeMap<_, _> = sender.store.object_sequence_numbers.iter().collect();
+    let old_certificates: BTreeMap<_, _> = sender.store.certificates.iter().collect();
 
     // Remove all client-side data
-    sender.object_sequence_numbers.clear();
-    sender.certificates.clear();
-    assert!(rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
-    assert!(sender.object_sequence_numbers.is_empty());
-    assert!(sender.certificates.is_empty());
+    sender.store.object_sequence_numbers.clear().unwrap();
+    sender.store.certificates.clear().unwrap();
+    sender.store.object_refs.clear().unwrap();
+    assert!(rt.block_on(sender.get_owned_objects()).is_empty());
 
     // Sync client state
     rt.block_on(sender.sync_client_state_with_random_authority())
         .unwrap();
 
     // Confirm data are the same after sync
-    assert!(!rt.block_on(sender.get_owned_objects()).unwrap().is_empty());
+    assert!(!rt.block_on(sender.get_owned_objects()).is_empty());
     assert_eq!(
-        old_object_ids,
-        sender.object_sequence_numbers.copy_as_btree_map()
+        &old_object_ids,
+        &sender.store.object_sequence_numbers.iter().collect()
     );
     for tx_digest in old_certificates.keys() {
         // valid since our test authority should not lead us to download new certs
         compare_certified_orders(
-            &old_certificates[tx_digest],
-            &sender.certificates.get(tx_digest).unwrap(),
+            old_certificates.get(tx_digest).unwrap(),
+            &sender.store.certificates.get(tx_digest).unwrap().unwrap(),
         );
     }
 }
@@ -686,9 +693,9 @@ async fn test_client_state_sync_with_transferred_object() {
     );
 
     // Client 2's local object_id and cert should be empty before sync
-    assert!(client2.get_owned_objects().await.unwrap().is_empty());
-    assert!(client2.object_sequence_numbers.is_empty());
-    assert!(client2.certificates.is_empty());
+    assert!(client2.get_owned_objects().await.is_empty());
+    assert!(client2.store.object_sequence_numbers.is_empty().unwrap());
+    assert!(&client2.store.certificates.is_empty().unwrap());
 
     // Sync client state
     client2
@@ -697,9 +704,9 @@ async fn test_client_state_sync_with_transferred_object() {
         .unwrap();
 
     // Confirm client 2 received the new object id and cert
-    assert_eq!(1, client2.get_owned_objects().await.unwrap().len());
-    assert_eq!(1, client2.object_sequence_numbers.len());
-    assert_eq!(1, client2.certificates.len());
+    assert_eq!(1, client2.get_owned_objects().await.len());
+    assert_eq!(1, client2.store.object_sequence_numbers.iter().count());
+    assert_eq!(1, client2.store.certificates.iter().count());
 }
 
 #[tokio::test]
@@ -749,12 +756,25 @@ async fn test_client_certificate_state() {
         .await
         .unwrap();
     // Should have 2 certs after 2 transfer
-    assert_eq!(2, client1.certificates.len());
+    assert_eq!(2, client1.store.certificates.iter().count());
     // Only gas_object left in account, so object_certs link should only have 1 entry
-    assert_eq!(1, client1.object_certs.len());
+    assert_eq!(1, client1.store.object_certs.iter().count());
     // it should have 2 certificates associated with the gas object
-    assert!(client1.object_certs.contains_key(&gas_object_id_1));
-    assert_eq!(2, client1.object_certs.get(&gas_object_id_1).unwrap().len());
+    assert!(client1
+        .store
+        .object_certs
+        .contains_key(&gas_object_id_1)
+        .unwrap());
+    assert_eq!(
+        2,
+        client1
+            .store
+            .object_certs
+            .get(&gas_object_id_1)
+            .unwrap()
+            .unwrap()
+            .len()
+    );
     // Sequence number should be 2 for gas object after 2 mutation.
     assert_eq!(
         Ok(SequenceNumber::from(2)),
@@ -767,11 +787,37 @@ async fn test_client_certificate_state() {
         .unwrap();
 
     // Client 2 should retrieve 2 certificates for the 2 transactions after sync
-    assert_eq!(2, client2.certificates.len());
-    assert!(client2.object_certs.contains_key(&object_id_1));
-    assert!(client2.object_certs.contains_key(&object_id_2));
-    assert_eq!(1, client2.object_certs.get(&object_id_1).unwrap().len());
-    assert_eq!(1, client2.object_certs.get(&object_id_2).unwrap().len());
+    assert_eq!(2, client2.store.certificates.iter().count());
+    assert!(client2
+        .store
+        .object_certs
+        .contains_key(&object_id_1)
+        .unwrap());
+    assert!(client2
+        .store
+        .object_certs
+        .contains_key(&object_id_2)
+        .unwrap());
+    assert_eq!(
+        1,
+        client2
+            .store
+            .object_certs
+            .get(&object_id_1)
+            .unwrap()
+            .unwrap()
+            .len()
+    );
+    assert_eq!(
+        1,
+        client2
+            .store
+            .object_certs
+            .get(&object_id_2)
+            .unwrap()
+            .unwrap()
+            .len()
+    );
     // Sequence number for object 1 and 2 should be 1 after 1 mutation.
     assert_eq!(
         Ok(SequenceNumber::from(1)),
@@ -787,21 +833,64 @@ async fn test_client_certificate_state() {
         .await
         .unwrap();
 
-    assert_eq!(3, client2.certificates.len());
-    assert!(client2.object_certs.contains_key(&object_id_1));
-    assert!(!client2.object_certs.contains_key(&object_id_2));
-    assert!(client2.object_certs.contains_key(&gas_object_id_2));
-    assert_eq!(1, client2.object_certs.get(&object_id_1).unwrap().len());
-    assert_eq!(1, client2.object_certs.get(&gas_object_id_2).unwrap().len());
+    assert_eq!(3, client2.store.certificates.iter().count());
+    assert!(client2
+        .store
+        .object_certs
+        .contains_key(&object_id_1)
+        .unwrap());
+    assert!(!client2
+        .store
+        .object_certs
+        .contains_key(&object_id_2)
+        .unwrap());
+    assert!(client2
+        .store
+        .object_certs
+        .contains_key(&gas_object_id_2)
+        .unwrap());
+    assert_eq!(
+        1,
+        client2
+            .store
+            .object_certs
+            .get(&object_id_1)
+            .unwrap()
+            .unwrap()
+            .len()
+    );
+    assert_eq!(
+        1,
+        client2
+            .store
+            .object_certs
+            .get(&gas_object_id_2)
+            .unwrap()
+            .unwrap()
+            .len()
+    );
 
     client1
         .sync_client_state_with_random_authority()
         .await
         .unwrap();
 
-    assert_eq!(3, client1.certificates.len());
-    assert!(client1.object_certs.contains_key(&object_id_2));
-    assert_eq!(2, client1.object_certs.get(&object_id_2).unwrap().len());
+    assert_eq!(3, client1.store.certificates.iter().count());
+    assert!(client1
+        .store
+        .object_certs
+        .contains_key(&object_id_2)
+        .unwrap());
+    assert_eq!(
+        2,
+        client1
+            .store
+            .object_certs
+            .get(&object_id_2)
+            .unwrap()
+            .unwrap()
+            .len()
+    );
 }
 
 #[tokio::test]
@@ -1271,7 +1360,7 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
     // This is (finally) the function we want to test
 
     // If we try to sync from the authority that does not have the data to the one
-    // that does we fail.
+    // that does not have the data we fail.
     let result = client1
         .sync_authority_source_to_destination(
             ConfirmationOrder::new(last_certificate.clone()),
@@ -1734,27 +1823,61 @@ async fn test_move_calls_certs() {
     let (new_object_id, _, _) = &new_object_ref;
 
     // Client 1 should have one certificate, one new object and one gas object, each with one associated certificate.
-    assert!(client1.certificates.contains_key(&cert.order.digest()));
-    assert_eq!(1, client1.certificates.len());
-    assert_eq!(2, client1.object_sequence_numbers.len());
-    assert_eq!(2, client1.object_certs.len());
-    assert!(client1.object_certs.contains_key(&gas_object_id));
-    assert!(client1.object_certs.contains_key(new_object_id));
-    assert_eq!(1, client1.object_certs.get(&gas_object_id).unwrap().len());
-    assert_eq!(1, client1.object_certs.get(new_object_id).unwrap().len());
+    assert!(client1
+        .store
+        .certificates
+        .contains_key(&cert.order.digest())
+        .unwrap());
+    assert_eq!(1, client1.store.certificates.iter().count());
+    assert_eq!(2, client1.store.object_sequence_numbers.iter().count());
+    assert_eq!(2, client1.store.object_certs.iter().count());
+    assert!(client1
+        .store
+        .object_certs
+        .contains_key(&gas_object_id)
+        .unwrap());
+    assert!(client1
+        .store
+        .object_certs
+        .contains_key(new_object_id)
+        .unwrap());
+    assert_eq!(
+        1,
+        client1
+            .store
+            .object_certs
+            .get(&gas_object_id)
+            .unwrap()
+            .unwrap()
+            .len()
+    );
+    assert_eq!(
+        1,
+        client1
+            .store
+            .object_certs
+            .get(new_object_id)
+            .unwrap()
+            .unwrap()
+            .len()
+    );
     assert_eq!(
         OBJECT_START_VERSION,
         client1
+            .store
             .object_sequence_numbers
             .get(&gas_object_id)
+            .unwrap()
             .unwrap()
             .clone()
     );
     assert_eq!(
         OBJECT_START_VERSION,
         client1
+            .store
             .object_sequence_numbers
             .get(new_object_id)
+            .unwrap()
             .unwrap()
             .clone()
     );
@@ -1776,17 +1899,36 @@ async fn test_move_calls_certs() {
         .unwrap();
 
     // Client 1 should have two certificate, one gas object, with two associated certificate.
-    assert!(client1.certificates.contains_key(&cert.order.digest()));
-    assert_eq!(2, client1.certificates.len());
-    assert_eq!(1, client1.object_sequence_numbers.len());
-    assert_eq!(1, client1.object_certs.len());
-    assert!(client1.object_certs.contains_key(&gas_object_id));
-    assert_eq!(2, client1.object_certs.get(&gas_object_id).unwrap().len());
+    assert!(client1
+        .store
+        .certificates
+        .contains_key(&cert.order.digest())
+        .unwrap());
+    assert_eq!(client1.store.certificates.iter().count(), 2);
+    assert_eq!(client1.store.object_sequence_numbers.iter().count(), 1);
+    assert_eq!(client1.store.object_certs.iter().count(), 1);
+    assert!(client1
+        .store
+        .object_certs
+        .contains_key(&gas_object_id)
+        .unwrap());
+    assert_eq!(
+        2,
+        client1
+            .store
+            .object_certs
+            .get(&gas_object_id)
+            .unwrap()
+            .unwrap()
+            .len()
+    );
     assert_eq!(
         SequenceNumber::from(2),
         client1
+            .store
             .object_sequence_numbers
             .get(&gas_object_id)
+            .unwrap()
             .unwrap()
             .clone()
     );
@@ -1798,16 +1940,31 @@ async fn test_move_calls_certs() {
         .unwrap();
 
     // Client 2 should have 2 certificate, one new object, with two associated certificate.
-    assert_eq!(2, client2.certificates.len());
-    assert_eq!(1, client2.object_sequence_numbers.len());
-    assert_eq!(1, client2.object_certs.len());
-    assert!(client2.object_certs.contains_key(new_object_id));
-    assert_eq!(2, client2.object_certs.get(new_object_id).unwrap().len());
+    assert_eq!(2, client2.store.certificates.iter().count());
+    assert_eq!(1, client2.store.object_sequence_numbers.iter().count());
+    assert_eq!(1, client2.store.object_certs.iter().count());
+    assert!(client2
+        .store
+        .object_certs
+        .contains_key(new_object_id)
+        .unwrap());
+    assert_eq!(
+        2,
+        client2
+            .store
+            .object_certs
+            .get(new_object_id)
+            .unwrap()
+            .unwrap()
+            .len()
+    );
     assert_eq!(
         SequenceNumber::from(2),
         client2
+            .store
             .object_sequence_numbers
             .get(new_object_id)
+            .unwrap()
             .unwrap()
             .clone()
     );
@@ -2119,11 +2276,15 @@ fn test_transfer_object_error() {
     // Test 2: Object not known to authorities
     let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender.address);
     sender
+        .store
         .object_refs
-        .insert(obj.id(), obj.to_object_reference());
+        .insert(&obj.id(), &obj.to_object_reference())
+        .unwrap();
     sender
+        .store
         .object_sequence_numbers
-        .insert(obj.id(), SequenceNumber::new());
+        .insert(&obj.id(), &SequenceNumber::new())
+        .unwrap();
     let result = rt.block_on(sender.transfer_object(obj.id(), gas_object, recipient));
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err().downcast_ref(),
@@ -2133,10 +2294,14 @@ fn test_transfer_object_error() {
     let object_id = *objects.next().unwrap();
 
     // give object an incorrect object digest
-    sender.object_refs.insert(
-        object_id,
-        (object_id, SequenceNumber::new(), ObjectDigest([0; 32])),
-    );
+    sender
+        .store
+        .object_refs
+        .insert(
+            &object_id,
+            &(object_id, SequenceNumber::new(), ObjectDigest([0; 32])),
+        )
+        .unwrap();
 
     let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
     assert!(result.is_err());
@@ -2148,8 +2313,10 @@ fn test_transfer_object_error() {
 
     // give object an incorrect sequence number
     sender
+        .store
         .object_sequence_numbers
-        .insert(object_id, SequenceNumber::from(2));
+        .insert(&object_id, &SequenceNumber::from(2))
+        .unwrap();
 
     let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
     assert!(result.is_err());
@@ -2167,7 +2334,12 @@ fn test_transfer_object_error() {
         object_ref: (object_id, Default::default(), ObjectDigest::new([0; 32])),
         gas_payment: (gas_object, Default::default(), ObjectDigest::new([0; 32])),
     };
-    sender.pending_transfer = Some(Order::new(OrderKind::Transfer(transfer), &get_key_pair().1));
+    sender
+        .lock_pending_order_objects(&Order::new(
+            OrderKind::Transfer(transfer),
+            &get_key_pair().1,
+        ))
+        .unwrap();
 
     let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
     assert!(result.is_err());
@@ -2254,70 +2426,198 @@ async fn test_receive_object_error() -> Result<(), anyhow::Error> {
 
 #[test]
 fn test_client_store() {
-    let path = match tempfile::tempdir() {
-        Ok(p) => p.into_path(),
-        Err(_) => env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
-    };
-    let bt_a: BTreeMap<i32, ObjectID> = [
-        (1, ObjectID::random()),
-        (2, ObjectID::random()),
-        (3, ObjectID::random()),
-        (4, ObjectID::random()),
-    ]
+    let store =
+        ClientStore::new(env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())));
+
+    // Make random sequence numbers
+    let keys_vals = (0..100)
+        .map(|i| (ObjectID::random(), SequenceNumber::from(i)))
+        .collect::<Vec<_>>();
+    // Try insert batch
+    ClientStore::multi_insert(
+        &store.object_sequence_numbers,
+        keys_vals.clone().into_iter(),
+    )
+    .unwrap();
+
+    // Check the size
+    assert_eq!(store.object_sequence_numbers.iter().count(), 100);
+
+    // Check that the items are all correct
+    keys_vals.iter().for_each(|(k, v)| {
+        assert_eq!(*v, store.object_sequence_numbers.get(k).unwrap().unwrap());
+    });
+
+    // Check that are removed
+    ClientStore::multi_remove(
+        &store.object_sequence_numbers,
+        keys_vals.into_iter().map(|(k, _)| k),
+    )
+    .unwrap();
+
+    assert!(store.object_sequence_numbers.is_empty().unwrap());
+}
+
+#[tokio::test]
+async fn test_object_store() {
+    // Init the states
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+
+    let gas_object_id = ObjectID::random();
+
+    // Populate authorities with gas obj data
+    let gas_object = fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client1,
+        vec![gas_object_id],
+    )
+    .await
     .iter()
-    .cloned()
-    .collect();
+    .next()
+    .unwrap()
+    .1
+    .clone();
+    let gas_object_ref = gas_object.clone().to_object_reference();
+    // Ensure that object store is empty
+    assert!(client1.store.objects.is_empty().unwrap());
 
-    let bt_b: BTreeMap<i32, ObjectID> = [
-        (8, ObjectID::random()),
-        (9, ObjectID::random()),
-        (0, ObjectID::random()),
-        (12, ObjectID::random()),
-        (19, ObjectID::random()),
-    ]
-    .iter()
-    .cloned()
-    .collect();
+    // Run a few syncs to retrieve objects ids
+    for _ in 0..4 {
+        let _ = client1
+            .sync_client_state_with_random_authority()
+            .await
+            .unwrap();
+    }
+    // Try to download objects which are not already in storage
+    client1
+        .download_owned_objects_from_all_authorities()
+        .await
+        .unwrap();
 
-    let db = client_store::init_store(path, vec!["la", "lb"]);
-    let dba: ClientStoreMap<i32, ObjectID> = ClientStoreMap::new(&db, "la");
-    let dbb: ClientStoreMap<i32, ObjectID> = ClientStoreMap::new(&db, "lb");
+    // Gas object should be in storage now
+    assert_eq!(client1.store.objects.iter().count(), 1);
 
-    // Check that they're empty
-    assert_eq!(dba.len(), 0);
-    assert_eq!(dbb.len(), 0);
-    assert!(dba.is_empty());
-    assert!(dbb.is_empty());
+    // Verify that we indeed have the object
+    let gas_obj_from_store = client1.store.objects.get(&gas_object_ref).unwrap().unwrap();
+    assert_eq!(gas_obj_from_store, gas_object);
 
-    // Populate from/to BTreeMap
-    dba.populate_from_btree_map(bt_a.clone());
-    dbb.populate_from_btree_map(bt_b.clone());
-    assert_eq!(dba.copy_as_btree_map(), bt_a);
-    assert_eq!(dbb.copy_as_btree_map(), bt_b);
+    // Provide path to well formed package sources
+    let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
+    hero_path.push_str("/../fastx_programmability/examples/");
 
-    // Test insert & get
-    let first = dba.get(&1).unwrap();
-    dba.insert(1000, first);
-    assert_eq!(dba.len(), bt_a.len() + 1);
+    let pub_res = client1.publish(hero_path, gas_object_ref).await;
 
-    // Test remove
-    assert!(dba.contains_key(&1));
-    dba.remove(&1);
-    assert!(!dba.contains_key(&1));
-    assert_eq!(dba.len(), bt_a.len());
+    let (_, published_effects) = pub_res.unwrap();
 
-    // Test clear
-    dba.clear();
-    assert!(dba.is_empty());
+    // Only package obj should be created
+    assert_eq!(published_effects.created.len(), 1);
 
-    // Test repopulate after clear
-    dba.populate_from_btree_map(bt_a.clone());
-    assert_eq!(dba.copy_as_btree_map(), bt_a);
+    // Verif gas obj
+    assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
 
-    // Test key list
-    let mut keys_bt: Vec<i32> = bt_a.keys().copied().collect();
-    let mut keys_db = dba.key_list();
-    keys_bt.sort_unstable();
-    keys_db.sort_unstable();
-    assert_eq!(keys_db, keys_bt)
+    let (new_obj_ref, _) = published_effects.created.get(0).unwrap();
+    assert_ne!(gas_object_ref, *new_obj_ref);
+
+    // We now have the module obj ref
+    // We can inspect it
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+        })
+        .await
+        .unwrap();
+
+    // Published object should be in storage now
+    // But also the new gas object should be in storage, so 2 new items, plus 1 from before
+    assert_eq!(client1.store.objects.iter().count(), 3);
+
+    // Verify that we indeed have the new module object
+    let mod_obj_from_store = client1.store.objects.get(new_obj_ref).unwrap().unwrap();
+    assert_eq!(mod_obj_from_store, *new_obj.object().unwrap());
+}
+
+#[tokio::test]
+async fn test_object_store_transfer() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let mut client2 = make_client(authority_clients.clone(), committee);
+
+    let object_id = ObjectID::random();
+    let gas_object1 = ObjectID::random();
+    let gas_object2 = ObjectID::random();
+
+    fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client1,
+        vec![object_id, gas_object1],
+    )
+    .await;
+    fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client2,
+        vec![gas_object2],
+    )
+    .await;
+
+    // Clients should not have retrieved objects
+    assert_eq!(client1.store.objects.iter().count(), 0);
+    assert_eq!(client2.store.objects.iter().count(), 0);
+
+    // Run a few syncs to populate object ids
+    for _ in 0..4 {
+        let _ = client1
+            .sync_client_state_with_random_authority()
+            .await
+            .unwrap();
+        let _ = client2
+            .sync_client_state_with_random_authority()
+            .await
+            .unwrap();
+    }
+
+    // Try to download objects which are not already in storage
+    client1
+        .download_owned_objects_from_all_authorities()
+        .await
+        .unwrap();
+    client2
+        .download_owned_objects_from_all_authorities()
+        .await
+        .unwrap();
+
+    // Gas object and another object should be in storage now for client 1
+    assert_eq!(client1.store.objects.iter().count(), 2);
+
+    // Only gas object should be in storage now for client 2
+    assert_eq!(client2.store.objects.iter().count(), 1);
+
+    // Transfer object to client2.
+    let certificate = client1
+        .transfer_object(object_id, gas_object1, client2.address)
+        .await
+        .unwrap();
+
+    // Update client2's local object data.
+    client2.receive_object(&certificate).await.unwrap();
+
+    // Client 1 should not have lost its objects
+    // Plus it should have a new gas object
+    assert_eq!(client1.store.objects.iter().count(), 3);
+    // Client 2 should now have the new object
+    assert_eq!(client2.store.objects.iter().count(), 2);
+
+    // Transfer the object back to Client1
+    let certificate = client2
+        .transfer_object(object_id, gas_object2, client1.address)
+        .await
+        .unwrap();
+    // Update client1's local object data.
+    client1.receive_object(&certificate).await.unwrap();
+
+    // Client 1 should have a new version of the object back
+    assert_eq!(client1.store.objects.iter().count(), 4);
+    // Client 2 should have new gas object version
+    assert_eq!(client2.store.objects.iter().count(), 3);
 }
