@@ -50,10 +50,10 @@ fn make_server(
             store,
         )
         .await;
-        for initial_state_cfg_entry in &initial_accounts_config.config {
-            for object in &initial_state_cfg_entry.objects {
+        for initial_state_cfg_entry in initial_accounts_config.config {
+            for object in initial_state_cfg_entry.objects {
                 state.init_order_lock(object.to_object_reference()).await;
-                state.insert_object(object.clone()).await;
+                state.insert_object(object).await;
             }
         }
         state
