@@ -1358,46 +1358,22 @@ where
         }))
         .await;
 
-        fn obj_fetch_err(id: ObjectID, err: &str) -> Result<Object, FastPayError> {
-            Err(FastPayError::ObjectFetchFailed {
-                object_id: id,
-                err: err.to_owned(),
-            })
-        }
-
         let mut ret_val: Result<Object, FastPayError> = Err(FastPayError::ObjectFetchFailed {
-            object_id: object_ref.0,
-            err: "No authority returned object".to_string(),
+            object_id,
+            err: "No authority returned the correct object".to_string(),
         });
         // Find the first non-error value
         // There are multiple reasons why we might not have an object
         // We can timeout, or the authority returns an error or simply no object
         // When we get an object back, it also might not match the digest we want
-        for result in results {
-            // Check if the result of the call is successful
-            ret_val = match result {
-                Ok(res) => match res {
-                    // Check if the authority actually had an object
-                    Ok(resp) => match resp.object_and_lock {
-                        Some(o) => {
-                            // Check if this is the the object we want
-                            if o.object.digest() == object_ref.2 {
-                                Ok(o.object)
-                            } else {
-                                obj_fetch_err(object_id, "Object digest mismatch")
-                            }
-                        }
-                        None => obj_fetch_err(object_id, "object_and_lock is None"),
-                    },
-                    // Something in FastX failed
-                    Err(e) => Err(e),
-                },
-                // Took too long
-                Err(e) => obj_fetch_err(object_id, e.to_string().as_str()),
-            };
-            // We found a value
-            if ret_val.is_ok() {
-                break;
+        for resp in results.into_iter().flatten().flatten() {
+            match resp.object_and_lock {
+                // did the response match the digest?
+                Some(o) if o.object.digest() == object_ref.2 => {
+                    ret_val = Ok(o.object);
+                    break;
+                }
+                _ => (),
             }
         }
         sender
