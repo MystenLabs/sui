@@ -4,28 +4,29 @@
 use crate::{authority_client::AuthorityAPI, downloader::*};
 use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
+use fastx_types::object::Object;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
 use futures::{future, StreamExt, TryFutureExt};
+use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use rand::seq::SliceRandom;
 use typed_store::rocks::open_cf;
+use typed_store::Map;
 
-use std::collections::HashSet;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::env;
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::time::timeout;
 
 mod client_store;
+use self::client_store::ClientStore;
+const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
 
 #[cfg(test)]
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
-
-use self::client_store::ClientStoreMap;
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -44,19 +45,9 @@ pub struct ClientState<AuthorityAPI> {
     /// Our FastPay committee.
     committee: Committee,
     /// How to talk to this committee.
-    authority_clients: HashMap<AuthorityName, AuthorityAPI>,
-    /// Pending transfer.
-    pending_transfer: Option<Order>,
-
-    // The remaining fields are used to minimize networking, and may not always be persisted locally.
-    /// Known certificates, indexed by TX digest.
-    certificates: ClientStoreMap<TransactionDigest, CertifiedOrder>,
-    /// The known objects with it's sequence number owned by the client.
-    object_sequence_numbers: ClientStoreMap<ObjectID, SequenceNumber>,
-    /// Confirmed objects with it's ref owned by the client.
-    object_refs: ClientStoreMap<ObjectID, ObjectRef>,
-    /// Certificate <-> object id linking map.
-    object_certs: ClientStoreMap<ObjectID, Vec<TransactionDigest>>,
+    authority_clients: BTreeMap<AuthorityName, AuthorityAPI>,
+    /// Persistent store for client
+    store: ClientStore,
 }
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
@@ -81,6 +72,9 @@ pub trait Client {
         object_id: ObjectID,
         gas_payment: ObjectID,
     ) -> Result<CertifiedOrder, anyhow::Error>;
+
+    /// Try to complete all pending orders once. Return if any fails
+    async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError>;
 
     /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
     /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
@@ -115,67 +109,38 @@ pub trait Client {
     ) -> Result<ObjectInfoResponse, anyhow::Error>;
 
     /// Get all object we own.
-    async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error>;
+    async fn get_owned_objects(&self) -> Vec<ObjectID>;
+
+    async fn download_owned_objects_from_all_authorities(
+        &self,
+    ) -> Result<BTreeSet<ObjectRef>, FastPayError>;
 }
-const CERT_CF_NAME: &str = "certificates";
-const SEQ_NUMBER_CF_NAME: &str = "object_sequence_numbers";
-const OBJ_REF_CF_NAME: &str = "object_refs";
-const TX_DIGEST_TO_CERT_CF_NAME: &str = "object_certs";
 
 impl<A> ClientState<A> {
+    /// It is recommended that one call sync and download_owned_objects_from_all_authorities
+    /// right after constructor to fetch missing info form authorities
+    /// TODO: client should manage multiple addresses instead of each addr having DBs
+    /// https://github.com/MystenLabs/fastnft/issues/332
     pub fn new(
+        path: PathBuf,
         address: FastPayAddress,
         secret: KeyPair,
         committee: Committee,
-        authority_clients: HashMap<AuthorityName, A>,
+        authority_clients: BTreeMap<AuthorityName, A>,
         certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
         object_refs: BTreeMap<ObjectID, ObjectRef>,
-    ) -> Self {
-        // TODO: use deterministic path passed in
-        let path = match tempfile::tempdir() {
-            Ok(p) => p.into_path(),
-            Err(_) => env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
-        };
-
-        // Open column families
-        let db = client_store::init_store(
-            path,
-            vec![
-                CERT_CF_NAME,
-                SEQ_NUMBER_CF_NAME,
-                OBJ_REF_CF_NAME,
-                TX_DIGEST_TO_CERT_CF_NAME,
-            ],
-        );
+    ) -> Result<Self, FastPayError> {
         let client_state = ClientState {
             address,
             secret,
             committee,
             authority_clients,
-            pending_transfer: None,
-            certificates: ClientStoreMap::new(&db, CERT_CF_NAME),
-            object_sequence_numbers: ClientStoreMap::new(&db, SEQ_NUMBER_CF_NAME),
-            object_refs: ClientStoreMap::new(&db, OBJ_REF_CF_NAME),
-            object_certs: ClientStoreMap::new(&db, TX_DIGEST_TO_CERT_CF_NAME),
+            store: ClientStore::new(path),
         };
 
         // Backfill the DB
-        client_state.populate(object_refs, certificates);
-        client_state
-    }
-
-    pub fn populate(
-        &self,
-        object_refs: BTreeMap<ObjectID, ObjectRef>,
-        certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
-    ) {
-        self.object_refs
-            .populate_from_btree_map(object_refs.clone());
-        self.certificates.populate_from_btree_map(certificates);
-
-        object_refs
-            .iter()
-            .for_each(|(id, ref_)| self.object_sequence_numbers.insert(*id, ref_.1));
+        client_state.store.populate(object_refs, certificates)?;
+        Ok(client_state)
     }
 
     pub fn address(&self) -> FastPayAddress {
@@ -186,10 +151,11 @@ impl<A> ClientState<A> {
         &self,
         object_id: &ObjectID,
     ) -> Result<SequenceNumber, FastPayError> {
-        if self.object_sequence_numbers.contains_key(object_id) {
+        if self.store.object_sequence_numbers.contains_key(object_id)? {
             Ok(self
+                .store
                 .object_sequence_numbers
-                .get(object_id)
+                .get(object_id)?
                 .expect("Unable to get sequence number"))
         } else {
             Err(FastPayError::ObjectNotFound {
@@ -198,48 +164,84 @@ impl<A> ClientState<A> {
         }
     }
     pub fn object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, FastPayError> {
-        self.object_refs
-            .get(&object_id)
+        self.store
+            .object_refs
+            .get(&object_id)?
             .ok_or(FastPayError::ObjectNotFound { object_id })
     }
 
     pub fn object_refs(&self) -> BTreeMap<ObjectID, ObjectRef> {
-        self.object_refs.copy_as_btree_map()
+        self.store.object_refs.iter().collect()
     }
 
-    pub fn pending_transfer(&self) -> &Option<Order> {
-        &self.pending_transfer
-    }
-
+    /// Need to remove unwraps. Found this tricky due to iterator requirements of downloader and not being able to exit from closure to top fn
+    /// https://github.com/MystenLabs/fastnft/issues/307
     pub fn certificates(&self, object_id: &ObjectID) -> impl Iterator<Item = CertifiedOrder> + '_ {
-        self.object_certs
+        self.store
+            .object_certs
             .get(object_id)
+            .unwrap()
             .into_iter()
             .flat_map(|cert_digests| {
-                cert_digests
-                    .iter()
-                    .filter_map(|digest| self.certificates.get(digest))
-                    .collect::<Vec<_>>()
+                self.store
+                    .certificates
+                    .multi_get(&cert_digests[..])
+                    .unwrap()
+                    .into_iter()
+                    .flatten()
             })
     }
 
     pub fn all_certificates(&self) -> BTreeMap<TransactionDigest, CertifiedOrder> {
-        self.certificates.copy_as_btree_map()
+        self.store.certificates.iter().collect()
     }
 
-    pub fn insert_object(&mut self, object_ref: &ObjectRef, digest: &TransactionDigest) {
+    pub fn insert_object_info(
+        &mut self,
+        object_ref: &ObjectRef,
+        parent_tx_digest: &TransactionDigest,
+    ) -> Result<(), FastPayError> {
         let (object_id, seq, _) = object_ref;
-        self.object_sequence_numbers.insert(*object_id, *seq);
-        let mut tx_digests = self.object_certs.get(object_id).unwrap_or_default();
-        tx_digests.push(*digest);
-        self.object_certs.insert(*object_id, tx_digests.to_vec());
-        self.object_refs.insert(*object_id, *object_ref);
+        let mut tx_digests = self.store.object_certs.get(object_id)?.unwrap_or_default();
+        tx_digests.push(*parent_tx_digest);
+
+        // Multi table atomic insert using batches
+        let batch = self
+            .store
+            .object_sequence_numbers
+            .batch()
+            .insert_batch(
+                &self.store.object_sequence_numbers,
+                std::iter::once((object_id, seq)),
+            )?
+            .insert_batch(
+                &self.store.object_certs,
+                std::iter::once((object_id, &tx_digests.to_vec())),
+            )?
+            .insert_batch(
+                &self.store.object_refs,
+                std::iter::once((object_id, object_ref)),
+            )?;
+        // Execute atomic write of opers
+        batch.write()?;
+        Ok(())
     }
 
-    pub fn remove_object(&mut self, object_id: &ObjectID) {
-        self.object_sequence_numbers.remove(object_id);
-        self.object_certs.remove(object_id);
-        self.object_refs.remove(object_id);
+    pub fn remove_object_info(&mut self, object_id: &ObjectID) -> Result<(), FastPayError> {
+        // Multi table atomic delete using batches
+        let batch = self
+            .store
+            .object_sequence_numbers
+            .batch()
+            .delete_batch(
+                &self.store.object_sequence_numbers,
+                std::iter::once(object_id),
+            )?
+            .delete_batch(&self.store.object_certs, std::iter::once(object_id))?
+            .delete_batch(&self.store.object_refs, std::iter::once(object_id))?;
+        // Execute atomic write of opers
+        batch.write()?;
+        Ok(())
     }
 }
 
@@ -549,11 +551,7 @@ where
                 let fut = client.handle_object_info_request(request.clone());
                 async move {
                     match fut.await {
-                        Ok(info) => {
-                            // TODO(https://github.com/MystenLabs/fastnft/issues/323): This assumes the object is not deleted.
-                            let current_sequence_number = info.object().unwrap().version();
-                            Some((*name, current_sequence_number))
-                        }
+                        Ok(info) => info.object().map(|obj| (*name, obj.version())),
                         _ => None,
                     }
                 }
@@ -847,7 +845,7 @@ where
     ) -> Result<BTreeMap<ObjectID, Vec<CertifiedOrder>>, FastPayError> {
         let mut sent_certificates: BTreeMap<ObjectID, Vec<CertifiedOrder>> = BTreeMap::new();
 
-        for (object_id, next_sequence_number) in self.object_sequence_numbers.copy_as_btree_map() {
+        for (object_id, next_sequence_number) in self.store.object_sequence_numbers.iter() {
             let known_sequence_numbers: BTreeSet<_> = self
                 .certificates(&object_id)
                 .flat_map(|cert| cert.order.input_objects())
@@ -907,23 +905,33 @@ where
             if seq >= new_next_sequence_number {
                 new_next_sequence_number = seq.increment();
             }
-
-            self.certificates
-                .insert(new_cert.order.digest(), new_cert.clone());
-
-            // Atomic update
-            self.object_sequence_numbers
-                .insert(*object_id, new_next_sequence_number);
-
-            let mut certs = match self.object_certs.get(object_id) {
+            let new_cert_order_digest = new_cert.order.digest();
+            // Multi table atomic insert using batches
+            let mut batch = self
+                .store
+                .object_sequence_numbers
+                .batch()
+                .insert_batch(
+                    &self.store.object_sequence_numbers,
+                    std::iter::once((object_id, new_next_sequence_number)),
+                )?
+                .insert_batch(
+                    &self.store.certificates,
+                    std::iter::once((&new_cert_order_digest, new_cert)),
+                )?;
+            let mut certs = match self.store.object_certs.get(object_id)? {
                 Some(c) => c.clone(),
                 None => Vec::new(),
             };
-
-            if !certs.contains(&new_cert.order.digest()) {
-                certs.push(new_cert.order.digest());
-                self.object_certs.insert(*object_id, certs.to_vec())
+            if !certs.contains(&new_cert_order_digest) {
+                certs.push(new_cert_order_digest);
+                batch = batch.insert_batch(
+                    &self.store.object_certs,
+                    std::iter::once((object_id, certs)),
+                )?;
             }
+            // Execute atomic write of opers
+            batch.write()?;
         }
         // Sanity check
         let certificates_count = self.certificates(object_id).count();
@@ -962,9 +970,54 @@ where
             .ok_or(FastPayError::ErrorWhileRequestingInformation)?;
 
         // Update local data using new order response.
-        self.update_objects_from_order_info(response.clone())?;
+        self.update_objects_from_order_info(response.clone())
+            .await?;
 
         Ok((new_certificate, response.signed_effects.unwrap().effects))
+    }
+
+    /// Returns true if this pending order's input objects are locked by another unconfirmed order
+    /// The caller has to explicitly find which objects are locked
+    /// TODO: lock only objects that are mutable: https://github.com/MystenLabs/fastnft/issues/305
+    fn has_pending_order_conflict(&self, order: &Order) -> Result<bool, FastPayError> {
+        Ok(self
+            .store
+            .pending_orders
+            .multi_get(
+                &order
+                    .input_objects()
+                    .iter()
+                    .map(|q| q.object_id())
+                    .collect_vec(),
+            )?
+            .iter()
+            .any(|w| w.is_some()))
+    }
+    /// Locks the objects for the given order
+    /// It is important to check that the object is not locked before locking again
+    /// One should call has_pending_order_conflict before locking as this overwites the previous lock
+    /// If the object is already locked, ensure it is unlocked by calling unlock_pending_order_objects
+    /// Client runs sequentially right now so access to this is safe
+    /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/fastnft/issues/335
+    fn lock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
+        if self.has_pending_order_conflict(order)? {
+            return Err(FastPayError::ConcurrentTransactionError);
+        }
+        ClientStore::multi_insert(
+            &self.store.pending_orders,
+            order
+                .input_objects()
+                .iter()
+                .map(|e| (e.object_id(), order.clone())),
+        )
+    }
+    /// Unlocks the objects for the given order
+    /// Unlocking an already unlocked object, is a no-op and does not Err
+    fn unlock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
+        ClientStore::multi_remove(
+            &self.store.pending_orders,
+            order.input_objects().iter().map(|e| e.object_id()),
+        )
     }
 
     /// Execute (or retry) an order without confirmation. Update local object states using newly created certificate.
@@ -972,18 +1025,21 @@ where
         &mut self,
         order: Order,
     ) -> Result<CertifiedOrder, anyhow::Error> {
+        // Return error if conflict
+        // Ideally the caller should be notified
         fp_ensure!(
-            self.pending_transfer == None || self.pending_transfer.as_ref() == Some(&order),
+            !self.has_pending_order_conflict(&order)?,
             FastPayError::ConcurrentTransactionError.into()
         );
-        self.pending_transfer = Some(order.clone());
+        // Lock the objects in this order
+        self.lock_pending_order_objects(&order)?;
         let result = self
             .broadcast_and_handle_order(self.address, order.clone())
             .await;
-        // Clear `pending_transfer` and update `sent_certificates`,
+        // Unlock objects for the pending order and update `sent_certificates`,
         // and `next_sequence_number`. (Note that if we were using persistent
         // storage, we should ensure update atomicity in the eventuality of a crash.)
-        self.pending_transfer = None;
+        self.unlock_pending_order_objects(&order)?;
 
         // order_info_response contains response from broadcasting old unconfirmed order, if any.
         let (order_info_responses, new_sent_certificate) = result?;
@@ -991,7 +1047,7 @@ where
 
         // Update local data using all order response.
         for (_, response) in order_info_responses {
-            self.update_objects_from_order_info(response)?;
+            self.update_objects_from_order_info(response).await?;
         }
         Ok(new_sent_certificate)
     }
@@ -1022,41 +1078,53 @@ where
         Err(FastPayError::ErrorWhileRequestingInformation)
     }
 
-    fn update_objects_from_order_info(
+    async fn update_objects_from_order_info(
         &mut self,
         order_info_resp: OrderInfoResponse,
     ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
         if let Some(v) = order_info_resp.signed_effects {
             // The cert should be included in the response
             let cert = order_info_resp.certified_order.unwrap();
-            let digest = cert.order.digest();
-            self.certificates.insert(digest, cert.clone());
+            let parent_tx_digest = cert.order.digest();
+            self.store.certificates.insert(&parent_tx_digest, &cert)?;
+
+            let mut objs_to_download = Vec::new();
 
             for &(object_ref, owner) in v.effects.all_mutated() {
                 let (object_id, seq, _) = object_ref;
                 let old_seq = self
+                    .store
                     .object_sequence_numbers
-                    .get(&object_id)
+                    .get(&object_id)?
                     .unwrap_or_default();
                 // only update if data is new
                 if old_seq < seq {
                     if owner.is_address(&self.address) {
-                        self.insert_object(&object_ref, &digest);
+                        self.insert_object_info(&object_ref, &parent_tx_digest)?;
+                        objs_to_download.push(object_ref);
                     } else {
-                        self.remove_object(&object_id);
+                        self.remove_object_info(&object_id)?;
                     }
                 } else if old_seq == seq && owner.is_address(&self.address) {
                     // ObjectRef can be 1 version behind because it's only updated after confirmation.
-                    self.object_refs.insert(object_id, object_ref);
+                    self.store.object_refs.insert(&object_id, &object_ref)?;
                 }
             }
+
+            // TODO: decide what to do with failed object downloads
+            // https://github.com/MystenLabs/fastnft/issues/331
+            let _failed = self
+                .download_owned_objects_from_all_authorities_helper(objs_to_download)
+                .await?;
+
             for (object_id, seq, _) in &v.effects.deleted {
                 let old_seq = self
+                    .store
                     .object_sequence_numbers
-                    .get(object_id)
+                    .get(object_id)?
                     .unwrap_or_default();
                 if old_seq < *seq {
-                    self.remove_object(object_id);
+                    self.remove_object_info(object_id)?;
                 }
             }
             Ok((cert, v.effects))
@@ -1081,6 +1149,132 @@ where
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("No valid confirmation order votes"))
     }
+
+    /// Fetch the objects at the given object id, which do not already exist in the db
+    /// All authorities are polled for each object and their all assumed to be honest
+    /// This always returns the latest object known to the authorities
+    /// How it works: this function finds all object refs that are not in the DB
+    /// then it runs a downloader and submits download requests
+    /// Afterwards it persists objects returned by the downloader
+    /// It returns a set of the object ids which failed to download
+    /// TODO: return failed download errors along with the object id
+    async fn download_owned_objects_from_all_authorities_helper(
+        &self,
+        object_refs: Vec<ObjectRef>,
+    ) -> Result<BTreeSet<ObjectRef>, FastPayError> {
+        // Check the DB
+        // This could be expensive. Might want to use object_ref table
+        // We want items that are NOT in the table
+        let fresh_object_refs = self
+            .store
+            .objects
+            .multi_get(&object_refs)?
+            .iter()
+            .zip(object_refs)
+            .filter_map(|(object, ref_)| match object {
+                Some(_) => None,
+                None => Some(ref_),
+            })
+            .collect::<BTreeSet<_>>();
+
+        // Send request to download
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(OBJECT_DOWNLOAD_CHANNEL_BOUND);
+
+        // Now that we have all the fresh ids, dispatch fetches
+        for object_ref in fresh_object_refs.clone() {
+            let sender = sender.clone();
+            tokio::spawn(ClientState::fetch_and_store_object(
+                self.authority_clients.clone(),
+                object_ref,
+                AUTHORITY_REQUEST_TIMEOUT,
+                sender,
+            ));
+        }
+        // Close unused channel
+        drop(sender);
+        let mut err_object_refs = fresh_object_refs.clone();
+        // Receive from the downloader
+        while let Some(resp) = receiver.recv().await {
+            // Persists them to disk
+            if let Ok(o) = resp {
+                self.store.objects.insert(&o.to_object_reference(), &o)?;
+                err_object_refs.remove(&o.to_object_reference());
+            }
+        }
+        Ok(err_object_refs)
+    }
+
+    /// This function fetches one object at a time, and sends back the result over the channel
+    /// The object ids are also returned so the caller can determine which fetches failed
+    /// NOTE: This function assumes all authorities are honest
+    async fn fetch_and_store_object(
+        authority_clients: BTreeMap<PublicKeyBytes, A>,
+        object_ref: ObjectRef,
+        timeout: Duration,
+        sender: tokio::sync::mpsc::Sender<Result<Object, FastPayError>>,
+    ) {
+        let object_id = object_ref.0;
+        // Prepare the request
+        let request = ObjectInfoRequest {
+            object_id,
+            request_sequence_number: None,
+        };
+
+        // For now assume all authorities. Assume they're all honest
+        // This assumption is woeful, and should be fixed
+        // TODO: https://github.com/MystenLabs/fastnft/issues/320
+        let results = future::join_all(authority_clients.iter().map(|(_, ac)| {
+            tokio::time::timeout(timeout, ac.handle_object_info_request(request.clone()))
+        }))
+        .await;
+
+        fn obj_fetch_err(id: ObjectID, err: &str) -> Result<Object, FastPayError> {
+            Err(FastPayError::ObjectFetchFailed {
+                object_id: id,
+                err: err.to_owned(),
+            })
+        }
+
+        let mut ret_val: Result<Object, FastPayError> = Err(FastPayError::ObjectFetchFailed {
+            object_id: object_ref.0,
+            err: "No authority returned object".to_string(),
+        });
+        // Find the first non-error value
+        // There are multiple reasons why we might not have an object
+        // We can timeout, or the authority returns an error or simply no object
+        // When we get an object back, it also might not match the digest we want
+        for result in results {
+            // Check if the result of the call is successful
+            ret_val = match result {
+                Ok(res) => match res {
+                    // Check if the authority actually had an object
+                    Ok(resp) => match resp.object_and_lock {
+                        Some(o) => {
+                            // Check if this is the the object we want
+                            if o.object.digest() == object_ref.2 {
+                                Ok(o.object)
+                            } else {
+                                obj_fetch_err(object_id, "Object digest mismatch")
+                            }
+                        }
+                        None => obj_fetch_err(object_id, "object_and_lock is None"),
+                    },
+                    // Something in FastX failed
+                    Err(e) => Err(e),
+                },
+                // Took too long
+                Err(e) => obj_fetch_err(object_id, e.to_string().as_str()),
+            };
+            // We found a value
+            if ret_val.is_ok() {
+                break;
+            }
+        }
+        sender
+            .send(ret_val)
+            .await
+            .expect("Cannot send object on channel after object fetch attempt");
+    }
 }
 
 #[async_trait]
@@ -1095,12 +1289,14 @@ where
         recipient: FastPayAddress,
     ) -> Result<CertifiedOrder, anyhow::Error> {
         let object_ref = self
+            .store
             .object_refs
-            .get(&object_id)
+            .get(&object_id)?
             .ok_or(FastPayError::ObjectNotFound { object_id })?;
         let gas_payment =
-            self.object_refs
-                .get(&gas_payment)
+            self.store
+                .object_refs
+                .get(&gas_payment)?
                 .ok_or(FastPayError::ObjectNotFound {
                     object_id: gas_payment,
                 })?;
@@ -1116,7 +1312,7 @@ where
 
         // remove object from local storage if the recipient is not us.
         if recipient != self.address {
-            self.remove_object(&object_id);
+            self.remove_object_info(&object_id)?;
         }
 
         Ok(certificate)
@@ -1139,7 +1335,7 @@ where
                     .await?;
 
                 for (_, response) in responses {
-                    self.update_objects_from_order_info(response)?;
+                    self.update_objects_from_order_info(response).await?;
                 }
 
                 let response = self
@@ -1157,24 +1353,34 @@ where
                     })
                     .await?;
 
-                // TODO(https://github.com/MystenLabs/fastnft/issues/323): This assumes object is not deleted.
-                let object = &response.object().unwrap();
-                self.object_refs
-                    .insert(object.id(), object.to_object_reference());
+                let object = &response
+                    .object_and_lock
+                    .ok_or(FastPayError::ObjectNotFound {
+                        object_id: *certificate.order.object_id(),
+                    })?
+                    .object;
+                self.store
+                    .object_refs
+                    .insert(&object.id(), &object.to_object_reference())?;
 
-                // Everything worked: update the local balance.
-                if !self.certificates.contains_key(&certificate.order.digest()) {
-                    self.object_sequence_numbers
-                        .insert(transfer.object_ref.0, transfer.object_ref.1.increment());
-                    let mut tx_digests = match self.object_certs.get(&transfer.object_ref.0) {
-                        Some(c) => c,
-                        None => Vec::new(),
-                    };
-                    tx_digests.push(certificate.order.digest());
-                    self.object_certs
-                        .insert(transfer.object_ref.0, tx_digests.to_vec());
-                    self.certificates
-                        .insert(certificate.order.digest(), certificate.clone());
+                // Everything worked: update the local objects and certs.
+                let cert_order_digest = certificate.order.digest();
+                if !self.store.certificates.contains_key(&cert_order_digest)? {
+                    self.store
+                        .object_sequence_numbers
+                        .insert(&transfer.object_ref.0, &transfer.object_ref.1.increment())?;
+                    let mut tx_digests =
+                        match self.store.object_certs.get(&transfer.object_ref.0)? {
+                            Some(c) => c,
+                            None => Vec::new(),
+                        };
+                    tx_digests.push(cert_order_digest);
+                    self.store
+                        .object_certs
+                        .insert(&transfer.object_ref.0, &tx_digests.to_vec())?;
+                    self.store
+                        .certificates
+                        .insert(&cert_order_digest, certificate)?;
                 }
 
                 Ok(())
@@ -1212,23 +1418,43 @@ where
         Ok(new_certificate)
     }
 
+    async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError> {
+        // Orders are idempotent so no need to prevent multiple executions
+        let unique_pending_orders: HashSet<_> = self
+            .store
+            .pending_orders
+            .iter()
+            .map(|(_, ord)| ord)
+            .collect();
+        // Need some kind of timeout or max_trials here?
+        // TODO: https://github.com/MystenLabs/fastnft/issues/330
+        for order in unique_pending_orders {
+            self.execute_transaction(order.clone()).await.map_err(|e| {
+                FastPayError::ErrorWhileProcessingTransactionOrder { err: e.to_string() }
+            })?;
+            self.unlock_pending_order_objects(&order)?;
+        }
+        Ok(())
+    }
+
     async fn sync_client_state_with_random_authority(
         &mut self,
     ) -> Result<AuthorityName, anyhow::Error> {
-        if let Some(order) = self.pending_transfer.clone() {
-            // Finish executing the previous transfer.
-            self.execute_transaction(order).await?;
+        if !self.store.pending_orders.is_empty()? {
+            // Finish executing the previous orders
+            self.try_complete_pending_orders().await?;
         }
         // update object_ids.
-        self.object_sequence_numbers.clear();
-        self.object_refs.clear();
+        self.store.object_sequence_numbers.clear()?;
+        self.store.object_refs.clear()?;
 
         let (authority_name, object_refs) = self.download_own_object_ids().await?;
         for object_ref in object_refs {
             let (object_id, sequence_number, _) = object_ref;
-            self.object_sequence_numbers
-                .insert(object_id, sequence_number);
-            self.object_refs.insert(object_id, object_ref);
+            self.store
+                .object_sequence_numbers
+                .insert(&object_id, &sequence_number)?;
+            self.store.object_refs.insert(&object_id, &object_ref)?;
         }
         // Recover missing certificates.
         let new_certificates = self.download_certificates().await?;
@@ -1284,7 +1510,15 @@ where
         self.get_object_info_execute(object_info_req).await
     }
 
-    async fn get_owned_objects(&self) -> Result<Vec<ObjectID>, anyhow::Error> {
-        Ok(self.object_sequence_numbers.key_list())
+    async fn get_owned_objects(&self) -> Vec<ObjectID> {
+        self.store.object_sequence_numbers.keys().collect()
+    }
+
+    async fn download_owned_objects_from_all_authorities(
+        &self,
+    ) -> Result<BTreeSet<ObjectRef>, FastPayError> {
+        let object_refs = self.store.object_refs.iter().map(|q| q.1).collect();
+        self.download_owned_objects_from_all_authorities_helper(object_refs)
+            .await
     }
 }
