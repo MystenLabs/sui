@@ -7,6 +7,7 @@ use fastx_types::{
     messages::{CertifiedOrder, OrderKind},
 };
 
+use fastx_types::object::Object;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::{identifier::Identifier, transaction_argument::TransactionArgument};
 use serde::{Deserialize, Serialize};
@@ -17,6 +18,7 @@ use std::{
     io::{BufReader, BufWriter, Write},
     iter::FromIterator,
 };
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthorityConfig {
     #[serde(
@@ -107,8 +109,12 @@ pub struct UserAccount {
 }
 
 impl UserAccount {
-    pub fn new(object_refs: Vec<ObjectRef>, gas_object_ids: Vec<ObjectID>) -> Self {
-        let (address, key) = get_key_pair();
+    pub fn new(
+        address: FastPayAddress,
+        key: KeyPair,
+        object_refs: Vec<ObjectRef>,
+        gas_object_ids: Vec<ObjectID>,
+    ) -> Self {
         let object_refs = object_refs
             .into_iter()
             .map(|object_ref| (object_ref.0, object_ref))
@@ -273,7 +279,7 @@ impl AccountsConfig {
 #[derive(Serialize, Deserialize)]
 pub struct InitialStateConfigEntry {
     pub address: FastPayAddress,
-    pub object_refs: Vec<ObjectRef>,
+    pub objects: Vec<Object>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct InitialStateConfig {
@@ -288,11 +294,11 @@ impl InitialStateConfig {
     pub fn read(path: &str) -> Result<Self, anyhow::Error> {
         let raw_data: String = read_to_string(path)?.parse()?;
 
-        Ok(toml::from_str(&raw_data)?)
+        Ok(serde_json::from_str(&raw_data)?)
     }
 
     pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let config = toml::to_string(self).unwrap();
+        let config = serde_json::to_string(self).unwrap();
 
         fs::write(path, config).expect("Unable to write to initial config file");
         Ok(())

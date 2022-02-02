@@ -6,7 +6,7 @@
 use fastpay::config::*;
 use fastpay_core::{authority::*, authority_server::AuthorityServer};
 use fastx_network::transport;
-use fastx_types::{base_types::*, committee::Committee, object::Object};
+use fastx_types::{base_types::*, committee::Committee};
 
 use futures::future::join_all;
 use std::path::Path;
@@ -50,11 +50,8 @@ fn make_server(
             store,
         )
         .await;
-        for initial_state_cfg_entry in &initial_accounts_config.config {
-            let address = &initial_state_cfg_entry.address;
-            for (object_id, _, _) in &initial_state_cfg_entry.object_refs {
-                let object = Object::with_id_owner_for_testing(*object_id, *address);
-
+        for initial_state_cfg_entry in initial_accounts_config.config {
+            for object in initial_state_cfg_entry.objects {
                 state.init_order_lock(object.to_object_reference()).await;
                 state.insert_object(object).await;
             }

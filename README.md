@@ -33,7 +33,7 @@ done
 # * Private account states are stored in one local wallet `accounts.json`.
 # * `initial_accounts.toml` is used to mint the corresponding initially randomly generated (for now) objects at startup on the server side.
 ./client --committee committee.json --accounts accounts.json create-accounts --num 100 \
---gas-objs-per-account 10 --value-per-per-obj 2000000 initial_accounts.toml
+--gas-objs-per-account 10 --value-per-obj 2000000 initial_accounts.toml
 # Start servers
 for I in 1 2 3 4
 do
