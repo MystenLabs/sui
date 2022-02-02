@@ -1,3 +1,5 @@
+use fastx_types::event::Event;
+
 use super::*;
 
 pub type InnerTemporaryStore = (
@@ -5,10 +7,12 @@ pub type InnerTemporaryStore = (
     Vec<ObjectRef>,
     BTreeMap<ObjectID, Object>,
     BTreeSet<ObjectID>,
+    Vec<Event>,
 );
 
 pub struct AuthorityTemporaryStore {
     object_store: Arc<AuthorityStore>,
+    tx_digest: TransactionDigest,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
     // TODO: We need to study whether it's worth to optimize the lookup of
@@ -16,6 +20,8 @@ pub struct AuthorityTemporaryStore {
     // Object reference calculation involves hashing which could be expensive.
     written: BTreeMap<ObjectID, Object>, // Objects written
     deleted: BTreeSet<ObjectID>,         // Objects actively deleted
+    /// Ordered sequence of events emitted by execution
+    events: Vec<Event>,
 }
 
 impl AuthorityTemporaryStore {
@@ -24,9 +30,11 @@ impl AuthorityTemporaryStore {
     pub fn new(
         authority_state: &AuthorityState,
         _input_objects: &'_ [Object],
+        tx_digest: TransactionDigest,
     ) -> AuthorityTemporaryStore {
         AuthorityTemporaryStore {
             object_store: authority_state._database.clone(),
+            tx_digest,
             objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
             active_inputs: _input_objects
                 .iter()
@@ -35,6 +43,7 @@ impl AuthorityTemporaryStore {
                 .collect(),
             written: BTreeMap::new(),
             deleted: BTreeSet::new(),
+            events: Vec::new(),
         }
     }
 
@@ -58,7 +67,13 @@ impl AuthorityTemporaryStore {
         {
             self.check_invariants();
         }
-        (self.objects, self.active_inputs, self.written, self.deleted)
+        (
+            self.objects,
+            self.active_inputs,
+            self.written,
+            self.deleted,
+            self.events,
+        )
     }
 
     /// For every object from active_inputs (i.e. all mutable objects), if they are not
@@ -80,14 +95,25 @@ impl AuthorityTemporaryStore {
         authority_name: &AuthorityName,
         secret: &KeyPair,
         transaction_digest: &TransactionDigest,
+        transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
+        gas_object_id: &ObjectID,
     ) -> SignedOrderEffects {
+        let gas_object = &self.written[gas_object_id];
         let effects = OrderEffects {
             status,
             transaction_digest: *transaction_digest,
+            created: self
+                .written
+                .iter()
+                .filter(|(id, _)| !self.objects.contains_key(*id))
+                .map(|(_, object)| (object.to_object_reference(), object.owner))
+                .collect(),
             mutated: self
                 .written
                 .iter()
+                // Exclude gas_object from the mutated list.
+                .filter(|(id, _)| *id != gas_object_id && self.objects.contains_key(*id))
                 .map(|(_, object)| (object.to_object_reference(), object.owner))
                 .collect(),
             deleted: self
@@ -95,6 +121,9 @@ impl AuthorityTemporaryStore {
                 .iter()
                 .map(|id| self.objects[id].to_object_reference())
                 .collect(),
+            gas_object: (gas_object.to_object_reference(), gas_object.owner),
+            events: self.events.clone(),
+            dependencies: transaction_dependencies,
         };
         let signature = Signature::new(&effects, secret);
 
@@ -149,19 +178,16 @@ impl Storage for AuthorityTemporaryStore {
         self.active_inputs.clear();
         self.written.clear();
         self.deleted.clear();
+        self.events.clear();
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
         match self.objects.get(id) {
             Some(x) => Some(x.clone()),
-            None => {
-                let object = self.object_store.object_state(id);
-                match object {
-                    Ok(o) => Some(o),
-                    Err(FastPayError::ObjectNotFound) => None,
-                    _ => panic!("Cound not read object"),
-                }
-            }
+            None => match self.object_store.get_object(id) {
+                Ok(o) => o,
+                Err(e) => panic!("Could not read object {}", e),
+            },
         }
     }
 
@@ -171,7 +197,7 @@ impl Storage for AuthorityTemporaryStore {
         caller.
     */
 
-    fn write_object(&mut self, object: Object) {
+    fn write_object(&mut self, mut object: Object) {
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
         if let Some(existing_object) = self.read_object(&object.id()) {
@@ -182,6 +208,9 @@ impl Storage for AuthorityTemporaryStore {
             }
         }
 
+        // The adapter is not very disciplined at filling in the correct
+        // previous transaction digest, so we ensure it is correct here.
+        object.previous_transaction = self.tx_digest;
         self.written.insert(object.id(), object);
     }
 
@@ -199,6 +228,10 @@ impl Storage for AuthorityTemporaryStore {
         // Mark it for deletion
         debug_assert!(self.objects.get(id).is_some());
         self.deleted.insert(*id);
+    }
+
+    fn log_event(&mut self, event: Event) {
+        self.events.push(event)
     }
 }
 

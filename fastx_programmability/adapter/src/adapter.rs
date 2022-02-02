@@ -4,11 +4,14 @@
 use anyhow::Result;
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
+use fastx_framework::EventType;
 use fastx_types::{
     base_types::{
-        FastPayAddress, ObjectID, TxContext, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+        Authenticator, FastPayAddress, ObjectID, TransactionDigest, TxContext,
+        TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
     },
     error::{FastPayError, FastPayResult},
+    event::Event,
     gas,
     messages::ExecutionStatus,
     object::{Data, MoveObject, Object},
@@ -17,6 +20,7 @@ use fastx_types::{
 };
 use fastx_verifier::verifier;
 use move_binary_format::{
+    errors::PartialVMResult,
     file_format::CompiledModule,
     normalized::{Function, Type},
 };
@@ -29,9 +33,24 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::{native_functions::NativeFunctionTable, session::ExecutionResult};
-use std::{borrow::Borrow, collections::BTreeMap, convert::TryFrom, fmt::Debug, sync::Arc};
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, HashMap},
+    convert::TryFrom,
+    fmt::Debug,
+    sync::Arc,
+};
 
 pub use move_vm_runtime::move_vm::MoveVM;
+
+macro_rules! exec_failure {
+    ($gas:expr, $err:expr) => {
+        return Ok(ExecutionStatus::Failure {
+            gas_used: $gas,
+            error: Box::new($err),
+        })
+    };
+}
 
 #[cfg(test)]
 #[path = "unit_tests/adapter_tests.rs"]
@@ -65,6 +84,12 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     mut gas_object: Object,
     ctx: &TxContext,
 ) -> FastPayResult<ExecutionStatus> {
+    let mut object_owner_map = HashMap::new();
+    for object in object_args.iter().filter(|obj| !obj.is_read_only()) {
+        if let Authenticator::Object(owner_object_id) = object.owner {
+            object_owner_map.insert(object.id(), owner_object_id);
+        }
+    }
     let TypeCheckSuccess {
         module_id,
         args,
@@ -81,10 +106,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     ) {
         Ok(ok) => ok,
         Err(err) => {
-            return Ok(ExecutionStatus::Failure {
-                gas_used: gas::MIN_MOVE_CALL_GAS,
-                error: Box::new(err),
-            });
+            exec_failure!(gas::MIN_MOVE_CALL_GAS, err);
         }
     };
 
@@ -95,10 +117,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         }) {
             Ok(ok) => ok,
             Err(err) => {
-                return Ok(ExecutionStatus::Failure {
-                    gas_used: gas::MIN_MOVE_CALL_GAS,
-                    error: Box::new(err),
-                });
+                exec_failure!(gas::MIN_MOVE_CALL_GAS, err);
             }
         };
     let session = vm.new_session(state_view);
@@ -129,31 +148,33 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             let mutable_refs = mutable_ref_objects
                 .into_iter()
                 .zip(mutable_ref_values.into_iter());
-            let (extra_gas_used, gas_refund) = process_successful_execution(
+            let (extra_gas_used, gas_refund, result) = process_successful_execution(
                 state_view,
                 by_value_objects,
                 mutable_refs,
                 events,
                 ctx,
+                object_owner_map,
             );
             let total_gas = gas::aggregate_gas(gas_used + extra_gas_used, gas_refund);
+            if let Err(err) = result {
+                // Cap total_gas by gas_budget in the fail case.
+                exec_failure!(std::cmp::min(total_gas, gas_budget), err);
+            }
             match gas::try_deduct_gas(&mut gas_object, total_gas) {
                 Ok(()) => {
                     state_view.write_object(gas_object);
                     Ok(ExecutionStatus::Success)
                 }
-                Err(err) => Ok(ExecutionStatus::Failure {
-                    gas_used: gas_budget,
-                    error: Box::new(err),
-                }),
+                Err(err) => exec_failure!(gas_budget, err),
             }
         }
-        ExecutionResult::Fail { error, gas_used } => Ok(ExecutionStatus::Failure {
+        ExecutionResult::Fail { error, gas_used } => exec_failure!(
             gas_used,
-            error: Box::new(FastPayError::AbortedExecution {
+            FastPayError::AbortedExecution {
                 error: error.to_string(),
-            }),
-        }),
+            }
+        ),
     }
 }
 
@@ -170,42 +191,53 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     // Deduct gas upfront, if not enough balance, bail out early.
     let gas_cost = gas::calculate_module_publish_cost(&module_bytes);
     if let Err(err) = gas::try_deduct_gas(&mut gas_object, gas_cost) {
-        return Ok(ExecutionStatus::Failure {
-            gas_used: gas::MIN_MOVE_PUBLISH_GAS,
-            error: Box::new(err),
-        });
+        exec_failure!(gas::MIN_MOVE_PUBLISH_GAS, err);
     }
     state_view.write_object(gas_object);
 
-    let mut modules = module_bytes
+    let result = module_bytes
         .iter()
-        .map(|b| {
-            CompiledModule::deserialize(b).map_err(|e| FastPayError::ModuleDeserializationFailure {
-                error: e.to_string(),
-            })
-        })
-        .collect::<FastPayResult<Vec<CompiledModule>>>()?;
+        .map(|b| CompiledModule::deserialize(b))
+        .collect::<PartialVMResult<Vec<CompiledModule>>>();
+    let mut modules = match result {
+        Ok(ok) => ok,
+        Err(err) => {
+            exec_failure!(
+                gas::MIN_MOVE_PUBLISH_GAS,
+                FastPayError::ModuleDeserializationFailure {
+                    error: err.to_string(),
+                }
+            );
+        }
+    };
 
     // run validation checks
     if modules.is_empty() {
-        return Ok(ExecutionStatus::Failure {
-            gas_used: gas::MIN_MOVE_PUBLISH_GAS,
-            error: Box::new(FastPayError::ModulePublishFailure {
+        exec_failure!(
+            gas::MIN_MOVE_PUBLISH_GAS,
+            FastPayError::ModulePublishFailure {
                 error: "Publishing empty list of modules".to_string(),
-            }),
-        });
+            }
+        );
     }
-    let package_id = generate_package_id(&mut modules, ctx)?;
-    verify_and_link(state_view, &modules, package_id, natives)?;
+    let package_id = match generate_package_id(&mut modules, ctx) {
+        Ok(ok) => ok,
+        Err(err) => exec_failure!(gas::MIN_MOVE_PUBLISH_GAS, err),
+    };
+    if let Err(err) = verify_and_link(state_view, &modules, package_id, natives) {
+        exec_failure!(gas::MIN_MOVE_PUBLISH_GAS, err);
+    }
 
     // wrap the modules in an object, write it to the store
-    let package_object = Object::new_package(modules, sender, ctx.digest());
+    let package_object = Object::new_package(modules, Authenticator::Address(sender), ctx.digest());
     state_view.write_object(package_object);
 
     Ok(ExecutionStatus::Success)
 }
 
-/// Rewrite the self_id of `modules`, then verify and link the result
+/// Given a list of `modules`, links each module against its
+/// dependencies and runs each module with both the Move VM verifier
+/// and the FastX verifier.
 pub fn verify_and_link<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
@@ -215,7 +247,7 @@ pub fn verify_and_link<
     package_id: ObjectID,
     natives: NativeFunctionTable,
 ) -> Result<(), FastPayError> {
-    // run the Move bytecode verifier and linker.
+    // Run the Move bytecode verifier and linker.
     // It is important to do this before running the FastX verifier, since the fastX
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
     let vm = MoveVM::new(natives)
@@ -241,7 +273,7 @@ pub fn verify_and_link<
 
     // run the FastX verifier
     for module in modules.iter() {
-        // Run FastX bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed
+        // Run FastX bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
         verifier::verify_module(module)?;
     }
     Ok(())
@@ -254,7 +286,7 @@ pub fn verify_and_link<
 /// to reflect the new ID's of its dependencies.
 /// Returns the newly created package ID.
 pub fn generate_package_id(
-    modules: &mut Vec<CompiledModule>,
+    modules: &mut [CompiledModule],
     ctx: &mut TxContext,
 ) -> Result<ObjectID, FastPayError> {
     let mut sub_map = BTreeMap::new();
@@ -284,7 +316,7 @@ pub fn generate_package_id(
     Ok(package_id)
 }
 
-type Event = (Vec<u8>, u64, TypeTag, Vec<u8>);
+type MoveEvent = (Vec<u8>, u64, TypeTag, Vec<u8>);
 
 /// Update `state_view` with the effects of successfully executing a transaction:
 /// - Look for each input in `by_value_objects` to determine whether the object was transferred, frozen, or deleted
@@ -299,9 +331,10 @@ fn process_successful_execution<
     state_view: &mut S,
     mut by_value_objects: BTreeMap<ObjectID, Object>,
     mutable_refs: impl Iterator<Item = (Object, Vec<u8>)>,
-    events: Vec<Event>,
+    events: Vec<MoveEvent>,
     ctx: &TxContext,
-) -> (u64, u64) {
+    mut object_owner_map: HashMap<ObjectID, ObjectID>,
+) -> (u64, u64, FastPayResult) {
     for (mut obj, new_contents) in mutable_refs {
         // update contents and increment sequence number
         obj.data
@@ -312,38 +345,57 @@ fn process_successful_execution<
     }
     // process events to identify transfers, freezes
     let mut gas_used = 0;
+    let tx_digest = ctx.digest();
     for e in events {
-        let (recipient, should_freeze, type_, event_bytes) = e;
-        debug_assert!(!recipient.is_empty() && should_freeze < 2);
-        match type_ {
-            TypeTag::Struct(s_type) => {
-                let contents = event_bytes;
-                let should_freeze = should_freeze != 0;
-                // unwrap safe due to size enforcement in Move code for `Authenticator
-                let recipient = FastPayAddress::try_from(recipient.borrow()).unwrap();
-                let mut move_obj = MoveObject::new(s_type, contents);
-                let old_object = by_value_objects.remove(&move_obj.id());
-
-                #[cfg(debug_assertions)]
-                {
-                    check_transferred_object_invariants(&move_obj, &old_object)
-                }
-
-                // increment the object version. note that if the transferred object was
-                // freshly created, this means that its version will now be 1.
-                // thus, all objects in the global object pool have version > 0
-                move_obj.increment_version();
-                if should_freeze {
-                    move_obj.freeze();
-                }
-                let obj = Object::new_move(move_obj, recipient, ctx.digest());
-                if old_object.is_none() {
-                    // Charge extra gas based on object size if we are creating a new object.
-                    gas_used += gas::calculate_object_creation_cost(&obj);
-                }
-                state_view.write_object(obj);
+        let (recipient, event_type, type_, event_bytes) = e;
+        let result = match EventType::try_from(event_type as u8)
+            .expect("Safe because event_type is derived from an EventType enum")
+        {
+            EventType::TransferToAddress => handle_transfer(
+                Authenticator::Address(FastPayAddress::try_from(recipient.borrow()).unwrap()),
+                type_,
+                event_bytes,
+                false, /* should_freeze */
+                tx_digest,
+                &mut by_value_objects,
+                &mut gas_used,
+                state_view,
+                &mut object_owner_map,
+            ),
+            EventType::TransferToAddressAndFreeze => handle_transfer(
+                Authenticator::Address(FastPayAddress::try_from(recipient.borrow()).unwrap()),
+                type_,
+                event_bytes,
+                true, /* should_freeze */
+                tx_digest,
+                &mut by_value_objects,
+                &mut gas_used,
+                state_view,
+                &mut object_owner_map,
+            ),
+            EventType::TransferToObject => handle_transfer(
+                Authenticator::Object(ObjectID::try_from(recipient.borrow()).unwrap()),
+                type_,
+                event_bytes,
+                false, /* should_freeze */
+                tx_digest,
+                &mut by_value_objects,
+                &mut gas_used,
+                state_view,
+                &mut object_owner_map,
+            ),
+            EventType::User => {
+                match type_ {
+                    TypeTag::Struct(s) => state_view.log_event(Event::new(s, event_bytes)),
+                    _ => unreachable!(
+                        "Native function emit_event<T> ensures that T is always bound to structs"
+                    ),
+                };
+                Ok(())
             }
-            _ => unreachable!("Only structs can be transferred"),
+        };
+        if result.is_err() {
+            return (gas_used, 0, result);
         }
     }
 
@@ -357,7 +409,70 @@ fn process_successful_execution<
         gas_refund += gas::calculate_object_deletion_refund(object);
     }
 
-    (gas_used, gas_refund)
+    (gas_used, gas_refund, Ok(()))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_transfer<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+>(
+    recipient: Authenticator,
+    type_: TypeTag,
+    contents: Vec<u8>,
+    should_freeze: bool,
+    tx_digest: TransactionDigest,
+    by_value_objects: &mut BTreeMap<ObjectID, Object>,
+    gas_used: &mut u64,
+    state_view: &mut S,
+    object_owner_map: &mut HashMap<ObjectID, ObjectID>,
+) -> FastPayResult {
+    match type_ {
+        TypeTag::Struct(s_type) => {
+            let mut move_obj = MoveObject::new(s_type, contents);
+            let old_object = by_value_objects.remove(&move_obj.id());
+
+            #[cfg(debug_assertions)]
+            {
+                check_transferred_object_invariants(&move_obj, &old_object)
+            }
+
+            // increment the object version. note that if the transferred object was
+            // freshly created, this means that its version will now be 1.
+            // thus, all objects in the global object pool have version > 0
+            move_obj.increment_version();
+            if should_freeze {
+                move_obj.freeze();
+            }
+            let obj = Object::new_move(move_obj, recipient, tx_digest);
+            if old_object.is_none() {
+                // Charge extra gas based on object size if we are creating a new object.
+                *gas_used += gas::calculate_object_creation_cost(&obj);
+            }
+            let obj_id = obj.id();
+            // Below we check whether the transfer introduced any circular ownership.
+            // We know that for any mutable object, all its ancenstors (if it was owned by another object)
+            // must be in the input as well. Prior to this we have recored the original ownership mapping
+            // in object_owner_map. For any new transfer, we trace the new owner through the ownership
+            // chain to see if a cycle is detected.
+            // TODO: Set a constant upper bound to the depth of the new ownership chain.
+            object_owner_map.remove(&obj_id);
+            if let Authenticator::Object(owner_object_id) = recipient {
+                let mut parent = owner_object_id;
+                while parent != obj_id && object_owner_map.contains_key(&parent) {
+                    parent = *object_owner_map.get(&parent).unwrap();
+                }
+                if parent == obj_id {
+                    return Err(FastPayError::CircularObjectOwnership);
+                }
+                object_owner_map.insert(obj_id, owner_object_id);
+            }
+
+            state_view.write_object(obj);
+        }
+        _ => unreachable!("Only structs can be transferred"),
+    }
+    Ok(())
 }
 
 struct TypeCheckSuccess {
@@ -394,7 +509,7 @@ fn resolve_and_type_check(
             (
                 Function::new_from_name(&m, function).ok_or(FastPayError::FunctionNotFound {
                     error: format!(
-                        "Could not resolve function {} in module {}",
+                        "Could not resolve function '{}' in module {}",
                         function,
                         m.self_id()
                     ),
@@ -429,8 +544,9 @@ fn resolve_and_type_check(
     if function_signature.parameters.len() != num_args {
         return Err(FastPayError::InvalidFunctionSignature {
             error: format!(
-                "Expected {:?} arguments, but found {:?}",
+                "Expected {:?} arguments calling function '{}', but found {:?}",
                 function_signature.parameters.len(),
+                function,
                 num_args
             ),
         });

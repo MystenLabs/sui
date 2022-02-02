@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future;
-use log::*;
 use std::io::ErrorKind;
 use std::{collections::HashMap, convert::TryInto, io, sync::Arc};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -11,6 +10,7 @@ use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::{TcpListener, TcpStream},
 };
+use tracing::*;
 
 #[cfg(test)]
 #[path = "unit_tests/transport_tests.rs"]
@@ -49,12 +49,12 @@ pub async fn connect(
     address: String,
     max_data_size: usize,
 ) -> Result<TcpDataStream, std::io::Error> {
-    Ok(TcpDataStream::connect(address, max_data_size).await?)
+    TcpDataStream::connect(address, max_data_size).await
 }
 
 /// Create a DataStreamPool for this protocol.
 pub async fn make_outgoing_connection_pool() -> Result<TcpDataStreamPool, std::io::Error> {
-    Ok(TcpDataStreamPool::new().await?)
+    TcpDataStreamPool::new().await
 }
 
 /// Run a server for this protocol and the given message handler.

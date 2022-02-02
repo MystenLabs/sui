@@ -6,6 +6,7 @@ use fastx_verifier::verifier as fastx_bytecode_verifier;
 use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
+use num_enum::TryFromPrimitive;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -14,6 +15,19 @@ pub mod natives;
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
 #[cfg(test)]
 const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
+
+#[derive(TryFromPrimitive)]
+#[repr(u8)]
+pub enum EventType {
+    /// System event: transfer between addresses
+    TransferToAddress,
+    /// System event: freeze, then transfer between addresses
+    TransferToAddressAndFreeze,
+    /// System event: transfer object to another object
+    TransferToObject,
+    /// User-defined event
+    User,
+}
 
 pub fn get_fastx_framework_modules() -> Vec<CompiledModule> {
     let modules = build_framework(".");
@@ -33,6 +47,29 @@ pub fn get_move_stdlib_modules() -> Vec<CompiledModule> {
         .collect();
     verify_modules(&modules);
     modules
+}
+
+/// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as Vec<Vec<u8>>.
+/// This is useful for when publishing
+/// If we are building the FastX framework, `is_framework` will be true;
+/// Otherwise `is_framework` should be false (e.g. calling from client).
+pub fn build_move_package_to_bytes(path: &Path) -> Result<Vec<Vec<u8>>, FastPayError> {
+    build_move_package(
+        path,
+        BuildConfig {
+            ..Default::default()
+        },
+        false,
+    )
+    .map(|mods| {
+        mods.iter()
+            .map(|m| {
+                let mut bytes = Vec::new();
+                m.serialize(&mut bytes).unwrap();
+                bytes
+            })
+            .collect::<Vec<_>>()
+    })
 }
 
 /// Given a `path` and a `build_config`, build the package in that path.
@@ -62,28 +99,35 @@ pub fn build_move_package(
                         ),
                     });
                 }
-                // Collect all module names from the current package to be published.
-                // For each transistive dependent module, if they are not to be published,
-                // they must have a non-zero address (meaning they are already published on-chain).
-                // TODO: Shall we also check if they are really on-chain in the future?
-                let self_modules: HashSet<String> = compiled_modules
-                    .iter_modules()
-                    .iter()
-                    .map(|m| m.self_id().name().to_string())
-                    .collect();
-                if let Some(m) = package
-                    .transitive_compiled_modules()
-                    .iter_modules()
-                    .iter()
-                    .find(|m| {
-                        !self_modules.contains(m.self_id().name().as_str())
-                            && m.self_id().address() == &AccountAddress::ZERO
-                    })
-                {
-                    return Err(FastPayError::ModulePublishFailure { error: format!("Denpendent modules must have already been published on-chain with non-0 addresses. Violated by module {:?}", m.self_id()) });
-                }
             }
-            Ok(compiled_modules.iter_modules_owned())
+            // Collect all module names from the current package to be published.
+            // For each transitive dependent module, if they are not to be published,
+            // they must have a non-zero address (meaning they are already published on-chain).
+            // TODO: Shall we also check if they are really on-chain in the future?
+            let self_modules: HashSet<String> = compiled_modules
+                .iter_modules()
+                .iter()
+                .map(|m| m.self_id().name().to_string())
+                .collect();
+            if let Some(m) = package
+                .transitive_compiled_modules()
+                .iter_modules()
+                .iter()
+                .find(|m| {
+                    !self_modules.contains(m.self_id().name().as_str())
+                        && m.self_id().address() == &AccountAddress::ZERO
+                })
+            {
+                return Err(FastPayError::ModulePublishFailure { error: format!("Denpendent modules must have been published on-chain with non-0 addresses, unlike module {:?}", m.self_id()) });
+            }
+            Ok(package
+                .transitive_compiled_modules()
+                .compute_dependency_graph()
+                .compute_topological_order()
+                .unwrap()
+                .filter(|m| self_modules.contains(m.self_id().name().as_str()))
+                .cloned()
+                .collect())
         }
     }
 }

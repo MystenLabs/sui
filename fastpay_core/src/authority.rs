@@ -18,7 +18,7 @@ use move_core_types::{
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     sync::Arc,
 };
 
@@ -44,6 +44,7 @@ pub struct AuthorityState {
     /// Move native functions that are available to invoke
     _native_functions: NativeFunctionTable,
     move_vm: Arc<adapter::MoveVM>,
+
     /// The database
     _database: Arc<AuthorityStore>,
 }
@@ -55,103 +56,175 @@ pub struct AuthorityState {
 ///
 /// Repeating commands should produce no changes and return no error.
 impl AuthorityState {
+    /// The logic to check one object against a reference, and return the object if all is well
+    /// or an error if not.
+    fn check_one_lock(
+        &self,
+        order: &Order,
+        object_kind: InputObjectKind,
+        object: &Object,
+        mutable_object_ids: &HashSet<ObjectID>,
+    ) -> FastPayResult {
+        match object_kind {
+            InputObjectKind::MovePackage(package_id) => {
+                fp_ensure!(
+                    object.data.try_as_package().is_some(),
+                    FastPayError::MoveObjectAsPackage {
+                        object_id: package_id
+                    }
+                );
+            }
+            InputObjectKind::MoveObject((object_id, sequence_number, object_digest)) => {
+                fp_ensure!(
+                    sequence_number <= SequenceNumber::max(),
+                    FastPayError::InvalidSequenceNumber
+                );
+
+                // Check that the seq number is the same
+                fp_ensure!(
+                    object.version() == sequence_number,
+                    FastPayError::UnexpectedSequenceNumber {
+                        object_id,
+                        expected_sequence: object.version(),
+                    }
+                );
+
+                // Check the digest matches
+                fp_ensure!(
+                    object.digest() == object_digest,
+                    FastPayError::InvalidObjectDigest {
+                        object_id,
+                        expected_digest: object_digest
+                    }
+                );
+
+                if object.is_read_only() {
+                    // Gas object must not be immutable.
+                    fp_ensure!(
+                        &object_id != order.gas_payment_object_id(),
+                        FastPayError::InsufficientGas {
+                            error: "Gas object should not be immutable".to_string()
+                        }
+                    );
+                    // Checks for read-only objects end here.
+                    return Ok(());
+                }
+
+                // Additional checks for mutable objects
+                // Check the transaction sender is also the object owner
+                // If the object is owned by another object, we make sure the owner object
+                // is also a mutable input to this order.
+                match &object.owner {
+                    // TODO: More detailed error message for IncorrectSigner.
+                    Authenticator::Address(addr) => {
+                        fp_ensure!(order.sender() == addr, FastPayError::IncorrectSigner);
+                    }
+                    Authenticator::Object(id) => {
+                        fp_ensure!(
+                            mutable_object_ids.contains(id),
+                            FastPayError::IncorrectSigner
+                        );
+                    }
+                };
+
+                if &object_id == order.gas_payment_object_id() {
+                    gas::check_gas_requirement(order, object)?;
+                }
+            }
+        };
+        Ok(())
+    }
+
+    /// Check all the objects used in the order against the database, and ensure
+    /// that they are all the correct version and number.
+    async fn check_locks(
+        &self,
+        order: &Order,
+    ) -> Result<Vec<(InputObjectKind, Object)>, FastPayError> {
+        let input_objects = order.input_objects();
+        let mut all_objects = Vec::with_capacity(input_objects.len());
+
+        // There is at least one input
+        fp_ensure!(
+            !input_objects.is_empty(),
+            FastPayError::ObjectInputArityViolation
+        );
+        // Ensure that there are no duplicate inputs
+        let mut used = HashSet::new();
+        if !input_objects.iter().all(|o| used.insert(o.object_id())) {
+            return Err(FastPayError::DuplicateObjectRefInput);
+        }
+
+        let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
+
+        let objects = self.get_objects(&ids[..]).await?;
+        let mutable_object_ids: HashSet<_> = objects
+            .iter()
+            .flat_map(|opt_obj| match opt_obj {
+                Some(obj) if !obj.is_read_only() => Some(obj.id()),
+                _ => None,
+            })
+            .collect();
+        let mut errors = Vec::new();
+        for (object_kind, object) in input_objects.into_iter().zip(objects) {
+            let object = match object {
+                Some(object) => object,
+                None => {
+                    errors.push(object_kind.object_not_found_error());
+                    continue;
+                }
+            };
+
+            match self.check_one_lock(order, object_kind, &object, &mutable_object_ids) {
+                Ok(()) => all_objects.push((object_kind, object)),
+                Err(e) => {
+                    errors.push(e);
+                }
+            }
+        }
+
+        // If any errors with the locks were detected, we return all errors to give the client
+        // a chance to update the authority if possible.
+        if !errors.is_empty() {
+            return Err(FastPayError::LockErrors { errors });
+        }
+
+        fp_ensure!(
+            !all_objects.is_empty(),
+            FastPayError::ObjectInputArityViolation
+        );
+
+        Ok(all_objects)
+    }
+
     /// Initiate a new order.
     pub async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
         // Check the sender's signature.
         order.check_signature()?;
         let transaction_digest = order.digest();
 
-        let input_objects = order.input_objects();
-        let mut mutable_objects = Vec::with_capacity(input_objects.len());
-
-        // There is at least one input
-        fp_ensure!(
-            !input_objects.is_empty(),
-            FastPayError::InsufficientObjectNumber
-        );
-        // Ensure that there are no duplicate inputs
-        let mut used = HashSet::new();
-        if !input_objects.iter().all(|o| used.insert(o)) {
-            return Err(FastPayError::DuplicateObjectRefInput);
-        }
-        let transfer_object_id = if let OrderKind::Transfer(t) = &order.kind {
-            Some(&t.object_ref.0)
-        } else {
-            None
-        };
-
-        let ids: Vec<_> = input_objects.iter().map(|(id, _, _)| *id).collect();
-        // Get a copy of the object.
-        // TODO: We only need to read the read_only and owner field of the object,
-        //      it's a bit wasteful to copy the entire object.
-        let objects = self.get_objects(&ids[..]).await?;
-        for (object_ref, object) in input_objects.into_iter().zip(objects) {
-            let (object_id, sequence_number, _object_digest) = object_ref;
-
-            fp_ensure!(
-                sequence_number <= SequenceNumber::max(),
-                FastPayError::InvalidSequenceNumber
-            );
-
-            let object = object.ok_or(FastPayError::ObjectNotFound)?;
-
-            // TODO(https://github.com/MystenLabs/fastnft/issues/123): This hack substitutes the real
-            // object digest instead of using the one passed in by the client. We need to fix clients and
-            // then use the digest provided, by deleting this line.
-            let object_digest = object.digest();
-
-            // Check that the seq number is the same
-            fp_ensure!(
-                object.version() == sequence_number,
-                FastPayError::UnexpectedSequenceNumber {
-                    object_id,
-                    expected_sequence: object.version(),
-                    received_sequence: sequence_number
-                }
-            );
-
-            if object.is_read_only() {
-                // For a tranfer order, the object to be transferred
-                // must not be read only.
-                fp_ensure!(
-                    Some(&object_id) != transfer_object_id,
-                    FastPayError::TransferImmutableError
-                );
-                // Gas object must not be immutable.
-                fp_ensure!(
-                    &object_id != order.gas_payment_object_id(),
-                    FastPayError::InsufficientGas {
-                        error: "Gas object should not be immutable".to_string()
+        let mutable_objects: Vec<_> = self
+            .check_locks(&order)
+            .await?
+            .into_iter()
+            .filter_map(|(object_kind, object)| match object_kind {
+                InputObjectKind::MovePackage(_) => None,
+                InputObjectKind::MoveObject(object_ref) => {
+                    if object.is_read_only() {
+                        None
+                    } else {
+                        Some(object_ref)
                     }
-                );
-                // Checks for read-only objects end here.
-                continue;
-            }
-
-            // Additional checks for mutable objects
-            // Check the transaction sender is also the object owner
-            fp_ensure!(
-                order.sender() == &object.owner,
-                FastPayError::IncorrectSigner
-            );
-
-            if &object_id == order.gas_payment_object_id() {
-                gas::check_gas_requirement(&order, &object)?;
-            }
-
-            /* The call to self.set_order_lock checks the lock is not conflicting,
-            and returns ConflictingOrder in case there is a lock on a different
-            existing order */
-
-            mutable_objects.push((object_id, sequence_number, object_digest));
-        }
-
-        // We have checked that there is a mutable gas object.
-        debug_assert!(!mutable_objects.is_empty());
+                }
+            })
+            .collect();
 
         let signed_order = SignedOrder::new(order, self.name, &self.secret);
 
         // Check and write locks, to signed order, into the database
+        // The call to self.set_order_lock checks the lock is not conflicting,
+        // and returns ConflictingOrder error in case there is a lock on a different
+        // existing order.
         self.set_order_lock(&mutable_objects, signed_order).await?;
 
         // Return the signed Order or maybe a cert.
@@ -170,54 +243,41 @@ impl AuthorityState {
         // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
-        let input_objects = order.input_objects();
-        let ids: Vec<_> = input_objects.iter().map(|(id, _, _)| *id).collect();
-        // Get a copy of the object.
-        // TODO: We only need to read the read_only and owner field of the object,
-        //      it's a bit wasteful to copy the entire object.
-        let objects = self.get_objects(&ids[..]).await?;
-
-        let mut inputs = vec![];
-        let mut owner_index = HashMap::new();
-        for (object_ref, object) in input_objects.into_iter().zip(objects) {
-            let (input_object_id, input_seq, _input_digest) = object_ref;
-
-            // If we have a certificate on the confirmation order it means that the input
-            // object exists on other honest authorities, but we do not have it.
-            let input_object = object.ok_or(FastPayError::ObjectNotFound)?;
-
-            let input_sequence_number = input_object.version();
-
-            // Check that the current object is exactly the right version.
-            if input_sequence_number < input_seq {
-                fp_bail!(FastPayError::MissingEalierConfirmations {
-                    current_sequence_number: input_sequence_number
-                });
-            }
-            if input_sequence_number > input_seq {
-                // Transfer was already confirmed.
-                return self.make_order_info(&transaction_digest).await;
-            }
-
-            if !input_object.is_read_only() {
-                owner_index.insert(input_object_id, input_object.owner);
-            }
-
-            inputs.push(input_object.clone());
+        // Ensure an idempotent answer
+        let order_info = self.make_order_info(&transaction_digest).await?;
+        if order_info.certified_order.is_some() {
+            return Ok(order_info);
         }
 
+        let inputs: Vec<_> = self
+            .check_locks(&order)
+            .await?
+            .into_iter()
+            .map(|(_, object)| object)
+            .collect();
+
+        let mut transaction_dependencies: BTreeSet<_> = inputs
+            .iter()
+            .map(|object| object.previous_transaction)
+            .collect();
+
         // Insert into the certificates map
-        let transaction_digest = certificate.order.digest();
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
+        let gas_object_id = *order.gas_payment_object_id();
         let (temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx)?;
+
+        // Remove from dependencies the generic hash
+        transaction_dependencies.remove(&TransactionDigest::genesis());
 
         // Update the database in an atomic manner
         let to_signed_effects = temporary_store.to_signed_effects(
             &self.name,
             &self.secret,
             &transaction_digest,
+            transaction_dependencies.into_iter().collect(),
             status,
+            &gas_object_id,
         );
         self.update_state(temporary_store, certificate, to_signed_effects)
             .await // Returns the OrderInfoResponse
@@ -229,7 +289,7 @@ impl AuthorityState {
         mut inputs: Vec<Object>,
         tx_ctx: &mut TxContext,
     ) -> FastPayResult<(AuthorityTemporaryStore, ExecutionStatus)> {
-        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs);
+        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs, tx_ctx.digest());
         // unwraps here are safe because we built `inputs`
         let mut gas_object = inputs.pop().unwrap();
 
@@ -281,10 +341,20 @@ impl AuthorityState {
     fn transfer(
         temporary_store: &mut AuthorityTemporaryStore,
         mut inputs: Vec<Object>,
-        recipient: Address,
+        recipient: FastPayAddress,
         mut gas_object: Object,
     ) -> FastPayResult<ExecutionStatus> {
-        let gas_used = gas::calculate_object_transfer_cost(&inputs[0]);
+        if !inputs.len() == 1 {
+            return Ok(ExecutionStatus::Failure {
+                gas_used: gas::MIN_OBJ_TRANSFER_GAS,
+                error: Box::new(FastPayError::ObjectInputArityViolation),
+            });
+        }
+
+        // Safe to do pop due to check !is_empty()
+        let mut output_object = inputs.pop().unwrap();
+
+        let gas_used = gas::calculate_object_transfer_cost(&output_object);
         if let Err(err) = gas::try_deduct_gas(&mut gas_object, gas_used) {
             return Ok(ExecutionStatus::Failure {
                 gas_used: gas::MIN_OBJ_TRANSFER_GAS,
@@ -293,13 +363,23 @@ impl AuthorityState {
         }
         temporary_store.write_object(gas_object);
 
-        let mut output_object = inputs.pop().unwrap();
-        output_object.transfer(match recipient {
-            Address::Primary(_) => FastPayAddress::default(),
-            Address::FastPay(addr) => addr,
-        });
+        if output_object.is_read_only() {
+            return Ok(ExecutionStatus::Failure {
+                gas_used: gas::MIN_OBJ_TRANSFER_GAS,
+                error: Box::new(FastPayError::CannotTransferReadOnlyObject),
+            });
+        }
+
+        output_object.transfer(Authenticator::Address(recipient));
         temporary_store.write_object(output_object);
         Ok(ExecutionStatus::Success)
+    }
+
+    pub async fn handle_order_info_request(
+        &self,
+        request: OrderInfoRequest,
+    ) -> Result<OrderInfoResponse, FastPayError> {
+        self.make_order_info(&request.transaction_digest).await
     }
 
     pub async fn handle_account_info_request(
@@ -313,18 +393,19 @@ impl AuthorityState {
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, FastPayError> {
-        let requested_certificate = if let Some(seq) = request.request_sequence_number {
-            // TODO(https://github.com/MystenLabs/fastnft/issues/123): Here we need to develop a strategy
-            // to provide back to the client the object digest for specific objects requested. Probably,
-            // we have to return the full ObjectRef and why not the actual full object here.
-
+        // Only add a certificate if it is requested
+        let parent_certificate = if let Some(seq) = request.request_sequence_number {
             // Get the Transaction Digest that created the object
             let parent_iterator = self
-                .get_parent_iterator(request.object_id, Some(seq.increment()))
+                .get_parent_iterator(request.object_id, Some(seq))
                 .await?;
-            let (_, transaction_digest) = parent_iterator
-                .first()
-                .ok_or(FastPayError::CertificateNotfound)?;
+            let (_, transaction_digest) =
+                parent_iterator
+                    .first()
+                    .ok_or(FastPayError::ParentNotfound {
+                        object_id: request.object_id,
+                        sequence: seq,
+                    })?;
             // Get the cert from the transaction digest
             Some(
                 self.read_certificate(transaction_digest)
@@ -334,12 +415,31 @@ impl AuthorityState {
         } else {
             None
         };
-        self.make_object_info(request.object_id, requested_certificate)
-            .await
-    }
-}
 
-impl AuthorityState {
+        // Always attempt to return the latest version of the object and the
+        // current lock if any.
+        let object_result = self.get_object(&request.object_id).await;
+        let object_and_lock = match object_result {
+            Ok(Some(object)) => {
+                let lock = if object.is_read_only() {
+                    // Read only objects have no locks.
+                    None
+                } else {
+                    self.get_order_lock(&object.to_object_reference()).await?
+                };
+
+                Some(ObjectResponse { object, lock })
+            }
+            Err(e) => return Err(e),
+            _ => None,
+        };
+
+        Ok(ObjectInfoResponse {
+            parent_certificate,
+            object_and_lock,
+        })
+    }
+
     pub async fn new_with_genesis_modules(
         committee: Committee,
         name: AuthorityName,
@@ -387,8 +487,8 @@ impl AuthorityState {
         }
     }
 
-    async fn object_state(&self, object_id: &ObjectID) -> Result<Object, FastPayError> {
-        self._database.object_state(object_id)
+    async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, FastPayError> {
+        self._database.get_object(object_id)
     }
 
     pub async fn insert_object(&self, object: Object) {
@@ -403,25 +503,6 @@ impl AuthorityState {
         transaction_digest: &TransactionDigest,
     ) -> Result<OrderInfoResponse, FastPayError> {
         self._database.get_order_info(transaction_digest)
-    }
-
-    /// Make an info summary of an object, and include the raw object for clients
-    async fn make_object_info(
-        &self,
-        object_id: ObjectID,
-        requested_certificate: Option<CertifiedOrder>,
-    ) -> Result<ObjectInfoResponse, FastPayError> {
-        let object = self.object_state(&object_id).await?;
-        let lock = self
-            .get_order_lock(&object.to_object_reference())
-            .await
-            .or::<FastPayError>(Ok(None))?;
-
-        Ok(ObjectInfoResponse {
-            requested_certificate,
-            pending_confirmation: lock,
-            object,
-        })
     }
 
     fn make_account_info(

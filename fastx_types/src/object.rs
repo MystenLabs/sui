@@ -15,8 +15,8 @@ use crate::id::ID;
 use crate::FASTX_FRAMEWORK_ADDRESS;
 use crate::{
     base_types::{
-        sha3_hash, BcsSignable, FastPayAddress, ObjectDigest, ObjectID, ObjectRef, SequenceNumber,
-        TransactionDigest,
+        sha3_hash, Authenticator, BcsSignable, FastPayAddress, ObjectDigest, ObjectID, ObjectRef,
+        SequenceNumber, TransactionDigest,
     },
     gas_coin::GasCoin,
 };
@@ -26,6 +26,7 @@ pub const OBJECT_BASICS_MODULE_NAME: &move_core_types::identifier::IdentStr =
 pub const OBJECT_BASICS_OBJECT_TYPE_NAME: &move_core_types::identifier::IdentStr =
     ident_str!("Object");
 pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
+pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
 #[serde_as]
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
@@ -43,19 +44,12 @@ pub struct ObjectBasicsObject {
     pub value: u64,
 }
 
-/// Coin in the Framework uses an object of the following format
-#[derive(Debug, Deserialize, Serialize)]
-pub struct CoinObject {
-    pub id: ID,
-    pub value: u64,
-}
-
 /// Byte encoding of a 64 byte unsigned integer in BCS
 type BcsU64 = [u8; 8];
 /// Index marking the end of the object's ID + the beginning of its version
-const ID_END_INDEX: usize = 16;
+const ID_END_INDEX: usize = AccountAddress::LENGTH;
 /// Index marking the end of the object's version + the beginning of type-specific data
-const VERSION_END_INDEX: usize = 24;
+const VERSION_END_INDEX: usize = ID_END_INDEX + 8;
 
 impl MoveObject {
     pub fn new(type_: StructTag, contents: Vec<u8>) -> Self {
@@ -192,8 +186,8 @@ impl Data {
 pub struct Object {
     /// The meat of the object
     pub data: Data,
-    /// The authenticator that unlocks this object (eg. public key, or other)
-    pub owner: FastPayAddress,
+    /// The authenticator that unlocks this object (eg. public key, or object id)
+    pub owner: Authenticator,
     /// The digest of the order that created or last mutated this object
     pub previous_transaction: TransactionDigest,
 }
@@ -204,7 +198,7 @@ impl Object {
     /// Create a new Move object
     pub fn new_move(
         o: MoveObject,
-        owner: FastPayAddress,
+        owner: Authenticator,
         previous_transaction: TransactionDigest,
     ) -> Self {
         Object {
@@ -216,7 +210,7 @@ impl Object {
 
     pub fn new_package(
         modules: Vec<CompiledModule>,
-        owner: FastPayAddress,
+        owner: Authenticator,
         previous_transaction: TransactionDigest,
     ) -> Self {
         let serialized: MovePackage = modules
@@ -266,7 +260,7 @@ impl Object {
 
         match &self.data {
             Move(v) => v.version(),
-            Package(_) => SequenceNumber::from(0), // modules are immutable, version is always 0
+            Package(_) => SequenceNumber::from(1), // modules are immutable, version is always 1
         }
     }
 
@@ -279,7 +273,7 @@ impl Object {
     }
 
     /// Change the owner of `self` to `new_owner`
-    pub fn transfer(&mut self, new_owner: FastPayAddress) {
+    pub fn transfer(&mut self, new_owner: Authenticator) {
         // TODO: these should be raised FastPayError's instead of panic's
         assert!(!self.is_read_only(), "Cannot transfer an immutable object");
         match &mut self.data {
@@ -308,7 +302,7 @@ impl Object {
             read_only: false,
         });
         Self {
-            owner,
+            owner: Authenticator::Address(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
@@ -347,7 +341,7 @@ impl Object {
             read_only: false,
         });
         Self {
-            owner,
+            owner: Authenticator::Address(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
@@ -360,11 +354,7 @@ impl Object {
         owner: FastPayAddress,
         value: u64,
     ) -> Self {
-        // An object in Coin.move is a struct of an ID and a u64 value
-        let obj = CoinObject {
-            id: ID::new(id, version),
-            value,
-        };
+        let obj = GasCoin::new(id, version, value);
 
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
@@ -372,7 +362,7 @@ impl Object {
             read_only: false,
         });
         Self {
-            owner,
+            owner: Authenticator::Address(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
         }

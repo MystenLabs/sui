@@ -22,6 +22,7 @@ pub enum SerializedMessage {
     ObjectInfoReq(Box<ObjectInfoRequest>),
     ObjectInfoResp(Box<ObjectInfoResponse>),
     OrderResp(Box<OrderInfoResponse>),
+    OrderInfoReq(Box<OrderInfoRequest>),
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.
@@ -39,6 +40,7 @@ enum ShallowSerializedMessage<'a> {
     ObjectInfoReq(&'a ObjectInfoRequest),
     ObjectInfoResp(&'a ObjectInfoResponse),
     OrderResp(&'a OrderInfoResponse),
+    OrderInfoReq(&'a OrderInfoRequest),
 }
 
 fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), anyhow::Error>
@@ -105,6 +107,10 @@ pub fn serialize_object_info_response(value: &ObjectInfoResponse) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::ObjectInfoResp(value))
 }
 
+pub fn serialize_order_info_request(value: &OrderInfoRequest) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::OrderInfoReq(value))
+}
+
 pub fn serialize_vote(value: &SignedOrder) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Vote(value))
 }
@@ -137,7 +143,7 @@ where
     bincode::deserialize_from(reader).map_err(|err| format_err!("{}", err))
 }
 
-pub fn object_info_deserializer(
+pub fn deserialize_object_info(
     message: SerializedMessage,
 ) -> Result<ObjectInfoResponse, FastPayError> {
     match message {
@@ -147,7 +153,7 @@ pub fn object_info_deserializer(
     }
 }
 
-pub fn account_info_deserializer(
+pub fn deserialize_account_info(
     message: SerializedMessage,
 ) -> Result<AccountInfoResponse, FastPayError> {
     match message {
@@ -157,7 +163,7 @@ pub fn account_info_deserializer(
     }
 }
 
-pub fn order_info_deserializer(
+pub fn deserialize_order_info(
     message: SerializedMessage,
 ) -> Result<OrderInfoResponse, FastPayError> {
     match message {

@@ -29,6 +29,7 @@ pub type VersionNumber = SequenceNumber;
 pub struct UserData(pub Option<[u8; 32]>);
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
+#[derive(Debug)]
 pub struct KeyPair(dalek::Keypair);
 
 #[serde_as]
@@ -72,7 +73,6 @@ impl TryFrom<&[u8]> for PublicKeyBytes {
     }
 }
 
-pub type PrimaryAddress = PublicKeyBytes;
 pub type FastPayAddress = PublicKeyBytes;
 pub type AuthorityName = PublicKeyBytes;
 
@@ -82,6 +82,28 @@ pub type AuthorityName = PublicKeyBytes;
 // addresses and ID's
 pub type ObjectID = AccountAddress;
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
+
+/// An object can be either owned by an account address, or another object.
+// TODO: A few things to improve:
+// 1. We may want to support multiple signing schemas, rename Authenticator to Address,
+//    and rename the Address enum to Ed25519PublicKey, so that we could add more.
+// 2. We may want to make Authenticator a fix-sized array instead of having different size
+//    for different variants, through hashing.
+// Refer details to https://github.com/MystenLabs/fastnft/pull/292.
+#[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, PartialOrd, Ord, Serialize, Hash)]
+pub enum Authenticator {
+    Address(FastPayAddress),
+    Object(ObjectID),
+}
+
+impl Authenticator {
+    pub fn is_address(&self, address: &FastPayAddress) -> bool {
+        match self {
+            Self::Address(addr) => addr == address,
+            Self::Object(_) => false,
+        }
+    }
+}
 
 // We use SHA3-256 hence 32 bytes here
 const TRANSACTION_DIGEST_LENGTH: usize = 32;
@@ -183,9 +205,15 @@ impl ObjectDigest {
     }
 }
 
+// TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;
     let keypair = dalek::Keypair::generate(&mut csprng);
+    (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
+}
+
+pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (FastPayAddress, KeyPair) {
+    let keypair = dalek::Keypair::from_bytes(bytes).unwrap();
     (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
 }
 
@@ -243,6 +271,7 @@ impl std::fmt::UpperHex for PublicKeyBytes {
         Ok(())
     }
 }
+
 pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::ser::Serializer,
@@ -343,6 +372,10 @@ impl SequenceNumber {
 
     pub fn value(&self) -> u64 {
         self.0
+    }
+
+    pub const fn from_u64(u: u64) -> Self {
+        SequenceNumber(u)
     }
 
     #[must_use]

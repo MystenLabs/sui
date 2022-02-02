@@ -8,26 +8,31 @@ edition = "2021"
 
 [dependencies]
 rocksdb = "0.17.0"
-anyhow = "1.0.52"
+anyhow = "1.0.53"
 bcs = "0.1.3"
-futures = "0.3.5"
+futures = "0.3.19"
 rand = "0.7.3"
-serde = { version = "1.0.133", features = ["derive"] }
-tokio = { version = "1.15.0", features = ["full"] }
-parking_lot = "0.11.2"
+serde = { version = "1.0.136", features = ["derive"] }
+tokio = { version = "1.16.1", features = ["full"] }
+parking_lot = "0.12.0"
 itertools = "0.10.3"
 async-trait = "0.1.52"
+tempfile = "3.3.0"
+tracing = { version = "0.1", features = ["log"] }
 
 fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-framework = { path = "../fastx_programmability/framework" }
+fastx-network = { path = "../network_utils" }
 fastx-types = { path = "../fastx_types" }
 
-move-binary-format = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
-move-core-types = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
-move-vm-runtime = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
+move-binary-format = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }
+move-core-types = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2", features=["address20"] }
+move-package = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }
+move-vm-runtime = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }
 
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0ef3f1fedcfbf3dfe0eeea65e05de073b7c25733" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "5221b8ff87e18a1bff2ffe930711685d54c04062"}
 
 [dev-dependencies]
 fdlimit = "0.2.1"
+naughty-strings = "0.2.4"

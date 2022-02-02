@@ -4,9 +4,10 @@
 use fastpay_core::client::ClientState;
 use fastx_types::{
     base_types::*,
-    messages::{Address, CertifiedOrder, OrderKind},
+    messages::{CertifiedOrder, OrderKind},
 };
 
+use fastx_types::object::Object;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::{identifier::Identifier, transaction_argument::TransactionArgument};
 use serde::{Deserialize, Serialize};
@@ -99,12 +100,15 @@ impl CommitteeConfig {
     }
 }
 
+<<<<<<< HEAD
 impl Default for CommitteeConfig {
     fn default() -> Self {
         Self::new()
     }
 }
 
+=======
+>>>>>>> main
 #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct UserAccount {
@@ -114,25 +118,32 @@ pub struct UserAccount {
     )]
     pub address: FastPayAddress,
     pub key: KeyPair,
-    pub object_ids: BTreeMap<ObjectID, SequenceNumber>,
+    pub object_refs: BTreeMap<ObjectID, ObjectRef>,
     pub gas_object_ids: BTreeSet<ObjectID>, // Every id in gas_object_ids should also be in object_ids.
+<<<<<<< HEAD
 
+=======
+>>>>>>> main
     #[serde_as(as = "Vec<(_, _)>")]
     pub certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
 }
 
 impl UserAccount {
-    pub fn new(object_ids: Vec<ObjectID>, gas_object_ids: Vec<ObjectID>) -> Self {
-        let (address, key) = get_key_pair();
-        let object_ids = object_ids
+    pub fn new(
+        address: FastPayAddress,
+        key: KeyPair,
+        object_refs: Vec<ObjectRef>,
+        gas_object_ids: Vec<ObjectID>,
+    ) -> Self {
+        let object_refs = object_refs
             .into_iter()
-            .map(|object_id| (object_id, SequenceNumber::new()))
+            .map(|object_ref| (object_ref.0, object_ref))
             .collect();
         let gas_object_ids = BTreeSet::from_iter(gas_object_ids);
         Self {
             address,
             key,
-            object_ids,
+            object_refs,
             gas_object_ids,
             certificates: BTreeMap::new(),
         }
@@ -229,7 +240,7 @@ impl AccountsConfig {
     pub fn find_account(&self, object_id: &ObjectID) -> Option<&UserAccount> {
         self.accounts
             .values()
-            .find(|acc| acc.object_ids.contains_key(object_id))
+            .find(|acc| acc.object_refs.contains_key(object_id))
     }
     pub fn accounts_mut(&mut self) -> impl Iterator<Item = &mut UserAccount> {
         self.accounts.values_mut()
@@ -244,20 +255,18 @@ impl AccountsConfig {
             .accounts
             .get_mut(&state.address())
             .expect("Updated account should already exist");
-        account.object_ids = state.object_ids().clone();
-        account.certificates = state.all_certificates().clone();
+        account.object_refs = state.object_refs();
+        account.certificates = state.all_certificates();
     }
 
     pub fn update_for_received_transfer(&mut self, certificate: CertifiedOrder) {
         match &certificate.order.kind {
             OrderKind::Transfer(transfer) => {
-                if let Address::FastPay(recipient) = &transfer.recipient {
-                    if let Some(config) = self.accounts.get_mut(recipient) {
-                        config
-                            .certificates
-                            .entry(certificate.order.digest())
-                            .or_insert(certificate);
-                    }
+                if let Some(config) = self.accounts.get_mut(&transfer.recipient) {
+                    config
+                        .certificates
+                        .entry(certificate.order.digest())
+                        .or_insert(certificate);
                 }
             }
             OrderKind::Publish(_) | OrderKind::Call(_) => {
@@ -296,7 +305,11 @@ impl AccountsConfig {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct InitialStateConfigEntry {
     pub address: FastPayAddress,
+<<<<<<< HEAD
     pub object_ids_and_gas_vals: Vec<(ObjectID, u64)>,
+=======
+    pub objects: Vec<Object>,
+>>>>>>> main
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub struct InitialStateConfig {
@@ -311,11 +324,11 @@ impl InitialStateConfig {
     pub fn read(path: &str) -> Result<Self, anyhow::Error> {
         let raw_data: String = read_to_string(path)?.parse()?;
 
-        Ok(toml::from_str(&raw_data)?)
+        Ok(serde_json::from_str(&raw_data)?)
     }
 
     pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let config = toml::to_string(self).unwrap();
+        let config = serde_json::to_string(self).unwrap();
 
         fs::write(path, config).expect("Unable to write to initial config file");
         Ok(())

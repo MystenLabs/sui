@@ -1,6 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Debug;
 use thiserror::Error;
 
 use crate::base_types::*;
@@ -30,6 +31,14 @@ pub(crate) use fp_ensure;
 
 #[allow(clippy::large_enum_variant)]
 pub enum FastPayError {
+    // Object misuse issues
+    #[error("Error acquiring lock for object(s): {:?}", errors)]
+    LockErrors { errors: Vec<FastPayError> },
+    #[error("Attempt to transfer read-only object.")]
+    CannotTransferReadOnlyObject,
+    #[error("A move package is expected, instead a move object is passed: {object_id}")]
+    MoveObjectAsPackage { object_id: ObjectID },
+
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
@@ -41,29 +50,33 @@ pub enum FastPayError {
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error(
-        "The given sequence ({received_sequence:?}) number must match the next expected sequence ({expected_sequence:?}) number of the account"
+        "The given sequence number must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
     )]
     UnexpectedSequenceNumber {
         object_id: ObjectID,
         expected_sequence: SequenceNumber,
-        received_sequence: SequenceNumber,
     },
-    #[error("Conflicting order already received: {pending_confirmation:?}")]
-    ConflictingOrder { pending_confirmation: Order },
+    #[error("Conflicting order already received: {pending_order:?}")]
+    ConflictingOrder { pending_order: Order },
     #[error("Transfer order was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransferOrder,
-    #[error("Transaction order processing not properly executed by authority")]
-    ErrorWhileProcessingTransactionOrder,
-    #[error("Invalid response when processing confirmation order by authority")]
-    ErrorWhileProcessingConfirmationOrder,
+    #[error("Transaction order processing failed: {err}")]
+    ErrorWhileProcessingTransactionOrder { err: String },
+    #[error("Confirmation order processing failed: {err}")]
+    ErrorWhileProcessingConfirmationOrder { err: String },
     #[error("An invalid answer was returned by the authority while requesting a certificate")]
     ErrorWhileRequestingCertificate,
+    #[error("Module publish failed: {err}")]
+    ErrorWhileProcessingPublish { err: String },
+    #[error("Move call failed: {err}")]
+    ErrorWhileProcessingMoveCall { err: String },
     #[error("An invalid answer was returned by the authority while requesting information")]
     ErrorWhileRequestingInformation,
-    #[error(
-         "Cannot confirm a transfer while previous transfer orders are still pending confirmation: {current_sequence_number:?}"
-    )]
+    #[error("Object fetch failed for {object_id:?}, err {err:?}.")]
+    ObjectFetchFailed { object_id: ObjectID, err: String },
+    #[error("Object {object_id:?} at old version: {current_sequence_number:?}")]
     MissingEalierConfirmations {
+        object_id: ObjectID,
         current_sequence_number: VersionNumber,
     },
     // Synchronization validation
@@ -72,6 +85,11 @@ pub enum FastPayError {
     // Account access
     #[error("No certificate for this account and sequence number")]
     CertificateNotfound,
+    #[error("No parent for object {object_id:?} at this sequence number {sequence:?}")]
+    ParentNotfound {
+        object_id: ObjectID,
+        sequence: SequenceNumber,
+    },
     #[error("Unknown sender's account")]
     UnknownSenderAccount,
     #[error("Signatures in a certificate must be from different authorities.")]
@@ -90,6 +108,13 @@ pub enum FastPayError {
     InvalidAuthenticator,
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
+    #[error(
+        "Invalid Object digest for object {object_id:?}. Expected digest : {expected_digest:?}."
+    )]
+    InvalidObjectDigest {
+        object_id: ObjectID,
+        expected_digest: ObjectDigest,
+    },
     #[error("Cannot deserialize.")]
     InvalidDecoding,
     #[error("Unexpected message.")]
@@ -110,8 +135,10 @@ pub enum FastPayError {
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error:?}.")]
     ModulePublishFailure { error: String },
-    #[error("FAiled to build Move modules")]
+    #[error("Failed to build Move modules")]
     ModuleBuildFailure { error: String },
+    #[error("Dependent package not found on-chain: {package_id:?}")]
+    DependentPackageNotFound { package_id: ObjectID },
 
     // Move call related errors
     #[error("Function resolution failure: {error:?}.")]
@@ -126,6 +153,8 @@ pub enum FastPayError {
     AbortedExecution { error: String },
     #[error("Invalid move event: {error:?}.")]
     InvalidMoveEvent { error: String },
+    #[error("Circular object ownership detected")]
+    CircularObjectOwnership,
 
     // Gas related errors
     #[error("Gas budget set higher than max: {error:?}.")]
@@ -140,18 +169,37 @@ pub enum FastPayError {
     OrderLockDoesNotExist,
     #[error("Attempt to reset a set order lock to a different value.")]
     OrderLockReset,
-    #[error("Could not find the referenced object.")]
-    ObjectNotFound,
+    #[error("Could not find the referenced object {:?}.", object_id)]
+    ObjectNotFound { object_id: ObjectID },
     #[error("Object ID did not have the expected type")]
     BadObjectType { error: String },
     #[error("Move Execution failed")]
     MoveExecutionFailure,
-    #[error("Insufficent input objects")]
-    InsufficientObjectNumber,
+    #[error("Wrong number of parameters for the order.")]
+    ObjectInputArityViolation,
     #[error("Execution invariant violated")]
     ExecutionInvariantViolation,
+    #[error("Authority did not return the information it is expected to have.")]
+    AuthorityInformationUnavailable,
+    #[error("Failed to update authority.")]
+    AuthorityUpdateFailure,
+    #[error(
+        "We have received cryptographic level of evidence that authority {authority:?} is faulty in a Byzantine manner."
+    )]
+    ByzantineAuthoritySuspicion { authority: AuthorityName },
     #[error("Storage error")]
-    StorageError,
+    StorageError(#[from] typed_store::rocks::TypedStoreError),
+
+    #[error(
+    "Failed to achieve quorum between authorities, cause by : {:#?}",
+    errors.iter().map(| e | e.to_string()).collect::<Vec<String>>()
+    )]
+    QuorumNotReached { errors: Vec<FastPayError> },
+    // Client side error
+    #[error("Client state has a different pending transaction.")]
+    ConcurrentTransactionError,
+    #[error("Transfer should be received by us.")]
+    IncorrectRecipientError,
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;

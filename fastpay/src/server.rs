@@ -3,6 +3,7 @@
 
 #![deny(warnings)]
 
+<<<<<<< HEAD
 use fastpay::{config::*, transport};
 use fastx_types::base_types::*;
 mod server_api;
@@ -12,6 +13,71 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{env, fs};
 use structopt::StructOpt;
+=======
+use fastpay::config::*;
+use fastpay_core::{authority::*, authority_server::AuthorityServer};
+use fastx_network::transport;
+use fastx_types::{base_types::*, committee::Committee};
+
+use futures::future::join_all;
+use std::path::Path;
+use std::sync::Arc;
+use structopt::StructOpt;
+use tokio::runtime::Runtime;
+use tracing::subscriber::set_global_default;
+use tracing::*;
+use tracing_subscriber::EnvFilter;
+
+#[allow(clippy::too_many_arguments)]
+fn make_server(
+    local_ip_addr: &str,
+    server_config_path: &str,
+    committee_config_path: &str,
+    initial_accounts_config_path: &str,
+    buffer_size: usize,
+) -> AuthorityServer {
+    let server_config =
+        AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
+    let committee_config =
+        CommitteeConfig::read(committee_config_path).expect("Fail to read committee config");
+    let initial_accounts_config = InitialStateConfig::read(initial_accounts_config_path)
+        .expect("Fail to read initial account config");
+
+    let committee = Committee::new(committee_config.voting_rights());
+
+    let store = Arc::new(AuthorityStore::open(
+        Path::new(&server_config.authority.database_path),
+        None,
+    ));
+
+    // Load initial states
+    let rt = Runtime::new().unwrap();
+
+    let state = rt.block_on(async {
+        let state = AuthorityState::new_with_genesis_modules(
+            committee,
+            server_config.authority.address,
+            server_config.key.copy(),
+            store,
+        )
+        .await;
+        for initial_state_cfg_entry in initial_accounts_config.config {
+            for object in initial_state_cfg_entry.objects {
+                state.init_order_lock(object.to_object_reference()).await;
+                state.insert_object(object).await;
+            }
+        }
+        state
+    });
+
+    AuthorityServer::new(
+        local_ip_addr.to_string(),
+        server_config.authority.base_port,
+        buffer_size,
+        state,
+    )
+}
+>>>>>>> main
 
 #[derive(StructOpt)]
 #[structopt(
@@ -68,7 +134,12 @@ enum ServerCommands {
 }
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let subscriber_builder =
+        tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
+    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
+    set_global_default(subscriber).expect("Failed to set subscriber");
+
     let options = ServerOpt::from_args();
 
     let server_config_path = &options.server;

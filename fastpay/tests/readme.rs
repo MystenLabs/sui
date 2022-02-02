@@ -14,7 +14,7 @@ fn test_examples_in_readme() -> std::io::Result<()> {
     assert_eq!(quotes.len(), 1);
 
     let mut test_script = std::fs::File::create(dir.path().join("test.sh"))?;
-    write!(&mut test_script, "{}", quotes.pop().unwrap())?;
+    write!(test_script, "{}", quotes.pop().unwrap())?;
 
     let status = Command::new("bash")
         .current_dir("..") // root of the repo
