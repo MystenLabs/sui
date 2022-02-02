@@ -51,6 +51,10 @@ ignore = [
     #"RUSTSEC-0000-0000",
     "RUSTSEC-2020-0071",
     "RUSTSEC-2020-0159",
+    # this points at a usage of dashmap 5.0.0 in the upstream Move repo.
+    # no safe upgrade is available, but once one is, we should upgrade Move
+    # and remove this
+    "RUSTSEC-2022-0002",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -60,7 +64,7 @@ ignore = [
 # * Medium - CVSS Score 4.0 - 6.9
 # * High - CVSS Score 7.0 - 8.9
 # * Critical - CVSS Score 9.0 - 10.0
-#severity-threshold = 
+#severity-threshold =
 
 # This section is considered when running `cargo deny check licenses`
 # More documentation for the licenses section can be found here:
@@ -191,8 +195,8 @@ deny = [
 skip = [
     #{ name = "ansi_term", version = "=0.11.0" },
 ]
-# Similarly to `skip` allows you to skip certain crates during duplicate 
-# detection. Unlike skip, it also includes the entire tree of transitive 
+# Similarly to `skip` allows you to skip certain crates during duplicate
+# detection. Unlike skip, it also includes the entire tree of transitive
 # dependencies starting at the specified crate, up to a certain depth, which is
 # by default infinite
 skip-tree = [
