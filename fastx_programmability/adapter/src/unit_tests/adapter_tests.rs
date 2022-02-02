@@ -956,7 +956,7 @@ fn test_simple_call() {
     publish_from_src(
         &mut storage,
         &natives,
-        "src/unit_tests/src/simple_call",
+        "src/unit_tests/data/simple_call",
         gas_object.clone(),
     );
 
