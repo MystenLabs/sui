@@ -1363,7 +1363,7 @@ where
                     .object_refs
                     .insert(&object.id(), &object.to_object_reference())?;
 
-                // Everything worked: update the local balance.
+                // Everything worked: update the local objects and certs.
                 let cert_order_digest = certificate.order.digest();
                 if !self.store.certificates.contains_key(&cert_order_digest)? {
                     self.store
