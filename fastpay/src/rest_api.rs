@@ -1,14 +1,13 @@
-/*!
- * REST Endpoints for FastX.
- */
+// Copyright (c) Mysten Labs
+// SPDX-License-Identifier: Apache-2.0
 
 // REMOVE THIS
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
-mod client_api;
-mod server_api;
+mod client;
+mod server;
 
 use crossbeam::thread as cb_thread;
 
@@ -26,9 +25,8 @@ use dropshot::TypedBody;
 
 use fastpay::{
     config::{AccountsConfig, AuthorityServerConfig, CommitteeConfig, InitialStateConfig},
-    transport,
 };
-
+use fastx_network::transport;
 use fastx_types::{
     base_types::*,
     messages::Order,
@@ -121,7 +119,7 @@ async fn main() -> Result<(), String> {
  */
 struct ServerContext {
     /** Server configuration that can be manipulated by requests to the HTTP API */
-    
+
     // also should store the threads with servers to check status
     threadpool: Arc<Mutex<ThreadPool>>,
     initial_state_cfg: Arc<Mutex<InitialStateConfig>>,
@@ -130,8 +128,8 @@ struct ServerContext {
     recv_timeout: Arc<Mutex<Duration>>,
     acc_cfg: Arc<Mutex<AccountsConfig>>,
     committee_cfg: Arc<Mutex<CommitteeConfig>>,
-    
-    
+
+
     // Do I need any of the below???
     num_servers: AtomicU64,
     auth_serv_cfgs: Vec<AuthorityServerConfig>,
@@ -149,8 +147,8 @@ impl ServerContext {
             buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE.to_string().parse().unwrap(),
             send_timeout: Arc::new(Mutex::new(Duration::new(0, 0))),
             recv_timeout: Arc::new(Mutex::new(Duration::new(0, 0))),
-            acc_cfg: Arc::new(Mutex::new(AccountsConfig::new())),
-            committee_cfg: Arc::new(Mutex::new(CommitteeConfig::new())),
+            acc_cfg: Arc::new(Mutex::new(AccountsConfig::read_or_create("").unwrap())),
+            committee_cfg: Arc::new(Mutex::new(CommitteeConfig::read("").unwrap())),
 
 
             num_servers: AtomicU64::new(0),
@@ -203,15 +201,15 @@ async fn start(
     *server_context.recv_timeout.lock().unwrap() = Duration::from_secs(configuration.recv_timeout_secs);
 
     // Create some account config container
-    let mut acc_cfg = AccountsConfig::new();
+    let mut acc_cfg = AccountsConfig::read_or_create("").unwrap();
     // Committee config is an aggregate of auth configs
-    let mut committee_cfg = CommitteeConfig::new();
+    let mut committee_cfg = CommitteeConfig::read("").unwrap();
 
     // Generate configs for the servers
     let mut auth_serv_cfgs = Vec::new();
     for i in 0..num_servers {
         let db_dir = "db".to_owned() + &i.to_string();
-        let s = server_api::create_server_configs(
+        let s = server::create_server_config(
             "127.0.0.1".to_string(),
             (9100 + i).try_into().unwrap(),
             db_dir,
@@ -226,11 +224,10 @@ async fn start(
     }
 
     // Create accounts with starting values
-    let initial_state_cfg = client_api::create_account_configs(
-        &mut acc_cfg,
+    let initial_state_cfg = client::create_account_configs(
         5,
-        20000,
-        3
+        3,
+        &mut acc_cfg,
     );
 
     *server_context.acc_cfg.lock().unwrap() = acc_cfg;
@@ -270,11 +267,10 @@ async fn start(
 
             println!("Starting...");
 
-            server_api::run_server(
-                "0.0.0.0", 
-                auth, 
-                cfg, 
-                init_cfg, 
+            server::run_server(
+                &"".to_string(),
+                "".to_string(), 
+                "".to_string(), 
                 buffer_size);
 
             // println!("Working...");
@@ -345,8 +341,8 @@ struct Account {
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct Object {
-    object_address: String,
-    sequence_number: Option<String>,
+    object_id: String,
+    object_ref: String,
 }
 
 /**
@@ -368,25 +364,26 @@ async fn get_account_objects(
     rqctx: Arc<RequestContext<ServerContext>>,
     account: TypedBody<Account>,
 ) -> Result<HttpResponseOk<Objects>, HttpError> {
-    
+
     let server_context = rqctx.context();
 
     let send_timeout = *server_context.send_timeout.lock().unwrap();
     let recv_timeout = *server_context.recv_timeout.lock().unwrap();
     let buffer_size = server_context.buffer_size.clone();
-    let account_config = &mut *server_context.acc_cfg.lock().unwrap();
+    let mut account_config = &mut *server_context.acc_cfg.lock().unwrap();
     let committee_config = &*server_context.committee_cfg.lock().unwrap();
 
     let acc_objs = cb_thread::scope(|scope| {
         scope.spawn(|_| {
             // Get the objects for account
-            client_api::get_account_objects(
+            client::query_objects(
+                &mut account_config,
+                &committee_config,
                 decode_address_hex(account.into_inner().account_address.as_str()).unwrap(),
+                buffer_size,
                 send_timeout,
                 recv_timeout,
-                buffer_size,
-                account_config,
-                committee_config,
+                
             )
         }).join().unwrap()
     }).unwrap();
@@ -394,7 +391,7 @@ async fn get_account_objects(
     Ok(HttpResponseOk(Objects{ objects: 
         acc_objs
             .into_iter()
-            .map(|e| Object{ object_address: e.0.to_string(), sequence_number: Some(format!("{:?}", e.1)) })
+            .map(|e| Object{ object_id: e.1.0.to_string(), object_ref: format!("{:?}", e.1) })
             .collect::<Vec<Object>>()
     }))
 }
@@ -405,9 +402,11 @@ async fn get_account_objects(
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct ObjectInfo {
-   requested_certificate: String,
-   pending_confirmation: String,
-   object: String,
+   owner: String,
+   version: String,
+   id: String,
+   readonly: String,
+   obj_type: String
 }
 
 /**
@@ -421,7 +420,7 @@ async fn get_object_info(
     rqctx: Arc<RequestContext<ServerContext>>,
     object: TypedBody<Object>,
 ) -> Result<HttpResponseOk<ObjectInfo>, HttpError> {
-    
+
     let server_context = rqctx.context();
 
     let send_timeout = *server_context.send_timeout.lock().unwrap();
@@ -430,24 +429,36 @@ async fn get_object_info(
     let mut account_config = &mut *server_context.acc_cfg.lock().unwrap();
     let committee_config = &*server_context.committee_cfg.lock().unwrap();
 
-    let acc_obj_info = cb_thread::scope(|scope| {
+    let obj_info = cb_thread::scope(|scope| {
         scope.spawn(|_| {
             // Get the object info
-            client_api::get_object_info(
-                AccountAddress::try_from(object.into_inner().object_address).unwrap(),
+            client::get_object_info(
                 &mut account_config,
                 &committee_config,
+                AccountAddress::try_from(object.into_inner().object_id).unwrap(),
+                buffer_size,
                 send_timeout,
                 recv_timeout,
-                buffer_size,
             )
         }).join().unwrap()
     }).unwrap();
 
     Ok(HttpResponseOk(ObjectInfo{ 
-        requested_certificate: format!("{:?}", acc_obj_info.requested_certificate),
-        pending_confirmation: format!("{:?}", acc_obj_info.pending_confirmation),
-        object: format!("{:?}", acc_obj_info.object),
+        owner: format!("Owner: {:#?}", obj_info.object.owner), 
+        version: format!("Version: {:#?}", obj_info.object.version().value()),
+        id: format!("ID: {:#?}", obj_info.object.id()),
+        readonly: format!("Readonly: {:#?}", obj_info.object.is_read_only()),
+        obj_type: format!(
+            "Type: {:#?}",
+            obj_info
+                .object
+                .data
+                .type_()
+                .map_or("Type Unwrap Failed".to_owned(), |type_| type_
+                    .module
+                    .as_ident_str()
+                    .to_string())
+        )
     }))
 }
 
@@ -473,7 +484,7 @@ async fn transfer_object(
     rqctx: Arc<RequestContext<ServerContext>>,
     transfer_order_body: TypedBody<TransferOrder>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-    
+
     let server_context = rqctx.context();
     let transfer_order = transfer_order_body.into_inner();
 
@@ -492,19 +503,18 @@ async fn transfer_object(
     let acc_obj_info = cb_thread::scope(|scope| {
         scope.spawn(|_| {
             // Transfer from ACC1 to ACC2
-            client_api::transfer_object(
-                from_account,
-                to_account,
-                object_id,
-                gas_object_id,
+            client::transfer_object(
                 &mut account_config,
                 &committee_config,
+                object_id,
+                gas_object_id,
+                to_account,
+                buffer_size,
                 send_timeout,
                 recv_timeout,
-                buffer_size,
             )
         }).join().unwrap()
     }).unwrap();
 
     Ok(HttpResponseUpdatedNoContent())
-}
+} 

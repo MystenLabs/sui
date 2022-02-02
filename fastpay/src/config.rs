@@ -59,7 +59,7 @@ impl AuthorityServerConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 pub struct CommitteeConfig {
     pub authorities: Vec<AuthorityConfig>,
 }
@@ -290,12 +290,6 @@ impl AccountsConfig {
             writer.write_all(b"\n")?;
         }
         Ok(())
-    }
-}
-
-impl Default for AccountsConfig {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

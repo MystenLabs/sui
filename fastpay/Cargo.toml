@@ -7,47 +7,46 @@ publish = false
 edition = "2021"
 
 [dependencies]
-
-anyhow = "1.0.52"
+anyhow = "1.0.53"
 bytes = "1.1.0"
-clap = "2"
-crossbeam = "0.8.1"
-dropshot = "0.6.0"
-env_logger = "0.9.0"
-futures = "0.3.5"
-http = "0.2.6"
-hyper = "0.14.16"
-log = "0.4.14"
-net2 = "0.2.37"
-mime_guess = "2.0.3"
-serde = { version = "1.0.133", features = ["derive"] }
-serde_json = "1.0.74"
-structopt = "0.3.25"
+clap = "3.0.13"
+futures = "0.3.19"
+serde = { version = "1.0.136", features = ["derive"] }
+serde_json = "1.0.78"
+structopt = "0.3.26"
 tempfile = "3.3.0"
-tokio = { version = "1.15.0", features = ["full"] }
+tokio = { version = "1.16.1", features = ["full"] }
 rand = "0.8.4"
 toml = "0.5.8"
-schemars = "0.8.8"
 strum = "0.23.0"
 strum_macros = "0.23.1"
-threadpool = "1.8.1"
 num_cpus = "1.13.1"
 base64 = "0.13.0"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 rocksdb = "0.17.0"
 hex = "0.4.3"
-prettytable-rs = "^0.8"
-serde_with = "1.11.0"
 async-trait = "0.1.52"
+serde_with = "1.11.0"
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 
 bcs = "0.1.3"
 fastpay_core = { path = "../fastpay_core" }
 fastx-adapter = { path = "../fastx_programmability/adapter" }
+fastx-network = { path = "../network_utils" }
 fastx-types = { path = "../fastx_types" }
 
-move-package = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
-move-core-types = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
-move-bytecode-verifier = { git = "https://github.com/diem/move", rev="d253bf1c21314679d17e6935116f30baf409f264" }
+move-package = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }
+move-core-types = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2", features=["address20"] }
+move-bytecode-verifier = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }
+
+# Deps for REST API
+crossbeam = "0.8.1"
+dropshot = "0.6.0"
+http = "0.2.6"
+hyper = "0.14.16"
+schemars = "0.8.8"
+threadpool = "1.8.1"
 
 [[bin]]
 name = "client"
@@ -62,12 +61,5 @@ name = "bench"
 path = "src/bench.rs"
 
 [[bin]]
-name = "api_demo"
-path = "src/api_demo.rs"
-
-[[bin]]
-name = "rest_client"
-path = "src/rest_client.rs"
-
-[package.metadata.cargo-udeps.ignore]
-normal = ["net2"]
+name = "rest_api"
+path = "src/rest_api.rs"

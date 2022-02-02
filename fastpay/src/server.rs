@@ -80,36 +80,10 @@ fn main() {
             initial_accounts,
             local_ip,
         } => {
-            let (auth_cfg, committee_cfg, init_config) =
-                read_cfg_files(server_config_path, &committee, &initial_accounts);
-
-            server_api::run_server(&local_ip, auth_cfg, committee_cfg, init_config, buffer_size);
-        }
-
-        ServerCommands::Generate {
-            host,
             port,
             database_path,
-        } => {
-            // Set the path to the DB
-            let db_path_str = if database_path.is_empty() {
-                env::temp_dir().join(format!("DB_{:?}", ObjectID::random()))
-            } else {
-                PathBuf::from_str(&database_path).unwrap()
-            };
-            let db_path = Path::new(&db_path_str);
-            fs::create_dir(&db_path).unwrap();
-            info!("Will open database on path: {:?}", db_path.as_os_str());
-
-            // The configuration of this authority
-            let authority_config = server_api::create_server_configs(
-                host,
-                port,
-                db_path.to_str().unwrap().to_string(),
-            );
-
-            // Write to the store
-            authority_config
+            let server = create_server_config(host, port, database_path);
+            server
                 .write(server_config_path)
                 .expect("Unable to write server config file");
             info!("Wrote server config file");
@@ -118,17 +92,43 @@ fn main() {
     }
 }
 
-fn read_cfg_files(
-    server_config_path: &str,
-    committee_config_path: &str,
-    initial_accounts_config_path: &str,
-) -> (AuthorityServerConfig, CommitteeConfig, InitialStateConfig) {
-    let server_config =
-        AuthorityServerConfig::read(server_config_path).expect("Fail to read server config");
-    let committee_config =
-        CommitteeConfig::read(committee_config_path).expect("Fail to read committee config");
-    let initial_accounts_config = InitialStateConfig::read(initial_accounts_config_path)
-        .expect("Fail to read initial account config");
+// Shared functions for REST API & CLI 
+pub fn create_server_config(host: String, port: u32, database_path: String) -> AuthorityServerConfig {
+    let (address, key) = get_key_pair();
+    let authority = AuthorityConfig {
+        address,
+        host,
+        base_port: port,
+        database_path,
+    };
+    AuthorityServerConfig { authority, key }
+}
 
-    (server_config, committee_config, initial_accounts_config)
+pub fn run_server(
+    server_config_path: &String, 
+    committee_config_path: String, 
+    initial_accounts_config_path: String, 
+    buffer_size: usize) {
+    let server = make_server(
+        "0.0.0.0", // Allow local IP address to be different from the public one.
+        server_config_path,
+        &committee_config_path,
+        &initial_accounts_config_path,
+        buffer_size,
+    );
+    let rt = Runtime::new().unwrap();
+    let mut handles = Vec::new();
+    handles.push(async move {
+        let spawned_server = match server.spawn().await {
+            Ok(server) => server,
+            Err(err) => {
+                error!("Failed to start server: {}", err);
+                return;
+            }
+        };
+        if let Err(err) = spawned_server.join().await {
+            error!("Server ended with an error: {}", err);
+        }
+    });
+    rt.block_on(join_all(handles));
 }
