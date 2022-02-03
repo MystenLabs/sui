@@ -58,6 +58,7 @@ def switch_to_local():
         "move-cli": "tools/move-cli",
         "move-core-types": "move-core/types",
         "move-package": "tools/move-package",
+        "move-unit-test": "tools/move-unit-test",
         "move-vm-runtime": "move-vm/runtime",
         "move-vm-types": "move-vm/types",
     }
