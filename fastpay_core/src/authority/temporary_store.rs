@@ -175,7 +175,6 @@ impl AuthorityTemporaryStore {
 impl Storage for AuthorityTemporaryStore {
     /// Resets any mutations and deletions recorded in the store.
     fn reset(&mut self) {
-        self.active_inputs.clear();
         self.written.clear();
         self.deleted.clear();
         self.events.clear();
