@@ -2636,7 +2636,7 @@ async fn test_transfer_pending_orders() {
         .collect();
 
     let mut sender_state = init_local_client_state(authority_objects).await;
-    let recipient = recipient_state.address();
+    let recipient = init_local_client_state(vec![vec![]]).await.address();
 
     let mut objects = objects.iter();
 
