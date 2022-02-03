@@ -14,7 +14,7 @@ use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
 };
-use move_core_types::{ident_str, identifier::Identifier};
+use move_core_types::{ident_str, identifier::Identifier, language_storage::TypeTag};
 use move_package::BuildConfig;
 
 use std::fs;
@@ -306,7 +306,7 @@ async fn send_and_confirm_order(
     order: Order,
 ) -> Result<OrderInfoResponse, FastPayError> {
     // Make the initial request
-    let response = authority.handle_order(order.clone()).await.unwrap();
+    let response = authority.handle_order(order.clone()).await?;
     let vote = response.signed_order.unwrap();
 
     // Collect signatures from a quorum of authorities
@@ -525,7 +525,8 @@ async fn test_handle_move_order() {
         &sender,
         &sender_key,
     )
-    .await;
+    .await
+    .unwrap();
 
     assert_eq!(effects.status, ExecutionStatus::Success);
     assert_eq!(effects.created.len(), 1);
@@ -992,28 +993,33 @@ async fn test_move_call_mutable_object_not_mutated() {
     let gas_object_id = ObjectID::random();
     let mut authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
-    let effects =
-        create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key).await;
+    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+        .await
+        .unwrap();
     assert_eq!(effects.status, ExecutionStatus::Success);
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
     let (new_object_id1, seq1, _) = effects.created[0].0;
 
-    let effects =
-        create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key).await;
+    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+        .await
+        .unwrap();
     assert_eq!(effects.status, ExecutionStatus::Success);
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
     let (new_object_id2, seq2, _) = effects.created[0].0;
 
-    let effects = call_object_basics(
+    let effects = call_framework_code(
         &mut authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
-        ident_str!("update").to_owned(),
+        "ObjectBasics",
+        "update",
+        vec![],
         vec![new_object_id1, new_object_id2],
         vec![],
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(effects.status, ExecutionStatus::Success);
     assert_eq!((effects.created.len(), effects.mutated.len()), (0, 2));
     // Verify that both objects' version increased, even though only one object was updated.
@@ -1174,8 +1180,10 @@ async fn test_hero() {
         ident_str!("init").to_owned(),
         vec![],
         vec![],
+        vec![],
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(effects.status, ExecutionStatus::Success);
     let (admin_object, admin_object_owner) = effects.created[0];
     assert!(admin_object_owner.is_address(&admin));
@@ -1191,8 +1199,10 @@ async fn test_hero() {
         ident_str!("init").to_owned(),
         vec![],
         vec![],
+        vec![],
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(effects.status, ExecutionStatus::Success);
     let (cap, cap_owner) = effects.created[0];
     assert!(cap_owner.is_address(&player));
@@ -1206,10 +1216,12 @@ async fn test_hero() {
         &package_object,
         ident_str!("TrustedCoin").to_owned(),
         ident_str!("mint").to_owned(),
+        vec![],
         vec![cap.0],
         vec![bcs::to_bytes(&500_u64).unwrap()],
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(effects.status, ExecutionStatus::Success);
     assert_eq!(effects.mutated.len(), 1); // cap
     let (coin, coin_owner) = effects.created[0];
@@ -1224,10 +1236,12 @@ async fn test_hero() {
         &package_object,
         ident_str!("Hero").to_owned(),
         ident_str!("acquire_hero").to_owned(),
+        vec![],
         vec![coin.0],
         vec![],
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(effects.status, ExecutionStatus::Success);
     assert_eq!(effects.mutated.len(), 1); // coin
     let (hero, hero_owner) = effects.created[0];
@@ -1244,10 +1258,12 @@ async fn test_hero() {
         &package_object,
         ident_str!("Hero").to_owned(),
         ident_str!("assert_hero_strength").to_owned(),
+        vec![],
         vec![hero.0],
         vec![bcs::to_bytes(&5_u64).unwrap()],
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(effects.status, ExecutionStatus::Success);
 
     // 9. Give them a boar!
@@ -1264,10 +1280,12 @@ async fn test_hero() {
         &package_object,
         ident_str!("Hero").to_owned(),
         ident_str!("send_boar").to_owned(),
+        vec![],
         vec![admin_object.0],
         pure_args,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(effects.status, ExecutionStatus::Success);
     let (boar, boar_owner) = effects.created[0];
     assert!(boar_owner.is_address(&player));
@@ -1281,15 +1299,157 @@ async fn test_hero() {
         &package_object,
         ident_str!("Hero").to_owned(),
         ident_str!("slay").to_owned(),
+        vec![],
         vec![hero.0, boar.0],
         vec![],
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(effects.status, ExecutionStatus::Success);
     let events = effects.events;
     // should emit one BoarSlainEvent
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].type_.name.to_string(), "BoarSlainEvent")
+}
+
+#[tokio::test]
+async fn test_object_owning_another_object() {
+    let (sender1, sender1_key) = get_key_pair();
+    let (sender2, sender2_key) = get_key_pair();
+    let gas1 = ObjectID::random();
+    let gas2 = ObjectID::random();
+    let mut authority = init_state_with_ids(vec![(sender1, gas1), (sender2, gas2)]).await;
+
+    // Created 3 objects, all owned by sender1.
+    let effects = create_move_object(&mut authority, &gas1, &sender1, &sender1_key)
+        .await
+        .unwrap();
+    let (obj1, _, _) = effects.created[0].0;
+    let effects = create_move_object(&mut authority, &gas1, &sender1, &sender1_key)
+        .await
+        .unwrap();
+    let (obj2, _, _) = effects.created[0].0;
+    let effects = create_move_object(&mut authority, &gas1, &sender1, &sender1_key)
+        .await
+        .unwrap();
+    let (obj3, _, _) = effects.created[0].0;
+
+    // Transfer obj1 to obj2.
+    let effects = call_framework_code(
+        &mut authority,
+        &gas1,
+        &sender1,
+        &sender1_key,
+        "ObjectBasics",
+        "transfer_to_object",
+        vec![],
+        vec![obj1, obj2],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!(effects.mutated.len(), 2);
+    assert_eq!(
+        authority.get_object(&obj1).await.unwrap().unwrap().owner,
+        Authenticator::Object(obj2)
+    );
+
+    // Try to transfer obj1 to obj3, this time it will fail since obj1 is now owned by obj2,
+    // and obj2 must be in the input to mutate obj1.
+    let effects = call_framework_code(
+        &mut authority,
+        &gas1,
+        &sender1,
+        &sender1_key,
+        "ObjectBasics",
+        "transfer_to_object",
+        vec![],
+        vec![obj1, obj3],
+        vec![],
+    )
+    .await;
+    assert!(effects.unwrap_err().to_string().contains("IncorrectSigner"));
+
+    // Try to transfer obj2 to obj1, this will create circular ownership and fail.
+    let effects = call_framework_code(
+        &mut authority,
+        &gas1,
+        &sender1,
+        &sender1_key,
+        "ObjectBasics",
+        "transfer_to_object",
+        vec![],
+        vec![obj2, obj1],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(effects
+        .status
+        .unwrap_err()
+        .1
+        .to_string()
+        .contains("Circular object ownership detected"));
+
+    // Transfer obj2 to sender2, now sender 2 owns obj2, which owns obj1.
+    let effects = call_framework_code(
+        &mut authority,
+        &gas1,
+        &sender1,
+        &sender1_key,
+        "ObjectBasics",
+        "transfer",
+        vec![],
+        vec![obj2],
+        vec![bcs::to_bytes(&sender2.to_vec()).unwrap()],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!(effects.mutated.len(), 1);
+    assert_eq!(
+        authority.get_object(&obj2).await.unwrap().unwrap().owner,
+        Authenticator::Address(sender2)
+    );
+
+    // Sender 1 try to transfer obj1 to obj2 again.
+    // This will fail since sender1 no longer owns obj2.
+    let effects = call_framework_code(
+        &mut authority,
+        &gas1,
+        &sender1,
+        &sender1_key,
+        "ObjectBasics",
+        "transfer_to_object",
+        vec![],
+        vec![obj1, obj2],
+        vec![],
+    )
+    .await;
+    assert!(effects.unwrap_err().to_string().contains("IncorrectSigner"));
+
+    // Sender2 transfers obj1 to obj2. This should be a successful noop
+    // since obj1 is already owned by obj2.
+    let effects = call_framework_code(
+        &mut authority,
+        &gas2,
+        &sender2,
+        &sender2_key,
+        "ObjectBasics",
+        "transfer_to_object",
+        vec![],
+        vec![obj1, obj2],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!(effects.mutated.len(), 2);
+    assert_eq!(
+        authority.get_object(&obj1).await.unwrap().unwrap().owner,
+        Authenticator::Object(obj2)
+    );
 }
 
 // helpers
@@ -1417,9 +1577,10 @@ async fn call_move(
     package: &ObjectRef,
     module: Identifier,
     function: Identifier,
+    type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
-) -> OrderEffects {
+) -> FastPayResult<OrderEffects> {
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().to_object_reference();
     let mut object_args = vec![];
@@ -1438,29 +1599,30 @@ async fn call_move(
         *package,
         module,
         function,
-        vec![],
+        type_args,
         gas_object_ref,
         object_args,
         pure_args,
         MAX_GAS,
         sender_key,
     );
-    let response = send_and_confirm_order(authority, order).await.unwrap();
-    response.signed_effects.unwrap().effects
+    let response = send_and_confirm_order(authority, order).await?;
+    Ok(response.signed_effects.unwrap().effects)
 }
 
-async fn call_object_basics(
+async fn call_framework_code(
     authority: &mut AuthorityState,
     gas_object_id: &ObjectID,
     sender: &PublicKeyBytes,
     sender_key: &KeyPair,
-    function: Identifier,
+    module: &'static str,
+    function: &'static str,
+    type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
-) -> OrderEffects {
+) -> FastPayResult<OrderEffects> {
     let (genesis_package_objects, _) = genesis::clone_genesis_data();
-    let package_object_ref =
-        get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
+    let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
 
     call_move(
         authority,
@@ -1468,8 +1630,9 @@ async fn call_object_basics(
         sender,
         sender_key,
         &package_object_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        function,
+        ident_str!(module).to_owned(),
+        ident_str!(function).to_owned(),
+        type_args,
         object_arg_ids,
         pure_args,
     )
@@ -1481,13 +1644,15 @@ async fn create_move_object(
     gas_object_id: &ObjectID,
     sender: &PublicKeyBytes,
     sender_key: &KeyPair,
-) -> OrderEffects {
-    call_object_basics(
+) -> FastPayResult<OrderEffects> {
+    call_framework_code(
         authority,
         gas_object_id,
         sender,
         sender_key,
-        ident_str!("create").to_owned(),
+        "ObjectBasics",
+        "create",
+        vec![],
         vec![],
         vec![
             16u64.to_le_bytes().to_vec(),
