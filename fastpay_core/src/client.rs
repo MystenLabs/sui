@@ -91,7 +91,7 @@ pub trait Client {
     async fn get_object_info(&mut self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
 
     /// Get all object we own.
-    async fn get_owned_objects(&self) -> Vec<ObjectID>;
+    fn get_owned_objects(&self) -> Vec<ObjectID>;
 
     async fn download_owned_objects_not_in_db(&self) -> Result<BTreeSet<ObjectRef>, FastPayError>;
 }
@@ -587,7 +587,7 @@ where
         self.authorities.get_object_info_execute(object_id).await
     }
 
-    async fn get_owned_objects(&self) -> Vec<ObjectID> {
+    fn get_owned_objects(&self) -> Vec<ObjectID> {
         self.store.object_sequence_numbers.keys().collect()
     }
 

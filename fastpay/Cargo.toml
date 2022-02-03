@@ -36,9 +36,12 @@ fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-network = { path = "../network_utils" }
 fastx-types = { path = "../fastx_types" }
 
-move-package = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }
-move-core-types = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2", features=["address20"] }
-move-bytecode-verifier = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }
+move-package = { git = "https://github.com/diem/move", rev = "62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }
+move-core-types = { git = "https://github.com/diem/move", rev = "62b5a5075378ae6a7102bbfc1fb33b57ba6125d2", features = ["address20"] }
+move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }
+
+shellfish = { version = "0.6.0", features = ["async"] }
+colored = "2.0.0"
 
 [[bin]]
 name = "client"
@@ -51,3 +54,7 @@ path = "src/server.rs"
 [[bin]]
 name = "bench"
 path = "src/bench.rs"
+
+[[bin]]
+name = "wallet"
+path = "src/wallet.rs"

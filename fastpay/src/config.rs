@@ -7,11 +7,15 @@ use fastx_types::{
     messages::{CertifiedOrder, OrderKind},
 };
 
+use fastx_network::transport;
 use fastx_types::object::Object;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::{identifier::Identifier, transaction_argument::TransactionArgument};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::fmt::{Debug, Display, Formatter};
+use std::path::PathBuf;
+use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, read_to_string, File, OpenOptions},
@@ -311,4 +315,91 @@ impl Default for InitialStateConfig {
     fn default() -> Self {
         Self::new()
     }
+}
+
+pub struct ClientConfig {
+    pub send_timeout: Duration,
+    pub recv_timeout: Duration,
+    pub buffer_size: usize,
+    pub db_path: String,
+    pub accounts_config_path: String,
+    pub committee_config_path: String,
+    pub accounts_config: AccountsConfig,
+    pub committee_config: CommitteeConfig,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct WalletConfig {
+    pub accounts: Vec<AccountInfo>,
+    pub authorities: Vec<AuthorityInfo>,
+    pub send_timeout: Duration,
+    pub recv_timeout: Duration,
+    pub buffer_size: usize,
+    pub db_folder_path: String,
+
+    #[serde(skip)]
+    config_path: String,
+}
+
+impl WalletConfig {
+    pub fn read_or_create(path: &str) -> Result<Self, anyhow::Error> {
+        let path_buf = PathBuf::from(path);
+        Ok(if path_buf.exists() {
+            let raw_data: String = read_to_string(path_buf)?.parse()?;
+            let mut config: WalletConfig = serde_json::from_str(&raw_data)?;
+            config.config_path = path.to_string();
+            config
+        } else {
+            let new_config = WalletConfig {
+                accounts: Vec::new(),
+                authorities: Vec::new(),
+                send_timeout: Duration::from_micros(4000000),
+                recv_timeout: Duration::from_micros(4000000),
+                buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE.to_string().parse()?,
+                db_folder_path: "./client_db".to_string(),
+                config_path: path.to_string(),
+            };
+            new_config.write(path)?;
+            new_config
+        })
+    }
+
+    pub fn write(&self, path: &str) -> Result<(), anyhow::Error> {
+        let config = serde_json::to_string_pretty(self).unwrap();
+        fs::write(path, config).expect("Unable to write to wallet config file");
+        Ok(())
+    }
+
+    pub fn save(&self) -> Result<(), anyhow::Error> {
+        self.write(&*self.config_path)
+    }
+}
+
+impl Display for WalletConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Config path : {}\nClient state DB folder path : {}\nManaged addresses : {}",
+            self.config_path,
+            self.db_folder_path,
+            self.accounts.len()
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AccountInfo {
+    #[serde(
+        serialize_with = "address_as_hex",
+        deserialize_with = "address_from_hex"
+    )]
+    pub address: FastPayAddress,
+    pub key_pair: KeyPair,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AuthorityInfo {
+    pub address: FastPayAddress,
+    pub host: String,
+    pub base_port: u32,
 }
