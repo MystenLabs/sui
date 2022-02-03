@@ -3,6 +3,7 @@
 
 use crate::EventType;
 use move_binary_format::errors::PartialVMResult;
+use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     gas_schedule::NativeCostIndex,
@@ -52,7 +53,7 @@ pub fn transfer_to_object_id(
     debug_assert!(args.len() == 2);
 
     let ty = ty_args.pop().unwrap();
-    let recipient = pop_arg!(args, Vec<u8>);
+    let recipient = pop_arg!(args, AccountAddress).to_vec();
     let transferred_obj = args.pop_back().unwrap();
     let event_type = EventType::TransferToObject;
     transfer_common(context, ty, transferred_obj, recipient, event_type)
