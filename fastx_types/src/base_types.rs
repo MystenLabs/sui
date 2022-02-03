@@ -397,6 +397,11 @@ impl SequenceNumber {
     }
 }
 
+// impl Default for SequenceNumber {
+//     fn default() -> Self {
+//         SequenceNumber(0)
+//     }
+// }
 impl From<SequenceNumber> for u64 {
     fn from(val: SequenceNumber) -> Self {
         val.0

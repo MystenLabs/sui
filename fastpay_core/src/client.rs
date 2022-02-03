@@ -68,9 +68,9 @@ pub trait Client {
     /// Do not confirm the transaction, however this locks the objects until confirmation
     async fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
-        recipient: FastPayAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
+        recipient: FastPayAddress,
     ) -> Result<CertifiedOrder, anyhow::Error>;
 
     /// Try to complete all pending orders once. Return if any fails
@@ -981,7 +981,7 @@ where
                 // Ensure we can unlock by this order
                 fp_ensure!(
                     self.can_lock_or_unlock(&order.clone())?,
-                    FastPayError::ConcurrentTransactionError.into()
+                    FastPayError::OverlappingOrderObjectsError.into()
                 );
                 // We can now unlock the input objects
                 self.unlock_pending_order_objects(order)?;
@@ -1040,7 +1040,7 @@ where
         // Ensure we can unlock by this order
         fp_ensure!(
             self.can_lock_or_unlock(&order.clone())?,
-            FastPayError::ConcurrentTransactionError.into()
+            FastPayError::OverlappingOrderObjectsError.into()
         );
 
         // We can now unlock the input objects
@@ -1079,7 +1079,7 @@ where
     /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/fastnft/issues/335
     fn lock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
         if !self.can_lock_or_unlock(order)? {
-            return Err(FastPayError::OrderInputObjectsOverlapError);
+            return Err(FastPayError::OverlappingOrderObjectsError);
         }
         self.store
             .pending_orders
@@ -1095,7 +1095,7 @@ where
     /// Unlocking an already unlocked object, is a no-op and does not Err
     fn unlock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
         if !self.can_lock_or_unlock(order)? {
-            return Err(FastPayError::OrderInputObjectsOverlapError);
+            return Err(FastPayError::OverlappingOrderObjectsError);
         }
         self.store
             .pending_orders
@@ -1113,7 +1113,7 @@ where
         // Is it okay for an order to double-lock it's own objects since it may be recovering from a crash
         fp_ensure!(
             self.can_lock_or_unlock(&order)?,
-            FastPayError::ConcurrentTransactionError.into()
+            FastPayError::OverlappingOrderObjectsError.into()
         );
         // Lock the objects in this order
         // We should only unlock them after confirmation
@@ -1479,9 +1479,9 @@ where
 
     async fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
-        recipient: FastPayAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
+        recipient: FastPayAddress,
     ) -> Result<CertifiedOrder, anyhow::Error> {
         let object_ref = self.object_ref(object_id)?;
         let gas_payment = self.object_ref(gas_payment)?;
@@ -1612,7 +1612,7 @@ where
             .await
     }
 }
-
+/// This macro extends the matches! macros but does also returns the input object to the owner
 macro_rules! matches_error {
     ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? $(,)?) => {
         match $expression {

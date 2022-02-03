@@ -196,10 +196,8 @@ pub enum FastPayError {
     )]
     QuorumNotReached { errors: Vec<FastPayError> },
     // Client side error
-    #[error("Client state has a different pending transaction.")]
-    ConcurrentTransactionError,
     #[error("Inputs objects from this order overalap with another order's.")]
-    OrderInputObjectsOverlapError,
+    OverlappingOrderObjectsError,
     #[error("Transfer should be received by us.")]
     IncorrectRecipientError,
 }

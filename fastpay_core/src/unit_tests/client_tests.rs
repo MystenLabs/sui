@@ -586,9 +586,9 @@ fn test_receiving_unconfirmed_transfer() {
 
     let certificate = rt
         .block_on(client1.transfer_to_fastx_unsafe_unconfirmed(
-            client2.address,
             object_id,
             gas_object_id,
+            client2.address,
         ))
         .unwrap();
     assert_eq!(
@@ -1147,7 +1147,6 @@ async fn test_move_calls_chain_many_authority_syncronization() {
             .await;
 
         last_certificate = _call_response.unwrap().0;
-        println!("EXECUTE: {:?}", last_certificate.order.digest());
     }
 
     // For this test to work the client has updated the first 3 authorities but not the last one
@@ -2297,11 +2296,6 @@ fn test_transfer_object_error() {
 
     // Test 3: invalid object digest
     let object_id = *objects.next().unwrap();
-    println!(
-        "HOW?? {:?}",
-        sender.store.pending_orders.keys().collect::<Vec<_>>()
-    );
-
     // give object an incorrect object digest
     sender
         .store
@@ -2354,7 +2348,7 @@ fn test_transfer_object_error() {
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err().downcast_ref(),
-        Some(FastPayError::ConcurrentTransactionError)
+        Some(FastPayError::OverlappingOrderObjectsError)
     ))
 }
 
@@ -2627,4 +2621,139 @@ async fn test_object_store_transfer() {
     assert_eq!(client1.store.objects.iter().count(), 4);
     // Client 2 should have new gas object version
     assert_eq!(client2.store.objects.iter().count(), 3);
+}
+
+#[tokio::test]
+async fn test_transfer_pending_orders() {
+    let objects: Vec<ObjectID> = (0..15).map(|_| ObjectID::random()).collect();
+    let gas_object = ObjectID::random();
+    let number_of_authorities = 4;
+
+    let mut all_objects = objects.clone();
+    all_objects.push(gas_object);
+    let authority_objects = (0..number_of_authorities)
+        .map(|_| all_objects.clone())
+        .collect();
+
+    let mut sender_state = init_local_client_state(authority_objects).await;
+    let recipient = recipient_state.address();
+
+    let mut objects = objects.iter();
+
+    // Test 1: Normal transfer
+    let object_id = *objects.next().unwrap();
+    sender_state
+        .transfer_object(object_id, gas_object, recipient)
+        .await
+        .unwrap();
+    // Pending order should be cleared
+    assert!(sender_state.store.pending_orders.is_empty().unwrap());
+
+    // Test 2: Object not known to authorities. This has no side effect
+    let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender_state.address);
+    sender_state
+        .store
+        .object_refs
+        .insert(&obj.id(), &obj.to_object_reference())
+        .unwrap();
+    sender_state
+        .store
+        .object_sequence_numbers
+        .insert(&obj.id(), &SequenceNumber::new())
+        .unwrap();
+    let result = sender_state
+        .transfer_object(obj.id(), gas_object, recipient)
+        .await;
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err().downcast_ref(),
+            Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::ObjectNotFound{..}, ..])));
+    // Pending order should be cleared
+    assert!(sender_state.store.pending_orders.is_empty().unwrap());
+
+    // Test 3: invalid object digest. This also has no side effect
+    let object_id = *objects.next().unwrap();
+
+    // give object an incorrect object digest
+    sender_state
+        .store
+        .object_refs
+        .insert(
+            &object_id,
+            &(object_id, SequenceNumber::new(), ObjectDigest([0; 32])),
+        )
+        .unwrap();
+
+    let result = sender_state
+        .transfer_object(object_id, gas_object, recipient)
+        .await;
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err().downcast_ref(),
+            Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::LockErrors{..}, ..])));
+
+    // Pending order should be cleared
+    assert!(sender_state.store.pending_orders.is_empty().unwrap());
+
+    // Test 4: Conflicting orders touching same objects
+    let object_id = *objects.next().unwrap();
+    // Fabricate a fake pending transfer
+    let transfer = Transfer {
+        sender: sender_state.address,
+        recipient: FastPayAddress::random_for_testing_only(),
+        object_ref: (object_id, Default::default(), ObjectDigest::new([0; 32])),
+        gas_payment: (gas_object, Default::default(), ObjectDigest::new([0; 32])),
+    };
+    // Simulate locking some objects
+    sender_state
+        .lock_pending_order_objects(&Order::new(
+            OrderKind::Transfer(transfer),
+            &get_key_pair().1,
+        ))
+        .unwrap();
+    // Try to use those objects in another order
+    let result = sender_state
+        .transfer_object(object_id, gas_object, recipient)
+        .await;
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err().downcast_ref(),
+        Some(FastPayError::OverlappingOrderObjectsError)
+    ));
+    // clear the pending orders
+    sender_state.store.pending_orders.clear().unwrap();
+    assert_eq!(sender_state.store.pending_orders.iter().count(), 0);
+
+    // Test 5: Transfer object without confirmations
+    let object_id = *objects.next().unwrap();
+
+    let cert_ord = sender_state
+        .transfer_to_fastx_unsafe_unconfirmed(object_id, gas_object, recipient)
+        .await
+        .unwrap();
+
+    // Order should be locked by gas object and object being transferred
+    assert_eq!(sender_state.store.pending_orders.iter().count(), 2);
+    assert_eq!(
+        sender_state
+            .store
+            .pending_orders
+            .get(&object_id)
+            .unwrap()
+            .unwrap(),
+        cert_ord.order
+    );
+    assert_eq!(
+        sender_state
+            .store
+            .pending_orders
+            .get(&gas_object)
+            .unwrap()
+            .unwrap(),
+        cert_ord.order
+    );
+
+    // Try to complete the pending order
+    // However this fails because of a false assumption that sequence numbers increase after a tx order
+    // This bug is being tracked here https://github.com/MystenLabs/fastnft/issues/290
+    //
+    // sender_state.try_complete_pending_orders().await.unwrap();
 }
