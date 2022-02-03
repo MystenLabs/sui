@@ -198,6 +198,8 @@ pub enum FastPayError {
     // Client side error
     #[error("Client state has a different pending transaction.")]
     ConcurrentTransactionError,
+    #[error("Inputs objects from this order overalap with another order's.")]
+    OrderInputObjectsOverlapError,
     #[error("Transfer should be received by us.")]
     IncorrectRecipientError,
 }

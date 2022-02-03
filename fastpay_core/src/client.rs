@@ -65,7 +65,7 @@ pub trait Client {
     async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error>;
 
     /// Send object to a FastX account.
-    /// Do not confirm the transaction.
+    /// Do not confirm the transaction, however this locks the objects until confirmation
     async fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
         recipient: FastPayAddress,
@@ -946,22 +946,87 @@ where
         }
     }
 
+    /// There are situations where a transaction failure does not have side effects in the authorities
+    /// Hence after a failure, we can release the order lock locally
+    /// This function tries to check if the error from a transaction is one of such errors
+    /// If an error does not have sife effects, we unlock the objects and return the original error
+    /// TODO: define other situations and error types where we can unlock objects after authority error
+    /// https://github.com/MystenLabs/fastnft/issues/346
+    fn handle_transaction_error_side_effects<T>(
+        &self,
+        val: Result<T, anyhow::Error>,
+        order: &Order,
+    ) -> Result<T, anyhow::Error>
+    where
+        T: std::fmt::Debug,
+    {
+        if let Err(err) = val {
+            // Try convert to FP error
+            let fp_error = err.downcast_ref::<FastPayError>();
+            // TODO: define all such errors: https://github.com/MystenLabs/fastnft/issues/346
+            // Try to match error variants
+            let (conv, flag1) = matches_error!(
+                fp_error,
+                Some(FastPayError::UnexpectedSequenceNumber { .. })
+                    | Some(FastPayError::InvalidObjectDigest { .. })
+                    | Some(FastPayError::LockErrors { .. })
+                    | Some(FastPayError::ObjectNotFound { .. })
+            );
+            let (conv, flag2) = matches_error!(conv,
+                Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(),
+                [FastPayError::LockErrors{..},..] | [FastPayError::ObjectNotFound{..},..]
+                | [FastPayError::UnexpectedSequenceNumber{..},..] | [FastPayError::InvalidObjectDigest{..},..]));
+            if flag1 || flag2 {
+                // Execution failed but no side effects on authorities
+                // Ensure we can unlock by this order
+                fp_ensure!(
+                    self.can_lock_or_unlock(&order.clone())?,
+                    FastPayError::ConcurrentTransactionError.into()
+                );
+                // We can now unlock the input objects
+                self.unlock_pending_order_objects(order)?;
+                // All done
+                return Err(conv.unwrap().clone().into());
+            }
+            return anyhow::private::Err(err);
+        }
+        // Return the original error
+        val
+    }
+
     /// Execute (or retry) an order and subsequently execute the Confirmation Order.
     /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
+    /// Unlocking objects from an order must only be performed at the end of confirmation
+    /// If the authorities failed to execute the order due to the object not being found, we can unlock the object
+    /// TODO: define other situations where we can unlock objects after authority error
+    /// https://github.com/MystenLabs/fastnft/issues/346
     async fn execute_transaction(
         &mut self,
         order: Order,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
-        let new_certificate = self.execute_transaction_without_confirmation(order).await?;
+        // This call locks the input objects
+        let tx_result = self
+            .execute_transaction_without_confirmation(order.clone())
+            .await;
+        // Check the kinds of errors returned
+        // Some errors can allow us unlock the objects
+        // Due to Rust object ownership rules, one has to transfer the response back
+        let new_certificate =
+            self.handle_transaction_error_side_effects(tx_result, &order.clone())?;
 
         // Confirm last transfer certificate if needed.
-        let responses = self
+        let conf_result = self
             .broadcast_confirmation_orders(
                 self.address,
                 new_certificate.order.input_objects(),
                 vec![new_certificate.clone()],
             )
-            .await?;
+            .await;
+
+        // Check the kinds of errors returned
+        // Some errors can allow us unlock the objects
+        // Due to Rust object ownership rules, one has to transfer the response back
+        let responses = self.handle_transaction_error_side_effects(conf_result, &order.clone())?;
 
         // Find response for the current order from all the returned order responses.
         let (_, response) = responses
@@ -972,26 +1037,39 @@ where
         // Update local data using new order response.
         self.update_objects_from_order_info(response.clone())
             .await?;
+        // Ensure we can unlock by this order
+        fp_ensure!(
+            self.can_lock_or_unlock(&order.clone())?,
+            FastPayError::ConcurrentTransactionError.into()
+        );
 
+        // We can now unlock the input objects
+        self.unlock_pending_order_objects(&order)?;
+        // All done
         Ok((new_certificate, response.signed_effects.unwrap().effects))
     }
 
-    /// Returns true if this pending order's input objects are locked by another unconfirmed order
+    /// This function verifies that the objects in the specfied order are locked by the given order
+    /// We use this to ensure that an order can indeed unclock or lock certain objects in order
+    /// This means either exactly all the objects are owned by this order, or by no order
     /// The caller has to explicitly find which objects are locked
-    /// TODO: lock only objects that are mutable: https://github.com/MystenLabs/fastnft/issues/305
-    fn has_pending_order_conflict(&self, order: &Order) -> Result<bool, FastPayError> {
-        Ok(self
-            .store
-            .pending_orders
-            .multi_get(
-                &order
-                    .input_objects()
-                    .iter()
-                    .map(|q| q.object_id())
-                    .collect_vec(),
-            )?
-            .iter()
-            .any(|w| w.is_some()))
+    /// TODO: always return true for immutable objects https://github.com/MystenLabs/fastnft/issues/305
+    fn can_lock_or_unlock(&self, order: &Order) -> Result<bool, FastPayError> {
+        let iter_matches = self.store.pending_orders.multi_get(
+            &order
+                .input_objects()
+                .iter()
+                .map(|q| q.object_id())
+                .collect_vec(),
+        )?;
+        for o in iter_matches {
+            // If we find any order that isn't the given order, we cannot proceed
+            if o.is_some() && o.unwrap() != *order {
+                return Ok(false);
+            }
+        }
+        // All the objects are either owned by this order or by no order
+        Ok(true)
     }
     /// Locks the objects for the given order
     /// It is important to check that the object is not locked before locking again
@@ -1000,49 +1078,57 @@ where
     /// Client runs sequentially right now so access to this is safe
     /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/fastnft/issues/335
     fn lock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
-        if self.has_pending_order_conflict(order)? {
-            return Err(FastPayError::ConcurrentTransactionError);
+        if !self.can_lock_or_unlock(order)? {
+            return Err(FastPayError::OrderInputObjectsOverlapError);
         }
-        ClientStore::multi_insert(
-            &self.store.pending_orders,
-            order
-                .input_objects()
-                .iter()
-                .map(|e| (e.object_id(), order.clone())),
-        )
+        self.store
+            .pending_orders
+            .multi_insert(
+                order
+                    .input_objects()
+                    .iter()
+                    .map(|e| (e.object_id(), order.clone())),
+            )
+            .map_err(|e| e.into())
     }
     /// Unlocks the objects for the given order
     /// Unlocking an already unlocked object, is a no-op and does not Err
     fn unlock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
-        ClientStore::multi_remove(
-            &self.store.pending_orders,
-            order.input_objects().iter().map(|e| e.object_id()),
-        )
+        if !self.can_lock_or_unlock(order)? {
+            return Err(FastPayError::OrderInputObjectsOverlapError);
+        }
+        self.store
+            .pending_orders
+            .multi_remove(order.input_objects().iter().map(|e| e.object_id()))
+            .map_err(|e| e.into())
     }
 
     /// Execute (or retry) an order without confirmation. Update local object states using newly created certificate.
+    /// At the end of this function, the input objects are locked but can only be unlocked after confirmation
     async fn execute_transaction_without_confirmation(
         &mut self,
         order: Order,
     ) -> Result<CertifiedOrder, anyhow::Error> {
-        // Return error if conflict
-        // Ideally the caller should be notified
+        // Check if this order can lock the objects
+        // Is it okay for an order to double-lock it's own objects since it may be recovering from a crash
         fp_ensure!(
-            !self.has_pending_order_conflict(&order)?,
+            self.can_lock_or_unlock(&order)?,
             FastPayError::ConcurrentTransactionError.into()
         );
         // Lock the objects in this order
+        // We should only unlock them after confirmation
         self.lock_pending_order_objects(&order)?;
-        let result = self
+        let tx_result = self
             .broadcast_and_handle_order(self.address, order.clone())
             .await;
-        // Unlock objects for the pending order and update `sent_certificates`,
-        // and `next_sequence_number`. (Note that if we were using persistent
-        // storage, we should ensure update atomicity in the eventuality of a crash.)
-        self.unlock_pending_order_objects(&order)?;
+
+        // Check the kinds of errors returned
+        // Some errors can allow us unlock the objects
+        // Due to Rust object ownership rules, one has to transfer the response back
+        let result = self.handle_transaction_error_side_effects(tx_result, &order.clone())?;
 
         // order_info_response contains response from broadcasting old unconfirmed order, if any.
-        let (order_info_responses, new_sent_certificate) = result?;
+        let (order_info_responses, new_sent_certificate) = result;
         assert_eq!(&new_sent_certificate.order, &order);
 
         // Update local data using all order response.
@@ -1407,6 +1493,7 @@ where
             gas_payment,
         };
         let order = Order::new_transfer(transfer, &self.secret);
+        // We need to ensure that confirmation is executed eventually otherwise all objects in this order will be locked
         let new_certificate = self.execute_transaction_without_confirmation(order).await?;
 
         // The new cert will not be updated by order effect without confirmation, the new unconfirmed cert need to be added temporally.
@@ -1418,6 +1505,9 @@ where
         Ok(new_certificate)
     }
 
+    /// Try to complete pending orders
+    /// Order could have been locked due to tx failure or intentional tx without confirmation
+    /// We always assume a pending order simply can be re-executed due to idempotence of orders
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError> {
         // Orders are idempotent so no need to prevent multiple executions
         let unique_pending_orders: HashSet<_> = self
@@ -1429,10 +1519,10 @@ where
         // Need some kind of timeout or max_trials here?
         // TODO: https://github.com/MystenLabs/fastnft/issues/330
         for order in unique_pending_orders {
+            // Execution method handles locking and unlocking if successful
             self.execute_transaction(order.clone()).await.map_err(|e| {
                 FastPayError::ErrorWhileProcessingTransactionOrder { err: e.to_string() }
             })?;
-            self.unlock_pending_order_objects(&order)?;
         }
         Ok(())
     }
@@ -1522,3 +1612,13 @@ where
             .await
     }
 }
+
+macro_rules! matches_error {
+    ($expression:expr, $(|)? $( $pattern:pat_param )|+ $( if $guard: expr )? $(,)?) => {
+        match $expression {
+            $( $pattern )|+ $( if $guard )? => ($expression, true),
+            _ => ($expression, false)
+        }
+    }
+}
+pub(crate) use matches_error;

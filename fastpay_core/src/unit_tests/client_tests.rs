@@ -596,7 +596,12 @@ fn test_receiving_unconfirmed_transfer() {
         Ok(SequenceNumber::from(1))
     );
 
-    assert!((client1.store.pending_orders.is_empty().unwrap()));
+    // Check that we indeed flagged this order as pending
+    assert!(!(client1.store.pending_orders.is_empty().unwrap()));
+
+    // Check that this order is allowed to eventually unlock the objects
+    assert!(client1.can_lock_or_unlock(&certificate.order).unwrap());
+
     // ..but not confirmed remotely, hence an unchanged balance and sequence number.
     assert_eq!(
         rt.block_on(client1.get_strong_majority_owner(object_id)),
@@ -2292,6 +2297,10 @@ fn test_transfer_object_error() {
 
     // Test 3: invalid object digest
     let object_id = *objects.next().unwrap();
+    println!(
+        "HOW?? {:?}",
+        sender.store.pending_orders.keys().collect::<Vec<_>>()
+    );
 
     // give object an incorrect object digest
     sender
@@ -2434,11 +2443,10 @@ fn test_client_store() {
         .map(|i| (ObjectID::random(), SequenceNumber::from(i)))
         .collect::<Vec<_>>();
     // Try insert batch
-    ClientStore::multi_insert(
-        &store.object_sequence_numbers,
-        keys_vals.clone().into_iter(),
-    )
-    .unwrap();
+    store
+        .object_sequence_numbers
+        .multi_insert(keys_vals.clone().into_iter())
+        .unwrap();
 
     // Check the size
     assert_eq!(store.object_sequence_numbers.iter().count(), 100);
@@ -2449,11 +2457,10 @@ fn test_client_store() {
     });
 
     // Check that are removed
-    ClientStore::multi_remove(
-        &store.object_sequence_numbers,
-        keys_vals.into_iter().map(|(k, _)| k),
-    )
-    .unwrap();
+    store
+        .object_sequence_numbers
+        .multi_remove(keys_vals.into_iter().map(|(k, _)| k))
+        .unwrap();
 
     assert!(store.object_sequence_numbers.is_empty().unwrap());
 }
