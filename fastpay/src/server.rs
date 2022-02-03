@@ -3,17 +3,6 @@
 
 #![deny(warnings)]
 
-<<<<<<< HEAD
-use fastpay::{config::*, transport};
-use fastx_types::base_types::*;
-mod server_api;
-
-use log::*;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use std::{env, fs};
-use structopt::StructOpt;
-=======
 use fastpay::config::*;
 use fastpay_core::{authority::*, authority_server::AuthorityServer};
 use fastx_network::transport;
@@ -77,7 +66,6 @@ fn make_server(
         state,
     )
 }
->>>>>>> main
 
 #[derive(StructOpt)]
 #[structopt(
@@ -110,10 +98,6 @@ enum ServerCommands {
         /// Path to the file describing the initial user accounts
         #[structopt(long)]
         initial_accounts: String,
-
-        /// Sets the local ip addr
-        #[structopt(long)]
-        local_ip: String,
     },
 
     /// Generate a new server configuration and output its public description
@@ -134,6 +118,7 @@ enum ServerCommands {
 }
 
 fn main() {
+
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let subscriber_builder =
         tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
@@ -149,16 +134,26 @@ fn main() {
             buffer_size,
             committee,
             initial_accounts,
-            local_ip,
         } => {
+            // Run the server
+            run_server(
+                server_config_path, 
+                committee, 
+                initial_accounts, 
+                buffer_size);
+        }
+
+        ServerCommands::Generate {
+            host,
             port,
             database_path,
+        } => {
             let server = create_server_config(host, port, database_path);
             server
                 .write(server_config_path)
                 .expect("Unable to write server config file");
             info!("Wrote server config file");
-            authority_config.authority.print();
+            server.authority.print();
         }
     }
 }

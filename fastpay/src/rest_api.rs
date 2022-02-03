@@ -41,6 +41,7 @@ use move_core_types::{account_address::AccountAddress, transaction_argument::con
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use std::env;
 use std::net::Ipv6Addr;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU64;
@@ -227,6 +228,7 @@ async fn start(
     let initial_state_cfg = client::create_account_configs(
         5,
         3,
+        2000000,
         &mut acc_cfg,
     );
 
@@ -377,6 +379,7 @@ async fn get_account_objects(
         scope.spawn(|_| {
             // Get the objects for account
             client::query_objects(
+                env::temp_dir().join("CLIENT_DB_0"),
                 &mut account_config,
                 &committee_config,
                 decode_address_hex(account.into_inner().account_address.as_str()).unwrap(),
@@ -433,6 +436,7 @@ async fn get_object_info(
         scope.spawn(|_| {
             // Get the object info
             client::get_object_info(
+                env::temp_dir().join("CLIENT_DB_0"),
                 &mut account_config,
                 &committee_config,
                 AccountAddress::try_from(object.into_inner().object_id).unwrap(),
@@ -444,14 +448,13 @@ async fn get_object_info(
     }).unwrap();
 
     Ok(HttpResponseOk(ObjectInfo{ 
-        owner: format!("Owner: {:#?}", obj_info.object.owner), 
-        version: format!("Version: {:#?}", obj_info.object.version().value()),
-        id: format!("ID: {:#?}", obj_info.object.id()),
-        readonly: format!("Readonly: {:#?}", obj_info.object.is_read_only()),
+        owner: format!("Owner: {:#?}", obj_info.owner), 
+        version: format!("Version: {:#?}", obj_info.version().value()),
+        id: format!("ID: {:#?}", obj_info.id()),
+        readonly: format!("Readonly: {:#?}", obj_info.is_read_only()),
         obj_type: format!(
             "Type: {:#?}",
             obj_info
-                .object
                 .data
                 .type_()
                 .map_or("Type Unwrap Failed".to_owned(), |type_| type_
@@ -504,6 +507,7 @@ async fn transfer_object(
         scope.spawn(|_| {
             // Transfer from ACC1 to ACC2
             client::transfer_object(
+                env::temp_dir().join("CLIENT_DB_0"),
                 &mut account_config,
                 &committee_config,
                 object_id,

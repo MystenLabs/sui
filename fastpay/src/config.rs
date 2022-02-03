@@ -100,15 +100,6 @@ impl CommitteeConfig {
     }
 }
 
-<<<<<<< HEAD
-impl Default for CommitteeConfig {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-=======
->>>>>>> main
 #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct UserAccount {
@@ -120,10 +111,6 @@ pub struct UserAccount {
     pub key: KeyPair,
     pub object_refs: BTreeMap<ObjectID, ObjectRef>,
     pub gas_object_ids: BTreeSet<ObjectID>, // Every id in gas_object_ids should also be in object_ids.
-<<<<<<< HEAD
-
-=======
->>>>>>> main
     #[serde_as(as = "Vec<(_, _)>")]
     pub certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
 }
@@ -305,11 +292,7 @@ impl AccountsConfig {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct InitialStateConfigEntry {
     pub address: FastPayAddress,
-<<<<<<< HEAD
-    pub object_ids_and_gas_vals: Vec<(ObjectID, u64)>,
-=======
     pub objects: Vec<Object>,
->>>>>>> main
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub struct InitialStateConfig {
