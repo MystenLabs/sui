@@ -205,6 +205,13 @@ impl ObjectDigest {
     }
 }
 
+pub fn decode_tx_digest_hex(s: &str) -> Result<TransactionDigest, hex::FromHexError> {
+    let value = hex::decode(s)?;
+    let mut tx_digest = [0u8; TRANSACTION_DIGEST_LENGTH];
+    tx_digest.copy_from_slice(&value[..TRANSACTION_DIGEST_LENGTH]);
+    Ok(TransactionDigest(tx_digest))
+}
+
 // TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
 pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
     let mut csprng = OsRng;
