@@ -1,7 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-#![deny(warnings)]
+#![allow(warnings)]
 
 use fastpay::config::*;
 use fastpay_core::{authority_client::AuthorityClient, client::*};
@@ -476,9 +476,10 @@ fn main() {
     let accounts_config_path = &options.accounts;
     let committee_config_path = &options.committee;
     let buffer_size = options.buffer_size;
-    let client_db_path = options
-        .db_path
-        .map_or(env::temp_dir().join("CLIENT_DB_0"), PathBuf::from);
+    let client_db_path = options.db_path.map_or(
+        env::current_dir().unwrap().join("./CLIENT_DB_0"),
+        PathBuf::from,
+    );
 
     let mut accounts_config =
         AccountsConfig::read_or_create(accounts_config_path).expect("Unable to read user accounts");

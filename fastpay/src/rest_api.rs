@@ -87,7 +87,7 @@ async fn main() -> Result<(), String> {
         .expect("Couldn't create initial accounts config file");
     let committee_config_path = "committee.json".to_string();
     File::create(&committee_config_path).expect("Couldn't create committee config file");
-    let client_db_path = env::temp_dir().join("CLIENT_DB_0");
+    let client_db_path = env::current_dir().unwrap().join("./CLIENT_DB_0");
     let api_context = ServerContext::new(
         account_config_path,
         committee_config_path,
