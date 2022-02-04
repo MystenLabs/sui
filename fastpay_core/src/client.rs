@@ -845,21 +845,39 @@ where
     pub async fn download_certificates(
         &mut self,
     ) -> Result<BTreeMap<ObjectID, Vec<CertifiedOrder>>, FastPayError> {
+        let known_sequence_numbers_map = self
+            .store
+            .object_sequence_numbers
+            .iter()
+            .map(|(object_id, next_sequence_number)| {
+                (
+                    (object_id, next_sequence_number),
+                    self.certificates(&object_id)
+                        .flat_map(|cert| cert.order.input_objects())
+                        .filter_map(|object_kind| {
+                            if object_kind.object_id() == object_id {
+                                Some(object_kind.version())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<HashSet<_>>(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        self.request_certificates_from_authority(known_sequence_numbers_map)
+            .await
+    }
+
+    pub async fn request_certificates_from_authority(
+        &self,
+        known_sequence_numbers_map: BTreeMap<(ObjectID, SequenceNumber), HashSet<SequenceNumber>>,
+    ) -> Result<BTreeMap<ObjectID, Vec<CertifiedOrder>>, FastPayError> {
         let mut sent_certificates: BTreeMap<ObjectID, Vec<CertifiedOrder>> = BTreeMap::new();
 
-        for (object_id, next_sequence_number) in self.store.object_sequence_numbers.iter() {
-            let known_sequence_numbers: BTreeSet<_> = self
-                .certificates(&object_id)
-                .flat_map(|cert| cert.order.input_objects())
-                .filter_map(|object_kind| {
-                    if object_kind.object_id() == object_id {
-                        Some(object_kind.version())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
+        for ((object_id, next_sequence_number), known_sequence_numbers) in
+            known_sequence_numbers_map
+        {
             let mut requester = CertificateRequester::new(
                 self.committee.clone(),
                 self.authority_clients.values().cloned().collect(),
