@@ -667,19 +667,6 @@ where
         &self,
         order: Order,
     ) -> Result<(Vec<(CertifiedOrder, OrderInfoResponse)>, CertifiedOrder), anyhow::Error> {
-        for object_kind in &order.input_objects() {
-            let object_id = object_kind.object_id();
-            let next_sequence_number = self.next_sequence_number(&object_id).unwrap_or_default();
-            fp_ensure!(
-                object_kind.version() >= next_sequence_number,
-                FastPayError::UnexpectedSequenceNumber {
-                    object_id,
-                    expected_sequence: next_sequence_number,
-                }
-                .into()
-            );
-        }
-
         let committee = self.committee.clone();
         let (responses, votes) = self
             .broadcast_and_execute(Vec::new(), |name, authority| {
@@ -971,6 +958,19 @@ where
         &mut self,
         order: Order,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+        for object_kind in &order.input_objects() {
+            let object_id = object_kind.object_id();
+            let next_sequence_number = self.next_sequence_number(&object_id).unwrap_or_default();
+            fp_ensure!(
+                object_kind.version() >= next_sequence_number,
+                FastPayError::UnexpectedSequenceNumber {
+                    object_id,
+                    expected_sequence: next_sequence_number,
+                }
+                .into()
+            );
+        }
+
         let inputs = order.input_objects();
         let known_certificates = self.get_known_certificates(order.sender(), &inputs);
         self.update_authority_certificates(*order.sender(), &inputs, known_certificates)
