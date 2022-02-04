@@ -966,6 +966,24 @@ where
         }
     }
 
+    async fn execute_transaction_inner(
+        &mut self,
+        order: &Order,
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+        let inputs = order.input_objects();
+        let known_certificates = self.get_known_certificates(order.sender(), &inputs);
+        self.update_authority_certificates(*order.sender(), &inputs, known_certificates)
+            .await?;
+
+        let (new_certificate, response) = self.execute_transaction_stateless(order).await?;
+
+        // Update local data using new order response.
+        self.update_objects_from_order_info(response.clone())
+            .await?;
+
+        Ok((new_certificate, response.signed_effects.unwrap().effects))
+    }
+
     /// Execute (or retry) an order and subsequently execute the Confirmation Order.
     /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
     async fn execute_transaction(
@@ -984,24 +1002,26 @@ where
                 .into()
             );
         }
-
-        let inputs = order.input_objects();
-        let known_certificates = self.get_known_certificates(order.sender(), &inputs);
-        self.update_authority_certificates(*order.sender(), &inputs, known_certificates)
-            .await?;
-
-        let (new_certificate, response) = self.execute_transaction_stateless(order).await?;
-
-        // Update local data using new order response.
-        self.update_objects_from_order_info(response.clone())
-            .await?;
-
-        Ok((new_certificate, response.signed_effects.unwrap().effects))
+        // TODO: The pending order logic needs to be enhanced.
+        // Return error if conflict
+        // Ideally the caller should be notified
+        fp_ensure!(
+            !self.has_pending_order_conflict(&order)?,
+            FastPayError::ConcurrentTransactionError.into()
+        );
+        // Lock the objects in this order
+        self.lock_pending_order_objects(&order)?;
+        // Unlock objects for the pending order and update `sent_certificates`,
+        // and `next_sequence_number`. (Note that if we were using persistent
+        // storage, we should ensure update atomicity in the eventuality of a crash.)
+        let result = self.execute_transaction_inner(&order).await;
+        self.unlock_pending_order_objects(&order)?;
+        result
     }
 
     async fn execute_transaction_stateless(
         &self,
-        order: Order,
+        order: &Order,
     ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
         let new_certificate = self.execute_transaction_without_confirmation(order).await?;
 
@@ -1066,25 +1086,13 @@ where
     /// Execute (or retry) an order without confirmation. Update local object states using newly created certificate.
     async fn execute_transaction_without_confirmation(
         &self,
-        order: Order,
+        order: &Order,
     ) -> Result<CertifiedOrder, anyhow::Error> {
-        // Return error if conflict
-        // Ideally the caller should be notified
-        fp_ensure!(
-            !self.has_pending_order_conflict(&order)?,
-            FastPayError::ConcurrentTransactionError.into()
-        );
-        // Lock the objects in this order
-        self.lock_pending_order_objects(&order)?;
         let result = self.broadcast_and_handle_order(order.clone()).await;
-        // Unlock objects for the pending order and update `sent_certificates`,
-        // and `next_sequence_number`. (Note that if we were using persistent
-        // storage, we should ensure update atomicity in the eventuality of a crash.)
-        self.unlock_pending_order_objects(&order)?;
 
         // order_info_response contains response from broadcasting old unconfirmed order, if any.
         let (_order_info_responses, new_sent_certificate) = result?;
-        assert_eq!(&new_sent_certificate.order, &order);
+        assert_eq!(&new_sent_certificate.order, order);
         // TODO: Verify that we don't need to update client objects here based on _order_info_responses,
         // but can do it at the caller site.
 
@@ -1441,6 +1449,9 @@ where
         }
     }
 
+    // TODO: Need to figure out how this function is typically used.
+    // We should merge this function into the execution_transaction pipeline,
+    // potentially with a flag to toggle the confirmation part.
     async fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
         recipient: FastPayAddress,
@@ -1457,7 +1468,9 @@ where
             gas_payment,
         };
         let order = Order::new_transfer(transfer, &self.secret);
-        let new_certificate = self.execute_transaction_without_confirmation(order).await?;
+        let new_certificate = self
+            .execute_transaction_without_confirmation(&order)
+            .await?;
 
         // The new cert will not be updated by order effect without confirmation, the new unconfirmed cert need to be added temporally.
         let new_sent_certificates = vec![new_certificate.clone()];
