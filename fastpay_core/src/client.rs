@@ -955,41 +955,41 @@ where
     fn handle_transaction_error_side_effects<T>(
         &self,
         val: Result<T, anyhow::Error>,
-        _order: &Order,
+        order: &Order,
     ) -> Result<T, anyhow::Error>
     where
         T: std::fmt::Debug,
     {
-        // if let Err(err) = val {
-        //     // Try convert to FP error
-        //     let fp_error = err.downcast_ref::<FastPayError>();
-        //     // TODO: define all such errors: https://github.com/MystenLabs/fastnft/issues/346
-        //     // Try to match error variants
-        //     let (conv, flag1) = matches_error!(
-        //         fp_error,
-        //         Some(FastPayError::UnexpectedSequenceNumber { .. })
-        //             | Some(FastPayError::InvalidObjectDigest { .. })
-        //             | Some(FastPayError::LockErrors { .. })
-        //             | Some(FastPayError::ObjectNotFound { .. })
-        //     );
-        //     let (conv, flag2) = matches_error!(conv,
-        //         Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(),
-        //         [FastPayError::LockErrors{..},..] | [FastPayError::ObjectNotFound{..},..]
-        //         | [FastPayError::UnexpectedSequenceNumber{..},..] | [FastPayError::InvalidObjectDigest{..},..]));
-        //     if flag1 || flag2 {
-        //         // Execution failed but no side effects on authorities
-        //         // Ensure we can unlock by this order
-        //         fp_ensure!(
-        //             self.can_lock_or_unlock(&order.clone())?,
-        //             FastPayError::OverlappingOrderObjectsError.into()
-        //         );
-        //         // We can now unlock the input objects
-        //         self.unlock_pending_order_objects(order)?;
-        //         // All done
-        //         return Err(conv.unwrap().clone().into());
-        //     }
-        //     return anyhow::private::Err(err);
-        // }
+        if let Err(err) = val {
+            // Try convert to FP error
+            let fp_error = err.downcast_ref::<FastPayError>();
+            // TODO: define all such errors: https://github.com/MystenLabs/fastnft/issues/346
+            // Try to match error variants
+            let (conv, flag1) = matches_error!(
+                fp_error,
+                Some(FastPayError::UnexpectedSequenceNumber { .. })
+                    | Some(FastPayError::InvalidObjectDigest { .. })
+                    | Some(FastPayError::LockErrors { .. })
+                    | Some(FastPayError::ObjectNotFound { .. })
+            );
+            let (conv, flag2) = matches_error!(conv,
+                Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(),
+                [FastPayError::LockErrors{..},..] | [FastPayError::ObjectNotFound{..},..]
+                | [FastPayError::UnexpectedSequenceNumber{..},..] | [FastPayError::InvalidObjectDigest{..},..]));
+            if flag1 || flag2 {
+                // Execution failed but no side effects on authorities
+                // Ensure we can unlock by this order
+                fp_ensure!(
+                    self.can_lock_or_unlock(&order.clone())?,
+                    FastPayError::OverlappingOrderObjectsError.into()
+                );
+                // We can now unlock the input objects
+                self.unlock_pending_order_objects(order)?;
+                // All done
+                return Err(conv.unwrap().clone().into());
+            }
+            return anyhow::private::Err(err);
+        }
         // Return the original error
         val
     }
