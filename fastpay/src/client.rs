@@ -14,7 +14,6 @@ use fastx_types::object::Object;
 use futures::stream::StreamExt;
 use std::{
     collections::{BTreeMap, HashSet},
-    env,
     path::PathBuf,
     time::{Duration, Instant},
 };
@@ -687,7 +686,7 @@ fn main() {
                 accounts_config.update_from_state(&client_state);
                 info!("Updating recipient's local balance");
 
-                let client2_db_path = env::temp_dir().join("CLIENT_DB_1");
+                let client2_db_path = tempdir().unwrap().into_path();
                 // TODO: client should manage multiple addresses instead of each addr having DBs
                 // https://github.com/MystenLabs/fastnft/issues/332
                 let mut recipient_client_state = make_client_state_and_try_sync(
