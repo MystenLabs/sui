@@ -791,12 +791,12 @@ pub fn transfer_object(
 ) {
     let rt = Runtime::new().unwrap();
     rt.block_on(async move {
-        let owner = find_cached_owner_by_object_id(&accounts_config, gas_object_id)
+        let owner = find_cached_owner_by_object_id(accounts_config, gas_object_id)
             .expect("Cannot find owner for gas object");
         let mut client_state = make_client_state_and_try_sync(
             client_db_path.clone(),
-            &accounts_config,
-            &committee_config,
+            accounts_config,
+            committee_config,
             *owner,
             buffer_size,
             send_timeout,
@@ -820,8 +820,8 @@ pub fn transfer_object(
         // https://github.com/MystenLabs/fastnft/issues/332
         let mut recipient_client_state = make_client_state_and_try_sync(
             client2_db_path,
-            &accounts_config,
-            &committee_config,
+            accounts_config,
+            committee_config,
             to,
             buffer_size,
             send_timeout,
@@ -857,8 +857,8 @@ pub fn get_object_info(
         // Fetch the object ref
         let mut client_state = make_client_state_and_try_sync(
             client_db_path,
-            &accounts_config,
-            &committee_config,
+            accounts_config,
+            committee_config,
             account,
             buffer_size,
             send_timeout,
@@ -898,8 +898,8 @@ pub fn query_objects(
     rt.block_on(async move {
         let client_state = make_client_state_and_try_sync(
             client_db_path,
-            &accounts_config,
-            &committee_config,
+            accounts_config,
+            committee_config,
             address,
             buffer_size,
             send_timeout,

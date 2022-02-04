@@ -1,0 +1,9 @@
+{
+  "authority": {
+    "address": "326a2bc5f41dcaeb8edf37758cea957e820f1ac16bf58a2ebd9d5936d2b5e244",
+    "host": "0.0.0.0",
+    "base_port": 9102,
+    "database_path": "db2"
+  },
+  "key": "DgV6VqWA5FCjtmo/cYYEG9eu5V6LHXuHjq7qkISkk0YyaivF9B3K647fN3WM6pV+gg8awWv1ii69nVk20rXiRA=="
+}

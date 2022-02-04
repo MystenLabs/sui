@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-// REMOVE THIS
-// #![allow(dead_code)]
-// #![allow(unused_variables)]
-// #![allow(unused_imports)]
-
 mod client;
 mod server;
 
@@ -23,11 +18,11 @@ use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
 use dropshot::TypedBody;
 
-use fastpay::config::{AccountsConfig, AuthorityServerConfig, CommitteeConfig, InitialStateConfig};
+use fastpay::config::{AccountsConfig, CommitteeConfig};
 use fastx_network::transport;
-use fastx_types::{base_types::*, messages::Order};
+use fastx_types::base_types::*;
 
-use move_core_types::{account_address::AccountAddress, transaction_argument::convert_txn_args};
+use move_core_types::account_address::AccountAddress;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -39,12 +34,10 @@ use std::io::Write;
 use std::net::Ipv6Addr;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::thread::{self, JoinHandle};
+use std::thread::{self};
 use std::time::Duration;
 
 #[tokio::main]
@@ -94,7 +87,7 @@ async fn main() -> Result<(), String> {
         .expect("Couldn't create initial accounts config file");
     let committee_config_path = "committee.json".to_string();
     File::create(&committee_config_path).expect("Couldn't create committee config file");
-    let client_db_path = PathBuf::from(env::temp_dir().join("CLIENT_DB_0"));
+    let client_db_path = env::temp_dir().join("CLIENT_DB_0");
     let api_context = ServerContext::new(
         account_config_path,
         committee_config_path,
@@ -149,9 +142,7 @@ impl ServerContext {
                 .unwrap(),
             send_timeout: Arc::new(Mutex::new(Duration::new(0, 0))),
             recv_timeout: Arc::new(Mutex::new(Duration::new(0, 0))),
-            initial_accounts_config_path: Arc::new(Mutex::new(
-                initial_accounts_config_path.to_owned(),
-            )),
+            initial_accounts_config_path: Arc::new(Mutex::new(initial_accounts_config_path)),
             accounts_config_path: Arc::new(Mutex::new(accounts_config_path.to_owned())),
             accounts_config: Arc::new(Mutex::new(
                 AccountsConfig::read_or_create(accounts_config_path.as_str()).unwrap(),
@@ -224,7 +215,7 @@ async fn start(
         let db_dir = "db".to_string() + &i.to_string();
         let server_config_path = "server".to_string() + &i.to_string() + ".json";
         fs::create_dir(&db_dir)
-            .expect(format!("Failed to create database directory: {}", db_dir).as_str());
+            .unwrap_or_else(|_| panic!("Failed to create database directory: {}", db_dir));
         File::create(&server_config_path).expect("Couldn't create server config file");
         let server = server::create_server_config(
             server_config_path.as_str(),
@@ -246,7 +237,7 @@ async fn start(
     let committee_config = CommitteeConfig::read(&committee_config_path).unwrap();
 
     // Create accounts with starting values (could split this out to its own endpoint)
-    let initial_state_config = client::create_account_configs(
+    let _initial_state_config = client::create_account_configs(
         100,
         10,
         2000000,
@@ -256,7 +247,7 @@ async fn start(
     );
 
     *server_context.accounts_config.lock().unwrap() = accounts_config;
-    *server_context.committee_config.lock().unwrap() = committee_config.clone();
+    *server_context.committee_config.lock().unwrap() = committee_config;
 
     let buffer_size: usize = server_context.buffer_size;
 
@@ -354,10 +345,10 @@ async fn get_account_objects(
 
     let send_timeout = *server_context.send_timeout.lock().unwrap();
     let recv_timeout = *server_context.recv_timeout.lock().unwrap();
-    let buffer_size = server_context.buffer_size.clone();
+    let buffer_size = server_context.buffer_size;
     let accounts_config_path = &*server_context.accounts_config_path.lock().unwrap();
     let client_db_path = server_context.client_db_path.lock().unwrap().clone();
-    let mut account_config = &mut *server_context.accounts_config.lock().unwrap();
+    let account_config = &mut *server_context.accounts_config.lock().unwrap();
     let committee_config = &*server_context.committee_config.lock().unwrap();
 
     let acc_objs = cb_thread::scope(|scope| {
@@ -367,8 +358,8 @@ async fn get_account_objects(
                 client::query_objects(
                     client_db_path,
                     accounts_config_path,
-                    &mut account_config,
-                    &committee_config,
+                    account_config,
+                    committee_config,
                     decode_address_hex(account.into_inner().account_address.as_str()).unwrap(),
                     buffer_size,
                     send_timeout,
@@ -418,8 +409,8 @@ async fn get_object_info(
 
     let send_timeout = *server_context.send_timeout.lock().unwrap();
     let recv_timeout = *server_context.recv_timeout.lock().unwrap();
-    let buffer_size = server_context.buffer_size.clone();
-    let mut account_config = &mut *server_context.accounts_config.lock().unwrap();
+    let buffer_size = server_context.buffer_size;
+    let account_config = &mut *server_context.accounts_config.lock().unwrap();
     let committee_config = &*server_context.committee_config.lock().unwrap();
     let client_db_path = server_context.client_db_path.lock().unwrap().clone();
 
@@ -429,8 +420,8 @@ async fn get_object_info(
                 // Get the object info
                 client::get_object_info(
                     client_db_path,
-                    &mut account_config,
-                    &committee_config,
+                    account_config,
+                    committee_config,
                     AccountAddress::try_from(object.into_inner().object_id).unwrap(),
                     buffer_size,
                     send_timeout,
@@ -487,27 +478,27 @@ async fn transfer_object(
 
     let send_timeout = *server_context.send_timeout.lock().unwrap();
     let recv_timeout = *server_context.recv_timeout.lock().unwrap();
-    let buffer_size = server_context.buffer_size.clone();
-    let mut account_config = &mut *server_context.accounts_config.lock().unwrap();
+    let buffer_size = server_context.buffer_size;
+    let account_config = &mut *server_context.accounts_config.lock().unwrap();
     let committee_config = &*server_context.committee_config.lock().unwrap();
     let client_db_path = server_context.client_db_path.lock().unwrap().clone();
     let accounts_config_path = &*server_context.accounts_config_path.lock().unwrap();
 
-    let from_account = decode_address_hex(transfer_order.from_account.as_str()).unwrap();
+    let _from_account = decode_address_hex(transfer_order.from_account.as_str()).unwrap();
     let to_account = decode_address_hex(transfer_order.to_account.as_str()).unwrap();
 
     let object_id = AccountAddress::try_from(transfer_order.object_address).unwrap();
     let gas_object_id = AccountAddress::try_from(transfer_order.gas_address).unwrap();
 
-    let acc_obj_info = cb_thread::scope(|scope| {
+    let _acc_obj_info = cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
                 // Transfer from ACC1 to ACC2
                 client::transfer_object(
                     client_db_path,
                     accounts_config_path,
-                    &mut account_config,
-                    &committee_config,
+                    account_config,
+                    committee_config,
                     object_id,
                     gas_object_id,
                     to_account,

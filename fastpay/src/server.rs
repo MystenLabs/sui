@@ -173,7 +173,7 @@ pub fn create_server_config(
         .write(server_config_path)
         .expect("Unable to write server config file");
     info!("Wrote server config file");
-    return server;
+    server
 }
 
 pub fn run_server(
@@ -185,8 +185,8 @@ pub fn run_server(
     let server = make_server(
         "0.0.0.0", // Allow local IP address to be different from the public one.
         server_config_path,
-        &committee_config_path,
-        &initial_accounts_config_path,
+        committee_config_path,
+        initial_accounts_config_path,
         buffer_size,
     );
     let rt = Runtime::new().unwrap();
