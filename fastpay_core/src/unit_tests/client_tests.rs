@@ -42,14 +42,14 @@ struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
 #[async_trait]
 impl AuthorityAPI for LocalAuthorityClient {
-    async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
+    async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
         let result = state.lock().await.handle_order(order).await;
         result
     }
 
     async fn handle_confirmation_order(
-        &mut self,
+        &self,
         order: ConfirmationOrder,
     ) -> Result<OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
