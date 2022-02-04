@@ -84,7 +84,7 @@ async fn make_client_state_and_try_sync(
     );
 
     // Force a sync
-    let _ = c.sync_client_state_with_random_authority();
+    let _ = c.sync_client_state();
     c
 }
 

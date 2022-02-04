@@ -82,9 +82,7 @@ pub trait Client {
 
     /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
     /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
-    async fn sync_client_state_with_random_authority(
-        &mut self,
-    ) -> Result<AuthorityName, anyhow::Error>;
+    async fn sync_client_state(&mut self) -> Result<AuthorityName, anyhow::Error>;
 
     /// Call move functions in the module in the given package, with args supplied
     async fn move_call(
@@ -1077,12 +1075,14 @@ where
         Ok(new_sent_certificate)
     }
 
-    async fn download_own_object_ids(
+    // TODO: This is incomplete at the moment.
+    // A complete algorithm is being introduced in
+    // https://github.com/MystenLabs/fastnft/pull/336.
+    async fn download_own_object_ids_from_random_authority(
         &self,
+        address: FastPayAddress,
     ) -> Result<(AuthorityName, Vec<ObjectRef>), FastPayError> {
-        let request = AccountInfoRequest {
-            account: self.address,
-        };
+        let request = AccountInfoRequest { account: address };
         // Sequentially try each authority in random order.
         let mut authorities: Vec<&AuthorityName> = self.authority_clients.keys().collect();
         // TODO: implement sampling according to stake distribution and using secure RNG. https://github.com/MystenLabs/fastnft/issues/128
@@ -1458,9 +1458,7 @@ where
         Ok(())
     }
 
-    async fn sync_client_state_with_random_authority(
-        &mut self,
-    ) -> Result<AuthorityName, anyhow::Error> {
+    async fn sync_client_state(&mut self) -> Result<AuthorityName, anyhow::Error> {
         if !self.store.pending_orders.is_empty()? {
             // Finish executing the previous orders
             self.try_complete_pending_orders().await?;
@@ -1469,7 +1467,9 @@ where
         self.store.object_sequence_numbers.clear()?;
         self.store.object_refs.clear()?;
 
-        let (authority_name, object_refs) = self.download_own_object_ids().await?;
+        let (authority_name, object_refs) = self
+            .download_own_object_ids_from_random_authority(self.address)
+            .await?;
         for object_ref in object_refs {
             let (object_id, sequence_number, _) = object_ref;
             self.store
