@@ -240,7 +240,7 @@ async fn start(
             .append(true)
             .open(&committee_config_path)
             .unwrap();
-        file.write_all(serde_json::to_string(&server.authority).unwrap().as_bytes());
+        file.write_all(serde_json::to_string(&server.authority).unwrap().as_bytes()).ok();
         
     }
 
