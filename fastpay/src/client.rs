@@ -7,7 +7,7 @@ use fastpay::config::*;
 use fastpay_core::{authority_client::AuthorityClient, client::*};
 use fastx_network::{network::NetworkClient, transport};
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
-use move_core_types::{transaction_argument::convert_txn_args, account_address::AccountAddress};
+use move_core_types::{account_address::AccountAddress, transaction_argument::convert_txn_args};
 
 use bytes::Bytes;
 use fastx_types::object::Object;
@@ -528,9 +528,14 @@ fn main() {
 
         ClientCommands::GetObjInfo { obj_id, deep } => {
             let object = get_object_info(
-                client_db_path, &mut accounts_config, &committee_config, 
+                client_db_path,
+                &mut accounts_config,
+                &committee_config,
                 obj_id,
-                buffer_size, send_timeout, recv_timeout);
+                buffer_size,
+                send_timeout,
+                recv_timeout,
+            );
 
             println!("Owner: {:#?}", object.owner);
             println!("Version: {:#?}", object.version().value());
@@ -632,10 +637,17 @@ fn main() {
             gas_object_id,
         } => {
             transfer_object(
-                client_db_path, accounts_config_path,
-                &mut accounts_config, &committee_config,
-                object_id, gas_object_id, to, 
-                buffer_size, send_timeout, recv_timeout);
+                client_db_path,
+                accounts_config_path,
+                &mut accounts_config,
+                &committee_config,
+                object_id,
+                gas_object_id,
+                to,
+                buffer_size,
+                send_timeout,
+                recv_timeout,
+            );
             info!("Saved user account states");
         }
 
@@ -651,10 +663,16 @@ fn main() {
 
         ClientCommands::QueryObjects { address } => {
             let object_refs = query_objects(
-                client_db_path, accounts_config_path, 
-                &mut accounts_config, &committee_config, 
-                address, buffer_size, send_timeout, recv_timeout);
-            
+                client_db_path,
+                accounts_config_path,
+                &mut accounts_config,
+                &committee_config,
+                address,
+                buffer_size,
+                send_timeout,
+                recv_timeout,
+            );
+
             for (obj_id, object_ref) in object_refs {
                 println!("{}: {:?}", obj_id, object_ref);
             }
@@ -748,17 +766,29 @@ fn main() {
             initial_state_config_path,
         } => {
             create_account_configs(
-                num, gas_objs_per_account, value_per_obj, accounts_config_path, 
-                &mut accounts_config, initial_state_config_path.as_str());
+                num,
+                gas_objs_per_account,
+                value_per_obj,
+                accounts_config_path,
+                &mut accounts_config,
+                initial_state_config_path.as_str(),
+            );
         }
     }
 }
 
 pub fn transfer_object(
-    client_db_path: PathBuf, accounts_config_path: &str,
-    accounts_config: &mut AccountsConfig, committee_config: &CommitteeConfig,
-    object_id: AccountAddress, gas_object_id: AccountAddress, to: PublicKeyBytes, 
-    buffer_size: usize, send_timeout: Duration, recv_timeout: Duration) {
+    client_db_path: PathBuf,
+    accounts_config_path: &str,
+    accounts_config: &mut AccountsConfig,
+    committee_config: &CommitteeConfig,
+    object_id: AccountAddress,
+    gas_object_id: AccountAddress,
+    to: PublicKeyBytes,
+    buffer_size: usize,
+    send_timeout: Duration,
+    recv_timeout: Duration,
+) {
     let rt = Runtime::new().unwrap();
     rt.block_on(async move {
         let owner = find_cached_owner_by_object_id(&accounts_config, gas_object_id)
@@ -807,9 +837,14 @@ pub fn transfer_object(
 }
 
 pub fn get_object_info(
-    client_db_path: PathBuf, accounts_config: &mut AccountsConfig, committee_config: &CommitteeConfig,
-    obj_id:AccountAddress, buffer_size: usize, send_timeout: Duration, 
-    recv_timeout: Duration) -> Object {
+    client_db_path: PathBuf,
+    accounts_config: &mut AccountsConfig,
+    committee_config: &CommitteeConfig,
+    obj_id: AccountAddress,
+    buffer_size: usize,
+    send_timeout: Duration,
+    recv_timeout: Duration,
+) -> Object {
     // Pick the first (or any) account for use in finding obj info
     let account = accounts_config
         .nth_account(0)
@@ -850,10 +885,15 @@ pub fn get_object_info(
 }
 
 pub fn query_objects(
-    client_db_path: PathBuf, accounts_config_path: &str, 
-    accounts_config: &mut AccountsConfig, committee_config: &CommitteeConfig,
-    address: PublicKeyBytes, buffer_size: usize, send_timeout: Duration,
-    recv_timeout: Duration) -> BTreeMap<AccountAddress, (AccountAddress, SequenceNumber, ObjectDigest)>{
+    client_db_path: PathBuf,
+    accounts_config_path: &str,
+    accounts_config: &mut AccountsConfig,
+    committee_config: &CommitteeConfig,
+    address: PublicKeyBytes,
+    buffer_size: usize,
+    send_timeout: Duration,
+    recv_timeout: Duration,
+) -> BTreeMap<AccountAddress, (AccountAddress, SequenceNumber, ObjectDigest)> {
     let rt = Runtime::new().unwrap();
     rt.block_on(async move {
         let client_state = make_client_state_and_try_sync(
@@ -870,17 +910,21 @@ pub fn query_objects(
         accounts_config.update_from_state(&client_state);
 
         accounts_config
-                .write(accounts_config_path)
-                .expect("Unable to write user accounts");
+            .write(accounts_config_path)
+            .expect("Unable to write user accounts");
 
         client_state.object_refs()
     })
 }
 
 pub fn create_account_configs(
-    num: u32, gas_objs_per_account: u32, value_per_obj: u64,
-    accounts_config_path:&str, accounts_config: &mut AccountsConfig, 
-    initial_accounts_config_path: &str) -> InitialStateConfig {
+    num: u32,
+    gas_objs_per_account: u32,
+    value_per_obj: u64,
+    accounts_config_path: &str,
+    accounts_config: &mut AccountsConfig,
+    initial_accounts_config_path: &str,
+) -> InitialStateConfig {
     let num_of_addresses: u32 = num;
     let mut init_state_cfg: InitialStateConfig = InitialStateConfig::new();
 

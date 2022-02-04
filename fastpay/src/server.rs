@@ -118,7 +118,6 @@ enum ServerCommands {
 }
 
 fn main() {
-
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let subscriber_builder =
         tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
@@ -137,10 +136,11 @@ fn main() {
         } => {
             // Run the server
             run_server(
-                server_config_path, 
-                &committee, 
-                &initial_accounts, 
-                buffer_size);
+                server_config_path,
+                &committee,
+                &initial_accounts,
+                buffer_size,
+            );
         }
 
         ServerCommands::Generate {
@@ -148,15 +148,19 @@ fn main() {
             port,
             database_path,
         } => {
-            let server = create_server_config(
-                server_config_path, host, port, database_path);
+            let server = create_server_config(server_config_path, host, port, database_path);
             server.authority.print();
         }
     }
 }
 
-// Shared functions for REST API & CLI 
-pub fn create_server_config(server_config_path: &str, host: String, port: u32, database_path: String) -> AuthorityServerConfig {
+// Shared functions for REST API & CLI
+pub fn create_server_config(
+    server_config_path: &str,
+    host: String,
+    port: u32,
+    database_path: String,
+) -> AuthorityServerConfig {
     let (address, key) = get_key_pair();
     let authority = AuthorityConfig {
         address,
@@ -173,10 +177,11 @@ pub fn create_server_config(server_config_path: &str, host: String, port: u32, d
 }
 
 pub fn run_server(
-    server_config_path: &str, 
-    committee_config_path: &str, 
-    initial_accounts_config_path: &str, 
-    buffer_size: usize) {
+    server_config_path: &str,
+    committee_config_path: &str,
+    initial_accounts_config_path: &str,
+    buffer_size: usize,
+) {
     let server = make_server(
         "0.0.0.0", // Allow local IP address to be different from the public one.
         server_config_path,
