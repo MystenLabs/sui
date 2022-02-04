@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // REMOVE THIS
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(unused_imports)]
+// #![allow(dead_code)]
+// #![allow(unused_variables)]
+// #![allow(unused_imports)]
 
 mod client;
 mod server;
@@ -23,18 +23,9 @@ use dropshot::HttpServerStarter;
 use dropshot::RequestContext;
 use dropshot::TypedBody;
 
-use fastpay::{
-    config::{AccountsConfig, AuthorityServerConfig, CommitteeConfig, InitialStateConfig},
-};
+use fastpay::config::{AccountsConfig, AuthorityServerConfig, CommitteeConfig, InitialStateConfig};
 use fastx_network::transport;
-use fastx_types::{
-    base_types::*,
-    messages::Order,
-};
-
-use http::StatusCode;
-use hyper::Body;
-use hyper::Response;
+use fastx_types::{base_types::*, messages::Order};
 
 use move_core_types::{account_address::AccountAddress, transaction_argument::convert_txn_args};
 
@@ -50,8 +41,8 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -95,17 +86,21 @@ async fn main() -> Result<(), String> {
      * The functions that implement our API endpoints will share this context.
      */
 
-    // Hardcoded for now as this won't be something users would be able to specify/access in a 
+    // Hardcoded for now as this won't be something users would be able to specify/access in a
     // properly designed RESTful API.
     let account_config_path = "accounts.json".to_string();
     let initial_accounts_config_path = "initial_accounts.toml".to_string();
-    File::create(&initial_accounts_config_path).expect("Couldn't create initial accounts config file");
+    File::create(&initial_accounts_config_path)
+        .expect("Couldn't create initial accounts config file");
     let committee_config_path = "committee.json".to_string();
     File::create(&committee_config_path).expect("Couldn't create committee config file");
     let client_db_path = PathBuf::from(env::temp_dir().join("CLIENT_DB_0"));
     let api_context = ServerContext::new(
-        account_config_path, committee_config_path, 
-        initial_accounts_config_path, client_db_path);
+        account_config_path,
+        committee_config_path,
+        initial_accounts_config_path,
+        client_db_path,
+    );
 
     /*
      * Set up the server.
@@ -126,22 +121,15 @@ async fn main() -> Result<(), String> {
  */
 struct ServerContext {
     /** Server configuration that can be manipulated by requests to the HTTP API */
-
     buffer_size: usize,
     send_timeout: Arc<Mutex<Duration>>,
     recv_timeout: Arc<Mutex<Duration>>,
-    initial_accounts_config_path: Arc<Mutex<String>>, 
+    initial_accounts_config_path: Arc<Mutex<String>>,
     accounts_config_path: Arc<Mutex<String>>,
     accounts_config: Arc<Mutex<AccountsConfig>>,
     committee_config_path: Arc<Mutex<String>>,
     committee_config: Arc<Mutex<CommitteeConfig>>,
     client_db_path: Arc<Mutex<PathBuf>>,
-
-
-    // Do I need any of the below???
-    initial_state_cfg: Arc<Mutex<InitialStateConfig>>,
-    num_servers: AtomicU64,
-    auth_serv_cfgs: Vec<AuthorityServerConfig>,
 }
 
 impl ServerContext {
@@ -149,23 +137,30 @@ impl ServerContext {
      * Return a new ServerContext.
      */
     pub fn new(
-        accounts_config_path: String, committee_config_path: String, 
-        initial_accounts_config_path: String, client_db_path: PathBuf) 
-        -> ServerContext {
+        accounts_config_path: String,
+        committee_config_path: String,
+        initial_accounts_config_path: String,
+        client_db_path: PathBuf,
+    ) -> ServerContext {
         ServerContext {
-            initial_state_cfg: Arc::new(Mutex::new(InitialStateConfig::new())),
-            buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE.to_string().parse().unwrap(),
+            buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE
+                .to_string()
+                .parse()
+                .unwrap(),
             send_timeout: Arc::new(Mutex::new(Duration::new(0, 0))),
             recv_timeout: Arc::new(Mutex::new(Duration::new(0, 0))),
-            initial_accounts_config_path: Arc::new(Mutex::new(initial_accounts_config_path.to_owned())),
+            initial_accounts_config_path: Arc::new(Mutex::new(
+                initial_accounts_config_path.to_owned(),
+            )),
             accounts_config_path: Arc::new(Mutex::new(accounts_config_path.to_owned())),
-            accounts_config: Arc::new(Mutex::new(AccountsConfig::read_or_create(accounts_config_path.as_str()).unwrap())),
+            accounts_config: Arc::new(Mutex::new(
+                AccountsConfig::read_or_create(accounts_config_path.as_str()).unwrap(),
+            )),
             committee_config_path: Arc::new(Mutex::new(committee_config_path.to_owned())),
-            committee_config: Arc::new(Mutex::new(CommitteeConfig::read(committee_config_path.as_str()).unwrap())),
+            committee_config: Arc::new(Mutex::new(
+                CommitteeConfig::read(committee_config_path.as_str()).unwrap(),
+            )),
             client_db_path: Arc::new(Mutex::new(client_db_path)),
-
-            num_servers: AtomicU64::new(0),
-            auth_serv_cfgs: Vec::new()
         }
     }
 }
@@ -173,15 +168,6 @@ impl ServerContext {
 /*
  * HTTP API interface
  */
-
-/**
- * `Server Status` represents the current status of the server with the most recently
- * provided server configuration.
- */
-#[derive(Deserialize, Serialize, JsonSchema)]
-struct ServerStatus {
-    status: Vec<String>,
-}
 
 /**
 * `Server Configuration` represents the provided server configuration.
@@ -210,26 +196,39 @@ async fn start(
 
     let num_servers = configuration.num_servers;
 
-    *server_context.send_timeout.lock().unwrap() = Duration::from_secs(configuration.send_timeout_secs);
-    *server_context.recv_timeout.lock().unwrap() = Duration::from_secs(configuration.recv_timeout_secs);
+    *server_context.send_timeout.lock().unwrap() =
+        Duration::from_secs(configuration.send_timeout_secs);
+    *server_context.recv_timeout.lock().unwrap() =
+        Duration::from_secs(configuration.recv_timeout_secs);
 
-    let accounts_config_path = server_context.accounts_config_path.lock().unwrap().to_owned();
-    let committee_config_path = server_context.committee_config_path.lock().unwrap().to_owned();
-    let initial_accounts_config_path = server_context.initial_accounts_config_path.lock().unwrap().to_owned();
-    
+    let accounts_config_path = server_context
+        .accounts_config_path
+        .lock()
+        .unwrap()
+        .to_owned();
+    let committee_config_path = server_context
+        .committee_config_path
+        .lock()
+        .unwrap()
+        .to_owned();
+    let initial_accounts_config_path = server_context
+        .initial_accounts_config_path
+        .lock()
+        .unwrap()
+        .to_owned();
+
     let mut accounts_config = AccountsConfig::read_or_create(&accounts_config_path).unwrap();
-    
 
     // Generate configs for the servers (could split this out to its own endpoint)
-    // let mut auth_serv_cfgs = Vec::new();
     for i in 0..num_servers {
         let db_dir = "db".to_string() + &i.to_string();
         let server_config_path = "server".to_string() + &i.to_string() + ".json";
-        fs::create_dir(&db_dir).expect(format!("Failed to create database directory: {}", db_dir).as_str());
+        fs::create_dir(&db_dir)
+            .expect(format!("Failed to create database directory: {}", db_dir).as_str());
         File::create(&server_config_path).expect("Couldn't create server config file");
         let server = server::create_server_config(
-            server_config_path.as_str(), 
-            "0.0.0.0".to_string(), // Allow local IP address to be different from the public one.
+            server_config_path.as_str(),
+            "0.0.0.0".to_string(),
             (9100 + i).try_into().unwrap(),
             db_dir,
         );
@@ -240,8 +239,8 @@ async fn start(
             .append(true)
             .open(&committee_config_path)
             .unwrap();
-        file.write_all(serde_json::to_string(&server.authority).unwrap().as_bytes()).ok();
-        
+        file.write_all(serde_json::to_string(&server.authority).unwrap().as_bytes())
+            .ok();
     }
 
     let committee_config = CommitteeConfig::read(&committee_config_path).unwrap();
@@ -253,97 +252,31 @@ async fn start(
         2000000,
         &accounts_config_path,
         &mut accounts_config,
-        &initial_accounts_config_path
+        &initial_accounts_config_path,
     );
 
     *server_context.accounts_config.lock().unwrap() = accounts_config;
     *server_context.committee_config.lock().unwrap() = committee_config.clone();
-    *server_context.initial_state_cfg.lock().unwrap() = initial_state_config.clone();
 
     let buffer_size: usize = server_context.buffer_size;
 
-    // Thread handles for servers
     let mut thrs = Vec::new();
 
-    // let mut status = Vec::new();
-
-    // Run the servers with the inite values
     for i in 0..num_servers {
-        // let s = auth_serv_cfgs.get(i as usize).unwrap();
-        // let auth = AuthorityServerConfig {
-        //     authority: s.authority.clone(),
-        //     key:s.key.copy(),
-        // };
-
-        // let cfg = committee_config.clone();
-        // let init_cfg = initial_state_cfg.clone();
-
-        // let status_string = format!(
-        //     "Server {:?} running on {}:{}", 
-        //      s.authority.address, s.authority.host, s.authority.base_port
-        // );
-
-        // println!("{}", status_string );
-
-        // status.push(status_string);
-
-        // let (tx, rx) = mpsc::channel();
-        // let server_config_path = "server".to_string() + &i.to_string() + ".json";
-
-        // cb_thread::scope(|scope| {
-        //     scope.spawn(|_| {
-        //         server::run_server(
-        //             &server_config_path,
-        //             &committee_config_path.clone(), 
-        //             &initial_accounts_config_path.clone(), 
-        //             buffer_size);
-        //     }).join().unwrap()
-        // }).unwrap();
         let server_config_path = "server".to_string() + &i.to_string() + ".json";
         let committee_config_path = committee_config_path.clone();
         let initial_accounts_config_path = initial_accounts_config_path.clone();
 
         thrs.push(thread::spawn(move || {
-
             println!("Starting...");
 
             server::run_server(
                 &server_config_path,
-                &committee_config_path, 
-                &initial_accounts_config_path, 
-                buffer_size);
-
-
-        // let pool = ThreadPool::new(num_servers as usize);
-
-        // for _ in 0..num_servers {
-        //     let server_config_path = "server".to_string() + &i.to_string() + ".json";
-        //     let committee_config_path = committee_config_path.clone();
-        //     let initial_accounts_config_path = initial_accounts_config_path.clone();
-        //     pool.execute(move || {
-        //     server::run_server(
-        //         &server_config_path,
-        //         &committee_config_path, 
-        //         &initial_accounts_config_path, 
-        //         buffer_size);
-        //     });
-        // }
-
-        //     // println!("Working...");
-
-        //     // loop {
-        //     //     thread::sleep(Duration::from_millis(500));
-        //     //     match rx.try_recv() {
-        //     //         Ok(_) | Err(TryRecvError::Disconnected) => {
-        //     //             println!("Terminating.");
-        //     //             break;
-        //     //         }
-        //     //         Err(TryRecvError::Empty) => {}
-        //     //     }
-        //     // }
-        //     // tx.send("Terminate".to_string());
-            }
-        ));
+                &committee_config_path,
+                &initial_accounts_config_path,
+                buffer_size,
+            );
+        }));
     }
 
     Ok(HttpResponseUpdatedNoContent())
@@ -358,7 +291,7 @@ struct Accounts {
 }
 
 /**
- * [SERVER] Retrieve all accounts (addresses) setup by initial configuration. 
+ * [SERVER] Retrieve all accounts (addresses) setup by initial configuration.
  */
 #[endpoint {
     method = GET,
@@ -369,18 +302,16 @@ async fn get_accounts(
 ) -> Result<HttpResponseOk<Accounts>, HttpError> {
     let server_context = rqctx.context();
 
-    // TODO: Error handle here instead of unwrap()
-    let init_cfg = server_context.initial_state_cfg.lock().unwrap();
+    let accounts_config = &mut *server_context.accounts_config.lock().unwrap();
 
-    let accounts = init_cfg.config
-        .iter()
-        .map(|entry| format!("{:?}", entry.address))
+    let accounts = accounts_config
+        .addresses()
+        .into_iter()
+        .map(|addr| format!("{:X}", addr).trim_end_matches('=').to_string())
         .collect();
 
     Ok(HttpResponseOk(Accounts { accounts }))
 }
-
-
 
 /**
 * `Account` represents the provided account.
@@ -390,7 +321,6 @@ struct Account {
     // Use accountaddress but it doesn't implement JsonSchema
     account_address: String,
 }
-
 
 /**
  * `Object` represents the value of the objects on the network.
@@ -410,7 +340,7 @@ struct Objects {
 }
 
 /**
- * [CLIENT] Return all objects for a specified account. 
+ * [CLIENT] Return all objects for a specified account.
  */
 #[endpoint {
     method = GET,
@@ -420,54 +350,61 @@ async fn get_account_objects(
     rqctx: Arc<RequestContext<ServerContext>>,
     account: TypedBody<Account>,
 ) -> Result<HttpResponseOk<Objects>, HttpError> {
-
     let server_context = rqctx.context();
 
     let send_timeout = *server_context.send_timeout.lock().unwrap();
     let recv_timeout = *server_context.recv_timeout.lock().unwrap();
     let buffer_size = server_context.buffer_size.clone();
+    let accounts_config_path = &*server_context.accounts_config_path.lock().unwrap();
+    let client_db_path = server_context.client_db_path.lock().unwrap().clone();
     let mut account_config = &mut *server_context.accounts_config.lock().unwrap();
     let committee_config = &*server_context.committee_config.lock().unwrap();
 
     let acc_objs = cb_thread::scope(|scope| {
-        scope.spawn(|_| {
-            // Get the objects for account
-            client::query_objects(
-                env::temp_dir().join("CLIENT_DB_0"),
-                &mut account_config,
-                &committee_config,
-                decode_address_hex(account.into_inner().account_address.as_str()).unwrap(),
-                buffer_size,
-                send_timeout,
-                recv_timeout,
-                
-            )
-        }).join().unwrap()
-    }).unwrap();
+        scope
+            .spawn(|_| {
+                // Get the objects for account
+                client::query_objects(
+                    client_db_path,
+                    accounts_config_path,
+                    &mut account_config,
+                    &committee_config,
+                    decode_address_hex(account.into_inner().account_address.as_str()).unwrap(),
+                    buffer_size,
+                    send_timeout,
+                    recv_timeout,
+                )
+            })
+            .join()
+            .unwrap()
+    })
+    .unwrap();
 
-    Ok(HttpResponseOk(Objects{ objects: 
-        acc_objs
+    Ok(HttpResponseOk(Objects {
+        objects: acc_objs
             .into_iter()
-            .map(|e| Object{ object_id: e.1.0.to_string(), object_ref: Some(format!("{:?}", e.1)) })
-            .collect::<Vec<Object>>()
+            .map(|e| Object {
+                object_id: e.1 .0.to_string(),
+                object_ref: Some(format!("{:?}", e.1)),
+            })
+            .collect::<Vec<Object>>(),
     }))
 }
-
 
 /**
 * `ObjectInfo` represents the object info on the network.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct ObjectInfo {
-   owner: String,
-   version: String,
-   id: String,
-   readonly: String,
-   obj_type: String
+    owner: String,
+    version: String,
+    id: String,
+    readonly: String,
+    obj_type: String,
 }
 
 /**
- * [CLIENT] Return object info. 
+ * [CLIENT] Return object info.
  */
 #[endpoint {
     method = GET,
@@ -477,7 +414,6 @@ async fn get_object_info(
     rqctx: Arc<RequestContext<ServerContext>>,
     object: TypedBody<Object>,
 ) -> Result<HttpResponseOk<ObjectInfo>, HttpError> {
-
     let server_context = rqctx.context();
 
     let send_timeout = *server_context.send_timeout.lock().unwrap();
@@ -485,24 +421,29 @@ async fn get_object_info(
     let buffer_size = server_context.buffer_size.clone();
     let mut account_config = &mut *server_context.accounts_config.lock().unwrap();
     let committee_config = &*server_context.committee_config.lock().unwrap();
+    let client_db_path = server_context.client_db_path.lock().unwrap().clone();
 
     let obj_info = cb_thread::scope(|scope| {
-        scope.spawn(|_| {
-            // Get the object info
-            client::get_object_info(
-                env::temp_dir().join("CLIENT_DB_0"),
-                &mut account_config,
-                &committee_config,
-                AccountAddress::try_from(object.into_inner().object_id).unwrap(),
-                buffer_size,
-                send_timeout,
-                recv_timeout,
-            )
-        }).join().unwrap()
-    }).unwrap();
+        scope
+            .spawn(|_| {
+                // Get the object info
+                client::get_object_info(
+                    client_db_path,
+                    &mut account_config,
+                    &committee_config,
+                    AccountAddress::try_from(object.into_inner().object_id).unwrap(),
+                    buffer_size,
+                    send_timeout,
+                    recv_timeout,
+                )
+            })
+            .join()
+            .unwrap()
+    })
+    .unwrap();
 
-    Ok(HttpResponseOk(ObjectInfo{ 
-        owner: format!("Owner: {:#?}", obj_info.owner), 
+    Ok(HttpResponseOk(ObjectInfo {
+        owner: format!("Owner: {:#?}", obj_info.owner),
         version: format!("Version: {:#?}", obj_info.version().value()),
         id: format!("ID: {:#?}", obj_info.id()),
         readonly: format!("Readonly: {:#?}", obj_info.is_read_only()),
@@ -515,7 +456,7 @@ async fn get_object_info(
                     .module
                     .as_ident_str()
                     .to_string())
-        )
+        ),
     }))
 }
 
@@ -527,11 +468,11 @@ struct TransferOrder {
     object_address: String,
     from_account: String,
     to_account: String,
-    gas_address: String   
- }
+    gas_address: String,
+}
 
 /**
- * [CLIENT] Transfer object. 
+ * [CLIENT] Transfer object.
  */
 #[endpoint {
     method = PATCH,
@@ -541,7 +482,6 @@ async fn transfer_object(
     rqctx: Arc<RequestContext<ServerContext>>,
     transfer_order_body: TypedBody<TransferOrder>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-
     let server_context = rqctx.context();
     let transfer_order = transfer_order_body.into_inner();
 
@@ -550,6 +490,8 @@ async fn transfer_object(
     let buffer_size = server_context.buffer_size.clone();
     let mut account_config = &mut *server_context.accounts_config.lock().unwrap();
     let committee_config = &*server_context.committee_config.lock().unwrap();
+    let client_db_path = server_context.client_db_path.lock().unwrap().clone();
+    let accounts_config_path = &*server_context.accounts_config_path.lock().unwrap();
 
     let from_account = decode_address_hex(transfer_order.from_account.as_str()).unwrap();
     let to_account = decode_address_hex(transfer_order.to_account.as_str()).unwrap();
@@ -558,21 +500,26 @@ async fn transfer_object(
     let gas_object_id = AccountAddress::try_from(transfer_order.gas_address).unwrap();
 
     let acc_obj_info = cb_thread::scope(|scope| {
-        scope.spawn(|_| {
-            // Transfer from ACC1 to ACC2
-            client::transfer_object(
-                env::temp_dir().join("CLIENT_DB_0"),
-                &mut account_config,
-                &committee_config,
-                object_id,
-                gas_object_id,
-                to_account,
-                buffer_size,
-                send_timeout,
-                recv_timeout,
-            )
-        }).join().unwrap()
-    }).unwrap();
+        scope
+            .spawn(|_| {
+                // Transfer from ACC1 to ACC2
+                client::transfer_object(
+                    client_db_path,
+                    accounts_config_path,
+                    &mut account_config,
+                    &committee_config,
+                    object_id,
+                    gas_object_id,
+                    to_account,
+                    buffer_size,
+                    send_timeout,
+                    recv_timeout,
+                )
+            })
+            .join()
+            .unwrap()
+    })
+    .unwrap();
 
     Ok(HttpResponseUpdatedNoContent())
-} 
+}

@@ -632,13 +632,10 @@ fn main() {
             gas_object_id,
         } => {
             transfer_object(
-                client_db_path, &mut accounts_config, &committee_config,
+                client_db_path, accounts_config_path,
+                &mut accounts_config, &committee_config,
                 object_id, gas_object_id, to, 
                 buffer_size, send_timeout, recv_timeout);
-
-            accounts_config
-                .write(accounts_config_path)
-                .expect("Unable to write user accounts");
             info!("Saved user account states");
         }
 
@@ -654,12 +651,9 @@ fn main() {
 
         ClientCommands::QueryObjects { address } => {
             let object_refs = query_objects(
-                client_db_path, &mut accounts_config, &committee_config, 
+                client_db_path, accounts_config_path, 
+                &mut accounts_config, &committee_config, 
                 address, buffer_size, send_timeout, recv_timeout);
-
-            accounts_config
-                .write(accounts_config_path)
-                .expect("Unable to write user accounts");
             
             for (obj_id, object_ref) in object_refs {
                 println!("{}: {:?}", obj_id, object_ref);
@@ -761,7 +755,8 @@ fn main() {
 }
 
 pub fn transfer_object(
-    client_db_path: PathBuf, accounts_config: &mut AccountsConfig, committee_config: &CommitteeConfig,
+    client_db_path: PathBuf, accounts_config_path: &str,
+    accounts_config: &mut AccountsConfig, committee_config: &CommitteeConfig,
     object_id: AccountAddress, gas_object_id: AccountAddress, to: PublicKeyBytes, 
     buffer_size: usize, send_timeout: Duration, recv_timeout: Duration) {
     let rt = Runtime::new().unwrap();
@@ -805,6 +800,9 @@ pub fn transfer_object(
         .await;
         recipient_client_state.receive_object(&cert).await.unwrap();
         accounts_config.update_from_state(&recipient_client_state);
+        accounts_config
+            .write(accounts_config_path)
+            .expect("Unable to write user accounts");
     });
 }
 
@@ -817,6 +815,8 @@ pub fn get_object_info(
         .nth_account(0)
         .expect("Account config is invalid")
         .address;
+
+    println!("retrieved account: {:?}", account);
     let rt = Runtime::new().unwrap();
     rt.block_on(async move {
         // Fetch the object ref
@@ -850,7 +850,8 @@ pub fn get_object_info(
 }
 
 pub fn query_objects(
-    client_db_path: PathBuf, accounts_config: &mut AccountsConfig, committee_config: &CommitteeConfig,
+    client_db_path: PathBuf, accounts_config_path: &str, 
+    accounts_config: &mut AccountsConfig, committee_config: &CommitteeConfig,
     address: PublicKeyBytes, buffer_size: usize, send_timeout: Duration,
     recv_timeout: Duration) -> BTreeMap<AccountAddress, (AccountAddress, SequenceNumber, ObjectDigest)>{
     let rt = Runtime::new().unwrap();
@@ -867,6 +868,10 @@ pub fn query_objects(
         .await;
 
         accounts_config.update_from_state(&client_state);
+
+        accounts_config
+                .write(accounts_config_path)
+                .expect("Unable to write user accounts");
 
         client_state.object_refs()
     })
