@@ -753,14 +753,9 @@ fn main() {
             value_per_obj,
             initial_state_config_path,
         } => {
-            let init_state_cfg = create_account_configs(
-                num, gas_objs_per_account, value_per_obj, &mut accounts_config);
-            init_state_cfg
-                .write(initial_state_config_path.as_str())
-                .expect("Unable to write to initial state config file");
-            accounts_config
-                .write(accounts_config_path)
-                .expect("Unable to write user accounts");
+            create_account_configs(
+                num, gas_objs_per_account, value_per_obj, accounts_config_path, 
+                &mut accounts_config, initial_state_config_path.as_str());
         }
     }
 }
@@ -879,7 +874,8 @@ pub fn query_objects(
 
 pub fn create_account_configs(
     num: u32, gas_objs_per_account: u32, value_per_obj: u64,
-    accounts_config: &mut AccountsConfig) -> InitialStateConfig {
+    accounts_config_path:&str, accounts_config: &mut AccountsConfig, 
+    initial_accounts_config_path: &str) -> InitialStateConfig {
     let num_of_addresses: u32 = num;
     let mut init_state_cfg: InitialStateConfig = InitialStateConfig::new();
 
@@ -909,5 +905,11 @@ pub fn create_account_configs(
 
         accounts_config.insert(account);
     }
+    init_state_cfg
+        .write(initial_accounts_config_path)
+        .expect("Unable to write to initial state config file");
+    accounts_config
+        .write(accounts_config_path)
+        .expect("Unable to write user accounts");
     init_state_cfg
 }

@@ -46,7 +46,6 @@ dropshot = "0.6.0"
 http = "0.2.6"
 hyper = "0.14.16"
 schemars = "0.8.8"
-threadpool = "1.8.1"
 
 [[bin]]
 name = "client"

@@ -138,8 +138,8 @@ fn main() {
             // Run the server
             run_server(
                 server_config_path, 
-                committee, 
-                initial_accounts, 
+                &committee, 
+                &initial_accounts, 
                 buffer_size);
         }
 
@@ -148,18 +148,15 @@ fn main() {
             port,
             database_path,
         } => {
-            let server = create_server_config(host, port, database_path);
-            server
-                .write(server_config_path)
-                .expect("Unable to write server config file");
-            info!("Wrote server config file");
+            let server = create_server_config(
+                server_config_path, host, port, database_path);
             server.authority.print();
         }
     }
 }
 
 // Shared functions for REST API & CLI 
-pub fn create_server_config(host: String, port: u32, database_path: String) -> AuthorityServerConfig {
+pub fn create_server_config(server_config_path: &str, host: String, port: u32, database_path: String) -> AuthorityServerConfig {
     let (address, key) = get_key_pair();
     let authority = AuthorityConfig {
         address,
@@ -167,13 +164,18 @@ pub fn create_server_config(host: String, port: u32, database_path: String) -> A
         base_port: port,
         database_path,
     };
-    AuthorityServerConfig { authority, key }
+    let server = AuthorityServerConfig { authority, key };
+    server
+        .write(server_config_path)
+        .expect("Unable to write server config file");
+    info!("Wrote server config file");
+    return server;
 }
 
 pub fn run_server(
-    server_config_path: &String, 
-    committee_config_path: String, 
-    initial_accounts_config_path: String, 
+    server_config_path: &str, 
+    committee_config_path: &str, 
+    initial_accounts_config_path: &str, 
     buffer_size: usize) {
     let server = make_server(
         "0.0.0.0", // Allow local IP address to be different from the public one.
