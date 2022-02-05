@@ -10,9 +10,6 @@ module Examples::TrustedCoin {
     /// Register the trusted currency to acquire its `TreasuryCap`. Because
     /// this is a module initializer, it ensures the currency only gets
     /// registered once.
-    // TODO: this uses a module initializer, which doesn't exist in Move.
-    // However, we can (and I think should) choose to support this in the FastX
-    // adapter to enable us -cases that require at-most-once semantics
     fun init(ctx: &mut TxContext) {
         // Get a treasury cap for the coin and give it to the transaction
         // sender

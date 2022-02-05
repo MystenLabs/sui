@@ -131,12 +131,36 @@ impl ModuleResolver for InMemoryStorage {
     type Error = ();
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self
-            .read_object(module_id.address())
-            .map(|o| match &o.data {
-                Data::Package(m) => m[module_id.name().as_str()].clone().into_vec(),
-                Data::Move(_) => panic!("Type error"),
-            }))
+        match self.read_object(module_id.address()) {
+            Some(o) => match &o.data {
+                Data::Package(c) => Ok(c
+                    .get(module_id.name().as_str())
+                    .cloned()
+                    .map(|m| m.into_vec())),
+                _ => panic!("Execpted a package"),
+            },
+            None => match self.created().get(module_id.address()) {
+                Some(o) => match &o.data {
+                    Data::Package(c) => Ok(c
+                        .get(module_id.name().as_str())
+                        .cloned()
+                        .map(|m| m.into_vec())),
+                    _ => panic!("Execpted a package"),
+                },
+
+                None => match self.updated().get(module_id.address()) {
+                    Some(o) => match &o.data {
+                        Data::Package(c) => Ok(c
+                            .get(module_id.name().as_str())
+                            .cloned()
+                            .map(|m| m.into_vec())),
+                        _ => panic!("Execpted a package"),
+                    },
+
+                    None => Ok(None),
+                },
+            },
+        }
     }
 }
 
@@ -517,6 +541,7 @@ fn test_publish_module_insufficient_gas() {
         module_bytes,
         base_types::FastPayAddress::default(),
         &mut tx_context,
+        0,
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
@@ -811,6 +836,7 @@ fn test_publish_module_linker_error() {
         module_bytes,
         base_types::FastPayAddress::default(),
         &mut tx_context,
+        0,
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
@@ -853,6 +879,7 @@ fn test_publish_module_non_zero_address() {
         module_bytes,
         base_types::FastPayAddress::default(),
         &mut tx_context,
+        0,
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
@@ -935,9 +962,10 @@ fn publish_from_src(
         all_module_bytes,
         base_types::FastPayAddress::default(),
         &mut tx_context,
+        GAS_BUDGET,
         gas_object,
     );
-    assert_eq!(response.unwrap(), ExecutionStatus::Success);
+    assert!(matches!(response.unwrap(), ExecutionStatus::Success { .. }));
     storage.flush();
 }
 
@@ -980,7 +1008,7 @@ fn test_simple_call() {
         Vec::new(),
         pure_args,
     );
-    assert_eq!(response.unwrap(), ExecutionStatus::Success);
+    assert!(matches!(response.unwrap(), ExecutionStatus::Success { .. }));
 
     // check if the object was created and if it has the right value
     let id = storage.get_created_keys().pop().unwrap();
@@ -992,5 +1020,25 @@ fn test_simple_call() {
     assert_eq!(
         u64::from_le_bytes(move_obj.type_specific_contents().try_into().unwrap()),
         obj_val
+    );
+}
+
+#[test]
+fn test_publish_init() {
+    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+    );
+
+    // publish modules at a given path
+    publish_from_src(
+        &mut storage,
+        &natives,
+        "src/unit_tests/data/publish_init",
+        gas_object,
     );
 }
