@@ -653,8 +653,20 @@ where
         Ok((new_certificate, response))
     }
 
+    /// Exposing `execute_transaction_without_confirmation` as a public API
+    /// so that it can be called by `transfer_to_fastx_unsafe_unconfirmed`.
+    /// This function alone does not properly lock/unlock pending orders,
+    /// and calls to it should be avoided unless absolutely necessary.
+    /// And caller will need to properly lock/unlock pending orders.
+    pub async fn execute_transaction_without_confirmation_unsafe(
+        &self,
+        order: &Order,
+    ) -> Result<CertifiedOrder, anyhow::Error> {
+        self.execute_transaction_without_confirmation(order).await
+    }
+
     /// Execute (or retry) an order without confirmation. Update local object states using newly created certificate.
-    pub async fn execute_transaction_without_confirmation(
+    async fn execute_transaction_without_confirmation(
         &self,
         order: &Order,
     ) -> Result<CertifiedOrder, anyhow::Error> {

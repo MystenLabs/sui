@@ -709,7 +709,7 @@ where
         self.lock_pending_order_objects(&order)?;
         let new_certificate = self
             .authorities
-            .execute_transaction_without_confirmation(&order)
+            .execute_transaction_without_confirmation_unsafe(&order)
             .await;
         self.unlock_pending_order_objects(&order)?;
 
