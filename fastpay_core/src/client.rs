@@ -688,9 +688,7 @@ where
         }
     }
 
-    // TODO: Need to figure out how this function is typically used.
-    // We should merge this function into the execution_transaction pipeline,
-    // potentially with a flag to toggle the confirmation part.
+    // TODO: Is this function still needed?
     async fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
         recipient: FastPayAddress,
@@ -707,10 +705,15 @@ where
             gas_payment,
         };
         let order = Order::new_transfer(transfer, &self.secret);
+
+        self.lock_pending_order_objects(&order)?;
         let new_certificate = self
             .authorities
             .execute_transaction_without_confirmation(&order)
-            .await?;
+            .await;
+        self.unlock_pending_order_objects(&order)?;
+
+        let new_certificate = new_certificate?;
 
         // The new cert will not be updated by order effect without confirmation, the new unconfirmed cert need to be added temporally.
         let new_sent_certificates = vec![new_certificate.clone()];
