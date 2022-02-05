@@ -274,16 +274,17 @@ impl ClientServerBenchmark {
     }
 
     async fn launch_client(&self, connections: usize, mut orders: Vec<Bytes>) {
+        // Give the server time to be ready
         time::sleep(Duration::from_millis(1000)).await;
+
         let order_len_factor = if self.benchmark_type == BenchmarkType::OrdersAndCerts {
             2
         } else {
             1
         };
         let items_number = orders.len() / order_len_factor;
-        let time_start = Instant::now();
+        let mut elapsed_time: u128 = 0;
 
-        // let connections: usize = num_cpus::get();
         let max_in_flight = self.max_in_flight / connections as usize;
         info!("Number of TCP connections: {}", connections);
         info!("Set max_in_flight to {}", max_in_flight);
@@ -298,10 +299,13 @@ impl ClientServerBenchmark {
                 Duration::from_micros(self.recv_timeout_us),
             );
 
+            let time_start = Instant::now();
             let responses = mass_client
                 .batch_send(orders, connections, max_in_flight as u64)
                 .concat()
                 .await;
+            elapsed_time = time_start.elapsed().as_micros();
+
             info!("Received {} responses.", responses.len(),);
             // Check the responses for errors
             for resp in &responses {
@@ -335,10 +339,12 @@ impl ClientServerBenchmark {
                     info!("Process message {}...", orders.len());
                 }
                 let order = orders.pop().unwrap();
-                let status = client
-                    .send_recv_bytes(order.to_vec())
-                    .await
-                    .and_then(deserialize_object_info);
+
+                let time_start = Instant::now();
+                let resp = client.send_recv_bytes(order.to_vec()).await;
+                elapsed_time += time_start.elapsed().as_micros();
+                let status = deserialize_object_info(resp.unwrap());
+
                 match status {
                     Ok(info) => {
                         debug!("Query response: {:?}", info);
@@ -350,13 +356,12 @@ impl ClientServerBenchmark {
             }
         }
 
-        let time_total = time_start.elapsed().as_micros();
         warn!(
             "Completed benchmark for {}\nTotal time: {}us, items: {}, tx/sec: {}",
             self.benchmark_type,
-            time_total,
+            elapsed_time,
             items_number,
-            1_000_000.0 * (items_number as f64) / (time_total as f64)
+            1_000_000.0 * (items_number as f64) / (elapsed_time as f64)
         );
     }
 }
