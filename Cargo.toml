@@ -1,10 +1,10 @@
 [workspace]
 members = [
         "fastpay_core",
-        "fastpay",
         "fastx_programmability/adapter",
         "fastx_programmability/framework",
 	"fastx_types",
+        "tools",
 ]
 
 [profile.release]

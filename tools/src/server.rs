@@ -3,10 +3,10 @@
 
 #![deny(warnings)]
 
-use fastpay::config::*;
 use fastpay_core::{authority::*, authority_server::AuthorityServer};
 use fastx_network::transport;
 use fastx_types::{base_types::*, committee::Committee};
+use tools::config::*;
 
 use futures::future::join_all;
 use std::path::Path;

@@ -3,11 +3,11 @@
 
 #![deny(warnings)]
 
-use fastpay::config::*;
 use fastpay_core::{authority_client::AuthorityClient, client::*};
 use fastx_network::{network::NetworkClient, transport};
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
 use move_core_types::transaction_argument::convert_txn_args;
+use tools::config::*;
 
 use bytes::Bytes;
 use fastx_types::object::Object;
