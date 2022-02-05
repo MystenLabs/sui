@@ -113,13 +113,11 @@ pub trait Client {
     /// Get all object we own.
     async fn get_owned_objects(&self) -> Vec<ObjectID>;
 
-    async fn download_owned_objects_from_all_authorities(
-        &self,
-    ) -> Result<BTreeSet<ObjectRef>, FastPayError>;
+    async fn download_owned_objects_not_in_db(&self) -> Result<BTreeSet<ObjectRef>, FastPayError>;
 }
 
 impl<A> ClientState<A> {
-    /// It is recommended that one call sync and download_owned_objects_from_all_authorities
+    /// It is recommended that one call sync and download_owned_objects
     /// right after constructor to fetch missing info form authorities
     /// TODO: client should manage multiple addresses instead of each addr having DBs
     /// https://github.com/MystenLabs/fastnft/issues/332
@@ -1138,9 +1136,7 @@ where
 
             // TODO: decide what to do with failed object downloads
             // https://github.com/MystenLabs/fastnft/issues/331
-            let _failed = self
-                .download_owned_objects_from_all_authorities_helper(objs_to_download)
-                .await?;
+            let _failed = self.download_objects_not_in_db(objs_to_download).await?;
 
             for (object_id, seq, _) in &v.effects.deleted {
                 let old_seq = self
@@ -1175,22 +1171,52 @@ where
             .ok_or_else(|| anyhow::anyhow!("No valid confirmation order votes"))
     }
 
-    /// Fetch the objects at the given object id, which do not already exist in the db
-    /// All authorities are polled for each object and their all assumed to be honest
+    /// All authorities are polled for each object_ref and their all assumed to be honest
     /// This always returns the latest object known to the authorities
+    async fn download_objects_from_all_authorities(
+        &self,
+        object_refs: BTreeSet<ObjectRef>,
+    ) -> Vec<Object> {
+        // Send request to download
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(OBJECT_DOWNLOAD_CHANNEL_BOUND);
+
+        // Now that we have all the fresh ids, dispatch fetches
+        for object_ref in object_refs {
+            let sender = sender.clone();
+            tokio::spawn(ClientState::fetch_and_store_object(
+                self.authority_clients.clone(),
+                object_ref,
+                AUTHORITY_REQUEST_TIMEOUT,
+                sender,
+            ));
+        }
+        // Close unused channel
+        drop(sender);
+        let mut objects = vec![];
+        // Receive from the downloader
+        while let Some(resp) = receiver.recv().await {
+            // Persists them to disk
+            if let Ok(o) = resp {
+                objects.push(o);
+            }
+        }
+        objects
+    }
+
+    /// Fetch the objects for the given list of ObjectRefs, which do not already exist in the db.
     /// How it works: this function finds all object refs that are not in the DB
-    /// then it runs a downloader and submits download requests
-    /// Afterwards it persists objects returned by the downloader
-    /// It returns a set of the object ids which failed to download
+    /// then it downloads them by calling download_objects_from_all_authorities.
+    /// Afterwards it persists objects returned.
+    /// Returns a set of the object ids which failed to download
     /// TODO: return failed download errors along with the object id
-    async fn download_owned_objects_from_all_authorities_helper(
+    async fn download_objects_not_in_db(
         &self,
         object_refs: Vec<ObjectRef>,
     ) -> Result<BTreeSet<ObjectRef>, FastPayError> {
         // Check the DB
         // This could be expensive. Might want to use object_ref table
         // We want items that are NOT in the table
-        let fresh_object_refs = self
+        let mut fresh_object_refs = self
             .store
             .objects
             .multi_get(&object_refs)?
@@ -1202,31 +1228,16 @@ where
             })
             .collect::<BTreeSet<_>>();
 
-        // Send request to download
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(OBJECT_DOWNLOAD_CHANNEL_BOUND);
-
-        // Now that we have all the fresh ids, dispatch fetches
-        for object_ref in fresh_object_refs.clone() {
-            let sender = sender.clone();
-            tokio::spawn(ClientState::fetch_and_store_object(
-                self.authority_clients.clone(),
-                object_ref,
-                AUTHORITY_REQUEST_TIMEOUT,
-                sender,
-            ));
-        }
-        // Close unused channel
-        drop(sender);
-        let mut err_object_refs = fresh_object_refs.clone();
+        let objects = self
+            .download_objects_from_all_authorities(fresh_object_refs.clone())
+            .await;
         // Receive from the downloader
-        while let Some(resp) = receiver.recv().await {
+        for o in objects {
             // Persists them to disk
-            if let Ok(o) = resp {
-                self.store.objects.insert(&o.to_object_reference(), &o)?;
-                err_object_refs.remove(&o.to_object_reference());
-            }
+            self.store.objects.insert(&o.to_object_reference(), &o)?;
+            fresh_object_refs.remove(&o.to_object_reference());
         }
-        Ok(err_object_refs)
+        Ok(fresh_object_refs)
     }
 
     /// This function fetches one object at a time, and sends back the result over the channel
@@ -1535,11 +1546,8 @@ where
         self.store.object_sequence_numbers.keys().collect()
     }
 
-    async fn download_owned_objects_from_all_authorities(
-        &self,
-    ) -> Result<BTreeSet<ObjectRef>, FastPayError> {
-        let object_refs = self.store.object_refs.iter().map(|q| q.1).collect();
-        self.download_owned_objects_from_all_authorities_helper(object_refs)
-            .await
+    async fn download_owned_objects_not_in_db(&self) -> Result<BTreeSet<ObjectRef>, FastPayError> {
+        let object_refs: Vec<ObjectRef> = self.store.object_refs.iter().map(|q| q.1).collect();
+        self.download_objects_not_in_db(object_refs).await
     }
 }

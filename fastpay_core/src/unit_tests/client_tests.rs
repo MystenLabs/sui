@@ -2474,10 +2474,7 @@ async fn test_object_store() {
         let _ = client1.sync_client_state().await.unwrap();
     }
     // Try to download objects which are not already in storage
-    client1
-        .download_owned_objects_from_all_authorities()
-        .await
-        .unwrap();
+    client1.download_owned_objects_not_in_db().await.unwrap();
 
     // Gas object should be in storage now
     assert_eq!(client1.store.objects.iter().count(), 1);
@@ -2556,14 +2553,8 @@ async fn test_object_store_transfer() {
     }
 
     // Try to download objects which are not already in storage
-    client1
-        .download_owned_objects_from_all_authorities()
-        .await
-        .unwrap();
-    client2
-        .download_owned_objects_from_all_authorities()
-        .await
-        .unwrap();
+    client1.download_owned_objects_not_in_db().await.unwrap();
+    client2.download_owned_objects_not_in_db().await.unwrap();
 
     // Gas object and another object should be in storage now for client 1
     assert_eq!(client1.store.objects.iter().count(), 2);
