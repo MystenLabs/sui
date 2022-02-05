@@ -546,7 +546,7 @@ where
         // Check the DB
         // This could be expensive. Might want to use object_ref table
         // We want items that are NOT in the table
-        let mut fresh_object_refs = self
+        let fresh_object_refs = self
             .store
             .objects
             .multi_get(&object_refs)?
@@ -558,17 +558,21 @@ where
             })
             .collect::<BTreeSet<_>>();
 
-        let objects = self
+        // Now that we have all the fresh ids, fetch from authorities.
+        let mut receiver = self
             .authorities
-            .download_objects_from_all_authorities(fresh_object_refs.clone())
-            .await;
+            .fetch_objects_from_authorities(fresh_object_refs.clone());
+
+        let mut err_object_refs = fresh_object_refs.clone();
         // Receive from the downloader
-        for o in objects {
+        while let Some(resp) = receiver.recv().await {
             // Persists them to disk
-            self.store.objects.insert(&o.to_object_reference(), &o)?;
-            fresh_object_refs.remove(&o.to_object_reference());
+            if let Ok(o) = resp {
+                self.store.objects.insert(&o.to_object_reference(), &o)?;
+                err_object_refs.remove(&o.to_object_reference());
+            }
         }
-        Ok(fresh_object_refs)
+        Ok(err_object_refs)
     }
 }
 
@@ -684,9 +688,7 @@ where
         }
     }
 
-    // TODO: Need to figure out how this function is typically used.
-    // We should merge this function into the execution_transaction pipeline,
-    // potentially with a flag to toggle the confirmation part.
+    // TODO: Is this function still needed?
     async fn transfer_to_fastx_unsafe_unconfirmed(
         &mut self,
         recipient: FastPayAddress,
@@ -703,10 +705,15 @@ where
             gas_payment,
         };
         let order = Order::new_transfer(transfer, &self.secret);
+
+        self.lock_pending_order_objects(&order)?;
         let new_certificate = self
             .authorities
             .execute_transaction_without_confirmation(&order)
-            .await?;
+            .await;
+        self.unlock_pending_order_objects(&order)?;
+
+        let new_certificate = new_certificate?;
 
         // The new cert will not be updated by order effect without confirmation, the new unconfirmed cert need to be added temporally.
         let new_sent_certificates = vec![new_certificate.clone()];

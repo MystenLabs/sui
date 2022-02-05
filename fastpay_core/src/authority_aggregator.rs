@@ -16,12 +16,13 @@ use rand::seq::SliceRandom;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::time::Duration;
+use tokio::sync::mpsc::Receiver;
 use tokio::time::timeout;
-
-const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
 
 // TODO: Make timeout duration configurable.
 const AUTHORITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+
+const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -713,19 +714,15 @@ where
             .ok_or_else(|| anyhow::anyhow!("No valid confirmation order votes"))
     }
 
-    /// All authorities are polled for each object_ref and their all assumed to be honest
-    /// This always returns the latest object known to the authorities
-    pub async fn download_objects_from_all_authorities(
+    /// Given a list of object refs, download the objects.
+    pub fn fetch_objects_from_authorities(
         &self,
         object_refs: BTreeSet<ObjectRef>,
-    ) -> Vec<Object> {
-        // Send request to download
-        let (sender, mut receiver) = tokio::sync::mpsc::channel(OBJECT_DOWNLOAD_CHANNEL_BOUND);
-
-        // Now that we have all the fresh ids, dispatch fetches
+    ) -> Receiver<FastPayResult<Object>> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(OBJECT_DOWNLOAD_CHANNEL_BOUND);
         for object_ref in object_refs {
             let sender = sender.clone();
-            tokio::spawn(Self::fetch_and_store_object(
+            tokio::spawn(Self::fetch_one_object(
                 self.authority_clients.clone(),
                 object_ref,
                 AUTHORITY_REQUEST_TIMEOUT,
@@ -734,21 +731,13 @@ where
         }
         // Close unused channel
         drop(sender);
-        let mut objects = vec![];
-        // Receive from the downloader
-        while let Some(resp) = receiver.recv().await {
-            // Persists them to disk
-            if let Ok(o) = resp {
-                objects.push(o);
-            }
-        }
-        objects
+        receiver
     }
 
     /// This function fetches one object at a time, and sends back the result over the channel
     /// The object ids are also returned so the caller can determine which fetches failed
     /// NOTE: This function assumes all authorities are honest
-    async fn fetch_and_store_object(
+    async fn fetch_one_object(
         authority_clients: BTreeMap<PublicKeyBytes, A>,
         object_ref: ObjectRef,
         timeout: Duration,
