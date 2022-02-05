@@ -546,7 +546,7 @@ where
         // Check the DB
         // This could be expensive. Might want to use object_ref table
         // We want items that are NOT in the table
-        let mut fresh_object_refs = self
+        let fresh_object_refs = self
             .store
             .objects
             .multi_get(&object_refs)?
@@ -558,17 +558,21 @@ where
             })
             .collect::<BTreeSet<_>>();
 
-        let objects = self
+        // Now that we have all the fresh ids, fetch from authorities.
+        let mut receiver = self
             .authorities
-            .download_objects_from_all_authorities(fresh_object_refs.clone())
-            .await;
+            .fetch_objects_from_authorities(fresh_object_refs.clone());
+
+        let mut err_object_refs = fresh_object_refs.clone();
         // Receive from the downloader
-        for o in objects {
+        while let Some(resp) = receiver.recv().await {
             // Persists them to disk
-            self.store.objects.insert(&o.to_object_reference(), &o)?;
-            fresh_object_refs.remove(&o.to_object_reference());
+            if let Ok(o) = resp {
+                self.store.objects.insert(&o.to_object_reference(), &o)?;
+                err_object_refs.remove(&o.to_object_reference());
+            }
         }
-        Ok(fresh_object_refs)
+        Ok(err_object_refs)
     }
 }
 
