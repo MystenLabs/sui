@@ -92,12 +92,6 @@ impl CommitteeConfig {
         }
         map
     }
-
-    pub fn new() -> Self {
-        Self {
-            authorities: Vec::new(),
-        }
-    }
 }
 
 #[serde_as]
@@ -202,12 +196,6 @@ pub struct AccountsConfig {
 }
 
 impl AccountsConfig {
-    pub fn new() -> Self {
-        Self {
-            accounts: BTreeMap::new(),
-        }
-    }
-
     pub fn get(&self, address: &FastPayAddress) -> Option<&UserAccount> {
         self.accounts.get(address)
     }

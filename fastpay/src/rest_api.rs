@@ -87,7 +87,7 @@ async fn main() -> Result<(), String> {
         .expect("Couldn't create initial accounts config file");
     let committee_config_path = "committee.json".to_string();
     File::create(&committee_config_path).expect("Couldn't create committee config file");
-    let client_db_path = env::current_dir().unwrap().join("./CLIENT_DB_0");
+    let client_db_path = env::current_dir().unwrap().join(format!("./CLIENT_DB_0{}",ObjectID::random()));
     let api_context = ServerContext::new(
         account_config_path,
         committee_config_path,
@@ -456,10 +456,9 @@ async fn get_object_info(
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct TransferOrder {
-    object_address: String,
-    from_account: String,
+    object_id: String,
     to_account: String,
-    gas_address: String,
+    gas_object_id: String,
 }
 
 /**
@@ -484,11 +483,9 @@ async fn transfer_object(
     let client_db_path = server_context.client_db_path.lock().unwrap().clone();
     let accounts_config_path = &*server_context.accounts_config_path.lock().unwrap();
 
-    let _from_account = decode_address_hex(transfer_order.from_account.as_str()).unwrap();
     let to_account = decode_address_hex(transfer_order.to_account.as_str()).unwrap();
-
-    let object_id = AccountAddress::try_from(transfer_order.object_address).unwrap();
-    let gas_object_id = AccountAddress::try_from(transfer_order.gas_address).unwrap();
+    let object_id = AccountAddress::try_from(transfer_order.object_id).unwrap();
+    let gas_object_id = AccountAddress::try_from(transfer_order.gas_object_id).unwrap();
 
     let _acc_obj_info = cb_thread::scope(|scope| {
         scope
