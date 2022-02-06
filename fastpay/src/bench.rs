@@ -11,7 +11,7 @@ use fastx_types::{base_types::*, committee::*, messages::*, object::Object, seri
 use futures::stream::StreamExt;
 use move_core_types::ident_str;
 use rand::rngs::StdRng;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
@@ -42,7 +42,7 @@ struct ClientServerBenchmark {
     db_dir: String,
     /// Base port number
     #[structopt(long, default_value = "9555")]
-    port: u32,
+    port: u16,
     /// Size of the FastPay committee
     #[structopt(long, default_value = "10")]
     committee_size: usize,

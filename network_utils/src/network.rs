@@ -14,7 +14,7 @@ use tokio::time;
 #[derive(Clone)]
 pub struct NetworkClient {
     base_address: String,
-    base_port: u32,
+    base_port: u16,
     buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
@@ -23,7 +23,7 @@ pub struct NetworkClient {
 impl NetworkClient {
     pub fn new(
         base_address: String,
-        base_port: u32,
+        base_port: u16,
         buffer_size: usize,
         send_timeout: std::time::Duration,
         recv_timeout: std::time::Duration,
@@ -160,7 +160,7 @@ impl NetworkClient {
 
 pub struct NetworkServer {
     pub base_address: String,
-    pub base_port: u32,
+    pub base_port: u16,
     pub buffer_size: usize,
     // Stats
     packets_processed: AtomicUsize,
@@ -168,7 +168,7 @@ pub struct NetworkServer {
 }
 
 impl NetworkServer {
-    pub fn new(base_address: String, base_port: u32, buffer_size: usize) -> Self {
+    pub fn new(base_address: String, base_port: u16, buffer_size: usize) -> Self {
         Self {
             base_address,
             base_port,

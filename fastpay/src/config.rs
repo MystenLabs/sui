@@ -31,7 +31,7 @@ pub struct AuthorityConfig {
     )]
     pub address: FastPayAddress,
     pub host: String,
-    pub base_port: u32,
+    pub base_port: u16,
     pub database_path: String,
 }
 
@@ -338,7 +338,7 @@ pub struct WalletConfig {
     pub db_folder_path: String,
 
     #[serde(skip)]
-    config_path: String,
+    pub config_path: String,
 }
 
 impl WalletConfig {
@@ -401,5 +401,18 @@ pub struct AccountInfo {
 pub struct AuthorityInfo {
     pub address: FastPayAddress,
     pub host: String,
-    pub base_port: u32,
+    pub base_port: u16,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AuthorityPrivateInfo {
+    #[serde(
+        serialize_with = "address_as_hex",
+        deserialize_with = "address_from_hex"
+    )]
+    pub address: FastPayAddress,
+    pub key_pair: KeyPair,
+    pub host: String,
+    pub port: u16,
+    pub db_path: String,
 }

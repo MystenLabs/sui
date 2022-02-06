@@ -48,7 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options: ClientOpt = ClientOpt::from_clap(&app.get_matches());
     let wallet_conf_path = options.config;
     let config =
-        WalletConfig::read_or_create(&wallet_conf_path).expect("Unable to read user accounts");
+        WalletConfig::read_or_create(&wallet_conf_path).expect("Unable to read wallet config");
     let mut context = WalletContext::new(config);
 
     if !options.no_shell {
