@@ -109,6 +109,12 @@ pub struct AccountInfoRequest {
     pub account: FastPayAddress,
 }
 
+impl From<FastPayAddress> for AccountInfoRequest {
+    fn from(account: FastPayAddress) -> Self {
+        AccountInfoRequest { account }
+    }
+}
+
 /// A request for information about an object and optionally its
 /// parent certificate at a specific version.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -117,6 +123,24 @@ pub struct ObjectInfoRequest {
     pub object_id: ObjectID,
     /// The version of the object for which the parent certificate is sought.
     pub request_sequence_number: Option<SequenceNumber>,
+}
+
+impl From<ObjectRef> for ObjectInfoRequest {
+    fn from(object_ref: ObjectRef) -> Self {
+        ObjectInfoRequest {
+            object_id: object_ref.0,
+            request_sequence_number: Some(object_ref.1),
+        }
+    }
+}
+
+impl From<ObjectID> for ObjectInfoRequest {
+    fn from(object_id: ObjectID) -> Self {
+        ObjectInfoRequest {
+            object_id,
+            request_sequence_number: None,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -139,10 +163,12 @@ pub struct ObjectResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectInfoResponse {
     /// The certificate that created or mutated the object at a given version.
-    /// If no parent certificate was requested this is set to None. If the
-    /// parent was requested and not found a error (ParentNotfound or
-    /// CertificateNotfound) will be returned.
+    /// If no parent certificate was requested the latest certificate concerning
+    /// this object is sent. If the parent was requested and not found a error
+    /// (ParentNotfound or CertificateNotfound) will be returned.
     pub parent_certificate: Option<CertifiedOrder>,
+    /// The full reference created by the above certificate
+    pub requested_object_reference: Option<ObjectRef>,
 
     /// The object and its current lock. If the object does not exist
     /// this is None.
