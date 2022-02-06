@@ -647,6 +647,17 @@ fn test_receiving_unconfirmed_transfer() {
 
     // Check that we indeed flagged this order as pending
     assert!(!(client1.store().pending_orders.is_empty().unwrap()));
+    for obj in certificate.order.input_objects() {
+        assert_eq!(
+            client1
+                .store()
+                .pending_orders
+                .get(&obj.object_id())
+                .unwrap()
+                .unwrap(),
+            certificate.order
+        );
+    }
 
     // ..but not confirmed remotely, hence an unchanged balance and sequence number.
     assert_eq!(
