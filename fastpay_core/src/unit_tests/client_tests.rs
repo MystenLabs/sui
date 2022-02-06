@@ -399,7 +399,8 @@ fn test_initiating_transfer_low_funds() {
         ),
     );
     assert_eq!(
-        rt.block_on(sender.authorities().get_latest_owner(object_id_2)).1,
+        rt.block_on(sender.authorities().get_latest_owner(object_id_2))
+            .1,
         SequenceNumber::from(0),
     );
 }
@@ -429,10 +430,7 @@ async fn test_bidirectional_transfer() {
 
     // Confirm client1 have ownership of the object.
     assert_eq!(
-        client1
-            .authorities()
-            .get_latest_owner(object_id)
-            .await,
+        client1.authorities().get_latest_owner(object_id).await,
         (
             Authenticator::Address(client1.address()),
             SequenceNumber::from(0)
@@ -440,10 +438,7 @@ async fn test_bidirectional_transfer() {
     );
     // Confirm client2 doesn't have ownership of the object.
     assert_eq!(
-        client2
-            .authorities()
-            .get_latest_owner(object_id)
-            .await,
+        client2.authorities().get_latest_owner(object_id).await,
         (
             Authenticator::Address(client1.address()),
             SequenceNumber::from(0)
@@ -458,10 +453,7 @@ async fn test_bidirectional_transfer() {
     assert!(client1.store().pending_orders.is_empty());
     // Confirm client1 lose ownership of the object.
     assert_eq!(
-        client1
-            .authorities()
-            .get_latest_owner(object_id)
-            .await,
+        client1.authorities().get_latest_owner(object_id).await,
         (
             Authenticator::Address(client2.address()),
             SequenceNumber::from(1)
@@ -469,10 +461,7 @@ async fn test_bidirectional_transfer() {
     );
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
-        client2
-            .authorities()
-            .get_latest_owner(object_id)
-            .await,
+        client2.authorities().get_latest_owner(object_id).await,
         (
             Authenticator::Address(client2.address()),
             SequenceNumber::from(1)
@@ -495,10 +484,7 @@ async fn test_bidirectional_transfer() {
 
     // Confirm sequence number are consistent between clients.
     assert_eq!(
-        client2
-            .authorities()
-            .get_latest_owner(object_id)
-            .await,
+        client2.authorities().get_latest_owner(object_id).await,
         (
             Authenticator::Address(client2.address()),
             SequenceNumber::from(1)
@@ -515,10 +501,7 @@ async fn test_bidirectional_transfer() {
 
     // Confirm client2 lose ownership of the object.
     assert_eq!(
-        client2
-            .authorities()
-            .get_latest_owner(object_id)
-            .await,
+        client2.authorities().get_latest_owner(object_id).await,
         (
             Authenticator::Address(client1.address()),
             SequenceNumber::from(2)
@@ -533,10 +516,7 @@ async fn test_bidirectional_transfer() {
     );
     // Confirm client1 acquired ownership of the object.
     assert_eq!(
-        client1
-            .authorities()
-            .get_latest_owner(object_id)
-            .await,
+        client1.authorities().get_latest_owner(object_id).await,
         (
             Authenticator::Address(client1.address()),
             SequenceNumber::from(2)
@@ -614,10 +594,7 @@ async fn test_client_state_sync_with_transferred_object() {
 
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
-        client2
-            .authorities()
-            .get_latest_owner(object_id)
-            .await,
+        client2.authorities().get_latest_owner(object_id).await,
         (
             Authenticator::Address(client2.address()),
             SequenceNumber::from(1)

@@ -596,99 +596,98 @@ where
     pub async fn sync_all_given_objects(
         &self,
         objects: Vec<ObjectID>,
-        timeout_after_quorum: Duration) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
+        timeout_after_quorum: Duration,
+    ) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
+        let mut active_objects = Vec::new();
+        let mut deleted_objects = Vec::new();
+        let mut certs_to_sync = BTreeMap::new();
+        // We update each object at each authority that does not have it.
+        for object_id in objects.iter() {
+            // Authorities to update.
+            let mut authorites: HashSet<AuthorityName> = self
+                .committee
+                .voting_rights
+                .iter()
+                .map(|(name, _)| *name)
+                .collect();
 
-            let mut active_objects = Vec::new();
-            let mut deleted_objects = Vec::new();
-            let mut certs_to_sync = BTreeMap::new();
-            // We update each object at each authority that does not have it.
-            for object_id in objects.iter() {
-                // Authorities to update.
-                let mut authorites: HashSet<AuthorityName> = self
-                    .committee
-                    .voting_rights
-                    .iter()
-                    .map(|(name, _)| *name)
-                    .collect();
-    
-                let (aggregate_object_info, certificates) = self
-                    .get_object_by_id(*object_id, timeout_after_quorum)
-                    .await?;
-    
-                let mut aggregate_object_info: Vec<_> = aggregate_object_info.into_iter().collect();
-    
-                // If more that one version of an object is available, we update all authorities with it.
-                while !aggregate_object_info.is_empty() {
-                    // This will be the very latest object version, because object_ref is ordered this way.
-                    let ((object_ref, transaction_digest), (object_option, object_authorities)) =
-                        aggregate_object_info.pop().unwrap(); // safe due to check above
-    
-                    // NOTE: Here we must check that the object is indeed an input to this transaction
-                    //       but for the moment lets do the happy case.
-    
-                    if !certificates.contains_key(&transaction_digest) {
-                        // NOTE: This implies this is a genesis object. We should check that it is.
-                        //       We can do this by looking into the genesis, or the object_refs of the genesis.
-                        //       Otherwise report the authority as potentially faulty.
-    
-                        if let Some(obj) = object_option {
-                            active_objects.push(obj);
-                        }
-                        // Cannot be that the genesis contributes to deleted objects
-    
-                        continue;
+            let (aggregate_object_info, certificates) = self
+                .get_object_by_id(*object_id, timeout_after_quorum)
+                .await?;
+
+            let mut aggregate_object_info: Vec<_> = aggregate_object_info.into_iter().collect();
+
+            // If more that one version of an object is available, we update all authorities with it.
+            while !aggregate_object_info.is_empty() {
+                // This will be the very latest object version, because object_ref is ordered this way.
+                let ((object_ref, transaction_digest), (object_option, object_authorities)) =
+                    aggregate_object_info.pop().unwrap(); // safe due to check above
+
+                // NOTE: Here we must check that the object is indeed an input to this transaction
+                //       but for the moment lets do the happy case.
+
+                if !certificates.contains_key(&transaction_digest) {
+                    // NOTE: This implies this is a genesis object. We should check that it is.
+                    //       We can do this by looking into the genesis, or the object_refs of the genesis.
+                    //       Otherwise report the authority as potentially faulty.
+
+                    if let Some(obj) = object_option {
+                        active_objects.push(obj);
                     }
-    
-                    let cert = certificates[&transaction_digest].clone(); // safe due to check above.
-    
-                    // Remove authorities at this version, they will not need to be updated.
-                    for (name, _signed_order) in object_authorities {
-                        authorites.remove(&name);
-                    }
-    
-                    // NOTE: Just above we have access to signed orders that have not quite
-                    //       been processed by enough authorities. We should either return them
-                    //       to the caller, or -- more in the spirit of this function -- do what
-                    //       needs to be done to force their processing if this is possible.
-    
-                    // Add authorities that need to be updated
-                    let entry = certs_to_sync
-                        .entry(cert.order.digest())
-                        .or_insert((cert, HashSet::new()));
-                    entry.1.extend(authorites);
-    
-                    // Return the latest version of an object, or a deleted object
-                    match object_option {
-                        Some(obj) => active_objects.push(obj),
-                        None => deleted_objects.push(object_ref),
-                    }
-    
-                    break;
+                    // Cannot be that the genesis contributes to deleted objects
+
+                    continue;
                 }
-            }
-    
-            for (_, (cert, authorities)) in certs_to_sync {
-                for name in authorities {
-                    // For each certificate authority pair run a sync to upate this authority to this
-                    // certificate.
-                    // NOTE: this is right now done sequentially, we should do them in parallel using
-                    //       the usual FuturesUnordered.
-                    let _result = self
-                        .sync_certificate_to_authority_with_timeout(
-                            ConfirmationOrder::new(cert.clone()),
-                            name,
-                            timeout_after_quorum,
-                            1,
-                        )
-                        .await;
-    
-                    // TODO: collect errors and propagate them to the right place
+
+                let cert = certificates[&transaction_digest].clone(); // safe due to check above.
+
+                // Remove authorities at this version, they will not need to be updated.
+                for (name, _signed_order) in object_authorities {
+                    authorites.remove(&name);
                 }
+
+                // NOTE: Just above we have access to signed orders that have not quite
+                //       been processed by enough authorities. We should either return them
+                //       to the caller, or -- more in the spirit of this function -- do what
+                //       needs to be done to force their processing if this is possible.
+
+                // Add authorities that need to be updated
+                let entry = certs_to_sync
+                    .entry(cert.order.digest())
+                    .or_insert((cert, HashSet::new()));
+                entry.1.extend(authorites);
+
+                // Return the latest version of an object, or a deleted object
+                match object_option {
+                    Some(obj) => active_objects.push(obj),
+                    None => deleted_objects.push(object_ref),
+                }
+
+                break;
             }
-    
-            Ok((active_objects, deleted_objects))
         }
 
+        for (_, (cert, authorities)) in certs_to_sync {
+            for name in authorities {
+                // For each certificate authority pair run a sync to upate this authority to this
+                // certificate.
+                // NOTE: this is right now done sequentially, we should do them in parallel using
+                //       the usual FuturesUnordered.
+                let _result = self
+                    .sync_certificate_to_authority_with_timeout(
+                        ConfirmationOrder::new(cert.clone()),
+                        name,
+                        timeout_after_quorum,
+                        1,
+                    )
+                    .await;
+
+                // TODO: collect errors and propagate them to the right place
+            }
+        }
+
+        Ok((active_objects, deleted_objects))
+    }
 
     /// Ask authorities for the user owned objects. Then download all objects at all versions present
     /// on authorites, along with the certificates preceeding them, and update lagging authorities to
@@ -720,7 +719,169 @@ where
         self.sync_all_given_objects(
             object_latest_version.keys().cloned().collect(),
             timeout_after_quorum,
-        ).await
+        )
+        .await
+    }
+
+    /// Takes an order, brings all authorities up to date with the versions of the
+    /// objects needed, and then submits the order to make a certificate.
+    pub async fn process_order(
+        &self,
+        order: Order,
+        timeout_after_quorum: Duration,
+    ) -> Result<CertifiedOrder, FastPayError> {
+        // Find out which objects are required by this order and
+        // ensure they are synced on authorities.
+        let required_ids: Vec<ObjectID> = order
+            .input_objects()
+            .iter()
+            .map(|o| o.object_id())
+            .collect();
+
+        let (_active_objects, _deleted_objects) = self
+            .sync_all_given_objects(required_ids, timeout_after_quorum)
+            .await?;
+
+        // TODO: check here that the latest versions necessary are available, AND that
+        // no newer versions are available.
+
+        let _required_id_version: Vec<(ObjectID, SequenceNumber)> = order
+            .input_objects()
+            .iter()
+            .map(|o| (o.object_id(), o.version()))
+            .collect();
+
+        // Now broadcast the order to all authorities.
+        let _digest = order.digest();
+        let threshold = self.committee.quorum_threshold();
+        let validity = self.committee.validity_threshold();
+        let state: (
+            Vec<(AuthorityName, Signature)>,
+            Option<CertifiedOrder>,
+            usize,
+            usize,
+        ) = (vec![], None, 0, 0);
+        let order_ref = &order;
+        let state = self
+            .quorum_map_then_reduce_with_timeout(
+                state,
+                |_name, client| {
+                    // NOTE: here I assume the AuthorityClient has done
+                    // the checks on this order response, and it is well formed.
+                    Box::pin(async move { client.handle_order(order_ref.clone()).await })
+                },
+                |mut state, name, weight, _result| {
+                    Box::pin(async move {
+                        match _result {
+                            Ok(OrderInfoResponse {
+                                certified_order: Some(inner_certificate),
+                                ..
+                            }) => {
+                                state.1 = Some(inner_certificate);
+                            }
+
+                            Ok(OrderInfoResponse {
+                                signed_order: Some(inner_signed_order),
+                                ..
+                            }) => {
+                                state.0.push((name, inner_signed_order.signature));
+                                state.2 += weight;
+                                if state.2 > threshold {
+                                    state.1 = Some(CertifiedOrder {
+                                        order: order_ref.clone(),
+                                        signatures: state.0.clone(),
+                                    });
+                                }
+                            }
+
+                            _ => {
+                                // We have an error here.
+                                state.3 += weight;
+                                if state.3 > validity {
+                                    // Too many errors
+                                    return Err(FastPayError::ErrorWhileProcessingTransferOrder);
+                                }
+                            }
+                        };
+
+                        if state.1.is_some() {
+                            Ok(ReduceOutput::End(state))
+                        } else {
+                            Ok(ReduceOutput::Continue(state))
+                        }
+                    })
+                },
+                // A long timeout before we hear back from a quorum
+                Duration::from_secs(60),
+            )
+            .await?;
+
+        state
+            .1
+            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)
+    }
+
+    /// Process a certificate assuming that 2f+1 authorites already are up to date.
+    pub async fn process_certificate_best_effort(
+        &self,
+        certificate: CertifiedOrder,
+        timeout_after_quorum: Duration,
+    ) -> Result<OrderEffects, FastPayError> {
+        let state = (HashMap::new(), 0usize);
+        let cert_ref = &certificate;
+        let threshold = self.committee.quorum_threshold();
+        let validity = self.committee.validity_threshold();
+        let (state, _) = self
+            .quorum_map_then_reduce_with_timeout(
+                state,
+                |_name, client| {
+                    Box::pin(async move {
+                        client
+                            .handle_confirmation_order(ConfirmationOrder::new(cert_ref.clone()))
+                            .await
+                    })
+                },
+                |(mut state, mut bad_stake), _name, weight, _result| {
+                    Box::pin(async move {
+                        if let Ok(OrderInfoResponse {
+                            signed_effects: Some(inner_effects),
+                            ..
+                        }) = _result
+                        {
+                            let entry = state
+                                .entry(sha3_hash(&inner_effects.effects))
+                                .or_insert((0usize, inner_effects.effects));
+                            entry.0 += weight;
+
+                            if entry.0 > threshold {
+                                // It will set the timeout quite high.
+                                return Ok(ReduceOutput::ContinueWithTimeout(
+                                    (state, bad_stake),
+                                    timeout_after_quorum,
+                                ));
+                            }
+                        }
+
+                        bad_stake += weight;
+                        if bad_stake > validity {
+                            return Err(FastPayError::ErrorWhileRequestingCertificate);
+                        }
+
+                        Ok(ReduceOutput::Continue((state, bad_stake)))
+                    })
+                },
+                // A long timeout before we hear back from a quorum
+                Duration::from_secs(60),
+            )
+            .await?;
+
+        for (stake, effects) in state.values() {
+            if stake > &threshold {
+                return Ok(effects.clone());
+            }
+        }
+
+        Err(FastPayError::ErrorWhileRequestingCertificate)
     }
 
     #[cfg(test)]
@@ -754,17 +915,13 @@ where
     /// Return owner address and sequence number of an object backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_latest_owner(
-        &self,
-        object_id: ObjectID,
-    ) -> (Authenticator, SequenceNumber) {
-
+    async fn get_latest_owner(&self, object_id: ObjectID) -> (Authenticator, SequenceNumber) {
         let (object_infos, _certificates) = self
             .get_object_by_id(object_id, Duration::from_secs(60))
             .await
             .unwrap(); // Not safe, but want to blow up if testing.
         let (top_ref, obj) = object_infos.iter().last().unwrap();
-        (obj.0.as_ref().unwrap().owner, top_ref.0.1)
+        (obj.0.as_ref().unwrap().owner, top_ref.0 .1)
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.
