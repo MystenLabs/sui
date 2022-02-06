@@ -343,13 +343,13 @@ where
         map_each_authority: FMap,
         // The async function that takes an accumulated state, and a new result for V from an
         // authority and returns a result to a ReduceOutput state.
-        mut reduce_result: FReduce,
+        reduce_result: FReduce,
         // The initial timeout applied to all
         initial_timeout: Duration,
     ) -> Result<S, FastPayError>
     where
         FMap: FnOnce(AuthorityName, &'a A) -> AsyncResult<'a, V, FastPayError> + Clone,
-        FReduce: FnMut(
+        FReduce: Fn(
             S,
             AuthorityName,
             usize,
@@ -728,59 +728,29 @@ where
     /// Find the highest sequence number that is known to a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_strong_majority_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
-        let request = ObjectInfoRequest {
-            object_id,
-            request_sequence_number: None,
-        };
-        let mut authority_clients = self.authority_clients.clone();
-        let numbers: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter_mut()
-            .map(|(name, client)| {
-                let fut = client.handle_object_info_request(request.clone());
-                async move {
-                    match fut.await {
-                        Ok(info) => info.object().map(|obj| (*name, obj.version())),
-                        _ => None,
-                    }
-                }
-            })
-            .collect();
-        self.committee.get_strong_majority_lower_bound(
-            numbers.filter_map(|x| async move { x }).collect().await,
-        )
+    async fn get_latest_majority_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
+        let (object_infos, _certificates) = self
+            .get_object_by_id(object_id, Duration::from_secs(60))
+            .await
+            .unwrap(); // Not safe, but want to blow up if testing.
+        let top_ref = object_infos.keys().last().unwrap().0;
+        top_ref.1
     }
 
     /// Return owner address and sequence number of an object backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_strong_majority_owner(
+    async fn get_latest_owner(
         &self,
         object_id: ObjectID,
-    ) -> Option<(Authenticator, SequenceNumber)> {
-        let request = ObjectInfoRequest {
-            object_id,
-            request_sequence_number: None,
-        };
-        let authority_clients = self.authority_clients.clone();
-        let numbers: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter()
-            .map(|(name, client)| {
-                let fut = client.handle_object_info_request(request.clone());
-                async move {
-                    match fut.await {
-                        Ok(ObjectInfoResponse {
-                            object_and_lock: Some(ObjectResponse { object, .. }),
-                            ..
-                        }) => Some((*name, Some((object.owner, object.version())))),
-                        _ => None,
-                    }
-                }
-            })
-            .collect();
-        self.committee.get_strong_majority_lower_bound(
-            numbers.filter_map(|x| async move { x }).collect().await,
-        )
+    ) -> (Authenticator, SequenceNumber) {
+
+        let (object_infos, _certificates) = self
+            .get_object_by_id(object_id, Duration::from_secs(60))
+            .await
+            .unwrap(); // Not safe, but want to blow up if testing.
+        let (top_ref, obj) = object_infos.iter().last().unwrap();
+        (obj.0.as_ref().unwrap().owner, top_ref.0.1)
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.

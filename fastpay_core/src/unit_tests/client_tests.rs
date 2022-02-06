@@ -268,77 +268,6 @@ async fn init_local_client_state_with_bad_authority(
 }
 
 #[test]
-fn test_get_strong_majority_owner() {
-    let rt = Runtime::new().unwrap();
-    rt.block_on(async {
-        let object_id_1 = ObjectID::random();
-        let object_id_2 = ObjectID::random();
-        let authority_objects = vec![
-            vec![object_id_1],
-            vec![object_id_1, object_id_2],
-            vec![object_id_1, object_id_2],
-            vec![object_id_1, object_id_2],
-        ];
-        let client = init_local_client_state(authority_objects).await;
-        assert_eq!(
-            client
-                .authorities()
-                .get_strong_majority_owner(object_id_1)
-                .await,
-            Some((
-                Authenticator::Address(client.address()),
-                SequenceNumber::from(0)
-            ))
-        );
-        assert_eq!(
-            client
-                .authorities()
-                .get_strong_majority_owner(object_id_2)
-                .await,
-            Some((
-                Authenticator::Address(client.address()),
-                SequenceNumber::from(0)
-            ))
-        );
-
-        let object_id_1 = ObjectID::random();
-        let object_id_2 = ObjectID::random();
-        let object_id_3 = ObjectID::random();
-        let authority_objects = vec![
-            vec![object_id_1],
-            vec![object_id_2, object_id_3],
-            vec![object_id_3, object_id_2],
-            vec![object_id_3],
-        ];
-        let client = init_local_client_state(authority_objects).await;
-        assert_eq!(
-            client
-                .authorities()
-                .get_strong_majority_owner(object_id_1)
-                .await,
-            None
-        );
-        assert_eq!(
-            client
-                .authorities()
-                .get_strong_majority_owner(object_id_2)
-                .await,
-            None
-        );
-        assert_eq!(
-            client
-                .authorities()
-                .get_strong_majority_owner(object_id_3)
-                .await,
-            Some((
-                Authenticator::Address(client.address()),
-                SequenceNumber::from(0)
-            ))
-        );
-    });
-}
-
-#[test]
 fn test_initiating_valid_transfer() {
     let rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
@@ -354,18 +283,18 @@ fn test_initiating_valid_transfer() {
 
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id_1)),
-        Some((
+        rt.block_on(sender.authorities().get_latest_owner(object_id_1)),
+        (
             Authenticator::Address(sender.address()),
             SequenceNumber::from(0)
-        ))
+        )
     );
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id_2)),
-        Some((
+        rt.block_on(sender.authorities().get_latest_owner(object_id_2)),
+        (
             Authenticator::Address(sender.address()),
             SequenceNumber::from(0)
-        ))
+        )
     );
     let (certificate, _) = rt
         .block_on(sender.transfer_object(object_id_1, gas_object, recipient))
@@ -378,15 +307,15 @@ fn test_initiating_valid_transfer() {
     );
     assert!(sender.store().pending_orders.is_empty());
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id_1)),
-        Some((Authenticator::Address(recipient), SequenceNumber::from(1)))
+        rt.block_on(sender.authorities().get_latest_owner(object_id_1)),
+        (Authenticator::Address(recipient), SequenceNumber::from(1))
     );
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id_2)),
-        Some((
+        rt.block_on(sender.authorities().get_latest_owner(object_id_2)),
+        (
             Authenticator::Address(sender.address()),
             SequenceNumber::from(0)
-        ))
+        )
     );
     // valid since our test authority should not update its certificate set
     compare_certified_orders(
@@ -424,8 +353,8 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     );
     assert!(sender.store().pending_orders.is_empty());
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id)),
-        Some((Authenticator::Address(recipient), SequenceNumber::from(1)))
+        rt.block_on(sender.authorities().get_latest_owner(object_id)),
+        (Authenticator::Address(recipient), SequenceNumber::from(1))
     );
     // valid since our test authority shouldn't update its certificate set
     compare_certified_orders(
@@ -463,15 +392,15 @@ fn test_initiating_transfer_low_funds() {
     );
     // assert_eq!(sender.pending_transfer, None);
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id_1)),
-        Some((
+        rt.block_on(sender.authorities().get_latest_owner(object_id_1)),
+        (
             Authenticator::Address(sender.address()),
             SequenceNumber::from(0)
-        )),
+        ),
     );
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id_2)),
-        None,
+        rt.block_on(sender.authorities().get_latest_owner(object_id_2)).1,
+        SequenceNumber::from(0),
     );
 }
 
@@ -502,23 +431,23 @@ async fn test_bidirectional_transfer() {
     assert_eq!(
         client1
             .authorities()
-            .get_strong_majority_owner(object_id)
+            .get_latest_owner(object_id)
             .await,
-        Some((
+        (
             Authenticator::Address(client1.address()),
             SequenceNumber::from(0)
-        ))
+        )
     );
     // Confirm client2 doesn't have ownership of the object.
     assert_eq!(
         client2
             .authorities()
-            .get_strong_majority_owner(object_id)
+            .get_latest_owner(object_id)
             .await,
-        Some((
+        (
             Authenticator::Address(client1.address()),
             SequenceNumber::from(0)
-        ))
+        )
     );
     // Transfer object to client2.
     let (certificate, _) = client1
@@ -531,23 +460,23 @@ async fn test_bidirectional_transfer() {
     assert_eq!(
         client1
             .authorities()
-            .get_strong_majority_owner(object_id)
+            .get_latest_owner(object_id)
             .await,
-        Some((
+        (
             Authenticator::Address(client2.address()),
             SequenceNumber::from(1)
-        ))
+        )
     );
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
         client2
             .authorities()
-            .get_strong_majority_owner(object_id)
+            .get_latest_owner(object_id)
             .await,
-        Some((
+        (
             Authenticator::Address(client2.address()),
             SequenceNumber::from(1)
-        ))
+        )
     );
 
     // Confirm certificate is consistent between authorities and client.
@@ -568,12 +497,12 @@ async fn test_bidirectional_transfer() {
     assert_eq!(
         client2
             .authorities()
-            .get_strong_majority_owner(object_id)
+            .get_latest_owner(object_id)
             .await,
-        Some((
+        (
             Authenticator::Address(client2.address()),
             SequenceNumber::from(1)
-        ))
+        )
     );
 
     // Transfer the object back to Client1
@@ -588,17 +517,17 @@ async fn test_bidirectional_transfer() {
     assert_eq!(
         client2
             .authorities()
-            .get_strong_majority_owner(object_id)
+            .get_latest_owner(object_id)
             .await,
-        Some((
+        (
             Authenticator::Address(client1.address()),
             SequenceNumber::from(2)
-        ))
+        )
     );
     assert_eq!(
         client2
             .authorities()
-            .get_strong_majority_sequence_number(object_id)
+            .get_latest_majority_sequence_number(object_id)
             .await,
         SequenceNumber::from(2)
     );
@@ -606,12 +535,12 @@ async fn test_bidirectional_transfer() {
     assert_eq!(
         client1
             .authorities()
-            .get_strong_majority_owner(object_id)
+            .get_latest_owner(object_id)
             .await,
-        Some((
+        (
             Authenticator::Address(client1.address()),
             SequenceNumber::from(2)
-        ))
+        )
     );
 
     // Should fail if Client 2 double spend the object
@@ -687,12 +616,12 @@ async fn test_client_state_sync_with_transferred_object() {
     assert_eq!(
         client2
             .authorities()
-            .get_strong_majority_owner(object_id)
+            .get_latest_owner(object_id)
             .await,
-        Some((
+        (
             Authenticator::Address(client2.address()),
             SequenceNumber::from(1)
-        ))
+        )
     );
 
     // Client 2's local object_id and cert should be empty before sync
