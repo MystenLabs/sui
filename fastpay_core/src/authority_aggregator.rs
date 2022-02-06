@@ -822,6 +822,10 @@ where
     }
 
     /// Process a certificate assuming that 2f+1 authorites already are up to date.
+    ///
+    /// This call is meant to be called after `process_order` returns a certificate.
+    /// At that point (and after) enough authorities are up to date with all objects
+    /// needed to process the certificate that a submission should succeed.
     pub async fn process_certificate_best_effort(
         &self,
         certificate: CertifiedOrder,
