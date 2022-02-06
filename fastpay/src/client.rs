@@ -311,7 +311,12 @@ fn find_cached_owner_by_object_id(
         .map(|acc| &acc.address)
 }
 
-fn show_object_effects(order_effects: OrderEffects) {
+fn show_object_effects(order_info_resp: OrderInfoResponse) {
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
+
+    if order_effects.status != ExecutionStatus::Success {
+        error!("Error publishing module: {:#?}", order_effects.status);
+    }
     if !order_effects.created.is_empty() {
         println!("Created Objects:");
         for (obj, _) in order_effects.created {
@@ -514,13 +519,7 @@ fn main() {
                 let pub_resp = client_state.publish(path, gas_obj_ref).await;
 
                 match pub_resp {
-                    Ok(resp) => {
-                        if resp.1.status != ExecutionStatus::Success {
-                            error!("Error publishing module: {:#?}", resp.1.status);
-                        }
-                        let (_, effects) = resp;
-                        show_object_effects(effects);
-                    }
+                    Ok(resp) => show_object_effects(resp.1),
                     Err(err) => error!("{:#?}", err),
                 }
             });

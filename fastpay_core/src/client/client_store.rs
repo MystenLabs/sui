@@ -1,8 +1,6 @@
 use super::*;
 use fastx_types::object::Object;
 use rocksdb::{DBWithThreadMode, MultiThreaded};
-use serde::Serialize;
-use std::borrow::Borrow;
 use std::path::PathBuf;
 use std::sync::Arc;
 use typed_store::rocks::DBMap;
@@ -85,36 +83,5 @@ impl ClientStore {
             )?
             .write()?;
         Ok(())
-    }
-
-    /// Insert multiple KV pairs atomically
-    pub fn multi_insert<J, U, K, V>(
-        map: &DBMap<K, V>,
-        kv: impl IntoIterator<Item = (J, U)>,
-    ) -> Result<(), FastPayError>
-    where
-        J: Borrow<K>,
-        U: Borrow<V>,
-        K: Serialize,
-        V: Serialize,
-    {
-        map.batch()
-            .insert_batch(map, kv)?
-            .write()
-            .map_err(|e| e.into())
-    }
-    /// Remove multiple Keys atomically
-    pub fn multi_remove<J, K, V>(
-        map: &DBMap<K, V>,
-        k: impl IntoIterator<Item = J>,
-    ) -> Result<(), FastPayError>
-    where
-        J: Borrow<K>,
-        K: Serialize,
-    {
-        map.batch()
-            .delete_batch(map, k)?
-            .write()
-            .map_err(|e| e.into())
     }
 }

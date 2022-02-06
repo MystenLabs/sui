@@ -645,7 +645,9 @@ fn test_receiving_unconfirmed_transfer() {
         Ok(SequenceNumber::from(1))
     );
 
-    assert!((client1.store().pending_orders.is_empty().unwrap()));
+    // Check that we indeed flagged this order as pending
+    assert!(!(client1.store().pending_orders.is_empty().unwrap()));
+
     // ..but not confirmed remotely, hence an unchanged balance and sequence number.
     assert_eq!(
         rt.block_on(client1.authorities().get_strong_majority_owner(object_id)),
@@ -980,7 +982,8 @@ async fn test_move_calls_object_create() {
         .await;
 
     // Check effects are good
-    let (_, order_effects) = call_response.unwrap();
+    let (_, order_info_resp) = call_response.unwrap();
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
     // Status flag should be success
     assert_eq!(order_effects.status, ExecutionStatus::Success);
     // Nothing should be deleted during a creation
@@ -1034,7 +1037,9 @@ async fn test_move_calls_object_transfer() {
         )
         .await;
 
-    let (_, order_effects) = call_response.unwrap();
+    let (_, order_info_resp) = call_response.unwrap();
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
+
     assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
     // Get the object created from the call
@@ -1074,7 +1079,8 @@ async fn test_move_calls_object_transfer() {
         .await;
 
     // Check effects are good
-    let (_, order_effects) = call_response.unwrap();
+    let (_, order_info_resp) = call_response.unwrap();
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
     // Status flag should be success
     assert_eq!(order_effects.status, ExecutionStatus::Success);
     // Nothing should be deleted during a transfer
@@ -1146,7 +1152,9 @@ async fn test_move_calls_chain_many_authority_syncronization() {
         )
         .await;
 
-    let (mut last_certificate, order_effects) = call_response.unwrap();
+    let (mut last_certificate, order_info_resp) = call_response.unwrap();
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
+
     assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
     // Get the object created from the call
@@ -1293,7 +1301,9 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
         )
         .await;
 
-    let (_, order_effects) = call_response.unwrap();
+    let (_, order_info_resp) = call_response.unwrap();
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
+
     assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
     // Get the object created from the call
@@ -1475,7 +1485,8 @@ async fn test_move_calls_chain_many_delete_authority_auto_synchronization() {
         )
         .await;
 
-    let (_, order_effects) = call_response.unwrap();
+    let (_, order_info_resp) = call_response.unwrap();
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
     assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
     // Get the object created from the call
@@ -1644,7 +1655,8 @@ async fn test_move_calls_object_transfer_and_freeze() {
         )
         .await;
 
-    let (_, order_effects) = call_response.unwrap();
+    let (_, order_info_resp) = call_response.unwrap();
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
     // Get the object created from the call
     let (new_obj_ref, _) = order_effects.created[0];
     // Fetch the full object
@@ -1682,7 +1694,8 @@ async fn test_move_calls_object_transfer_and_freeze() {
         .await;
 
     // Check effects are good
-    let (_, order_effects) = call_response.unwrap();
+    let (_, order_info_resp) = call_response.unwrap();
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
     // Status flag should be success
     assert_eq!(order_effects.status, ExecutionStatus::Success);
     // Nothing should be deleted during a transfer
@@ -1754,8 +1767,9 @@ async fn test_move_calls_object_delete() {
         )
         .await;
 
-    let (_, order_effects) = call_response.unwrap();
+    let (_, order_info_resp) = call_response.unwrap();
     // Get the object created from the call
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
     let (new_obj_ref, _) = order_effects.created[0];
     // Fetch the full object
     let new_obj = client1
@@ -1791,7 +1805,9 @@ async fn test_move_calls_object_delete() {
         .await;
 
     // Check effects are good
-    let (_, order_effects) = call_response.unwrap();
+    let (_, order_info_resp) = call_response.unwrap();
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
+
     // Status flag should be success
     assert_eq!(order_effects.status, ExecutionStatus::Success);
     // Object be deleted during a delete
@@ -1853,7 +1869,7 @@ async fn test_move_calls_certs() {
     ];
 
     // Create new object with move
-    let (cert, effect) = client1
+    let (cert, order_info_resp) = client1
         .move_call(
             framework_obj_ref,
             ident_str!("ObjectBasics").to_owned(),
@@ -1866,7 +1882,7 @@ async fn test_move_calls_certs() {
         )
         .await
         .unwrap();
-
+    let effect = order_info_resp.signed_effects.unwrap().effects;
     let new_object_ref = &effect.created[0].0;
 
     let gas_object_ref = &effect.gas_object.0;
@@ -2045,7 +2061,8 @@ async fn test_module_publish_and_call_good() {
 
     let pub_res = client1.publish(hero_path, gas_object_ref).await;
 
-    let (_, published_effects) = pub_res.unwrap();
+    let (_, order_info_resp) = pub_res.unwrap();
+    let published_effects = order_info_resp.signed_effects.unwrap().effects;
 
     // Only package obj should be created
     assert_eq!(published_effects.created.len(), 1);
@@ -2104,14 +2121,14 @@ async fn test_module_publish_and_call_good() {
             vec![],
             1000,
         )
-        .await;
+        .await
+        .unwrap();
 
-    assert!(call_resp.as_ref().unwrap().1.status == ExecutionStatus::Success);
+    let effects = call_resp.1.signed_effects.unwrap().effects;
+    assert!(effects.status == ExecutionStatus::Success);
 
     // This gets the treasury cap for the coin and gives it to the sender
-    let tres_cap_ref = call_resp
-        .unwrap()
-        .1
+    let tres_cap_ref = effects
         .created
         .iter()
         .find(|r| r.0 .0 != gas_object_ref.0)
@@ -2160,7 +2177,8 @@ async fn test_module_publish_file_path() {
 
     let pub_resp = client1.publish(hero_path, gas_object_ref).await;
 
-    let (_, published_effects) = pub_resp.unwrap();
+    let (_, order_info_resp) = pub_resp.unwrap();
+    let published_effects = order_info_resp.signed_effects.unwrap().effects;
 
     // Only package obj should be created
     assert_eq!(published_effects.created.len(), 1);
@@ -2482,11 +2500,10 @@ fn test_client_store() {
         .map(|i| (ObjectID::random(), SequenceNumber::from(i)))
         .collect::<Vec<_>>();
     // Try insert batch
-    ClientStore::multi_insert(
-        &store.object_sequence_numbers,
-        keys_vals.clone().into_iter(),
-    )
-    .unwrap();
+    store
+        .object_sequence_numbers
+        .multi_insert(keys_vals.clone().into_iter())
+        .unwrap();
 
     // Check the size
     assert_eq!(store.object_sequence_numbers.iter().count(), 100);
@@ -2497,11 +2514,10 @@ fn test_client_store() {
     });
 
     // Check that are removed
-    ClientStore::multi_remove(
-        &store.object_sequence_numbers,
-        keys_vals.into_iter().map(|(k, _)| k),
-    )
-    .unwrap();
+    store
+        .object_sequence_numbers
+        .multi_remove(keys_vals.into_iter().map(|(k, _)| k))
+        .unwrap();
 
     assert!(store.object_sequence_numbers.is_empty().unwrap());
 }
@@ -2555,7 +2571,8 @@ async fn test_object_store() {
 
     let pub_res = client1.publish(hero_path, gas_object_ref).await;
 
-    let (_, published_effects) = pub_res.unwrap();
+    let (_, order_info_resp) = pub_res.unwrap();
+    let published_effects = order_info_resp.signed_effects.unwrap().effects;
 
     // Only package obj should be created
     assert_eq!(published_effects.created.len(), 1);
@@ -2655,4 +2672,139 @@ async fn test_object_store_transfer() {
     assert_eq!(client1.store().objects.iter().count(), 4);
     // Client 2 should have new gas object version
     assert_eq!(client2.store().objects.iter().count(), 3);
+}
+
+#[tokio::test]
+async fn test_transfer_pending_orders() {
+    let objects: Vec<ObjectID> = (0..15).map(|_| ObjectID::random()).collect();
+    let gas_object = ObjectID::random();
+    let number_of_authorities = 4;
+
+    let mut all_objects = objects.clone();
+    all_objects.push(gas_object);
+    let authority_objects = (0..number_of_authorities)
+        .map(|_| all_objects.clone())
+        .collect();
+
+    let mut sender_state = init_local_client_state(authority_objects).await;
+    let recipient = init_local_client_state(vec![vec![]]).await.address();
+
+    let mut objects = objects.iter();
+
+    // Test 1: Normal transfer
+    let object_id = *objects.next().unwrap();
+    sender_state
+        .transfer_object(object_id, gas_object, recipient)
+        .await
+        .unwrap();
+    // Pending order should be cleared
+    assert!(sender_state.store().pending_orders.is_empty().unwrap());
+
+    // Test 2: Object not known to authorities. This has no side effect
+    let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender_state.address());
+    sender_state
+        .store()
+        .object_refs
+        .insert(&obj.id(), &obj.to_object_reference())
+        .unwrap();
+    sender_state
+        .store()
+        .object_sequence_numbers
+        .insert(&obj.id(), &SequenceNumber::new())
+        .unwrap();
+    let result = sender_state
+        .transfer_object(obj.id(), gas_object, recipient)
+        .await;
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err().downcast_ref(),
+            Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::ObjectNotFound{..}, ..])));
+    // Pending order should be cleared
+    assert!(sender_state.store().pending_orders.is_empty().unwrap());
+
+    // Test 3: invalid object digest. This also has no side effect
+    let object_id = *objects.next().unwrap();
+
+    // give object an incorrect object digest
+    sender_state
+        .store()
+        .object_refs
+        .insert(
+            &object_id,
+            &(object_id, SequenceNumber::new(), ObjectDigest([0; 32])),
+        )
+        .unwrap();
+
+    let result = sender_state
+        .transfer_object(object_id, gas_object, recipient)
+        .await;
+    assert!(result.is_err());
+    assert!(matches!(result.unwrap_err().downcast_ref(),
+            Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::LockErrors{..}, ..])));
+
+    // Pending order should be cleared
+    assert!(sender_state.store().pending_orders.is_empty().unwrap());
+
+    // Test 4: Conflicting orders touching same objects
+    let object_id = *objects.next().unwrap();
+    // Fabricate a fake pending transfer
+    let transfer = Transfer {
+        sender: sender_state.address(),
+        recipient: FastPayAddress::random_for_testing_only(),
+        object_ref: (object_id, Default::default(), ObjectDigest::new([0; 32])),
+        gas_payment: (gas_object, Default::default(), ObjectDigest::new([0; 32])),
+    };
+    // Simulate locking some objects
+    sender_state
+        .lock_pending_order_objects(&Order::new(
+            OrderKind::Transfer(transfer),
+            &get_key_pair().1,
+        ))
+        .unwrap();
+    // Try to use those objects in another order
+    let result = sender_state
+        .transfer_object(object_id, gas_object, recipient)
+        .await;
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err().downcast_ref(),
+        Some(FastPayError::ConcurrentTransactionError)
+    ));
+    // clear the pending orders
+    sender_state.store().pending_orders.clear().unwrap();
+    assert_eq!(sender_state.store().pending_orders.iter().count(), 0);
+
+    // Test 5: Transfer object without confirmations
+    let object_id = *objects.next().unwrap();
+
+    let cert_ord = sender_state
+        .transfer_to_fastx_unsafe_unconfirmed(recipient, object_id, gas_object)
+        .await
+        .unwrap();
+
+    // Order should be locked by gas object and object being transferred
+    assert_eq!(sender_state.store().pending_orders.iter().count(), 2);
+    assert_eq!(
+        sender_state
+            .store()
+            .pending_orders
+            .get(&object_id)
+            .unwrap()
+            .unwrap(),
+        cert_ord.order
+    );
+    assert_eq!(
+        sender_state
+            .store()
+            .pending_orders
+            .get(&gas_object)
+            .unwrap()
+            .unwrap(),
+        cert_ord.order
+    );
+
+    // Try to complete the pending order
+    // However this fails because of a false assumption that sequence numbers increase after a tx order
+    // This bug is being tracked here https://github.com/MystenLabs/fastnft/issues/290
+    //
+    // sender_state.try_complete_pending_orders().await.unwrap();
 }
