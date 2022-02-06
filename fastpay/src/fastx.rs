@@ -93,12 +93,18 @@ async fn main() -> Result<(), anyhow::Error> {
             }
             println!("Started {} authorities", handles.len());
             join_all(handles).await;
-            println!("ended");
+            println!("All server stopped.");
         }
         FastXCommand::Genesis => {
+            if !config.authorities.is_empty() {
+                println!("Cannot run genesis on a existing network, please delete network config file and try again.");
+                exit(1);
+            }
+
             let mut authorities = BTreeMap::new();
             let mut authority_info = Vec::new();
 
+            println!("Creating new addresses...");
             for _ in 0..4 {
                 let (address, key_pair) = get_key_pair();
                 let info = AuthorityPrivateInfo {
@@ -122,6 +128,7 @@ async fn main() -> Result<(), anyhow::Error> {
             let mut new_addresses = Vec::new();
             let mut preload_objects = Vec::new();
 
+            println!("Creating test objects...");
             for _ in 0..5 {
                 let (address, key_pair) = get_key_pair();
                 new_addresses.push(AccountInfo { address, key_pair });
@@ -151,8 +158,14 @@ async fn main() -> Result<(), anyhow::Error> {
                 db_folder_path: "./client_db".to_string(),
                 config_path: "./wallet.conf".to_string(),
             };
-
             wallet_config.save()?;
+
+            println!("Network genesis completed.");
+            println!("Network config file is stored in {}.", config.config_path);
+            println!(
+                "Wallet config file is stored in {}.",
+                wallet_config.config_path
+            );
         }
     };
 

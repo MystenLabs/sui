@@ -25,7 +25,7 @@ use tracing::*;
     rename_all = "kebab-case"
 )]
 #[structopt(setting(AppSettings::NoBinaryName))]
-pub enum ClientCommands {
+pub enum WalletCommands {
     /// Get obj info
     #[structopt(name = "object")]
     Object {
@@ -88,10 +88,10 @@ pub enum ClientCommands {
     },
 }
 
-impl ClientCommands {
+impl WalletCommands {
     pub async fn execute(&mut self, context: &mut WalletContext) -> Result<(), anyhow::Error> {
         match self {
-            ClientCommands::Publish {
+            WalletCommands::Publish {
                 path,
                 gas_object_id,
             } => {
@@ -101,7 +101,7 @@ impl ClientCommands {
                 publish(client_state, path.clone(), *gas_object_id).await;
             }
 
-            ClientCommands::Object { obj_id, deep } => {
+            WalletCommands::Object { obj_id, deep } => {
                 // Pick the first (or any) account for use in finding obj info
                 let account = context.find_owner(obj_id)?;
                 // Fetch the object ref
@@ -109,7 +109,7 @@ impl ClientCommands {
                 get_object_info(client_state, *obj_id, *deep).await;
             }
 
-            ClientCommands::Call { path } => {
+            WalletCommands::Call { path } => {
                 let call_config = MoveCallConfig::read(path).unwrap();
                 // Find owner of gas object
                 let owner = context.find_owner(&call_config.gas_object_id)?;
@@ -167,7 +167,7 @@ impl ClientCommands {
                 show_object_effects(call_ret.1);
             }
 
-            ClientCommands::Transfer {
+            WalletCommands::Transfer {
                 to,
                 object_id,
                 gas_object_id,
@@ -186,7 +186,7 @@ impl ClientCommands {
                 println!("{:?}", cert);
             }
 
-            ClientCommands::Addresses => {
+            WalletCommands::Addresses => {
                 let addr_strings: Vec<_> = context
                     .config
                     .accounts
@@ -198,7 +198,7 @@ impl ClientCommands {
                 println!("{}", addr_text);
             }
 
-            ClientCommands::Objects { address } => {
+            WalletCommands::Objects { address } => {
                 let client_state = context.get_or_create_client_state(address)?;
                 let object_refs = client_state.object_refs();
                 println!("Showing {} results.", object_refs.len());
@@ -207,11 +207,11 @@ impl ClientCommands {
                 }
             }
 
-            ClientCommands::SyncClientState { address } => {
+            WalletCommands::SyncClientState { address } => {
                 let client_state = context.get_or_create_client_state(address)?;
                 client_state.sync_client_state().await?;
             }
-            ClientCommands::NewAddress => {
+            WalletCommands::NewAddress => {
                 let (address, key) = get_key_pair();
                 context.config.accounts.push(AccountInfo {
                     address,

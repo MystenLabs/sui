@@ -11,7 +11,7 @@ use fastx_types::{base_types::*, committee::*, messages::*, object::Object, seri
 use futures::stream::StreamExt;
 use move_core_types::ident_str;
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::Rng;
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use tokio::runtime::Runtime;

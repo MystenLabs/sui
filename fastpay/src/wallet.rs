@@ -32,7 +32,7 @@ struct ClientOpt {
     config: String,
     /// Subcommands. Acceptable values are transfer, query_objects, benchmark, and create_accounts.
     #[structopt(subcommand)]
-    cmd: Option<ClientCommands>,
+    cmd: Option<WalletCommands>,
 }
 
 #[tokio::main]
@@ -49,10 +49,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wallet_conf_path = options.config;
     let config =
         WalletConfig::read_or_create(&wallet_conf_path).expect("Unable to read wallet config");
+    let addresses = config
+        .accounts
+        .iter()
+        .map(|info| info.address)
+        .collect::<Vec<_>>();
     let mut context = WalletContext::new(config);
 
+    // Sync all accounts on start up.
+    for address in addresses {
+        WalletCommands::SyncClientState { address }
+            .execute(&mut context)
+            .await?;
+    }
+
     if !options.no_shell {
-        let app: App = ClientCommands::clap();
+        let app: App = WalletCommands::clap();
         println!("{}", FAST_X.cyan().bold());
         print!("--- FastX");
         app.write_long_version(&mut io::stdout())?;
@@ -96,8 +108,8 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
             }
         };
 
-        let command: Result<ClientCommands, structopt::clap::Error> =
-            ClientCommands::from_iter_safe(args);
+        let command: Result<WalletCommands, structopt::clap::Error> =
+            WalletCommands::from_iter_safe(args);
 
         match command {
             Ok(mut cmd) => cmd.execute(context).await.unwrap(),
