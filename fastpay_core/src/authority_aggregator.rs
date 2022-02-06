@@ -108,23 +108,12 @@ where
         self.authority_clients.shuffle(&mut rand::thread_rng());
         for client in self.authority_clients.iter_mut() {
             let result = client.handle_object_info_request(request.clone()).await;
-            if let Ok(response) = result {
-                let certificate = response
-                    .parent_certificate
-                    .expect("Unable to get certificate");
+            if let Ok(ObjectInfoResponse {
+                parent_certificate: Some(certificate),
+                ..
+            }) = result
+            {
                 if certificate.check(&self.committee).is_ok() {
-                    // BUG (https://github.com/MystenLabs/fastnft/issues/290): Orders do not have a sequence number any more, objects do.
-                    /*
-                    let order = &certificate.order;
-                    if let Some(sender) = self.sender {
-
-                        if order.sender() == &sender && order.sequence_number() == inner_sequence_number {
-                            return Ok(certificate.clone());
-                        }
-                    } else {
-                        return Ok(certificate.clone());
-                    }
-                    */
                     return Ok(certificate);
                 }
             }
