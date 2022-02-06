@@ -239,12 +239,14 @@ fn test_info_response() {
         cert.signatures.push((authority_name, sig));
     }
 
+    let object = Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20));
     let resp1 = ObjectInfoResponse {
         object_and_lock: Some(ObjectResponse {
-            object: Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20)),
+            object: object.clone(),
             lock: Some(vote),
         }),
         parent_certificate: None,
+        requested_object_reference: Some(object.to_object_reference()),
     };
     let resp2 = resp1.clone();
     let resp3 = resp1.clone();

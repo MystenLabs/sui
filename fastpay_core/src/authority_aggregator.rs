@@ -49,6 +49,12 @@ impl<AuthorityAPI> AuthorityAggregator<AuthorityAPI> {
     }
 }
 
+pub enum ReduceOutput<S> {
+    Continue(S),
+    ContinueWithTimeout(S, Duration),
+    End(S),
+}
+
 #[allow(dead_code)]
 #[derive(Clone)]
 struct CertificateRequester<A> {
@@ -102,23 +108,12 @@ where
         self.authority_clients.shuffle(&mut rand::thread_rng());
         for client in self.authority_clients.iter_mut() {
             let result = client.handle_object_info_request(request.clone()).await;
-            if let Ok(response) = result {
-                let certificate = response
-                    .parent_certificate
-                    .expect("Unable to get certificate");
+            if let Ok(ObjectInfoResponse {
+                parent_certificate: Some(certificate),
+                ..
+            }) = result
+            {
                 if certificate.check(&self.committee).is_ok() {
-                    // BUG (https://github.com/MystenLabs/fastnft/issues/290): Orders do not have a sequence number any more, objects do.
-                    /*
-                    let order = &certificate.order;
-                    if let Some(sender) = self.sender {
-
-                        if order.sender() == &sender && order.sequence_number() == inner_sequence_number {
-                            return Ok(certificate.clone());
-                        }
-                    } else {
-                        return Ok(certificate.clone());
-                    }
-                    */
                     return Ok(certificate);
                 }
             }
@@ -263,7 +258,7 @@ where
         &self,
         cert: ConfirmationOrder,
         destination_authority: AuthorityName,
-        timeout_milliseconds: u64,
+        timeout_period: Duration,
         retries: usize,
     ) -> Result<(), FastPayError> {
         // Extract the set of authorities that should have this certificate
@@ -296,7 +291,7 @@ where
             //       `sync_authority_source_to_destination` call a cache of
             //       certificates and parents to avoid re-downloading them.
             if timeout(
-                Duration::from_millis(timeout_milliseconds),
+                timeout_period,
                 self.sync_authority_source_to_destination(
                     cert.clone(),
                     source_authority,
@@ -322,6 +317,396 @@ where
         // Eventually we should add more information to this error about the destination
         // and maybe event the certificiate.
         Err(FastPayError::AuthorityUpdateFailure)
+    }
+
+    /// This function takes an initial state, than executes an asynchronous function (FMap) for each
+    /// uthority, and folds the results as they become available into the state using an async function (FReduce).
+    ///
+    /// FMap can do io, and returns a result V. An error there may not be fatal, and could be consumed by the
+    /// MReduce function to overall recover from it. This is necessary to ensure byzantine authorities cannot
+    /// interupt the logic of this function.
+    ///
+    /// FReduce returns a result to a ReduceOutput. If the result is Err the function
+    /// shortcuts and the Err is returned. An Ok ReduceOutput result can be used to shortcut and return
+    /// the resulting state (ReduceOutput::End), continue the folding as new states arrive (ReduceOutput::Continue),
+    /// or continue with a timeout maximum waiting time (ReduceOutput::ContinueWithTimeout).
+    ///
+    /// This function provides a flexible way to communicate with a quorum of authorities, processing and
+    /// processing their results into a safe overall result, and also safely allowing operations to continue
+    /// past the quorum to ensure all authorities are up to date (up to a timeout).
+    async fn quorum_map_then_reduce_with_timeout<'a, S, V, FMap, FReduce>(
+        &'a self,
+        // The initial state that will be used to fold in values from authorities.
+        initial_state: S,
+        // The async function used to apply to each authority. It takes an authority name,
+        // and authority client parameter and returns a Result<V>.
+        map_each_authority: FMap,
+        // The async function that takes an accumulated state, and a new result for V from an
+        // authority and returns a result to a ReduceOutput state.
+        mut reduce_result: FReduce,
+        // The initial timeout applied to all
+        initial_timeout: Duration,
+    ) -> Result<S, FastPayError>
+    where
+        FMap: FnOnce(AuthorityName, &'a A) -> AsyncResult<'a, V, FastPayError> + Clone,
+        FReduce: FnMut(
+            S,
+            AuthorityName,
+            usize,
+            Result<V, FastPayError>,
+        ) -> AsyncResult<'a, ReduceOutput<S>, FastPayError>,
+    {
+        // TODO: shuffle here according to stake
+        let authority_clients = &self.authority_clients;
+
+        // First, execute in parallel for each authority FMap.
+        let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
+            .iter()
+            .map(|(name, client)| {
+                let execute = map_each_authority.clone();
+                async move { (*name, execute(*name, client).await) }
+            })
+            .collect();
+
+        let mut current_timeout = initial_timeout;
+        let mut accumulated_state = initial_state;
+        // Then, as results become available fold them into the state using FReduce.
+        while let Ok(Some((authority_name, result))) =
+            timeout(current_timeout, responses.next()).await
+        {
+            let authority_weight = self.committee.weight(&authority_name);
+            accumulated_state =
+                match reduce_result(accumulated_state, authority_name, authority_weight, result)
+                    .await?
+                {
+                    // In the first two cases we are told to continue the iteration.
+                    ReduceOutput::Continue(state) => state,
+                    ReduceOutput::ContinueWithTimeout(state, duration) => {
+                        // Adjust the waiting timeout.
+                        current_timeout = duration;
+                        state
+                    }
+                    ReduceOutput::End(state) => {
+                        // The reducer tells us that we have the result needed. Just return it.
+                        return Ok(state);
+                    }
+                }
+        }
+        Ok(accumulated_state)
+    }
+
+    /// Return all the information in the network about a specific object, including all versions of it
+    /// as well as all certificates that lead to the versions and the authorities at that version.
+    pub async fn get_object_by_id(
+        &self,
+        object_id: ObjectID,
+        timeout_after_quorum: Duration,
+    ) -> Result<
+        (
+            BTreeMap<
+                (ObjectRef, TransactionDigest),
+                (Option<Object>, Vec<(AuthorityName, Option<SignedOrder>)>),
+            >,
+            HashMap<TransactionDigest, CertifiedOrder>,
+        ),
+        FastPayError,
+    > {
+        let initial_state = ((0usize, 0usize), Vec::new());
+        let threshold = self.committee.quorum_threshold();
+        let validity = self.committee.validity_threshold();
+        let final_state = self
+            .quorum_map_then_reduce_with_timeout(
+                initial_state,
+                |_name, client| {
+                    Box::pin(async move {
+                        // Request and return an error if any
+                        let request = ObjectInfoRequest::from(object_id);
+                        client.handle_object_info_request(request).await
+                    })
+                },
+                |(mut total_stake, mut state), name, weight, result| {
+                    Box::pin(async move {
+                        // Here we increase the stake counter no matter if we got an error or not. The idea is that a
+                        // call to ObjectInfoRequest should suceed for correct authorities no matter what. Therefore
+                        // if there is an error it means that we are accessing an incorrect authority. However, an
+                        // object is final if it is on 2f+1 good nodes, and any set of 2f+1 intersects with this, so
+                        // after we have 2f+1 of stake (good or bad) we should get a response with the object.
+                        total_stake.0 += weight;
+
+                        if result.is_err() {
+                            // We also keep an error stake counter, and if it is larger than f+1 we return an error,
+                            // since either there are too many faulty authorities or we are not connected to the network.
+                            total_stake.1 += weight;
+                            if total_stake.1 > validity {
+                                return Err(FastPayError::TooManyIncorrectAuthorities);
+                            }
+                        }
+
+                        state.push((name, result));
+
+                        if total_stake.0 < threshold {
+                            // While we are under the threshold we wait for a longer time
+                            Ok(ReduceOutput::Continue((total_stake, state)))
+                        } else {
+                            // After we reach threshold we wait for potentially less time.
+                            Ok(ReduceOutput::ContinueWithTimeout(
+                                (total_stake, state),
+                                timeout_after_quorum,
+                            ))
+                        }
+                    })
+                },
+                // A long timeout before we hear back from a quorum
+                Duration::from_secs(60),
+            )
+            .await?;
+
+        let mut error_list = Vec::new();
+        let mut object_map = BTreeMap::<
+            (ObjectRef, TransactionDigest),
+            (Option<Object>, Vec<(AuthorityName, Option<SignedOrder>)>),
+        >::new();
+        let mut certificates = HashMap::new();
+
+        for (name, result) in final_state.1 {
+            if let Ok(ObjectInfoResponse {
+                parent_certificate,
+                requested_object_reference,
+                object_and_lock,
+            }) = result
+            {
+                // Extract the object_ref and transaction digest that will be used as keys
+                let object_ref = if let Some(object_ref) = requested_object_reference {
+                    object_ref
+                } else {
+                    // The object has never been seen on this authority, so we skip
+                    continue;
+                };
+
+                let (transaction_digest, cert_option) = if let Some(cert) = parent_certificate {
+                    (cert.order.digest(), Some(cert))
+                } else {
+                    (TransactionDigest::genesis(), None)
+                };
+
+                // Extract an optional object to be used in the value, note that the object can be
+                // None if the object was deleted at this authority
+                //
+                // NOTE: here we could also be gathering the locked orders to see if we could make a cert.
+                let (object_option, signed_order_option) =
+                    if let Some(ObjectResponse { object, lock }) = object_and_lock {
+                        (Some(object), lock)
+                    } else {
+                        (None, None)
+                    };
+
+                // Update the map with the information from this authority
+                let entry = object_map
+                    .entry((object_ref, transaction_digest))
+                    .or_insert((object_option, Vec::new()));
+                entry.1.push((name, signed_order_option));
+
+                if let Some(cert) = cert_option {
+                    certificates.insert(cert.order.digest(), cert);
+                }
+            } else {
+                error_list.push((name, result));
+            }
+        }
+
+        // TODO: return the errors too
+        Ok((object_map, certificates))
+    }
+
+    /// This function returns a map between object references owned and authorities that hold the objects
+    /// at this version, as well as a list of authorities that responsed to the query for the objects owned.
+    pub async fn get_all_owned_objects(
+        &self,
+        address: FastPayAddress,
+        timeout_after_quorum: Duration,
+    ) -> Result<(BTreeMap<ObjectRef, Vec<AuthorityName>>, Vec<AuthorityName>), FastPayError> {
+        let initial_state = (
+            (0usize, 0usize),
+            BTreeMap::<ObjectRef, Vec<AuthorityName>>::new(),
+            Vec::new(),
+        );
+        let threshold = self.committee.quorum_threshold();
+        let validity = self.committee.validity_threshold();
+        let (_, object_map, authority_list) = self
+            .quorum_map_then_reduce_with_timeout(
+                initial_state,
+                |_name, client| {
+                    // For each authority we ask all objects associated with this address, and return
+                    // the result.
+                    let inner_address = address;
+                    Box::pin(async move {
+                        client
+                            .handle_account_info_request(AccountInfoRequest::from(inner_address))
+                            .await
+                    })
+                },
+                |mut state, name, weight, _result| {
+                    Box::pin(async move {
+                        // Here we increase the stake counter no matter if we got a correct
+                        // response or not. A final order will have effects on 2f+1 so if we
+                        // ask any 2f+1 we should get the version of the latest object.
+                        state.0 .0 += weight;
+
+                        // For each non error result we get we add the objects to the map
+                        // as keys and append the authority that holds them in the values.
+                        if let Ok(AccountInfoResponse { object_ids, .. }) = _result {
+                            // Also keep a record of all authorities that responded.
+                            state.2.push(name);
+                            // Update the map.
+                            for obj_ref in object_ids {
+                                state.1.entry(obj_ref).or_insert_with(Vec::new).push(name);
+                            }
+                        } else {
+                            // We also keep an error weight counter, and if it exceeds 1/3
+                            // we return an error as it is likely we do not have enough
+                            // evidence to return a correct result.
+
+                            state.0 .1 += weight;
+                            if state.0 .1 > validity {
+                                return Err(FastPayError::TooManyIncorrectAuthorities);
+                            }
+                        }
+
+                        if state.0 .0 < threshold {
+                            // While we are under the threshold we wait for a longer time
+                            Ok(ReduceOutput::Continue(state))
+                        } else {
+                            // After we reach threshold we wait for potentially less time.
+                            Ok(ReduceOutput::ContinueWithTimeout(
+                                state,
+                                timeout_after_quorum,
+                            ))
+                        }
+                    })
+                },
+                // A long timeout before we hear back from a quorum
+                Duration::from_secs(60),
+            )
+            .await?;
+        Ok((object_map, authority_list))
+    }
+
+    /// Ask authorities for the user owned objects. Then download all objects at all versions present
+    /// on authorites, along with the certificates preceeding them, and update lagging authorities to
+    /// the latest version of the object.
+    ///
+    /// This function returns all objects, including those that are
+    /// no more owned by the user (but were previously owned by the user), as well as a list of
+    /// deleted object references.
+    pub async fn sync_all_owned_objects(
+        &self,
+        address: FastPayAddress,
+        timeout_after_quorum: Duration,
+    ) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
+        // First get a map of all objects at least a quorum of authorities think we hold.
+        let (object_map, _authority_list) = self
+            .get_all_owned_objects(address, timeout_after_quorum)
+            .await?;
+
+        // We make a list of all versions, in order
+        let mut object_latest_version: BTreeMap<ObjectID, Vec<ObjectRef>> = BTreeMap::new();
+        for object_ref in object_map.keys() {
+            let entry = object_latest_version
+                .entry(object_ref.0)
+                .or_insert_with(Vec::new);
+            entry.push(*object_ref);
+            entry.sort();
+        }
+
+        let mut active_objects = Vec::new();
+        let mut deleted_objects = Vec::new();
+        let mut certs_to_sync = BTreeMap::new();
+        // We update each object at each authority that does not have it.
+        for object_id in object_latest_version.keys() {
+            // Authorities to update.
+            let mut authorites: HashSet<AuthorityName> = self
+                .committee
+                .voting_rights
+                .iter()
+                .map(|(name, _)| *name)
+                .collect();
+
+            let (aggregate_object_info, certificates) = self
+                .get_object_by_id(*object_id, timeout_after_quorum)
+                .await?;
+
+            let mut aggregate_object_info: Vec<_> = aggregate_object_info.into_iter().collect();
+
+            // If more that one version of an object is available, we update all authorities with it.
+            while !aggregate_object_info.is_empty() {
+                // This will be the very latest object version, because object_ref is ordered this way.
+                let ((object_ref, transaction_digest), (object_option, object_authorities)) =
+                    aggregate_object_info.pop().unwrap(); // safe due to check above
+
+                // NOTE: Here we must check that the object is indeed an input to this transaction
+                //       but for the moment lets do the happy case.
+
+                if !certificates.contains_key(&transaction_digest) {
+                    // NOTE: This implies this is a genesis object. We should check that it is.
+                    //       We can do this by looking into the genesis, or the object_refs of the genesis.
+                    //       Otherwise report the authority as potentially faulty.
+
+                    if let Some(obj) = object_option {
+                        active_objects.push(obj);
+                    }
+                    // Cannot be that the genesis contributes to deleted objects
+
+                    continue;
+                }
+
+                let cert = certificates[&transaction_digest].clone(); // safe due to check above.
+
+                // Remove authorities at this version, they will not need to be updated.
+                for (name, _signed_order) in object_authorities {
+                    authorites.remove(&name);
+                }
+
+                // NOTE: Just above we have access to signed orders that have not quite
+                //       been processed by enough authorities. We should either return them
+                //       to the caller, or -- more in the spirit of this function -- do what
+                //       needs to be done to force their processing if this is possible.
+
+                // Add authorities that need to be updated
+                let entry = certs_to_sync
+                    .entry(cert.order.digest())
+                    .or_insert((cert, HashSet::new()));
+                entry.1.extend(authorites);
+
+                // Return the latest version of an object, or a deleted object
+                match object_option {
+                    Some(obj) => active_objects.push(obj),
+                    None => deleted_objects.push(object_ref),
+                }
+
+                break;
+            }
+        }
+
+        for (_, (cert, authorities)) in certs_to_sync {
+            for name in authorities {
+                // For each certificate authority pair run a sync to upate this authority to this
+                // certificate.
+                // NOTE: this is right now done sequentially, we should do them in parallel using
+                //       the usual FuturesUnordered.
+                let _result = self
+                    .sync_certificate_to_authority_with_timeout(
+                        ConfirmationOrder::new(cert.clone()),
+                        name,
+                        timeout_after_quorum,
+                        1,
+                    )
+                    .await;
+
+                // TODO: collect errors and propagate them to the right place
+            }
+        }
+
+        Ok((active_objects, deleted_objects))
     }
 
     #[cfg(test)]

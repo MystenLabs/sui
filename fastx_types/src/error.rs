@@ -83,8 +83,10 @@ pub enum FastPayError {
     #[error("Transaction index must increase by one")]
     UnexpectedTransactionIndex,
     // Account access
-    #[error("No certificate for this account and sequence number")]
-    CertificateNotfound,
+    #[error("No certificate with digest: {certificate_digest:?}")]
+    CertificateNotfound {
+        certificate_digest: TransactionDigest,
+    },
     #[error("No parent for object {object_id:?} at this sequence number {sequence:?}")]
     ParentNotfound {
         object_id: ObjectID,
@@ -195,11 +197,14 @@ pub enum FastPayError {
     errors.iter().map(| e | e.to_string()).collect::<Vec<String>>()
     )]
     QuorumNotReached { errors: Vec<FastPayError> },
+
     // Client side error
     #[error("Client state has a different pending transaction.")]
     ConcurrentTransactionError,
     #[error("Transfer should be received by us.")]
     IncorrectRecipientError,
+    #[error("Too many authority errors were detected.")]
+    TooManyIncorrectAuthorities,
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;
