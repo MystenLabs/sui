@@ -591,6 +591,105 @@ where
         Ok((object_map, authority_list))
     }
 
+    /// Takes a list of object IDs, goes to all (quorum+timeout) of authorities to find their
+    /// latest version, and then updates all authorities with the latest version of each object.
+    pub async fn sync_all_given_objects(
+        &self,
+        objects: Vec<ObjectID>,
+        timeout_after_quorum: Duration) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
+
+            let mut active_objects = Vec::new();
+            let mut deleted_objects = Vec::new();
+            let mut certs_to_sync = BTreeMap::new();
+            // We update each object at each authority that does not have it.
+            for object_id in objects.iter() {
+                // Authorities to update.
+                let mut authorites: HashSet<AuthorityName> = self
+                    .committee
+                    .voting_rights
+                    .iter()
+                    .map(|(name, _)| *name)
+                    .collect();
+    
+                let (aggregate_object_info, certificates) = self
+                    .get_object_by_id(*object_id, timeout_after_quorum)
+                    .await?;
+    
+                let mut aggregate_object_info: Vec<_> = aggregate_object_info.into_iter().collect();
+    
+                // If more that one version of an object is available, we update all authorities with it.
+                while !aggregate_object_info.is_empty() {
+                    // This will be the very latest object version, because object_ref is ordered this way.
+                    let ((object_ref, transaction_digest), (object_option, object_authorities)) =
+                        aggregate_object_info.pop().unwrap(); // safe due to check above
+    
+                    // NOTE: Here we must check that the object is indeed an input to this transaction
+                    //       but for the moment lets do the happy case.
+    
+                    if !certificates.contains_key(&transaction_digest) {
+                        // NOTE: This implies this is a genesis object. We should check that it is.
+                        //       We can do this by looking into the genesis, or the object_refs of the genesis.
+                        //       Otherwise report the authority as potentially faulty.
+    
+                        if let Some(obj) = object_option {
+                            active_objects.push(obj);
+                        }
+                        // Cannot be that the genesis contributes to deleted objects
+    
+                        continue;
+                    }
+    
+                    let cert = certificates[&transaction_digest].clone(); // safe due to check above.
+    
+                    // Remove authorities at this version, they will not need to be updated.
+                    for (name, _signed_order) in object_authorities {
+                        authorites.remove(&name);
+                    }
+    
+                    // NOTE: Just above we have access to signed orders that have not quite
+                    //       been processed by enough authorities. We should either return them
+                    //       to the caller, or -- more in the spirit of this function -- do what
+                    //       needs to be done to force their processing if this is possible.
+    
+                    // Add authorities that need to be updated
+                    let entry = certs_to_sync
+                        .entry(cert.order.digest())
+                        .or_insert((cert, HashSet::new()));
+                    entry.1.extend(authorites);
+    
+                    // Return the latest version of an object, or a deleted object
+                    match object_option {
+                        Some(obj) => active_objects.push(obj),
+                        None => deleted_objects.push(object_ref),
+                    }
+    
+                    break;
+                }
+            }
+    
+            for (_, (cert, authorities)) in certs_to_sync {
+                for name in authorities {
+                    // For each certificate authority pair run a sync to upate this authority to this
+                    // certificate.
+                    // NOTE: this is right now done sequentially, we should do them in parallel using
+                    //       the usual FuturesUnordered.
+                    let _result = self
+                        .sync_certificate_to_authority_with_timeout(
+                            ConfirmationOrder::new(cert.clone()),
+                            name,
+                            timeout_after_quorum,
+                            1,
+                        )
+                        .await;
+    
+                    // TODO: collect errors and propagate them to the right place
+                }
+            }
+    
+            Ok((active_objects, deleted_objects))
+        }
+
+
     /// Ask authorities for the user owned objects. Then download all objects at all versions present
     /// on authorites, along with the certificates preceeding them, and update lagging authorities to
     /// the latest version of the object.
@@ -618,95 +717,10 @@ where
             entry.sort();
         }
 
-        let mut active_objects = Vec::new();
-        let mut deleted_objects = Vec::new();
-        let mut certs_to_sync = BTreeMap::new();
-        // We update each object at each authority that does not have it.
-        for object_id in object_latest_version.keys() {
-            // Authorities to update.
-            let mut authorites: HashSet<AuthorityName> = self
-                .committee
-                .voting_rights
-                .iter()
-                .map(|(name, _)| *name)
-                .collect();
-
-            let (aggregate_object_info, certificates) = self
-                .get_object_by_id(*object_id, timeout_after_quorum)
-                .await?;
-
-            let mut aggregate_object_info: Vec<_> = aggregate_object_info.into_iter().collect();
-
-            // If more that one version of an object is available, we update all authorities with it.
-            while !aggregate_object_info.is_empty() {
-                // This will be the very latest object version, because object_ref is ordered this way.
-                let ((object_ref, transaction_digest), (object_option, object_authorities)) =
-                    aggregate_object_info.pop().unwrap(); // safe due to check above
-
-                // NOTE: Here we must check that the object is indeed an input to this transaction
-                //       but for the moment lets do the happy case.
-
-                if !certificates.contains_key(&transaction_digest) {
-                    // NOTE: This implies this is a genesis object. We should check that it is.
-                    //       We can do this by looking into the genesis, or the object_refs of the genesis.
-                    //       Otherwise report the authority as potentially faulty.
-
-                    if let Some(obj) = object_option {
-                        active_objects.push(obj);
-                    }
-                    // Cannot be that the genesis contributes to deleted objects
-
-                    continue;
-                }
-
-                let cert = certificates[&transaction_digest].clone(); // safe due to check above.
-
-                // Remove authorities at this version, they will not need to be updated.
-                for (name, _signed_order) in object_authorities {
-                    authorites.remove(&name);
-                }
-
-                // NOTE: Just above we have access to signed orders that have not quite
-                //       been processed by enough authorities. We should either return them
-                //       to the caller, or -- more in the spirit of this function -- do what
-                //       needs to be done to force their processing if this is possible.
-
-                // Add authorities that need to be updated
-                let entry = certs_to_sync
-                    .entry(cert.order.digest())
-                    .or_insert((cert, HashSet::new()));
-                entry.1.extend(authorites);
-
-                // Return the latest version of an object, or a deleted object
-                match object_option {
-                    Some(obj) => active_objects.push(obj),
-                    None => deleted_objects.push(object_ref),
-                }
-
-                break;
-            }
-        }
-
-        for (_, (cert, authorities)) in certs_to_sync {
-            for name in authorities {
-                // For each certificate authority pair run a sync to upate this authority to this
-                // certificate.
-                // NOTE: this is right now done sequentially, we should do them in parallel using
-                //       the usual FuturesUnordered.
-                let _result = self
-                    .sync_certificate_to_authority_with_timeout(
-                        ConfirmationOrder::new(cert.clone()),
-                        name,
-                        timeout_after_quorum,
-                        1,
-                    )
-                    .await;
-
-                // TODO: collect errors and propagate them to the right place
-            }
-        }
-
-        Ok((active_objects, deleted_objects))
+        self.sync_all_given_objects(
+            object_latest_version.keys().cloned().collect(),
+            timeout_after_quorum,
+        ).await
     }
 
     #[cfg(test)]
@@ -728,7 +742,7 @@ where
     /// Find the highest sequence number that is known to a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_latest_majority_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
+    async fn get_latest_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
         let (object_infos, _certificates) = self
             .get_object_by_id(object_id, Duration::from_secs(60))
             .await

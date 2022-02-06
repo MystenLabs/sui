@@ -527,7 +527,7 @@ async fn test_bidirectional_transfer() {
     assert_eq!(
         client2
             .authorities()
-            .get_latest_majority_sequence_number(object_id)
+            .get_latest_sequence_number(object_id)
             .await,
         SequenceNumber::from(2)
     );
