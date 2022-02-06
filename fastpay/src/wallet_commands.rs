@@ -209,9 +209,7 @@ impl ClientCommands {
 
             ClientCommands::SyncClientState { address } => {
                 let client_state = context.get_or_create_client_state(address)?;
-                client_state
-                    .sync_client_state_with_random_authority()
-                    .await?;
+                client_state.sync_client_state().await?;
             }
             ClientCommands::NewAddress => {
                 let (address, key) = get_key_pair();
