@@ -596,8 +596,8 @@ where
     pub async fn sync_all_given_objects(
         &self,
         objects: &[ObjectID],
-        timeout_after_quorum: Duration) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
-
+        timeout_after_quorum: Duration,
+    ) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
         let mut active_objects = Vec::new();
         let mut deleted_objects = Vec::new();
         let mut certs_to_sync = BTreeMap::new();
@@ -688,7 +688,6 @@ where
 
         Ok((active_objects, deleted_objects))
     }
-
 
     /// Ask authorities for the user owned objects. Then download all objects at all versions present
     /// on authorites, along with the certificates preceeding them, and update lagging authorities to
@@ -971,17 +970,13 @@ where
     /// Return owner address and sequence number of an object backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_latest_owner(
-        &self,
-        object_id: ObjectID,
-    ) -> (Authenticator, SequenceNumber) {
-
+    async fn get_latest_owner(&self, object_id: ObjectID) -> (Authenticator, SequenceNumber) {
         let (object_infos, _certificates) = self
             .get_object_by_id(object_id, Duration::from_secs(60))
             .await
             .unwrap(); // Not safe, but want to blow up if testing.
         let (top_ref, obj) = object_infos.iter().last().unwrap();
-        (obj.0.as_ref().unwrap().owner, top_ref.0.1)
+        (obj.0.as_ref().unwrap().owner, top_ref.0 .1)
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.
