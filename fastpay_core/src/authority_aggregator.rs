@@ -1042,7 +1042,7 @@ where
         &self,
         order: &Order,
     ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
-        let (new_certificate, _) = self.execute_transaction_without_confirmation(order).await?;
+        let new_certificate = self.execute_transaction_without_confirmation(order).await?;
 
         // Confirm transfer certificate if specified.
         let responses = self
@@ -1062,15 +1062,15 @@ where
     async fn execute_transaction_without_confirmation(
         &self,
         order: &Order,
-    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
+    ) -> Result<CertifiedOrder, anyhow::Error> {
         let result = self.broadcast_tx_order(order.clone()).await;
 
-        let (order_info_responses, new_sent_certificate) = result?;
+        let (_, new_sent_certificate) = result?;
         assert_eq!(&new_sent_certificate.order, order);
         // TODO: Verify that we don't need to update client objects here based on order_info_responses,
         // but can do it at the caller site.
 
-        Ok((new_sent_certificate, order_info_responses))
+        Ok(new_sent_certificate)
     }
 
     // TODO: This is incomplete at the moment.
