@@ -786,7 +786,7 @@ where
                             }) => {
                                 state.0.push((name, inner_signed_order.signature));
                                 state.2 += weight;
-                                if state.2 > threshold {
+                                if state.2 >= threshold {
                                     state.1 = Some(CertifiedOrder {
                                         order: order_ref.clone(),
                                         signatures: state.0.clone(),
@@ -907,7 +907,7 @@ where
             .await?;
 
         for (stake, effects) in state.values() {
-            if stake > &threshold {
+            if stake >= &threshold {
                 return Ok(effects.clone());
             }
         }
