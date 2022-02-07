@@ -188,6 +188,7 @@ fn order_transfer(
     )
 }
 
+#[allow(dead_code)]
 #[cfg(test)]
 fn order_set(
     src: FastPayAddress,
