@@ -185,6 +185,7 @@ fn order_transfer(
     )
 }
 
+#[allow(dead_code)]
 #[cfg(test)]
 fn order_set(
     src: FastPayAddress,
@@ -3249,7 +3250,7 @@ async fn test_get_all_owned_objects() {
     assert_eq!(1, owned_object.len());
     assert!(owned_object.contains_key(&gas_ref_1));
 
-    // Submit the cert to first 3 authorities.
+    // Submit the cert to first authority.
     let effects = do_cert(&auth_vec[0], &cert1).await;
 
     // Test 2: Once the cert is submitted one auth returns the new object,
@@ -3265,7 +3266,7 @@ async fn test_get_all_owned_objects() {
     assert!(owned_object.contains_key(&effects.created[0].0));
     let created_ref = effects.created[0].0;
 
-    // Submit to next 2 authorities.
+    // Submit to next 3 authorities.
     do_cert(&auth_vec[1], &cert1).await;
     do_cert(&auth_vec[2], &cert1).await;
     do_cert(&auth_vec[3], &cert1).await;
@@ -3285,7 +3286,7 @@ async fn test_get_all_owned_objects() {
     do_order(&auth_vec[1], &delete1).await;
     do_order(&auth_vec[2], &delete1).await;
     let cert2 = extract_cert(&authority_clients, &committee, delete1.digest()).await;
-    let effects = do_cert(&auth_vec[0], &cert2).await;
+    let _effects = do_cert(&auth_vec[0], &cert2).await;
 
     // Test 3: dealing with deleted objects on some authorities
     let (owned_object, _) = client1
@@ -3311,4 +3312,139 @@ async fn test_get_all_owned_objects() {
 
     // Just the gas object is returned
     assert_eq!(1, owned_object.len());
+}
+
+#[tokio::test]
+async fn test_sync_all_owned_objects() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let auth_vec: Vec<_> = authority_clients.values().cloned().collect();
+
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let client2 = make_client(authority_clients.clone(), committee.clone());
+
+    let gas_object1 = ObjectID::random();
+    let gas_object2 = ObjectID::random();
+
+    fund_account_with_same_objects(
+        auth_vec.iter().collect(),
+        &mut client1,
+        vec![gas_object1, gas_object2],
+    )
+    .await;
+
+    // Make a schedule of transactions
+    let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let create1 = order_create(
+        client1.address(),
+        client1.secret(),
+        client1.address(),
+        100,
+        framework_obj_ref,
+        gas_ref_1,
+    );
+
+    let gas_ref_2 = get_latest_ref(&auth_vec[0], gas_object2).await;
+    let create2 = order_create(
+        client1.address(),
+        client1.secret(),
+        client1.address(),
+        101,
+        framework_obj_ref,
+        gas_ref_2,
+    );
+
+    // Submit to 3 authorities, but not 4th
+    do_order(&auth_vec[0], &create1).await;
+    do_order(&auth_vec[1], &create1).await;
+    do_order(&auth_vec[2], &create1).await;
+
+    do_order(&auth_vec[1], &create2).await;
+    do_order(&auth_vec[2], &create2).await;
+    do_order(&auth_vec[3], &create2).await;
+
+    // Get a cert
+    let cert1 = extract_cert(&authority_clients, &committee, create1.digest()).await;
+    let cert2 = extract_cert(&authority_clients, &committee, create2.digest()).await;
+
+    // Submit the cert to 1 authority.
+    let new_ref_1 = do_cert(&auth_vec[0], &cert1).await.created[0].0;
+    let new_ref_2 = do_cert(&auth_vec[3], &cert2).await.created[0].0;
+
+    // Test 1: Once the cert is submitted one auth returns the new object,
+    //         but now two versions of gas exist. Ie total 2x3 = 6.
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(6, owned_object.len());
+
+    // After sync we are back to having 4.
+    let (owned_object, _) = client1
+        .authorities()
+        .sync_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(4, owned_object.len());
+
+    // Now lets delete and move objects
+
+    // Make a delete order
+    let gas_ref_del = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let delete1 = order_delete(
+        client1.address(),
+        client1.secret(),
+        new_ref_1,
+        framework_obj_ref,
+        gas_ref_del,
+    );
+
+    // Make a transfer order
+    let gas_ref_trans = get_latest_ref(&auth_vec[0], gas_object2).await;
+    let transfer1 = order_transfer(
+        client1.address(),
+        client1.secret(),
+        client2.address(),
+        new_ref_2,
+        framework_obj_ref,
+        gas_ref_trans,
+    );
+
+    do_order(&auth_vec[0], &delete1).await;
+    do_order(&auth_vec[1], &delete1).await;
+    do_order(&auth_vec[2], &delete1).await;
+
+    do_order(&auth_vec[1], &transfer1).await;
+    do_order(&auth_vec[2], &transfer1).await;
+    do_order(&auth_vec[3], &transfer1).await;
+
+    let cert1 = extract_cert(&authority_clients, &committee, delete1.digest()).await;
+    let cert2 = extract_cert(&authority_clients, &committee, transfer1.digest()).await;
+
+    do_cert(&auth_vec[0], &cert1).await;
+    do_cert(&auth_vec[3], &cert2).await;
+
+    // Test 2: Before we sync we see 6 object, incl: (old + new gas) x 2, and 2 x old objects
+    // after we see just 2 (one deleted one transfered.)
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(6, owned_object.len());
+
+    // After sync we are back to having 2.
+    let (owned_object, _) = client1
+        .authorities()
+        .sync_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(
+        2,
+        owned_object
+            .iter()
+            .filter(|o| o.owner.is_address(&client1.address()))
+            .count()
+    );
 }
