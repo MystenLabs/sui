@@ -311,8 +311,7 @@ fn find_cached_owner_by_object_id(
         .map(|acc| acc.address)
 }
 
-fn show_object_effects(order_info_resp: OrderInfoResponse) {
-    let order_effects = order_info_resp.signed_effects.unwrap().effects;
+fn show_object_effects(order_effects: OrderEffects) {
 
     if order_effects.status != ExecutionStatus::Success {
         error!("Error publishing module: {:#?}", order_effects.status);
@@ -698,7 +697,7 @@ fn main() {
                     recv_timeout,
                 )
                 .await;
-                recipient_client_state.receive_object(&cert).await.unwrap();
+                recipient_client_state.sync_client_state().await.unwrap();
                 accounts_config.update_from_state(&recipient_client_state);
                 accounts_config
                     .write(accounts_config_path)

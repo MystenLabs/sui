@@ -5,11 +5,7 @@ use crate::{authority_aggregator::AuthorityAggregator, authority_client::Authori
 use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
 use fastx_types::{
-    base_types::*,
-    committee::Committee,
-    error::{FastPayError, FastPayResult},
-    fp_ensure,
-    messages::*,
+    base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
 };
 use futures::future;
 use itertools::Itertools;
@@ -62,21 +58,7 @@ pub trait Client {
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error>;
-
-    /// Receive object from FastX.
-    async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error>;
-
-    /*
-    /// Send object to a FastX account.
-    /// Do not confirm the transaction.
-    async fn transfer_to_fastx_unsafe_unconfirmed(
-        &mut self,
-        recipient: FastPayAddress,
-        object_id: ObjectID,
-        gas_payment: ObjectID,
-    ) -> Result<CertifiedOrder, anyhow::Error>;
-    */
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
 
     /// Try to complete all pending orders once. Return if any fails
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError>;
@@ -96,14 +78,14 @@ pub trait Client {
         object_arguments: Vec<ObjectRef>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error>;
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
 
     /// Publish Move modules
     async fn publish(
         &mut self,
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
-    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error>;
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
 
     /// Get the object information
     async fn get_object_info(
@@ -253,28 +235,6 @@ impl<A> ClientState<A> {
     pub fn secret(&self) -> &dyn signature::Signer<ed25519_dalek::Signature> {
         &*self.secret
     }
-
-    /// Given an order, return the list of certificates that are known by this client
-    /// for each object in the input of the order.
-    fn get_known_certificates(
-        &self,
-        sender: &FastPayAddress,
-        inputs: &[InputObjectKind],
-    ) -> Vec<((ObjectID, SequenceNumber), FastPayResult<CertifiedOrder>)> {
-        inputs
-            .iter()
-            .flat_map(|input_kind| {
-                self.certificates(&input_kind.object_id())
-                    .filter_map(move |cert| {
-                        if cert.order.sender() == sender {
-                            Some(((input_kind.object_id(), input_kind.version()), Ok(cert)))
-                        } else {
-                            None
-                        }
-                    })
-            })
-            .collect()
-    }
 }
 
 impl<A> ClientState<A>
@@ -304,126 +264,17 @@ where
         Ok(reference)
     }
 
-    /*
-
-    /// Make sure we have all our certificates with sequence number
-    /// in the range 0..self.next_sequence_number
-    pub async fn download_certificates(
-        &mut self,
-    ) -> Result<BTreeMap<ObjectID, Vec<CertifiedOrder>>, FastPayError> {
-        let known_sequence_numbers_map = self
-            .store
-            .object_sequence_numbers
-            .iter()
-            .map(|(object_id, next_sequence_number)| {
-                (
-                    (object_id, next_sequence_number),
-                    self.certificates(&object_id)
-                        .flat_map(|cert| cert.order.input_objects())
-                        .filter_map(|object_kind| {
-                            if object_kind.object_id() == object_id {
-                                Some(object_kind.version())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<HashSet<_>>(),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-        self.authorities
-            .request_certificates_from_authority(known_sequence_numbers_map)
-            .await
-    }
-
-    */
-
-    /*
-
-    /// Update our view of certificates. Update the object_id and the next sequence number accordingly.
-    /// NOTE: This is only useful in the eventuality of missing local data.
-    /// We assume certificates to be valid and sent by us, and their sequence numbers to be unique.
-    fn update_certificates(
-        &mut self,
-        object_id: &ObjectID,
-        certificates: &[CertifiedOrder],
-    ) -> Result<(), FastPayError> {
-        for new_cert in certificates {
-            // Try to get object's last seq number before the mutation, default to 0 for newly created object.
-            let seq = new_cert
-                .order
-                .input_objects()
-                .iter()
-                .find_map(|object_kind| {
-                    if object_id == &object_kind.object_id() {
-                        Some(object_kind.version())
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or_default();
-
-            let mut new_next_sequence_number = self.next_sequence_number(object_id)?;
-            if seq >= new_next_sequence_number {
-                new_next_sequence_number = seq.increment();
-            }
-            let new_cert_order_digest = new_cert.order.digest();
-            // Multi table atomic insert using batches
-            let mut batch = self
-                .store
-                .object_sequence_numbers
-                .batch()
-                .insert_batch(
-                    &self.store.object_sequence_numbers,
-                    std::iter::once((object_id, new_next_sequence_number)),
-                )?
-                .insert_batch(
-                    &self.store.certificates,
-                    std::iter::once((&new_cert_order_digest, new_cert)),
-                )?;
-            let mut certs = match self.store.object_certs.get(object_id)? {
-                Some(c) => c.clone(),
-                None => Vec::new(),
-            };
-            if !certs.contains(&new_cert_order_digest) {
-                certs.push(new_cert_order_digest);
-                batch = batch.insert_batch(
-                    &self.store.object_certs,
-                    std::iter::once((object_id, certs)),
-                )?;
-            }
-            // Execute atomic write of opers
-            batch.write()?;
-        }
-        // Sanity check
-        let certificates_count = self.certificates(object_id).count();
-
-        if certificates_count == usize::from(self.next_sequence_number(object_id)?) {
-            Ok(())
-        } else {
-            Err(FastPayError::UnexpectedSequenceNumber {
-                object_id: *object_id,
-                expected_sequence: SequenceNumber::from(certificates_count as u64),
-            })
-        }
-    }
-
-    */
-
     async fn execute_transaction_inner(
         &mut self,
         order: &Order,
-    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
-        let inputs = order.input_objects();
-        let known_certificates = self.get_known_certificates(order.sender(), &inputs);
-        self.authorities
-            .update_authority_certificates(*order.sender(), &inputs, known_certificates)
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+        let (new_certificate, effects) = self.authorities.execute_transaction(order).await?;
+
+        // Update local data using new order response.
+        self.update_objects_from_order_info(new_certificate.clone(), effects.clone())
             .await?;
 
-        let resp = self.authorities.execute_transaction(order).await?;
-
-        self.update_objects_from_order_info(resp.1.clone()).await?;
-        Ok(resp)
+        Ok((new_certificate, effects))
     }
 
     /// Execute (or retry) an order and execute the Confirmation Order.
@@ -434,7 +285,7 @@ where
     async fn execute_transaction(
         &mut self,
         order: Order,
-    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         for object_kind in &order.input_objects() {
             let object_id = object_kind.object_id();
             let next_sequence_number = self.next_sequence_number(&object_id).unwrap_or_default();
@@ -521,17 +372,16 @@ where
 
     async fn update_objects_from_order_info(
         &mut self,
-        order_info_resp: OrderInfoResponse,
-    ) -> Result<(), FastPayError> {
-        if let Some(v) = order_info_resp.signed_effects {
+        cert: CertifiedOrder,
+        effects: OrderEffects,
+    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
             // The cert should be included in the response
-            let cert = order_info_resp.certified_order.unwrap();
             let parent_tx_digest = cert.order.digest();
             self.store.certificates.insert(&parent_tx_digest, &cert)?;
 
             let mut objs_to_download = Vec::new();
 
-            for &(object_ref, owner) in v.effects.all_mutated() {
+        for &(object_ref, owner) in effects.all_mutated() {
                 let (object_id, seq, _) = object_ref;
                 let old_seq = self
                     .store
@@ -556,7 +406,7 @@ where
             // https://github.com/MystenLabs/fastnft/issues/331
             let _failed = self.download_objects_not_in_db(objs_to_download).await?;
 
-            for (object_id, seq, _) in &v.effects.deleted {
+        for (object_id, seq, _) in &effects.deleted {
                 let old_seq = self
                     .store
                     .object_sequence_numbers
@@ -566,10 +416,7 @@ where
                     self.remove_object_info(object_id)?;
                 }
             }
-            Ok(())
-        } else {
-            Err(FastPayError::ErrorWhileRequestingInformation)
-        }
+        Ok((cert, effects))
     }
 
     /// Fetch the objects for the given list of ObjectRefs, which do not already exist in the db.
@@ -625,7 +472,7 @@ where
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         let object_ref = self
             .store
             .object_refs
@@ -647,127 +494,18 @@ where
             gas_payment,
         };
         let order = Order::new_transfer(transfer, &*self.secret);
-        let (certificate, order_info_response) = self.execute_transaction(order).await?;
+        let (certificate, effects) = self.execute_transaction(order).await?;
+        self.authorities
+            .process_certificate(certificate.clone(), Duration::from_secs(60))
+            .await?;
 
         // remove object from local storage if the recipient is not us.
         if recipient != self.address {
             self.remove_object_info(&object_id)?;
         }
 
-        Ok((certificate, order_info_response))
-    }
-
-    // TODO: Revisit this and see if this method is still necessary.
-    // Technically we can just `sync` and fetch all changes
-    async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error> {
-        certificate.check(&self.authorities.committee)?;
-        match &certificate.order.kind {
-            OrderKind::Transfer(transfer) => {
-                fp_ensure!(
-                    transfer.recipient == self.address,
-                    FastPayError::IncorrectRecipientError.into()
-                );
-                let responses = self
-                    .authorities
-                    .broadcast_confirmation_orders(vec![certificate.clone()])
-                    .await?;
-
-                for (_, response) in responses {
-                    self.update_objects_from_order_info(response).await?;
+        Ok((certificate, effects))
                 }
-
-                let response = self
-                    .get_object_info(ObjectInfoRequest {
-                        object_id: *certificate.order.object_id(),
-                        // TODO(https://github.com/MystenLabs/fastnft/issues/290):
-                        //        This function assumes that requesting the parent cert of object seq+1 will give the cert of
-                        //        that creates the object. This is not true, as objects may be deleted and may not have a seq+1
-                        //        to look up.
-                        //
-                        //        The authority `handle_object_info_request` is now fixed to return the parent at seq, and not
-                        //        seq+1. But a lot of the client code makes the above wrong assumption, and the line above reverts
-                        //        query to the old (incorrect) behavious to not break tests everywhere.
-                        request_sequence_number: Some(transfer.object_ref.1.increment()),
-                    })
-                    .await?;
-
-                let object = &response
-                    .object_and_lock
-                    .ok_or(FastPayError::ObjectNotFound {
-                        object_id: *certificate.order.object_id(),
-                    })?
-                    .object;
-                self.store
-                    .object_refs
-                    .insert(&object.id(), &object.to_object_reference())?;
-
-                // Everything worked: update the local objects and certs.
-                let cert_order_digest = certificate.order.digest();
-                if !self.store.certificates.contains_key(&cert_order_digest)? {
-                    self.store
-                        .object_sequence_numbers
-                        .insert(&transfer.object_ref.0, &transfer.object_ref.1.increment())?;
-                    let mut tx_digests =
-                        match self.store.object_certs.get(&transfer.object_ref.0)? {
-                            Some(c) => c,
-                            None => Vec::new(),
-                        };
-                    tx_digests.push(cert_order_digest);
-                    self.store
-                        .object_certs
-                        .insert(&transfer.object_ref.0, &tx_digests.to_vec())?;
-                    self.store
-                        .certificates
-                        .insert(&cert_order_digest, certificate)?;
-                }
-
-                Ok(())
-            }
-            OrderKind::Publish(_) | OrderKind::Call(_) => {
-                unimplemented!("receiving (?) Move call or publish")
-            }
-        }
-    }
-
-    /*
-
-    // TODO: Is this function still needed?
-    async fn transfer_to_fastx_unsafe_unconfirmed(
-        &mut self,
-        recipient: FastPayAddress,
-        object_id: ObjectID,
-        gas_payment: ObjectID,
-    ) -> Result<CertifiedOrder, anyhow::Error> {
-        let object_ref = self.object_ref(object_id)?;
-        let gas_payment = self.object_ref(gas_payment)?;
-
-        let transfer = Transfer {
-            object_ref,
-            sender: self.address,
-            recipient,
-            gas_payment,
-        };
-        let order = Order::new_transfer(transfer, &self.secret);
-
-        self.lock_pending_order_objects(&order)?;
-        let new_certificate = self
-            .authorities
-            .execute_transaction_without_confirmation_unsafe(&order)
-            .await;
-        self.unlock_pending_order_objects(&order)?;
-
-        let new_certificate = new_certificate?;
-
-        // The new cert will not be updated by order effect without confirmation, the new unconfirmed cert need to be added temporally.
-        let new_sent_certificates = vec![new_certificate.clone()];
-        for object_kind in new_certificate.order.input_objects() {
-            self.update_certificates(&object_kind.object_id(), &new_sent_certificates)?;
-        }
-
-        Ok(new_certificate)
-    }
-
-    */
 
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError> {
         // Orders are idempotent so no need to prevent multiple executions
@@ -800,12 +538,7 @@ where
             .authorities
             .sync_all_owned_objects(self.address, Duration::from_secs(60))
             .await?;
-        /*
-        let (authority_name, object_refs) = self
-            .authorities
-            .download_own_object_ids_from_random_authority(self.address)
-            .await?;
-        */
+
         for (object, option_cert) in active_object_certs {
             let object_ref = object.to_object_reference();
             let (object_id, sequence_number, _) = object_ref;
@@ -820,15 +553,6 @@ where
             }
         }
 
-        /*
-
-        // Recover missing certificates.
-        let new_certificates = self.download_certificates().await?;
-
-        for (id, certs) in new_certificates {
-            self.update_certificates(&id, &certs)?;
-        }
-        */
         Ok(())
     }
 
@@ -842,7 +566,7 @@ where
         object_arguments: Vec<ObjectRef>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         let move_call_order = Order::new_move_call(
             self.address,
             package_object_ref,
@@ -862,7 +586,7 @@ where
         &mut self,
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
-    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         // Try to compile the package at the given path
         let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
         let move_publish_order = Order::new_module(
