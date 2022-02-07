@@ -478,9 +478,6 @@ where
         if !self.can_lock_or_unlock(order)? {
             return Err(FastPayError::ConcurrentTransactionError);
         }
-        if !self.can_lock_or_unlock(order)? {
-            return Err(FastPayError::ConcurrentTransactionError);
-        }
         self.store
             .pending_orders
             .multi_remove(order.input_objects().iter().map(|e| e.object_id()))
