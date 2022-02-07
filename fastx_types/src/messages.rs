@@ -189,6 +189,12 @@ pub struct OrderInfoRequest {
     pub transaction_digest: TransactionDigest,
 }
 
+impl From<TransactionDigest> for OrderInfoRequest {
+    fn from(transaction_digest: TransactionDigest) -> Self {
+        OrderInfoRequest { transaction_digest }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OrderInfoResponse {
     // The signed order response to handle_order

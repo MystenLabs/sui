@@ -102,6 +102,153 @@ impl LocalAuthorityClient {
 }
 
 #[cfg(test)]
+async fn extract_cert(
+    authorities: &BTreeMap<AuthorityName, LocalAuthorityClient>,
+    commitee: &Committee,
+    transaction_digest: TransactionDigest,
+) -> CertifiedOrder {
+    let mut votes = vec![];
+    let mut order = None;
+    for (_name, authority) in authorities {
+        if let Ok(OrderInfoResponse {
+            signed_order: Some(signed),
+            ..
+        }) = authority
+            .handle_order_info_request(OrderInfoRequest::from(transaction_digest))
+            .await
+        {
+            votes.push((signed.authority, signed.signature));
+            order = Some(signed.order);
+        }
+    }
+
+    let stake: usize = votes.iter().map(|(name, _)| commitee.weight(name)).sum();
+    assert!(stake >= commitee.quorum_threshold());
+
+    CertifiedOrder {
+        order: order.unwrap(),
+        signatures: votes,
+    }
+}
+
+#[cfg(test)]
+fn order_create(
+    src: FastPayAddress,
+    secret: &KeyPair,
+    dest: FastPayAddress,
+    value: u64,
+    framework_obj_ref: ObjectRef,
+    gas_object_ref: ObjectRef,
+) -> Order {
+    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    let pure_arguments = vec![
+        value.to_le_bytes().to_vec(),
+        bcs::to_bytes(&dest.to_vec()).unwrap(),
+    ];
+
+    Order::new_move_call(
+        src,
+        framework_obj_ref,
+        ident_str!("ObjectBasics").to_owned(),
+        ident_str!("create").to_owned(),
+        Vec::new(),
+        gas_object_ref,
+        Vec::new(),
+        pure_arguments,
+        GAS_VALUE_FOR_TESTING / 2,
+        secret,
+    )
+}
+
+#[cfg(test)]
+fn order_transfer(
+    src: FastPayAddress,
+    secret: &KeyPair,
+    dest: FastPayAddress,
+    object_ref: ObjectRef,
+    framework_obj_ref: ObjectRef,
+    gas_object_ref: ObjectRef,
+) -> Order {
+    let pure_args = vec![bcs::to_bytes(&dest.to_vec()).unwrap()];
+
+    Order::new_move_call(
+        src,
+        framework_obj_ref,
+        ident_str!("ObjectBasics").to_owned(),
+        ident_str!("transfer").to_owned(),
+        Vec::new(),
+        gas_object_ref,
+        vec![object_ref],
+        pure_args,
+        GAS_VALUE_FOR_TESTING / 2,
+        secret,
+    )
+}
+
+#[cfg(test)]
+fn order_set(
+    src: FastPayAddress,
+    secret: &KeyPair,
+    object_ref: ObjectRef,
+    value: u64,
+    framework_obj_ref: ObjectRef,
+    gas_object_ref: ObjectRef,
+) -> Order {
+    let pure_args = vec![bcs::to_bytes(&value).unwrap()];
+
+    Order::new_move_call(
+        src,
+        framework_obj_ref,
+        ident_str!("ObjectBasics").to_owned(),
+        ident_str!("set_value").to_owned(),
+        Vec::new(),
+        gas_object_ref,
+        vec![object_ref],
+        pure_args,
+        GAS_VALUE_FOR_TESTING / 2,
+        secret,
+    )
+}
+
+#[cfg(test)]
+fn order_delete(
+    src: FastPayAddress,
+    secret: &KeyPair,
+    object_ref: ObjectRef,
+    framework_obj_ref: ObjectRef,
+    gas_object_ref: ObjectRef,
+) -> Order {
+    Order::new_move_call(
+        src,
+        framework_obj_ref,
+        ident_str!("ObjectBasics").to_owned(),
+        ident_str!("delete").to_owned(),
+        Vec::new(),
+        gas_object_ref,
+        vec![object_ref],
+        Vec::new(),
+        GAS_VALUE_FOR_TESTING / 2,
+        secret,
+    )
+}
+
+#[cfg(test)]
+async fn do_order(authority: &LocalAuthorityClient, order: &Order) {
+    authority.handle_order(order.clone()).await.unwrap();
+}
+
+#[cfg(test)]
+async fn do_cert(authority: &LocalAuthorityClient, cert: &CertifiedOrder) -> OrderEffects {
+    authority
+        .handle_confirmation_order(ConfirmationOrder::new(cert.clone()))
+        .await
+        .unwrap()
+        .signed_effects
+        .unwrap()
+        .effects
+}
+
+#[cfg(test)]
 async fn init_local_authorities(
     count: usize,
 ) -> (BTreeMap<AuthorityName, LocalAuthorityClient>, Committee) {
@@ -3042,4 +3189,126 @@ async fn test_map_reducer() {
         .await;
     assert_eq!(res.as_ref().unwrap().len(), 3);
     assert!(!res.as_ref().unwrap().contains(&bad_auth));
+}
+
+async fn get_latest_ref(authority: &LocalAuthorityClient, object_id: ObjectID) -> ObjectRef {
+    if let Ok(ObjectInfoResponse {
+        requested_object_reference: Some(object_ref),
+        ..
+    }) = authority
+        .handle_object_info_request(ObjectInfoRequest::from(object_id))
+        .await
+    {
+        return object_ref;
+    }
+    panic!("Object not found!");
+}
+
+#[tokio::test]
+async fn test_get_all_owned_objects() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let auth_vec: Vec<_> = authority_clients.values().cloned().collect();
+
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let mut client2 = make_client(authority_clients.clone(), committee.clone());
+
+    let gas_object1 = ObjectID::random();
+    let gas_object2 = ObjectID::random();
+
+    fund_account_with_same_objects(auth_vec.iter().collect(), &mut client1, vec![gas_object1])
+        .await;
+    fund_account_with_same_objects(auth_vec.iter().collect(), &mut client2, vec![gas_object2])
+        .await;
+
+    // Make a schedule of transactions
+    let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let create1 = order_create(
+        client1.address(),
+        client1.secret(),
+        client1.address(),
+        100,
+        framework_obj_ref,
+        gas_ref_1,
+    );
+
+    // Submit to 3 authorities, but not 4th
+    do_order(&auth_vec[0], &create1).await;
+    do_order(&auth_vec[1], &create1).await;
+    do_order(&auth_vec[2], &create1).await;
+
+    // Get a cert
+    let cert1 = extract_cert(&authority_clients, &committee, create1.digest()).await;
+
+    // Test 1: Before the cert is submitted no one knows of the new object.
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(1, owned_object.len());
+    assert!(owned_object.contains_key(&gas_ref_1));
+
+    // Submit the cert to first 3 authorities.
+    let effects = do_cert(&auth_vec[0], &cert1).await;
+
+    // Test 2: Once the cert is submitted one auth returns the new object,
+    //         but now two versions of gas exist.
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(3, owned_object.len());
+
+    assert!(owned_object.contains_key(&effects.gas_object.0));
+    assert!(owned_object.contains_key(&effects.created[0].0));
+    let created_ref = effects.created[0].0;
+
+    // Submit to next 2 authorities.
+    do_cert(&auth_vec[1], &cert1).await;
+    do_cert(&auth_vec[2], &cert1).await;
+    do_cert(&auth_vec[3], &cert1).await;
+
+    // Make a delete order
+    let gas_ref_del = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let delete1 = order_delete(
+        client1.address(),
+        client1.secret(),
+        created_ref,
+        framework_obj_ref,
+        gas_ref_del,
+    );
+
+    // Get cert for delete order, and submit to first authority
+    do_order(&auth_vec[0], &delete1).await;
+    do_order(&auth_vec[1], &delete1).await;
+    do_order(&auth_vec[2], &delete1).await;
+    let cert2 = extract_cert(&authority_clients, &committee, delete1.digest()).await;
+    let effects = do_cert(&auth_vec[0], &cert2).await;
+
+    // Test 3: dealing with deleted objects on some authorities
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    // Since not all authorities know the object is deleted, we get back
+    // the new gas object, the delete object and the old gas object.
+    assert_eq!(3, owned_object.len());
+
+    // Update rest of authorities
+    do_cert(&auth_vec[1], &cert2).await;
+    do_cert(&auth_vec[2], &cert2).await;
+    do_cert(&auth_vec[3], &cert2).await;
+
+    // Test 4: dealing with deleted objects on all authorities
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    // Just the gas object is returned
+    assert_eq!(1, owned_object.len());
 }

@@ -236,6 +236,11 @@ impl<A> ClientState<A> {
         &self.store
     }
 
+    #[cfg(test)]
+    pub fn secret(&self) -> &KeyPair {
+        &self.secret
+    }
+
     /// Given an order, return the list of certificates that are known by this client
     /// for each object in the input of the order.
     fn get_known_certificates(
