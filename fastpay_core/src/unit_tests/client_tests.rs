@@ -362,7 +362,7 @@ fn test_initiating_valid_transfer() {
             SequenceNumber::from(0)
         ))
     );
-    let certificate = rt
+    let (certificate, _) = rt
         .block_on(sender.transfer_object(object_id_1, gas_object, recipient))
         .unwrap();
     assert_eq!(
@@ -410,7 +410,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     let mut sender = rt.block_on(init_local_client_state_with_bad_authority(
         authority_objects,
     ));
-    let certificate = rt
+    let (certificate, _) = rt
         .block_on(sender.transfer_object(object_id, gas_object, recipient))
         .unwrap();
     assert_eq!(
@@ -516,7 +516,7 @@ async fn test_bidirectional_transfer() {
         ))
     );
     // Transfer object to client2.
-    let certificate = client1
+    let (certificate, _) = client1
         .transfer_object(object_id, gas_object1, client2.address())
         .await
         .unwrap();
@@ -614,76 +614,6 @@ async fn test_bidirectional_transfer() {
         .transfer_object(object_id, gas_object2, client1.address(),)
         .await
         .is_err());
-}
-
-#[test]
-fn test_receiving_unconfirmed_transfer() {
-    let rt = Runtime::new().unwrap();
-    let (authority_clients, committee) = rt.block_on(init_local_authorities(4));
-    let mut client1 = make_client(authority_clients.clone(), committee.clone());
-    let mut client2 = make_client(authority_clients.clone(), committee);
-
-    let object_id = ObjectID::random();
-    let gas_object_id = ObjectID::random();
-
-    rt.block_on(fund_account_with_same_objects(
-        authority_clients.values().collect(),
-        &mut client1,
-        vec![object_id, gas_object_id],
-    ));
-    // not updating client1.balance
-
-    let certificate = rt
-        .block_on(client1.transfer_to_fastx_unsafe_unconfirmed(
-            client2.address(),
-            object_id,
-            gas_object_id,
-        ))
-        .unwrap();
-    assert_eq!(
-        client1.next_sequence_number(&object_id),
-        Ok(SequenceNumber::from(1))
-    );
-
-    // Check that we indeed flagged this order as pending
-    assert!(!(client1.store().pending_orders.is_empty().unwrap()));
-    for obj in certificate.order.input_objects() {
-        assert_eq!(
-            client1
-                .store()
-                .pending_orders
-                .get(&obj.object_id())
-                .unwrap()
-                .unwrap(),
-            certificate.order
-        );
-    }
-
-    // ..but not confirmed remotely, hence an unchanged balance and sequence number.
-    assert_eq!(
-        rt.block_on(client1.authorities().get_strong_majority_owner(object_id)),
-        Some((
-            Authenticator::Address(client1.address()),
-            SequenceNumber::from(0)
-        ))
-    );
-    assert_eq!(
-        rt.block_on(
-            client1
-                .authorities()
-                .get_strong_majority_sequence_number(object_id)
-        ),
-        SequenceNumber::from(0)
-    );
-    // Let the receiver confirm in last resort.
-    rt.block_on(client2.receive_object(&certificate)).unwrap();
-    assert_eq!(
-        rt.block_on(client2.authorities().get_strong_majority_owner(object_id)),
-        Some((
-            Authenticator::Address(client2.address()),
-            SequenceNumber::from(1)
-        ))
-    );
 }
 
 #[test]
@@ -1126,7 +1056,6 @@ async fn test_move_calls_object_transfer() {
 async fn test_move_calls_chain_many_authority_syncronization() {
     let (authority_clients, committee) = init_local_authorities(4).await;
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
-    // let client2 = make_client(authority_clients.clone(), committee);
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
@@ -1207,7 +1136,6 @@ async fn test_move_calls_chain_many_authority_syncronization() {
             .await;
 
         last_certificate = _call_response.unwrap().0;
-        println!("EXECUTE: {:?}", last_certificate.order.digest());
     }
 
     // For this test to work the client has updated the first 3 authorities but not the last one
@@ -1257,6 +1185,15 @@ async fn test_move_calls_chain_many_authority_syncronization() {
 
     assert!(result.is_err());
 
+    // Here we get the list of objects known by authorities.
+    let (obj_map, _auths) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    // Check only 3 out of 4 authorities have the latest object
+    assert_eq!(obj_map[&full_seq].len(), 3);
+
     // If we try to sync from the authority that does have the data to the one
     // that does not we succeed.
     let result = client1
@@ -1268,6 +1205,15 @@ async fn test_move_calls_chain_many_authority_syncronization() {
         )
         .await;
 
+    // Here we get the list of objects known by authorities.
+    let (obj_map, _auths) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    // Check all 4 out of 4 authorities have the latest object
+    assert_eq!(obj_map[&full_seq].len(), 4);
+
     assert!(result.is_ok());
 }
 
@@ -1275,7 +1221,6 @@ async fn test_move_calls_chain_many_authority_syncronization() {
 async fn test_move_calls_chain_many_delete_authority_synchronization() {
     let (authority_clients, committee) = init_local_authorities(4).await;
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
-    // let client2 = make_client(authority_clients.clone(), committee);
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
@@ -1459,7 +1404,6 @@ async fn test_move_calls_chain_many_delete_authority_synchronization() {
 async fn test_move_calls_chain_many_delete_authority_auto_synchronization() {
     let (authority_clients, committee) = init_local_authorities(4).await;
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
-    // let client2 = make_client(authority_clients.clone(), committee);
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
@@ -1617,8 +1561,8 @@ async fn test_move_calls_chain_many_delete_authority_auto_synchronization() {
         .sync_certificate_to_authority_with_timeout(
             ConfirmationOrder::new(last_certificate),
             authorities[3].0,
-            1000, // ms
-            2,    // retry
+            Duration::from_millis(1000), // ms
+            2,                           // retry
         )
         .await;
 
@@ -2454,7 +2398,7 @@ async fn test_receive_object_error() -> Result<(), anyhow::Error> {
     let mut objects = objects.iter();
     // Test 1: Recipient is not us.
     let object_id = *objects.next().unwrap();
-    let certificate = client1
+    let (certificate, _) = client1
         .transfer_object(
             object_id,
             gas_object,
@@ -2657,7 +2601,7 @@ async fn test_object_store_transfer() {
     assert_eq!(client2.store().objects.iter().count(), 1);
 
     // Transfer object to client2.
-    let certificate = client1
+    let (certificate, _) = client1
         .transfer_object(object_id, gas_object1, client2.address())
         .await
         .unwrap();
@@ -2672,7 +2616,7 @@ async fn test_object_store_transfer() {
     assert_eq!(client2.store().objects.iter().count(), 2);
 
     // Transfer the object back to Client1
-    let certificate = client2
+    let (certificate, _) = client2
         .transfer_object(object_id, gas_object2, client1.address())
         .await
         .unwrap();
@@ -2783,39 +2727,408 @@ async fn test_transfer_pending_orders() {
     // clear the pending orders
     sender_state.store().pending_orders.clear().unwrap();
     assert_eq!(sender_state.store().pending_orders.iter().count(), 0);
+}
 
-    // Test 5: Transfer object without confirmations
-    let object_id = *objects.next().unwrap();
+#[tokio::test]
+async fn test_full_client_sync_move_calls() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
 
-    let cert_ord = sender_state
-        .transfer_to_fastx_unsafe_unconfirmed(recipient, object_id, gas_object)
+    let object_value: u64 = 100;
+    let gas_object_id = ObjectID::random();
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+
+    // Populate authorities with obj data
+    let mut gas_object_ref = fund_account_with_same_objects(
+        authority_clients.clone().values().collect(),
+        &mut client1,
+        vec![gas_object_id],
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    let pure_args = vec![
+        object_value.to_le_bytes().to_vec(),
+        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+    ];
+    let call_res = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
+
+    let (mut last_certificate, order_info_resp) = call_res.unwrap();
+    let call_effects = order_info_resp.signed_effects.unwrap().effects;
+
+    assert_eq!(call_effects.gas_object.0 .0, gas_object_id);
+
+    // Get the object created from the call
+    let (new_obj_ref, _) = call_effects.created[0];
+
+    for value in 0u64..10u64 {
+        // Fetch the full object
+        let new_obj_ref = client_object(&mut client1, new_obj_ref.0).await.0;
+        gas_object_ref = client_object(&mut client1, gas_object_id).await.0;
+
+        let pure_args = vec![bcs::to_bytes(&value).unwrap()];
+        let _call_response = client1
+            .move_call(
+                framework_obj_ref,
+                ident_str!("ObjectBasics").to_owned(),
+                ident_str!("set_value").to_owned(),
+                Vec::new(),
+                gas_object_ref,
+                vec![new_obj_ref],
+                pure_args,
+                GAS_VALUE_FOR_TESTING / 2,
+            )
+            .await;
+
+        last_certificate = _call_response.unwrap().0;
+    }
+
+    // For this test to work the client has updated the first 3 authorities but not the last one
+    // Assert this to catch any changes to the client behaviour that reqire fixing this test to still
+    // test sync.
+
+    let authorities: Vec<_> = authority_clients.clone().into_iter().collect();
+
+    let (full_seq, _) = auth_object(&authorities[2].1, gas_object_id).await;
+    assert_eq!(full_seq.1, SequenceNumber::from(11));
+
+    let (zero_seq, _) = auth_object(&authorities[3].1, gas_object_id).await;
+    assert_eq!(zero_seq.1, SequenceNumber::from(0));
+
+    // This is (finally) the function we want to test
+
+    // If we try to sync from the authority that does not have the data to the one
+    // that does not we fail.
+    let result = client1
+        .authorities()
+        .sync_authority_source_to_destination(
+            ConfirmationOrder::new(last_certificate.clone()),
+            authorities[3].0,
+            authorities[3].0,
+        )
+        .await;
+
+    assert!(result.is_err());
+
+    // Here we get the list of objects known by authorities.
+    let (obj_map, _auths) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    // Check only 3 out of 4 authorities have the latest object
+    assert_eq!(obj_map[&full_seq].len(), 3);
+
+    // We sync all the client objects
+    let result = client1
+        .authorities()
+        .sync_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await;
+
+    let (active, deleted) = result.unwrap();
+
+    assert_eq!(0, deleted.len());
+    assert_eq!(2, active.len());
+
+    // Here we get the list of objects known by authorities.
+    let (obj_map, _auths) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    // Check all 4 out of 4 authorities have the latest object
+    assert_eq!(obj_map[&full_seq].len(), 4);
+}
+
+#[tokio::test]
+async fn test_full_client_sync_delete_calls() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+
+    let object_value: u64 = 100;
+    let gas_object_id = ObjectID::random();
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+
+    // Populate authorities with obj data
+    let mut gas_object_ref = fund_account_with_same_objects(
+        authority_clients.clone().values().collect(),
+        &mut client1,
+        vec![gas_object_id],
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference();
+
+    let gas_id = gas_object_ref.0;
+
+    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    let pure_args = vec![
+        object_value.to_le_bytes().to_vec(),
+        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+    ];
+    let call_res = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
+    let (_, order_info_resp) = call_res.unwrap();
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
+
+    assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
+
+    // Get the object created from the call
+    let (new_obj_ref, _) = order_effects.created[0];
+
+    for value in 0u64..20u64 {
+        // Fetch the full object
+        let new_obj_ref = client_object(&mut client1, new_obj_ref.0).await.0;
+        gas_object_ref = client_object(&mut client1, gas_id).await.0;
+
+        let pure_args = vec![bcs::to_bytes(&value).unwrap()];
+        let _call_response = client1
+            .move_call(
+                framework_obj_ref,
+                ident_str!("ObjectBasics").to_owned(),
+                ident_str!("set_value").to_owned(),
+                Vec::new(),
+                gas_object_ref,
+                vec![new_obj_ref],
+                pure_args,
+                GAS_VALUE_FOR_TESTING / 2,
+            )
+            .await;
+    }
+
+    // Fetch the full object
+    let new_obj_ref = client_object(&mut client1, new_obj_ref.0).await.0;
+    gas_object_ref = client_object(&mut client1, gas_id).await.0;
+
+    // We sync before we delete
+    let result = client1
+        .authorities()
+        .sync_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await;
+
+    let (active, deleted) = result.unwrap();
+    assert_eq!(0, deleted.len());
+    assert_eq!(2, active.len());
+
+    let _call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("delete").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            vec![new_obj_ref],
+            Vec::new(),
+            GAS_VALUE_FOR_TESTING / 2,
+        )
+        .await;
+
+    // For this test to work the client has updated the first 3 authorities but not the last one
+    // Assert this to catch any changes to the client behaviour that reqire fixing this test to still
+    // test sync.
+
+    let authorities: Vec<_> = authority_clients.clone().into_iter().collect();
+
+    let (full_seq, _) = auth_object(&authorities[2].1, gas_id).await;
+    assert_eq!(full_seq.1, SequenceNumber::from(22));
+
+    let (zero_seq, _) = auth_object(&authorities[3].1, gas_id).await;
+    assert_eq!(zero_seq.1, SequenceNumber::from(21));
+
+    // This is (finally) the function we want to test
+    // Here we get the list of objects known by authorities.
+    let (obj_map, _auths) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    // Check only 3 out of 4 authorities have the latest object
+    assert_eq!(obj_map[&full_seq].len(), 3);
+
+    // We sync all the client objects
+    let result = client1
+        .authorities()
+        .sync_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await;
+
+    let (active, deleted) = result.unwrap();
+
+    assert_eq!(1, deleted.len());
+    assert_eq!(1, active.len());
+}
+
+// A helper function to make tests less verbose
+async fn client_object(client: &mut dyn Client, object_id: ObjectID) -> (ObjectRef, Object) {
+    let object = client
+        .get_object_info(ObjectInfoRequest {
+            object_id,
+            request_sequence_number: None,
+        })
+        .await
+        .unwrap()
+        .object_and_lock
+        .unwrap()
+        .object;
+
+    (object.to_object_reference(), object)
+}
+
+// A helper function to make tests less verbose
+async fn auth_object(authority: &LocalAuthorityClient, object_id: ObjectID) -> (ObjectRef, Object) {
+    let response = authority
+        .handle_object_info_request(ObjectInfoRequest::from(object_id))
         .await
         .unwrap();
 
-    // Order should be locked by gas object and object being transferred
-    assert_eq!(sender_state.store().pending_orders.iter().count(), 2);
-    assert_eq!(
-        sender_state
-            .store()
-            .pending_orders
-            .get(&object_id)
-            .unwrap()
-            .unwrap(),
-        cert_ord.order
-    );
-    assert_eq!(
-        sender_state
-            .store()
-            .pending_orders
-            .get(&gas_object)
-            .unwrap()
-            .unwrap(),
-        cert_ord.order
-    );
+    let object = response.object_and_lock.unwrap().object;
+    (object.to_object_reference(), object)
+}
 
-    // Try to complete the pending order
-    // However this fails because of a false assumption that sequence numbers increase after a tx order
-    // This bug is being tracked here https://github.com/MystenLabs/fastnft/issues/290
-    //
-    // sender_state.try_complete_pending_orders().await.unwrap();
+#[tokio::test]
+async fn test_map_reducer() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let client1 = make_client(authority_clients.clone(), committee.clone());
+
+    // Test: reducer errors get propagated up
+    let res = client1
+        .authorities()
+        .quorum_map_then_reduce_with_timeout(
+            0usize,
+            |_name, _client| Box::pin(async move { Ok(()) }),
+            |_accumulated_state, _authority_name, _authority_weight, _result| {
+                Box::pin(async move { Err(FastPayError::TooManyIncorrectAuthorities) })
+            },
+            Duration::from_millis(1000),
+        )
+        .await;
+    assert!(Err(FastPayError::TooManyIncorrectAuthorities) == res);
+
+    // Test: mapper errors do not get propagated up, reducer works
+    let res = client1
+        .authorities()
+        .quorum_map_then_reduce_with_timeout(
+            0usize,
+            |_name, _client| {
+                Box::pin(async move {
+                    let res: Result<usize, FastPayError> =
+                        Err(FastPayError::TooManyIncorrectAuthorities);
+                    res
+                })
+            },
+            |mut accumulated_state, _authority_name, _authority_weight, result| {
+                Box::pin(async move {
+                    assert!(Err(FastPayError::TooManyIncorrectAuthorities) == result);
+                    accumulated_state += 1;
+                    Ok(ReduceOutput::Continue(accumulated_state))
+                })
+            },
+            Duration::from_millis(1000),
+        )
+        .await;
+    assert_eq!(Ok(4), res);
+
+    // Test: early end
+    let res = client1
+        .authorities()
+        .quorum_map_then_reduce_with_timeout(
+            0usize,
+            |_name, _client| Box::pin(async move { Ok(()) }),
+            |mut accumulated_state, _authority_name, _authority_weight, _result| {
+                Box::pin(async move {
+                    if accumulated_state > 2 {
+                        Ok(ReduceOutput::End(accumulated_state))
+                    } else {
+                        accumulated_state += 1;
+                        Ok(ReduceOutput::Continue(accumulated_state))
+                    }
+                })
+            },
+            Duration::from_millis(1000),
+        )
+        .await;
+    assert_eq!(Ok(3), res);
+
+    // Test: Global timeout works
+    let res = client1
+        .authorities()
+        .quorum_map_then_reduce_with_timeout(
+            0usize,
+            |_name, _client| {
+                Box::pin(async move {
+                    // 10 mins
+                    tokio::time::sleep(Duration::from_secs(10 * 60)).await;
+                    Ok(())
+                })
+            },
+            |_accumulated_state, _authority_name, _authority_weight, _result| {
+                Box::pin(async move { Err(FastPayError::TooManyIncorrectAuthorities) })
+            },
+            Duration::from_millis(10),
+        )
+        .await;
+    assert_eq!(Ok(0), res);
+
+    // Test: Local timeout works
+    let bad_auth = *committee.sample();
+    let res = client1
+        .authorities()
+        .quorum_map_then_reduce_with_timeout(
+            HashSet::new(),
+            |_name, _client| {
+                Box::pin(async move {
+                    // 10 mins
+                    if _name == bad_auth {
+                        tokio::time::sleep(Duration::from_secs(10 * 60)).await;
+                    }
+                    Ok(())
+                })
+            },
+            |mut accumulated_state, authority_name, _authority_weight, _result| {
+                Box::pin(async move {
+                    accumulated_state.insert(authority_name);
+                    if accumulated_state.len() <= 3 {
+                        Ok(ReduceOutput::Continue(accumulated_state))
+                    } else {
+                        Ok(ReduceOutput::ContinueWithTimeout(
+                            accumulated_state,
+                            Duration::from_millis(10),
+                        ))
+                    }
+                })
+            },
+            // large delay
+            Duration::from_millis(10 * 60),
+        )
+        .await;
+    assert_eq!(res.as_ref().unwrap().len(), 3);
+    assert!(!res.as_ref().unwrap().contains(&bad_auth));
 }

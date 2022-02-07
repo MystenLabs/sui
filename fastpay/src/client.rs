@@ -675,7 +675,7 @@ fn main() {
                 .await;
                 info!("Starting transfer");
                 let time_start = Instant::now();
-                let cert = client_state
+                let (cert, _) = client_state
                     .transfer_object(object_id, gas_object_id, to)
                     .await
                     .unwrap();

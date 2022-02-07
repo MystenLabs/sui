@@ -41,6 +41,9 @@ pub struct AuthorityStore {
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
+    ///
+    /// When an object is deleted we include an entry into this table for its next version and
+    /// a digest of ObjectDigest::deleted(), along with a link to the transaction that deleted it.
     parent_sync: DBMap<ObjectRef, TransactionDigest>,
 
     /// A map between the transaction digest of a certificate that was successfully processed
@@ -213,6 +216,13 @@ impl AuthorityStore {
         self.owner_index
             .insert(&(object.owner, object.id()), &object.to_object_reference())?;
 
+        // Update the parent
+        self.parent_sync
+            .insert(&object.to_object_reference(), &object.previous_transaction)?;
+
+        // We only side load objects with a genesis parent transaction.
+        debug_assert!(object.previous_transaction == TransactionDigest::genesis());
+
         Ok(())
     }
 
@@ -344,6 +354,21 @@ impl AuthorityStore {
                 .map(|(_, object)| (object.to_object_reference(), transaction_digest)),
         )?;
 
+        // Index the certificate by the objects deleted
+        write_batch = write_batch.insert_batch(
+            &self.parent_sync,
+            deleted.iter().map(|object_id| {
+                (
+                    (
+                        *object_id,
+                        objects[object_id].version().increment(),
+                        ObjectDigest::deleted(),
+                    ),
+                    transaction_digest,
+                )
+            }),
+        )?;
+
         // Create locks for new objects, if they are not immutable
         write_batch = write_batch.insert_batch(
             &self.order_lock,
@@ -393,5 +418,35 @@ impl AuthorityStore {
             certified_order: Some(certificate),
             signed_effects: Some(signed_effects),
         })
+    }
+
+    /// Returns the last entry we have for this object in the parents_sync index used
+    /// to facilitate client and authority sync. In turn the latest entry provides the
+    /// latest object_reference, and also the latest tranaction that has interacted with
+    /// this object.
+    ///
+    /// This parent_sync index also contains entries for deleted objects (with a digest of
+    /// ObjectDigest::deleted()), and provides the transaction digest of the certificate
+    /// that deleted the object. Note that a deleted object may re-appear if the deletion
+    /// was the result of the object being wrapped in another object.
+    ///
+    /// If no entry for the object_id is found, return None.
+    pub fn get_latest_parent_entry(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<(ObjectRef, TransactionDigest)>, FastPayError> {
+        let mut iterator = self
+            .parent_sync
+            .iter()
+            // Make the max possible entry for this object ID.
+            .skip_prior_to(&(object_id, SEQUENCE_NUMBER_MAX, OBJECT_DIGEST_MAX))?;
+
+        Ok(iterator.next().and_then(|(obj_ref, tx_digest)| {
+            if obj_ref.0 == object_id {
+                Some((obj_ref, tx_digest))
+            } else {
+                None
+            }
+        }))
     }
 }

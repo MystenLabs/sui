@@ -918,12 +918,13 @@ async fn test_handle_confirmation_order_ok() {
         .is_none());
 
     // Check that all the parents are returned.
-    assert!(
-        authority_state.get_parent_iterator(object_id, None).await
-            == Ok(vec![(
-                (object_id, 1.into(), new_account.digest()),
-                certified_transfer_order.order.digest()
-            )])
+    assert_eq!(
+        authority_state
+            .get_parent_iterator(object_id, None)
+            .await
+            .unwrap()
+            .len(),
+        2
     );
 }
 
@@ -1041,6 +1042,155 @@ async fn test_move_call_mutable_object_not_mutated() {
             .version(),
         seq2.increment()
     );
+}
+
+#[tokio::test]
+async fn test_move_call_delete() {
+    let (sender, sender_key) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let mut authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+
+    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+        .await
+        .unwrap();
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
+    let (new_object_id1, _seq1, _) = effects.created[0].0;
+
+    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+        .await
+        .unwrap();
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
+    let (new_object_id2, _seq2, _) = effects.created[0].0;
+
+    let effects = call_framework_code(
+        &mut authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        "ObjectBasics",
+        "update",
+        vec![],
+        vec![new_object_id1, new_object_id2],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!((effects.created.len(), effects.mutated.len()), (0, 2));
+
+    let effects = call_framework_code(
+        &mut authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        "ObjectBasics",
+        "delete",
+        vec![],
+        vec![new_object_id1],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert_eq!((effects.deleted.len(), effects.mutated.len()), (1, 0));
+}
+
+#[tokio::test]
+async fn test_get_latest_parent_entry() {
+    let (sender, sender_key) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let mut authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+
+    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+        .await
+        .unwrap();
+    let (new_object_id1, _seq1, _) = effects.created[0].0;
+
+    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+        .await
+        .unwrap();
+    let (new_object_id2, _seq2, _) = effects.created[0].0;
+
+    let effects = call_framework_code(
+        &mut authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        "ObjectBasics",
+        "update",
+        vec![],
+        vec![new_object_id1, new_object_id2],
+        vec![],
+    )
+    .await
+    .unwrap();
+
+    // Check entry for object to be deleted is returned
+    let (obj_ref, tx) = authority_state
+        .get_latest_parent_entry(new_object_id1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(obj_ref.0, new_object_id1);
+    assert_eq!(obj_ref.1, SequenceNumber::from(2));
+    assert_eq!(effects.transaction_digest, tx);
+
+    let effects = call_framework_code(
+        &mut authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        "ObjectBasics",
+        "delete",
+        vec![],
+        vec![new_object_id1],
+        vec![],
+    )
+    .await
+    .unwrap();
+
+    // Test get_latest_parent_entry function
+
+    // The very first object returns None
+    assert!(authority_state
+        .get_latest_parent_entry(ObjectID::ZERO)
+        .await
+        .unwrap()
+        .is_none());
+
+    // The objects just after the gas object also returns None
+    let mut x = gas_object_id.to_vec();
+    let last_index = x.len() - 1;
+    x[last_index] += 1;
+    let unknown_object_id: ObjectID = x.try_into().unwrap();
+    assert!(authority_state
+        .get_latest_parent_entry(unknown_object_id)
+        .await
+        .unwrap()
+        .is_none());
+
+    // Check gas object is returned.
+    let (obj_ref, tx) = authority_state
+        .get_latest_parent_entry(gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(obj_ref.0, gas_object_id);
+    assert_eq!(obj_ref.1, SequenceNumber::from(4));
+    assert_eq!(effects.transaction_digest, tx);
+
+    // Check entry for deleted object is returned
+    let (obj_ref, tx) = authority_state
+        .get_latest_parent_entry(new_object_id1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(obj_ref.0, new_object_id1);
+    assert_eq!(obj_ref.1, SequenceNumber::from(3));
+    assert_eq!(obj_ref.2, ObjectDigest::deleted());
+    assert_eq!(effects.transaction_digest, tx);
 }
 
 #[tokio::test]

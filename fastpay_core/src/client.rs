@@ -49,19 +49,10 @@ pub trait Client {
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-    ) -> Result<CertifiedOrder, anyhow::Error>;
+    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error>;
 
     /// Receive object from FastX.
     async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error>;
-
-    /// Send object to a FastX account.
-    /// Do not confirm the transaction, however this locks the objects until confirmation
-    async fn transfer_to_fastx_unsafe_unconfirmed(
-        &mut self,
-        recipient: FastPayAddress,
-        object_id: ObjectID,
-        gas_payment: ObjectID,
-    ) -> Result<CertifiedOrder, anyhow::Error>;
 
     /// Try to complete all pending orders once. Return if any fails
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError>;
@@ -385,7 +376,6 @@ where
     async fn execute_transaction_inner(
         &mut self,
         order: &Order,
-        with_confirmation: bool,
     ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
         let inputs = order.input_objects();
         let known_certificates = self.get_known_certificates(order.sender(), &inputs);
@@ -393,27 +383,20 @@ where
             .update_authority_certificates(*order.sender(), &inputs, known_certificates)
             .await?;
 
-        let resp = self
-            .authorities
-            .execute_transaction(order, with_confirmation)
-            .await?;
+        let resp = self.authorities.execute_transaction(order).await?;
 
-        if with_confirmation {
-            self.update_objects_from_order_info(resp.1.clone()).await?;
-        }
+        self.update_objects_from_order_info(resp.1.clone()).await?;
         Ok(resp)
     }
 
-    /// Execute (or retry) an order and optionally execute the Confirmation Order.
+    /// Execute (or retry) an order and execute the Confirmation Order.
     /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
     /// This functions locks all the input objects if possible, and unlocks at the end of confirmation or if an error occurs
-    /// If `with_confirmation` is false, the objects are locked until a subsequent confirmation step is executed.
     /// TODO: define other situations where we can unlock objects after authority error
     /// https://github.com/MystenLabs/fastnft/issues/346
     async fn execute_transaction(
         &mut self,
         order: Order,
-        with_confirmation: bool,
     ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
         for object_kind in &order.input_objects() {
             let object_id = object_kind.object_id();
@@ -432,17 +415,15 @@ where
         // Unlock objects for the pending order and update `sent_certificates`,
         // and `next_sequence_number`. (Note that if we were using persistent
         // storage, we should ensure update atomically in the eventuality of a crash.)
-        let result = self
-            .execute_transaction_inner(&order, with_confirmation)
-            .await;
+        let result = self.execute_transaction_inner(&order).await;
 
-        // We only unlock in case of errors or in case of finality
-        // Which errors should be unlock on?
-        // TODO: define which errors we must not unlock from
+        // How do we handle errors on authority which lock objects?
+        // VM can crash and keep objects locked, so we should not lock in client.
+        // TODO: https://github.com/MystenLabs/fastnft/issues/349
         // https://github.com/MystenLabs/fastnft/issues/346
-        if result.is_err() || with_confirmation {
-            self.unlock_pending_order_objects(&order)?;
-        }
+        // if result.is_err() {}
+
+        self.unlock_pending_order_objects(&order)?;
         result
     }
 
@@ -610,7 +591,7 @@ where
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-    ) -> Result<CertifiedOrder, anyhow::Error> {
+    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
         let object_ref = self
             .store
             .object_refs
@@ -631,14 +612,14 @@ where
             gas_payment,
         };
         let order = Order::new_transfer(transfer, &self.secret);
-        let (certificate, _) = self.execute_transaction(order, true).await?;
+        let (certificate, order_info_response) = self.execute_transaction(order).await?;
 
         // remove object from local storage if the recipient is not us.
         if recipient != self.address {
             self.remove_object_info(&object_id)?;
         }
 
-        Ok(certificate)
+        Ok((certificate, order_info_response))
     }
 
     // TODO: Revisit this and see if this method is still necessary.
@@ -712,37 +693,6 @@ where
         }
     }
 
-    // TODO: Is this function still needed?
-    async fn transfer_to_fastx_unsafe_unconfirmed(
-        &mut self,
-        recipient: FastPayAddress,
-        object_id: ObjectID,
-        gas_payment: ObjectID,
-    ) -> Result<CertifiedOrder, anyhow::Error> {
-        let object_ref = self.object_ref(object_id)?;
-        let gas_payment = self.object_ref(gas_payment)?;
-
-        let transfer = Transfer {
-            object_ref,
-            sender: self.address,
-            recipient,
-            gas_payment,
-        };
-        let order = Order::new_transfer(transfer, &self.secret);
-
-        // The objects are locked if this completes successfully
-        // Confirm steps unlocks the objects
-        let (new_certificate, _) = self.execute_transaction(order, false).await?;
-
-        // The new cert will not be updated by order effect without confirmation, the new unconfirmed cert need to be added temporally.
-        let new_sent_certificates = vec![new_certificate.clone()];
-        for object_kind in new_certificate.order.input_objects() {
-            self.update_certificates(&object_kind.object_id(), &new_sent_certificates)?;
-        }
-
-        Ok(new_certificate)
-    }
-
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError> {
         // Orders are idempotent so no need to prevent multiple executions
         let unique_pending_orders: HashSet<_> = self
@@ -754,12 +704,9 @@ where
         // Need some kind of timeout or max_trials here?
         // TODO: https://github.com/MystenLabs/fastnft/issues/330
         for order in unique_pending_orders {
-            // Execute with confirmation for finality
-            self.execute_transaction(order.clone(), true)
-                .await
-                .map_err(|e| FastPayError::ErrorWhileProcessingTransactionOrder {
-                    err: e.to_string(),
-                })?;
+            self.execute_transaction(order.clone()).await.map_err(|e| {
+                FastPayError::ErrorWhileProcessingTransactionOrder { err: e.to_string() }
+            })?;
         }
         Ok(())
     }
@@ -816,7 +763,7 @@ where
             gas_budget,
             &self.secret,
         );
-        self.execute_transaction(move_call_order, true).await
+        self.execute_transaction(move_call_order).await
     }
 
     async fn publish(
@@ -828,7 +775,7 @@ where
         let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
         let move_publish_order =
             Order::new_module(self.address, gas_object_ref, compiled_modules, &self.secret);
-        self.execute_transaction(move_publish_order, true).await
+        self.execute_transaction(move_publish_order).await
     }
 
     async fn get_object_info(
