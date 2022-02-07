@@ -884,7 +884,7 @@ where
                                 .or_insert((0usize, inner_effects.effects));
                             entry.0 += weight;
 
-                            if entry.0 > threshold {
+                            if entry.0 >= threshold {
                                 // It will set the timeout quite high.
                                 return Ok(ReduceOutput::ContinueWithTimeout(
                                     (state, bad_stake),

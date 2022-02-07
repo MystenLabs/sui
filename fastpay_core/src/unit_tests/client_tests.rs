@@ -3448,3 +3448,150 @@ async fn test_sync_all_owned_objects() {
             .count()
     );
 }
+
+#[tokio::test]
+async fn test_process_order() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let auth_vec: Vec<_> = authority_clients.values().cloned().collect();
+
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+
+    let gas_object1 = ObjectID::random();
+    let gas_object2 = ObjectID::random();
+
+    fund_account_with_same_objects(
+        auth_vec.iter().collect(),
+        &mut client1,
+        vec![gas_object1, gas_object2],
+    )
+    .await;
+
+    // Make a schedule of transactions
+    let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let create1 = order_create(
+        client1.address(),
+        client1.secret(),
+        client1.address(),
+        100,
+        framework_obj_ref,
+        gas_ref_1,
+    );
+
+    do_order(&auth_vec[0], &create1).await;
+    do_order(&auth_vec[1], &create1).await;
+    do_order(&auth_vec[2], &create1).await;
+
+    // Get a cert
+    let cert1 = extract_cert(&authority_clients, &committee, create1.digest()).await;
+
+    // Submit the cert to 1 authority.
+    let new_ref_1 = do_cert(&auth_vec[0], &cert1).await.created[0].0;
+
+    // Make a schedule of transactions
+    let gas_ref_set = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let create2 = order_set(
+        client1.address(),
+        client1.secret(),
+        new_ref_1,
+        100,
+        framework_obj_ref,
+        gas_ref_set,
+    );
+
+    // Test 1: When we call process order on the second order, the process_order
+    // updates all authorities with latest objects, and then the order goes through
+    // on all of them. Note that one authority has processed cert 1, and none cert2,
+    // and auth 3 has no seen either.
+    client1
+        .authorities()
+        .process_order(create2.clone(), Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    let cert2 = extract_cert(&authority_clients, &committee, create2.digest()).await;
+    assert_eq!(4, cert2.signatures.len());
+}
+
+#[tokio::test]
+async fn test_process_certificate() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let auth_vec: Vec<_> = authority_clients.values().cloned().collect();
+
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+
+    let gas_object1 = ObjectID::random();
+    let gas_object2 = ObjectID::random();
+
+    fund_account_with_same_objects(
+        auth_vec.iter().collect(),
+        &mut client1,
+        vec![gas_object1, gas_object2],
+    )
+    .await;
+
+    // Make a schedule of transactions
+    let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let create1 = order_create(
+        client1.address(),
+        client1.secret(),
+        client1.address(),
+        100,
+        framework_obj_ref,
+        gas_ref_1,
+    );
+
+    do_order(&auth_vec[0], &create1).await;
+    do_order(&auth_vec[1], &create1).await;
+    do_order(&auth_vec[2], &create1).await;
+
+    // Get a cert
+    let cert1 = extract_cert(&authority_clients, &committee, create1.digest()).await;
+
+    // Submit the cert to 1 authority.
+    let new_ref_1 = do_cert(&auth_vec[0], &cert1).await.created[0].0;
+    do_cert(&auth_vec[1], &cert1).await;
+    do_cert(&auth_vec[2], &cert1).await;
+
+    // Check the new object is at version 1
+    let new_object_ref = client_object(&mut client1, new_ref_1.0).await.0;
+    assert_eq!(SequenceNumber::from(1), new_object_ref.1);
+
+    // Make a schedule of transactions
+    let gas_ref_set = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let create2 = order_set(
+        client1.address(),
+        client1.secret(),
+        new_ref_1,
+        100,
+        framework_obj_ref,
+        gas_ref_set,
+    );
+
+    do_order(&auth_vec[0], &create2).await;
+    do_order(&auth_vec[1], &create2).await;
+    do_order(&auth_vec[2], &create2).await;
+
+    let cert2 = extract_cert(&authority_clients, &committee, create2.digest()).await;
+
+    // Test: process the certificate, including bring up to date authority 3.
+    //       which is 2 certs behind.
+    client1
+        .authorities()
+        .process_certificate(cert2, Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    // As a result, we have 2 gas objects and 1 created object.
+    assert_eq!(3, owned_object.len());
+    // Check this is the latest version.
+    let new_object_ref = client_object(&mut client1, new_ref_1.0).await.0;
+    assert_eq!(SequenceNumber::from(2), new_object_ref.1);
+}
