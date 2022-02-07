@@ -1,8 +1,8 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{authority_client::AuthorityAPI, downloader::*};
-use async_trait::async_trait;
+use crate::{authority_client::AuthorityAPI, };
+
 use fastx_types::object::Object;
 use fastx_types::{
     base_types::*,
@@ -12,7 +12,6 @@ use fastx_types::{
     messages::*,
 };
 use futures::{future, StreamExt};
-use rand::seq::SliceRandom;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::time::Duration;
@@ -53,73 +52,6 @@ pub enum ReduceOutput<S> {
     Continue(S),
     ContinueWithTimeout(S, Duration),
     End(S),
-}
-
-#[allow(dead_code)]
-#[derive(Clone)]
-struct CertificateRequester<A> {
-    committee: Committee,
-    authority_clients: Vec<A>,
-    sender: Option<FastPayAddress>,
-}
-
-impl<A> CertificateRequester<A> {
-    fn new(
-        committee: Committee,
-        authority_clients: Vec<A>,
-        sender: Option<FastPayAddress>,
-    ) -> Self {
-        Self {
-            committee,
-            authority_clients,
-            sender,
-        }
-    }
-}
-
-#[async_trait]
-impl<A> Requester for CertificateRequester<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    type Key = (ObjectID, SequenceNumber);
-    type Value = Result<CertifiedOrder, FastPayError>;
-
-    /// Try to find a certificate for the given sender, object_id and sequence number.
-    async fn query(
-        &mut self,
-        (object_id, sequence_number): (ObjectID, SequenceNumber),
-    ) -> Result<CertifiedOrder, FastPayError> {
-        // BUG(https://github.com/MystenLabs/fastnft/issues/290): This function assumes that requesting the parent cert of object seq+1 will give the cert of
-        //        that creates the object. This is not true, as objects may be deleted and may not have a seq+1
-        //        to look up.
-        //
-        //        The authority `handle_object_info_request` is now fixed to return the parent at seq, and not
-        //        seq+1. But a lot of the client code makes the above wrong assumption, and the line above reverts
-        //        query to the old (incorrect) behavious to not break tests everywhere.
-        let inner_sequence_number = sequence_number.increment();
-
-        let request = ObjectInfoRequest {
-            object_id,
-            request_sequence_number: Some(inner_sequence_number),
-        };
-        // Sequentially try each authority in random order.
-        // TODO: Improve shuffle, different authorities might different amount of stake.
-        self.authority_clients.shuffle(&mut rand::thread_rng());
-        for client in self.authority_clients.iter_mut() {
-            let result = client.handle_object_info_request(request.clone()).await;
-            if let Ok(ObjectInfoResponse {
-                parent_certificate: Some(certificate),
-                ..
-            }) = result
-            {
-                if certificate.check(&self.committee).is_ok() {
-                    return Ok(certificate);
-                }
-            }
-        }
-        Err(FastPayError::ErrorWhileRequestingCertificate)
-    }
 }
 
 impl<A> AuthorityAggregator<A>

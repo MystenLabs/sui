@@ -16,6 +16,7 @@ use std::{
 };
 use tokio::runtime::Runtime;
 use typed_store::Map;
+use async_trait::async_trait;
 
 use fastx_types::error::FastPayError::ObjectNotFound;
 use move_core_types::account_address::AccountAddress;
