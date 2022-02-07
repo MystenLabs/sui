@@ -6,11 +6,11 @@ use fastx_types::base_types::{get_key_pair, ObjectID, SequenceNumber};
 use fastx_types::committee::Committee;
 use fastx_types::object::Object;
 use futures::future::join_all;
-use portpicker::pick_unused_port;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::fs::read_to_string;
+use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
@@ -103,6 +103,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
             let mut authorities = BTreeMap::new();
             let mut authority_info = Vec::new();
+            let mut port_allocator = PortAllocator::new(10000);
 
             println!("Creating new addresses...");
             for _ in 0..4 {
@@ -111,7 +112,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     address,
                     key_pair,
                     host: "127.0.0.1".to_string(),
-                    port: pick_unused_port().expect("No free ports"),
+                    port: port_allocator.next_port().expect("No free ports"),
                     db_path: format!("./authorities_db/{:?}", address),
                 };
                 authority_info.push(AuthorityInfo {
@@ -233,4 +234,25 @@ async fn make_server(
     }
 
     AuthorityServer::new(authority.host.clone(), authority.port, buffer_size, state)
+}
+
+struct PortAllocator {
+    next_port: u16,
+}
+
+impl PortAllocator {
+    pub fn new(starting_port: u16) -> Self {
+        Self {
+            next_port: starting_port,
+        }
+    }
+    fn next_port(&mut self) -> Option<u16> {
+        for port in self.next_port..65535 {
+            if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+                self.next_port = port + 1;
+                return Some(port);
+            }
+        }
+        None
+    }
 }

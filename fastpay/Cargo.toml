@@ -42,7 +42,6 @@ move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "62b5a507
 
 shellfish = { version = "0.6.0", features = ["async"] }
 colored = "2.0.0"
-portpicker = "0.1.1"
 
 [[bin]]
 name = "client"
