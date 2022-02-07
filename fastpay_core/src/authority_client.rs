@@ -8,11 +8,11 @@ use fastx_types::{error::FastPayError, messages::*, serialize::*};
 #[async_trait]
 pub trait AuthorityAPI {
     /// Initiate a new order to a FastPay or Primary account.
-    async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError>;
+    async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, FastPayError>;
 
     /// Confirm an order to a FastPay or Primary account.
     async fn handle_confirmation_order(
-        &mut self,
+        &self,
         order: ConfirmationOrder,
     ) -> Result<OrderInfoResponse, FastPayError>;
 
@@ -47,14 +47,14 @@ impl AuthorityClient {
 #[async_trait]
 impl AuthorityAPI for AuthorityClient {
     /// Initiate a new transfer to a FastPay or Primary account.
-    async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
+    async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
         let response = self.0.send_recv_bytes(serialize_order(&order)).await?;
         deserialize_order_info(response)
     }
 
     /// Confirm a transfer to a FastPay or Primary account.
     async fn handle_confirmation_order(
-        &mut self,
+        &self,
         order: ConfirmationOrder,
     ) -> Result<OrderInfoResponse, FastPayError> {
         let response = self

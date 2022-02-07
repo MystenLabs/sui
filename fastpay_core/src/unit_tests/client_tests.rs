@@ -42,14 +42,14 @@ struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
 #[async_trait]
 impl AuthorityAPI for LocalAuthorityClient {
-    async fn handle_order(&mut self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
+    async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
         let result = state.lock().await.handle_order(order).await;
         result
     }
 
     async fn handle_confirmation_order(
-        &mut self,
+        &self,
         order: ConfirmationOrder,
     ) -> Result<OrderInfoResponse, FastPayError> {
         let state = self.0.clone();
@@ -641,8 +641,7 @@ fn test_client_state_sync() {
     assert!(rt.block_on(sender.get_owned_objects()).is_empty());
 
     // Sync client state
-    rt.block_on(sender.sync_client_state_with_random_authority())
-        .unwrap();
+    rt.block_on(sender.sync_client_state()).unwrap();
 
     // Confirm data are the same after sync
     assert!(!rt.block_on(sender.get_owned_objects()).is_empty());
@@ -698,10 +697,7 @@ async fn test_client_state_sync_with_transferred_object() {
     assert!(&client2.store.certificates.is_empty().unwrap());
 
     // Sync client state
-    client2
-        .sync_client_state_with_random_authority()
-        .await
-        .unwrap();
+    client2.sync_client_state().await.unwrap();
 
     // Confirm client 2 received the new object id and cert
     assert_eq!(1, client2.get_owned_objects().await.len());
@@ -781,10 +777,7 @@ async fn test_client_certificate_state() {
         client1.next_sequence_number(&gas_object_id_1)
     );
 
-    client2
-        .sync_client_state_with_random_authority()
-        .await
-        .unwrap();
+    client2.sync_client_state().await.unwrap();
 
     // Client 2 should retrieve 2 certificates for the 2 transactions after sync
     assert_eq!(2, client2.store.certificates.iter().count());
@@ -870,10 +863,7 @@ async fn test_client_certificate_state() {
             .len()
     );
 
-    client1
-        .sync_client_state_with_random_authority()
-        .await
-        .unwrap();
+    client1.sync_client_state().await.unwrap();
 
     assert_eq!(3, client1.store.certificates.iter().count());
     assert!(client1
@@ -1934,10 +1924,7 @@ async fn test_move_calls_certs() {
     );
 
     // Sync client 2
-    client2
-        .sync_client_state_with_random_authority()
-        .await
-        .unwrap();
+    client2.sync_client_state().await.unwrap();
 
     // Client 2 should have 2 certificate, one new object, with two associated certificate.
     assert_eq!(2, client2.store.certificates.iter().count());
@@ -2484,10 +2471,7 @@ async fn test_object_store() {
 
     // Run a few syncs to retrieve objects ids
     for _ in 0..4 {
-        let _ = client1
-            .sync_client_state_with_random_authority()
-            .await
-            .unwrap();
+        let _ = client1.sync_client_state().await.unwrap();
     }
     // Try to download objects which are not already in storage
     client1
@@ -2567,14 +2551,8 @@ async fn test_object_store_transfer() {
 
     // Run a few syncs to populate object ids
     for _ in 0..4 {
-        let _ = client1
-            .sync_client_state_with_random_authority()
-            .await
-            .unwrap();
-        let _ = client2
-            .sync_client_state_with_random_authority()
-            .await
-            .unwrap();
+        let _ = client1.sync_client_state().await.unwrap();
+        let _ = client2.sync_client_state().await.unwrap();
     }
 
     // Try to download objects which are not already in storage

@@ -27,7 +27,7 @@ use move_core_types::account_address::AccountAddress;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use std::env;
+use tempfile::tempdir;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
@@ -42,70 +42,45 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-    /*
-     * We must specify a configuration with a bind address.  We'll use 127.0.0.1
-     * since it's available and won't expose this server outside the host.  Requesting
-     * a specific port so we can use ngrok to expose that port publicly.
-     */
     let config_dropshot: ConfigDropshot = ConfigDropshot {
         bind_address: SocketAddr::from((Ipv6Addr::LOCALHOST, 5000)),
         ..Default::default()
     };
 
-    /*
-     * For simplicity, we'll configure an "info"-level logger that writes to
-     * stderr assuming that it's a terminal.
-     */
     let config_logging = ConfigLogging::StderrTerminal {
         level: ConfigLoggingLevel::Info,
     };
     let log = config_logging
-        .to_logger("example-basic")
+        .to_logger("rest-api")
         .map_err(|error| format!("failed to create logger: {}", error))?;
 
-    /*
-     * Build a description of the API.
-     */
     let mut api = ApiDescription::new();
     api.register(start).unwrap();
     // Use mpsc channels to send terminating message and kill thread
     // api.register(stop).unwrap();
-    api.register(get_accounts).unwrap();
-    api.register(get_account_objects).unwrap();
+    api.register(get_addresses).unwrap();
+    api.register(get_address_objects).unwrap();
     api.register(get_object_info).unwrap();
     api.register(transfer_object).unwrap();
 
-    /*
-     * The functions that implement our API endpoints will share this context.
-     */
-
-    // Hardcoded for now as this won't be something users would be able to specify/access in a
-    // properly designed RESTful API.
-    let account_config_path = "accounts.json".to_string();
+    let accounts_config_path = "accounts.json".to_string();
     let initial_accounts_config_path = "initial_accounts.toml".to_string();
     File::create(&initial_accounts_config_path)
         .expect("Couldn't create initial accounts config file");
     let committee_config_path = "committee.json".to_string();
     File::create(&committee_config_path).expect("Couldn't create committee config file");
-    let client_db_path = env::current_dir().unwrap().join(format!("./CLIENT_DB_0{}",ObjectID::random()));
+    let client_db_path = tempdir().unwrap().into_path();
     let api_context = ServerContext::new(
-        account_config_path,
+        accounts_config_path,
         committee_config_path,
         initial_accounts_config_path,
         client_db_path,
     );
 
-    /*
-     * Set up the server.
-     */
     let server = HttpServerStarter::new(&config_dropshot, api, api_context, &log)
         .map_err(|error| format!("failed to create server: {}", error))?
         .start();
 
-    /*
-     * Wait for the server to stop.  Note that there's not any code to shut down
-     * this server, so we should never get past this point.
-     */
     server.await
 }
 
@@ -113,7 +88,6 @@ async fn main() -> Result<(), String> {
  * Server context (state shared by handler functions)
  */
 struct ServerContext {
-    /** Server configuration that can be manipulated by requests to the HTTP API */
     buffer_size: usize,
     send_timeout: Arc<Mutex<Duration>>,
     recv_timeout: Arc<Mutex<Duration>>,
@@ -126,9 +100,6 @@ struct ServerContext {
 }
 
 impl ServerContext {
-    /**
-     * Return a new ServerContext.
-     */
     pub fn new(
         accounts_config_path: String,
         committee_config_path: String,
@@ -156,12 +127,9 @@ impl ServerContext {
     }
 }
 
-/*
- * HTTP API interface
- */
 
 /**
-* `Server Configuration` represents the provided server configuration.
+* [INPUT] `Server Configuration` represents the provided server configuration.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct ServerConfiguration {
@@ -274,47 +242,46 @@ async fn start(
 }
 
 /**
- * `Accounts` represents the value of the accounts on the network.
+ * [OUTPUT] `Accounts` represents the value of the accounts on the network.
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
-struct Accounts {
-    accounts: Vec<String>,
+struct Addresses {
+    addresses: Vec<String>,
 }
 
 /**
- * [SERVER] Retrieve all accounts (addresses) setup by initial configuration.
+ * [SERVER] Retrieve all addresses setup by initial configuration.
  */
 #[endpoint {
     method = GET,
-    path = "/server/accounts",
+    path = "/server/addresses",
 }]
-async fn get_accounts(
+async fn get_addresses(
     rqctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseOk<Accounts>, HttpError> {
+) -> Result<HttpResponseOk<Addresses>, HttpError> {
     let server_context = rqctx.context();
 
     let accounts_config = &mut *server_context.accounts_config.lock().unwrap();
 
-    let accounts = accounts_config
+    let addresses = accounts_config
         .addresses()
         .into_iter()
         .map(|addr| format!("{:X}", addr).trim_end_matches('=').to_string())
         .collect();
 
-    Ok(HttpResponseOk(Accounts { accounts }))
+    Ok(HttpResponseOk(Addresses { addresses }))
 }
 
 /**
-* `Account` represents the provided account.
+* [INPUT] `Address` represents the provided address.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
-struct Account {
-    // Use accountaddress but it doesn't implement JsonSchema
-    account_address: String,
+struct Address {
+    address: String,
 }
 
 /**
- * `Object` represents the value of the objects on the network.
+ * [INPUT & OUTPUT] `Object` represents the value of the objects on the network.
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct Object {
@@ -323,7 +290,7 @@ struct Object {
 }
 
 /**
- * `Objects` is a collection of Object
+ * [OUTPUT] `Objects` is a collection of Object
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct Objects {
@@ -331,15 +298,15 @@ struct Objects {
 }
 
 /**
- * [CLIENT] Return all objects for a specified account.
+ * [CLIENT] Return all objects for a specified address.
  */
 #[endpoint {
     method = GET,
-    path = "/client/account_objects",
+    path = "/client/address_objects",
 }]
-async fn get_account_objects(
+async fn get_address_objects(
     rqctx: Arc<RequestContext<ServerContext>>,
-    account: TypedBody<Account>,
+    account: TypedBody<Address>,
 ) -> Result<HttpResponseOk<Objects>, HttpError> {
     let server_context = rqctx.context();
 
@@ -360,7 +327,7 @@ async fn get_account_objects(
                     accounts_config_path,
                     account_config,
                     committee_config,
-                    decode_address_hex(account.into_inner().account_address.as_str()).unwrap(),
+                    decode_address_hex(account.into_inner().address.as_str()).unwrap(),
                     buffer_size,
                     send_timeout,
                     recv_timeout,
@@ -383,7 +350,7 @@ async fn get_account_objects(
 }
 
 /**
-* `ObjectInfo` represents the object info on the network.
+* [OUTPUT] `ObjectInfo` represents the object info on the network.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct ObjectInfo {
@@ -452,12 +419,12 @@ async fn get_object_info(
 }
 
 /**
-* [Input] `TransferOrder` represents the transaction to be sent to the network.
+* [INPUT] `TransferOrder` represents the transaction to be sent to the network.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct TransferOrder {
     object_id: String,
-    to_account: String,
+    to_address: String,
     gas_object_id: String,
 }
 
@@ -483,7 +450,7 @@ async fn transfer_object(
     let client_db_path = server_context.client_db_path.lock().unwrap().clone();
     let accounts_config_path = &*server_context.accounts_config_path.lock().unwrap();
 
-    let to_account = decode_address_hex(transfer_order.to_account.as_str()).unwrap();
+    let to_address = decode_address_hex(transfer_order.to_address.as_str()).unwrap();
     let object_id = AccountAddress::try_from(transfer_order.object_id).unwrap();
     let gas_object_id = AccountAddress::try_from(transfer_order.gas_object_id).unwrap();
 
@@ -498,7 +465,7 @@ async fn transfer_object(
                     committee_config,
                     object_id,
                     gas_object_id,
-                    to_account,
+                    to_address,
                     buffer_size,
                     send_timeout,
                     recv_timeout,

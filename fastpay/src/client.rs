@@ -14,11 +14,11 @@ use fastx_types::object::Object;
 use futures::stream::StreamExt;
 use std::{
     collections::{BTreeMap, HashSet},
-    env,
     path::PathBuf,
     time::{Duration, Instant},
 };
 use structopt::StructOpt;
+use tempfile::tempdir;
 use tokio::runtime::Runtime;
 use tracing::{subscriber::set_global_default, *};
 use tracing_subscriber::EnvFilter;
@@ -84,7 +84,7 @@ async fn make_client_state_and_try_sync(
     );
 
     // Force a sync
-    let _ = c.sync_client_state_with_random_authority();
+    let _ = c.sync_client_state();
     c
 }
 
@@ -476,10 +476,9 @@ fn main() {
     let accounts_config_path = &options.accounts;
     let committee_config_path = &options.committee;
     let buffer_size = options.buffer_size;
-    let client_db_path = options.db_path.map_or(
-        env::current_dir().unwrap().join("./CLIENT_DB_0"),
-        PathBuf::from,
-    );
+    let client_db_path = options
+        .db_path
+        .map_or(tempdir().unwrap().into_path(), PathBuf::from);
 
     let mut accounts_config =
         AccountsConfig::read_or_create(accounts_config_path).expect("Unable to read user accounts");
@@ -816,7 +815,7 @@ pub fn transfer_object(
         accounts_config.update_from_state(&client_state);
         info!("Updating recipient's local balance");
 
-        let client2_db_path = env::temp_dir().join("CLIENT_DB_1");
+        let client2_db_path = tempdir().unwrap().into_path();
         // TODO: client should manage multiple addresses instead of each addr having DBs
         // https://github.com/MystenLabs/fastnft/issues/332
         let mut recipient_client_state = make_client_state_and_try_sync(
