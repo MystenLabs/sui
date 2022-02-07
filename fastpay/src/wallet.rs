@@ -101,6 +101,11 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
         context: &mut WalletContext,
         _: &str,
     ) -> bool {
+        // do nothing if line is empty
+        if args.is_empty() {
+            return false;
+        }
+
         if let Some(arg) = args.get(0) {
             if let "quit" | "exit" = arg.as_str() {
                 println!("Bye!");
@@ -108,9 +113,7 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
             }
         };
 
-        let command: Result<WalletCommands, structopt::clap::Error> =
-            WalletCommands::from_iter_safe(args);
-
+        let command: Result<WalletCommands, _> = WalletCommands::from_iter_safe(args);
         match command {
             Ok(mut cmd) => {
                 if let Err(e) = cmd.execute(context).await {

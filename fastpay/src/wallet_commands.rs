@@ -187,8 +187,6 @@ impl WalletCommands {
                     );
                 }
 
-                let pure_args = convert_txn_args(pure_args);
-
                 let call_ret = client_state
                     .move_call(
                         package_obj_ref,
@@ -197,7 +195,7 @@ impl WalletCommands {
                         type_args.clone(),
                         gas_obj_ref,
                         object_args_refs,
-                        pure_args,
+                        convert_txn_args(pure_args),
                         *gas_budget,
                     )
                     .await?;
