@@ -1042,8 +1042,7 @@ where
         &self,
         order: &Order,
     ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
-        let (new_certificate, _) =
-            self.execute_transaction_without_confirmation(order).await?;
+        let (new_certificate, _) = self.execute_transaction_without_confirmation(order).await?;
 
         // Confirm transfer certificate if specified.
         let responses = self
