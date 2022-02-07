@@ -8,8 +8,3 @@ lto = true
 [profile.bench]
 codegen-units = 1
 lto = true
-
-# Stopgap, remove when https://github.com/rust-rocksdb/rust-rocksdb/issues/602 is fixed
-[patch.crates-io]
-rocksdb = { git = "https://github.com/rust-rocksdb/rust-rocksdb/", rev="626ff7e79dca107f76e347c3e1ea9cdabbd9d679" }
-librocksdb-sys = { git = "https://github.com/rust-rocksdb/rust-rocksdb/", rev="626ff7e79dca107f76e347c3e1ea9cdabbd9d679" }
