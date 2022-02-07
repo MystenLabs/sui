@@ -3509,8 +3509,9 @@ async fn test_process_order() {
         .await
         .unwrap();
 
+    // The order still only has 3 votes, as only these are needed.
     let cert2 = extract_cert(&authority_clients, &committee, create2.digest()).await;
-    assert_eq!(4, cert2.signatures.len());
+    assert_eq!(3, cert2.signatures.len());
 }
 
 #[tokio::test]

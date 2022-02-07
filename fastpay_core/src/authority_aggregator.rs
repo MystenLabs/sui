@@ -770,9 +770,17 @@ where
                     // the checks on this order response, and it is well formed.
                     Box::pin(async move { client.handle_order(order_ref.clone()).await })
                 },
-                |mut state, name, weight, _result| {
+                |mut state, name, weight, result| {
+                    // The state is of the form:
+                    // - [(Authority_name, Authority_signature)],
+                    // - Option<Certificate>,
+                    // - (good_stake, bad_stake)
+
                     Box::pin(async move {
-                        match _result {
+                        match result {
+                            // If we are given back a certificate, then we do not need
+                            // to re-submit this order, we just returned the ready made
+                            // certificate.
                             Ok(OrderInfoResponse {
                                 certified_order: Some(inner_certificate),
                                 ..
@@ -780,12 +788,15 @@ where
                                 state.1 = Some(inner_certificate);
                             }
 
+                            // If we get back a signed order, then we arregarate the
+                            // new signature and check whether we have enough to form
+                            // a certificate.
                             Ok(OrderInfoResponse {
                                 signed_order: Some(inner_signed_order),
                                 ..
                             }) => {
                                 state.0.push((name, inner_signed_order.signature));
-                                state.2 += weight;
+                                state.2 += weight; // This is the good_stake counter.
                                 if state.2 >= threshold {
                                     state.1 = Some(CertifiedOrder {
                                         order: order_ref.clone(),
@@ -794,9 +805,12 @@ where
                                 }
                             }
 
+                            // In all other cases we will not be able to use this response
+                            // to make a certificate. If this happens for more than f
+                            // authorities we just stop, as there is no hope to finish.
                             _ => {
                                 // We have an error here.
-                                state.3 += weight;
+                                state.3 += weight; // This is the bad stake counter
                                 if state.3 > validity {
                                     // Too many errors
                                     return Err(FastPayError::ErrorWhileProcessingTransferOrder);
@@ -804,6 +818,7 @@ where
                             }
                         };
 
+                        // If we have a certificate, the finish, otherwise continue.
                         if state.1.is_some() {
                             Ok(ReduceOutput::End(state))
                         } else {
@@ -816,6 +831,7 @@ where
             )
             .await?;
 
+        // If we have some certificate return it, or return an error.
         state
             .1
             .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)
@@ -841,6 +857,11 @@ where
                 state,
                 |_name, client| {
                     Box::pin(async move {
+                        // Here is the per-authority logic to process a certificate:
+                        // - we try to process a cert, and return Ok on success.
+                        // - we try to update the authority with the cert, and on error return Err.
+                        // - we try to re-process the certificate and return the result.
+
                         let res = client
                             .handle_confirmation_order(ConfirmationOrder::new(cert_ref.clone()))
                             .await;
@@ -874,11 +895,14 @@ where
                 },
                 |(mut state, mut bad_stake), _name, weight, _result| {
                     Box::pin(async move {
+                        // We aggregate the effects response, until we have more than 2f
+                        // and return.
                         if let Ok(OrderInfoResponse {
                             signed_effects: Some(inner_effects),
                             ..
                         }) = _result
                         {
+                            // Note: here we aggregate votes by the hash of the effects structure
                             let entry = state
                                 .entry(sha3_hash(&inner_effects.effects))
                                 .or_insert((0usize, inner_effects.effects));
@@ -893,6 +917,7 @@ where
                             }
                         }
 
+                        // If instead we have more than f bad responses, then we fail.
                         bad_stake += weight;
                         if bad_stake > validity {
                             return Err(FastPayError::ErrorWhileRequestingCertificate);
@@ -906,12 +931,15 @@ where
             )
             .await?;
 
+        // Check that one effects structure has more than 2f votes,
+        // and return it.
         for (stake, effects) in state.values() {
             if stake >= &threshold {
                 return Ok(effects.clone());
             }
         }
 
+        // If none has, fail.
         Err(FastPayError::ErrorWhileRequestingCertificate)
     }
 
