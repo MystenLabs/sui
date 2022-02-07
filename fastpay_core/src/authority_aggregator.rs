@@ -1042,7 +1042,7 @@ where
         &self,
         order: &Order,
     ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
-        let (new_certificate, order_info_response) =
+        let (new_certificate, _) =
             self.execute_transaction_without_confirmation(order).await?;
 
         // Confirm transfer certificate if specified.

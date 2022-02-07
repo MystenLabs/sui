@@ -52,7 +52,10 @@ pub trait Client {
     ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error>;
 
     /// Receive object from FastX.
-    async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error>;
+    async fn update_state_by_certificate(
+        &mut self,
+        certificate: &CertifiedOrder,
+    ) -> Result<(), anyhow::Error>;
 
     /// Try to complete all pending orders once. Return if any fails
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError>;
@@ -412,16 +415,15 @@ where
         }
         // Lock the objects in this order
         self.lock_pending_order_objects(&order)?;
-        // Unlock objects for the pending order and update `sent_certificates`,
-        // and `next_sequence_number`. (Note that if we were using persistent
-        // storage, we should ensure update atomically in the eventuality of a crash.)
+
+        // We can escape this function without unlocking. This could be dangerous
         let result = self.execute_transaction_inner(&order).await;
 
         // How do we handle errors on authority which lock objects?
         // VM can crash and keep objects locked, so we should not lock in client.
         // TODO: https://github.com/MystenLabs/fastnft/issues/349
+        // https://github.com/MystenLabs/fastnft/issues/211
         // https://github.com/MystenLabs/fastnft/issues/346
-        // if result.is_err() {}
 
         self.unlock_pending_order_objects(&order)?;
         result
@@ -623,7 +625,11 @@ where
     }
 
     // TODO: Revisit this and see if this method is still necessary.
-    async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error> {
+    // Technically we can just `sync` and fetch all changes
+    async fn update_state_by_certificate(
+        &mut self,
+        certificate: &CertifiedOrder,
+    ) -> Result<(), anyhow::Error> {
         certificate.check(&self.authorities.committee)?;
         match &certificate.order.kind {
             OrderKind::Transfer(transfer) => {

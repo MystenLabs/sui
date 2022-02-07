@@ -698,7 +698,10 @@ fn main() {
                     recv_timeout,
                 )
                 .await;
-                recipient_client_state.receive_object(&cert).await.unwrap();
+                recipient_client_state
+                    .update_state_by_certificate(&cert)
+                    .await
+                    .unwrap();
                 accounts_config.update_from_state(&recipient_client_state);
                 accounts_config
                     .write(accounts_config_path)
