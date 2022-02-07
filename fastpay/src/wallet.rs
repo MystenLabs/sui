@@ -112,7 +112,11 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
             WalletCommands::from_iter_safe(args);
 
         match command {
-            Ok(mut cmd) => cmd.execute(context).await.unwrap(),
+            Ok(mut cmd) => {
+                if let Err(e) = cmd.execute(context).await {
+                    println!("{}", e);
+                }
+            }
             Err(e) => {
                 println!("{}", e.message);
             }

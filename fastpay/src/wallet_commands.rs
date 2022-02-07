@@ -1,4 +1,4 @@
-use crate::config::{AccountInfo, AuthorityInfo, MoveCallConfig, WalletConfig};
+use crate::config::{AccountInfo, AuthorityInfo, WalletConfig};
 use fastpay_core::authority_client::AuthorityClient;
 use fastpay_core::client::{Client, ClientState};
 use fastx_network::network::NetworkClient;
@@ -10,7 +10,10 @@ use fastx_types::committee::Committee;
 use fastx_types::messages::{ExecutionStatus, ObjectInfoRequest, OrderEffects};
 
 use fastx_types::error::FastPayError;
-use move_core_types::transaction_argument::convert_txn_args;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::parser::{parse_transaction_argument, parse_type_tag};
+use move_core_types::transaction_argument::{convert_txn_args, TransactionArgument};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -30,7 +33,8 @@ pub enum WalletCommands {
     #[structopt(name = "object")]
     Object {
         /// Object ID of the object to fetch
-        obj_id: ObjectID,
+        #[structopt(long)]
+        id: ObjectID,
 
         /// Deep inspection of object
         #[structopt(long)]
@@ -41,15 +45,45 @@ pub enum WalletCommands {
     #[structopt(name = "publish")]
     Publish {
         /// Path to directory containing a Move package
+        #[structopt(long)]
         path: String,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
-        gas_object_id: ObjectID,
+        #[structopt(long)]
+        gas: ObjectID,
     },
 
     /// Call Move
     #[structopt(name = "call")]
-    Call { path: String },
+    Call {
+        /// Object ID of the package, which contains the module
+        #[structopt(long)]
+        package: ObjectID,
+        /// The name of the module in the package
+        #[structopt(long)]
+        module: Identifier,
+        /// Function name in module
+        #[structopt(long)]
+        function: Identifier,
+        /// Function name in module
+        #[structopt(long, parse(try_from_str = parse_type_tag))]
+        type_args: Vec<TypeTag>,
+        /// Object args object IDs
+        #[structopt(long)]
+        object_args: Vec<ObjectID>,
+        /// Pure arguments to the functions, which conform to move_core_types::transaction_argument
+        /// Special case formatting rules:
+        /// Use one string with CSV token embedded, for example "54u8,0x43"
+        /// When specifying FastX addresses, specify as vector. Example x\"01FE4E6F9F57935C5150A486B5B78AC2B94E2C5CD9352C132691D99B3E8E095C\"
+        #[structopt(long, parse(try_from_str = parse_transaction_argument))]
+        pure_args: Vec<TransactionArgument>,
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        #[structopt(long)]
+        gas: ObjectID,
+        /// Gas budget for this call
+        #[structopt(long)]
+        gas_budget: u64,
+    },
 
     /// Transfer funds
     #[structopt(name = "transfer")]
@@ -59,10 +93,12 @@ pub enum WalletCommands {
         to: PublicKeyBytes,
 
         /// Object to transfer, in 20 bytes Hex string
+        #[structopt(long)]
         object_id: ObjectID,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
-        gas_object_id: ObjectID,
+        #[structopt(long)]
+        gas: ObjectID,
     },
     /// Synchronize client state with authorities.
     #[structopt(name = "sync")]
@@ -91,34 +127,37 @@ pub enum WalletCommands {
 impl WalletCommands {
     pub async fn execute(&mut self, context: &mut WalletContext) -> Result<(), anyhow::Error> {
         match self {
-            WalletCommands::Publish {
-                path,
-                gas_object_id,
-            } => {
+            WalletCommands::Publish { path, gas } => {
                 // Find owner of gas object
-                let owner = context.find_owner(gas_object_id)?;
+                let owner = context.find_owner(gas)?;
                 let client_state = context.get_or_create_client_state(&owner)?;
-                publish(client_state, path.clone(), *gas_object_id).await;
+                publish(client_state, path.clone(), *gas).await;
             }
 
-            WalletCommands::Object { obj_id, deep } => {
+            WalletCommands::Object { id, deep } => {
                 // Pick the first (or any) account for use in finding obj info
-                let account = context.find_owner(obj_id)?;
+                let account = context.find_owner(id)?;
                 // Fetch the object ref
                 let client_state = context.get_or_create_client_state(&account)?;
-                get_object_info(client_state, *obj_id, *deep).await;
+                get_object_info(client_state, *id, *deep).await;
             }
-
-            WalletCommands::Call { path } => {
-                let call_config = MoveCallConfig::read(path).unwrap();
+            WalletCommands::Call {
+                package,
+                module,
+                function,
+                type_args,
+                object_args,
+                pure_args,
+                gas,
+                gas_budget,
+            } => {
                 // Find owner of gas object
-                let owner = context.find_owner(&call_config.gas_object_id)?;
-
-                let client_state = context.get_or_create_client_state(&owner)?;
+                let sender = context.find_owner(gas)?;
+                let client_state = context.get_or_create_client_state(&sender)?;
 
                 // Fetch the object info for the package
                 let package_obj_info_req = ObjectInfoRequest {
-                    object_id: call_config.package_obj_id,
+                    object_id: *package,
                     request_sequence_number: None,
                 };
                 let package_obj_info = client_state.get_object_info(package_obj_info_req).await?;
@@ -127,15 +166,15 @@ impl WalletCommands {
                 // Fetch the object info for the gas obj
                 let gas_obj_ref = *client_state
                     .object_refs()
-                    .get(&call_config.gas_object_id)
+                    .get(gas)
                     .expect("Gas object not found");
 
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
-                for obj_id in call_config.object_args_ids {
+                for obj_id in object_args {
                     // Fetch the obj ref
                     let obj_info_req = ObjectInfoRequest {
-                        object_id: obj_id,
+                        object_id: *obj_id,
                         request_sequence_number: None,
                     };
 
@@ -148,37 +187,32 @@ impl WalletCommands {
                     );
                 }
 
-                let pure_args = convert_txn_args(&call_config.pure_args);
+                let pure_args = convert_txn_args(pure_args);
 
                 let call_ret = client_state
                     .move_call(
                         package_obj_ref,
-                        call_config.module,
-                        call_config.function,
-                        call_config.type_args,
+                        module.to_owned(),
+                        function.to_owned(),
+                        type_args.clone(),
                         gas_obj_ref,
                         object_args_refs,
                         pure_args,
-                        call_config.gas_budget,
+                        *gas_budget,
                     )
-                    .await
-                    .unwrap();
+                    .await?;
                 println!("Cert: {:?}", call_ret.0);
                 show_object_effects(call_ret.1);
             }
 
-            WalletCommands::Transfer {
-                to,
-                object_id,
-                gas_object_id,
-            } => {
-                let owner = context.find_owner(gas_object_id)?;
+            WalletCommands::Transfer { to, object_id, gas } => {
+                let owner = context.find_owner(gas)?;
 
                 let client_state = context.get_or_create_client_state(&owner)?;
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let cert = client_state
-                    .transfer_object(*object_id, *gas_object_id, *to)
+                    .transfer_object(*object_id, *gas, *to)
                     .await
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
