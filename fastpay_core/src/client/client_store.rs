@@ -7,6 +7,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use typed_store::rocks::DBMap;
 
+// Table keys
+const ADDRESS_KEY: &str = "address";
+const SECRET_KEY: &str = "secret";
+
+// Column family names
+const ADDRESS_CF_NAME: &str = "address";
+const SECRET_CF_NAME: &str = "secret";
+
 const CERT_CF_NAME: &str = "certificates";
 const SEQ_NUMBER_CF_NAME: &str = "object_sequence_numbers";
 const OBJ_REF_CF_NAME: &str = "object_refs";
@@ -19,6 +27,10 @@ pub fn init_store(path: PathBuf, names: Vec<&str>) -> Arc<DBWithThreadMode<Multi
 }
 
 pub struct ClientStore {
+    // These should never change
+    pub address: DBMap<String, FastPayAddress>,
+    pub secret: DBMap<String, KeyPair>,
+
     // Table of objects to orders pending on the objects
     pub pending_orders: DBMap<ObjectID, Order>,
     // The remaining fields are used to minimize networking, and may not always be persisted locally.
@@ -41,6 +53,8 @@ impl ClientStore {
         let db = client_store::init_store(
             path,
             vec![
+                ADDRESS_CF_NAME,
+                SECRET_CF_NAME,
                 PENDING_ORDERS_CF_NAME,
                 CERT_CF_NAME,
                 SEQ_NUMBER_CF_NAME,
@@ -51,6 +65,8 @@ impl ClientStore {
         );
 
         ClientStore {
+            address: ClientStore::open_db(&db, ADDRESS_CF_NAME),
+            secret: ClientStore::open_db(&db, SECRET_CF_NAME),
             pending_orders: ClientStore::open_db(&db, PENDING_ORDERS_CF_NAME),
             certificates: ClientStore::open_db(&db, CERT_CF_NAME),
             object_sequence_numbers: ClientStore::open_db(&db, SEQ_NUMBER_CF_NAME),
@@ -66,25 +82,40 @@ impl ClientStore {
     /// Populate DB with older state
     pub fn populate(
         &self,
+        address: FastPayAddress,
+        secret: KeyPair,
         object_refs: BTreeMap<ObjectID, ObjectRef>,
         certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
     ) -> Result<(), FastPayError> {
-        self.certificates
+        self.address
             .batch()
+            .insert_batch(
+                &self.address,
+                std::iter::once((ADDRESS_KEY.to_string(), address)),
+            )?
+            .insert_batch(
+                &self.secret,
+                std::iter::once((SECRET_KEY.to_string(), secret)),
+            )?
             .insert_batch(&self.certificates, certificates.iter())?
-            .write()?;
-        self.object_refs
-            .batch()
             .insert_batch(&self.object_refs, object_refs.iter())?
-            .write()?;
-        self.object_sequence_numbers
-            .batch()
             .insert_batch(
                 &self.object_sequence_numbers,
                 object_refs.iter().map(|w| (w.0, w.1 .1)),
             )?
             .write()?;
         Ok(())
+    }
+
+    pub fn address(&self) -> Result<Option<FastPayAddress>, FastPayError> {
+        self.address
+            .get(&ADDRESS_KEY.to_string())
+            .map_err(|e| e.into())
+    }
+    pub fn secret(&self) -> Result<Option<KeyPair>, FastPayError> {
+        self.secret
+            .get(&SECRET_KEY.to_string())
+            .map_err(|e| e.into())
     }
 
     /// Insert multiple KV pairs atomically

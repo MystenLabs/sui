@@ -118,13 +118,15 @@ impl<A> ClientState<A> {
     ) -> Result<Self, FastPayError> {
         let client_state = ClientState {
             address,
-            secret,
+            secret: secret.copy(),
             authorities: AuthorityAggregator::new(committee, authority_clients),
             store: ClientStore::new(path),
         };
 
         // Backfill the DB
-        client_state.store.populate(object_refs, certificates)?;
+        client_state
+            .store
+            .populate(address, secret, object_refs, certificates)?;
         Ok(client_state)
     }
 
@@ -232,6 +234,10 @@ impl<A> ClientState<A> {
     #[cfg(test)]
     pub fn store(&self) -> &ClientStore {
         &self.store
+    }
+    #[cfg(test)]
+    pub fn secret(&self) -> &KeyPair {
+        &self.secret
     }
 
     /// Given an order, return the list of certificates that are known by this client

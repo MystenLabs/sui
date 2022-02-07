@@ -2486,8 +2486,8 @@ async fn test_receive_object_error() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[test]
-fn test_client_store() {
+#[tokio::test]
+async fn test_client_store() {
     let store =
         ClientStore::new(env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())));
 
@@ -2518,6 +2518,21 @@ fn test_client_store() {
     .unwrap();
 
     assert!(store.object_sequence_numbers.is_empty().unwrap());
+
+    // Test with client
+    // Init the states
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+
+    // Check that addr and secret are stored
+    assert_eq!(
+        client1.address(),
+        client1.store().address().unwrap().unwrap()
+    );
+    assert_eq!(
+        fastx_types::serialize::serialize(client1.secret()),
+        fastx_types::serialize::serialize(&client1.store().secret().unwrap().unwrap())
+    );
 }
 
 #[tokio::test]
