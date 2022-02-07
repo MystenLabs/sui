@@ -19,9 +19,9 @@ pub struct Downloader<R, K, V> {
     /// Status of previous downloads, indexed by key.
     downloads: BTreeMap<K, DownloadStatus<V>>,
     /// Command stream of the main handler.
-    command_receiver: mpsc::UnboundedReceiver<DownloadCommand<K, V>>,
+    command_receiver: mpsc::Receiver<DownloadCommand<K, V>>,
     /// How to send commands to the main handler.
-    command_sender: mpsc::UnboundedSender<DownloadCommand<K, V>>,
+    command_sender: mpsc::Sender<DownloadCommand<K, V>>,
 }
 
 /// The underlying data-fetching mechanism to be provided by the user.
@@ -36,7 +36,7 @@ pub trait Requester {
 
 /// Channel for using code to send requests and stop the downloader task.
 #[derive(Clone)]
-pub struct DownloadHandle<K, V>(mpsc::UnboundedSender<DownloadCommand<K, V>>);
+pub struct DownloadHandle<K, V>(mpsc::Sender<DownloadCommand<K, V>>);
 
 /// A command send to the downloader task.
 enum DownloadCommand<K, V> {
@@ -100,7 +100,7 @@ where
     where
         I: IntoIterator<Item = (K, V)>,
     {
-        let (command_sender, command_receiver) = mpsc::unbounded();
+        let (command_sender, command_receiver) = mpsc::channel(1024);
         let mut downloads = BTreeMap::new();
         for (key, value) in known_values {
             downloads.insert(key, DownloadStatus::Ready(value));
