@@ -52,10 +52,7 @@ pub trait Client {
     ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error>;
 
     /// Receive object from FastX.
-    async fn update_state_by_certificate(
-        &mut self,
-        certificate: &CertifiedOrder,
-    ) -> Result<(), anyhow::Error>;
+    async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error>;
 
     /// Try to complete all pending orders once. Return if any fails
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError>;
@@ -420,7 +417,7 @@ where
         let result = self.execute_transaction_inner(&order).await;
 
         // How do we handle errors on authority which lock objects?
-        // VM can crash and keep objects locked, so we should not lock in client.
+        // Currently VM crash can keep objects locked, but we would like to avoid this.
         // TODO: https://github.com/MystenLabs/fastnft/issues/349
         // https://github.com/MystenLabs/fastnft/issues/211
         // https://github.com/MystenLabs/fastnft/issues/346
@@ -434,6 +431,7 @@ where
     /// This means either exactly all the objects are owned by this order, or by no order
     /// The caller has to explicitly find which objects are locked
     /// TODO: always return true for immutable objects https://github.com/MystenLabs/fastnft/issues/305
+    /// TODO: this function can fail. Need to handle it https://github.com/MystenLabs/fastnft/issues/383
     fn can_lock_or_unlock(&self, order: &Order) -> Result<bool, FastPayError> {
         let iter_matches = self.store.pending_orders.multi_get(
             &order
@@ -623,10 +621,7 @@ where
 
     // TODO: Revisit this and see if this method is still necessary.
     // Technically we can just `sync` and fetch all changes
-    async fn update_state_by_certificate(
-        &mut self,
-        certificate: &CertifiedOrder,
-    ) -> Result<(), anyhow::Error> {
+    async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error> {
         certificate.check(&self.authorities.committee)?;
         match &certificate.order.kind {
             OrderKind::Transfer(transfer) => {

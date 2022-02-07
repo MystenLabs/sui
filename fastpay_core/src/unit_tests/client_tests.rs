@@ -557,10 +557,7 @@ async fn test_bidirectional_transfer() {
     );
 
     // Update client2's local object data.
-    client2
-        .update_state_by_certificate(&certificate)
-        .await
-        .unwrap();
+    client2.receive_object(&certificate).await.unwrap();
 
     // Confirm sequence number are consistent between clients.
     assert_eq!(
@@ -2374,7 +2371,7 @@ fn test_transfer_object_error() {
 }
 
 #[tokio::test]
-async fn test_update_state_by_certificate_error() -> Result<(), anyhow::Error> {
+async fn test_receive_object_error() -> Result<(), anyhow::Error> {
     let number_of_authorities = 4;
     let (authority_clients, committee) = init_local_authorities(number_of_authorities).await;
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
@@ -2409,7 +2406,7 @@ async fn test_update_state_by_certificate_error() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let result = client2.update_state_by_certificate(&certificate).await;
+    let result = client2.receive_object(&certificate).await;
 
     assert!(matches!(
         result.unwrap_err().downcast_ref(),
@@ -2439,7 +2436,7 @@ async fn test_update_state_by_certificate_error() -> Result<(), anyhow::Error> {
         signatures: certificate.signatures,
     };
 
-    let result = client2.update_state_by_certificate(&malformed_order).await;
+    let result = client2.receive_object(&malformed_order).await;
     assert!(matches!(
         result.unwrap_err().downcast_ref(),
         Some(FastPayError::InvalidSignature { .. })
@@ -2610,10 +2607,7 @@ async fn test_object_store_transfer() {
         .unwrap();
 
     // Update client2's local object data.
-    client2
-        .update_state_by_certificate(&certificate)
-        .await
-        .unwrap();
+    client2.receive_object(&certificate).await.unwrap();
 
     // Client 1 should not have lost its objects
     // Plus it should have a new gas object
@@ -2627,10 +2621,7 @@ async fn test_object_store_transfer() {
         .await
         .unwrap();
     // Update client1's local object data.
-    client1
-        .update_state_by_certificate(&certificate)
-        .await
-        .unwrap();
+    client1.receive_object(&certificate).await.unwrap();
 
     // Client 1 should have a new version of the object back
     assert_eq!(client1.store().objects.iter().count(), 4);
