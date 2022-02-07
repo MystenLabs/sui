@@ -29,6 +29,8 @@ pub fn init_store(path: PathBuf, names: Vec<&str>) -> Arc<DBWithThreadMode<Multi
 pub struct ClientStore {
     // These should never change
     pub address: DBMap<String, FastPayAddress>,
+    // We should ideally not pass keypairs around
+    // TODO: https://github.com/MystenLabs/fastnft/issues/380
     pub secret: DBMap<String, KeyPair>,
 
     // Table of objects to orders pending on the objects
