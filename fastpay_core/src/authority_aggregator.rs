@@ -678,7 +678,7 @@ where
                         ConfirmationOrder::new(cert.clone()),
                         name,
                         timeout_after_quorum,
-                        1,
+                        3,
                     )
                     .await;
 
@@ -825,8 +825,9 @@ where
     ///
     /// This call is meant to be called after `process_order` returns a certificate.
     /// At that point (and after) enough authorities are up to date with all objects
-    /// needed to process the certificate that a submission should succeed.
-    pub async fn process_certificate_best_effort(
+    /// needed to process the certificate that a submission should succeed. However,
+    /// in case an authority returns an error, we do try to bring it up to speed.
+    pub async fn process_certificate(
         &self,
         certificate: CertifiedOrder,
         timeout_after_quorum: Duration,
@@ -840,6 +841,32 @@ where
                 state,
                 |_name, client| {
                     Box::pin(async move {
+                        let res = client
+                            .handle_confirmation_order(ConfirmationOrder::new(cert_ref.clone()))
+                            .await;
+
+                        if res.is_ok() {
+                            // We got an ok answer, so returning the result of processing
+                            // the order.
+                            return res;
+                        }
+
+                        // If we got an error, we try to update the authority.
+                        let _result = self
+                            .sync_certificate_to_authority_with_timeout(
+                                ConfirmationOrder::new(cert_ref.clone()),
+                                _name,
+                                timeout_after_quorum,
+                                3,
+                            )
+                            .await;
+
+                        if let Err(err) = _result {
+                            // If we fail we give up and return the error
+                            return Err(err);
+                        }
+
+                        // Now try again
                         client
                             .handle_confirmation_order(ConfirmationOrder::new(cert_ref.clone()))
                             .await
