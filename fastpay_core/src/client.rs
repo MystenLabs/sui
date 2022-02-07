@@ -23,6 +23,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     pin::Pin,
 };
+use std::time::Duration;
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -31,6 +32,7 @@ use std::{
 /// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
 ///
 pub type StableSyncSigner = Pin<Box<dyn signature::Signer<ed25519_dalek::Signature> + Send + Sync>>;
+
 
 pub mod client_store;
 use self::client_store::ClientStore;
@@ -65,12 +67,23 @@ pub trait Client {
     /// Receive object from FastX.
     async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error>;
 
+    /*
+    /// Send object to a FastX account.
+    /// Do not confirm the transaction.
+    async fn transfer_to_fastx_unsafe_unconfirmed(
+        &mut self,
+        recipient: FastPayAddress,
+        object_id: ObjectID,
+        gas_payment: ObjectID,
+    ) -> Result<CertifiedOrder, anyhow::Error>;
+    */
+
     /// Try to complete all pending orders once. Return if any fails
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError>;
 
     /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
     /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
-    async fn sync_client_state(&mut self) -> Result<AuthorityName, anyhow::Error>;
+    async fn sync_client_state(&mut self) -> Result<(), anyhow::Error>;
 
     /// Call move functions in the module in the given package, with args supplied
     async fn move_call(
@@ -291,6 +304,8 @@ where
         Ok(reference)
     }
 
+    /*
+
     /// Make sure we have all our certificates with sequence number
     /// in the range 0..self.next_sequence_number
     pub async fn download_certificates(
@@ -320,6 +335,10 @@ where
             .request_certificates_from_authority(known_sequence_numbers_map)
             .await
     }
+
+    */
+
+    /*
 
     /// Update our view of certificates. Update the object_id and the next sequence number accordingly.
     /// NOTE: This is only useful in the eventuality of missing local data.
@@ -388,6 +407,8 @@ where
             })
         }
     }
+
+    */
 
     async fn execute_transaction_inner(
         &mut self,
@@ -708,6 +729,46 @@ where
         }
     }
 
+    /*
+
+    // TODO: Is this function still needed?
+    async fn transfer_to_fastx_unsafe_unconfirmed(
+        &mut self,
+        recipient: FastPayAddress,
+        object_id: ObjectID,
+        gas_payment: ObjectID,
+    ) -> Result<CertifiedOrder, anyhow::Error> {
+        let object_ref = self.object_ref(object_id)?;
+        let gas_payment = self.object_ref(gas_payment)?;
+
+        let transfer = Transfer {
+            object_ref,
+            sender: self.address,
+            recipient,
+            gas_payment,
+        };
+        let order = Order::new_transfer(transfer, &self.secret);
+
+        self.lock_pending_order_objects(&order)?;
+        let new_certificate = self
+            .authorities
+            .execute_transaction_without_confirmation_unsafe(&order)
+            .await;
+        self.unlock_pending_order_objects(&order)?;
+
+        let new_certificate = new_certificate?;
+
+        // The new cert will not be updated by order effect without confirmation, the new unconfirmed cert need to be added temporally.
+        let new_sent_certificates = vec![new_certificate.clone()];
+        for object_kind in new_certificate.order.input_objects() {
+            self.update_certificates(&object_kind.object_id(), &new_sent_certificates)?;
+        }
+
+        Ok(new_certificate)
+    }
+
+    */
+
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError> {
         // Orders are idempotent so no need to prevent multiple executions
         let unique_pending_orders: HashSet<_> = self
@@ -726,7 +787,7 @@ where
         Ok(())
     }
 
-    async fn sync_client_state(&mut self) -> Result<AuthorityName, anyhow::Error> {
+    async fn sync_client_state(&mut self) -> Result<(), anyhow::Error> {
         if !self.store.pending_orders.is_empty() {
             // Finish executing the previous orders
             self.try_complete_pending_orders().await?;
@@ -735,24 +796,40 @@ where
         self.store.object_sequence_numbers.clear()?;
         self.store.object_refs.clear()?;
 
+        let (active_object_certs, _deleted_refs_certs) = self
+            .authorities
+            .sync_all_owned_objects(self.address, Duration::from_secs(60))
+            .await?;
+        /*
         let (authority_name, object_refs) = self
             .authorities
             .download_own_object_ids_from_random_authority(self.address)
             .await?;
-        for object_ref in object_refs {
+        */
+        for (object, option_cert) in active_object_certs {
+            let object_ref = object.to_object_reference();
             let (object_id, sequence_number, _) = object_ref;
             self.store
                 .object_sequence_numbers
                 .insert(&object_id, &sequence_number)?;
             self.store.object_refs.insert(&object_id, &object_ref)?;
+            if let Some(cert) = option_cert {
+                self.store
+                    .certificates
+                    .insert(&cert.order.digest(), &cert)?;
+            }
         }
+
+        /*
+
         // Recover missing certificates.
         let new_certificates = self.download_certificates().await?;
 
         for (id, certs) in new_certificates {
             self.update_certificates(&id, &certs)?;
         }
-        Ok(authority_name)
+        */
+        Ok(())
     }
 
     async fn move_call(

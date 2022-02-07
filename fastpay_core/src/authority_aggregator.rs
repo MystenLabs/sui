@@ -11,7 +11,7 @@ use fastx_types::{
     fp_ensure,
     messages::*,
 };
-use futures::{future, StreamExt, TryFutureExt};
+use futures::{future, StreamExt};
 use rand::seq::SliceRandom;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -520,7 +520,9 @@ where
 
     /// This function returns a map between object references owned and authorities that hold the objects
     /// at this version, as well as a list of authorities that responsed to the query for the objects owned.
-    pub async fn get_all_owned_objects(
+    ///
+    /// We do not expose this function to users, as its output is hard for callers to interpet.
+    async fn get_all_owned_objects(
         &self,
         address: FastPayAddress,
         timeout_after_quorum: Duration,
@@ -597,7 +599,13 @@ where
         &self,
         objects: &[ObjectID],
         timeout_after_quorum: Duration,
-    ) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
+    ) -> Result<
+        (
+            Vec<(Object, Option<CertifiedOrder>)>,
+            Vec<(ObjectRef, Option<CertifiedOrder>)>,
+        ),
+        FastPayError,
+    > {
         let mut active_objects = Vec::new();
         let mut deleted_objects = Vec::new();
         let mut certs_to_sync = BTreeMap::new();
@@ -632,7 +640,7 @@ where
                     //       Otherwise report the authority as potentially faulty.
 
                     if let Some(obj) = object_option {
-                        active_objects.push(obj);
+                        active_objects.push((obj, None));
                     }
                     // Cannot be that the genesis contributes to deleted objects
 
@@ -654,13 +662,13 @@ where
                 // Add authorities that need to be updated
                 let entry = certs_to_sync
                     .entry(cert.order.digest())
-                    .or_insert((cert, HashSet::new()));
+                    .or_insert((cert.clone(), HashSet::new()));
                 entry.1.extend(authorites);
 
                 // Return the latest version of an object, or a deleted object
                 match object_option {
-                    Some(obj) => active_objects.push(obj),
-                    None => deleted_objects.push(object_ref),
+                    Some(obj) => active_objects.push((obj, Some(cert))),
+                    None => deleted_objects.push((object_ref, Some(cert))),
                 }
 
                 break;
@@ -700,9 +708,14 @@ where
         &self,
         address: FastPayAddress,
         timeout_after_quorum: Duration,
-    ) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
-        // First get a map of all objects at one authority holds when at
-        // least a quorum of authorities is contacted.
+    ) -> Result<
+        (
+            Vec<(Object, Option<CertifiedOrder>)>,
+            Vec<(ObjectRef, Option<CertifiedOrder>)>,
+        ),
+        FastPayError,
+    > {
+        // First get a map of all objects at least a quorum of authorities think we hold.
         let (object_map, _authority_list) = self
             .get_all_owned_objects(address, timeout_after_quorum)
             .await?;
@@ -1205,6 +1218,8 @@ where
             .map(|(responses, _)| responses)
     }
 
+    /*
+
     pub async fn request_certificates_from_authority(
         &self,
         known_sequence_numbers_map: BTreeMap<(ObjectID, SequenceNumber), HashSet<SequenceNumber>>,
@@ -1233,6 +1248,7 @@ where
         }
         Ok(sent_certificates)
     }
+    */
 
     pub async fn execute_transaction(
         &self,
@@ -1269,6 +1285,8 @@ where
         Ok(new_sent_certificate)
     }
 
+    /*
+
     // TODO: This is incomplete at the moment.
     // A complete algorithm is being introduced in
     // https://github.com/MystenLabs/fastnft/pull/336.
@@ -1296,6 +1314,8 @@ where
         }
         Err(FastPayError::ErrorWhileRequestingInformation)
     }
+
+    */
 
     pub async fn get_object_info_execute(
         &mut self,
