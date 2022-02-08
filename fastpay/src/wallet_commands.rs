@@ -9,7 +9,7 @@ use fastx_types::base_types::{
     PublicKeyBytes,
 };
 use fastx_types::committee::Committee;
-use fastx_types::messages::{ExecutionStatus, ObjectInfoRequest, OrderEffects};
+use fastx_types::messages::{ExecutionStatus, ObjectInfoRequest, OrderEffects, OrderInfoResponse};
 
 use crate::utils::Config;
 use fastx_types::error::FastPayError;
@@ -190,7 +190,7 @@ impl WalletCommands {
                     );
                 }
 
-                let call_ret = client_state
+                let (cert, resp) = client_state
                     .move_call(
                         package_obj_ref,
                         module.to_owned(),
@@ -202,8 +202,10 @@ impl WalletCommands {
                         *gas_budget,
                     )
                     .await?;
-                println!("Cert: {:?}", call_ret.0);
-                show_object_effects(call_ret.1);
+                println!("Cert: {:?}", cert);
+                if let Some(effects) = resp.signed_effects {
+                    show_object_effects(effects.effects);
+                }
             }
 
             WalletCommands::Transfer { to, object_id, gas } => {
@@ -301,14 +303,23 @@ async fn publish(
     let pub_resp = client_state.publish(path, gas_obj_ref).await;
 
     match pub_resp {
-        Ok(resp) => {
-            if resp.1.status != ExecutionStatus::Success {
-                error!("Error publishing module: {:#?}", resp.1.status);
+        Ok((
+            _,
+            OrderInfoResponse {
+                signed_effects: Some(signed_effect),
+                ..
+            },
+        )) => {
+            if signed_effect.effects.status != ExecutionStatus::Success {
+                error!(
+                    "Error publishing module: {:#?}",
+                    signed_effect.effects.status
+                );
             }
-            let (_, effects) = resp;
-            show_object_effects(effects);
+            show_object_effects(signed_effect.effects);
         }
         Err(err) => error!("{:#?}", err),
+        _ => error!("Unexpected publish response"),
     }
 }
 
