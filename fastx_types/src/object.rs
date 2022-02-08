@@ -7,6 +7,7 @@ use serde_with::{serde_as, Bytes};
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 
+use crate::error::FastPayError;
 use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 
@@ -317,6 +318,30 @@ impl Object {
             owner: Authenticator::Address(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
+        }
+    }
+}
+
+pub enum ObjectRead {
+    NotExists(ObjectID),
+    Exists(ObjectRef, Object),
+    Deleted(ObjectRef),
+}
+
+impl ObjectRead {
+    pub fn object(&self) -> Result<&Object, FastPayError> {
+        match &self {
+            ObjectRead::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
+            ObjectRead::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
+            ObjectRead::Exists(_, o) => Ok(o),
+        }
+    }
+
+    pub fn reference(&self) -> Result<ObjectRef, FastPayError> {
+        match &self {
+            ObjectRead::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
+            ObjectRead::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
+            ObjectRead::Exists(oref, _) => Ok(*oref),
         }
     }
 }

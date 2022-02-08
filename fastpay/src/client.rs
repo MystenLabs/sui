@@ -10,7 +10,7 @@ use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*
 use move_core_types::transaction_argument::convert_txn_args;
 
 use bytes::Bytes;
-use fastx_types::object::Object;
+use fastx_types::object::{Object, ObjectRead};
 use futures::stream::StreamExt;
 use std::{
     collections::{BTreeMap, HashSet},

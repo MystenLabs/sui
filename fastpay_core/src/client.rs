@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
-    object::Object,
+    object::ObjectRead,
 };
 use futures::future;
 use itertools::Itertools;
@@ -47,30 +47,6 @@ pub struct ClientState<AuthorityAPI> {
     authorities: AuthorityAggregator<AuthorityAPI>,
     /// Persistent store for client
     store: ClientStore,
-}
-
-pub enum ObjectRead {
-    NotExists(ObjectID),
-    Exists(ObjectRef, Object),
-    Deleted(ObjectRef),
-}
-
-impl ObjectRead {
-    pub fn object(&self) -> Result<&Object, FastPayError> {
-        match &self {
-            ObjectRead::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
-            ObjectRead::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
-            ObjectRead::Exists(_, o) => Ok(o),
-        }
-    }
-
-    pub fn reference(&self) -> Result<ObjectRef, FastPayError> {
-        match &self {
-            ObjectRead::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
-            ObjectRead::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
-            ObjectRead::Exists(oref, _) => Ok(*oref),
-        }
-    }
 }
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
@@ -608,21 +584,7 @@ where
     }
 
     async fn get_object_info(&mut self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
-        let info = self
-            .authorities
-            .get_object_info_execute(ObjectInfoRequest::from(object_id))
-            .await?;
-
-        if let Some(object_ref) = info.requested_object_reference {
-            if let Some(object_and_lock) = info.object_and_lock {
-                Ok(ObjectRead::Exists(object_ref, object_and_lock.object))
-            } else {
-                // Note: check the digest is for deleted?
-                Ok(ObjectRead::Deleted(object_ref))
-            }
-        } else {
-            Ok(ObjectRead::NotExists(object_id))
-        }
+        self.authorities.get_object_info_execute(object_id).await
     }
 
     async fn get_owned_objects(&self) -> Vec<ObjectID> {

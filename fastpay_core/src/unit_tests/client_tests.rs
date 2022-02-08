@@ -5,7 +5,7 @@
 use super::*;
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::client::client_store::ClientStore;
-use crate::client::{Client, ClientState, ObjectRead};
+use crate::client::{Client, ClientState};
 use async_trait::async_trait;
 use fastx_types::object::{Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use futures::lock::Mutex;

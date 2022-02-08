@@ -3,7 +3,7 @@
 
 use crate::authority_client::AuthorityAPI;
 
-use fastx_types::object::Object;
+use fastx_types::object::{Object, ObjectRead};
 use fastx_types::{
     base_types::*,
     committee::Committee,
@@ -1013,19 +1013,47 @@ where
 
     pub async fn get_object_info_execute(
         &mut self,
-        object_info_req: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, anyhow::Error> {
-        let votes = self
-            .communicate_with_quorum(|_, client| {
-                let req = object_info_req.clone();
-                Box::pin(async move { client.handle_object_info_request(req).await })
-            })
+        object_id: ObjectID,
+    ) -> Result<ObjectRead, anyhow::Error> {
+        let (object_map, cert_map) = self
+            .get_object_by_id(object_id, AUTHORITY_REQUEST_TIMEOUT)
             .await?;
+        let mut object_ref_stack: Vec<_> = object_map.into_iter().collect();
 
-        votes
-            .get(0)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("No valid confirmation order votes"))
+        while let Some(((obj_ref, tx_digest), (obj_option, authorities))) = object_ref_stack.pop() {
+            let stake: usize = authorities
+                .iter()
+                .map(|(name, _)| self.committee.weight(name))
+                .sum();
+            if stake >= self.committee.validity_threshold() {
+                if obj_option.is_none() {
+                    return Ok(ObjectRead::Deleted(obj_ref));
+                } else {
+                    return Ok(ObjectRead::Exists(obj_ref, obj_option.unwrap()));
+                    // safe due to check
+                }
+            } else {
+                if cert_map.contains_key(&tx_digest) {
+                    if let Ok(_effects) = self
+                        .process_certificate(
+                            cert_map[&tx_digest].clone(),
+                            AUTHORITY_REQUEST_TIMEOUT,
+                        )
+                        .await
+                    {
+                        // NOTE: here we should validate the object is correct from the effects
+                        if obj_option.is_none() {
+                            return Ok(ObjectRead::Deleted(obj_ref));
+                        } else {
+                            return Ok(ObjectRead::Exists(obj_ref, obj_option.unwrap()));
+                            // safe due to check
+                        }
+                    }
+                }
+            }
+        }
+
+        return Ok(ObjectRead::NotExists(object_id));
     }
 
     /// Given a list of object refs, download the objects.
