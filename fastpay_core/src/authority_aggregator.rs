@@ -951,52 +951,6 @@ where
         (obj.0.as_ref().unwrap().owner, top_ref.0 .1)
     }
 
-    /// Execute a sequence of actions in parallel for a quorum of authorities.
-    async fn communicate_with_quorum<'a, V, F>(&'a self, execute: F) -> Result<Vec<V>, FastPayError>
-    where
-        F: Fn(AuthorityName, &'a A) -> AsyncResult<'a, V, FastPayError> + Clone,
-    {
-        let committee = &self.committee;
-        let authority_clients = &self.authority_clients;
-        let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter()
-            .map(|(name, client)| {
-                let execute = execute.clone();
-                async move { (*name, execute(*name, client).await) }
-            })
-            .collect();
-
-        let mut values = Vec::new();
-        let mut value_score = 0;
-        let mut error_scores = HashMap::new();
-        while let Some((name, result)) = responses.next().await {
-            match result {
-                Ok(value) => {
-                    values.push(value);
-                    value_score += committee.weight(&name);
-                    if value_score >= committee.quorum_threshold() {
-                        // Success!
-                        return Ok(values);
-                    }
-                }
-                Err(err) => {
-                    let entry = error_scores.entry(err.clone()).or_insert(0);
-                    *entry += committee.weight(&name);
-                    if *entry >= committee.validity_threshold() {
-                        // At least one honest node returned this error.
-                        // No quorum can be reached, so return early.
-                        return Err(FastPayError::QuorumNotReached {
-                            errors: error_scores.into_keys().collect(),
-                        });
-                    }
-                }
-            }
-        }
-        Err(FastPayError::QuorumNotReached {
-            errors: error_scores.into_keys().collect(),
-        })
-    }
-
     pub async fn execute_transaction(
         &self,
         order: &Order,
