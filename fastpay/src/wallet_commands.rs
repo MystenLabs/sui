@@ -1,3 +1,5 @@
+// Copyright (c) Mysten Labs
+// SPDX-License-Identifier: Apache-2.0
 use crate::config::{AccountInfo, AuthorityInfo, WalletConfig};
 use fastpay_core::authority_client::AuthorityClient;
 use fastpay_core::client::{Client, ClientState};
@@ -9,6 +11,7 @@ use fastx_types::base_types::{
 use fastx_types::committee::Committee;
 use fastx_types::messages::{ExecutionStatus, ObjectInfoRequest, OrderEffects};
 
+use crate::utils::Config;
 use fastx_types::error::FastPayError;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
@@ -276,20 +279,7 @@ async fn get_object_info(
         .unwrap()
         .object()
     {
-        println!("Owner: {:#?}", object.owner);
-        println!("Version: {:#?}", object.version().value());
-        println!("ID: {:#?}", object.id());
-        println!("Readonly: {:#?}", object.is_read_only());
-        println!(
-            "Type: {:#?}",
-            object
-                .data
-                .type_()
-                .map_or("Type Unwrap Failed".to_owned(), |type_| type_
-                    .module
-                    .as_ident_str()
-                    .to_string())
-        );
+        println!("{}", object);
         if deep {
             println!("Full Info: {:#?}", object);
         }

@@ -2,4 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod config;
+pub mod shell;
+pub mod utils;
 pub mod wallet_commands;

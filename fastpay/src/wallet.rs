@@ -1,11 +1,11 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 use async_trait::async_trait;
 use colored::Colorize;
-use fastpay::config::*;
+use fastpay::config::WalletConfig;
+use fastpay::shell::{AsyncHandler, CommandStructure, Shell};
+use fastpay::utils::Config;
 use fastpay::wallet_commands::*;
-use shellfish::{AsyncHandler, Command, Shell};
-use std::collections::HashMap;
 use std::io;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
@@ -36,7 +36,7 @@ struct ClientOpt {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), anyhow::Error> {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let subscriber_builder =
         tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
@@ -74,14 +74,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Welcome to the FastX interactive shell.");
         println!();
 
-        app.settings(&[AppSettings::NoBinaryName]);
-
         let mut shell = Shell {
             prompt: "fastx>-$ ",
-            commands: HashMap::new(),
             state: context,
-            handler: ClientCommandHandler(),
+            handler: ClientCommandHandler,
             description: String::new(),
+            command: CommandStructure::from_clap(&app),
         };
         shell.run_async().await?;
     } else if let Some(mut cmd) = options.cmd {
@@ -90,29 +88,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-struct ClientCommandHandler();
+struct ClientCommandHandler;
 
 #[async_trait]
 impl AsyncHandler<WalletContext> for ClientCommandHandler {
-    async fn handle_async(
-        &self,
-        args: Vec<String>,
-        _: &HashMap<&str, Command<WalletContext>>,
-        context: &mut WalletContext,
-        _: &str,
-    ) -> bool {
-        // do nothing if line is empty
-        if args.is_empty() {
-            return false;
-        }
-
-        if let Some(arg) = args.get(0) {
-            if let "quit" | "exit" = arg.as_str() {
-                println!("Bye!");
-                return true;
-            }
-        };
-
+    async fn handle_async(&self, args: Vec<String>, context: &mut WalletContext, _: &str) -> bool {
         let command: Result<WalletCommands, _> = WalletCommands::from_iter_safe(args);
         match command {
             Ok(mut cmd) => {
