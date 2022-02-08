@@ -51,7 +51,7 @@ where
     bincode::serialize_into(writer, msg).map_err(|err| format_err!("{}", err))
 }
 
-fn serialize<T>(msg: &T) -> Vec<u8>
+pub fn serialize<T>(msg: &T) -> Vec<u8>
 where
     T: Serialize,
 {

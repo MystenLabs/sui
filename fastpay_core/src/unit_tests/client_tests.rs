@@ -2522,7 +2522,7 @@ async fn test_client_store() {
     // Test with client
     // Init the states
     let (authority_clients, committee) = init_local_authorities(4).await;
-    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let client1 = make_client(authority_clients, committee);
 
     // Check that addr and secret are stored
     assert_eq!(
