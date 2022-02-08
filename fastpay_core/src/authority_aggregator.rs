@@ -21,8 +21,8 @@ use tokio::time::timeout;
 
 // TODO: Make timeout duration configurable.
 const AUTHORITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
-
 const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
+pub const DEFAULT_RETRIES: usize = 4;
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -678,7 +678,7 @@ where
                         ConfirmationOrder::new(cert.clone()),
                         name,
                         timeout_after_quorum,
-                        3,
+                        DEFAULT_RETRIES,
                     )
                     .await;
 
@@ -788,7 +788,7 @@ where
                                 ..
                             }) => {
                                 state.signatures.push((name, inner_signed_order.signature));
-                                state.good_stake += weight; // This is the good_stake counter.
+                                state.good_stake += weight;
                                 if state.good_stake >= threshold {
                                     state.certificate = Some(CertifiedOrder {
                                         order: order_ref.clone(),
@@ -879,7 +879,7 @@ where
                                 ConfirmationOrder::new(cert_ref.clone()),
                                 _name,
                                 timeout_after_quorum,
-                                3,
+                                DEFAULT_RETRIES,
                             )
                             .await?;
 
@@ -930,9 +930,9 @@ where
 
         // Check that one effects structure has more than 2f votes,
         // and return it.
-        for (stake, effects) in state.effects_map.values() {
-            if stake >= &threshold {
-                return Ok(effects.clone());
+        for (stake, effects) in state.effects_map.into_values() {
+            if stake >= threshold {
+                return Ok(effects);
             }
         }
 

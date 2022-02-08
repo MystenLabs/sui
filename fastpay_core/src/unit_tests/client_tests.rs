@@ -1624,7 +1624,7 @@ async fn test_move_calls_chain_many_delete_authority_auto_synchronization() {
             ConfirmationOrder::new(last_certificate),
             authorities[3].0,
             Duration::from_millis(1000), // ms
-            2,                           // retry
+            DEFAULT_RETRIES,             // retry
         )
         .await;
 
