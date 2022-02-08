@@ -51,8 +51,6 @@ pub struct ClientState<AuthorityAPI> {
     store: ClientStore,
 }
 
-unsafe impl<AuthorityAPI> Sync for ClientState<AuthorityAPI> {}
-
 // Operations are considered successful when they successfully reach a quorum of authorities.
 #[async_trait]
 pub trait Client {
