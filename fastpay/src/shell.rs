@@ -69,10 +69,6 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                         continue 'shell;
                     };
                     // safe to unwrap with the above is_empty check.
-                    if *line.first().unwrap() == "clear" {
-                        line_editor.clear_screen()?;
-                        continue 'shell;
-                    };
                     if *line.first().unwrap() == "quit" || *line.first().unwrap() == "exit" {
                         println!("Bye!");
                         break 'shell;
@@ -151,7 +147,7 @@ impl Completer for ShellHelper {
     fn complete(
         &self,
         line: &str,
-        pos: usize,
+        _pos: usize,
         _ctx: &Context<'_>,
     ) -> Result<(usize, Vec<Self::Candidate>), rustyline::error::ReadlineError> {
         let line = format!("{}_", line);
@@ -161,19 +157,19 @@ impl Completer for ShellHelper {
         last_token.pop();
 
         let mut command = &self.command;
-
+        let mut previous_tokens = Vec::new();
         for tok in tokens {
             let next_cmd = command.get_child(tok);
-            if next_cmd.is_none() {
-                return Ok((pos, vec![]));
+            if let Some(next_command) = next_cmd {
+                command = next_command;
             }
-            command = next_cmd.unwrap();
+            previous_tokens.push(tok.to_string());
         }
 
         let candidates = command
             .completions
             .iter()
-            .filter(|string| string.starts_with(&last_token))
+            .filter(|string| string.starts_with(&last_token) && !previous_tokens.contains(*string))
             .cloned()
             .collect::<Vec<_>>();
 
