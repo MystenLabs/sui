@@ -260,18 +260,18 @@ impl Completer for FastXCompleter {
 
         let mut command = &self.command;
 
-        for tok in tokens {
-            let next_cmd = command.get_child(tok);
-            if next_cmd.is_none() {
-                return Vec::new();
+        let mut previous_tokens = Vec::new();
+        for token in tokens {
+            if let Some(next_command) = command.get_child(token) {
+                command = next_command;
             }
-            command = next_cmd.unwrap();
+            previous_tokens.push(token.to_string());
         }
 
         let mut candidates = command
             .completions
             .iter()
-            .filter(|string| string.starts_with(&last_token))
+            .filter(|string| string.starts_with(&last_token) && !previous_tokens.contains(*string))
             .cloned()
             .collect::<Vec<_>>();
 
