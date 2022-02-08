@@ -710,7 +710,7 @@ where
     }
 
     async fn sync_client_state(&mut self) -> Result<AuthorityName, anyhow::Error> {
-        if !self.store.pending_orders.is_empty()? {
+        if !self.store.pending_orders.is_empty() {
             // Finish executing the previous orders
             self.try_complete_pending_orders().await?;
         }
