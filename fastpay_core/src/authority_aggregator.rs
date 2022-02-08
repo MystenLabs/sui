@@ -737,8 +737,8 @@ where
             .sync_all_given_objects(&required_ids, timeout_after_quorum)
             .await?;
 
-        // TODO: check here that the latest versions necessary are available, AND that
-        // no newer versions are available.
+        // NOTE: Check here that the latest versions necessary are available, AND that
+        // no newer versions are available, or deleted.
 
         let _required_id_version: Vec<(ObjectID, SequenceNumber)> = order
             .input_objects()
