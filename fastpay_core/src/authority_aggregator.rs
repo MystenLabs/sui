@@ -829,43 +829,63 @@ where
         })
     }
 
-    /// Broadcast missing confirmation orders and invoke handle_order on each authority client.
-    async fn broadcast_and_handle_order(
+    /// Broadcast transaction order on each authority client.
+    async fn broadcast_tx_order(
         &self,
         order: Order,
-    ) -> Result<(Vec<(CertifiedOrder, OrderInfoResponse)>, CertifiedOrder), anyhow::Error> {
+    ) -> Result<(OrderInfoResponse, CertifiedOrder), anyhow::Error> {
         let committee = self.committee.clone();
-        let (responses, votes) = self
+        // We are not broadcasting any confirmation orders, so certificates_to_broadcast vec is empty
+        let (_confirmation_responses, order_votes) = self
             .broadcast_and_execute(Vec::new(), |name, authority| {
                 let order = order.clone();
                 let committee = committee.clone();
                 Box::pin(async move {
                     match authority.handle_order(order).await {
-                        Ok(OrderInfoResponse {
-                            signed_order: Some(inner_signed_order),
-                            ..
-                        }) => {
-                            fp_ensure!(
-                                inner_signed_order.authority == name,
-                                FastPayError::ErrorWhileProcessingTransferOrder
-                            );
-                            inner_signed_order.check(&committee)?;
-                            Ok((inner_signed_order.authority, inner_signed_order.signature))
+                        // Check if the response is okay
+                        Ok(response) =>
+                        // Verify we have a signed order
+                        {
+                            match response.clone().signed_order {
+                                Some(inner_signed_order) => {
+                                    fp_ensure!(
+                                        inner_signed_order.authority == name,
+                                        FastPayError::ErrorWhileProcessingTransactionOrder {
+                                            err: "Signed by unexpected authority".to_string()
+                                        }
+                                    );
+                                    inner_signed_order.check(&committee)?;
+                                    Ok(response)
+                                }
+                                None => Err(FastPayError::ErrorWhileProcessingTransactionOrder {
+                                    err: "Invalid order response".to_string(),
+                                }),
+                            }
                         }
                         Err(err) => Err(err),
-                        _ => Err(FastPayError::ErrorWhileProcessingTransferOrder),
                     }
                 })
             })
             .await?;
-        let certificate = CertifiedOrder {
-            order,
-            signatures: votes,
-        };
+        // Collate the signatures
+        // If we made it here, values are safe
+        let signatures = order_votes
+            .iter()
+            .map(|vote| {
+                (
+                    vote.signed_order.as_ref().unwrap().authority,
+                    vote.signed_order.as_ref().unwrap().signature,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let certificate = CertifiedOrder { order, signatures };
         // Certificate is valid because
         // * `communicate_with_quorum` ensured a sufficient "weight" of (non-error) answers were returned by authorities.
         // * each answer is a vote signed by the expected authority.
-        Ok((responses, certificate))
+
+        // Assume all responses are same. Pick first
+        Ok((order_votes.get(0).unwrap().clone(), certificate))
     }
 
     /// Broadcast missing confirmation orders and execute provided authority action on each authority.
@@ -880,7 +900,7 @@ where
     ) -> Result<(Vec<(CertifiedOrder, OrderInfoResponse)>, Vec<V>), anyhow::Error>
     where
         F: Fn(AuthorityName, &'a A) -> AsyncResult<'a, V, FastPayError> + Send + Sync + Copy,
-        V: Copy,
+        V: Clone,
     {
         let result = self
             .communicate_with_quorum(|name, client| {
@@ -900,7 +920,7 @@ where
             })
             .await?;
 
-        let action_results = result.iter().map(|(_, result)| *result).collect();
+        let action_results = result.iter().map(|(_, result)| result.clone()).collect();
 
         // Assume all responses are the same, pick the first one.
         let order_response = result
@@ -1024,7 +1044,7 @@ where
     ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
         let new_certificate = self.execute_transaction_without_confirmation(order).await?;
 
-        // Confirm last transfer certificate if needed.
+        // Confirm transfer certificate if specified.
         let responses = self
             .broadcast_confirmation_orders(vec![new_certificate.clone()])
             .await?;
@@ -1038,29 +1058,16 @@ where
         Ok((new_certificate, response))
     }
 
-    /// Exposing `execute_transaction_without_confirmation` as a public API
-    /// so that it can be called by `transfer_to_fastx_unsafe_unconfirmed`.
-    /// This function alone does not properly lock/unlock pending orders,
-    /// and calls to it should be avoided unless absolutely necessary.
-    /// And caller will need to properly lock/unlock pending orders.
-    pub async fn execute_transaction_without_confirmation_unsafe(
-        &self,
-        order: &Order,
-    ) -> Result<CertifiedOrder, anyhow::Error> {
-        self.execute_transaction_without_confirmation(order).await
-    }
-
     /// Execute (or retry) an order without confirmation. Update local object states using newly created certificate.
     async fn execute_transaction_without_confirmation(
         &self,
         order: &Order,
     ) -> Result<CertifiedOrder, anyhow::Error> {
-        let result = self.broadcast_and_handle_order(order.clone()).await;
+        let result = self.broadcast_tx_order(order.clone()).await;
 
-        // order_info_response contains response from broadcasting old unconfirmed order, if any.
-        let (_order_info_responses, new_sent_certificate) = result?;
+        let (_, new_sent_certificate) = result?;
         assert_eq!(&new_sent_certificate.order, order);
-        // TODO: Verify that we don't need to update client objects here based on _order_info_responses,
+        // TODO: Verify that we don't need to update client objects here based on order_info_responses,
         // but can do it at the caller site.
 
         Ok(new_sent_certificate)
