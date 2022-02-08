@@ -79,7 +79,7 @@ async fn main() -> Result<(), anyhow::Error> {
             state: context,
             handler: ClientCommandHandler,
             description: String::new(),
-            commands: CommandStructure::from_clap(&app),
+            command: CommandStructure::from_clap(&app),
         };
         shell.run_async().await?;
     } else if let Some(mut cmd) = options.cmd {

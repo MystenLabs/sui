@@ -3,13 +3,13 @@
 
 use async_trait::async_trait;
 use colored::Colorize;
-use crossterm::event::{KeyCode, KeyModifiers};
-use reedline::{
-    default_emacs_keybindings, ComplationActionHandler, Completer, DefaultCompletionActionHandler,
-    Emacs, Prompt, PromptEditMode, PromptHistorySearch, PromptHistorySearchStatus, Reedline,
-    ReedlineEvent, Signal, Span,
-};
-use std::borrow::Cow;
+use rustyline::completion::{Completer, Pair};
+use rustyline::error::ReadlineError;
+use rustyline::highlight::Highlighter;
+use rustyline::hint::Hinter;
+use rustyline::validate::Validator;
+use rustyline::{Config, Context, Editor};
+use rustyline_derive::Helper;
 use std::fmt::Display;
 use std::io;
 use std::io::Write;
@@ -21,47 +21,44 @@ pub struct Shell<P: Display, S, H> {
     pub state: S,
     pub handler: H,
     pub description: String,
-    pub commands: CommandStructure,
+    pub command: CommandStructure,
 }
 
 impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
     pub async fn run_async(&mut self) -> Result<(), anyhow::Error> {
-        let mut keybindings = default_emacs_keybindings();
-        keybindings.add_binding(
-            KeyModifiers::CONTROL,
-            KeyCode::Char('d'),
-            ReedlineEvent::CtrlD,
-        );
-        keybindings.add_binding(
-            KeyModifiers::CONTROL,
-            KeyCode::Char('c'),
-            ReedlineEvent::CtrlC,
-        );
+        let config = Config::builder()
+            .auto_add_history(true)
+            .history_ignore_space(true)
+            .history_ignore_dups(true)
+            .build();
 
-        let mut line_editor = Reedline::create()?
-            .with_edit_mode(Box::new(Emacs::new(keybindings)))
-            .with_completion_action_handler(self.get_competition_handler());
+        let mut rl = Editor::with_config(config);
+
+        let mut command = self.command.clone();
+        let help = CommandStructure {
+            name: "help".to_string(),
+            completions: command.completions.clone(),
+            children: vec![],
+        };
+        command.children.push(help);
+        command
+            .completions
+            .extend(["help".to_string(), "exit".to_string(), "quit".to_string()]);
+
+        rl.set_helper(Some(ShellHelper { command }));
 
         let mut stdout = io::stdout();
-        let prompt = FastXPrompt {
-            prompt_indicator: "fastx>-$ ".to_string(),
-        };
 
         'shell: loop {
+            print!("{}", self.prompt);
             stdout.flush()?;
+
             // Read a line
-            let sig = line_editor.read_line(&prompt)?;
-            let line = match sig {
-                Signal::CtrlD | Signal::CtrlC => {
-                    let _ = line_editor.print_crlf();
-                    println!("Bye!");
-                    break 'shell;
-                }
-                Signal::CtrlL => {
-                    line_editor.clear_screen()?;
-                    continue 'shell;
-                }
-                Signal::Success(buffer) => buffer,
+            let readline = rl.readline(&self.prompt.to_string());
+            let line = match readline {
+                Ok(rl_line) => rl_line,
+                Err(ReadlineError::Interrupted | ReadlineError::Eof) => break 'shell,
+                Err(err) => return Err(err.into()),
             };
 
             // Runs the line
@@ -134,26 +131,62 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
         }
         Ok(vec)
     }
+}
 
-    fn get_competition_handler(&self) -> Box<dyn ComplationActionHandler> {
-        let mut command = self.commands.clone();
-        let help = CommandStructure {
-            name: "help".to_string(),
-            completions: command.completions.clone(),
-            children: vec![],
-        };
-        command.children.push(help);
-        command.completions.extend([
-            "help".to_string(),
-            "exit".to_string(),
-            "quit".to_string(),
-            "clear".to_string(),
-        ]);
+#[derive(Helper)]
+struct ShellHelper {
+    pub command: CommandStructure,
+}
 
-        Box::new(
-            DefaultCompletionActionHandler::default()
-                .with_completer(Box::new(FastXCompleter { command })),
-        )
+impl Hinter for ShellHelper {
+    type Hint = String;
+}
+
+impl Highlighter for ShellHelper {}
+
+impl Validator for ShellHelper {}
+
+impl Completer for ShellHelper {
+    type Candidate = Pair;
+    fn complete(
+        &self,
+        line: &str,
+        pos: usize,
+        _ctx: &Context<'_>,
+    ) -> Result<(usize, Vec<Self::Candidate>), rustyline::error::ReadlineError> {
+        let line = format!("{}_", line);
+        // split line
+        let mut tokens = line.split_whitespace();
+        let mut last_token = tokens.next_back().unwrap().to_string();
+        last_token.pop();
+
+        let mut command = &self.command;
+
+        for tok in tokens {
+            let next_cmd = command.get_child(tok);
+            if next_cmd.is_none() {
+                return Ok((pos, vec![]));
+            }
+            command = next_cmd.unwrap();
+        }
+
+        let candidates = command
+            .completions
+            .iter()
+            .filter(|string| string.starts_with(&last_token))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        Ok((
+            line.len() - last_token.len() - 1,
+            candidates
+                .iter()
+                .map(|cmd| Pair {
+                    display: cmd.to_string(),
+                    replacement: cmd.to_string(),
+                })
+                .collect(),
+        ))
     }
 }
 
@@ -211,77 +244,4 @@ impl CommandStructure {
 #[async_trait]
 pub trait AsyncHandler<T: Send> {
     async fn handle_async(&self, args: Vec<String>, state: &mut T, description: &str) -> bool;
-}
-
-pub struct FastXPrompt {
-    prompt_indicator: String,
-}
-
-impl Prompt for FastXPrompt {
-    fn render_prompt(&self, _: usize) -> Cow<str> {
-        "".into()
-    }
-
-    fn render_prompt_indicator(&self, _: PromptEditMode) -> Cow<str> {
-        let prompt = &*self.prompt_indicator;
-        prompt.into()
-    }
-
-    fn render_prompt_multiline_indicator(&self) -> Cow<str> {
-        Cow::Borrowed(">")
-    }
-
-    fn render_prompt_history_search_indicator(
-        &self,
-        history_search: PromptHistorySearch,
-    ) -> Cow<str> {
-        let prefix = match history_search.status {
-            PromptHistorySearchStatus::Passing => "",
-            PromptHistorySearchStatus::Failing => "failing ",
-        };
-        Cow::Owned(format!(
-            "({}reverse-search: {})",
-            prefix, history_search.term
-        ))
-    }
-}
-
-pub struct FastXCompleter {
-    pub command: CommandStructure,
-}
-
-impl Completer for FastXCompleter {
-    fn complete(&self, line: &str, pos: usize) -> Vec<(Span, String)> {
-        let line = format!("{}_", line);
-        // split line
-        let mut tokens = line.split_whitespace();
-        let mut last_token = tokens.next_back().unwrap().to_string();
-        last_token.pop();
-
-        let mut command = &self.command;
-
-        let mut previous_tokens = Vec::new();
-        for token in tokens {
-            if let Some(next_command) = command.get_child(token) {
-                command = next_command;
-            }
-            previous_tokens.push(token.to_string());
-        }
-
-        let mut candidates = command
-            .completions
-            .iter()
-            .filter(|string| string.starts_with(&last_token) && !previous_tokens.contains(*string))
-            .cloned()
-            .collect::<Vec<_>>();
-
-        candidates.sort();
-
-        let start = line.len() - last_token.len() - 1;
-
-        candidates
-            .iter()
-            .map(|cmd| (Span::new(start, pos), cmd.to_string()))
-            .collect::<Vec<_>>()
-    }
 }
