@@ -19,6 +19,7 @@ use move_core_types::{
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
+    pin::Pin,
     sync::Arc,
 };
 
@@ -32,6 +33,14 @@ use temporary_store::AuthorityTemporaryStore;
 mod authority_store;
 pub use authority_store::AuthorityStore;
 
+/// a Trait object for `signature::Signer` that is:
+/// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
+/// - Sync, i.e. can be safely shared between threads.
+///
+/// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
+///
+type StableSyncSigner = Pin<Box<dyn signature::Signer<ed25519_dalek::Signature> + Send + Sync>>;
+
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -39,7 +48,7 @@ pub struct AuthorityState {
     /// Committee of this FastPay instance.
     pub committee: Committee,
     /// The signature key of the authority.
-    pub secret: KeyPair,
+    pub secret: StableSyncSigner,
 
     /// Move native functions that are available to invoke
     _native_functions: NativeFunctionTable,
@@ -219,7 +228,7 @@ impl AuthorityState {
             })
             .collect();
 
-        let signed_order = SignedOrder::new(order, self.name, &self.secret);
+        let signed_order = SignedOrder::new(order, self.name, &*self.secret);
 
         // Check and write locks, to signed order, into the database
         // The call to self.set_order_lock checks the lock is not conflicting,
@@ -273,7 +282,7 @@ impl AuthorityState {
         // Update the database in an atomic manner
         let to_signed_effects = temporary_store.to_signed_effects(
             &self.name,
-            &self.secret,
+            &*self.secret,
             &transaction_digest,
             transaction_dependencies.into_iter().collect(),
             status,
@@ -453,7 +462,7 @@ impl AuthorityState {
     pub async fn new_with_genesis_modules(
         committee: Committee,
         name: AuthorityName,
-        secret: KeyPair,
+        secret: StableSyncSigner,
         store: Arc<AuthorityStore>,
     ) -> Self {
         let (genesis_modules, native_functions) = genesis::clone_genesis_data();
@@ -483,7 +492,7 @@ impl AuthorityState {
     pub fn new_without_genesis_for_testing(
         committee: Committee,
         name: AuthorityName,
-        secret: KeyPair,
+        secret: StableSyncSigner,
         store: Arc<AuthorityStore>,
     ) -> Self {
         let native_functions = NativeFunctionTable::new();

@@ -330,7 +330,7 @@ impl InputObjectKind {
 }
 
 impl Order {
-    pub fn new(kind: OrderKind, secret: &KeyPair) -> Self {
+    pub fn new(kind: OrderKind, secret: &dyn signature::Signer<ed25519_dalek::Signature>) -> Self {
         let signature = Signature::new(&kind, secret);
         Order { kind, signature }
     }
@@ -346,7 +346,7 @@ impl Order {
         object_arguments: Vec<ObjectRef>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-        secret: &KeyPair,
+        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     ) -> Self {
         let kind = OrderKind::Call(MoveCall {
             sender,
@@ -366,7 +366,7 @@ impl Order {
         sender: FastPayAddress,
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
-        secret: &KeyPair,
+        secret: &dyn signature::Signer<ed25519::Signature>,
     ) -> Self {
         let kind = OrderKind::Publish(MoveModulePublish {
             sender,
@@ -376,7 +376,10 @@ impl Order {
         Self::new(kind, secret)
     }
 
-    pub fn new_transfer(transfer: Transfer, secret: &KeyPair) -> Self {
+    pub fn new_transfer(
+        transfer: Transfer,
+        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+    ) -> Self {
         Self::new(OrderKind::Transfer(transfer), secret)
     }
 
@@ -504,7 +507,11 @@ impl Order {
 
 impl SignedOrder {
     /// Use signing key to create a signed object.
-    pub fn new(order: Order, authority: AuthorityName, secret: &KeyPair) -> Self {
+    pub fn new(
+        order: Order,
+        authority: AuthorityName,
+        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+    ) -> Self {
         let signature = Signature::new(&order.kind, secret);
         Self {
             order,

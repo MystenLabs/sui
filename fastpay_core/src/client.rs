@@ -18,8 +18,19 @@ use move_core_types::language_storage::TypeTag;
 use typed_store::rocks::open_cf;
 use typed_store::Map;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    pin::Pin,
+};
+
+/// a Trait object for `signature::Signer` that is:
+/// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
+/// - Sync, i.e. can be safely shared between threads.
+///
+/// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
+///
+type StableSyncSigner = Pin<Box<dyn signature::Signer<ed25519_dalek::Signature> + Send + Sync>>;
 
 pub mod client_store;
 use self::client_store::ClientStore;
@@ -33,12 +44,14 @@ pub struct ClientState<AuthorityAPI> {
     /// Our FastPay address.
     address: FastPayAddress,
     /// Our signature key.
-    secret: KeyPair,
+    secret: StableSyncSigner,
     /// Authority entry point.
     authorities: AuthorityAggregator<AuthorityAPI>,
     /// Persistent store for client
     store: ClientStore,
 }
+
+unsafe impl<AuthorityAPI> Sync for ClientState<AuthorityAPI> {}
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
 #[async_trait]
@@ -101,7 +114,7 @@ impl<A> ClientState<A> {
     pub fn new(
         path: PathBuf,
         address: FastPayAddress,
-        secret: KeyPair,
+        secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
@@ -594,6 +607,7 @@ where
             .object_refs
             .get(&object_id)?
             .ok_or(FastPayError::ObjectNotFound { object_id })?;
+
         let gas_payment =
             self.store
                 .object_refs
@@ -608,7 +622,7 @@ where
             recipient,
             gas_payment,
         };
-        let order = Order::new_transfer(transfer, &self.secret);
+        let order = Order::new_transfer(transfer, &*self.secret);
         let (certificate, order_info_response) = self.execute_transaction(order).await?;
 
         // remove object from local storage if the recipient is not us.
@@ -759,7 +773,7 @@ where
             object_arguments,
             pure_arguments,
             gas_budget,
-            &self.secret,
+            &*self.secret,
         );
         self.execute_transaction(move_call_order).await
     }
@@ -771,8 +785,12 @@ where
     ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
         // Try to compile the package at the given path
         let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
-        let move_publish_order =
-            Order::new_module(self.address, gas_object_ref, compiled_modules, &self.secret);
+        let move_publish_order = Order::new_module(
+            self.address,
+            gas_object_ref,
+            compiled_modules,
+            &*self.secret,
+        );
         self.execute_transaction(move_publish_order).await
     }
 

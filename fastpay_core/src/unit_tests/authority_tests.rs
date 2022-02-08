@@ -1240,7 +1240,8 @@ async fn test_authority_persist() {
     let authority = AuthorityState::new_without_genesis_for_testing(
         committee.clone(),
         authority_address,
-        authority_key.copy(),
+        // we assume that the node runner is in charge for its key -> it's ok to reopen a copy below.
+        Box::pin(authority_key.copy()),
         store,
     );
 
@@ -1265,7 +1266,7 @@ async fn test_authority_persist() {
     let authority2 = AuthorityState::new_without_genesis_for_testing(
         committee,
         authority_address,
-        authority_key,
+        Box::pin(authority_key),
         store,
     );
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
@@ -1628,8 +1629,13 @@ fn init_state_parameters() -> (Committee, PublicKeyBytes, KeyPair, Arc<Authority
 #[cfg(test)]
 async fn init_state() -> AuthorityState {
     let (committee, authority_address, authority_key, store) = init_state_parameters();
-    AuthorityState::new_with_genesis_modules(committee, authority_address, authority_key, store)
-        .await
+    AuthorityState::new_with_genesis_modules(
+        committee,
+        authority_address,
+        Box::pin(authority_key),
+        store,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -1693,7 +1699,7 @@ fn init_certified_transfer_order(
     let vote = SignedOrder::new(
         transfer_order.clone(),
         authority_state.name,
-        &authority_state.secret,
+        &*authority_state.secret,
     );
     let mut builder =
         SignatureAggregator::try_new(transfer_order, &authority_state.committee).unwrap();

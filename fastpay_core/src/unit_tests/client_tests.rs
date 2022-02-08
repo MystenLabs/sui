@@ -125,9 +125,13 @@ async fn init_local_authorities(
         opts.set_max_open_files(max_files_client_tests());
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
 
-        let state =
-            AuthorityState::new_with_genesis_modules(committee.clone(), address, secret, store)
-                .await;
+        let state = AuthorityState::new_with_genesis_modules(
+            committee.clone(),
+            address,
+            Box::pin(secret),
+            store,
+        )
+        .await;
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
@@ -164,7 +168,7 @@ fn init_local_authorities_bad_1(
         let state = AuthorityState::new_without_genesis_for_testing(
             committee.clone(),
             address,
-            secret,
+            Box::pin(secret),
             store,
         );
         clients.insert(address, LocalAuthorityClient::new(state));
@@ -178,10 +182,11 @@ fn make_client(
     committee: Committee,
 ) -> ClientState<LocalAuthorityClient> {
     let (address, secret) = get_key_pair();
+    let pb_secret = Box::pin(secret);
     ClientState::new(
         env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
         address,
-        secret,
+        pb_secret,
         committee,
         authority_clients,
         BTreeMap::new(),

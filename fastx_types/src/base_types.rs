@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 
 use ed25519_dalek as dalek;
-use ed25519_dalek::{Digest, PublicKey, Signer, Verifier};
+use ed25519_dalek::{Digest, PublicKey, Verifier};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -31,6 +31,12 @@ pub struct UserData(pub Option<[u8; 32]>);
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 #[derive(Debug)]
 pub struct KeyPair(dalek::Keypair);
+
+impl signature::Signer<ed25519::Signature> for KeyPair {
+    fn try_sign(&self, msg: &[u8]) -> Result<ed25519::Signature, ed25519::Error> {
+        self.0.try_sign(msg)
+    }
+}
 
 #[serde_as]
 #[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
@@ -466,13 +472,13 @@ where
 }
 
 impl Signature {
-    pub fn new<T>(value: &T, secret: &KeyPair) -> Self
+    pub fn new<T>(value: &T, secret: &dyn signature::Signer<ed25519_dalek::Signature>) -> Self
     where
         T: Signable<Vec<u8>>,
     {
         let mut message = Vec::new();
         value.write(&mut message);
-        let signature = secret.0.sign(&message);
+        let signature = secret.sign(&message);
         Signature(signature)
     }
 

@@ -93,7 +93,7 @@ impl AuthorityTemporaryStore {
     pub fn to_signed_effects(
         &self,
         authority_name: &AuthorityName,
-        secret: &KeyPair,
+        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
