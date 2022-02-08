@@ -2250,3 +2250,103 @@ async fn test_process_certificate() {
     let new_object_ref = client_object(&mut client1, new_ref_1.0).await.0;
     assert_eq!(SequenceNumber::from(2), new_object_ref.1);
 }
+
+#[tokio::test]
+async fn test_transfer_pending_orders() {
+    let objects: Vec<ObjectID> = (0..15).map(|_| ObjectID::random()).collect();
+    let gas_object = ObjectID::random();
+    let number_of_authorities = 4;
+
+    let mut all_objects = objects.clone();
+    all_objects.push(gas_object);
+    let authority_objects = (0..number_of_authorities)
+        .map(|_| all_objects.clone())
+        .collect();
+
+    let mut sender_state = init_local_client_state(authority_objects).await;
+    let recipient = init_local_client_state(vec![vec![]]).await.address();
+
+    let mut objects = objects.iter();
+
+    // Test 1: Normal transfer
+    let object_id = *objects.next().unwrap();
+    sender_state
+        .transfer_object(object_id, gas_object, recipient)
+        .await
+        .unwrap();
+    // Pending order should be cleared
+    assert!(sender_state.store().pending_orders.is_empty());
+
+    // Test 2: Object not known to authorities. This has no side effect
+    let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender_state.address());
+    sender_state
+        .store()
+        .object_refs
+        .insert(&obj.id(), &obj.to_object_reference())
+        .unwrap();
+    sender_state
+        .store()
+        .object_sequence_numbers
+        .insert(&obj.id(), &SequenceNumber::new())
+        .unwrap();
+    let result = sender_state
+        .transfer_object(obj.id(), gas_object, recipient)
+        .await;
+    assert!(result.is_err());
+    // assert!(matches!(result.unwrap_err().downcast_ref(),
+    //        Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::ObjectNotFound{..}, ..])));
+    // Pending order should be cleared
+    assert!(sender_state.store().pending_orders.is_empty());
+
+    // Test 3: invalid object digest. This also has no side effect
+    let object_id = *objects.next().unwrap();
+
+    // give object an incorrect object digest
+    sender_state
+        .store()
+        .object_refs
+        .insert(
+            &object_id,
+            &(object_id, SequenceNumber::new(), ObjectDigest([0; 32])),
+        )
+        .unwrap();
+
+    let result = sender_state
+        .transfer_object(object_id, gas_object, recipient)
+        .await;
+    assert!(result.is_err());
+    //assert!(matches!(result.unwrap_err().downcast_ref(),
+    //        Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::LockErrors{..}, ..])));
+
+    // Pending order should be cleared
+    assert!(sender_state.store().pending_orders.is_empty());
+
+    // Test 4: Conflicting orders touching same objects
+    let object_id = *objects.next().unwrap();
+    // Fabricate a fake pending transfer
+    let transfer = Transfer {
+        sender: sender_state.address(),
+        recipient: FastPayAddress::random_for_testing_only(),
+        object_ref: (object_id, Default::default(), ObjectDigest::new([0; 32])),
+        gas_payment: (gas_object, Default::default(), ObjectDigest::new([0; 32])),
+    };
+    // Simulate locking some objects
+    sender_state
+        .lock_pending_order_objects(&Order::new(
+            OrderKind::Transfer(transfer),
+            &get_key_pair().1,
+        ))
+        .unwrap();
+    // Try to use those objects in another order
+    let result = sender_state
+        .transfer_object(object_id, gas_object, recipient)
+        .await;
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err().downcast_ref(),
+        Some(FastPayError::ConcurrentTransactionError)
+    ));
+    // clear the pending orders
+    sender_state.store().pending_orders.clear().unwrap();
+    assert_eq!(sender_state.store().pending_orders.iter().count(), 0);
+}
