@@ -112,7 +112,6 @@ where
             // TODO: Eventually the client will store more information, and we could
             // first try to read certificates and parents from a local cache before
             // asking an authority.
-            // let input_objects = target_cert.certificate.order.input_objects();
 
             let order_info = if missing_certificates.is_empty() {
                 // Here we cover a corner case due to the nature of using consistent
@@ -186,7 +185,7 @@ where
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
-    pub async fn sync_certificate_to_authority_with_timeout(
+    async fn sync_certificate_to_authority_with_timeout(
         &self,
         cert: ConfirmationOrder,
         destination_authority: AuthorityName,
@@ -329,7 +328,7 @@ where
 
     /// Return all the information in the network about a specific object, including all versions of it
     /// as well as all certificates that lead to the versions and the authorities at that version.
-    pub async fn get_object_by_id(
+    async fn get_object_by_id(
         &self,
         object_id: ObjectID,
         timeout_after_quorum: Duration,
@@ -647,7 +646,7 @@ where
         ),
         FastPayError,
     > {
-        // First get a map of all objects at least a quorum of authorities think we hold.
+        // Contact a quorum of authorities, and return all objects they report we own.
         let (object_map, _authority_list) = self
             .get_all_owned_objects(address, timeout_after_quorum)
             .await?;

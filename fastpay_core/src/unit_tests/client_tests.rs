@@ -186,7 +186,6 @@ fn order_transfer(
     )
 }
 
-#[allow(dead_code)]
 #[cfg(test)]
 fn order_set(
     src: FastPayAddress,
@@ -806,7 +805,6 @@ async fn test_move_calls_object_create() {
 
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
-    // let order_effects = order_info_resp.signed_effects.unwrap().effects;
     // Status flag should be success
     assert_eq!(order_effects.status, ExecutionStatus::Success);
     // Nothing should be deleted during a creation
@@ -861,7 +859,6 @@ async fn test_move_calls_object_transfer() {
         .await;
 
     let (_, order_effects) = call_response.unwrap();
-    // let order_effects = order_info_resp.signed_effects.unwrap().effects;
 
     assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
@@ -903,7 +900,6 @@ async fn test_move_calls_object_transfer() {
 
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
-    // let order_effects = order_info_resp.signed_effects.unwrap().effects;
     // Status flag should be success
     assert_eq!(order_effects.status, ExecutionStatus::Success);
     // Nothing should be deleted during a transfer
@@ -1172,7 +1168,6 @@ async fn test_module_publish_and_call_good() {
     let pub_res = client1.publish(hero_path, gas_object_ref).await;
 
     let (_, published_effects) = pub_res.unwrap();
-    // let published_effects = order_info_resp.signed_effects.unwrap().effects;
 
     // Only package obj should be created
     assert_eq!(published_effects.created.len(), 1);
@@ -1288,7 +1283,6 @@ async fn test_module_publish_file_path() {
     let pub_resp = client1.publish(hero_path, gas_object_ref).await;
 
     let (_, published_effects) = pub_resp.unwrap();
-    // let published_effects = order_info_resp.signed_effects.unwrap().effects;
 
     // Only package obj should be created
     assert_eq!(published_effects.created.len(), 1);
@@ -1595,7 +1589,6 @@ async fn test_object_store() {
     let pub_res = client1.publish(hero_path, gas_object_ref).await;
 
     let (_, published_effects) = pub_res.unwrap();
-    // let published_effects = order_info_resp.signed_effects.unwrap().effects;
 
     // Only package obj should be created
     assert_eq!(published_effects.created.len(), 1);
