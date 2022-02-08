@@ -28,7 +28,6 @@ impl<C> SafeClient<C> {
         digest: TransactionDigest,
         response: &OrderInfoResponse,
     ) -> Result<(), FastPayError> {
-
         if let Some(signed_order) = &response.signed_order {
             // Check the order signature
             signed_order.check(&self.committee)?;
