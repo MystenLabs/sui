@@ -387,22 +387,6 @@ impl Order {
         self.signature.check(&self.kind, *self.sender())
     }
 
-    // TODO: support orders with multiple objects, each with their own sequence number (https://github.com/MystenLabs/fastnft/issues/8)
-    pub fn sequence_number(&self) -> SequenceNumber {
-        use OrderKind::*;
-        match &self.kind {
-            Transfer(t) => t.object_ref.1,
-            Publish(_) => SequenceNumber::new(), // modules are immutable, seq # is always 0
-            Call(c) => {
-                assert!(
-                    c.object_arguments.is_empty(),
-                    "Unimplemented: non-gas object arguments"
-                );
-                c.gas_payment.1
-            }
-        }
-    }
-
     /// Return the metadata of each of the input objects for the order.
     /// For a Move object, we attach the object reference;
     /// for a Move package, we provide the object id only since they never change on chain.
