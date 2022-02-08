@@ -137,7 +137,7 @@ pub enum FastPayError {
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error:?}.")]
     ModulePublishFailure { error: String },
-    #[error("Failed to build Move modules")]
+    #[error("Failed to build Move modules: {error:?}.")]
     ModuleBuildFailure { error: String },
     #[error("Dependent package not found on-chain: {package_id:?}")]
     DependentPackageNotFound { package_id: ObjectID },
