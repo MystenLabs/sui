@@ -265,12 +265,13 @@ impl AuthorityState {
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
         let gas_object_id = *order.gas_payment_object_id();
-        let (temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx)?;
+        let (mut temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx)?;
 
         // Remove from dependencies the generic hash
         transaction_dependencies.remove(&TransactionDigest::genesis());
 
-        // Update the database in an atomic manner
+        let unwrapped_object_ids = self.get_unwrapped_object_ids(temporary_store.written())?;
+        temporary_store.patch_unwrapped_object_version(unwrapped_object_ids);
         let to_signed_effects = temporary_store.to_signed_effects(
             &self.name,
             &self.secret,
@@ -279,6 +280,7 @@ impl AuthorityState {
             status,
             &gas_object_id,
         );
+        // Update the database in an atomic manner
         self.update_state(temporary_store, certificate, to_signed_effects)
             .await // Returns the OrderInfoResponse
     }
@@ -604,5 +606,29 @@ impl AuthorityState {
         object_id: ObjectID,
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, FastPayError> {
         self._database.get_latest_parent_entry(object_id)
+    }
+
+    /// Given all mutated objects during a transaction, return the list of objects
+    /// that were unwrapped (i.e. re-appeared after being deleted).
+    fn get_unwrapped_object_ids(
+        &self,
+        written: &BTreeMap<ObjectID, Object>,
+    ) -> Result<Vec<ObjectID>, FastPayError> {
+        // For each mutated object, we first find out whether there was a transaction
+        // that deleted this object in the past.
+        let parents = self._database.multi_get_parents(
+            &written
+                .iter()
+                .map(|(object_id, object)| (*object_id, object.version(), OBJECT_DIGEST_DELETED))
+                .collect::<Vec<_>>(),
+        )?;
+        // Filter the list of mutated objects based on whether they were deleted in the past.
+        // These objects are the unwrapped ones.
+        let filtered = written
+            .iter()
+            .zip(parents.iter())
+            .filter_map(|((object_id, _object), d)| d.map(|_| *object_id))
+            .collect();
+        Ok(filtered)
     }
 }

@@ -181,6 +181,16 @@ impl AuthorityStore {
         self.parent_sync.get(object_ref).map_err(|e| e.into())
     }
 
+    /// Batch version of `parent` function.
+    pub fn multi_get_parents(
+        &self,
+        object_refs: &[ObjectRef],
+    ) -> Result<Vec<Option<TransactionDigest>>, FastPayError> {
+        self.parent_sync
+            .multi_get(object_refs)
+            .map_err(|e| e.into())
+    }
+
     /// Returns all parents (object_ref and transaction digests) that match an object_id, at
     /// any object version, or optionally at a specific version.
     pub fn get_parent_iterator(
@@ -346,7 +356,7 @@ impl AuthorityStore {
         // Delete the old owner index entries
         write_batch = write_batch.delete_batch(&self.owner_index, old_object_owners)?;
 
-        // Index the certificate by the objects created
+        // Index the certificate by the objects mutated
         write_batch = write_batch.insert_batch(
             &self.parent_sync,
             written

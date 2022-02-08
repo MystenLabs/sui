@@ -90,6 +90,23 @@ impl AuthorityTemporaryStore {
         }
     }
 
+    /// We need to special handle objects that was deleted in the past but re-appeared.
+    /// These objects must have been wrapped into another object, and then got unwrapped.
+    /// When an object was deleted at version `v`, we added an record into `parent_sync`
+    /// with version `v+1` along with OBJECT_DIGEST_MAX. Now when the object re-appeared,
+    /// it will also have version `v+1`, leading to a violation of the invariant that any
+    /// object_id and version pair must be unique. Hence for any object that re-appear
+    /// after deletion, we force incrementing its version number again to make it `v+2`
+    /// before writing to the store.
+    pub fn patch_unwrapped_object_version(&mut self, unwrapped_object_ids: Vec<ObjectID>) {
+        for id in unwrapped_object_ids {
+            // The way we constructed `unwrapped_object_ids` guarantees it must exists
+            // in written and is a mutable move object. Safe to unwrap.
+            let object = self.written.get_mut(&id).unwrap();
+            object.data.try_as_move_mut().unwrap().increment_version();
+        }
+    }
+
     pub fn to_signed_effects(
         &self,
         authority_name: &AuthorityName,
