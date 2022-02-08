@@ -839,7 +839,6 @@ where
         certificate: CertifiedOrder,
         timeout_after_quorum: Duration,
     ) -> Result<OrderEffects, FastPayError> {
-        
         struct ProcessCertificateState {
             effects_map: HashMap<[u8; 32], (usize, OrderEffects)>,
             bad_stake: usize,
