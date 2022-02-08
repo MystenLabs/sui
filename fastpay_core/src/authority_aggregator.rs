@@ -752,18 +752,22 @@ where
         let validity = self.committee.validity_threshold();
 
         struct ProcessOrderState {
+            // The list of signatures gathered at any point
             signatures : Vec<(AuthorityName, Signature)>,
+            // A certificate if we manage to make or find one
             certificate : Option<CertifiedOrder>,
+            // Tally of stake for good vs bad responses.
             good_stake : usize,
             bad_stake : usize,
         }
 
-        let state: (
-            Vec<(AuthorityName, Signature)>,
-            Option<CertifiedOrder>,
-            usize,
-            usize,
-        ) = (vec![], None, 0, 0);
+        let state = ProcessOrderState {
+            signatures: vec![],
+            certificate: None,
+            good_stake: 0,
+            bad_stake: 0,
+        };
+
         let order_ref = &order;
         let state = self
             .quorum_map_then_reduce_with_timeout(
@@ -774,10 +778,6 @@ where
                     Box::pin(async move { client.handle_order(order_ref.clone()).await })
                 },
                 |mut state, name, weight, result| {
-                    // The state is of the form:
-                    // - [(Authority_name, Authority_signature)],
-                    // - Option<Certificate>,
-                    // - (good_stake, bad_stake)
 
                     Box::pin(async move {
                         match result {
@@ -788,7 +788,7 @@ where
                                 certified_order: Some(inner_certificate),
                                 ..
                             }) => {
-                                state.1 = Some(inner_certificate);
+                                state.certificate = Some(inner_certificate);
                             }
 
                             // If we get back a signed order, then we aggregate the
@@ -798,12 +798,12 @@ where
                                 signed_order: Some(inner_signed_order),
                                 ..
                             }) => {
-                                state.0.push((name, inner_signed_order.signature));
-                                state.2 += weight; // This is the good_stake counter.
-                                if state.2 >= threshold {
-                                    state.1 = Some(CertifiedOrder {
+                                state.signatures.push((name, inner_signed_order.signature));
+                                state.good_stake += weight; // This is the good_stake counter.
+                                if state.good_stake >= threshold {
+                                    state.certificate = Some(CertifiedOrder {
                                         order: order_ref.clone(),
-                                        signatures: state.0.clone(),
+                                        signatures: state.signatures.clone(),
                                     });
                                 }
                             }
@@ -813,8 +813,8 @@ where
                             // authorities we just stop, as there is no hope to finish.
                             _ => {
                                 // We have an error here.
-                                state.3 += weight; // This is the bad stake counter
-                                if state.3 > validity {
+                                state.bad_stake += weight; // This is the bad stake counter
+                                if state.bad_stake > validity {
                                     // Too many errors
                                     return Err(FastPayError::ErrorWhileProcessingTransferOrder);
                                 }
@@ -822,7 +822,7 @@ where
                         };
 
                         // If we have a certificate, then finish, otherwise continue.
-                        if state.1.is_some() {
+                        if state.certificate.is_some() {
                             Ok(ReduceOutput::End(state))
                         } else {
                             Ok(ReduceOutput::Continue(state))
@@ -836,7 +836,7 @@ where
 
         // If we have some certificate return it, or return an error.
         state
-            .1
+            .certificate
             .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)
     }
 
@@ -851,11 +851,21 @@ where
         certificate: CertifiedOrder,
         timeout_after_quorum: Duration,
     ) -> Result<OrderEffects, FastPayError> {
-        let state = (HashMap::new(), 0usize);
+
+        struct ProcessCertificateState {
+            effects_map : HashMap<[u8; 32], (usize, OrderEffects)>,
+            bad_stake : usize,
+        }
+
+        let state = ProcessCertificateState {
+            effects_map: HashMap::new(),
+            bad_stake: 0,
+        };
+
         let cert_ref = &certificate;
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
-        let (state, _) = self
+        let state = self
             .quorum_map_then_reduce_with_timeout(
                 state,
                 |_name, client| {
@@ -891,7 +901,7 @@ where
                             .await
                     })
                 },
-                |(mut state, mut bad_stake), _name, weight, result| {
+                |mut state, _name, weight, result| {
                     Box::pin(async move {
                         // We aggregate the effects response, until we have more than 2f
                         // and return.
@@ -901,7 +911,7 @@ where
                         }) = result
                         {
                             // Note: here we aggregate votes by the hash of the effects structure
-                            let entry = state
+                            let entry = state.effects_map
                                 .entry(sha3_hash(&inner_effects.effects))
                                 .or_insert((0usize, inner_effects.effects));
                             entry.0 += weight;
@@ -909,19 +919,19 @@ where
                             if entry.0 >= threshold {
                                 // It will set the timeout quite high.
                                 return Ok(ReduceOutput::ContinueWithTimeout(
-                                    (state, bad_stake),
+                                    state,
                                     timeout_after_quorum,
                                 ));
                             }
                         }
 
                         // If instead we have more than f bad responses, then we fail.
-                        bad_stake += weight;
-                        if bad_stake > validity {
+                        state.bad_stake += weight;
+                        if state.bad_stake > validity {
                             return Err(FastPayError::ErrorWhileRequestingCertificate);
                         }
 
-                        Ok(ReduceOutput::Continue((state, bad_stake)))
+                        Ok(ReduceOutput::Continue(state))
                     })
                 },
                 // A long timeout before we hear back from a quorum
@@ -931,7 +941,7 @@ where
 
         // Check that one effects structure has more than 2f votes,
         // and return it.
-        for (stake, effects) in state.values() {
+        for (stake, effects) in state.effects_map.values() {
             if stake >= &threshold {
                 return Ok(effects.clone());
             }

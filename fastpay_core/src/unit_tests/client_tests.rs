@@ -118,6 +118,9 @@ async fn extract_cert(
             .await
         {
             votes.push((signed.authority, signed.signature));
+            if let Some(inner_order) = order {
+                assert!(inner_order == signed.order);
+            }
             order = Some(signed.order);
         }
     }
