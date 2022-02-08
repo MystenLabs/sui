@@ -544,15 +544,8 @@ fn main() {
                 .await;
 
                 // Fetch the object info for the object
-                let obj_info_req = ObjectInfoRequest {
-                    object_id: obj_id,
-                    request_sequence_number: None,
-                };
-                if let Some(object) = client_state
-                    .get_object_info(obj_info_req)
-                    .await
-                    .unwrap()
-                    .object()
+                if let Ok(ObjectRead::Exists(_, object)) =
+                    client_state.get_object_info(obj_id).await
                 {
                     println!("Owner: {:#?}", object.owner);
                     println!("Version: {:#?}", object.version().value());
@@ -598,15 +591,12 @@ fn main() {
                 .await;
 
                 // Fetch the object info for the package
-                let package_obj_info_req = ObjectInfoRequest {
-                    object_id: config.package_obj_id,
-                    request_sequence_number: None,
-                };
-                let package_obj_info = client_state
-                    .get_object_info(package_obj_info_req)
+                let package_obj_ref = client_state
+                    .get_object_info(config.package_obj_id)
                     .await
+                    .unwrap()
+                    .reference()
                     .unwrap();
-                let package_obj_ref = package_obj_info.object().unwrap().to_object_reference();
 
                 // Fetch the object info for the gas obj
                 let gas_obj_ref = *client_state
@@ -618,18 +608,13 @@ fn main() {
                 let mut object_args_refs = Vec::new();
                 for obj_id in config.object_args_ids {
                     // Fetch the obj ref
-                    let obj_info_req = ObjectInfoRequest {
-                        object_id: obj_id,
-                        request_sequence_number: None,
-                    };
-
-                    let obj_info = client_state.get_object_info(obj_info_req).await.unwrap();
-                    object_args_refs.push(
-                        obj_info
-                            .object()
-                            .unwrap_or_else(|| panic!("Could not find object {:?}", obj_id))
-                            .to_object_reference(),
-                    );
+                    let obj_info_ref = client_state
+                        .get_object_info(obj_id)
+                        .await
+                        .unwrap()
+                        .reference()
+                        .unwrap_or_else(|_| panic!("Could not find object {:?}", obj_id));
+                    object_args_refs.push(obj_info_ref);
                 }
 
                 let pure_args = convert_txn_args(&config.pure_args);

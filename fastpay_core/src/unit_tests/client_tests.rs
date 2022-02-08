@@ -5,7 +5,7 @@
 use super::*;
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::client::client_store::ClientStore;
-use crate::client::{Client, ClientState};
+use crate::client::{Client, ClientState, ObjectRead};
 use async_trait::async_trait;
 use fastx_types::object::{Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use futures::lock::Mutex;
@@ -1058,15 +1058,12 @@ async fn test_move_calls_object_delete() {
     assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
     // Try to fetch the deleted object
-    let deleted_object_resp = client1
-        .get_object_info(ObjectInfoRequest {
-            object_id: new_obj_ref.0,
-            request_sequence_number: None,
-        })
-        .await
-        .unwrap();
+    let deleted_object_resp = client1.get_object_info(new_obj_ref.0).await.unwrap();
 
-    assert!(deleted_object_resp.object_and_lock.is_none());
+    if let ObjectRead::Deleted(_) = deleted_object_resp {
+    } else {
+        panic!("Object should be deleted.")
+    }
 }
 
 #[tokio::test]
@@ -1576,18 +1573,9 @@ async fn test_object_store_transfer() {
 
 // A helper function to make tests less verbose
 async fn client_object(client: &mut dyn Client, object_id: ObjectID) -> (ObjectRef, Object) {
-    let object = client
-        .get_object_info(ObjectInfoRequest {
-            object_id,
-            request_sequence_number: None,
-        })
-        .await
-        .unwrap()
-        .object_and_lock
-        .unwrap()
-        .object;
+    let info = client.get_object_info(object_id).await.unwrap();
 
-    (object.to_object_reference(), object)
+    (info.reference().unwrap(), info.object().unwrap().clone())
 }
 
 // A helper function to make tests less verbose

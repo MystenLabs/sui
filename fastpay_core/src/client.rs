@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
+    object::Object,
 };
 use futures::future;
 use itertools::Itertools;
@@ -49,9 +50,27 @@ pub struct ClientState<AuthorityAPI> {
 }
 
 pub enum ObjectRead {
-    NotExists,
+    NotExists(ObjectID),
     Exists(ObjectRef, Object),
     Deleted(ObjectRef),
+}
+
+impl ObjectRead {
+    pub fn object(&self) -> Result<&Object, FastPayError> {
+        match &self {
+            ObjectRead::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
+            ObjectRead::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
+            ObjectRead::Exists(_, o) => Ok(o),
+        }
+    }
+
+    pub fn reference(&self) -> Result<ObjectRef, FastPayError> {
+        match &self {
+            ObjectRead::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
+            ObjectRead::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
+            ObjectRead::Exists(oref, _) => Ok(*oref),
+        }
+    }
 }
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
@@ -93,10 +112,7 @@ pub trait Client {
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
 
     /// Get the object information
-    async fn get_object_info(
-        &mut self,
-        object_info_req: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, anyhow::Error>;
+    async fn get_object_info(&mut self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
 
     /// Get all object we own.
     async fn get_owned_objects(&self) -> Vec<ObjectID>;
@@ -253,20 +269,8 @@ where
 
     #[cfg(test)]
     pub async fn get_framework_object_ref(&mut self) -> Result<ObjectRef, anyhow::Error> {
-        let info = self
-            .get_object_info(ObjectInfoRequest {
-                object_id: FASTX_FRAMEWORK_ADDRESS,
-                request_sequence_number: None,
-            })
-            .await?;
-        let reference = info
-            .object_and_lock
-            .ok_or(FastPayError::ObjectNotFound {
-                object_id: FASTX_FRAMEWORK_ADDRESS,
-            })?
-            .object
-            .to_object_reference();
-        Ok(reference)
+        let info = self.get_object_info(FASTX_FRAMEWORK_ADDRESS).await?;
+        Ok(info.reference()?)
     }
 
     async fn execute_transaction_inner(
@@ -603,13 +607,22 @@ where
         self.execute_transaction(move_publish_order).await
     }
 
-    async fn get_object_info(
-        &mut self,
-        object_info_req: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, anyhow::Error> {
-        self.authorities
-            .get_object_info_execute(object_info_req)
-            .await
+    async fn get_object_info(&mut self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
+        let info = self
+            .authorities
+            .get_object_info_execute(ObjectInfoRequest::from(object_id))
+            .await?;
+
+        if let Some(object_ref) = info.requested_object_reference {
+            if let Some(object_and_lock) = info.object_and_lock {
+                Ok(ObjectRead::Exists(object_ref, object_and_lock.object))
+            } else {
+                // Note: check the digest is for deleted?
+                Ok(ObjectRead::Deleted(object_ref))
+            }
+        } else {
+            Ok(ObjectRead::NotExists(object_id))
+        }
     }
 
     async fn get_owned_objects(&self) -> Vec<ObjectID> {
