@@ -102,6 +102,157 @@ impl LocalAuthorityClient {
 }
 
 #[cfg(test)]
+async fn extract_cert(
+    authorities: &BTreeMap<AuthorityName, LocalAuthorityClient>,
+    commitee: &Committee,
+    transaction_digest: TransactionDigest,
+) -> CertifiedOrder {
+    let mut votes = vec![];
+    let mut order = None;
+    for authority in authorities.values() {
+        if let Ok(OrderInfoResponse {
+            signed_order: Some(signed),
+            ..
+        }) = authority
+            .handle_order_info_request(OrderInfoRequest::from(transaction_digest))
+            .await
+        {
+            votes.push((signed.authority, signed.signature));
+            if let Some(inner_order) = order {
+                assert!(inner_order == signed.order);
+            }
+            order = Some(signed.order);
+        }
+    }
+
+    let stake: usize = votes.iter().map(|(name, _)| commitee.weight(name)).sum();
+    assert!(stake >= commitee.quorum_threshold());
+
+    CertifiedOrder {
+        order: order.unwrap(),
+        signatures: votes,
+    }
+}
+
+#[cfg(test)]
+fn order_create(
+    src: FastPayAddress,
+    secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+    dest: FastPayAddress,
+    value: u64,
+    framework_obj_ref: ObjectRef,
+    gas_object_ref: ObjectRef,
+) -> Order {
+    // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+    let pure_arguments = vec![
+        value.to_le_bytes().to_vec(),
+        bcs::to_bytes(&dest.to_vec()).unwrap(),
+    ];
+
+    Order::new_move_call(
+        src,
+        framework_obj_ref,
+        ident_str!("ObjectBasics").to_owned(),
+        ident_str!("create").to_owned(),
+        Vec::new(),
+        gas_object_ref,
+        Vec::new(),
+        pure_arguments,
+        GAS_VALUE_FOR_TESTING / 2,
+        &*secret,
+    )
+}
+
+#[cfg(test)]
+fn order_transfer(
+    src: FastPayAddress,
+    secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+    dest: FastPayAddress,
+    object_ref: ObjectRef,
+    framework_obj_ref: ObjectRef,
+    gas_object_ref: ObjectRef,
+) -> Order {
+    let pure_args = vec![bcs::to_bytes(&dest.to_vec()).unwrap()];
+
+    Order::new_move_call(
+        src,
+        framework_obj_ref,
+        ident_str!("ObjectBasics").to_owned(),
+        ident_str!("transfer").to_owned(),
+        Vec::new(),
+        gas_object_ref,
+        vec![object_ref],
+        pure_args,
+        GAS_VALUE_FOR_TESTING / 2,
+        secret,
+    )
+}
+
+#[allow(dead_code)]
+#[cfg(test)]
+fn order_set(
+    src: FastPayAddress,
+    secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+    object_ref: ObjectRef,
+    value: u64,
+    framework_obj_ref: ObjectRef,
+    gas_object_ref: ObjectRef,
+) -> Order {
+    let pure_args = vec![bcs::to_bytes(&value).unwrap()];
+
+    Order::new_move_call(
+        src,
+        framework_obj_ref,
+        ident_str!("ObjectBasics").to_owned(),
+        ident_str!("set_value").to_owned(),
+        Vec::new(),
+        gas_object_ref,
+        vec![object_ref],
+        pure_args,
+        GAS_VALUE_FOR_TESTING / 2,
+        secret,
+    )
+}
+
+#[cfg(test)]
+fn order_delete(
+    src: FastPayAddress,
+    secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+    object_ref: ObjectRef,
+    framework_obj_ref: ObjectRef,
+    gas_object_ref: ObjectRef,
+) -> Order {
+    Order::new_move_call(
+        src,
+        framework_obj_ref,
+        ident_str!("ObjectBasics").to_owned(),
+        ident_str!("delete").to_owned(),
+        Vec::new(),
+        gas_object_ref,
+        vec![object_ref],
+        Vec::new(),
+        GAS_VALUE_FOR_TESTING / 2,
+        secret,
+    )
+}
+
+#[cfg(test)]
+async fn do_order(authority: &LocalAuthorityClient, order: &Order) {
+    authority.handle_order(order.clone()).await.unwrap();
+}
+
+#[cfg(test)]
+async fn do_cert(authority: &LocalAuthorityClient, cert: &CertifiedOrder) -> OrderEffects {
+    authority
+        .handle_confirmation_order(ConfirmationOrder::new(cert.clone()))
+        .await
+        .unwrap()
+        .signed_effects
+        .unwrap()
+        .effects
+}
+
+#[cfg(test)]
 async fn init_local_authorities(
     count: usize,
 ) -> (BTreeMap<AuthorityName, LocalAuthorityClient>, Committee) {
@@ -268,77 +419,6 @@ async fn init_local_client_state_with_bad_authority(
 }
 
 #[test]
-fn test_get_strong_majority_owner() {
-    let rt = Runtime::new().unwrap();
-    rt.block_on(async {
-        let object_id_1 = ObjectID::random();
-        let object_id_2 = ObjectID::random();
-        let authority_objects = vec![
-            vec![object_id_1],
-            vec![object_id_1, object_id_2],
-            vec![object_id_1, object_id_2],
-            vec![object_id_1, object_id_2],
-        ];
-        let client = init_local_client_state(authority_objects).await;
-        assert_eq!(
-            client
-                .authorities()
-                .get_strong_majority_owner(object_id_1)
-                .await,
-            Some((
-                Authenticator::Address(client.address()),
-                SequenceNumber::from(0)
-            ))
-        );
-        assert_eq!(
-            client
-                .authorities()
-                .get_strong_majority_owner(object_id_2)
-                .await,
-            Some((
-                Authenticator::Address(client.address()),
-                SequenceNumber::from(0)
-            ))
-        );
-
-        let object_id_1 = ObjectID::random();
-        let object_id_2 = ObjectID::random();
-        let object_id_3 = ObjectID::random();
-        let authority_objects = vec![
-            vec![object_id_1],
-            vec![object_id_2, object_id_3],
-            vec![object_id_3, object_id_2],
-            vec![object_id_3],
-        ];
-        let client = init_local_client_state(authority_objects).await;
-        assert_eq!(
-            client
-                .authorities()
-                .get_strong_majority_owner(object_id_1)
-                .await,
-            None
-        );
-        assert_eq!(
-            client
-                .authorities()
-                .get_strong_majority_owner(object_id_2)
-                .await,
-            None
-        );
-        assert_eq!(
-            client
-                .authorities()
-                .get_strong_majority_owner(object_id_3)
-                .await,
-            Some((
-                Authenticator::Address(client.address()),
-                SequenceNumber::from(0)
-            ))
-        );
-    });
-}
-
-#[test]
 fn test_initiating_valid_transfer() {
     let rt = Runtime::new().unwrap();
     let (recipient, _) = get_key_pair();
@@ -354,18 +434,18 @@ fn test_initiating_valid_transfer() {
 
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id_1)),
-        Some((
+        rt.block_on(sender.authorities().get_latest_owner(object_id_1)),
+        (
             Authenticator::Address(sender.address()),
             SequenceNumber::from(0)
-        ))
+        )
     );
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id_2)),
-        Some((
+        rt.block_on(sender.authorities().get_latest_owner(object_id_2)),
+        (
             Authenticator::Address(sender.address()),
             SequenceNumber::from(0)
-        ))
+        )
     );
     let (certificate, _) = rt
         .block_on(sender.transfer_object(object_id_1, gas_object, recipient))
@@ -378,15 +458,15 @@ fn test_initiating_valid_transfer() {
     );
     assert!(sender.store().pending_orders.is_empty());
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id_1)),
-        Some((Authenticator::Address(recipient), SequenceNumber::from(1)))
+        rt.block_on(sender.authorities().get_latest_owner(object_id_1)),
+        (Authenticator::Address(recipient), SequenceNumber::from(1))
     );
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id_2)),
-        Some((
+        rt.block_on(sender.authorities().get_latest_owner(object_id_2)),
+        (
             Authenticator::Address(sender.address()),
             SequenceNumber::from(0)
-        ))
+        )
     );
     // valid since our test authority should not update its certificate set
     compare_certified_orders(
@@ -424,8 +504,8 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     );
     assert!(sender.store().pending_orders.is_empty());
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id)),
-        Some((Authenticator::Address(recipient), SequenceNumber::from(1)))
+        rt.block_on(sender.authorities().get_latest_owner(object_id)),
+        (Authenticator::Address(recipient), SequenceNumber::from(1))
     );
     // valid since our test authority shouldn't update its certificate set
     compare_certified_orders(
@@ -463,15 +543,16 @@ fn test_initiating_transfer_low_funds() {
     );
     // assert_eq!(sender.pending_transfer, None);
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id_1)),
-        Some((
+        rt.block_on(sender.authorities().get_latest_owner(object_id_1)),
+        (
             Authenticator::Address(sender.address()),
             SequenceNumber::from(0)
-        )),
+        ),
     );
     assert_eq!(
-        rt.block_on(sender.authorities().get_strong_majority_owner(object_id_2)),
-        None,
+        rt.block_on(sender.authorities().get_latest_owner(object_id_2))
+            .1,
+        SequenceNumber::from(0),
     );
 }
 
@@ -500,25 +581,19 @@ async fn test_bidirectional_transfer() {
 
     // Confirm client1 have ownership of the object.
     assert_eq!(
-        client1
-            .authorities()
-            .get_strong_majority_owner(object_id)
-            .await,
-        Some((
+        client1.authorities().get_latest_owner(object_id).await,
+        (
             Authenticator::Address(client1.address()),
             SequenceNumber::from(0)
-        ))
+        )
     );
     // Confirm client2 doesn't have ownership of the object.
     assert_eq!(
-        client2
-            .authorities()
-            .get_strong_majority_owner(object_id)
-            .await,
-        Some((
+        client2.authorities().get_latest_owner(object_id).await,
+        (
             Authenticator::Address(client1.address()),
             SequenceNumber::from(0)
-        ))
+        )
     );
     // Transfer object to client2.
     let (certificate, _) = client1
@@ -529,25 +604,19 @@ async fn test_bidirectional_transfer() {
     assert!(client1.store().pending_orders.is_empty());
     // Confirm client1 lose ownership of the object.
     assert_eq!(
-        client1
-            .authorities()
-            .get_strong_majority_owner(object_id)
-            .await,
-        Some((
+        client1.authorities().get_latest_owner(object_id).await,
+        (
             Authenticator::Address(client2.address()),
             SequenceNumber::from(1)
-        ))
+        )
     );
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
-        client2
-            .authorities()
-            .get_strong_majority_owner(object_id)
-            .await,
-        Some((
+        client2.authorities().get_latest_owner(object_id).await,
+        (
             Authenticator::Address(client2.address()),
             SequenceNumber::from(1)
-        ))
+        )
     );
 
     // Confirm certificate is consistent between authorities and client.
@@ -566,14 +635,11 @@ async fn test_bidirectional_transfer() {
 
     // Confirm sequence number are consistent between clients.
     assert_eq!(
-        client2
-            .authorities()
-            .get_strong_majority_owner(object_id)
-            .await,
-        Some((
+        client2.authorities().get_latest_owner(object_id).await,
+        (
             Authenticator::Address(client2.address()),
             SequenceNumber::from(1)
-        ))
+        )
     );
 
     // Transfer the object back to Client1
@@ -586,32 +652,26 @@ async fn test_bidirectional_transfer() {
 
     // Confirm client2 lose ownership of the object.
     assert_eq!(
-        client2
-            .authorities()
-            .get_strong_majority_owner(object_id)
-            .await,
-        Some((
+        client2.authorities().get_latest_owner(object_id).await,
+        (
             Authenticator::Address(client1.address()),
             SequenceNumber::from(2)
-        ))
+        )
     );
     assert_eq!(
         client2
             .authorities()
-            .get_strong_majority_sequence_number(object_id)
+            .get_latest_sequence_number(object_id)
             .await,
         SequenceNumber::from(2)
     );
     // Confirm client1 acquired ownership of the object.
     assert_eq!(
-        client1
-            .authorities()
-            .get_strong_majority_owner(object_id)
-            .await,
-        Some((
+        client1.authorities().get_latest_owner(object_id).await,
+        (
             Authenticator::Address(client1.address()),
             SequenceNumber::from(2)
-        ))
+        )
     );
 
     // Should fail if Client 2 double spend the object
@@ -685,14 +745,11 @@ async fn test_client_state_sync_with_transferred_object() {
 
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
-        client2
-            .authorities()
-            .get_strong_majority_owner(object_id)
-            .await,
-        Some((
+        client2.authorities().get_latest_owner(object_id).await,
+        (
             Authenticator::Address(client2.address()),
             SequenceNumber::from(1)
-        ))
+        )
     );
 
     // Client 2's local object_id and cert should be empty before sync
@@ -1567,7 +1624,7 @@ async fn test_move_calls_chain_many_delete_authority_auto_synchronization() {
             ConfirmationOrder::new(last_certificate),
             authorities[3].0,
             Duration::from_millis(1000), // ms
-            2,                           // retry
+            DEFAULT_RETRIES,             // retry
         )
         .await;
 
@@ -3136,4 +3193,409 @@ async fn test_map_reducer() {
         .await;
     assert_eq!(res.as_ref().unwrap().len(), 3);
     assert!(!res.as_ref().unwrap().contains(&bad_auth));
+}
+
+async fn get_latest_ref(authority: &LocalAuthorityClient, object_id: ObjectID) -> ObjectRef {
+    if let Ok(ObjectInfoResponse {
+        requested_object_reference: Some(object_ref),
+        ..
+    }) = authority
+        .handle_object_info_request(ObjectInfoRequest::from(object_id))
+        .await
+    {
+        return object_ref;
+    }
+    panic!("Object not found!");
+}
+
+#[tokio::test]
+async fn test_get_all_owned_objects() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let auth_vec: Vec<_> = authority_clients.values().cloned().collect();
+
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let mut client2 = make_client(authority_clients.clone(), committee.clone());
+
+    let gas_object1 = ObjectID::random();
+    let gas_object2 = ObjectID::random();
+
+    fund_account_with_same_objects(auth_vec.iter().collect(), &mut client1, vec![gas_object1])
+        .await;
+    fund_account_with_same_objects(auth_vec.iter().collect(), &mut client2, vec![gas_object2])
+        .await;
+
+    // Make a schedule of transactions
+    let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let create1 = order_create(
+        client1.address(),
+        client1.secret(),
+        client1.address(),
+        100,
+        framework_obj_ref,
+        gas_ref_1,
+    );
+
+    // Submit to 3 authorities, but not 4th
+    do_order(&auth_vec[0], &create1).await;
+    do_order(&auth_vec[1], &create1).await;
+    do_order(&auth_vec[2], &create1).await;
+
+    // Get a cert
+    let cert1 = extract_cert(&authority_clients, &committee, create1.digest()).await;
+
+    // Test 1: Before the cert is submitted no one knows of the new object.
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(1, owned_object.len());
+    assert!(owned_object.contains_key(&gas_ref_1));
+
+    // Submit the cert to first authority.
+    let effects = do_cert(&auth_vec[0], &cert1).await;
+
+    // Test 2: Once the cert is submitted one auth returns the new object,
+    //         but now two versions of gas exist.
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(3, owned_object.len());
+
+    assert!(owned_object.contains_key(&effects.gas_object.0));
+    assert!(owned_object.contains_key(&effects.created[0].0));
+    let created_ref = effects.created[0].0;
+
+    // Submit to next 3 authorities.
+    do_cert(&auth_vec[1], &cert1).await;
+    do_cert(&auth_vec[2], &cert1).await;
+    do_cert(&auth_vec[3], &cert1).await;
+
+    // Make a delete order
+    let gas_ref_del = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let delete1 = order_delete(
+        client1.address(),
+        client1.secret(),
+        created_ref,
+        framework_obj_ref,
+        gas_ref_del,
+    );
+
+    // Get cert for delete order, and submit to first authority
+    do_order(&auth_vec[0], &delete1).await;
+    do_order(&auth_vec[1], &delete1).await;
+    do_order(&auth_vec[2], &delete1).await;
+    let cert2 = extract_cert(&authority_clients, &committee, delete1.digest()).await;
+    let _effects = do_cert(&auth_vec[0], &cert2).await;
+
+    // Test 3: dealing with deleted objects on some authorities
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    // Since not all authorities know the object is deleted, we get back
+    // the new gas object, the delete object and the old gas object.
+    assert_eq!(3, owned_object.len());
+
+    // Update rest of authorities
+    do_cert(&auth_vec[1], &cert2).await;
+    do_cert(&auth_vec[2], &cert2).await;
+    do_cert(&auth_vec[3], &cert2).await;
+
+    // Test 4: dealing with deleted objects on all authorities
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    // Just the gas object is returned
+    assert_eq!(1, owned_object.len());
+}
+
+#[tokio::test]
+async fn test_sync_all_owned_objects() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let auth_vec: Vec<_> = authority_clients.values().cloned().collect();
+
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let client2 = make_client(authority_clients.clone(), committee.clone());
+
+    let gas_object1 = ObjectID::random();
+    let gas_object2 = ObjectID::random();
+
+    fund_account_with_same_objects(
+        auth_vec.iter().collect(),
+        &mut client1,
+        vec![gas_object1, gas_object2],
+    )
+    .await;
+
+    // Make a schedule of transactions
+    let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let create1 = order_create(
+        client1.address(),
+        client1.secret(),
+        client1.address(),
+        100,
+        framework_obj_ref,
+        gas_ref_1,
+    );
+
+    let gas_ref_2 = get_latest_ref(&auth_vec[0], gas_object2).await;
+    let create2 = order_create(
+        client1.address(),
+        client1.secret(),
+        client1.address(),
+        101,
+        framework_obj_ref,
+        gas_ref_2,
+    );
+
+    // Submit to 3 authorities, but not 4th
+    do_order(&auth_vec[0], &create1).await;
+    do_order(&auth_vec[1], &create1).await;
+    do_order(&auth_vec[2], &create1).await;
+
+    do_order(&auth_vec[1], &create2).await;
+    do_order(&auth_vec[2], &create2).await;
+    do_order(&auth_vec[3], &create2).await;
+
+    // Get a cert
+    let cert1 = extract_cert(&authority_clients, &committee, create1.digest()).await;
+    let cert2 = extract_cert(&authority_clients, &committee, create2.digest()).await;
+
+    // Submit the cert to 1 authority.
+    let new_ref_1 = do_cert(&auth_vec[0], &cert1).await.created[0].0;
+    let new_ref_2 = do_cert(&auth_vec[3], &cert2).await.created[0].0;
+
+    // Test 1: Once the cert is submitted one auth returns the new object,
+    //         but now two versions of gas exist. Ie total 2x3 = 6.
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(6, owned_object.len());
+
+    // After sync we are back to having 4.
+    let (owned_object, _) = client1
+        .authorities()
+        .sync_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(4, owned_object.len());
+
+    // Now lets delete and move objects
+
+    // Make a delete order
+    let gas_ref_del = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let delete1 = order_delete(
+        client1.address(),
+        client1.secret(),
+        new_ref_1,
+        framework_obj_ref,
+        gas_ref_del,
+    );
+
+    // Make a transfer order
+    let gas_ref_trans = get_latest_ref(&auth_vec[0], gas_object2).await;
+    let transfer1 = order_transfer(
+        client1.address(),
+        client1.secret(),
+        client2.address(),
+        new_ref_2,
+        framework_obj_ref,
+        gas_ref_trans,
+    );
+
+    do_order(&auth_vec[0], &delete1).await;
+    do_order(&auth_vec[1], &delete1).await;
+    do_order(&auth_vec[2], &delete1).await;
+
+    do_order(&auth_vec[1], &transfer1).await;
+    do_order(&auth_vec[2], &transfer1).await;
+    do_order(&auth_vec[3], &transfer1).await;
+
+    let cert1 = extract_cert(&authority_clients, &committee, delete1.digest()).await;
+    let cert2 = extract_cert(&authority_clients, &committee, transfer1.digest()).await;
+
+    do_cert(&auth_vec[0], &cert1).await;
+    do_cert(&auth_vec[3], &cert2).await;
+
+    // Test 2: Before we sync we see 6 object, incl: (old + new gas) x 2, and 2 x old objects
+    // after we see just 2 (one deleted one transfered.)
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(6, owned_object.len());
+
+    // After sync we are back to having 2.
+    let (owned_object, _) = client1
+        .authorities()
+        .sync_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+    assert_eq!(
+        2,
+        owned_object
+            .iter()
+            .filter(|o| o.owner.is_address(&client1.address()))
+            .count()
+    );
+}
+
+#[tokio::test]
+async fn test_process_order() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let auth_vec: Vec<_> = authority_clients.values().cloned().collect();
+
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+
+    let gas_object1 = ObjectID::random();
+    let gas_object2 = ObjectID::random();
+
+    fund_account_with_same_objects(
+        auth_vec.iter().collect(),
+        &mut client1,
+        vec![gas_object1, gas_object2],
+    )
+    .await;
+
+    // Make a schedule of transactions
+    let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let create1 = order_create(
+        client1.address(),
+        client1.secret(),
+        client1.address(),
+        100,
+        framework_obj_ref,
+        gas_ref_1,
+    );
+
+    do_order(&auth_vec[0], &create1).await;
+    do_order(&auth_vec[1], &create1).await;
+    do_order(&auth_vec[2], &create1).await;
+
+    // Get a cert
+    let cert1 = extract_cert(&authority_clients, &committee, create1.digest()).await;
+
+    // Submit the cert to 1 authority.
+    let new_ref_1 = do_cert(&auth_vec[0], &cert1).await.created[0].0;
+
+    // Make a schedule of transactions
+    let gas_ref_set = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let create2 = order_set(
+        client1.address(),
+        client1.secret(),
+        new_ref_1,
+        100,
+        framework_obj_ref,
+        gas_ref_set,
+    );
+
+    // Test 1: When we call process order on the second order, the process_order
+    // updates all authorities with latest objects, and then the order goes through
+    // on all of them. Note that one authority has processed cert 1, and none cert2,
+    // and auth 3 has no seen either.
+    client1
+        .authorities()
+        .process_order(create2.clone(), Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    // The order still only has 3 votes, as only these are needed.
+    let cert2 = extract_cert(&authority_clients, &committee, create2.digest()).await;
+    assert_eq!(3, cert2.signatures.len());
+}
+
+#[tokio::test]
+async fn test_process_certificate() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let auth_vec: Vec<_> = authority_clients.values().cloned().collect();
+
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+
+    let gas_object1 = ObjectID::random();
+    let gas_object2 = ObjectID::random();
+
+    fund_account_with_same_objects(
+        auth_vec.iter().collect(),
+        &mut client1,
+        vec![gas_object1, gas_object2],
+    )
+    .await;
+
+    // Make a schedule of transactions
+    let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let create1 = order_create(
+        client1.address(),
+        client1.secret(),
+        client1.address(),
+        100,
+        framework_obj_ref,
+        gas_ref_1,
+    );
+
+    do_order(&auth_vec[0], &create1).await;
+    do_order(&auth_vec[1], &create1).await;
+    do_order(&auth_vec[2], &create1).await;
+
+    // Get a cert
+    let cert1 = extract_cert(&authority_clients, &committee, create1.digest()).await;
+
+    // Submit the cert to 1 authority.
+    let new_ref_1 = do_cert(&auth_vec[0], &cert1).await.created[0].0;
+    do_cert(&auth_vec[1], &cert1).await;
+    do_cert(&auth_vec[2], &cert1).await;
+
+    // Check the new object is at version 1
+    let new_object_ref = client_object(&mut client1, new_ref_1.0).await.0;
+    assert_eq!(SequenceNumber::from(1), new_object_ref.1);
+
+    // Make a schedule of transactions
+    let gas_ref_set = get_latest_ref(&auth_vec[0], gas_object1).await;
+    let create2 = order_set(
+        client1.address(),
+        client1.secret(),
+        new_ref_1,
+        100,
+        framework_obj_ref,
+        gas_ref_set,
+    );
+
+    do_order(&auth_vec[0], &create2).await;
+    do_order(&auth_vec[1], &create2).await;
+    do_order(&auth_vec[2], &create2).await;
+
+    let cert2 = extract_cert(&authority_clients, &committee, create2.digest()).await;
+
+    // Test: process the certificate, including bring up to date authority 3.
+    //       which is 2 certs behind.
+    client1
+        .authorities()
+        .process_certificate(cert2, Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    let (owned_object, _) = client1
+        .authorities()
+        .get_all_owned_objects(client1.address(), Duration::from_secs(10))
+        .await
+        .unwrap();
+
+    // As a result, we have 2 gas objects and 1 created object.
+    assert_eq!(3, owned_object.len());
+    // Check this is the latest version.
+    let new_object_ref = client_object(&mut client1, new_ref_1.0).await.0;
+    assert_eq!(SequenceNumber::from(2), new_object_ref.1);
 }

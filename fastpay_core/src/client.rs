@@ -30,7 +30,7 @@ use std::{
 ///
 /// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
 ///
-type StableSyncSigner = Pin<Box<dyn signature::Signer<ed25519_dalek::Signature> + Send + Sync>>;
+pub type StableSyncSigner = Pin<Box<dyn signature::Signer<ed25519_dalek::Signature> + Send + Sync>>;
 
 pub mod client_store;
 use self::client_store::ClientStore;
@@ -234,6 +234,11 @@ impl<A> ClientState<A> {
     #[cfg(test)]
     pub fn store(&self) -> &ClientStore {
         &self.store
+    }
+
+    #[cfg(test)]
+    pub fn secret(&self) -> &dyn signature::Signer<ed25519_dalek::Signature> {
+        &*self.secret
     }
 
     /// Given an order, return the list of certificates that are known by this client

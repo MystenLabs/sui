@@ -21,8 +21,8 @@ use tokio::time::timeout;
 
 // TODO: Make timeout duration configurable.
 const AUTHORITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
-
 const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
+pub const DEFAULT_RETRIES: usize = 4;
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -343,13 +343,13 @@ where
         map_each_authority: FMap,
         // The async function that takes an accumulated state, and a new result for V from an
         // authority and returns a result to a ReduceOutput state.
-        mut reduce_result: FReduce,
+        reduce_result: FReduce,
         // The initial timeout applied to all
         initial_timeout: Duration,
     ) -> Result<S, FastPayError>
     where
         FMap: FnOnce(AuthorityName, &'a A) -> AsyncResult<'a, V, FastPayError> + Clone,
-        FReduce: FnMut(
+        FReduce: Fn(
             S,
             AuthorityName,
             usize,
@@ -591,38 +591,18 @@ where
         Ok((object_map, authority_list))
     }
 
-    /// Ask authorities for the user owned objects. Then download all objects at all versions present
-    /// on authorites, along with the certificates preceeding them, and update lagging authorities to
-    /// the latest version of the object.
-    ///
-    /// This function returns all objects, including those that are
-    /// no more owned by the user (but were previously owned by the user), as well as a list of
-    /// deleted object references.
-    pub async fn sync_all_owned_objects(
+    /// Takes a list of object IDs, goes to all (quorum+timeout) of authorities to find their
+    /// latest version, and then updates all authorities with the latest version of each object.
+    pub async fn sync_all_given_objects(
         &self,
-        address: FastPayAddress,
+        objects: &[ObjectID],
         timeout_after_quorum: Duration,
     ) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
-        // First get a map of all objects at least a quorum of authorities think we hold.
-        let (object_map, _authority_list) = self
-            .get_all_owned_objects(address, timeout_after_quorum)
-            .await?;
-
-        // We make a list of all versions, in order
-        let mut object_latest_version: BTreeMap<ObjectID, Vec<ObjectRef>> = BTreeMap::new();
-        for object_ref in object_map.keys() {
-            let entry = object_latest_version
-                .entry(object_ref.0)
-                .or_insert_with(Vec::new);
-            entry.push(*object_ref);
-            entry.sort();
-        }
-
         let mut active_objects = Vec::new();
         let mut deleted_objects = Vec::new();
         let mut certs_to_sync = BTreeMap::new();
         // We update each object at each authority that does not have it.
-        for object_id in object_latest_version.keys() {
+        for object_id in objects {
             // Authorities to update.
             let mut authorites: HashSet<AuthorityName> = self
                 .committee
@@ -698,7 +678,7 @@ where
                         ConfirmationOrder::new(cert.clone()),
                         name,
                         timeout_after_quorum,
-                        1,
+                        DEFAULT_RETRIES,
                     )
                     .await;
 
@@ -707,6 +687,256 @@ where
         }
 
         Ok((active_objects, deleted_objects))
+    }
+
+    /// Ask authorities for the user owned objects. Then download all objects at all versions present
+    /// on authorites, along with the certificates preceeding them, and update lagging authorities to
+    /// the latest version of the object.
+    ///
+    /// This function returns all objects, including those that are
+    /// no more owned by the user (but were previously owned by the user), as well as a list of
+    /// deleted object references.
+    pub async fn sync_all_owned_objects(
+        &self,
+        address: FastPayAddress,
+        timeout_after_quorum: Duration,
+    ) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
+        // First get a map of all objects at one authority holds when at
+        // least a quorum of authorities is contacted.
+        let (object_map, _authority_list) = self
+            .get_all_owned_objects(address, timeout_after_quorum)
+            .await?;
+
+        let all_object_ids: HashSet<_> = object_map.keys().map(|object_ref| object_ref.0).collect();
+
+        // Then sync all the owned objects
+        self.sync_all_given_objects(
+            &all_object_ids.into_iter().collect::<Vec<_>>(),
+            timeout_after_quorum,
+        )
+        .await
+    }
+
+    /// Takes an order, brings all authorities up to date with the versions of the
+    /// objects needed, and then submits the order to make a certificate.
+    pub async fn process_order(
+        &self,
+        order: Order,
+        timeout_after_quorum: Duration,
+    ) -> Result<CertifiedOrder, FastPayError> {
+        // Find out which objects are required by this order and
+        // ensure they are synced on authorities.
+        let required_ids: Vec<ObjectID> = order
+            .input_objects()
+            .iter()
+            .map(|o| o.object_id())
+            .collect();
+
+        let (_active_objects, _deleted_objects) = self
+            .sync_all_given_objects(&required_ids, timeout_after_quorum)
+            .await?;
+
+        // Now broadcast the order to all authorities.
+        let threshold = self.committee.quorum_threshold();
+        let validity = self.committee.validity_threshold();
+
+        struct ProcessOrderState {
+            // The list of signatures gathered at any point
+            signatures: Vec<(AuthorityName, Signature)>,
+            // A certificate if we manage to make or find one
+            certificate: Option<CertifiedOrder>,
+            // Tally of stake for good vs bad responses.
+            good_stake: usize,
+            bad_stake: usize,
+        }
+
+        let state = ProcessOrderState {
+            signatures: vec![],
+            certificate: None,
+            good_stake: 0,
+            bad_stake: 0,
+        };
+
+        let order_ref = &order;
+        let state = self
+            .quorum_map_then_reduce_with_timeout(
+                state,
+                |_name, client| {
+                    // NOTE: here I assume the AuthorityClient has done
+                    // the checks on this order response, and it is well formed.
+                    Box::pin(async move { client.handle_order(order_ref.clone()).await })
+                },
+                |mut state, name, weight, result| {
+                    Box::pin(async move {
+                        match result {
+                            // If we are given back a certificate, then we do not need
+                            // to re-submit this order, we just returned the ready made
+                            // certificate.
+                            Ok(OrderInfoResponse {
+                                certified_order: Some(inner_certificate),
+                                ..
+                            }) => {
+                                state.certificate = Some(inner_certificate);
+                            }
+
+                            // If we get back a signed order, then we aggregate the
+                            // new signature and check whether we have enough to form
+                            // a certificate.
+                            Ok(OrderInfoResponse {
+                                signed_order: Some(inner_signed_order),
+                                ..
+                            }) => {
+                                state.signatures.push((name, inner_signed_order.signature));
+                                state.good_stake += weight;
+                                if state.good_stake >= threshold {
+                                    state.certificate = Some(CertifiedOrder {
+                                        order: order_ref.clone(),
+                                        signatures: state.signatures.clone(),
+                                    });
+                                }
+                            }
+
+                            // In all other cases we will not be able to use this response
+                            // to make a certificate. If this happens for more than f
+                            // authorities we just stop, as there is no hope to finish.
+                            _ => {
+                                // We have an error here.
+                                state.bad_stake += weight; // This is the bad stake counter
+                                if state.bad_stake > validity {
+                                    // Too many errors
+                                    return Err(FastPayError::ErrorWhileProcessingTransferOrder);
+                                }
+                            }
+                        };
+
+                        // If we have a certificate, then finish, otherwise continue.
+                        if state.certificate.is_some() {
+                            Ok(ReduceOutput::End(state))
+                        } else {
+                            Ok(ReduceOutput::Continue(state))
+                        }
+                    })
+                },
+                // A long timeout before we hear back from a quorum
+                Duration::from_secs(60),
+            )
+            .await?;
+
+        // If we have some certificate return it, or return an error.
+        state
+            .certificate
+            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)
+    }
+
+    /// Process a certificate assuming that 2f+1 authorites already are up to date.
+    ///
+    /// This call is meant to be called after `process_order` returns a certificate.
+    /// At that point (and after) enough authorities are up to date with all objects
+    /// needed to process the certificate that a submission should succeed. However,
+    /// in case an authority returns an error, we do try to bring it up to speed.
+    pub async fn process_certificate(
+        &self,
+        certificate: CertifiedOrder,
+        timeout_after_quorum: Duration,
+    ) -> Result<OrderEffects, FastPayError> {
+        struct ProcessCertificateState {
+            effects_map: HashMap<[u8; 32], (usize, OrderEffects)>,
+            bad_stake: usize,
+        }
+
+        let state = ProcessCertificateState {
+            effects_map: HashMap::new(),
+            bad_stake: 0,
+        };
+
+        let cert_ref = &certificate;
+        let threshold = self.committee.quorum_threshold();
+        let validity = self.committee.validity_threshold();
+        let state = self
+            .quorum_map_then_reduce_with_timeout(
+                state,
+                |_name, client| {
+                    Box::pin(async move {
+                        // Here is the per-authority logic to process a certificate:
+                        // - we try to process a cert, and return Ok on success.
+                        // - we try to update the authority with the cert, and on error return Err.
+                        // - we try to re-process the certificate and return the result.
+
+                        let res = client
+                            .handle_confirmation_order(ConfirmationOrder::new(cert_ref.clone()))
+                            .await;
+
+                        if res.is_ok() {
+                            // We got an ok answer, so returning the result of processing
+                            // the order.
+                            return res;
+                        }
+
+                        // If we got an error, we try to update the authority.
+                        let _result = self
+                            .sync_certificate_to_authority_with_timeout(
+                                ConfirmationOrder::new(cert_ref.clone()),
+                                _name,
+                                timeout_after_quorum,
+                                DEFAULT_RETRIES,
+                            )
+                            .await?;
+
+                        // Now try again
+                        client
+                            .handle_confirmation_order(ConfirmationOrder::new(cert_ref.clone()))
+                            .await
+                    })
+                },
+                |mut state, _name, weight, result| {
+                    Box::pin(async move {
+                        // We aggregate the effects response, until we have more than 2f
+                        // and return.
+                        if let Ok(OrderInfoResponse {
+                            signed_effects: Some(inner_effects),
+                            ..
+                        }) = result
+                        {
+                            // Note: here we aggregate votes by the hash of the effects structure
+                            let entry = state
+                                .effects_map
+                                .entry(sha3_hash(&inner_effects.effects))
+                                .or_insert((0usize, inner_effects.effects));
+                            entry.0 += weight;
+
+                            if entry.0 >= threshold {
+                                // It will set the timeout quite high.
+                                return Ok(ReduceOutput::ContinueWithTimeout(
+                                    state,
+                                    timeout_after_quorum,
+                                ));
+                            }
+                        }
+
+                        // If instead we have more than f bad responses, then we fail.
+                        state.bad_stake += weight;
+                        if state.bad_stake > validity {
+                            return Err(FastPayError::ErrorWhileRequestingCertificate);
+                        }
+
+                        Ok(ReduceOutput::Continue(state))
+                    })
+                },
+                // A long timeout before we hear back from a quorum
+                Duration::from_secs(60),
+            )
+            .await?;
+
+        // Check that one effects structure has more than 2f votes,
+        // and return it.
+        for (stake, effects) in state.effects_map.into_values() {
+            if stake >= threshold {
+                return Ok(effects);
+            }
+        }
+
+        // If none has, fail.
+        Err(FastPayError::ErrorWhileRequestingCertificate)
     }
 
     #[cfg(test)]
@@ -728,59 +958,25 @@ where
     /// Find the highest sequence number that is known to a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_strong_majority_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
-        let request = ObjectInfoRequest {
-            object_id,
-            request_sequence_number: None,
-        };
-        let mut authority_clients = self.authority_clients.clone();
-        let numbers: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter_mut()
-            .map(|(name, client)| {
-                let fut = client.handle_object_info_request(request.clone());
-                async move {
-                    match fut.await {
-                        Ok(info) => info.object().map(|obj| (*name, obj.version())),
-                        _ => None,
-                    }
-                }
-            })
-            .collect();
-        self.committee.get_strong_majority_lower_bound(
-            numbers.filter_map(|x| async move { x }).collect().await,
-        )
+    async fn get_latest_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
+        let (object_infos, _certificates) = self
+            .get_object_by_id(object_id, Duration::from_secs(60))
+            .await
+            .unwrap(); // Not safe, but want to blow up if testing.
+        let top_ref = object_infos.keys().last().unwrap().0;
+        top_ref.1
     }
 
     /// Return owner address and sequence number of an object backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_strong_majority_owner(
-        &self,
-        object_id: ObjectID,
-    ) -> Option<(Authenticator, SequenceNumber)> {
-        let request = ObjectInfoRequest {
-            object_id,
-            request_sequence_number: None,
-        };
-        let authority_clients = self.authority_clients.clone();
-        let numbers: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter()
-            .map(|(name, client)| {
-                let fut = client.handle_object_info_request(request.clone());
-                async move {
-                    match fut.await {
-                        Ok(ObjectInfoResponse {
-                            object_and_lock: Some(ObjectResponse { object, .. }),
-                            ..
-                        }) => Some((*name, Some((object.owner, object.version())))),
-                        _ => None,
-                    }
-                }
-            })
-            .collect();
-        self.committee.get_strong_majority_lower_bound(
-            numbers.filter_map(|x| async move { x }).collect().await,
-        )
+    async fn get_latest_owner(&self, object_id: ObjectID) -> (Authenticator, SequenceNumber) {
+        let (object_infos, _certificates) = self
+            .get_object_by_id(object_id, Duration::from_secs(60))
+            .await
+            .unwrap(); // Not safe, but want to blow up if testing.
+        let (top_ref, obj) = object_infos.iter().last().unwrap();
+        (obj.0.as_ref().unwrap().owner, top_ref.0 .1)
     }
 
     /// Execute a sequence of actions in parallel for a quorum of authorities.
