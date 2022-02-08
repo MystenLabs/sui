@@ -737,17 +737,7 @@ where
             .sync_all_given_objects(&required_ids, timeout_after_quorum)
             .await?;
 
-        // NOTE: Check here that the latest versions necessary are available, AND that
-        // no newer versions are available, or deleted.
-
-        let _required_id_version: Vec<(ObjectID, SequenceNumber)> = order
-            .input_objects()
-            .iter()
-            .map(|o| (o.object_id(), o.version()))
-            .collect();
-
         // Now broadcast the order to all authorities.
-        let _digest = order.digest();
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
