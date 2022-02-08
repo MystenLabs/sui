@@ -7,6 +7,7 @@ use serde_bytes::ByteBuf;
 use serde_with::{serde_as, Bytes};
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
+use std::fmt::{Debug, Display, Formatter};
 
 use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
@@ -366,5 +367,26 @@ impl Object {
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
+    }
+}
+
+impl Display for Object {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let type_string = self
+            .data
+            .type_()
+            .map_or("Type Unwrap Failed".to_owned(), |type_| {
+                type_.module.as_ident_str().to_string()
+            });
+
+        write!(
+            f,
+            "Owner: {:?}\nVersion: {:?}\nID: {:?}\nReadonly: {:?}\nType: {:?}",
+            self.owner,
+            self.version().value(),
+            self.id(),
+            self.is_read_only(),
+            type_string
+        )
     }
 }

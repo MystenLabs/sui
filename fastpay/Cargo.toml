@@ -62,3 +62,7 @@ path = "src/bench.rs"
 [[bin]]
 name = "rest_api"
 path = "src/rest_api.rs"
+
+[[bin]]
+name = "fastx"
+path = "src/fastx.rs"

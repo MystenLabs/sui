@@ -205,6 +205,9 @@ pub enum FastPayError {
     IncorrectRecipientError,
     #[error("Too many authority errors were detected.")]
     TooManyIncorrectAuthorities,
+
+    #[error("Account not found.")]
+    AccountNotFound,
 }
 
 pub type FastPayResult<T = ()> = Result<T, FastPayError>;

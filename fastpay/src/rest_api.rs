@@ -37,7 +37,7 @@ use std::path::PathBuf;
 
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::thread::{self};
+use std::thread;
 use std::time::Duration;
 
 #[tokio::main]
@@ -93,10 +93,10 @@ struct ServerContext {
     recv_timeout: Arc<Mutex<Duration>>,
     initial_accounts_config_path: Arc<Mutex<String>>,
     accounts_config_path: Arc<Mutex<String>>,
-    accounts_config: Arc<Mutex<AccountsConfig>>,
     committee_config_path: Arc<Mutex<String>>,
-    committee_config: Arc<Mutex<CommitteeConfig>>,
     client_db_path: Arc<Mutex<PathBuf>>,
+    accounts_config: Arc<Mutex<AccountsConfig>>,
+    committee_config: Arc<Mutex<CommitteeConfig>>,
 }
 
 impl ServerContext {
@@ -115,20 +115,109 @@ impl ServerContext {
             recv_timeout: Arc::new(Mutex::new(Duration::new(0, 0))),
             initial_accounts_config_path: Arc::new(Mutex::new(initial_accounts_config_path)),
             accounts_config_path: Arc::new(Mutex::new(accounts_config_path.to_owned())),
+            committee_config_path: Arc::new(Mutex::new(committee_config_path.to_owned())),
+            client_db_path: Arc::new(Mutex::new(client_db_path)),
             accounts_config: Arc::new(Mutex::new(
                 AccountsConfig::read_or_create(accounts_config_path.as_str()).unwrap(),
             )),
-            committee_config_path: Arc::new(Mutex::new(committee_config_path.to_owned())),
             committee_config: Arc::new(Mutex::new(
                 CommitteeConfig::read(committee_config_path.as_str()).unwrap(),
             )),
-            client_db_path: Arc::new(Mutex::new(client_db_path)),
         }
     }
 }
 
 
-/**
+// /**
+//  * [SERVER] Use to provide server configurations for genesis.
+//  */
+// #[endpoint {
+//     method = POST,
+//     path = "/fastx/genesis",
+// }]
+// async fn genesis(
+//     rqctx: Arc<RequestContext<ServerContext>>,
+//     configuration: TypedBody<ServerConfiguration>,
+// ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+//     let mut config =
+//         NetworkConfig::read_or_create(&network_conf_path).expect("Unable to read user accounts");
+
+//     if !config.authorities.is_empty() {
+//         println!("Cannot run genesis on a existing network, please delete network config file and try again.");
+//         exit(1);
+//     }
+
+//     let mut authorities = BTreeMap::new();
+//     let mut authority_info = Vec::new();
+//     let mut port_allocator = PortAllocator::new(10000);
+
+//     println!("Creating new addresses...");
+//     for _ in 0..4 {
+//         let (address, key_pair) = get_key_pair();
+//         let info = AuthorityPrivateInfo {
+//             address,
+//             key_pair,
+//             host: "127.0.0.1".to_string(),
+//             port: port_allocator.next_port().expect("No free ports"),
+//             db_path: format!("./authorities_db/{:?}", address),
+//         };
+//         authority_info.push(AuthorityInfo {
+//             address,
+//             host: info.host.clone(),
+//             base_port: info.port,
+//         });
+//         authorities.insert(info.address, 1);
+//         config.authorities.push(info);
+//     }
+
+//     config.save()?;
+
+//     let mut new_addresses = Vec::new();
+//     let mut preload_objects = Vec::new();
+
+//     println!("Creating test objects...");
+//     for _ in 0..5 {
+//         let (address, key_pair) = get_key_pair();
+//         new_addresses.push(AccountInfo { address, key_pair });
+//         for _ in 0..5 {
+//             let new_object = Object::with_id_owner_gas_coin_object_for_testing(
+//                 ObjectID::random(),
+//                 SequenceNumber::new(),
+//                 address,
+//                 1000,
+//             );
+//             preload_objects.push(new_object);
+//         }
+//     }
+//     let committee = Committee::new(authorities);
+
+//     // Make server state to persist the objects.
+//     for authority in config.authorities {
+//         make_server(&authority, &committee, &preload_objects, config.buffer_size).await;
+//     }
+
+//     let wallet_config = WalletConfig {
+//         accounts: new_addresses,
+//         authorities: authority_info,
+//         send_timeout: Duration::from_micros(4000000),
+//         recv_timeout: Duration::from_micros(4000000),
+//         buffer_size: config.buffer_size,
+//         db_folder_path: "./client_db".to_string(),
+//         config_path: "./wallet.conf".to_string(),
+//     };
+//     wallet_config.save()?;
+
+//     println!("Network genesis completed.");
+//     println!("Network config file is stored in {}.", config.config_path);
+//     println!(
+//         "Wallet config file is stored in {}.",
+//         wallet_config.config_path
+//     );
+// }
+
+
+
+/**ee
 * [INPUT] `Server Configuration` represents the provided server configuration.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
@@ -144,7 +233,7 @@ struct ServerConfiguration {
  */
 #[endpoint {
     method = POST,
-    path = "/server/start",
+    path = "/fastx/start",
 }]
 async fn start(
     rqctx: Arc<RequestContext<ServerContext>>,

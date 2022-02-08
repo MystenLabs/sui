@@ -109,7 +109,7 @@ enum ServerCommands {
 
         /// Sets the port
         #[structopt(long)]
-        port: u32,
+        port: u16,
 
         /// Sets the path to the database folder
         #[structopt(long, default_value = "")]
@@ -158,7 +158,7 @@ fn main() {
 pub fn create_server_config(
     server_config_path: &str,
     host: String,
-    port: u32,
+    port: u16,
     database_path: String,
 ) -> AuthorityServerConfig {
     let (address, key) = get_key_pair();
