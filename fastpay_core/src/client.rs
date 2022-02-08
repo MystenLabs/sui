@@ -15,11 +15,11 @@ use typed_store::rocks::open_cf;
 use typed_store::Map;
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     pin::Pin,
 };
-use std::time::Duration;
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -28,7 +28,6 @@ use std::time::Duration;
 /// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
 ///
 pub type StableSyncSigner = Pin<Box<dyn signature::Signer<ed25519_dalek::Signature> + Send + Sync>>;
-
 
 pub mod client_store;
 use self::client_store::ClientStore;
@@ -375,47 +374,47 @@ where
         cert: CertifiedOrder,
         effects: OrderEffects,
     ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
-            // The cert should be included in the response
-            let parent_tx_digest = cert.order.digest();
-            self.store.certificates.insert(&parent_tx_digest, &cert)?;
+        // The cert should be included in the response
+        let parent_tx_digest = cert.order.digest();
+        self.store.certificates.insert(&parent_tx_digest, &cert)?;
 
-            let mut objs_to_download = Vec::new();
+        let mut objs_to_download = Vec::new();
 
         for &(object_ref, owner) in effects.all_mutated() {
-                let (object_id, seq, _) = object_ref;
-                let old_seq = self
-                    .store
-                    .object_sequence_numbers
-                    .get(&object_id)?
-                    .unwrap_or_default();
-                // only update if data is new
-                if old_seq < seq {
-                    if owner.is_address(&self.address) {
-                        self.insert_object_info(&object_ref, &parent_tx_digest)?;
-                        objs_to_download.push(object_ref);
-                    } else {
-                        self.remove_object_info(&object_id)?;
-                    }
-                } else if old_seq == seq && owner.is_address(&self.address) {
-                    // ObjectRef can be 1 version behind because it's only updated after confirmation.
-                    self.store.object_refs.insert(&object_id, &object_ref)?;
+            let (object_id, seq, _) = object_ref;
+            let old_seq = self
+                .store
+                .object_sequence_numbers
+                .get(&object_id)?
+                .unwrap_or_default();
+            // only update if data is new
+            if old_seq < seq {
+                if owner.is_address(&self.address) {
+                    self.insert_object_info(&object_ref, &parent_tx_digest)?;
+                    objs_to_download.push(object_ref);
+                } else {
+                    self.remove_object_info(&object_id)?;
                 }
+            } else if old_seq == seq && owner.is_address(&self.address) {
+                // ObjectRef can be 1 version behind because it's only updated after confirmation.
+                self.store.object_refs.insert(&object_id, &object_ref)?;
             }
+        }
 
-            // TODO: decide what to do with failed object downloads
-            // https://github.com/MystenLabs/fastnft/issues/331
-            let _failed = self.download_objects_not_in_db(objs_to_download).await?;
+        // TODO: decide what to do with failed object downloads
+        // https://github.com/MystenLabs/fastnft/issues/331
+        let _failed = self.download_objects_not_in_db(objs_to_download).await?;
 
         for (object_id, seq, _) in &effects.deleted {
-                let old_seq = self
-                    .store
-                    .object_sequence_numbers
-                    .get(object_id)?
-                    .unwrap_or_default();
-                if old_seq < *seq {
-                    self.remove_object_info(object_id)?;
-                }
+            let old_seq = self
+                .store
+                .object_sequence_numbers
+                .get(object_id)?
+                .unwrap_or_default();
+            if old_seq < *seq {
+                self.remove_object_info(object_id)?;
             }
+        }
         Ok((cert, effects))
     }
 
@@ -505,7 +504,7 @@ where
         }
 
         Ok((certificate, effects))
-                }
+    }
 
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError> {
         // Orders are idempotent so no need to prevent multiple executions
