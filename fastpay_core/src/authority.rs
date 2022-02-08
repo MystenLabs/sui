@@ -60,10 +60,10 @@ pub struct AuthorityState {
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
 ///
-/// Note the authority operations can be accesessed through a read reaf (&) and do not
+/// Note the authority operations can be accesessed through a read ref (&) and do not
 /// require &mut. Internally a database is syncronized through a mutex lock.
 ///
-/// Repeating commands should produce no changes and return no error.
+/// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
     /// The logic to check one object against a reference, and return the object if all is well
     /// or an error if not.
