@@ -137,7 +137,7 @@ async fn extract_cert(
 #[cfg(test)]
 fn order_create(
     src: FastPayAddress,
-    secret: &KeyPair,
+    secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     dest: FastPayAddress,
     value: u64,
     framework_obj_ref: ObjectRef,
@@ -159,14 +159,14 @@ fn order_create(
         Vec::new(),
         pure_arguments,
         GAS_VALUE_FOR_TESTING / 2,
-        secret,
+        &*secret,
     )
 }
 
 #[cfg(test)]
 fn order_transfer(
     src: FastPayAddress,
-    secret: &KeyPair,
+    secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     dest: FastPayAddress,
     object_ref: ObjectRef,
     framework_obj_ref: ObjectRef,
@@ -192,7 +192,7 @@ fn order_transfer(
 #[cfg(test)]
 fn order_set(
     src: FastPayAddress,
-    secret: &KeyPair,
+    secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     object_ref: ObjectRef,
     value: u64,
     framework_obj_ref: ObjectRef,
@@ -217,7 +217,7 @@ fn order_set(
 #[cfg(test)]
 fn order_delete(
     src: FastPayAddress,
-    secret: &KeyPair,
+    secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     object_ref: ObjectRef,
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
