@@ -701,7 +701,7 @@ where
         address: FastPayAddress,
         timeout_after_quorum: Duration,
     ) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
-        // First get a map of all objects at one authority holds when at 
+        // First get a map of all objects at one authority holds when at
         // least a quorum of authorities is contacted.
         let (object_map, _authority_list) = self
             .get_all_owned_objects(address, timeout_after_quorum)
@@ -743,12 +743,12 @@ where
 
         struct ProcessOrderState {
             // The list of signatures gathered at any point
-            signatures : Vec<(AuthorityName, Signature)>,
+            signatures: Vec<(AuthorityName, Signature)>,
             // A certificate if we manage to make or find one
-            certificate : Option<CertifiedOrder>,
+            certificate: Option<CertifiedOrder>,
             // Tally of stake for good vs bad responses.
-            good_stake : usize,
-            bad_stake : usize,
+            good_stake: usize,
+            bad_stake: usize,
         }
 
         let state = ProcessOrderState {
@@ -768,7 +768,6 @@ where
                     Box::pin(async move { client.handle_order(order_ref.clone()).await })
                 },
                 |mut state, name, weight, result| {
-
                     Box::pin(async move {
                         match result {
                             // If we are given back a certificate, then we do not need
@@ -841,10 +840,9 @@ where
         certificate: CertifiedOrder,
         timeout_after_quorum: Duration,
     ) -> Result<OrderEffects, FastPayError> {
-
         struct ProcessCertificateState {
-            effects_map : HashMap<[u8; 32], (usize, OrderEffects)>,
-            bad_stake : usize,
+            effects_map: HashMap<[u8; 32], (usize, OrderEffects)>,
+            bad_stake: usize,
         }
 
         let state = ProcessCertificateState {
@@ -901,7 +899,8 @@ where
                         }) = result
                         {
                             // Note: here we aggregate votes by the hash of the effects structure
-                            let entry = state.effects_map
+                            let entry = state
+                                .effects_map
                                 .entry(sha3_hash(&inner_effects.effects))
                                 .or_insert((0usize, inner_effects.effects));
                             entry.0 += weight;
