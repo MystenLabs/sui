@@ -864,7 +864,7 @@ async fn test_move_calls_object_transfer() {
 
     // Get the object created from the call
     let (new_obj_ref, _) = order_effects.created[0];
-    gas_object_ref = client_object(&mut client1, gas_object_ref.0 ).await.0;
+    gas_object_ref = client_object(&mut client1, gas_object_ref.0).await.0;
 
     let pure_args = vec![bcs::to_bytes(&client2.address().to_vec()).unwrap()];
     let call_response = client1
@@ -896,12 +896,10 @@ async fn test_move_calls_object_transfer() {
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
 
-    let transferred_obj = client_object(&mut client1, new_obj_ref.0 ).await.1;
+    let transferred_obj = client_object(&mut client1, new_obj_ref.0).await.1;
 
     // Confirm new owner
-    assert!(transferred_obj
-        .owner
-        .is_address(&client2.address()));
+    assert!(transferred_obj.owner.is_address(&client2.address()));
 }
 
 #[tokio::test]
@@ -949,8 +947,8 @@ async fn test_move_calls_object_transfer_and_freeze() {
     // Get the object created from the call
     let (new_obj_ref, _) = order_effects.created[0];
     // Fetch the full object
-    let new_obj_ref = client_object(&mut client1, new_obj_ref.0 ).await.0;
-    gas_object_ref = client_object(&mut client1, gas_object_ref.0 ).await.0;
+    let new_obj_ref = client_object(&mut client1, new_obj_ref.0).await.0;
+    gas_object_ref = client_object(&mut client1, gas_object_ref.0).await.0;
 
     let pure_args = vec![bcs::to_bytes(&client2.address().to_vec()).unwrap()];
     let call_response = client1
@@ -980,12 +978,10 @@ async fn test_move_calls_object_transfer_and_freeze() {
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
 
-    let transferred_obj = client_object(&mut client1, new_obj_ref.0 ).await.1;
+    let transferred_obj = client_object(&mut client1, new_obj_ref.0).await.1;
 
     // Confirm new owner
-    assert!(transferred_obj
-        .owner
-        .is_address(&client2.address()));
+    assert!(transferred_obj.owner.is_address(&client2.address()));
 
     // Confirm read only
     assert!(transferred_obj.is_read_only());
@@ -1035,8 +1031,7 @@ async fn test_move_calls_object_delete() {
     // Get the object created from the call
     let (new_obj_ref, _) = order_effects.created[0];
 
-    gas_object_ref = client_object(&mut client1, gas_object_ref.0 ).await.0;
-
+    gas_object_ref = client_object(&mut client1, gas_object_ref.0).await.0;
 
     let call_response = client1
         .move_call(
@@ -1063,8 +1058,7 @@ async fn test_move_calls_object_delete() {
     assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
     // Try to fetch the deleted object
-    let deleted_object_resp = 
-        client1
+    let deleted_object_resp = client1
         .get_object_info(ObjectInfoRequest {
             object_id: new_obj_ref.0,
             request_sequence_number: None,
@@ -1115,7 +1109,7 @@ async fn test_module_publish_and_call_good() {
 
     // We now have the module obj ref
     // We can inspect it
-    let (new_obj_ref, new_obj) = client_object(&mut client1, new_obj_ref.0 ).await;
+    let (new_obj_ref, new_obj) = client_object(&mut client1, new_obj_ref.0).await;
 
     // Version should be 1 for all modules
     assert_eq!(new_obj.version(), OBJECT_START_VERSION);
@@ -1129,7 +1123,7 @@ async fn test_module_publish_and_call_good() {
     assert!(new_obj.data.try_as_package().is_some());
 
     // Retrieve latest gas obj spec
-    let (gas_object_ref, gas_object) = client_object(&mut client1, gas_object_id ).await;
+    let (gas_object_ref, gas_object) = client_object(&mut client1, gas_object_id).await;
 
     //Try to call a function in TrustedCoin module
     let call_resp = client1
@@ -1158,7 +1152,7 @@ async fn test_module_publish_and_call_good() {
         .0;
 
     // Fetch the full obj info
-    let (_, tres_cap_obj) = client_object(&mut client1, tres_cap_ref.0 ).await;
+    let (_, tres_cap_obj) = client_object(&mut client1, tres_cap_ref.0).await;
 
     // Confirm we own this object
     assert_eq!(tres_cap_obj.owner, gas_object.owner);
@@ -1207,7 +1201,7 @@ async fn test_module_publish_file_path() {
 
     // We now have the module obj ref
     // We can inspect it
-    let (new_obj_ref, new_obj) = client_object(&mut client1, new_obj_ref.0 ).await;
+    let (new_obj_ref, new_obj) = client_object(&mut client1, new_obj_ref.0).await;
 
     // Version should be 1 for all modules
     assert_eq!(new_obj.version(), OBJECT_START_VERSION);
@@ -1221,7 +1215,7 @@ async fn test_module_publish_file_path() {
     assert!(new_obj.data.try_as_package().is_some());
 
     // Retrieve latest gas obj spec
-    let (gas_object_ref, _) = client_object(&mut client1, gas_object_id ).await;
+    let (gas_object_ref, _) = client_object(&mut client1, gas_object_id).await;
 
     // Even though we provided a path to Hero.move, the builder is able to find the package root
     // build all in the package, including TrustedCoin module
@@ -1496,7 +1490,7 @@ async fn test_object_store() {
 
     // We now have the module obj ref
     // We can inspect it
-    let new_obj = client_object(&mut client1, new_obj_ref.0 ).await.1;
+    let new_obj = client_object(&mut client1, new_obj_ref.0).await.1;
 
     // Published object should be in storage now
     // But also the new gas object should be in storage, so 2 new items, plus 1 from before

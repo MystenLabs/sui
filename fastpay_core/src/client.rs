@@ -48,6 +48,12 @@ pub struct ClientState<AuthorityAPI> {
     store: ClientStore,
 }
 
+pub enum ObjectRead {
+    NotExists,
+    Exists(ObjectRef, Object),
+    Deleted(ObjectRef),
+}
+
 // Operations are considered successful when they successfully reach a quorum of authorities.
 #[async_trait]
 pub trait Client {
