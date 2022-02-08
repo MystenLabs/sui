@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
+use crate::safe_client::SafeClient;
 
 use fastx_types::object::Object;
 use fastx_types::{
     base_types::*,
     committee::Committee,
     error::{FastPayError, FastPayResult},
-    fp_ensure,
     messages::*,
 };
 use futures::{future, StreamExt};
@@ -33,7 +33,7 @@ pub struct AuthorityAggregator<AuthorityAPI> {
     /// Our FastPay committee.
     pub committee: Committee,
     /// How to talk to this committee.
-    authority_clients: BTreeMap<AuthorityName, AuthorityAPI>,
+    authority_clients: BTreeMap<AuthorityName, SafeClient<AuthorityAPI>>,
 }
 
 impl<AuthorityAPI> AuthorityAggregator<AuthorityAPI> {
@@ -42,8 +42,11 @@ impl<AuthorityAPI> AuthorityAggregator<AuthorityAPI> {
         authority_clients: BTreeMap<AuthorityName, AuthorityAPI>,
     ) -> Self {
         Self {
-            committee,
-            authority_clients,
+            committee: committee.clone(),
+            authority_clients: authority_clients
+                .into_iter()
+                .map(|(name, api)| (name, SafeClient::new(api, committee.clone(), name)))
+                .collect(),
         }
     }
 }
@@ -280,7 +283,7 @@ where
         initial_timeout: Duration,
     ) -> Result<S, FastPayError>
     where
-        FMap: FnOnce(AuthorityName, &'a A) -> AsyncResult<'a, V, FastPayError> + Clone,
+        FMap: FnOnce(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, V, FastPayError> + Clone,
         FReduce: Fn(
             S,
             AuthorityName,
@@ -682,7 +685,6 @@ where
             .await?;
 
         // Now broadcast the order to all authorities.
-        let digest = order.digest();
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
@@ -707,34 +709,8 @@ where
         let state = self
             .quorum_map_then_reduce_with_timeout(
                 state,
-                |name, client| {
-                    Box::pin(async move {
-                        let info_reponse = client.handle_order(order_ref.clone()).await?;
-
-                        // NOTE: Move these and check all responses for validity.
-
-                        if let Some(signed_order) = &info_reponse.signed_order {
-                            signed_order.check(&self.committee)?;
-                            fp_ensure!(
-                                signed_order.authority == name,
-                                FastPayError::ByzantineAuthoritySuspicion { authority: name }
-                            );
-                            fp_ensure!(
-                                signed_order.order.digest() == digest,
-                                FastPayError::ByzantineAuthoritySuspicion { authority: name }
-                            );
-                        }
-
-                        if let Some(certificate) = &info_reponse.certified_order {
-                            certificate.check(&self.committee)?;
-                            fp_ensure!(
-                                certificate.order.digest() == digest,
-                                FastPayError::ByzantineAuthoritySuspicion { authority: name }
-                            );
-                        }
-
-                        Ok(info_reponse)
-                    })
+                |_name, client| {
+                    Box::pin(async move { client.handle_order(order_ref.clone()).await })
                 },
                 |mut state, name, weight, result| {
                     Box::pin(async move {
@@ -951,7 +927,7 @@ where
     /// Execute a sequence of actions in parallel for a quorum of authorities.
     async fn communicate_with_quorum<'a, V, F>(&'a self, execute: F) -> Result<Vec<V>, FastPayError>
     where
-        F: Fn(AuthorityName, &'a A) -> AsyncResult<'a, V, FastPayError> + Clone,
+        F: Fn(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, V, FastPayError> + Clone,
     {
         let committee = &self.committee;
         let authority_clients = &self.authority_clients;
@@ -1049,7 +1025,7 @@ where
     /// The object ids are also returned so the caller can determine which fetches failed
     /// NOTE: This function assumes all authorities are honest
     async fn fetch_one_object(
-        authority_clients: BTreeMap<PublicKeyBytes, A>,
+        authority_clients: BTreeMap<PublicKeyBytes, SafeClient<A>>,
         object_ref: ObjectRef,
         timeout: Duration,
         sender: tokio::sync::mpsc::Sender<Result<Object, FastPayError>>,

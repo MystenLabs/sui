@@ -412,6 +412,8 @@ impl AuthorityState {
             parent_iterator
                 .first()
                 .map(|(object_ref, tx_digest)| (*object_ref, *tx_digest))
+                // Check we got the correct object & version
+                .filter(|(object_ref, _)| object_ref.0 == request.object_id && object_ref.1 == seq)
         } else {
             // Or get the latest object_reference and transaction entry.
             self.get_latest_parent_entry(request.object_id).await?
