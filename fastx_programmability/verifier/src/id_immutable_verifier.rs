@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! The ID field of structs with key ability is immutable since it represents a
-//! FastNFT object ID. The only way to mutate a field is to write into
+//! Sui object ID. The only way to mutate a field is to write into
 //! a mutable reference borrowed through MutBorrowField/MutBorrowFieldGeneric
 //! bytecode. This verifier checks that such bytecode is never operated on
 //! an ID field.
