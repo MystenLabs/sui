@@ -41,9 +41,12 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
             children: vec![],
         };
         command.children.push(help);
-        command
-            .completions
-            .extend(["help".to_string(), "exit".to_string(), "quit".to_string()]);
+        command.completions.extend([
+            "help".to_string(),
+            "exit".to_string(),
+            "quit".to_string(),
+            "clear".to_string(),
+        ]);
 
         rl.set_helper(Some(ShellHelper { command }));
 
@@ -72,6 +75,10 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                     if *line.first().unwrap() == "quit" || *line.first().unwrap() == "exit" {
                         println!("Bye!");
                         break 'shell;
+                    };
+                    if *line.first().unwrap() == "clear" {
+                        print!("\x1B[2J\x1B[1;1H");
+                        continue 'shell;
                     };
                     if self
                         .handler
