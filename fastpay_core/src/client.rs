@@ -35,8 +35,6 @@ type StableSyncSigner = Pin<Box<dyn signature::Signer<ed25519_dalek::Signature> 
 pub mod client_store;
 use self::client_store::ClientStore;
 
-pub const DEFAULT_RETRIES: usize = 4;
-
 #[cfg(test)]
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
 
