@@ -312,7 +312,6 @@ fn find_cached_owner_by_object_id(
 }
 
 fn show_object_effects(order_effects: OrderEffects) {
-
     if order_effects.status != ExecutionStatus::Success {
         error!("Error publishing module: {:#?}", order_effects.status);
     }
