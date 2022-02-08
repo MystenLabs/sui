@@ -15,6 +15,7 @@ use std::io;
 use std::io::Write;
 use structopt::clap::App;
 
+/// A interactive command line shell with history and completion support
 pub struct Shell<P: Display, S, H> {
     pub prompt: P,
     pub state: S,
@@ -70,24 +71,22 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                     if line.is_empty() {
                         continue 'shell;
                     };
-
+                    // safe to unwrap with the above is_empty check.
                     if *line.first().unwrap() == "clear" {
                         line_editor.clear_screen()?;
                         continue 'shell;
-                    }
-
+                    };
                     if *line.first().unwrap() == "quit" || *line.first().unwrap() == "exit" {
                         println!("Bye!");
                         break 'shell;
                     };
-
                     if self
                         .handler
                         .handle_async(line, &mut self.state, &self.description)
                         .await
                     {
                         break 'shell;
-                    }
+                    };
                 }
                 Err(e) => eprintln!("{}", e.red()),
             }
@@ -166,6 +165,7 @@ pub struct CommandStructure {
 }
 
 impl CommandStructure {
+    /// Create CommandStructure using structopt::clap::App, currently only support 1 level of subcommands
     pub fn from_clap(app: &App) -> Self {
         let subcommands = app
             .p

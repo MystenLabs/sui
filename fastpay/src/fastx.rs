@@ -186,7 +186,7 @@ async fn make_server(
     let state = AuthorityState::new_with_genesis_modules(
         committee.clone(),
         authority.address,
-        authority.key_pair.copy(),
+        Box::pin(authority.key_pair.copy()),
         store,
     )
     .await;

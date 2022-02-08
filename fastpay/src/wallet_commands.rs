@@ -428,7 +428,7 @@ impl WalletContext {
         ClientState::new(
             path,
             client_info.address,
-            client_info.key_pair.copy(),
+            Box::pin(client_info.key_pair.copy()),
             committee,
             authority_clients,
             BTreeMap::new(),
