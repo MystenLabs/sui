@@ -27,3 +27,4 @@ typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="d04c29
 
 move-binary-format = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2" }
 move-core-types = { git = "https://github.com/diem/move", rev="62b5a5075378ae6a7102bbfc1fb33b57ba6125d2", features=["address20"] }
+signature = "1.5.0"
