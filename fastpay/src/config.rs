@@ -195,8 +195,10 @@ pub struct AccountsConfig {
 }
 
 impl AccountsConfig {
-    pub fn get(&self, address: &FastPayAddress) -> Option<&UserAccount> {
-        self.accounts.get(address)
+    /// Beware: this removes the account from the `AccountConfig` map!
+    /// better make sure we only use this once per account!
+    pub fn remove(&mut self, address: &FastPayAddress) -> Option<UserAccount> {
+        self.accounts.remove(address)
     }
 
     pub fn insert(&mut self, account: UserAccount) {
