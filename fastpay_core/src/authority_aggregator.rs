@@ -595,14 +595,14 @@ where
     /// latest version, and then updates all authorities with the latest version of each object.
     pub async fn sync_all_given_objects(
         &self,
-        objects: Vec<ObjectID>,
+        objects: &[ObjectID],
         timeout_after_quorum: Duration,
     ) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
         let mut active_objects = Vec::new();
         let mut deleted_objects = Vec::new();
         let mut certs_to_sync = BTreeMap::new();
         // We update each object at each authority that does not have it.
-        for object_id in objects.iter() {
+        for object_id in objects {
             // Authorities to update.
             let mut authorites: HashSet<AuthorityName> = self
                 .committee
@@ -701,23 +701,18 @@ where
         address: FastPayAddress,
         timeout_after_quorum: Duration,
     ) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
-        // First get a map of all objects at least a quorum of authorities think we hold.
+        // First get a map of all objects at one authority holds when at 
+        // least a quorum of authorities is contacted.
         let (object_map, _authority_list) = self
             .get_all_owned_objects(address, timeout_after_quorum)
             .await?;
 
-        // We make a list of all versions, in order
-        let mut object_latest_version: BTreeMap<ObjectID, Vec<ObjectRef>> = BTreeMap::new();
-        for object_ref in object_map.keys() {
-            let entry = object_latest_version
-                .entry(object_ref.0)
-                .or_insert_with(Vec::new);
-            entry.push(*object_ref);
-            entry.sort();
-        }
+        let object_latest_version: HashSet<_> =
+            object_map.keys().map(|object_ref| object_ref.0).collect();
 
+        // Then sync all the owned objects
         self.sync_all_given_objects(
-            object_latest_version.keys().cloned().collect(),
+            &object_latest_version.into_iter().collect::<Vec<_>>(),
             timeout_after_quorum,
         )
         .await
@@ -739,7 +734,7 @@ where
             .collect();
 
         let (_active_objects, _deleted_objects) = self
-            .sync_all_given_objects(required_ids, timeout_after_quorum)
+            .sync_all_given_objects(&required_ids, timeout_after_quorum)
             .await?;
 
         // TODO: check here that the latest versions necessary are available, AND that
@@ -755,6 +750,14 @@ where
         let _digest = order.digest();
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
+
+        struct ProcessOrderState {
+            signatures : Vec<(AuthorityName, Signature)>,
+            certificate : Option<CertifiedOrder>,
+            good_stake : usize,
+            bad_stake : usize,
+        }
+
         let state: (
             Vec<(AuthorityName, Signature)>,
             Option<CertifiedOrder>,
@@ -788,7 +791,7 @@ where
                                 state.1 = Some(inner_certificate);
                             }
 
-                            // If we get back a signed order, then we arregarate the
+                            // If we get back a signed order, then we aggregate the
                             // new signature and check whether we have enough to form
                             // a certificate.
                             Ok(OrderInfoResponse {
@@ -818,7 +821,7 @@ where
                             }
                         };
 
-                        // If we have a certificate, the finish, otherwise continue.
+                        // If we have a certificate, then finish, otherwise continue.
                         if state.1.is_some() {
                             Ok(ReduceOutput::End(state))
                         } else {
@@ -880,12 +883,7 @@ where
                                 timeout_after_quorum,
                                 3,
                             )
-                            .await;
-
-                        if let Err(err) = _result {
-                            // If we fail we give up and return the error
-                            return Err(err);
-                        }
+                            .await?;
 
                         // Now try again
                         client
@@ -893,14 +891,14 @@ where
                             .await
                     })
                 },
-                |(mut state, mut bad_stake), _name, weight, _result| {
+                |(mut state, mut bad_stake), _name, weight, result| {
                     Box::pin(async move {
                         // We aggregate the effects response, until we have more than 2f
                         // and return.
                         if let Ok(OrderInfoResponse {
                             signed_effects: Some(inner_effects),
                             ..
-                        }) = _result
+                        }) = result
                         {
                             // Note: here we aggregate votes by the hash of the effects structure
                             let entry = state

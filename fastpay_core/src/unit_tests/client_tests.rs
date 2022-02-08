@@ -109,7 +109,7 @@ async fn extract_cert(
 ) -> CertifiedOrder {
     let mut votes = vec![];
     let mut order = None;
-    for (_name, authority) in authorities {
+    for authority in authorities.values() {
         if let Ok(OrderInfoResponse {
             signed_order: Some(signed),
             ..
