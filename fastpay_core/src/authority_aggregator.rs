@@ -707,12 +707,11 @@ where
             .get_all_owned_objects(address, timeout_after_quorum)
             .await?;
 
-        let object_latest_version: HashSet<_> =
-            object_map.keys().map(|object_ref| object_ref.0).collect();
+        let all_object_ids: HashSet<_> = object_map.keys().map(|object_ref| object_ref.0).collect();
 
         // Then sync all the owned objects
         self.sync_all_given_objects(
-            &object_latest_version.into_iter().collect::<Vec<_>>(),
+            &all_object_ids.into_iter().collect::<Vec<_>>(),
             timeout_after_quorum,
         )
         .await
