@@ -978,39 +978,39 @@ async fn test_move_calls_object_transfer_and_freeze() {
     let (_, order_effects) = call_response.unwrap();
     // Get the object created from the call
     let (new_obj_ref, _) = order_effects.created[0];
-        // Fetch the full object
-        let new_obj = client1
-            .get_object_info(ObjectInfoRequest {
-                object_id: new_obj_ref.0,
-                request_sequence_number: None,
-            })
-            .await
-            .unwrap();
+    // Fetch the full object
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+        })
+        .await
+        .unwrap();
 
-        gas_object_ref = client1
-            .get_object_info(ObjectInfoRequest {
-                object_id: gas_object_ref.0,
-                request_sequence_number: None,
-            })
-            .await
-            .unwrap()
-            .object()
-            .unwrap()
-            .to_object_reference();
+    gas_object_ref = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: gas_object_ref.0,
+            request_sequence_number: None,
+        })
+        .await
+        .unwrap()
+        .object()
+        .unwrap()
+        .to_object_reference();
 
     let pure_args = vec![bcs::to_bytes(&client2.address().to_vec()).unwrap()];
     let call_response = client1
-            .move_call(
-                framework_obj_ref,
-                ident_str!("ObjectBasics").to_owned(),
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
             ident_str!("transfer_and_freeze").to_owned(),
-                Vec::new(),
-                gas_object_ref,
-                vec![new_obj.object().unwrap().to_object_reference()],
-                pure_args,
-                GAS_VALUE_FOR_TESTING / 2,
-            )
-            .await;
+            Vec::new(),
+            gas_object_ref,
+            vec![new_obj.object().unwrap().to_object_reference()],
+            pure_args,
+            GAS_VALUE_FOR_TESTING / 2,
+        )
+        .await;
 
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
@@ -1088,38 +1088,38 @@ async fn test_move_calls_object_delete() {
     let (_, order_effects) = call_response.unwrap();
     // Get the object created from the call
     let (new_obj_ref, _) = order_effects.created[0];
-        // Fetch the full object
-        let new_obj = client1
-            .get_object_info(ObjectInfoRequest {
-                object_id: new_obj_ref.0,
-                request_sequence_number: None,
-            })
-            .await
-            .unwrap();
+    // Fetch the full object
+    let new_obj = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: new_obj_ref.0,
+            request_sequence_number: None,
+        })
+        .await
+        .unwrap();
 
-        gas_object_ref = client1
-            .get_object_info(ObjectInfoRequest {
-                object_id: gas_object_ref.0,
-                request_sequence_number: None,
-            })
-            .await
-            .unwrap()
-            .object()
-            .unwrap()
-            .to_object_reference();
+    gas_object_ref = client1
+        .get_object_info(ObjectInfoRequest {
+            object_id: gas_object_ref.0,
+            request_sequence_number: None,
+        })
+        .await
+        .unwrap()
+        .object()
+        .unwrap()
+        .to_object_reference();
 
     let call_response = client1
-            .move_call(
-                framework_obj_ref,
-                ident_str!("ObjectBasics").to_owned(),
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
             ident_str!("delete").to_owned(),
-                Vec::new(),
-                gas_object_ref,
-                vec![new_obj.object().unwrap().to_object_reference()],
             Vec::new(),
-                GAS_VALUE_FOR_TESTING / 2,
-            )
-            .await;
+            gas_object_ref,
+            vec![new_obj.object().unwrap().to_object_reference()],
+            Vec::new(),
+            GAS_VALUE_FOR_TESTING / 2,
+        )
+        .await;
 
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
@@ -1161,7 +1161,7 @@ async fn test_module_publish_and_call_good() {
     .await
     .iter()
     .next()
-        .unwrap()
+    .unwrap()
     .1
     .to_object_reference();
 
