@@ -1,8 +1,8 @@
-## Contributing to FastPay
+## Contributing to Sui
 
 To contribute, ensure that you have the latest version of the codebase. To clone the repository, run the following:
 ```bash
-$ git clone https://github.com/novifinancial/fastpay.git
+$ git clone https://github.com/mystenlabs/fastnft.git
 $ cd fastpay
 $ cargo build --all --all-targets
 $ cargo test

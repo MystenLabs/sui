@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-//! Objects whose struct type has key ability represent FastNFT objects.
+//! Objects whose struct type has key ability represent Sui objects.
 //! They have unique IDs that should never be reused. This verifier makes
-//! sure that the id field of FastNFT objects never get leaked.
+//! sure that the id field of Sui objects never get leaked.
 //! Unpack is the only bytecode that could extract the id field out of
-//! a FastNFT object. From there, we track the flow of the value and make
+//! a Sui object. From there, we track the flow of the value and make
 //! sure it can never get leaked outside of the function. There are four
 //! ways it can happen:
 //! 1. Returned
