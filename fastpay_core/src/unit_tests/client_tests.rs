@@ -371,7 +371,7 @@ fn test_initiating_valid_transfer() {
             object_id: object_id_1
         })
     );
-    assert!(sender.store().pending_orders.is_empty().unwrap());
+    assert!(sender.store().pending_orders.is_empty());
     assert_eq!(
         rt.block_on(sender.authorities().get_strong_majority_owner(object_id_1)),
         Some((Authenticator::Address(recipient), SequenceNumber::from(1)))
@@ -417,7 +417,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
         sender.next_sequence_number(&object_id),
         Err(ObjectNotFound { object_id })
     );
-    assert!(sender.store().pending_orders.is_empty().unwrap());
+    assert!(sender.store().pending_orders.is_empty());
     assert_eq!(
         rt.block_on(sender.authorities().get_strong_majority_owner(object_id)),
         Some((Authenticator::Address(recipient), SequenceNumber::from(1)))
@@ -521,7 +521,7 @@ async fn test_bidirectional_transfer() {
         .await
         .unwrap();
 
-    assert!(client1.store().pending_orders.is_empty().unwrap());
+    assert!(client1.store().pending_orders.is_empty());
     // Confirm client1 lose ownership of the object.
     assert_eq!(
         client1
@@ -577,7 +577,7 @@ async fn test_bidirectional_transfer() {
         .await
         .unwrap();
 
-    assert!((client2.store().pending_orders.is_empty().unwrap()));
+    assert!((client2.store().pending_orders.is_empty()));
 
     // Confirm client2 lose ownership of the object.
     assert_eq!(
@@ -692,8 +692,8 @@ async fn test_client_state_sync_with_transferred_object() {
 
     // Client 2's local object_id and cert should be empty before sync
     assert!(client2.get_owned_objects().await.is_empty());
-    assert!(client2.store().object_sequence_numbers.is_empty().unwrap());
-    assert!(&client2.store().certificates.is_empty().unwrap());
+    assert!(client2.store().object_sequence_numbers.is_empty());
+    assert!(&client2.store().certificates.is_empty());
 
     // Sync client state
     client2.sync_client_state().await.unwrap();
@@ -2474,7 +2474,7 @@ fn test_client_store() {
         .multi_remove(keys_vals.into_iter().map(|(k, _)| k))
         .unwrap();
 
-    assert!(store.object_sequence_numbers.is_empty().unwrap());
+    assert!(store.object_sequence_numbers.is_empty());
 }
 
 #[tokio::test]
@@ -2499,7 +2499,7 @@ async fn test_object_store() {
     .clone();
     let gas_object_ref = gas_object.clone().to_object_reference();
     // Ensure that object store is empty
-    assert!(client1.store().objects.is_empty().unwrap());
+    assert!(client1.store().objects.is_empty());
 
     // Run a few syncs to retrieve objects ids
     for _ in 0..4 {
@@ -2653,7 +2653,7 @@ async fn test_transfer_pending_orders() {
         .await
         .unwrap();
     // Pending order should be cleared
-    assert!(sender_state.store().pending_orders.is_empty().unwrap());
+    assert!(sender_state.store().pending_orders.is_empty());
 
     // Test 2: Object not known to authorities. This has no side effect
     let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender_state.address());
@@ -2674,7 +2674,7 @@ async fn test_transfer_pending_orders() {
     assert!(matches!(result.unwrap_err().downcast_ref(),
             Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::ObjectNotFound{..}, ..])));
     // Pending order should be cleared
-    assert!(sender_state.store().pending_orders.is_empty().unwrap());
+    assert!(sender_state.store().pending_orders.is_empty());
 
     // Test 3: invalid object digest. This also has no side effect
     let object_id = *objects.next().unwrap();
@@ -2697,7 +2697,7 @@ async fn test_transfer_pending_orders() {
             Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::LockErrors{..}, ..])));
 
     // Pending order should be cleared
-    assert!(sender_state.store().pending_orders.is_empty().unwrap());
+    assert!(sender_state.store().pending_orders.is_empty());
 
     // Test 4: Conflicting orders touching same objects
     let object_id = *objects.next().unwrap();
