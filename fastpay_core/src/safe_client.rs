@@ -3,8 +3,9 @@
 
 use crate::authority_client::AuthorityAPI;
 use async_trait::async_trait;
-use fastx_types::{base_types::*, committee::*, fp_ensure};
-use fastx_types::{error::FastPayError, messages::*};
+use fastx_types::{base_types::*, committee::*, fp_ensure, };
+
+use fastx_types::{error::{FastPayError, FastPayResult}, messages::*};
 
 #[derive(Clone)]
 pub struct SafeClient<C> {
@@ -27,18 +28,18 @@ impl<C> SafeClient<C> {
         &self,
         digest: TransactionDigest,
         response: &OrderInfoResponse,
-    ) -> Result<(), FastPayError> {
+    ) -> FastPayResult {
         if let Some(signed_order) = &response.signed_order {
             // Check the order signature
             signed_order.check(&self.committee)?;
-            // Check its the right signer
+            // Check it has the right signer
             fp_ensure!(
                 signed_order.authority == self.address,
                 FastPayError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
             );
-            // Check its the right order
+            // Check it's the right order
             fp_ensure!(
                 signed_order.order.digest() == digest,
                 FastPayError::ByzantineAuthoritySuspicion {
@@ -50,7 +51,7 @@ impl<C> SafeClient<C> {
         if let Some(certificate) = &response.certified_order {
             // Check signatures and quorum
             certificate.check(&self.committee)?;
-            // Check its the right order
+            // Check it's the right order
             fp_ensure!(
                 certificate.order.digest() == digest,
                 FastPayError::ByzantineAuthoritySuspicion {
@@ -71,7 +72,7 @@ impl<C> SafeClient<C> {
                     authority: self.address
                 }
             );
-            // Check its the right signer
+            // Check it has the right signer
             fp_ensure!(
                 signed_effects.authority == self.address,
                 FastPayError::ByzantineAuthoritySuspicion {
@@ -87,7 +88,7 @@ impl<C> SafeClient<C> {
         &self,
         request: &ObjectInfoRequest,
         response: &ObjectInfoResponse,
-    ) -> Result<(), FastPayError> {
+    ) -> FastPayResult {
         // If we get a certificate make sure it is a valid certificate
         if let Some(certificate) = &response.parent_certificate {
             certificate.check(&self.committee)?;
@@ -109,7 +110,7 @@ impl<C> SafeClient<C> {
         if let Some(object_and_lock) = &response.object_and_lock {
             if let Some(signed_order) = &object_and_lock.lock {
                 signed_order.check(&self.committee)?;
-                // Check its the right signer
+                // Check it has the right signer
                 fp_ensure!(
                     signed_order.authority == self.address,
                     FastPayError::ByzantineAuthoritySuspicion {
