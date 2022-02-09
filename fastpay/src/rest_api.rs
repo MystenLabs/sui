@@ -7,38 +7,46 @@ mod server;
 use crossbeam::thread as cb_thread;
 
 use dropshot::endpoint;
-use dropshot::ApiDescription;
-use dropshot::ConfigDropshot;
-use dropshot::ConfigLogging;
-use dropshot::ConfigLoggingLevel;
-use dropshot::HttpError;
-use dropshot::HttpResponseOk;
-use dropshot::HttpResponseUpdatedNoContent;
-use dropshot::HttpServerStarter;
-use dropshot::RequestContext;
-use dropshot::TypedBody;
+use dropshot::{
+    ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, 
+    HttpError, HttpResponseOk, HttpResponseUpdatedNoContent, HttpServerStarter,
+    RequestContext, TypedBody
+};
 
-use fastpay::config::{AccountsConfig, CommitteeConfig};
+use fastpay::config::{
+    AccountInfo, AccountsConfig, AuthorityInfo, AuthorityPrivateInfo, CommitteeConfig, 
+    NetworkConfig, PortAllocator, WalletConfig
+};
+use fastpay::utils::Config;
+use fastpay::wallet_commands::{WalletContext, WalletCommands};
+use fastpay_core::authority::{AuthorityState, AuthorityStore};
+use fastpay_core::authority_server::AuthorityServer;
+use fastpay_core::client::Client;
 use fastx_network::transport;
 use fastx_types::base_types::*;
+use fastx_types::committee::Committee;
+use fastx_types::object::Object as FastxObject;
 
+use futures::future::join_all;
 use move_core_types::account_address::AccountAddress;
 
 use schemars::JsonSchema;
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tempfile::tempdir;
+use tokio::runtime::Runtime;
+use tracing::error;
+use std::collections::BTreeMap;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
-use std::net::Ipv6Addr;
-use std::net::SocketAddr;
+use std::net::{Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+
+const DEFAULT_WEIGHT: usize = 1;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -56,8 +64,9 @@ async fn main() -> Result<(), String> {
 
     let mut api = ApiDescription::new();
     api.register(start).unwrap();
-    // Use mpsc channels to send terminating message and kill thread
-    // api.register(stop).unwrap();
+    api.register(genesis).unwrap();
+    // Use mpsc channels to send terminating message and kill thread?
+    api.register(stop).unwrap();
     api.register(get_addresses).unwrap();
     api.register(get_address_objects).unwrap();
     api.register(get_object_info).unwrap();
@@ -95,6 +104,8 @@ struct ServerContext {
     accounts_config_path: Arc<Mutex<String>>,
     committee_config_path: Arc<Mutex<String>>,
     client_db_path: Arc<Mutex<PathBuf>>,
+    wallet_config_path: Arc<Mutex<String>>,
+    network_config_path: Arc<Mutex<String>>,
     accounts_config: Arc<Mutex<AccountsConfig>>,
     committee_config: Arc<Mutex<CommitteeConfig>>,
 }
@@ -117,6 +128,8 @@ impl ServerContext {
             accounts_config_path: Arc::new(Mutex::new(accounts_config_path.to_owned())),
             committee_config_path: Arc::new(Mutex::new(committee_config_path.to_owned())),
             client_db_path: Arc::new(Mutex::new(client_db_path)),
+            wallet_config_path: Arc::new(Mutex::new(String::from("./wallet.conf"))),
+            network_config_path: Arc::new(Mutex::new(String::from("./network.conf"))),
             accounts_config: Arc::new(Mutex::new(
                 AccountsConfig::read_or_create(accounts_config_path.as_str()).unwrap(),
             )),
@@ -127,105 +140,168 @@ impl ServerContext {
     }
 }
 
-
-// /**
-//  * [SERVER] Use to provide server configurations for genesis.
-//  */
-// #[endpoint {
-//     method = POST,
-//     path = "/fastx/genesis",
-// }]
-// async fn genesis(
-//     rqctx: Arc<RequestContext<ServerContext>>,
-//     configuration: TypedBody<ServerConfiguration>,
-// ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-//     let mut config =
-//         NetworkConfig::read_or_create(&network_conf_path).expect("Unable to read user accounts");
-
-//     if !config.authorities.is_empty() {
-//         println!("Cannot run genesis on a existing network, please delete network config file and try again.");
-//         exit(1);
-//     }
-
-//     let mut authorities = BTreeMap::new();
-//     let mut authority_info = Vec::new();
-//     let mut port_allocator = PortAllocator::new(10000);
-
-//     println!("Creating new addresses...");
-//     for _ in 0..4 {
-//         let (address, key_pair) = get_key_pair();
-//         let info = AuthorityPrivateInfo {
-//             address,
-//             key_pair,
-//             host: "127.0.0.1".to_string(),
-//             port: port_allocator.next_port().expect("No free ports"),
-//             db_path: format!("./authorities_db/{:?}", address),
-//         };
-//         authority_info.push(AuthorityInfo {
-//             address,
-//             host: info.host.clone(),
-//             base_port: info.port,
-//         });
-//         authorities.insert(info.address, 1);
-//         config.authorities.push(info);
-//     }
-
-//     config.save()?;
-
-//     let mut new_addresses = Vec::new();
-//     let mut preload_objects = Vec::new();
-
-//     println!("Creating test objects...");
-//     for _ in 0..5 {
-//         let (address, key_pair) = get_key_pair();
-//         new_addresses.push(AccountInfo { address, key_pair });
-//         for _ in 0..5 {
-//             let new_object = Object::with_id_owner_gas_coin_object_for_testing(
-//                 ObjectID::random(),
-//                 SequenceNumber::new(),
-//                 address,
-//                 1000,
-//             );
-//             preload_objects.push(new_object);
-//         }
-//     }
-//     let committee = Committee::new(authorities);
-
-//     // Make server state to persist the objects.
-//     for authority in config.authorities {
-//         make_server(&authority, &committee, &preload_objects, config.buffer_size).await;
-//     }
-
-//     let wallet_config = WalletConfig {
-//         accounts: new_addresses,
-//         authorities: authority_info,
-//         send_timeout: Duration::from_micros(4000000),
-//         recv_timeout: Duration::from_micros(4000000),
-//         buffer_size: config.buffer_size,
-//         db_folder_path: "./client_db".to_string(),
-//         config_path: "./wallet.conf".to_string(),
-//     };
-//     wallet_config.save()?;
-
-//     println!("Network genesis completed.");
-//     println!("Network config file is stored in {}.", config.config_path);
-//     println!(
-//         "Wallet config file is stored in {}.",
-//         wallet_config.config_path
-//     );
-// }
-
-
-
-/**ee
-* [INPUT] `Server Configuration` represents the provided server configuration.
+/**
+* 'GenesisRequest' represents the server configuration.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
-struct ServerConfiguration {
-    num_servers: u32,
-    // Make optional and provide defaults?
-    send_timeout_secs: u64,
-    recv_timeout_secs: u64,
+struct GenesisRequest {
+    num_authorities: u32,
+    num_objects: u32,
+}
+
+
+/**
+ * 'GenesisResponse' returns the genesis wallet & network config.
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct GenesisResponse {
+    wallet_config: String,
+    network_config: String,
+}
+
+/**
+ * [SERVER] Use to provide server configurations for genesis.
+ */
+#[endpoint {
+    method = POST,
+    path = "/fastx/genesis",
+}]
+async fn genesis(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    _genesis_request: TypedBody<GenesisRequest>,
+) -> Result<HttpResponseOk<GenesisResponse>, HttpError> {
+    // TODO: Move to server startup code and add to server context
+
+    let network_conf_path = String::from("./network.conf");
+
+    let mut network_config = match NetworkConfig::read_or_create(&network_conf_path) {
+        Ok(network_config) => network_config,
+        Err(error) => return Err(
+            HttpError::for_client_error(
+                None, 
+                hyper::StatusCode::FAILED_DEPENDENCY, 
+                format!("Unable to read user accounts: {error}"))),
+    };
+
+    if !network_config.authorities.is_empty() {
+        return Err(
+            HttpError::for_client_error(
+                None, 
+                hyper::StatusCode::FAILED_DEPENDENCY, 
+                String::from("Cannot run genesis on a existing network, please delete network config file and try again.")));
+    }
+
+    let mut authorities = BTreeMap::new();
+    let mut authority_info = Vec::new();
+    let mut port_allocator = PortAllocator::new(10000);
+
+    println!("Creating new addresses...");
+    for _ in 0..4 {
+        let (address, key_pair) = get_key_pair();
+        let info = AuthorityPrivateInfo {
+            address,
+            key_pair,
+            host: "127.0.0.1".to_string(),
+            port: port_allocator.next_port().expect("No free ports"),
+            db_path: format!("./authorities_db/{:?}", address),
+        };
+        authority_info.push(AuthorityInfo {
+            address,
+            host: info.host.clone(),
+            base_port: info.port,
+        });
+        authorities.insert(info.address, 1);
+        network_config.authorities.push(info);
+    }
+
+    network_config.save().map_err(|err| 
+        HttpError::for_client_error(
+            None, 
+            hyper::StatusCode::FAILED_DEPENDENCY, 
+            format!("Network config was unable to be saved: {err}"))
+        ).ok();
+
+    let mut new_addresses = Vec::new();
+    let mut preload_objects: Vec<FastxObject> = Vec::new();
+
+    println!("Creating test objects...");
+    for _ in 0..5 {
+        let (address, key_pair) = get_key_pair();
+        new_addresses.push(AccountInfo { address, key_pair });
+        for _ in 0..5 {
+            let new_object = FastxObject::with_id_owner_gas_coin_object_for_testing(
+                ObjectID::random(),
+                SequenceNumber::new(),
+                address,
+                1000,
+            );
+            preload_objects.push(new_object);
+        }
+    }
+    let committee = Committee::new(authorities);
+
+    // Make server state to persist the objects.
+    let network_config_path = network_config.config_path().to_string();
+    for authority in network_config.authorities.iter() {
+        make_server(&authority, &committee, &preload_objects, network_config.buffer_size).await;
+    }
+
+    let wallet_config = match WalletConfig::create("./wallet.conf") {
+        Ok(wallet_config) => wallet_config,
+        Err(error) => return Err(HttpError::for_client_error(
+            None, 
+            hyper::StatusCode::FAILED_DEPENDENCY, 
+            format!("Wallet config was unable to be created: {error}")))
+    };
+    wallet_config.save().map_err(|err| 
+        HttpError::for_client_error(
+            None, 
+            hyper::StatusCode::FAILED_DEPENDENCY, 
+            format!("Wallet config was unable to be saved: {err}"))
+        ).ok();
+
+    println!("Network genesis completed.");
+    println!("Network config file is stored in {}.", network_config_path);
+    println!(
+        "Wallet config file is stored in {}.",
+        wallet_config.config_path()
+    );
+
+    let wallet_config_string = format!(
+        "Wallet Config was created with {} accounts",
+        wallet_config.accounts.len(),
+    );
+    let network_config_string = format!(
+        "Network Config was created with {} authorities",
+        network_config.authorities.len(),
+    );
+
+    Ok(HttpResponseOk(GenesisResponse { 
+        wallet_config: wallet_config_string,
+        network_config: network_config_string
+    }))
+}
+
+/**
+ * [SERVER] Stop servers and delete storage.
+ */
+#[endpoint {
+    method = POST,
+    path = "/fastx/stop",
+}]
+async fn stop(
+    _rqctx: Arc<RequestContext<ServerContext>>,
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    // TODO move to server context
+    let network_conf_path = String::from("./network.conf");
+    let wallet_conf_path = String::from("./wallet.conf");
+    let authority_db_dir = String::from("./authorities_db");
+
+    fs::remove_dir_all(authority_db_dir).ok();
+    fs::remove_file(network_conf_path).ok();
+    fs::remove_file(wallet_conf_path).ok();
+
+    Ok(HttpResponseUpdatedNoContent())
 }
 
 /**
@@ -236,98 +312,69 @@ struct ServerConfiguration {
     path = "/fastx/start",
 }]
 async fn start(
-    rqctx: Arc<RequestContext<ServerContext>>,
-    configuration: TypedBody<ServerConfiguration>,
-) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-    let server_context = rqctx.context();
-    let configuration = configuration.into_inner();
+    _rqctx: Arc<RequestContext<ServerContext>>,
+) -> Result<HttpResponseOk<String>, HttpError> {
+    // TODO: Move to server startup code and add to server context
+    let network_conf_path = String::from("./network.conf");
 
-    let num_servers = configuration.num_servers;
+    let network_config = match NetworkConfig::read_or_create(&network_conf_path) {
+        Ok(network_config) => network_config,
+        Err(error) => return Err(
+            HttpError::for_client_error(
+                None, 
+                hyper::StatusCode::FAILED_DEPENDENCY, 
+                format!("Unable to read user accounts: {error}"))),
+    };
 
-    *server_context.send_timeout.lock().unwrap() =
-        Duration::from_secs(configuration.send_timeout_secs);
-    *server_context.recv_timeout.lock().unwrap() =
-        Duration::from_secs(configuration.recv_timeout_secs);
-
-    let accounts_config_path = server_context
-        .accounts_config_path
-        .lock()
-        .unwrap()
-        .to_owned();
-    let committee_config_path = server_context
-        .committee_config_path
-        .lock()
-        .unwrap()
-        .to_owned();
-    let initial_accounts_config_path = server_context
-        .initial_accounts_config_path
-        .lock()
-        .unwrap()
-        .to_owned();
-
-    let mut accounts_config = AccountsConfig::read_or_create(&accounts_config_path).unwrap();
-
-    // Generate configs for the servers (could split this out to its own endpoint)
-    for i in 0..num_servers {
-        let db_dir = "db".to_string() + &i.to_string();
-        let server_config_path = "server".to_string() + &i.to_string() + ".json";
-        fs::create_dir(&db_dir)
-            .unwrap_or_else(|_| panic!("Failed to create database directory: {}", db_dir));
-        File::create(&server_config_path).expect("Couldn't create server config file");
-        let server = server::create_server_config(
-            server_config_path.as_str(),
-            "0.0.0.0".to_string(),
-            (9100 + i).try_into().unwrap(),
-            db_dir,
-        );
-
-        // Write to committee_config_path
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .append(true)
-            .open(&committee_config_path)
-            .unwrap();
-        file.write_all(serde_json::to_string(&server.authority).unwrap().as_bytes())
-            .ok();
+    if network_config.authorities.is_empty() {
+        return Err(
+            HttpError::for_client_error(
+                None, 
+                hyper::StatusCode::FAILED_DEPENDENCY, 
+                String::from("No authority configured for the network, please run genesis.")));
     }
 
-    let committee_config = CommitteeConfig::read(&committee_config_path).unwrap();
-
-    // Create accounts with starting values (could split this out to its own endpoint)
-    let _initial_state_config = client::create_account_configs(
-        100,
-        10,
-        2000000,
-        &accounts_config_path,
-        &mut accounts_config,
-        &initial_accounts_config_path,
+    println!(
+        "Starting network with {} authorities",
+        network_config.authorities.len()
     );
 
-    *server_context.accounts_config.lock().unwrap() = accounts_config;
-    *server_context.committee_config.lock().unwrap() = committee_config;
+    let committee = Committee::new(
+        network_config
+            .authorities
+            .iter()
+            .map(|info| (info.address, DEFAULT_WEIGHT))
+            .collect(),
+    );
+    let mut handles = Vec::new();
+    let rt = Runtime::new().unwrap();
 
-    let buffer_size: usize = server_context.buffer_size;
+    for authority in network_config.authorities {
+        let server = make_server(&authority, &committee, &[], network_config.buffer_size).await;
 
-    let mut thrs = Vec::new();
-
-    for i in 0..num_servers {
-        let server_config_path = "server".to_string() + &i.to_string() + ".json";
-        let committee_config_path = committee_config_path.clone();
-        let initial_accounts_config_path = initial_accounts_config_path.clone();
-
-        thrs.push(thread::spawn(move || {
-            println!("Starting...");
-
-            server::run_server(
-                &server_config_path,
-                &committee_config_path,
-                &initial_accounts_config_path,
-                buffer_size,
-            );
-        }));
+        handles.push(async move {
+            let spawned_server = match server.spawn().await {
+                Ok(server) => server,
+                Err(err) => {
+                    error!("Failed to start server: {}", err);
+                    return;
+                }
+            };
+            if let Err(err) = spawned_server.join().await {
+                error!("Server ended with an error: {}", err);
+            }
+        });
+        
+    
     }
 
-    Ok(HttpResponseUpdatedNoContent())
+    let num_authorities = handles.len();
+
+    thread::spawn(move || {
+        rt.block_on(join_all(handles));
+    });
+
+    Ok(HttpResponseOk(format!("Started {} authorities", num_authorities)))
 }
 
 /**
@@ -343,22 +390,44 @@ struct Addresses {
  */
 #[endpoint {
     method = GET,
-    path = "/server/addresses",
+    path = "/fastx/addresses",
 }]
 async fn get_addresses(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<Addresses>, HttpError> {
     let server_context = rqctx.context();
+    let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
 
-    let accounts_config = &mut *server_context.accounts_config.lock().unwrap();
+    let config =
+        WalletConfig::read_or_create(&wallet_config_path).expect("Unable to read wallet config");
+    let addresses = config
+        .accounts
+        .iter()
+        .map(|info| info.address)
+        .collect::<Vec<_>>();
+    let mut context = WalletContext::new(config);
 
-    let addresses = accounts_config
-        .addresses()
-        .into_iter()
-        .map(|addr| format!("{:X}", addr).trim_end_matches('=').to_string())
-        .collect();
-
-    Ok(HttpResponseOk(Addresses { addresses }))
+    // Sync all accounts on start up.
+    for address in addresses.iter() {
+        let client_state = context
+            .get_or_create_client_state(address).map_err(|err| 
+                HttpError::for_client_error(
+                None, 
+                hyper::StatusCode::FAILED_DEPENDENCY, 
+                format!("Can't create client state: {err}"))).ok().unwrap();
+        client_state.sync_client_state()
+            .await.map_err(|err| 
+                HttpError::for_client_error(
+                None, 
+                hyper::StatusCode::FAILED_DEPENDENCY, 
+                format!("Sync failed: {err}"))).ok();
+    }
+    Ok(HttpResponseOk(Addresses { 
+        addresses: addresses
+                        .into_iter()
+                        .map(|address| format!("{:?}", address).to_string())
+                        .collect() 
+    }))
 }
 
 /**
@@ -566,4 +635,29 @@ async fn transfer_object(
     .unwrap();
 
     Ok(HttpResponseUpdatedNoContent())
+}
+
+async fn make_server(
+    authority: &AuthorityPrivateInfo,
+    committee: &Committee,
+    pre_load_objects: &[FastxObject],
+    buffer_size: usize,
+) -> AuthorityServer {
+    let path = PathBuf::from(authority.db_path.clone());
+    let store = Arc::new(AuthorityStore::open(path, None));
+
+    let state = AuthorityState::new_with_genesis_modules(
+        committee.clone(),
+        authority.address,
+        Box::pin(authority.key_pair.copy()),
+        store,
+    )
+    .await;
+
+    for object in pre_load_objects {
+        state.init_order_lock(object.to_object_reference()).await;
+        state.insert_object(object.clone()).await;
+    }
+
+    AuthorityServer::new(authority.host.clone(), authority.port, buffer_size, state)
 }

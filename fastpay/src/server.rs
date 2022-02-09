@@ -46,7 +46,7 @@ fn make_server(
         let state = AuthorityState::new_with_genesis_modules(
             committee,
             server_config.authority.address,
-            server_config.key.copy(),
+            Box::pin(server_config.key),
             store,
         )
         .await;

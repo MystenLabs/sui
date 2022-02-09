@@ -66,7 +66,7 @@ fn make_authority_mass_clients(
 
 async fn make_client_state_and_try_sync(
     path: PathBuf,
-    accounts: &AccountsConfig,
+    accounts: &mut AccountsConfig,
     committee_config: &CommitteeConfig,
     address: FastPayAddress,
     buffer_size: usize,
@@ -90,25 +90,25 @@ async fn make_client_state_and_try_sync(
 
 fn make_client_state(
     path: PathBuf,
-    accounts: &AccountsConfig,
+    accounts: &mut AccountsConfig,
     committee_config: &CommitteeConfig,
     address: FastPayAddress,
     buffer_size: usize,
     send_timeout: std::time::Duration,
     recv_timeout: std::time::Duration,
 ) -> ClientState<AuthorityClient> {
-    let account = accounts.get(&address).expect("Unknown account");
+    let account = accounts.remove(&address).expect("Unknown account");
     let committee = Committee::new(committee_config.voting_rights());
     let authority_clients =
         make_authority_clients(committee_config, buffer_size, send_timeout, recv_timeout);
     ClientState::new(
         path,
         address,
-        account.key.copy(),
+        Box::pin(account.key),
         committee,
         authority_clients,
         account.certificates.clone(),
-        account.object_refs.clone(),
+        account.object_refs,
     )
     .unwrap()
 }
@@ -304,14 +304,19 @@ fn deserialize_response(response: &[u8]) -> Option<OrderInfoResponse> {
 }
 fn find_cached_owner_by_object_id(
     account_config: &AccountsConfig,
-    object_id: ObjectID,
-) -> Option<&PublicKeyBytes> {
+    object_id: &ObjectID,
+) -> Option<PublicKeyBytes> {
     account_config
-        .find_account(&object_id)
-        .map(|acc| &acc.address)
+        .find_account(object_id)
+        .map(|acc| acc.address)
 }
 
-fn show_object_effects(order_effects: OrderEffects) {
+fn show_object_effects(order_info_resp: OrderInfoResponse) {
+    let order_effects = order_info_resp.signed_effects.unwrap().effects;
+
+    if order_effects.status != ExecutionStatus::Success {
+        error!("Error publishing module: {:#?}", order_effects.status);
+    }
     if !order_effects.created.is_empty() {
         println!("Created Objects:");
         for (obj, _) in order_effects.created {
@@ -493,13 +498,13 @@ fn main() {
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 // Find owner of gas object
-                let owner = find_cached_owner_by_object_id(&accounts_config, gas_object_id)
+                let owner = find_cached_owner_by_object_id(&accounts_config, &gas_object_id)
                     .expect("Cannot find owner for gas object");
                 let mut client_state = make_client_state_and_try_sync(
                     client_db_path,
-                    &accounts_config,
+                    &mut accounts_config,
                     &committee_config,
-                    *owner,
+                    owner,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
@@ -514,13 +519,7 @@ fn main() {
                 let pub_resp = client_state.publish(path, gas_obj_ref).await;
 
                 match pub_resp {
-                    Ok(resp) => {
-                        if resp.1.status != ExecutionStatus::Success {
-                            error!("Error publishing module: {:#?}", resp.1.status);
-                        }
-                        let (_, effects) = resp;
-                        show_object_effects(effects);
-                    }
+                    Ok(resp) => show_object_effects(resp.1),
                     Err(err) => error!("{:#?}", err),
                 }
             });
@@ -562,14 +561,14 @@ fn main() {
             let rt = Runtime::new().unwrap();
             rt.block_on(async move {
                 // Find owner of gas object
-                let owner = find_cached_owner_by_object_id(&accounts_config, config.gas_object_id)
+                let owner = find_cached_owner_by_object_id(&accounts_config, &config.gas_object_id)
                     .expect("Cannot find owner for gas object");
 
                 let mut client_state = make_client_state_and_try_sync(
                     client_db_path,
-                    &accounts_config,
+                    &mut accounts_config,
                     &committee_config,
-                    *owner,
+                    owner,
                     buffer_size,
                     send_timeout,
                     recv_timeout,
@@ -791,13 +790,13 @@ pub fn transfer_object(
 ) {
     let rt = Runtime::new().unwrap();
     rt.block_on(async move {
-        let owner = find_cached_owner_by_object_id(accounts_config, gas_object_id)
+        let owner = find_cached_owner_by_object_id(&accounts_config, &gas_object_id)
             .expect("Cannot find owner for gas object");
         let mut client_state = make_client_state_and_try_sync(
             client_db_path.clone(),
             accounts_config,
-            committee_config,
-            *owner,
+            &committee_config,
+            owner,
             buffer_size,
             send_timeout,
             recv_timeout,
@@ -805,7 +804,7 @@ pub fn transfer_object(
         .await;
         info!("Starting transfer");
         let time_start = Instant::now();
-        let cert = client_state
+        let (cert, _) = client_state
             .transfer_object(object_id, gas_object_id, to)
             .await
             .unwrap();
@@ -821,7 +820,7 @@ pub fn transfer_object(
         let mut recipient_client_state = make_client_state_and_try_sync(
             client2_db_path,
             accounts_config,
-            committee_config,
+            &committee_config,
             to,
             buffer_size,
             send_timeout,
@@ -850,15 +849,13 @@ pub fn get_object_info(
         .nth_account(0)
         .expect("Account config is invalid")
         .address;
-
-    println!("retrieved account: {:?}", account);
     let rt = Runtime::new().unwrap();
     rt.block_on(async move {
         // Fetch the object ref
         let mut client_state = make_client_state_and_try_sync(
             client_db_path,
             accounts_config,
-            committee_config,
+            &committee_config,
             account,
             buffer_size,
             send_timeout,
@@ -899,7 +896,7 @@ pub fn query_objects(
         let client_state = make_client_state_and_try_sync(
             client_db_path,
             accounts_config,
-            committee_config,
+            &committee_config,
             address,
             buffer_size,
             send_timeout,

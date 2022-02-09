@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 use fastpay::config::{
-    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, WalletConfig,
+    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, PortAllocator, WalletConfig,
 };
 use fastpay::utils::Config;
 use fastpay_core::authority::{AuthorityState, AuthorityStore};
@@ -11,7 +11,6 @@ use fastx_types::committee::Committee;
 use fastx_types::object::Object;
 use futures::future::join_all;
 use std::collections::BTreeMap;
-use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
@@ -197,25 +196,4 @@ async fn make_server(
     }
 
     AuthorityServer::new(authority.host.clone(), authority.port, buffer_size, state)
-}
-
-struct PortAllocator {
-    next_port: u16,
-}
-
-impl PortAllocator {
-    pub fn new(starting_port: u16) -> Self {
-        Self {
-            next_port: starting_port,
-        }
-    }
-    fn next_port(&mut self) -> Option<u16> {
-        for port in self.next_port..65535 {
-            if TcpListener::bind(("127.0.0.1", port)).is_ok() {
-                self.next_port = port + 1;
-                return Some(port);
-            }
-        }
-        None
-    }
 }

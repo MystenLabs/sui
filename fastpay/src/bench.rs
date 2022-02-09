@@ -162,7 +162,7 @@ impl ClientServerBenchmark {
             let state = AuthorityState::new_with_genesis_modules(
                 committee.clone(),
                 public_auth0,
-                secret_auth0.copy(),
+                Box::pin(secret_auth0),
                 store,
             )
             .await;

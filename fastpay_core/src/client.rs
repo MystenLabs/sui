@@ -18,8 +18,19 @@ use move_core_types::language_storage::TypeTag;
 use typed_store::rocks::open_cf;
 use typed_store::Map;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    pin::Pin,
+};
+
+/// a Trait object for `signature::Signer` that is:
+/// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
+/// - Sync, i.e. can be safely shared between threads.
+///
+/// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
+///
+type StableSyncSigner = Pin<Box<dyn signature::Signer<ed25519_dalek::Signature> + Send + Sync>>;
 
 pub mod client_store;
 use self::client_store::ClientStore;
@@ -33,7 +44,7 @@ pub struct ClientState<AuthorityAPI> {
     /// Our FastPay address.
     address: FastPayAddress,
     /// Our signature key.
-    secret: KeyPair,
+    secret: StableSyncSigner,
     /// Authority entry point.
     authorities: AuthorityAggregator<AuthorityAPI>,
     /// Persistent store for client
@@ -49,19 +60,10 @@ pub trait Client {
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-    ) -> Result<CertifiedOrder, anyhow::Error>;
+    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error>;
 
     /// Receive object from FastX.
     async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error>;
-
-    /// Send object to a FastX account.
-    /// Do not confirm the transaction.
-    async fn transfer_to_fastx_unsafe_unconfirmed(
-        &mut self,
-        recipient: FastPayAddress,
-        object_id: ObjectID,
-        gas_payment: ObjectID,
-    ) -> Result<CertifiedOrder, anyhow::Error>;
 
     /// Try to complete all pending orders once. Return if any fails
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError>;
@@ -81,14 +83,14 @@ pub trait Client {
         object_arguments: Vec<ObjectRef>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
+    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error>;
 
     /// Publish Move modules
     async fn publish(
         &mut self,
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
+    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error>;
 
     /// Get the object information
     async fn get_object_info(
@@ -110,7 +112,7 @@ impl<A> ClientState<A> {
     pub fn new(
         path: PathBuf,
         address: FastPayAddress,
-        secret: KeyPair,
+        secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
@@ -385,28 +387,28 @@ where
     async fn execute_transaction_inner(
         &mut self,
         order: &Order,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
         let inputs = order.input_objects();
         let known_certificates = self.get_known_certificates(order.sender(), &inputs);
         self.authorities
             .update_authority_certificates(*order.sender(), &inputs, known_certificates)
             .await?;
 
-        let (new_certificate, response) = self.authorities.execute_transaction(order).await?;
+        let resp = self.authorities.execute_transaction(order).await?;
 
-        // Update local data using new order response.
-        self.update_objects_from_order_info(response.clone())
-            .await?;
-
-        Ok((new_certificate, response.signed_effects.unwrap().effects))
+        self.update_objects_from_order_info(resp.1.clone()).await?;
+        Ok(resp)
     }
 
-    /// Execute (or retry) an order and subsequently execute the Confirmation Order.
+    /// Execute (or retry) an order and execute the Confirmation Order.
     /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
+    /// This functions locks all the input objects if possible, and unlocks at the end of confirmation or if an error occurs
+    /// TODO: define other situations where we can unlock objects after authority error
+    /// https://github.com/MystenLabs/fastnft/issues/346
     async fn execute_transaction(
         &mut self,
         order: Order,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
         for object_kind in &order.input_objects() {
             let object_id = object_kind.object_id();
             let next_sequence_number = self.next_sequence_number(&object_id).unwrap_or_default();
@@ -419,71 +421,82 @@ where
                 .into()
             );
         }
-        // TODO: The pending order logic needs to be enhanced.
-        // Return error if conflict
-        // Ideally the caller should be notified
-        fp_ensure!(
-            !self.has_pending_order_conflict(&order)?,
-            FastPayError::ConcurrentTransactionError.into()
-        );
         // Lock the objects in this order
         self.lock_pending_order_objects(&order)?;
-        // Unlock objects for the pending order and update `sent_certificates`,
-        // and `next_sequence_number`. (Note that if we were using persistent
-        // storage, we should ensure update atomicity in the eventuality of a crash.)
+
+        // We can escape this function without unlocking. This could be dangerous
         let result = self.execute_transaction_inner(&order).await;
+
+        // How do we handle errors on authority which lock objects?
+        // Currently VM crash can keep objects locked, but we would like to avoid this.
+        // TODO: https://github.com/MystenLabs/fastnft/issues/349
+        // https://github.com/MystenLabs/fastnft/issues/211
+        // https://github.com/MystenLabs/fastnft/issues/346
+
         self.unlock_pending_order_objects(&order)?;
         result
     }
 
-    /// Returns true if this pending order's input objects are locked by another unconfirmed order
+    /// This function verifies that the objects in the specfied order are locked by the given order
+    /// We use this to ensure that an order can indeed unclock or lock certain objects in order
+    /// This means either exactly all the objects are owned by this order, or by no order
     /// The caller has to explicitly find which objects are locked
-    /// TODO: lock only objects that are mutable: https://github.com/MystenLabs/fastnft/issues/305
-    fn has_pending_order_conflict(&self, order: &Order) -> Result<bool, FastPayError> {
-        Ok(self
-            .store
-            .pending_orders
-            .multi_get(
-                &order
-                    .input_objects()
-                    .iter()
-                    .map(|q| q.object_id())
-                    .collect_vec(),
-            )?
-            .iter()
-            .any(|w| w.is_some()))
+    /// TODO: always return true for immutable objects https://github.com/MystenLabs/fastnft/issues/305
+    /// TODO: this function can fail. Need to handle it https://github.com/MystenLabs/fastnft/issues/383
+    fn can_lock_or_unlock(&self, order: &Order) -> Result<bool, FastPayError> {
+        let iter_matches = self.store.pending_orders.multi_get(
+            &order
+                .input_objects()
+                .iter()
+                .map(|q| q.object_id())
+                .collect_vec(),
+        )?;
+        for o in iter_matches {
+            // If we find any order that isn't the given order, we cannot proceed
+            if o.is_some() && o.unwrap() != *order {
+                return Ok(false);
+            }
+        }
+        // All the objects are either owned by this order or by no order
+        Ok(true)
     }
+
     /// Locks the objects for the given order
     /// It is important to check that the object is not locked before locking again
-    /// One should call has_pending_order_conflict before locking as this overwites the previous lock
+    /// One should call can_lock_or_unlock before locking as this overwites the previous lock
     /// If the object is already locked, ensure it is unlocked by calling unlock_pending_order_objects
     /// Client runs sequentially right now so access to this is safe
     /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/fastnft/issues/335
     pub fn lock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
-        if self.has_pending_order_conflict(order)? {
+        if !self.can_lock_or_unlock(order)? {
             return Err(FastPayError::ConcurrentTransactionError);
         }
-        ClientStore::multi_insert(
-            &self.store.pending_orders,
-            order
-                .input_objects()
-                .iter()
-                .map(|e| (e.object_id(), order.clone())),
-        )
+        self.store
+            .pending_orders
+            .multi_insert(
+                order
+                    .input_objects()
+                    .iter()
+                    .map(|e| (e.object_id(), order.clone())),
+            )
+            .map_err(|e| e.into())
     }
     /// Unlocks the objects for the given order
     /// Unlocking an already unlocked object, is a no-op and does not Err
     fn unlock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
-        ClientStore::multi_remove(
-            &self.store.pending_orders,
-            order.input_objects().iter().map(|e| e.object_id()),
-        )
+        if !self.can_lock_or_unlock(order)? {
+            return Err(FastPayError::ConcurrentTransactionError);
+        }
+        self.store
+            .pending_orders
+            .multi_remove(order.input_objects().iter().map(|e| e.object_id()))
+            .map_err(|e| e.into())
     }
 
     async fn update_objects_from_order_info(
         &mut self,
         order_info_resp: OrderInfoResponse,
-    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
+    ) -> Result<(), FastPayError> {
         if let Some(v) = order_info_resp.signed_effects {
             // The cert should be included in the response
             let cert = order_info_resp.certified_order.unwrap();
@@ -527,7 +540,7 @@ where
                     self.remove_object_info(object_id)?;
                 }
             }
-            Ok((cert, v.effects))
+            Ok(())
         } else {
             Err(FastPayError::ErrorWhileRequestingInformation)
         }
@@ -586,12 +599,13 @@ where
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-    ) -> Result<CertifiedOrder, anyhow::Error> {
+    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
         let object_ref = self
             .store
             .object_refs
             .get(&object_id)?
             .ok_or(FastPayError::ObjectNotFound { object_id })?;
+
         let gas_payment =
             self.store
                 .object_refs
@@ -606,18 +620,19 @@ where
             recipient,
             gas_payment,
         };
-        let order = Order::new_transfer(transfer, &self.secret);
-        let (certificate, _) = self.execute_transaction(order).await?;
+        let order = Order::new_transfer(transfer, &*self.secret);
+        let (certificate, order_info_response) = self.execute_transaction(order).await?;
 
         // remove object from local storage if the recipient is not us.
         if recipient != self.address {
             self.remove_object_info(&object_id)?;
         }
 
-        Ok(certificate)
+        Ok((certificate, order_info_response))
     }
 
     // TODO: Revisit this and see if this method is still necessary.
+    // Technically we can just `sync` and fetch all changes
     async fn receive_object(&mut self, certificate: &CertifiedOrder) -> Result<(), anyhow::Error> {
         certificate.check(&self.authorities.committee)?;
         match &certificate.order.kind {
@@ -688,42 +703,6 @@ where
         }
     }
 
-    // TODO: Is this function still needed?
-    async fn transfer_to_fastx_unsafe_unconfirmed(
-        &mut self,
-        recipient: FastPayAddress,
-        object_id: ObjectID,
-        gas_payment: ObjectID,
-    ) -> Result<CertifiedOrder, anyhow::Error> {
-        let object_ref = self.object_ref(object_id)?;
-        let gas_payment = self.object_ref(gas_payment)?;
-
-        let transfer = Transfer {
-            object_ref,
-            sender: self.address,
-            recipient,
-            gas_payment,
-        };
-        let order = Order::new_transfer(transfer, &self.secret);
-
-        self.lock_pending_order_objects(&order)?;
-        let new_certificate = self
-            .authorities
-            .execute_transaction_without_confirmation_unsafe(&order)
-            .await;
-        self.unlock_pending_order_objects(&order)?;
-
-        let new_certificate = new_certificate?;
-
-        // The new cert will not be updated by order effect without confirmation, the new unconfirmed cert need to be added temporally.
-        let new_sent_certificates = vec![new_certificate.clone()];
-        for object_kind in new_certificate.order.input_objects() {
-            self.update_certificates(&object_kind.object_id(), &new_sent_certificates)?;
-        }
-
-        Ok(new_certificate)
-    }
-
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError> {
         // Orders are idempotent so no need to prevent multiple executions
         let unique_pending_orders: HashSet<_> = self
@@ -738,13 +717,12 @@ where
             self.execute_transaction(order.clone()).await.map_err(|e| {
                 FastPayError::ErrorWhileProcessingTransactionOrder { err: e.to_string() }
             })?;
-            self.unlock_pending_order_objects(&order)?;
         }
         Ok(())
     }
 
     async fn sync_client_state(&mut self) -> Result<AuthorityName, anyhow::Error> {
-        if !self.store.pending_orders.is_empty()? {
+        if !self.store.pending_orders.is_empty() {
             // Finish executing the previous orders
             self.try_complete_pending_orders().await?;
         }
@@ -782,7 +760,7 @@ where
         object_arguments: Vec<ObjectRef>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
         let move_call_order = Order::new_move_call(
             self.address,
             package_object_ref,
@@ -793,7 +771,7 @@ where
             object_arguments,
             pure_arguments,
             gas_budget,
-            &self.secret,
+            &*self.secret,
         );
         self.execute_transaction(move_call_order).await
     }
@@ -802,11 +780,15 @@ where
         &mut self,
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
         // Try to compile the package at the given path
         let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
-        let move_publish_order =
-            Order::new_module(self.address, gas_object_ref, compiled_modules, &self.secret);
+        let move_publish_order = Order::new_module(
+            self.address,
+            gas_object_ref,
+            compiled_modules,
+            &*self.secret,
+        );
         self.execute_transaction(move_publish_order).await
     }
 
