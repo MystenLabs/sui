@@ -3,9 +3,12 @@
 
 use crate::authority_client::AuthorityAPI;
 use async_trait::async_trait;
-use fastx_types::{base_types::*, committee::*, fp_ensure, };
+use fastx_types::{base_types::*, committee::*, fp_ensure};
 
-use fastx_types::{error::{FastPayError, FastPayResult}, messages::*};
+use fastx_types::{
+    error::{FastPayError, FastPayResult},
+    messages::*,
+};
 
 #[derive(Clone)]
 pub struct SafeClient<C> {
