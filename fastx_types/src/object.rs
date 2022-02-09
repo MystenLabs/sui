@@ -329,19 +329,24 @@ pub enum ObjectRead {
 }
 
 impl ObjectRead {
+
+    /// Returns a reference to the object if there is any, otherwise an Err if 
+    /// the object does exist or is deleted.
     pub fn object(&self) -> Result<&Object, FastPayError> {
         match &self {
-            ObjectRead::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
-            ObjectRead::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
-            ObjectRead::Exists(_, o) => Ok(o),
+            Self::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
+            Self::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
+            Self::Exists(_, o) => Ok(o),
         }
     }
 
+    /// Returns the object ref if there is an object, otherwise an Err if 
+    /// the object does exist or is deleted.
     pub fn reference(&self) -> Result<ObjectRef, FastPayError> {
         match &self {
-            ObjectRead::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
-            ObjectRead::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
-            ObjectRead::Exists(oref, _) => Ok(*oref),
+            Self::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
+            Self::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
+            Self::Exists(oref, _) => Ok(*oref),
         }
     }
 }
