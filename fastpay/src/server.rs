@@ -109,7 +109,7 @@ enum ServerCommands {
 
         /// Sets the port
         #[structopt(long)]
-        port: u32,
+        port: u16,
 
         /// Sets the path to the database folder
         #[structopt(long)]
