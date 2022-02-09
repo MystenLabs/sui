@@ -61,7 +61,7 @@ The following commands are supported by the interactive wallet:
     sync           Synchronize client state with authorities
     transfer       Transfer funds
 
-Use the `help <command>` to see more information on each command.
+Use `help <command>` to see more information on each command.
 
 ### 5. Using the wallet without interactive shell
 The wallet can also be use without the interactive shell
