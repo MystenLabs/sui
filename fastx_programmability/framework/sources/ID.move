@@ -8,7 +8,9 @@ module FastX::ID {
 
     /// Globally unique identifier of an object. This is a privileged type
     /// that can only be derived from a `TxContext`
-    struct ID has store, drop {
+    /// ID doesn't have drop capability, which means to delete an ID (when
+    /// deleting an object), one must explicitly call the delete function.
+    struct ID has store {
         id: IDBytes,
         /// Version number for the ID. The version number is incremented each
         /// time the object with this ID is passed to a non-failing transaction
@@ -68,4 +70,9 @@ module FastX::ID {
     public native fun get_id<T: key>(obj: &T): &ID;
 
     public native fun bytes_to_address(bytes: vector<u8>): address;
+
+    /// When an object is being deleted through unpacking, the 
+    /// delete function must be called on the id to inform Sui
+    /// regarding the deletion of the object.
+    public native fun delete(id: ID);
 }

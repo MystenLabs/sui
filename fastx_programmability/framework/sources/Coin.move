@@ -1,6 +1,6 @@
 module FastX::Coin {
     use FastX::Address::{Self, Address};
-    use FastX::ID::ID;
+    use FastX::ID::{Self, ID};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
     use Std::Errors;
@@ -34,7 +34,8 @@ module FastX::Coin {
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
     public fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
-        let Coin { id: _, value } = c;
+        let Coin { id, value } = c;
+        ID::delete(id);
         self.value = self.value + value
     }
 
@@ -72,7 +73,8 @@ module FastX::Coin {
 
     /// Destroy a coin with value zero
     public fun destroy_zero<T>(c: Coin<T>) {
-        let Coin { id: _, value } = c;
+        let Coin { id, value } = c;
+        ID::delete(id);
         assert!(value == 0, Errors::invalid_argument(ENONZERO))
     }
 
@@ -104,7 +106,8 @@ module FastX::Coin {
     /// Destroy the coin `c` and decrease the total supply in `cap`
     /// accordingly.
     public fun burn<T>(c: Coin<T>, cap: &mut TreasuryCap<T>) {
-        let Coin { id: _, value } = c;
+        let Coin { id, value } = c;
+        ID::delete(id);
         cap.total_supply = cap.total_supply - value
     }
 

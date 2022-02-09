@@ -140,7 +140,9 @@ module Examples::Hero {
             slayer_address: TxContext::get_signer_address(ctx),
             hero: *ID::get_inner(&hero.id),
             boar: *ID::get_inner(&boar_id),
-        })
+        });
+        ID::delete(boar_id);
+
     }
 
     /// Strength of the hero when attacking
@@ -173,7 +175,8 @@ module Examples::Hero {
 
     /// Heal the weary hero with a potion
     public fun heal(hero: &mut Hero, potion: Potion) {
-        let Potion { id: _, potency } = potion;
+        let Potion { id, potency } = potion;
+        ID::delete(id);
         let new_hp = hero.hp + potency;
         // cap hero's HP at MAX_HP to avoid int overflows
         hero.hp = Math::min(new_hp, MAX_HP)

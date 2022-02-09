@@ -25,6 +25,11 @@ pub enum EventType {
     TransferToAddressAndFreeze,
     /// System event: transfer object to another object
     TransferToObject,
+    /// System event: an object ID is deleted. This does not necessarily
+    /// mean an object is being deleted. However whenever an object is being
+    /// deleted, the object ID must be deleted and this event will be
+    /// emitted.
+    DeleteObjectID,
     /// User-defined event
     User,
 }

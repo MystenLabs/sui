@@ -2,7 +2,7 @@
 module FastX::ObjectBasics {
     use FastX::Address;
     use FastX::Event;
-    use FastX::ID::ID;
+    use FastX::ID::{Self, ID};
     use FastX::TxContext::{Self, TxContext};
     use FastX::Transfer;
 
@@ -51,7 +51,8 @@ module FastX::ObjectBasics {
     }
 
     public fun delete(o: Object, _ctx: &mut TxContext) {
-        let Object { id: _, value: _ } = o;
+        let Object { id, value: _ } = o;
+        ID::delete(id);
     }
 
     public fun wrap(o: Object, ctx: &mut TxContext) {
@@ -59,7 +60,8 @@ module FastX::ObjectBasics {
     }
 
     public fun unwrap(w: Wrapper, ctx: &mut TxContext) {
-        let Wrapper { id: _, o } = w;
+        let Wrapper { id, o } = w;
+        ID::delete(id);
         Transfer::transfer(o, TxContext::get_signer_address(ctx))
     }
 }
