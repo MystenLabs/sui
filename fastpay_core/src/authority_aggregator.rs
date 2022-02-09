@@ -452,7 +452,11 @@ where
     /// This function returns a map between object references owned and authorities that hold the objects
     /// at this version, as well as a list of authorities that responsed to the query for the objects owned.
     ///
-    /// We do not expose this function to users, as its output is hard for callers to interpet.
+    /// We do not expose this function to users, as its output is hard for callers to interpet. In particular,
+    /// some of the entries in the list might be the result of a query to a byzantine authority, so further
+    /// sanitization and checks are necessary to rely on this information.
+    /// 
+    /// Clients should use `sync_all_owned_objects` instead.
     async fn get_all_owned_objects(
         &self,
         address: FastPayAddress,
