@@ -979,35 +979,70 @@ where
                 .iter()
                 .map(|(name, _)| self.committee.weight(name))
                 .sum();
+
+            // If we have f+1 stake telling us of the latest version of the object, we just accept it.
             if stake >= self.committee.validity_threshold() {
                 if obj_option.is_none() {
                     return Ok(ObjectRead::Deleted(obj_ref));
                 } else {
-                    return Ok(ObjectRead::Exists(obj_ref, obj_option.unwrap()));
                     // safe due to check
+                    return Ok(ObjectRead::Exists(obj_ref, obj_option.unwrap()));
                 }
-            } else {
-                if cert_map.contains_key(&tx_digest) {
-                    if let Ok(_effects) = self
-                        .process_certificate(
-                            cert_map[&tx_digest].clone(),
-                            AUTHORITY_REQUEST_TIMEOUT,
-                        )
-                        .await
+            } else if cert_map.contains_key(&tx_digest) {
+                // If we have less stake telling us about the latest state of an object
+                // we re-run the certificate on all authorities to ensure it is correct.
+                if let Ok(_effects) = self
+                    .process_certificate(cert_map[&tx_digest].clone(), AUTHORITY_REQUEST_TIMEOUT)
+                    .await
+                {
+                    let mut is_ok = false;
+
+                    // The mutated or created case
+                    if _effects
+                        .mutated
+                        .iter()
+                        .filter(|(oref, _)| *oref == obj_ref)
+                        .count()
+                        != 0
+                        || _effects
+                            .created
+                            .iter()
+                            .filter(|(oref, _)| *oref == obj_ref)
+                            .count()
+                            != 0
                     {
-                        // NOTE: here we should validate the object is correct from the effects
-                        if obj_option.is_none() {
-                            return Ok(ObjectRead::Deleted(obj_ref));
-                        } else {
-                            return Ok(ObjectRead::Exists(obj_ref, obj_option.unwrap()));
-                            // safe due to check
-                        }
+                        is_ok = true;
+                    }
+
+                    // The deleted case
+                    if obj_ref.2 == OBJECT_DIGEST_DELETED
+                        && _effects
+                            .deleted
+                            .iter()
+                            .filter(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
+                            .count()
+                            != 0
+                    {
+                        is_ok = true;
+                    }
+
+                    if !is_ok {
+                        // Report a byzantine fault here
+                        continue;
+                    }
+
+                    // NOTE: here we should validate the object is correct from the effects
+                    if obj_option.is_none() {
+                        return Ok(ObjectRead::Deleted(obj_ref));
+                    } else {
+                        // safe due to check
+                        return Ok(ObjectRead::Exists(obj_ref, obj_option.unwrap()));
                     }
                 }
             }
         }
 
-        return Ok(ObjectRead::NotExists(object_id));
+        Ok(ObjectRead::NotExists(object_id))
     }
 
     /// Given a list of object refs, download the objects.

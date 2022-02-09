@@ -329,8 +329,7 @@ pub enum ObjectRead {
 }
 
 impl ObjectRead {
-
-    /// Returns a reference to the object if there is any, otherwise an Err if 
+    /// Returns a reference to the object if there is any, otherwise an Err if
     /// the object does exist or is deleted.
     pub fn object(&self) -> Result<&Object, FastPayError> {
         match &self {
@@ -340,7 +339,7 @@ impl ObjectRead {
         }
     }
 
-    /// Returns the object ref if there is an object, otherwise an Err if 
+    /// Returns the object ref if there is an object, otherwise an Err if
     /// the object does exist or is deleted.
     pub fn reference(&self) -> Result<ObjectRef, FastPayError> {
         match &self {
