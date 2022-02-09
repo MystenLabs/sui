@@ -24,8 +24,8 @@ const DEFAULT_WEIGHT: usize = 1;
 
 #[derive(StructOpt)]
 #[structopt(
-    name = "FastX",
-    about = "A Byzantine fault tolerant payments chain with low-latency finality and high throughput",
+    name = "FastX Local",
+    about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
 struct FastXOpt {

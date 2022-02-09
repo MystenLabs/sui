@@ -14,6 +14,7 @@ use std::fmt::Display;
 use std::io;
 use std::io::Write;
 use structopt::clap::App;
+use unescape::unescape;
 
 /// A interactive command line shell with history and completion support
 pub struct Shell<P: Display, S, H> {
@@ -65,7 +66,7 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
             };
 
             // Runs the line
-            match Self::unescape(line.trim()) {
+            match Self::split_and_unescape(line.trim()) {
                 Ok(line) => {
                     // do nothing if line is empty
                     if line.is_empty() {
@@ -77,6 +78,7 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                         break 'shell;
                     };
                     if *line.first().unwrap() == "clear" {
+                        // Clear screen and move cursor to top left
                         print!("\x1B[2J\x1B[1;1H");
                         continue 'shell;
                     };
@@ -94,45 +96,16 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
         Ok(())
     }
 
-    fn unescape(command: &str) -> Result<Vec<String>, String> {
-        // Create a vec to store the split int.
-        let mut vec = vec![String::new()];
-
-        // Are we in an escape sequence?
-        let mut escape = false;
-
-        // Are we in a string?
-        let mut string = false;
-
-        // Go through each char in the string
-        for c in command.chars() {
-            let segment = vec.last_mut().unwrap();
-            if escape {
-                match c {
-                    '\\' => segment.push('\\'),
-                    ' ' if !string => segment.push(' '),
-                    'n' => segment.push('\n'),
-                    'r' => segment.push('\r'),
-                    't' => segment.push('\t'),
-                    '"' => segment.push('"'),
-                    _ => return Err(format!("Error: Unhandled escape sequence \\{}", c)),
-                }
-                escape = false;
-            } else {
-                match c {
-                    '\\' => escape = true,
-                    '"' => string = !string,
-                    ' ' if string => segment.push(c),
-                    ' ' if !string => vec.push(String::new()),
-                    _ => segment.push(c),
-                }
-            }
+    fn split_and_unescape(line: &str) -> Result<Vec<String>, String> {
+        let mut commands = Vec::new();
+        for word in line.split_whitespace() {
+            let command = match unescape(word) {
+                Some(word) => word,
+                None => return Err(format!("Error: Unhandled escape sequence {}", word)),
+            };
+            commands.push(command);
         }
-
-        if vec.len() == 1 && vec[0].is_empty() {
-            vec.clear();
-        }
-        Ok(vec)
+        Ok(commands)
     }
 }
 
