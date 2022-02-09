@@ -1,9 +1,9 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{authority_client::AuthorityAPI, downloader::*};
-use async_trait::async_trait;
-use fastx_types::object::Object;
+use crate::authority_client::AuthorityAPI;
+
+use fastx_types::object::{Object, ObjectRead};
 use fastx_types::{
     base_types::*,
     committee::Committee,
@@ -11,8 +11,7 @@ use fastx_types::{
     fp_ensure,
     messages::*,
 };
-use futures::{future, StreamExt, TryFutureExt};
-use rand::seq::SliceRandom;
+use futures::{future, StreamExt};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::time::Duration;
@@ -21,8 +20,8 @@ use tokio::time::timeout;
 
 // TODO: Make timeout duration configurable.
 const AUTHORITY_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
-
 const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
+pub const DEFAULT_RETRIES: usize = 4;
 
 #[cfg(test)]
 #[path = "unit_tests/client_tests.rs"]
@@ -53,73 +52,6 @@ pub enum ReduceOutput<S> {
     Continue(S),
     ContinueWithTimeout(S, Duration),
     End(S),
-}
-
-#[allow(dead_code)]
-#[derive(Clone)]
-struct CertificateRequester<A> {
-    committee: Committee,
-    authority_clients: Vec<A>,
-    sender: Option<FastPayAddress>,
-}
-
-impl<A> CertificateRequester<A> {
-    fn new(
-        committee: Committee,
-        authority_clients: Vec<A>,
-        sender: Option<FastPayAddress>,
-    ) -> Self {
-        Self {
-            committee,
-            authority_clients,
-            sender,
-        }
-    }
-}
-
-#[async_trait]
-impl<A> Requester for CertificateRequester<A>
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    type Key = (ObjectID, SequenceNumber);
-    type Value = Result<CertifiedOrder, FastPayError>;
-
-    /// Try to find a certificate for the given sender, object_id and sequence number.
-    async fn query(
-        &mut self,
-        (object_id, sequence_number): (ObjectID, SequenceNumber),
-    ) -> Result<CertifiedOrder, FastPayError> {
-        // BUG(https://github.com/MystenLabs/fastnft/issues/290): This function assumes that requesting the parent cert of object seq+1 will give the cert of
-        //        that creates the object. This is not true, as objects may be deleted and may not have a seq+1
-        //        to look up.
-        //
-        //        The authority `handle_object_info_request` is now fixed to return the parent at seq, and not
-        //        seq+1. But a lot of the client code makes the above wrong assumption, and the line above reverts
-        //        query to the old (incorrect) behavious to not break tests everywhere.
-        let inner_sequence_number = sequence_number.increment();
-
-        let request = ObjectInfoRequest {
-            object_id,
-            request_sequence_number: Some(inner_sequence_number),
-        };
-        // Sequentially try each authority in random order.
-        // TODO: Improve shuffle, different authorities might different amount of stake.
-        self.authority_clients.shuffle(&mut rand::thread_rng());
-        for client in self.authority_clients.iter_mut() {
-            let result = client.handle_object_info_request(request.clone()).await;
-            if let Ok(ObjectInfoResponse {
-                parent_certificate: Some(certificate),
-                ..
-            }) = result
-            {
-                if certificate.check(&self.committee).is_ok() {
-                    return Ok(certificate);
-                }
-            }
-        }
-        Err(FastPayError::ErrorWhileRequestingCertificate)
-    }
 }
 
 impl<A> AuthorityAggregator<A>
@@ -180,7 +112,6 @@ where
             // TODO: Eventually the client will store more information, and we could
             // first try to read certificates and parents from a local cache before
             // asking an authority.
-            // let input_objects = target_cert.certificate.order.input_objects();
 
             let order_info = if missing_certificates.is_empty() {
                 // Here we cover a corner case due to the nature of using consistent
@@ -254,7 +185,7 @@ where
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
-    pub async fn sync_certificate_to_authority_with_timeout(
+    async fn sync_certificate_to_authority_with_timeout(
         &self,
         cert: ConfirmationOrder,
         destination_authority: AuthorityName,
@@ -343,13 +274,13 @@ where
         map_each_authority: FMap,
         // The async function that takes an accumulated state, and a new result for V from an
         // authority and returns a result to a ReduceOutput state.
-        mut reduce_result: FReduce,
+        reduce_result: FReduce,
         // The initial timeout applied to all
         initial_timeout: Duration,
     ) -> Result<S, FastPayError>
     where
         FMap: FnOnce(AuthorityName, &'a A) -> AsyncResult<'a, V, FastPayError> + Clone,
-        FReduce: FnMut(
+        FReduce: Fn(
             S,
             AuthorityName,
             usize,
@@ -397,7 +328,7 @@ where
 
     /// Return all the information in the network about a specific object, including all versions of it
     /// as well as all certificates that lead to the versions and the authorities at that version.
-    pub async fn get_object_by_id(
+    async fn get_object_by_id(
         &self,
         object_id: ObjectID,
         timeout_after_quorum: Duration,
@@ -520,7 +451,13 @@ where
 
     /// This function returns a map between object references owned and authorities that hold the objects
     /// at this version, as well as a list of authorities that responsed to the query for the objects owned.
-    pub async fn get_all_owned_objects(
+    ///
+    /// We do not expose this function to users, as its output is hard for callers to interpet. In particular,
+    /// some of the entries in the list might be the result of a query to a byzantine authority, so further
+    /// sanitization and checks are necessary to rely on this information.
+    ///
+    /// Clients should use `sync_all_owned_objects` instead.
+    async fn get_all_owned_objects(
         &self,
         address: FastPayAddress,
         timeout_after_quorum: Duration,
@@ -591,38 +528,24 @@ where
         Ok((object_map, authority_list))
     }
 
-    /// Ask authorities for the user owned objects. Then download all objects at all versions present
-    /// on authorites, along with the certificates preceeding them, and update lagging authorities to
-    /// the latest version of the object.
-    ///
-    /// This function returns all objects, including those that are
-    /// no more owned by the user (but were previously owned by the user), as well as a list of
-    /// deleted object references.
-    pub async fn sync_all_owned_objects(
+    /// Takes a list of object IDs, goes to all (quorum+timeout) of authorities to find their
+    /// latest version, and then updates all authorities with the latest version of each object.
+    pub async fn sync_all_given_objects(
         &self,
-        address: FastPayAddress,
+        objects: &[ObjectID],
         timeout_after_quorum: Duration,
-    ) -> Result<(Vec<Object>, Vec<ObjectRef>), FastPayError> {
-        // First get a map of all objects at least a quorum of authorities think we hold.
-        let (object_map, _authority_list) = self
-            .get_all_owned_objects(address, timeout_after_quorum)
-            .await?;
-
-        // We make a list of all versions, in order
-        let mut object_latest_version: BTreeMap<ObjectID, Vec<ObjectRef>> = BTreeMap::new();
-        for object_ref in object_map.keys() {
-            let entry = object_latest_version
-                .entry(object_ref.0)
-                .or_insert_with(Vec::new);
-            entry.push(*object_ref);
-            entry.sort();
-        }
-
+    ) -> Result<
+        (
+            Vec<(Object, Option<CertifiedOrder>)>,
+            Vec<(ObjectRef, Option<CertifiedOrder>)>,
+        ),
+        FastPayError,
+    > {
         let mut active_objects = Vec::new();
         let mut deleted_objects = Vec::new();
         let mut certs_to_sync = BTreeMap::new();
         // We update each object at each authority that does not have it.
-        for object_id in object_latest_version.keys() {
+        for object_id in objects {
             // Authorities to update.
             let mut authorites: HashSet<AuthorityName> = self
                 .committee
@@ -652,7 +575,7 @@ where
                     //       Otherwise report the authority as potentially faulty.
 
                     if let Some(obj) = object_option {
-                        active_objects.push(obj);
+                        active_objects.push((obj, None));
                     }
                     // Cannot be that the genesis contributes to deleted objects
 
@@ -674,13 +597,13 @@ where
                 // Add authorities that need to be updated
                 let entry = certs_to_sync
                     .entry(cert.order.digest())
-                    .or_insert((cert, HashSet::new()));
+                    .or_insert((cert.clone(), HashSet::new()));
                 entry.1.extend(authorites);
 
                 // Return the latest version of an object, or a deleted object
                 match object_option {
-                    Some(obj) => active_objects.push(obj),
-                    None => deleted_objects.push(object_ref),
+                    Some(obj) => active_objects.push((obj, Some(cert))),
+                    None => deleted_objects.push((object_ref, Some(cert))),
                 }
 
                 break;
@@ -698,7 +621,7 @@ where
                         ConfirmationOrder::new(cert.clone()),
                         name,
                         timeout_after_quorum,
-                        1,
+                        DEFAULT_RETRIES,
                     )
                     .await;
 
@@ -709,413 +632,417 @@ where
         Ok((active_objects, deleted_objects))
     }
 
+    /// Ask authorities for the user owned objects. Then download all objects at all versions present
+    /// on authorites, along with the certificates preceeding them, and update lagging authorities to
+    /// the latest version of the object.
+    ///
+    /// This function returns all objects, including those that are
+    /// no more owned by the user (but were previously owned by the user), as well as a list of
+    /// deleted object references.
+    pub async fn sync_all_owned_objects(
+        &self,
+        address: FastPayAddress,
+        timeout_after_quorum: Duration,
+    ) -> Result<
+        (
+            Vec<(Object, Option<CertifiedOrder>)>,
+            Vec<(ObjectRef, Option<CertifiedOrder>)>,
+        ),
+        FastPayError,
+    > {
+        // Contact a quorum of authorities, and return all objects they report we own.
+        let (object_map, _authority_list) = self
+            .get_all_owned_objects(address, timeout_after_quorum)
+            .await?;
+
+        let all_object_ids: HashSet<_> = object_map.keys().map(|object_ref| object_ref.0).collect();
+
+        // Then sync all the owned objects
+        self.sync_all_given_objects(
+            &all_object_ids.into_iter().collect::<Vec<_>>(),
+            timeout_after_quorum,
+        )
+        .await
+    }
+
+    /// Takes an order, brings all authorities up to date with the versions of the
+    /// objects needed, and then submits the order to make a certificate.
+    pub async fn process_order(
+        &self,
+        order: Order,
+        timeout_after_quorum: Duration,
+    ) -> Result<CertifiedOrder, FastPayError> {
+        // Find out which objects are required by this order and
+        // ensure they are synced on authorities.
+        let required_ids: Vec<ObjectID> = order
+            .input_objects()
+            .iter()
+            .map(|o| o.object_id())
+            .collect();
+
+        let (_active_objects, _deleted_objects) = self
+            .sync_all_given_objects(&required_ids, timeout_after_quorum)
+            .await?;
+
+        // Now broadcast the order to all authorities.
+        let digest = order.digest();
+        let threshold = self.committee.quorum_threshold();
+        let validity = self.committee.validity_threshold();
+
+        struct ProcessOrderState {
+            // The list of signatures gathered at any point
+            signatures: Vec<(AuthorityName, Signature)>,
+            // A certificate if we manage to make or find one
+            certificate: Option<CertifiedOrder>,
+            // Tally of stake for good vs bad responses.
+            good_stake: usize,
+            bad_stake: usize,
+        }
+
+        let state = ProcessOrderState {
+            signatures: vec![],
+            certificate: None,
+            good_stake: 0,
+            bad_stake: 0,
+        };
+
+        let order_ref = &order;
+        let state = self
+            .quorum_map_then_reduce_with_timeout(
+                state,
+                |name, client| {
+                    Box::pin(async move {
+                        let info_reponse = client.handle_order(order_ref.clone()).await?;
+
+                        // NOTE: Move these and check all responses for validity.
+
+                        if let Some(signed_order) = &info_reponse.signed_order {
+                            signed_order.check(&self.committee)?;
+                            fp_ensure!(
+                                signed_order.authority == name,
+                                FastPayError::ByzantineAuthoritySuspicion { authority: name }
+                            );
+                            fp_ensure!(
+                                signed_order.order.digest() == digest,
+                                FastPayError::ByzantineAuthoritySuspicion { authority: name }
+                            );
+                        }
+
+                        if let Some(certificate) = &info_reponse.certified_order {
+                            certificate.check(&self.committee)?;
+                            fp_ensure!(
+                                certificate.order.digest() == digest,
+                                FastPayError::ByzantineAuthoritySuspicion { authority: name }
+                            );
+                        }
+
+                        Ok(info_reponse)
+                    })
+                },
+                |mut state, name, weight, result| {
+                    Box::pin(async move {
+                        match result {
+                            // If we are given back a certificate, then we do not need
+                            // to re-submit this order, we just returned the ready made
+                            // certificate.
+                            Ok(OrderInfoResponse {
+                                certified_order: Some(inner_certificate),
+                                ..
+                            }) => {
+                                state.certificate = Some(inner_certificate);
+                            }
+
+                            // If we get back a signed order, then we aggregate the
+                            // new signature and check whether we have enough to form
+                            // a certificate.
+                            Ok(OrderInfoResponse {
+                                signed_order: Some(inner_signed_order),
+                                ..
+                            }) => {
+                                state.signatures.push((name, inner_signed_order.signature));
+                                state.good_stake += weight;
+                                if state.good_stake >= threshold {
+                                    state.certificate = Some(CertifiedOrder {
+                                        order: order_ref.clone(),
+                                        signatures: state.signatures.clone(),
+                                    });
+                                }
+                            }
+
+                            // In all other cases we will not be able to use this response
+                            // to make a certificate. If this happens for more than f
+                            // authorities we just stop, as there is no hope to finish.
+                            _ => {
+                                // We have an error here.
+                                state.bad_stake += weight; // This is the bad stake counter
+                                if state.bad_stake > validity {
+                                    // Too many errors
+                                    return Err(FastPayError::ErrorWhileProcessingTransferOrder);
+                                }
+                            }
+                        };
+
+                        // If we have a certificate, then finish, otherwise continue.
+                        if state.certificate.is_some() {
+                            Ok(ReduceOutput::End(state))
+                        } else {
+                            Ok(ReduceOutput::Continue(state))
+                        }
+                    })
+                },
+                // A long timeout before we hear back from a quorum
+                Duration::from_secs(60),
+            )
+            .await?;
+
+        // If we have some certificate return it, or return an error.
+        state
+            .certificate
+            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)
+    }
+
+    /// Process a certificate assuming that 2f+1 authorites already are up to date.
+    ///
+    /// This call is meant to be called after `process_order` returns a certificate.
+    /// At that point (and after) enough authorities are up to date with all objects
+    /// needed to process the certificate that a submission should succeed. However,
+    /// in case an authority returns an error, we do try to bring it up to speed.
+    pub async fn process_certificate(
+        &self,
+        certificate: CertifiedOrder,
+        timeout_after_quorum: Duration,
+    ) -> Result<OrderEffects, FastPayError> {
+        struct ProcessCertificateState {
+            effects_map: HashMap<[u8; 32], (usize, OrderEffects)>,
+            bad_stake: usize,
+        }
+
+        let state = ProcessCertificateState {
+            effects_map: HashMap::new(),
+            bad_stake: 0,
+        };
+
+        let cert_ref = &certificate;
+        let threshold = self.committee.quorum_threshold();
+        let validity = self.committee.validity_threshold();
+        let state = self
+            .quorum_map_then_reduce_with_timeout(
+                state,
+                |_name, client| {
+                    Box::pin(async move {
+                        // Here is the per-authority logic to process a certificate:
+                        // - we try to process a cert, and return Ok on success.
+                        // - we try to update the authority with the cert, and on error return Err.
+                        // - we try to re-process the certificate and return the result.
+
+                        let res = client
+                            .handle_confirmation_order(ConfirmationOrder::new(cert_ref.clone()))
+                            .await;
+
+                        if res.is_ok() {
+                            // We got an ok answer, so returning the result of processing
+                            // the order.
+                            return res;
+                        }
+
+                        // If we got an error, we try to update the authority.
+                        let _result = self
+                            .sync_certificate_to_authority_with_timeout(
+                                ConfirmationOrder::new(cert_ref.clone()),
+                                _name,
+                                timeout_after_quorum,
+                                DEFAULT_RETRIES,
+                            )
+                            .await?;
+
+                        // Now try again
+                        client
+                            .handle_confirmation_order(ConfirmationOrder::new(cert_ref.clone()))
+                            .await
+                    })
+                },
+                |mut state, _name, weight, result| {
+                    Box::pin(async move {
+                        // We aggregate the effects response, until we have more than 2f
+                        // and return.
+                        if let Ok(OrderInfoResponse {
+                            signed_effects: Some(inner_effects),
+                            ..
+                        }) = result
+                        {
+                            // Note: here we aggregate votes by the hash of the effects structure
+                            let entry = state
+                                .effects_map
+                                .entry(sha3_hash(&inner_effects.effects))
+                                .or_insert((0usize, inner_effects.effects));
+                            entry.0 += weight;
+
+                            if entry.0 >= threshold {
+                                // It will set the timeout quite high.
+                                return Ok(ReduceOutput::ContinueWithTimeout(
+                                    state,
+                                    timeout_after_quorum,
+                                ));
+                            }
+                        }
+
+                        // If instead we have more than f bad responses, then we fail.
+                        state.bad_stake += weight;
+                        if state.bad_stake > validity {
+                            return Err(FastPayError::ErrorWhileRequestingCertificate);
+                        }
+
+                        Ok(ReduceOutput::Continue(state))
+                    })
+                },
+                // A long timeout before we hear back from a quorum
+                Duration::from_secs(60),
+            )
+            .await?;
+
+        // Check that one effects structure has more than 2f votes,
+        // and return it.
+        for (stake, effects) in state.effects_map.into_values() {
+            if stake >= threshold {
+                return Ok(effects);
+            }
+        }
+
+        // If none has, fail.
+        Err(FastPayError::ErrorWhileRequestingCertificate)
+    }
+
     #[cfg(test)]
     async fn request_certificate(
         &self,
-        sender: FastPayAddress,
+        _sender: FastPayAddress,
         object_id: ObjectID,
-        sequence_number: SequenceNumber,
+        _sequence_number: SequenceNumber,
     ) -> Result<CertifiedOrder, FastPayError> {
-        CertificateRequester::new(
-            self.committee.clone(),
-            self.authority_clients.values().cloned().collect(),
-            Some(sender),
-        )
-        .query((object_id, sequence_number))
-        .await
+        let (object_map, transaction_map) = self
+            .get_object_by_id(object_id, Duration::from_secs(10))
+            .await?;
+
+        let (_obj_ref, tx_digest) = object_map.keys().last().unwrap();
+        return Ok(transaction_map[tx_digest].clone());
     }
 
     /// Find the highest sequence number that is known to a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_strong_majority_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
-        let request = ObjectInfoRequest {
-            object_id,
-            request_sequence_number: None,
-        };
-        let mut authority_clients = self.authority_clients.clone();
-        let numbers: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter_mut()
-            .map(|(name, client)| {
-                let fut = client.handle_object_info_request(request.clone());
-                async move {
-                    match fut.await {
-                        Ok(info) => info.object().map(|obj| (*name, obj.version())),
-                        _ => None,
-                    }
-                }
-            })
-            .collect();
-        self.committee.get_strong_majority_lower_bound(
-            numbers.filter_map(|x| async move { x }).collect().await,
-        )
+    async fn get_latest_sequence_number(&self, object_id: ObjectID) -> SequenceNumber {
+        let (object_infos, _certificates) = self
+            .get_object_by_id(object_id, Duration::from_secs(60))
+            .await
+            .unwrap(); // Not safe, but want to blow up if testing.
+        let top_ref = object_infos.keys().last().unwrap().0;
+        top_ref.1
     }
 
     /// Return owner address and sequence number of an object backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_strong_majority_owner(
-        &self,
-        object_id: ObjectID,
-    ) -> Option<(Authenticator, SequenceNumber)> {
-        let request = ObjectInfoRequest {
-            object_id,
-            request_sequence_number: None,
-        };
-        let authority_clients = self.authority_clients.clone();
-        let numbers: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter()
-            .map(|(name, client)| {
-                let fut = client.handle_object_info_request(request.clone());
-                async move {
-                    match fut.await {
-                        Ok(ObjectInfoResponse {
-                            object_and_lock: Some(ObjectResponse { object, .. }),
-                            ..
-                        }) => Some((*name, Some((object.owner, object.version())))),
-                        _ => None,
-                    }
-                }
-            })
-            .collect();
-        self.committee.get_strong_majority_lower_bound(
-            numbers.filter_map(|x| async move { x }).collect().await,
-        )
-    }
-
-    /// Execute a sequence of actions in parallel for a quorum of authorities.
-    async fn communicate_with_quorum<'a, V, F>(&'a self, execute: F) -> Result<Vec<V>, FastPayError>
-    where
-        F: Fn(AuthorityName, &'a A) -> AsyncResult<'a, V, FastPayError> + Clone,
-    {
-        let committee = &self.committee;
-        let authority_clients = &self.authority_clients;
-        let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter()
-            .map(|(name, client)| {
-                let execute = execute.clone();
-                async move { (*name, execute(*name, client).await) }
-            })
-            .collect();
-
-        let mut values = Vec::new();
-        let mut value_score = 0;
-        let mut error_scores = HashMap::new();
-        while let Some((name, result)) = responses.next().await {
-            match result {
-                Ok(value) => {
-                    values.push(value);
-                    value_score += committee.weight(&name);
-                    if value_score >= committee.quorum_threshold() {
-                        // Success!
-                        return Ok(values);
-                    }
-                }
-                Err(err) => {
-                    let entry = error_scores.entry(err.clone()).or_insert(0);
-                    *entry += committee.weight(&name);
-                    if *entry >= committee.validity_threshold() {
-                        // At least one honest node returned this error.
-                        // No quorum can be reached, so return early.
-                        return Err(FastPayError::QuorumNotReached {
-                            errors: error_scores.into_keys().collect(),
-                        });
-                    }
-                }
-            }
-        }
-        Err(FastPayError::QuorumNotReached {
-            errors: error_scores.into_keys().collect(),
-        })
-    }
-
-    /// Broadcast transaction order on each authority client.
-    async fn broadcast_tx_order(
-        &self,
-        order: Order,
-    ) -> Result<(OrderInfoResponse, CertifiedOrder), anyhow::Error> {
-        let committee = self.committee.clone();
-        // We are not broadcasting any confirmation orders, so certificates_to_broadcast vec is empty
-        let (_confirmation_responses, order_votes) = self
-            .broadcast_and_execute(Vec::new(), |name, authority| {
-                let order = order.clone();
-                let committee = committee.clone();
-                Box::pin(async move {
-                    match authority.handle_order(order).await {
-                        // Check if the response is okay
-                        Ok(response) =>
-                        // Verify we have a signed order
-                        {
-                            match response.clone().signed_order {
-                                Some(inner_signed_order) => {
-                                    fp_ensure!(
-                                        inner_signed_order.authority == name,
-                                        FastPayError::ErrorWhileProcessingTransactionOrder {
-                                            err: "Signed by unexpected authority".to_string()
-                                        }
-                                    );
-                                    inner_signed_order.check(&committee)?;
-                                    Ok(response)
-                                }
-                                None => Err(FastPayError::ErrorWhileProcessingTransactionOrder {
-                                    err: "Invalid order response".to_string(),
-                                }),
-                            }
-                        }
-                        Err(err) => Err(err),
-                    }
-                })
-            })
-            .await?;
-        // Collate the signatures
-        // If we made it here, values are safe
-        let signatures = order_votes
-            .iter()
-            .map(|vote| {
-                (
-                    vote.signed_order.as_ref().unwrap().authority,
-                    vote.signed_order.as_ref().unwrap().signature,
-                )
-            })
-            .collect::<Vec<_>>();
-
-        let certificate = CertifiedOrder { order, signatures };
-        // Certificate is valid because
-        // * `communicate_with_quorum` ensured a sufficient "weight" of (non-error) answers were returned by authorities.
-        // * each answer is a vote signed by the expected authority.
-
-        // Assume all responses are same. Pick first
-        Ok((order_votes.get(0).unwrap().clone(), certificate))
-    }
-
-    /// Broadcast missing confirmation orders and execute provided authority action on each authority.
-    // BUG(https://github.com/MystenLabs/fastnft/issues/290): This logic for
-    // updating an authority that is behind is not correct, since we now have
-    // potentially many dependencies that need to be satisfied, not just a
-    // list.
-    async fn broadcast_and_execute<'a, V, F: 'a>(
-        &'a self,
-        certificates_to_broadcast: Vec<CertifiedOrder>,
-        action: F,
-    ) -> Result<(Vec<(CertifiedOrder, OrderInfoResponse)>, Vec<V>), anyhow::Error>
-    where
-        F: Fn(AuthorityName, &'a A) -> AsyncResult<'a, V, FastPayError> + Send + Sync + Copy,
-        V: Clone,
-    {
-        let result = self
-            .communicate_with_quorum(|name, client| {
-                let certificates_to_broadcast = certificates_to_broadcast.clone();
-                Box::pin(async move {
-                    let mut responses = vec![];
-                    for certificate in certificates_to_broadcast {
-                        responses.push((
-                            certificate.clone(),
-                            client
-                                .handle_confirmation_order(ConfirmationOrder::new(certificate))
-                                .await?,
-                        ));
-                    }
-                    Ok((responses, action(name, client).await?))
-                })
-            })
-            .await?;
-
-        let action_results = result.iter().map(|(_, result)| result.clone()).collect();
-
-        // Assume all responses are the same, pick the first one.
-        let order_response = result
-            .iter()
-            .map(|(response, _)| response.clone())
-            .next()
-            .unwrap_or_default();
-
-        Ok((order_response, action_results))
-    }
-
-    pub async fn update_authority_certificates(
-        &mut self,
-        sender: FastPayAddress,
-        inputs: &[InputObjectKind],
-        known_certificates: Vec<((ObjectID, SequenceNumber), FastPayResult<CertifiedOrder>)>,
-    ) -> FastPayResult<Vec<Vec<(CertifiedOrder, OrderInfoResponse)>>> {
-        let requester = CertificateRequester::new(
-            self.committee.clone(),
-            self.authority_clients.values().cloned().collect(),
-            Some(sender),
-        );
-
-        let (_, handle) = Downloader::start(requester, known_certificates);
-        self.communicate_with_quorum(|_name, client| {
-            let mut handle = handle.clone();
-            Box::pin(async move {
-                // Sync certificate with authority
-                // Figure out which certificates this authority is missing.
-                let mut responses = Vec::new();
-                let mut missing_certificates = Vec::new();
-                for input_kind in inputs {
-                    let object_id = input_kind.object_id();
-                    let target_sequence_number = input_kind.version();
-                    let request = ObjectInfoRequest {
-                        object_id,
-                        request_sequence_number: None,
-                    };
-                    let response = client.handle_object_info_request(request).await?;
-
-                    let current_sequence_number = response
-                        .object_and_lock
-                        .ok_or(FastPayError::ObjectNotFound { object_id })?
-                        .object
-                        .version();
-
-                    // Download each missing certificate in reverse order using the downloader.
-                    let mut number = target_sequence_number.decrement();
-                    while let Ok(seq) = number {
-                        if seq < current_sequence_number {
-                            break;
-                        }
-                        let certificate = handle
-                            .query((object_id, seq))
-                            .await
-                            .map_err(|_| FastPayError::ErrorWhileRequestingCertificate)??;
-                        missing_certificates.push(certificate);
-                        number = seq.decrement();
-                    }
-                }
-
-                // Send all missing confirmation orders.
-                missing_certificates.reverse();
-                for certificate in missing_certificates {
-                    responses.push((
-                        certificate.clone(),
-                        client
-                            .handle_confirmation_order(ConfirmationOrder::new(certificate))
-                            .await?,
-                    ));
-                }
-                Ok(responses)
-            })
-        })
-        .await
-    }
-
-    /// Broadcast confirmation orders.
-    /// The corresponding sequence numbers should be consecutive and increasing.
-    pub async fn broadcast_confirmation_orders(
-        &self,
-        certificates_to_broadcast: Vec<CertifiedOrder>,
-    ) -> Result<Vec<(CertifiedOrder, OrderInfoResponse)>, anyhow::Error> {
-        self.broadcast_and_execute(certificates_to_broadcast, |_, _| Box::pin(async { Ok(()) }))
+    async fn get_latest_owner(&self, object_id: ObjectID) -> (Authenticator, SequenceNumber) {
+        let (object_infos, _certificates) = self
+            .get_object_by_id(object_id, Duration::from_secs(60))
             .await
-            .map(|(responses, _)| responses)
-    }
-
-    pub async fn request_certificates_from_authority(
-        &self,
-        known_sequence_numbers_map: BTreeMap<(ObjectID, SequenceNumber), HashSet<SequenceNumber>>,
-    ) -> Result<BTreeMap<ObjectID, Vec<CertifiedOrder>>, FastPayError> {
-        let mut sent_certificates: BTreeMap<ObjectID, Vec<CertifiedOrder>> = BTreeMap::new();
-
-        for ((object_id, next_sequence_number), known_sequence_numbers) in
-            known_sequence_numbers_map
-        {
-            let mut requester = CertificateRequester::new(
-                self.committee.clone(),
-                self.authority_clients.values().cloned().collect(),
-                None,
-            );
-
-            let entry = sent_certificates.entry(object_id).or_default();
-            // TODO: it's inefficient to loop through sequence numbers to retrieve missing cert, rethink this logic when we change certificate storage in client.
-            let mut number = SequenceNumber::from(0);
-            while number < next_sequence_number {
-                if !known_sequence_numbers.contains(&number) {
-                    let certificate = requester.query((object_id, number)).await?;
-                    entry.push(certificate);
-                }
-                number = number.increment();
-            }
-        }
-        Ok(sent_certificates)
+            .unwrap(); // Not safe, but want to blow up if testing.
+        let (top_ref, obj) = object_infos.iter().last().unwrap();
+        (obj.0.as_ref().unwrap().owner, top_ref.0 .1)
     }
 
     pub async fn execute_transaction(
         &self,
         order: &Order,
-    ) -> Result<(CertifiedOrder, OrderInfoResponse), anyhow::Error> {
-        let new_certificate = self.execute_transaction_without_confirmation(order).await?;
-
-        // Confirm transfer certificate if specified.
-        let responses = self
-            .broadcast_confirmation_orders(vec![new_certificate.clone()])
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+        let new_certificate = self
+            .process_order(order.clone(), Duration::from_secs(60))
             .await?;
-
-        // Find response for the current order from all the returned order responses.
-        let (_, response) = responses
-            .into_iter()
-            .find(|(cert, _)| cert.order == new_certificate.order)
-            .ok_or(FastPayError::ErrorWhileRequestingInformation)?;
+        let response = self
+            .process_certificate(new_certificate.clone(), Duration::from_secs(60))
+            .await?;
 
         Ok((new_certificate, response))
     }
 
-    /// Execute (or retry) an order without confirmation. Update local object states using newly created certificate.
-    async fn execute_transaction_without_confirmation(
-        &self,
-        order: &Order,
-    ) -> Result<CertifiedOrder, anyhow::Error> {
-        let result = self.broadcast_tx_order(order.clone()).await;
-
-        let (_, new_sent_certificate) = result?;
-        assert_eq!(&new_sent_certificate.order, order);
-        // TODO: Verify that we don't need to update client objects here based on order_info_responses,
-        // but can do it at the caller site.
-
-        Ok(new_sent_certificate)
-    }
-
-    // TODO: This is incomplete at the moment.
-    // A complete algorithm is being introduced in
-    // https://github.com/MystenLabs/fastnft/pull/336.
-    pub async fn download_own_object_ids_from_random_authority(
-        &self,
-        address: FastPayAddress,
-    ) -> Result<(AuthorityName, Vec<ObjectRef>), FastPayError> {
-        let request = AccountInfoRequest { account: address };
-        // Sequentially try each authority in random order.
-        let mut authorities: Vec<&AuthorityName> = self.authority_clients.keys().collect();
-        // TODO: implement sampling according to stake distribution and using secure RNG. https://github.com/MystenLabs/fastnft/issues/128
-        authorities.shuffle(&mut rand::thread_rng());
-        // Authority could be byzantine, add timeout to avoid waiting forever.
-        for authority_name in authorities {
-            let authority = self.authority_clients.get(authority_name).unwrap();
-            let result = timeout(
-                AUTHORITY_REQUEST_TIMEOUT,
-                authority.handle_account_info_request(request.clone()),
-            )
-            .map_err(|_| FastPayError::ErrorWhileRequestingInformation)
-            .await?;
-            if let Ok(AccountInfoResponse { object_ids, .. }) = &result {
-                return Ok((*authority_name, object_ids.clone()));
-            }
-        }
-        Err(FastPayError::ErrorWhileRequestingInformation)
-    }
-
     pub async fn get_object_info_execute(
         &mut self,
-        object_info_req: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, anyhow::Error> {
-        let votes = self
-            .communicate_with_quorum(|_, client| {
-                let req = object_info_req.clone();
-                Box::pin(async move { client.handle_object_info_request(req).await })
-            })
+        object_id: ObjectID,
+    ) -> Result<ObjectRead, anyhow::Error> {
+        let (object_map, cert_map) = self
+            .get_object_by_id(object_id, AUTHORITY_REQUEST_TIMEOUT)
             .await?;
+        let mut object_ref_stack: Vec<_> = object_map.into_iter().collect();
 
-        votes
-            .get(0)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("No valid confirmation order votes"))
+        while let Some(((obj_ref, tx_digest), (obj_option, authorities))) = object_ref_stack.pop() {
+            let stake: usize = authorities
+                .iter()
+                .map(|(name, _)| self.committee.weight(name))
+                .sum();
+
+            // If we have f+1 stake telling us of the latest version of the object, we just accept it.
+            if stake >= self.committee.validity_threshold() {
+                if obj_option.is_none() {
+                    return Ok(ObjectRead::Deleted(obj_ref));
+                } else {
+                    // safe due to check
+                    return Ok(ObjectRead::Exists(obj_ref, obj_option.unwrap()));
+                }
+            } else if cert_map.contains_key(&tx_digest) {
+                // If we have less stake telling us about the latest state of an object
+                // we re-run the certificate on all authorities to ensure it is correct.
+                if let Ok(_effects) = self
+                    .process_certificate(cert_map[&tx_digest].clone(), AUTHORITY_REQUEST_TIMEOUT)
+                    .await
+                {
+                    let mut is_ok = false;
+
+                    // The mutated or created case
+                    if _effects
+                        .mutated
+                        .iter()
+                        .filter(|(oref, _)| *oref == obj_ref)
+                        .count()
+                        != 0
+                        || _effects
+                            .created
+                            .iter()
+                            .filter(|(oref, _)| *oref == obj_ref)
+                            .count()
+                            != 0
+                    {
+                        is_ok = true;
+                    }
+
+                    // The deleted case
+                    if obj_ref.2 == OBJECT_DIGEST_DELETED
+                        && _effects
+                            .deleted
+                            .iter()
+                            .filter(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
+                            .count()
+                            != 0
+                    {
+                        is_ok = true;
+                    }
+
+                    if !is_ok {
+                        // Report a byzantine fault here
+                        continue;
+                    }
+
+                    // NOTE: here we should validate the object is correct from the effects
+                    if obj_option.is_none() {
+                        return Ok(ObjectRead::Deleted(obj_ref));
+                    } else {
+                        // safe due to check
+                        return Ok(ObjectRead::Exists(obj_ref, obj_option.unwrap()));
+                    }
+                }
+            }
+        }
+
+        Ok(ObjectRead::NotExists(object_id))
     }
 
     /// Given a list of object refs, download the objects.
@@ -1162,46 +1089,22 @@ where
         }))
         .await;
 
-        fn obj_fetch_err(id: ObjectID, err: &str) -> Result<Object, FastPayError> {
-            Err(FastPayError::ObjectFetchFailed {
-                object_id: id,
-                err: err.to_owned(),
-            })
-        }
-
         let mut ret_val: Result<Object, FastPayError> = Err(FastPayError::ObjectFetchFailed {
-            object_id: object_ref.0,
-            err: "No authority returned object".to_string(),
+            object_id,
+            err: "No authority returned the correct object".to_string(),
         });
         // Find the first non-error value
         // There are multiple reasons why we might not have an object
         // We can timeout, or the authority returns an error or simply no object
         // When we get an object back, it also might not match the digest we want
-        for result in results {
-            // Check if the result of the call is successful
-            ret_val = match result {
-                Ok(res) => match res {
-                    // Check if the authority actually had an object
-                    Ok(resp) => match resp.object_and_lock {
-                        Some(o) => {
-                            // Check if this is the the object we want
-                            if o.object.digest() == object_ref.2 {
-                                Ok(o.object)
-                            } else {
-                                obj_fetch_err(object_id, "Object digest mismatch")
-                            }
-                        }
-                        None => obj_fetch_err(object_id, "object_and_lock is None"),
-                    },
-                    // Something in FastX failed
-                    Err(e) => Err(e),
-                },
-                // Took too long
-                Err(e) => obj_fetch_err(object_id, e.to_string().as_str()),
-            };
-            // We found a value
-            if ret_val.is_ok() {
-                break;
+        for resp in results.into_iter().flatten().flatten() {
+            match resp.object_and_lock {
+                // did the response match the digest?
+                Some(o) if o.object.digest() == object_ref.2 => {
+                    ret_val = Ok(o.object);
+                    break;
+                }
+                _ => (),
             }
         }
         sender

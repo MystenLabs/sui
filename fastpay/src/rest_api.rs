@@ -65,10 +65,9 @@ async fn main() -> Result<(), String> {
     let mut api = ApiDescription::new();
     api.register(start).unwrap();
     api.register(genesis).unwrap();
-    // Use mpsc channels to send terminating message and kill thread?
     api.register(stop).unwrap();
     api.register(get_addresses).unwrap();
-    api.register(get_address_objects).unwrap();
+    api.register(get_objects).unwrap();
     api.register(get_object_info).unwrap();
     api.register(transfer_object).unwrap();
 
@@ -82,7 +81,7 @@ async fn main() -> Result<(), String> {
     let api_context = ServerContext::new(
         accounts_config_path,
         committee_config_path,
-        initial_accounts_config_path,
+        // initial_accounts_config_path,
         client_db_path,
     );
 
@@ -100,12 +99,14 @@ struct ServerContext {
     buffer_size: usize,
     send_timeout: Arc<Mutex<Duration>>,
     recv_timeout: Arc<Mutex<Duration>>,
-    initial_accounts_config_path: Arc<Mutex<String>>,
+    // initial_accounts_config_path: Arc<Mutex<String>>,
     accounts_config_path: Arc<Mutex<String>>,
-    committee_config_path: Arc<Mutex<String>>,
+    // committee_config_path: Arc<Mutex<String>>,
     client_db_path: Arc<Mutex<PathBuf>>,
+    authority_db_path: Arc<Mutex<String>>, 
     wallet_config_path: Arc<Mutex<String>>,
     network_config_path: Arc<Mutex<String>>,
+    wallet_context: Arc<Mutex<Option<WalletContext>>>,
     accounts_config: Arc<Mutex<AccountsConfig>>,
     committee_config: Arc<Mutex<CommitteeConfig>>,
 }
@@ -114,7 +115,7 @@ impl ServerContext {
     pub fn new(
         accounts_config_path: String,
         committee_config_path: String,
-        initial_accounts_config_path: String,
+        // initial_accounts_config_path: String,
         client_db_path: PathBuf,
     ) -> ServerContext {
         ServerContext {
@@ -124,12 +125,14 @@ impl ServerContext {
                 .unwrap(),
             send_timeout: Arc::new(Mutex::new(Duration::new(0, 0))),
             recv_timeout: Arc::new(Mutex::new(Duration::new(0, 0))),
-            initial_accounts_config_path: Arc::new(Mutex::new(initial_accounts_config_path)),
+            // initial_accounts_config_path: Arc::new(Mutex::new(initial_accounts_config_path)),
             accounts_config_path: Arc::new(Mutex::new(accounts_config_path.to_owned())),
-            committee_config_path: Arc::new(Mutex::new(committee_config_path.to_owned())),
+            // committee_config_path: Arc::new(Mutex::new(committee_config_path.to_owned())),
             client_db_path: Arc::new(Mutex::new(client_db_path)),
             wallet_config_path: Arc::new(Mutex::new(String::from("./wallet.conf"))),
             network_config_path: Arc::new(Mutex::new(String::from("./network.conf"))),
+            authority_db_path: Arc::new(Mutex::new(String::from("./authorities_db"))),
+            wallet_context: Arc::new(Mutex::new(None)),
             accounts_config: Arc::new(Mutex::new(
                 AccountsConfig::read_or_create(accounts_config_path.as_str()).unwrap(),
             )),
@@ -145,13 +148,13 @@ impl ServerContext {
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct GenesisRequest {
-    num_authorities: u32,
-    num_objects: u32,
+    num_authorities: Option<u16>,
+    num_objects: Option<u16>,
 }
 
 
 /**
- * 'GenesisResponse' returns the genesis wallet & network config.
+ * 'GenesisResponse' returns the genesis of wallet & network config.
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct GenesisResponse {
@@ -160,7 +163,7 @@ struct GenesisResponse {
 }
 
 /**
- * [SERVER] Use to provide server configurations for genesis.
+ * [FASTX] Use to provide server configurations for genesis.
  */
 #[endpoint {
     method = POST,
@@ -168,19 +171,29 @@ struct GenesisResponse {
 }]
 async fn genesis(
     rqctx: Arc<RequestContext<ServerContext>>,
-    _genesis_request: TypedBody<GenesisRequest>,
+    request: TypedBody<GenesisRequest>,
 ) -> Result<HttpResponseOk<GenesisResponse>, HttpError> {
-    // TODO: Move to server startup code and add to server context
+    let server_context = rqctx.context();
+    let network_config_path = server_context.network_config_path.lock().unwrap().clone();
+    let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
 
-    let network_conf_path = String::from("./network.conf");
+    let genesis_params = request.into_inner();
+    let num_authorities = match genesis_params.num_authorities {
+        Some(num_authorities) => num_authorities,
+        None => 4,
+    };
+    let num_objects = match genesis_params.num_objects {
+        Some(num_objects) => num_objects,
+        None => 5,
+    };
 
-    let mut network_config = match NetworkConfig::read_or_create(&network_conf_path) {
+    let mut network_config = match NetworkConfig::read_or_create(&network_config_path) {
         Ok(network_config) => network_config,
         Err(error) => return Err(
             HttpError::for_client_error(
                 None, 
                 hyper::StatusCode::FAILED_DEPENDENCY, 
-                format!("Unable to read user accounts: {error}"))),
+                format!("Unable to read network config: {error}"))),
     };
 
     if !network_config.authorities.is_empty() {
@@ -195,14 +208,14 @@ async fn genesis(
     let mut authority_info = Vec::new();
     let mut port_allocator = PortAllocator::new(10000);
 
-    println!("Creating new addresses...");
-    for _ in 0..4 {
+    println!("Creating new authorities...");
+    for _ in 0..num_authorities {
         let (address, key_pair) = get_key_pair();
         let info = AuthorityPrivateInfo {
             address,
             key_pair,
             host: "127.0.0.1".to_string(),
-            port: port_allocator.next_port().expect("No free ports"),
+            port: port_allocator.next_port().expect("No free ports"),  // TODO: change to http error
             db_path: format!("./authorities_db/{:?}", address),
         };
         authority_info.push(AuthorityInfo {
@@ -225,10 +238,10 @@ async fn genesis(
     let mut preload_objects: Vec<FastxObject> = Vec::new();
 
     println!("Creating test objects...");
-    for _ in 0..5 {
+    for _ in 0..num_objects {
         let (address, key_pair) = get_key_pair();
         new_addresses.push(AccountInfo { address, key_pair });
-        for _ in 0..5 {
+        for _ in 0..num_objects {
             let new_object = FastxObject::with_id_owner_gas_coin_object_for_testing(
                 ObjectID::random(),
                 SequenceNumber::new(),
@@ -246,13 +259,15 @@ async fn genesis(
         make_server(&authority, &committee, &preload_objects, network_config.buffer_size).await;
     }
 
-    let wallet_config = match WalletConfig::create("./wallet.conf") {
+    let mut wallet_config = match WalletConfig::create(&wallet_config_path) {
         Ok(wallet_config) => wallet_config,
         Err(error) => return Err(HttpError::for_client_error(
             None, 
             hyper::StatusCode::FAILED_DEPENDENCY, 
             format!("Wallet config was unable to be created: {error}")))
     };
+    wallet_config.authorities = authority_info;
+    wallet_config.accounts = new_addresses;
     wallet_config.save().map_err(|err| 
         HttpError::for_client_error(
             None, 
@@ -267,6 +282,7 @@ async fn genesis(
         wallet_config.config_path()
     );
 
+    // TODO: Print out the contents of wallet_config/network_config? Gated by request param 
     let wallet_config_string = format!(
         "Wallet Config was created with {} accounts",
         wallet_config.accounts.len(),
@@ -283,47 +299,25 @@ async fn genesis(
 }
 
 /**
- * [SERVER] Stop servers and delete storage.
- */
-#[endpoint {
-    method = POST,
-    path = "/fastx/stop",
-}]
-async fn stop(
-    _rqctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-    // TODO move to server context
-    let network_conf_path = String::from("./network.conf");
-    let wallet_conf_path = String::from("./wallet.conf");
-    let authority_db_dir = String::from("./authorities_db");
-
-    fs::remove_dir_all(authority_db_dir).ok();
-    fs::remove_file(network_conf_path).ok();
-    fs::remove_file(wallet_conf_path).ok();
-
-    Ok(HttpResponseUpdatedNoContent())
-}
-
-/**
- * [SERVER] Start servers with specified configurations.
+ * [FASTX] Start servers with specified configurations.
  */
 #[endpoint {
     method = POST,
     path = "/fastx/start",
 }]
 async fn start(
-    _rqctx: Arc<RequestContext<ServerContext>>,
+    rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
-    // TODO: Move to server startup code and add to server context
-    let network_conf_path = String::from("./network.conf");
+    let server_context = rqctx.context();
+    let network_config_path = server_context.network_config_path.lock().unwrap().clone();
 
-    let network_config = match NetworkConfig::read_or_create(&network_conf_path) {
+    let network_config = match NetworkConfig::read_or_create(&network_config_path) {
         Ok(network_config) => network_config,
         Err(error) => return Err(
             HttpError::for_client_error(
                 None, 
                 hyper::StatusCode::FAILED_DEPENDENCY, 
-                format!("Unable to read user accounts: {error}"))),
+                format!("Unable to read network config: {error}"))),
     };
 
     if network_config.authorities.is_empty() {
@@ -333,6 +327,10 @@ async fn start(
                 hyper::StatusCode::FAILED_DEPENDENCY, 
                 String::from("No authority configured for the network, please run genesis.")));
     }
+
+    // TODO check if thread/network is already started and stop if it is....
+    // JoinHandle::is_running() unstable feature :( 
+    // https://github.com/rust-lang/rust/issues/90470
 
     println!(
         "Starting network with {} authorities",
@@ -353,6 +351,7 @@ async fn start(
         let server = make_server(&authority, &committee, &[], network_config.buffer_size).await;
 
         handles.push(async move {
+            // TODO: how to bubble up async server errors as a http error
             let spawned_server = match server.spawn().await {
                 Ok(server) => server,
                 Err(err) => {
@@ -364,8 +363,6 @@ async fn start(
                 error!("Server ended with an error: {}", err);
             }
         });
-        
-    
     }
 
     let num_authorities = handles.len();
@@ -378,38 +375,71 @@ async fn start(
 }
 
 /**
- * [OUTPUT] `Accounts` represents the value of the accounts on the network.
+ * [SERVER] Stop servers and delete storage.
+ */
+#[endpoint {
+    method = POST,
+    path = "/fastx/stop",
+}]
+async fn stop(
+    rqctx: Arc<RequestContext<ServerContext>>,
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    let server_context = rqctx.context();
+    let network_config_path = server_context.network_config_path.lock().unwrap().clone();
+    let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
+    let authority_db_path = server_context.authority_db_path.lock().unwrap().clone();
+
+    // TODO: kill authorities 
+
+    // TODO: get client db path from server context
+    fs::remove_dir_all("./client_db").ok();
+    fs::remove_dir_all(authority_db_path).ok();
+    fs::remove_file(network_config_path).ok();
+    fs::remove_file(wallet_config_path).ok();
+
+    Ok(HttpResponseUpdatedNoContent())
+}
+
+/**
+ * `GetAddressResponse` represents the list of managed accounts for this client
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
-struct Addresses {
+struct GetAddressResponse {
     addresses: Vec<String>,
 }
 
 /**
- * [SERVER] Retrieve all addresses setup by initial configuration.
+ * [WALLET] Retrieve all managed accounts.
  */
 #[endpoint {
     method = GET,
-    path = "/fastx/addresses",
+    path = "/wallet/addresses",
 }]
 async fn get_addresses(
     rqctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseOk<Addresses>, HttpError> {
+) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
     let server_context = rqctx.context();
     let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
 
     let config =
-        WalletConfig::read_or_create(&wallet_config_path).expect("Unable to read wallet config");
+        match WalletConfig::read_or_create(&wallet_config_path) {
+            Ok(network_config) => network_config,
+            Err(error) => return Err(
+                HttpError::for_client_error(
+                    None, 
+                    hyper::StatusCode::FAILED_DEPENDENCY, 
+                    format!("Unable to read wallet config: {error}"))),
+        };
     let addresses = config
         .accounts
         .iter()
         .map(|info| info.address)
         .collect::<Vec<_>>();
-    let mut context = WalletContext::new(config);
+    let mut wallet_context = WalletContext::new(config);
 
-    // Sync all accounts on start up.
+    // Sync all accounts.
     for address in addresses.iter() {
-        let client_state = context
+        let client_state = wallet_context
             .get_or_create_client_state(address).map_err(|err| 
                 HttpError::for_client_error(
                 None, 
@@ -422,7 +452,11 @@ async fn get_addresses(
                 hyper::StatusCode::FAILED_DEPENDENCY, 
                 format!("Sync failed: {err}"))).ok();
     }
-    Ok(HttpResponseOk(Addresses { 
+
+    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+
+    // TODO: fix output to remove 'k#' as part of address
+    Ok(HttpResponseOk(GetAddressResponse { 
         addresses: addresses
                         .into_iter()
                         .map(|address| format!("{:?}", address).to_string())
@@ -431,16 +465,13 @@ async fn get_addresses(
 }
 
 /**
-* [INPUT] `Address` represents the provided address.
+* `GetObjectsRequest` represents the request to get objects for an address.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
-struct Address {
+struct GetObjectsRequest {
     address: String,
 }
 
-/**
- * [INPUT & OUTPUT] `Object` represents the value of the objects on the network.
- */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct Object {
     object_id: String,
@@ -451,56 +482,55 @@ struct Object {
  * [OUTPUT] `Objects` is a collection of Object
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
-struct Objects {
+struct GetObjectsResponse {
     objects: Vec<Object>,
 }
 
 /**
- * [CLIENT] Return all objects for a specified address.
+ * [WALLET] Return all objects for a specified address.
  */
 #[endpoint {
     method = GET,
-    path = "/client/address_objects",
+    path = "/wallet/objects",
 }]
-async fn get_address_objects(
+async fn get_objects(
     rqctx: Arc<RequestContext<ServerContext>>,
-    account: TypedBody<Address>,
-) -> Result<HttpResponseOk<Objects>, HttpError> {
+    request: TypedBody<GetObjectsRequest>,
+) -> Result<HttpResponseOk<GetObjectsResponse>, HttpError> {
     let server_context = rqctx.context();
 
-    let send_timeout = *server_context.send_timeout.lock().unwrap();
-    let recv_timeout = *server_context.recv_timeout.lock().unwrap();
-    let buffer_size = server_context.buffer_size;
-    let accounts_config_path = &*server_context.accounts_config_path.lock().unwrap();
-    let client_db_path = server_context.client_db_path.lock().unwrap().clone();
-    let account_config = &mut *server_context.accounts_config.lock().unwrap();
-    let committee_config = &*server_context.committee_config.lock().unwrap();
+    let get_objects_params = request.into_inner();
+    let address = get_objects_params.address;
 
-    let acc_objs = cb_thread::scope(|scope| {
-        scope
-            .spawn(|_| {
-                // Get the objects for account
-                client::query_objects(
-                    client_db_path,
-                    accounts_config_path,
-                    account_config,
-                    committee_config,
-                    decode_address_hex(account.into_inner().address.as_str()).unwrap(),
-                    buffer_size,
-                    send_timeout,
-                    recv_timeout,
-                )
-            })
-            .join()
-            .unwrap()
-    })
-    .unwrap();
+    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
 
-    Ok(HttpResponseOk(Objects {
-        objects: acc_objs
+    if wallet_context.is_none() {
+        return Err(
+            HttpError::for_client_error(
+            None, 
+            hyper::StatusCode::FAILED_DEPENDENCY, 
+            format!("Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."))
+        );
+    }
+
+    let wallet_context = wallet_context.as_mut().unwrap();
+
+    let client_state = 
+        wallet_context.get_or_create_client_state(
+            &decode_address_hex(address.as_str()).unwrap())
+                    .map_err(|err| 
+                        HttpError::for_client_error(
+                        None, 
+                        hyper::StatusCode::FAILED_DEPENDENCY, 
+                        format!("Could not create client state: {err}."))).unwrap();
+    let object_refs = client_state.object_refs();
+    println!("Showing {} results.", object_refs.len());
+
+    Ok(HttpResponseOk(GetObjectsResponse {
+        objects: object_refs
             .into_iter()
             .map(|e| Object {
-                object_id: e.1 .0.to_string(),
+                object_id: e.0.to_string(),
                 object_ref: Some(format!("{:?}", e.1)),
             })
             .collect::<Vec<Object>>(),

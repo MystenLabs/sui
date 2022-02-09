@@ -189,6 +189,12 @@ pub struct OrderInfoRequest {
     pub transaction_digest: TransactionDigest,
 }
 
+impl From<TransactionDigest> for OrderInfoRequest {
+    fn from(transaction_digest: TransactionDigest) -> Self {
+        OrderInfoRequest { transaction_digest }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OrderInfoResponse {
     // The signed order response to handle_order
@@ -385,22 +391,6 @@ impl Order {
 
     pub fn check_signature(&self) -> Result<(), FastPayError> {
         self.signature.check(&self.kind, *self.sender())
-    }
-
-    // TODO: support orders with multiple objects, each with their own sequence number (https://github.com/MystenLabs/fastnft/issues/8)
-    pub fn sequence_number(&self) -> SequenceNumber {
-        use OrderKind::*;
-        match &self.kind {
-            Transfer(t) => t.object_ref.1,
-            Publish(_) => SequenceNumber::new(), // modules are immutable, seq # is always 0
-            Call(c) => {
-                assert!(
-                    c.object_arguments.is_empty(),
-                    "Unimplemented: non-gas object arguments"
-                );
-                c.gas_payment.1
-            }
-        }
     }
 
     /// Return the metadata of each of the input objects for the order.

@@ -9,7 +9,7 @@ use fastx_types::base_types::{
     PublicKeyBytes,
 };
 use fastx_types::committee::Committee;
-use fastx_types::messages::{ExecutionStatus, ObjectInfoRequest, OrderEffects, OrderInfoResponse};
+use fastx_types::messages::{ExecutionStatus, OrderEffects};
 
 use crate::utils::Config;
 use fastx_types::error::FastPayError;
@@ -142,7 +142,12 @@ impl WalletCommands {
                 let account = context.find_owner(id)?;
                 // Fetch the object ref
                 let client_state = context.get_or_create_client_state(&account)?;
-                get_object_info(client_state, *id, *deep).await;
+                let object_read = client_state.get_object_info(*id).await?;
+                let object = object_read.object()?;
+                println!("{}", object);
+                if *deep {
+                    println!("Full Info: {:#?}", object);
+                }
             }
             WalletCommands::Call {
                 package,
@@ -158,12 +163,7 @@ impl WalletCommands {
                 let sender = context.find_owner(gas)?;
                 let client_state = context.get_or_create_client_state(&sender)?;
 
-                // Fetch the object info for the package
-                let package_obj_info_req = ObjectInfoRequest {
-                    object_id: *package,
-                    request_sequence_number: None,
-                };
-                let package_obj_info = client_state.get_object_info(package_obj_info_req).await?;
+                let package_obj_info = client_state.get_object_info(*package).await?;
                 let package_obj_ref = package_obj_info.object().unwrap().to_object_reference();
 
                 // Fetch the object info for the gas obj
@@ -175,22 +175,11 @@ impl WalletCommands {
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
                 for obj_id in object_args {
-                    // Fetch the obj ref
-                    let obj_info_req = ObjectInfoRequest {
-                        object_id: *obj_id,
-                        request_sequence_number: None,
-                    };
-
-                    let obj_info = client_state.get_object_info(obj_info_req).await?;
-                    object_args_refs.push(
-                        obj_info
-                            .object()
-                            .unwrap_or_else(|| panic!("Could not find object {:?}", obj_id))
-                            .to_object_reference(),
-                    );
+                    let obj_info = client_state.get_object_info(*obj_id).await?;
+                    object_args_refs.push(obj_info.object()?.to_object_reference());
                 }
 
-                let (cert, resp) = client_state
+                let (cert, effects) = client_state
                     .move_call(
                         package_obj_ref,
                         module.to_owned(),
@@ -203,9 +192,7 @@ impl WalletCommands {
                     )
                     .await?;
                 println!("Cert: {:?}", cert);
-                if let Some(effects) = resp.signed_effects {
-                    show_object_effects(effects.effects);
-                }
+                show_object_effects(effects);
             }
 
             WalletCommands::Transfer { to, object_id, gas } => {
@@ -265,31 +252,6 @@ impl WalletCommands {
     }
 }
 
-async fn get_object_info(
-    client_state: &mut ClientState<AuthorityClient>,
-    obj_id: ObjectID,
-    deep: bool,
-) {
-    // Fetch the object info for the object
-    let obj_info_req = ObjectInfoRequest {
-        object_id: obj_id,
-        request_sequence_number: None,
-    };
-    if let Some(object) = client_state
-        .get_object_info(obj_info_req)
-        .await
-        .unwrap()
-        .object()
-    {
-        println!("{}", object);
-        if deep {
-            println!("Full Info: {:#?}", object);
-        }
-    } else {
-        panic!("Object with id {:?} not found", obj_id);
-    }
-}
-
 async fn publish(
     client_state: &mut ClientState<AuthorityClient>,
     path: String,
@@ -303,23 +265,13 @@ async fn publish(
     let pub_resp = client_state.publish(path, gas_obj_ref).await;
 
     match pub_resp {
-        Ok((
-            _,
-            OrderInfoResponse {
-                signed_effects: Some(signed_effect),
-                ..
-            },
-        )) => {
-            if signed_effect.effects.status != ExecutionStatus::Success {
-                error!(
-                    "Error publishing module: {:#?}",
-                    signed_effect.effects.status
-                );
+        Ok((_, effects)) => {
+            if effects.status != ExecutionStatus::Success {
+                error!("Error publishing module: {:#?}", effects.status);
             }
-            show_object_effects(signed_effect.effects);
+            show_object_effects(effects);
         }
         Err(err) => error!("{:#?}", err),
-        _ => error!("Unexpected publish response"),
     }
 }
 

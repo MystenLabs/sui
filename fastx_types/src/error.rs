@@ -137,7 +137,7 @@ pub enum FastPayError {
     ModuleDeserializationFailure { error: String },
     #[error("Failed to publish the Move module(s), reason: {error:?}.")]
     ModulePublishFailure { error: String },
-    #[error("Failed to build Move modules")]
+    #[error("Failed to build Move modules: {error:?}.")]
     ModuleBuildFailure { error: String },
     #[error("Dependent package not found on-chain: {package_id:?}")]
     DependentPackageNotFound { package_id: ObjectID },
@@ -173,6 +173,8 @@ pub enum FastPayError {
     OrderLockReset,
     #[error("Could not find the referenced object {:?}.", object_id)]
     ObjectNotFound { object_id: ObjectID },
+    #[error("Object deleted at reference {:?}.", object_ref)]
+    ObjectDeleted { object_ref: ObjectRef },
     #[error("Object ID did not have the expected type")]
     BadObjectType { error: String },
     #[error("Move Execution failed")]

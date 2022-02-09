@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::ident_str;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use serde_with::{serde_as, Bytes};
@@ -9,11 +8,10 @@ use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Formatter};
 
+use crate::error::FastPayError;
 use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 
-use crate::id::ID;
-use crate::FASTX_FRAMEWORK_ADDRESS;
 use crate::{
     base_types::{
         sha3_hash, Authenticator, BcsSignable, FastPayAddress, ObjectDigest, ObjectID, ObjectRef,
@@ -22,10 +20,6 @@ use crate::{
     gas_coin::GasCoin,
 };
 
-pub const OBJECT_BASICS_MODULE_NAME: &move_core_types::identifier::IdentStr =
-    ident_str!("ObjectBasics");
-pub const OBJECT_BASICS_OBJECT_TYPE_NAME: &move_core_types::identifier::IdentStr =
-    ident_str!("Object");
 pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 
@@ -36,13 +30,6 @@ pub struct MoveObject {
     #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
     read_only: bool,
-}
-
-/// ObjectBasics in the Framework uses an object of the following format
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ObjectBasicsObject {
-    pub id: ID,
-    pub value: u64,
 }
 
 /// Byte encoding of a 64 byte unsigned integer in BCS
@@ -314,40 +301,6 @@ impl Object {
         Self::with_id_owner_gas_for_testing(id, SequenceNumber::new(), owner, GAS_VALUE_FOR_TESTING)
     }
 
-    /// Create ObjectBasics object for use in Move object operation
-    pub fn with_id_owner_object_basics_object_for_testing(
-        id: ObjectID,
-        version: SequenceNumber,
-        owner: FastPayAddress,
-        value: u64,
-    ) -> Self {
-        // Check ObjectBasics.move in Framework for details
-        // Create struct tag for ObjectBasics object
-        let struct_tag = StructTag {
-            address: FASTX_FRAMEWORK_ADDRESS,
-            name: OBJECT_BASICS_OBJECT_TYPE_NAME.to_owned(),
-            module: OBJECT_BASICS_MODULE_NAME.to_owned(),
-            type_params: Vec::new(),
-        };
-
-        // An object in ObjectBasics is a struct of an ID and a u64 value
-        let obj = ObjectBasicsObject {
-            id: ID::new(id, version),
-            value,
-        };
-
-        let data = Data::Move(MoveObject {
-            type_: struct_tag,
-            contents: bcs::to_bytes(&obj).unwrap(),
-            read_only: false,
-        });
-        Self {
-            owner: Authenticator::Address(owner),
-            data,
-            previous_transaction: TransactionDigest::genesis(),
-        }
-    }
-
     /// Create Coin object for use in Move object operation
     pub fn with_id_owner_gas_coin_object_for_testing(
         id: ObjectID,
@@ -366,6 +319,34 @@ impl Object {
             owner: Authenticator::Address(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
+        }
+    }
+}
+
+pub enum ObjectRead {
+    NotExists(ObjectID),
+    Exists(ObjectRef, Object),
+    Deleted(ObjectRef),
+}
+
+impl ObjectRead {
+    /// Returns a reference to the object if there is any, otherwise an Err if
+    /// the object does exist or is deleted.
+    pub fn object(&self) -> Result<&Object, FastPayError> {
+        match &self {
+            Self::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
+            Self::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
+            Self::Exists(_, o) => Ok(o),
+        }
+    }
+
+    /// Returns the object ref if there is an object, otherwise an Err if
+    /// the object does exist or is deleted.
+    pub fn reference(&self) -> Result<ObjectRef, FastPayError> {
+        match &self {
+            Self::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
+            Self::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
+            Self::Exists(oref, _) => Ok(*oref),
         }
     }
 }

@@ -20,8 +20,8 @@ const FAST_X: &str = "    ______           __ _  __
 
 #[derive(StructOpt)]
 #[structopt(
-    name = "FastX",
-    about = "A Byzantine fault tolerant payments chain with low-latency finality and high throughput",
+    name = "FastX Demo Wallet",
+    about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
 struct ClientOpt {
@@ -97,11 +97,11 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
         match command {
             Ok(mut cmd) => {
                 if let Err(e) = cmd.execute(context).await {
-                    println!("{}", e);
+                    eprintln!("{}", format!("{}", e).red());
                 }
             }
             Err(e) => {
-                println!("{}", e.message);
+                eprintln!("{}", e.message.red());
             }
         }
         false
