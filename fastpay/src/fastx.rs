@@ -115,7 +115,7 @@ async fn genesis(mut config: NetworkConfig) -> Result<(), anyhow::Error> {
     let mut authority_info = Vec::new();
     let mut port_allocator = PortAllocator::new(10000);
 
-    println!("Creating new addresses...");
+    println!("Creating new authorities...");
     for _ in 0..4 {
         let (address, key_pair) = get_key_pair();
         let info = AuthorityPrivateInfo {
@@ -161,7 +161,9 @@ async fn genesis(mut config: NetworkConfig) -> Result<(), anyhow::Error> {
         make_server(&authority, &committee, &preload_objects, config.buffer_size).await;
     }
 
-    let wallet_config = WalletConfig::create("./wallet.conf")?;
+    let mut wallet_config = WalletConfig::create("./wallet.conf")?;
+    wallet_config.authorities = authority_info;
+    wallet_config.accounts = new_addresses;
     wallet_config.save()?;
 
     println!("Network genesis completed.");
