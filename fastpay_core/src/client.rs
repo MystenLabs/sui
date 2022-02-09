@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
 use fastx_types::{
     base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
+    object::ObjectRead,
 };
 use futures::future;
 use itertools::Itertools;
@@ -87,10 +88,7 @@ pub trait Client {
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
 
     /// Get the object information
-    async fn get_object_info(
-        &mut self,
-        object_info_req: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, anyhow::Error>;
+    async fn get_object_info(&mut self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
 
     /// Get all object we own.
     async fn get_owned_objects(&self) -> Vec<ObjectID>;
@@ -247,20 +245,8 @@ where
 
     #[cfg(test)]
     pub async fn get_framework_object_ref(&mut self) -> Result<ObjectRef, anyhow::Error> {
-        let info = self
-            .get_object_info(ObjectInfoRequest {
-                object_id: FASTX_FRAMEWORK_ADDRESS,
-                request_sequence_number: None,
-            })
-            .await?;
-        let reference = info
-            .object_and_lock
-            .ok_or(FastPayError::ObjectNotFound {
-                object_id: FASTX_FRAMEWORK_ADDRESS,
-            })?
-            .object
-            .to_object_reference();
-        Ok(reference)
+        let info = self.get_object_info(FASTX_FRAMEWORK_ADDRESS).await?;
+        Ok(info.reference()?)
     }
 
     async fn execute_transaction_inner(
@@ -597,13 +583,8 @@ where
         self.execute_transaction(move_publish_order).await
     }
 
-    async fn get_object_info(
-        &mut self,
-        object_info_req: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, anyhow::Error> {
-        self.authorities
-            .get_object_info_execute(object_info_req)
-            .await
+    async fn get_object_info(&mut self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
+        self.authorities.get_object_info_execute(object_id).await
     }
 
     async fn get_owned_objects(&self) -> Vec<ObjectID> {

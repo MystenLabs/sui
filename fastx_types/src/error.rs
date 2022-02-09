@@ -173,6 +173,8 @@ pub enum FastPayError {
     OrderLockReset,
     #[error("Could not find the referenced object {:?}.", object_id)]
     ObjectNotFound { object_id: ObjectID },
+    #[error("Object deleted at reference {:?}.", object_ref)]
+    ObjectDeleted { object_ref: ObjectRef },
     #[error("Object ID did not have the expected type")]
     BadObjectType { error: String },
     #[error("Move Execution failed")]

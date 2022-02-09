@@ -58,21 +58,4 @@ impl Committee {
         // then (N + 2) / 3 = f + 1 + k/3 = f + 1
         (self.total_votes + 2) / 3
     }
-
-    /// Find the highest value than is supported by a quorum of authorities.
-    pub fn get_strong_majority_lower_bound<V>(&self, mut values: Vec<(AuthorityName, V)>) -> V
-    where
-        V: Default + std::cmp::Ord,
-    {
-        values.sort_by(|(_, x), (_, y)| V::cmp(y, x));
-        // Browse values by decreasing order, while tracking how many votes they have.
-        let mut score = 0;
-        for (name, value) in values {
-            score += self.weight(&name);
-            if score >= self.quorum_threshold() {
-                return value;
-            }
-        }
-        V::default()
-    }
 }

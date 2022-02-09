@@ -3,7 +3,7 @@
 
 use crate::authority_client::AuthorityAPI;
 
-use fastx_types::object::Object;
+use fastx_types::object::{Object, ObjectRead};
 use fastx_types::{
     base_types::*,
     committee::Committee,
@@ -951,52 +951,6 @@ where
         (obj.0.as_ref().unwrap().owner, top_ref.0 .1)
     }
 
-    /// Execute a sequence of actions in parallel for a quorum of authorities.
-    async fn communicate_with_quorum<'a, V, F>(&'a self, execute: F) -> Result<Vec<V>, FastPayError>
-    where
-        F: Fn(AuthorityName, &'a A) -> AsyncResult<'a, V, FastPayError> + Clone,
-    {
-        let committee = &self.committee;
-        let authority_clients = &self.authority_clients;
-        let mut responses: futures::stream::FuturesUnordered<_> = authority_clients
-            .iter()
-            .map(|(name, client)| {
-                let execute = execute.clone();
-                async move { (*name, execute(*name, client).await) }
-            })
-            .collect();
-
-        let mut values = Vec::new();
-        let mut value_score = 0;
-        let mut error_scores = HashMap::new();
-        while let Some((name, result)) = responses.next().await {
-            match result {
-                Ok(value) => {
-                    values.push(value);
-                    value_score += committee.weight(&name);
-                    if value_score >= committee.quorum_threshold() {
-                        // Success!
-                        return Ok(values);
-                    }
-                }
-                Err(err) => {
-                    let entry = error_scores.entry(err.clone()).or_insert(0);
-                    *entry += committee.weight(&name);
-                    if *entry >= committee.validity_threshold() {
-                        // At least one honest node returned this error.
-                        // No quorum can be reached, so return early.
-                        return Err(FastPayError::QuorumNotReached {
-                            errors: error_scores.into_keys().collect(),
-                        });
-                    }
-                }
-            }
-        }
-        Err(FastPayError::QuorumNotReached {
-            errors: error_scores.into_keys().collect(),
-        })
-    }
-
     pub async fn execute_transaction(
         &self,
         order: &Order,
@@ -1013,19 +967,82 @@ where
 
     pub async fn get_object_info_execute(
         &mut self,
-        object_info_req: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, anyhow::Error> {
-        let votes = self
-            .communicate_with_quorum(|_, client| {
-                let req = object_info_req.clone();
-                Box::pin(async move { client.handle_object_info_request(req).await })
-            })
+        object_id: ObjectID,
+    ) -> Result<ObjectRead, anyhow::Error> {
+        let (object_map, cert_map) = self
+            .get_object_by_id(object_id, AUTHORITY_REQUEST_TIMEOUT)
             .await?;
+        let mut object_ref_stack: Vec<_> = object_map.into_iter().collect();
 
-        votes
-            .get(0)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("No valid confirmation order votes"))
+        while let Some(((obj_ref, tx_digest), (obj_option, authorities))) = object_ref_stack.pop() {
+            let stake: usize = authorities
+                .iter()
+                .map(|(name, _)| self.committee.weight(name))
+                .sum();
+
+            // If we have f+1 stake telling us of the latest version of the object, we just accept it.
+            if stake >= self.committee.validity_threshold() {
+                if obj_option.is_none() {
+                    return Ok(ObjectRead::Deleted(obj_ref));
+                } else {
+                    // safe due to check
+                    return Ok(ObjectRead::Exists(obj_ref, obj_option.unwrap()));
+                }
+            } else if cert_map.contains_key(&tx_digest) {
+                // If we have less stake telling us about the latest state of an object
+                // we re-run the certificate on all authorities to ensure it is correct.
+                if let Ok(_effects) = self
+                    .process_certificate(cert_map[&tx_digest].clone(), AUTHORITY_REQUEST_TIMEOUT)
+                    .await
+                {
+                    let mut is_ok = false;
+
+                    // The mutated or created case
+                    if _effects
+                        .mutated
+                        .iter()
+                        .filter(|(oref, _)| *oref == obj_ref)
+                        .count()
+                        != 0
+                        || _effects
+                            .created
+                            .iter()
+                            .filter(|(oref, _)| *oref == obj_ref)
+                            .count()
+                            != 0
+                    {
+                        is_ok = true;
+                    }
+
+                    // The deleted case
+                    if obj_ref.2 == OBJECT_DIGEST_DELETED
+                        && _effects
+                            .deleted
+                            .iter()
+                            .filter(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
+                            .count()
+                            != 0
+                    {
+                        is_ok = true;
+                    }
+
+                    if !is_ok {
+                        // Report a byzantine fault here
+                        continue;
+                    }
+
+                    // NOTE: here we should validate the object is correct from the effects
+                    if obj_option.is_none() {
+                        return Ok(ObjectRead::Deleted(obj_ref));
+                    } else {
+                        // safe due to check
+                        return Ok(ObjectRead::Exists(obj_ref, obj_option.unwrap()));
+                    }
+                }
+            }
+        }
+
+        Ok(ObjectRead::NotExists(object_id))
     }
 
     /// Given a list of object refs, download the objects.
