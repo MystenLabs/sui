@@ -9,7 +9,7 @@ use fastx_types::base_types::{
     PublicKeyBytes,
 };
 use fastx_types::committee::Committee;
-use fastx_types::messages::{ExecutionStatus, ObjectInfoRequest, OrderEffects};
+use fastx_types::messages::{ExecutionStatus, OrderEffects};
 
 use crate::utils::Config;
 use fastx_types::error::FastPayError;
@@ -142,7 +142,12 @@ impl WalletCommands {
                 let account = context.find_owner(id)?;
                 // Fetch the object ref
                 let client_state = context.get_or_create_client_state(&account)?;
-                get_object_info(client_state, *id, *deep).await;
+                let object_read = client_state.get_object_info(*id).await?;
+                let object = object_read.object()?;
+                println!("{}", object);
+                if *deep {
+                    println!("Full Info: {:#?}", object);
+                }
             }
             WalletCommands::Call {
                 package,
@@ -158,12 +163,7 @@ impl WalletCommands {
                 let sender = context.find_owner(gas)?;
                 let client_state = context.get_or_create_client_state(&sender)?;
 
-                // Fetch the object info for the package
-                let package_obj_info_req = ObjectInfoRequest {
-                    object_id: *package,
-                    request_sequence_number: None,
-                };
-                let package_obj_info = client_state.get_object_info(package_obj_info_req).await?;
+                let package_obj_info = client_state.get_object_info(*package).await?;
                 let package_obj_ref = package_obj_info.object().unwrap().to_object_reference();
 
                 // Fetch the object info for the gas obj
@@ -175,19 +175,8 @@ impl WalletCommands {
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
                 for obj_id in object_args {
-                    // Fetch the obj ref
-                    let obj_info_req = ObjectInfoRequest {
-                        object_id: *obj_id,
-                        request_sequence_number: None,
-                    };
-
-                    let obj_info = client_state.get_object_info(obj_info_req).await?;
-                    object_args_refs.push(
-                        obj_info
-                            .object()
-                            .unwrap_or_else(|| panic!("Could not find object {:?}", obj_id))
-                            .to_object_reference(),
-                    );
+                    let obj_info = client_state.get_object_info(*obj_id).await?;
+                    object_args_refs.push(obj_info.object()?.to_object_reference());
                 }
 
                 let (cert, effects) = client_state
@@ -260,31 +249,6 @@ impl WalletCommands {
             }
         }
         Ok(())
-    }
-}
-
-async fn get_object_info(
-    client_state: &mut ClientState<AuthorityClient>,
-    obj_id: ObjectID,
-    deep: bool,
-) {
-    // Fetch the object info for the object
-    let obj_info_req = ObjectInfoRequest {
-        object_id: obj_id,
-        request_sequence_number: None,
-    };
-    if let Some(object) = client_state
-        .get_object_info(obj_info_req)
-        .await
-        .unwrap()
-        .object()
-    {
-        println!("{}", object);
-        if deep {
-            println!("Full Info: {:#?}", object);
-        }
-    } else {
-        panic!("Object with id {:?} not found", obj_id);
     }
 }
 

@@ -97,11 +97,11 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
         match command {
             Ok(mut cmd) => {
                 if let Err(e) = cmd.execute(context).await {
-                    println!("{}", e);
+                    eprintln!("{}", format!("{}", e).red());
                 }
             }
             Err(e) => {
-                println!("{}", e.message);
+                eprintln!("{}", e.message.red());
             }
         }
         false
