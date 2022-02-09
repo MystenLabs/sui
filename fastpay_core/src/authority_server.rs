@@ -19,7 +19,7 @@ pub struct AuthorityServer {
 impl AuthorityServer {
     pub fn new(
         base_address: String,
-        base_port: u32,
+        base_port: u16,
         buffer_size: usize,
         state: AuthorityState,
     ) -> Self {

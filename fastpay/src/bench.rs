@@ -42,7 +42,7 @@ struct ClientServerBenchmark {
     db_dir: String,
     /// Base port number
     #[structopt(long, default_value = "9555")]
-    port: u32,
+    port: u16,
     /// Size of the FastPay committee
     #[structopt(long, default_value = "10")]
     committee_size: usize,

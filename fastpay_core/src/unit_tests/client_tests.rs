@@ -696,13 +696,13 @@ fn test_client_state_sync() {
     sender.store().object_sequence_numbers.clear().unwrap();
     sender.store().certificates.clear().unwrap();
     sender.store().object_refs.clear().unwrap();
-    assert!(rt.block_on(sender.get_owned_objects()).is_empty());
+    assert!(sender.get_owned_objects().is_empty());
 
     // Sync client state
     rt.block_on(sender.sync_client_state()).unwrap();
 
     // Confirm data are the same after sync
-    assert!(!rt.block_on(sender.get_owned_objects()).is_empty());
+    assert!(!sender.get_owned_objects().is_empty());
     assert_eq!(
         &old_object_ids,
         &sender.store().object_sequence_numbers.iter().collect()
@@ -750,7 +750,7 @@ async fn test_client_state_sync_with_transferred_object() {
     );
 
     // Client 2's local object_id and cert should be empty before sync
-    assert!(client2.get_owned_objects().await.is_empty());
+    assert!(client2.get_owned_objects().is_empty());
     assert!(client2.store().object_sequence_numbers.is_empty());
     assert!(&client2.store().certificates.is_empty());
 
@@ -758,7 +758,7 @@ async fn test_client_state_sync_with_transferred_object() {
     client2.sync_client_state().await.unwrap();
 
     // Confirm client 2 received the new object id and cert
-    assert_eq!(1, client2.get_owned_objects().await.len());
+    assert_eq!(1, client2.get_owned_objects().len());
     assert_eq!(1, client2.store().object_sequence_numbers.iter().count());
     assert_eq!(1, client2.store().certificates.iter().count());
 }
