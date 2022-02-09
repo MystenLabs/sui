@@ -924,7 +924,7 @@ where
             .await?;
 
         let (_obj_ref, tx_digest) = object_map.keys().last().unwrap();
-        return Ok(transaction_map[tx_digest].clone());
+        Ok(transaction_map[tx_digest].clone())
     }
 
     /// Find the highest sequence number that is known to a quorum of authorities.

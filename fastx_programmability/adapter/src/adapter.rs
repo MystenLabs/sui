@@ -111,15 +111,17 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     };
 
     // TODO: Update Move gas constants to reflect the gas fee on fastx.
-    let mut gas_status =
-        match get_gas_status(Some(gas_budget)).map_err(|e| FastPayError::GasBudgetTooHigh {
+    let cost_table = &move_vm_types::gas_schedule::INITIAL_COST_SCHEDULE;
+    let mut gas_status = match get_gas_status(cost_table, Some(gas_budget)).map_err(|e| {
+        FastPayError::GasBudgetTooHigh {
             error: e.to_string(),
-        }) {
-            Ok(ok) => ok,
-            Err(err) => {
-                exec_failure!(gas::MIN_MOVE_CALL_GAS, err);
-            }
-        };
+        }
+    }) {
+        Ok(ok) => ok,
+        Err(err) => {
+            exec_failure!(gas::MIN_MOVE_CALL_GAS, err);
+        }
+    };
     let session = vm.new_session(state_view);
     match session.execute_function_for_effects(
         &module_id,
@@ -253,7 +255,8 @@ pub fn verify_and_link<
     let vm = MoveVM::new(natives)
         .expect("VM creation only fails if natives are invalid, and we created the natives");
     // Note: VM does not do any gas metering on publish code path, so setting budget to None is fine
-    let mut gas_status = get_gas_status(None)
+    let cost_table = &move_vm_types::gas_schedule::INITIAL_COST_SCHEDULE;
+    let mut gas_status = get_gas_status(cost_table, None)
         .expect("Can only fail if gas budget is too high, and we didn't supply one");
     let mut session = vm.new_session(state_view);
     // TODO(https://github.com/MystenLabs/fastnft/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`

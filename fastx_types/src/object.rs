@@ -1,17 +1,25 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::binary_views::BinaryIndexedView;
+use move_bytecode_utils::layout::TypeLayoutBuilder;
+use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
+use move_disassembler::disassembler::Disassembler;
+use move_ir_types::location::Spanned;
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
+use serde_json::{json, Value};
 use serde_with::{serde_as, Bytes};
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Formatter};
 
-use crate::error::FastPayError;
 use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 
+use crate::error::FastPayError;
 use crate::{
     base_types::{
         sha3_hash, Authenticator, BcsSignable, FastPayAddress, ObjectDigest, ObjectID, ObjectRef,
@@ -39,6 +47,15 @@ const ID_END_INDEX: usize = AccountAddress::LENGTH;
 /// Index marking the end of the object's version + the beginning of type-specific data
 const VERSION_END_INDEX: usize = ID_END_INDEX + 8;
 
+/// Different schemes for converting a Move object to JSON
+pub struct ObjectFormatOptions {
+    /// If true, include the type of each object as well as its fields; e.g.:
+    /// `{ "fields": { "f": 20, "g": { "fields" { "h": true }, "type": "0x0::MyModule::MyNestedType" }, "type": "0x0::MyModule::MyType" }`
+    ///  If false, include field names only; e.g.:
+    /// `{ "f": 20, "g": { "h": true } }`
+    include_types: bool,
+}
+
 impl MoveObject {
     pub fn new(type_: StructTag, contents: Vec<u8>) -> Self {
         Self {
@@ -63,7 +80,6 @@ impl MoveObject {
         &self.contents[VERSION_END_INDEX..]
     }
 
-    ///
     pub fn id_version_contents(&self) -> &[u8] {
         &self.contents[..VERSION_END_INDEX]
     }
@@ -120,6 +136,36 @@ impl MoveObject {
     pub fn freeze(&mut self) {
         self.read_only = true;
     }
+
+    /// Get a `MoveStructLayout` for `self`.
+    /// The `resolver` value must contain the module that declares `self.type_` and the (transitive)
+    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
+    pub fn get_layout(
+        &self,
+        format: ObjectFormatOptions,
+        resolver: &impl GetModule,
+    ) -> Result<MoveStructLayout, FastPayError> {
+        let type_ = TypeTag::Struct(self.type_.clone());
+        let layout = if format.include_types {
+            TypeLayoutBuilder::build_with_types(&type_, resolver)
+        } else {
+            TypeLayoutBuilder::build_with_fields(&type_, resolver)
+        }
+        .map_err(|_e| FastPayError::ObjectSerializationError)?;
+        match layout {
+            MoveTypeLayout::Struct(l) => Ok(l),
+            _ => unreachable!(
+                "We called build_with_types on Struct type, should get a struct layout"
+            ),
+        }
+    }
+
+    /// Convert `self` to the JSON representation dictated by `layout`.
+    pub fn to_json(&self, layout: &MoveStructLayout) -> Result<Value, FastPayError> {
+        let move_value = MoveStruct::simple_deserialize(&self.contents, layout)
+            .map_err(|_e| FastPayError::ObjectSerializationError)?;
+        serde_json::to_value(&move_value).map_err(|_e| FastPayError::ObjectSerializationError)
+    }
 }
 
 // TODO: Make MovePackage a NewType so that we can implement functions on it.
@@ -166,6 +212,38 @@ impl Data {
         match self {
             Move(m) => Some(&m.type_),
             Package(_) => None,
+        }
+    }
+
+    /// Convert `self` to the JSON representation dictated by `format`.
+    /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
+    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
+    pub fn to_json(
+        &self,
+        format: ObjectFormatOptions,
+        resolver: &impl GetModule,
+    ) -> Result<Value, FastPayError> {
+        use Data::*;
+        match self {
+            Move(m) => {
+                let layout = m.get_layout(format, resolver)?;
+                m.to_json(&layout)
+            }
+            Package(p) => {
+                let mut disassembled = serde_json::Map::new();
+                for (name, bytecode) in p {
+                    let module = CompiledModule::deserialize(bytecode)
+                        .expect("Adapter publish flow ensures that this bytecode deserializes");
+                    let view = BinaryIndexedView::Module(&module);
+                    let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc)
+                        .map_err(|_e| FastPayError::ObjectSerializationError)?;
+                    let bytecode_str = d
+                        .disassemble()
+                        .map_err(|_e| FastPayError::ObjectSerializationError)?;
+                    disassembled.insert(name.to_string(), Value::String(bytecode_str));
+                }
+                Ok(Value::Object(disassembled))
+            }
         }
     }
 }
@@ -320,6 +398,22 @@ impl Object {
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
+    }
+
+    /// Convert `self` to the JSON representation dictated by `format`.
+    /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
+    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
+    pub fn to_json(
+        &self,
+        format: ObjectFormatOptions,
+        resolver: &impl GetModule,
+    ) -> Result<Value, FastPayError> {
+        let contents = self.data.to_json(format, resolver)?;
+        let owner = serde_json::to_value(&self.owner)
+            .map_err(|_e| FastPayError::ObjectSerializationError)?;
+        let previous_transaction = serde_json::to_value(&self.previous_transaction)
+            .map_err(|_e| FastPayError::ObjectSerializationError)?;
+        Ok(json!({ "contents": contents, "owner": owner, "tx_digest": previous_transaction }))
     }
 }
 
