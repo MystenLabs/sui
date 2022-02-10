@@ -17,12 +17,18 @@ use fastpay::wallet_commands::WalletContext;
 use fastpay_core::authority::{AuthorityState, AuthorityStore};
 use fastpay_core::authority_server::AuthorityServer;
 use fastpay_core::client::Client;
-use fastx_types::base_types::*;
+use fastx_types::{
+    base_types::*, object::ObjectRead,
+};
 use fastx_types::committee::Committee;
-use fastx_types::object::{Object as FastxObject, ObjectRead};
+use fastx_types::messages::{ExecutionStatus, OrderEffects};
+use fastx_types::object::{Object as FastxObject};
 
 use futures::future::join_all;
 use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::Identifier;
+use move_core_types::parser::{parse_transaction_argument, parse_type_tag};
+use move_core_types::transaction_argument::convert_txn_args;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -30,12 +36,12 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::net::{Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
+use std::str::FromStr;
 use tokio::runtime::Runtime;
 use tracing::error;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Instant;
 
 const DEFAULT_WEIGHT: usize = 1;
 
@@ -62,6 +68,8 @@ async fn main() -> Result<(), String> {
     api.register(get_object_info).unwrap();
     api.register(transfer_object).unwrap();
     api.register(sync).unwrap();
+    api.register(publish).unwrap();
+    api.register(call).unwrap();
 
     let api_context = ServerContext::new();
 
@@ -112,11 +120,11 @@ struct GenesisResponse {
 }
 
 /**
- * [FASTX] Use to provide server configurations for genesis.
+ * [SUI] Use to provide server configurations for genesis.
  */
 #[endpoint {
     method = POST,
-    path = "/fastx/genesis",
+    path = "/sui/genesis",
 }]
 async fn genesis(
     rqctx: Arc<RequestContext<ServerContext>>,
@@ -195,7 +203,7 @@ async fn genesis(
                 ObjectID::random(),
                 SequenceNumber::new(),
                 address,
-                1000,
+                1000000,
             );
             preload_objects.push(new_object);
         }
@@ -261,11 +269,11 @@ async fn genesis(
 }
 
 /**
- * [FASTX] Start servers with specified configurations.
+ * [SUI] Start servers with specified configurations.
  */
 #[endpoint {
     method = POST,
-    path = "/fastx/start",
+    path = "/sui/start",
 }]
 async fn start(
     rqctx: Arc<RequestContext<ServerContext>>,
@@ -292,9 +300,7 @@ async fn start(
         ));
     }
 
-    // TODO check if thread/network is already started and stop if it is....
-    // JoinHandle::is_running() unstable feature :(
-    // https://github.com/rust-lang/rust/issues/90470
+    // TODO: check if thread/network is already before proceeding (use mutex to indicate if server has been started)
 
     println!(
         "Starting network with {} authorities",
@@ -315,7 +321,7 @@ async fn start(
         let server = make_server(&authority, &committee, &[], network_config.buffer_size).await;
 
         handles.push(async move {
-            // TODO: how to bubble up async server errors as a http error
+            // TODO: bubble up async server errors as a http error
             let spawned_server = match server.spawn().await {
                 Ok(server) => server,
                 Err(err) => {
@@ -326,7 +332,7 @@ async fn start(
             if let Err(err) = spawned_server.join().await {
                 error!("Server ended with an error: {}", err);
             }
-        });
+        })
     }
 
     let num_authorities = handles.len();
@@ -335,57 +341,6 @@ async fn start(
         rt.block_on(join_all(handles));
     });
 
-    Ok(HttpResponseOk(format!(
-        "Started {} authorities",
-        num_authorities
-    )))
-}
-
-/**
- * [FASTX] Stop servers and delete storage.
- */
-#[endpoint {
-    method = POST,
-    path = "/fastx/stop",
-}]
-async fn stop(
-    rqctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-    let server_context = rqctx.context();
-    let network_config_path = server_context.network_config_path.lock().unwrap().clone();
-    let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
-    let authority_db_path = server_context.authority_db_path.lock().unwrap().clone();
-
-    // TODO: kill authorities
-
-    // TODO: get client db path from server context & error handle
-    fs::remove_dir_all("./client_db").ok();
-    fs::remove_dir_all(authority_db_path).ok();
-    fs::remove_file(network_config_path).ok();
-    fs::remove_file(wallet_config_path).ok();
-
-    Ok(HttpResponseUpdatedNoContent())
-}
-
-/**
- * `GetAddressResponse` represents the list of managed accounts for this client
- */
-#[derive(Deserialize, Serialize, JsonSchema)]
-struct GetAddressResponse {
-    addresses: Vec<String>,
-}
-
-/**
- * [WALLET] Retrieve all managed accounts.
- */
-#[endpoint {
-    method = GET,
-    path = "/wallet/addresses",
-}]
-async fn get_addresses(
-    rqctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
-    let server_context = rqctx.context();
     let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
 
     let config = match WalletConfig::read_or_create(&wallet_config_path) {
@@ -431,7 +386,126 @@ async fn get_addresses(
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
-    // TODO: fix output to remove 'k#' as part of address
+    Ok(HttpResponseOk(format!(
+        "Started {} authorities",
+        num_authorities
+    )))
+}
+
+/**
+ * [SUI] Stop servers and delete storage.
+ */
+#[endpoint {
+    method = POST,
+    path = "/sui/stop",
+}]
+async fn stop(
+    rqctx: Arc<RequestContext<ServerContext>>,
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    let server_context = rqctx.context();
+    let network_config_path = server_context.network_config_path.lock().unwrap().clone();
+    let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
+    let authority_db_path = server_context.authority_db_path.lock().unwrap().clone();
+
+    // TODO: kill thread that is hosting the authorities
+    // TODO: get client db path from server context & error handle
+    fs::remove_dir_all("./client_db").ok();
+    fs::remove_dir_all(authority_db_path).ok();
+    fs::remove_file(network_config_path).ok();
+    fs::remove_file(wallet_config_path).ok();
+
+    Ok(HttpResponseUpdatedNoContent())
+}
+
+/**
+ * `GetAddressResponse` represents the list of managed accounts for this client
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct GetAddressResponse {
+    addresses: Vec<String>,
+}
+
+/**
+ * [WALLET] Retrieve all managed accounts.
+ */
+#[endpoint {
+    method = GET,
+    path = "/wallet/addresses",
+}]
+async fn get_addresses(
+    rqctx: Arc<RequestContext<ServerContext>>,
+) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
+    let server_context = rqctx.context();
+    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
+    if wallet_context.is_none() {
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."
+                .to_string(),
+        ));
+    }
+    let wallet_context = wallet_context.as_mut().unwrap();
+
+    let addresses = wallet_context
+        .config
+        .accounts
+        .iter()
+        .map(|info| info.address)
+        .collect::<Vec<_>>();
+
+    // Sync all accounts.
+    for address in addresses.iter() {
+        let client_state = match wallet_context.get_or_create_client_state(address) {
+            Ok(client_state) => client_state,
+            Err(error) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Can't create client state: {error}"),
+                ))
+            }
+        };
+
+        match cb_thread::scope(|scope| {
+            scope
+                .spawn(|_| {
+                    // synchronize with authorities 
+                    let rt = Runtime::new().unwrap();
+                    rt.block_on(async move {
+                        client_state.sync_client_state().await
+                    })
+                })
+                .join()
+        }) {
+            Ok(result) => {  
+                match result {
+                    Ok(result) => {
+                        match result {
+                            Ok(_) => (),
+                            Err(err) => return Err(HttpError::for_client_error(
+                                None,
+                                hyper::StatusCode::FAILED_DEPENDENCY,
+                                format!("Sync error: {err}"),
+                            )) 
+                        }
+                    },
+                    Err(err) => return Err(HttpError::for_client_error(
+                        None,
+                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        format!("Sync error: {:?}", err),
+                    )) 
+                }
+            },
+            Err(err) => return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Sync error: {:?}", err),
+            ))
+        };
+    }
+
+    // TODO: check if we should remove 'k#' as part of address
     Ok(HttpResponseOk(GetAddressResponse {
         addresses: addresses
             .into_iter()
@@ -441,7 +515,7 @@ async fn get_addresses(
 }
 
 /**
-* `GetObjectsRequest` represents the request to get objects for an address.
+* 'GetObjectsRequest' represents the request to get objects for an address.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct GetObjectsRequest {
@@ -455,7 +529,7 @@ struct Object {
 }
 
 /**
- * [OUTPUT] `Objects` is a collection of Object
+ * 'GetObjectsResponse' is a collection of objects owned by an address.
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct GetObjectsResponse {
@@ -463,7 +537,7 @@ struct GetObjectsResponse {
 }
 
 /**
- * [WALLET] Return all objects for a specified address.
+ * [WALLET] Return all objects owned by the account address.
  */
 #[endpoint {
     method = GET,
@@ -492,7 +566,16 @@ async fn get_objects(
     let wallet_context = wallet_context.as_mut().unwrap();
 
     let client_state = match wallet_context
-        .get_or_create_client_state(&decode_address_hex(address.as_str()).unwrap())
+        .get_or_create_client_state(match &decode_address_hex(address.as_str()) {
+            Ok(address) => address,
+            Err(error) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Could not decode address from hex {error}"),
+                ))
+            }
+        })
     {
         Ok(client_state) => client_state,
         Err(error) => {
@@ -538,7 +621,7 @@ struct ObjectInfoResponse {
 }
 
 /**
- * [Wallet] Get object info.
+ * [WALLET] Get object info.
  */
 #[endpoint {
     method = GET,
@@ -560,11 +643,19 @@ async fn get_object_info(
         ));
     }
     let wallet_context = wallet_context.as_mut().unwrap();
-
-    let object_id = &AccountAddress::try_from(request.into_inner().object_id).unwrap();
+    let object_id = match AccountAddress::try_from(request.into_inner().object_id) {
+        Ok(object_id) => object_id,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("{error}"),
+            ))
+        }
+    };
 
     // Pick the first (or any) account for use in finding obj info
-    let account = match wallet_context.find_owner(object_id) {
+    let account = match wallet_context.find_owner(&object_id) {
         Ok(account) => account,
         Err(error) => {
             return Err(HttpError::for_client_error(
@@ -590,14 +681,14 @@ async fn get_object_info(
         }
     };
 
-    let object = cb_thread::scope(|scope| {
+    let object = match cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
                 // Get the object info
                 let rt = Runtime::new().unwrap();
                 rt.block_on(async move {
                     if let Ok(ObjectRead::Exists(_, object)) =
-                        client_state.get_object_info(*object_id).await
+                        client_state.get_object_info(object_id).await
                     {
                         Some(object)
                     } else {
@@ -606,9 +697,27 @@ async fn get_object_info(
                 })
             })
             .join()
-            .unwrap()
-    })
-    .unwrap();
+    }) {
+        Ok(result) => {
+            match result {
+                Ok(result) => result, 
+                Err(err) => {
+                    return Err(HttpError::for_client_error(
+                        None,
+                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        format!("Error while getting object info: {:?}", err),
+                    ))
+                }
+            }
+        }
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Error while getting object info: {:?}", err),
+            ))
+        }
+    };
 
     let object = match object {
         Some(object) => object,
@@ -622,7 +731,7 @@ async fn get_object_info(
     };
     println!("{}", object);
 
-    // TODO: add a way to print full object info i.e. raw bytes
+    // TODO: add a way to print full object info i.e. raw bytes?
     // if *deep {
     //     println!("Full Info: {:#?}", object);
     // }
@@ -646,105 +755,6 @@ async fn get_object_info(
 }
 
 /**
-* 'TransferOrderRequest' represents the transaction to be sent to the network.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-struct TransferOrderRequest {
-    object_id: String,
-    to_address: String,
-    gas_object_id: String,
-}
-
-/**
-* 'TransferOrderResponse' represents the transaction to be sent to the network.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-struct TransferOrderResponse {
-    confirmation_message: String,
-    certificate: String,
-}
-
-/**
- * [WALLET] Transfer object.
- */
-#[endpoint {
-    method = PATCH,
-    path = "/wallet/transfer",
-}]
-async fn transfer_object(
-    rqctx: Arc<RequestContext<ServerContext>>,
-    request: TypedBody<TransferOrderRequest>,
-) -> Result<HttpResponseOk<TransferOrderResponse>, HttpError> {
-    let server_context = rqctx.context();
-
-    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
-    if wallet_context.is_none() {
-        return Err(HttpError::for_client_error(
-            None,
-            hyper::StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."
-                .to_string(),
-        ));
-    }
-    let wallet_context = wallet_context.as_mut().unwrap();
-
-    let transfer_order_params = request.into_inner();
-
-    let to_address = decode_address_hex(transfer_order_params.to_address.as_str()).unwrap();
-    let object_id = AccountAddress::try_from(transfer_order_params.object_id).unwrap();
-    let gas_object_id = AccountAddress::try_from(transfer_order_params.gas_object_id).unwrap();
-
-    let owner = match wallet_context.find_owner(&gas_object_id) {
-        Ok(owner) => owner,
-        Err(err) => {
-            return Err(HttpError::for_client_error(
-                None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("{err}"),
-            ))
-        }
-    };
-
-    let client_state = match wallet_context.get_or_create_client_state(&owner) {
-        Ok(client_state) => client_state,
-        Err(err) => {
-            return Err(HttpError::for_client_error(
-                None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Could create or get client state for {:?}: {err}", owner),
-            ))
-        }
-    };
-    println!("Starting transfer");
-    let time_start = Instant::now();
-
-    // TODO: figure out how to bubble up error from transfer object
-    let cert = cb_thread::scope(|scope| {
-        scope
-            .spawn(|_| {
-                // transfer object
-                let rt = Runtime::new().unwrap();
-                rt.block_on(async move {
-                    client_state
-                        .transfer_object(object_id, gas_object_id, to_address)
-                        .await
-                        .unwrap()
-                })
-            })
-            .join()
-            .unwrap()
-    })
-    .unwrap();
-
-    let time_total = time_start.elapsed().as_micros();
-
-    Ok(HttpResponseOk(TransferOrderResponse {
-        confirmation_message: format!("Transfer confirmed after {} us", time_total),
-        certificate: format!("{:?}", cert),
-    }))
-}
-
-/**
 * 'SyncRequest' represents the sync request
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
@@ -753,7 +763,7 @@ struct SyncRequest {
 }
 
 /**
- * [WALLET] Sync wallet.
+ * [WALLET] Synchronize client state with authorities.
  */
 #[endpoint {
     method = PATCH,
@@ -765,7 +775,16 @@ async fn sync(
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     let server_context = rqctx.context();
     let sync_params = request.into_inner();
-    let address = decode_address_hex(sync_params.address.as_str()).unwrap();
+    let address = match decode_address_hex(sync_params.address.as_str()) {
+        Ok(address) => address,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could not decode address from hex {error}"),
+            ))
+        }
+    };
 
     let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
     if wallet_context.is_none() {
@@ -784,35 +803,691 @@ async fn sync(
             return Err(HttpError::for_client_error(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Could create or get client state for {:?}: {err}", address),
+                format!("Could not create or get client state for {:?}: {err}", address),
             ))
         }
     };
 
-    cb_thread::scope(|scope| {
+    match cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
-                // sync
+                // synchronize with authorities
                 let rt = Runtime::new().unwrap();
                 rt.block_on(async move {
-                    client_state.sync_client_state().await.ok()
-                    // TODO figure out how to bubble up error
-                    // {
-                    //     Ok(_) => (),
-                    //     Err(err) => Err(
-                    //         HttpError::for_client_error(
-                    //         None,
-                    //         hyper::StatusCode::FAILED_DEPENDENCY,
-                    //         format!("Could not sync client state: {err}")))
-                    // };
+                    client_state.sync_client_state().await
                 })
             })
             .join()
-            .unwrap()
-    })
-    .unwrap();
+    }) {
+        Ok(result) => {  
+            match result {
+                Ok(result) => {
+                    match result {
+                        Ok(_) => (),
+                        Err(err) => return Err(HttpError::for_client_error(
+                            None,
+                            hyper::StatusCode::FAILED_DEPENDENCY,
+                            format!("Sync error: {err}"),
+                        )) 
+                    }
+                },
+                Err(err) => return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Sync error: {:?}", err),
+                )) 
+            }
+        },
+        Err(err) => return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            format!("Sync error: {:?}", err),
+        ))
+    };
 
     Ok(HttpResponseUpdatedNoContent())
+}
+
+/**
+* 'TransferOrderRequest' represents the transaction to be sent to the network.
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct TransferOrderRequest {
+    object_id: String,
+    to_address: String,
+    gas_object_id: String,
+}
+
+/**
+* 'OrderResponse' represents the call response
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct OrderResponse {
+    object_effects_summary: Vec<String>,
+    certificate: String,
+}
+
+/**
+ * [WALLET] Transfer object.
+ */
+#[endpoint {
+    method = PATCH,
+    path = "/wallet/transfer",
+}]
+async fn transfer_object(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    request: TypedBody<TransferOrderRequest>,
+) -> Result<HttpResponseOk<OrderResponse>, HttpError> {
+    let server_context = rqctx.context();
+
+    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
+    if wallet_context.is_none() {
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."
+                .to_string(),
+        ));
+    }
+    let wallet_context = wallet_context.as_mut().unwrap();
+
+    let transfer_order_params = request.into_inner();
+
+    let to_address = match decode_address_hex(transfer_order_params.to_address.as_str()) {
+        Ok(to_address) => to_address,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could not decode to address from hex {error}"),
+            ))
+        }
+    };
+    let object_id = match AccountAddress::try_from(transfer_order_params.object_id) {
+        Ok(object_id) => object_id,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("{error}"),
+            ))
+        }
+    };
+    let gas_object_id = match AccountAddress::try_from(transfer_order_params.gas_object_id) {
+        Ok(gas_object_id) => gas_object_id,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("{error}"),
+            ))
+        }
+    };
+
+    let owner = match wallet_context.find_owner(&gas_object_id) {
+        Ok(owner) => owner,
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("{err}"),
+            ))
+        }
+    };
+
+    let client_state = match wallet_context.get_or_create_client_state(&owner) {
+        Ok(client_state) => client_state,
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could not create or get client state for {:?}: {err}", owner),
+            ))
+        }
+    };
+
+    let (cert, effects) = match cb_thread::scope(|scope| {
+        scope
+            .spawn(|_| {
+                // transfer object
+                let rt = Runtime::new().unwrap();
+                rt.block_on(async move {
+                    client_state
+                        .transfer_object(object_id, gas_object_id, to_address)
+                        .await
+                })
+            })
+            .join()
+    }) {
+        Ok(result) => {  
+            match result {
+                Ok(result) => {
+                    match result {
+                        Ok((cert, effects)) => {
+                            if effects.status != ExecutionStatus::Success {
+                                return Err(HttpError::for_client_error(
+                                    None,
+                                    hyper::StatusCode::FAILED_DEPENDENCY,
+                                    format!("Error publishing module: {:#?}", effects.status),
+                                )) 
+                            }
+                            (cert, effects)
+                        },
+                        Err(err) => return Err(HttpError::for_client_error(
+                            None,
+                            hyper::StatusCode::FAILED_DEPENDENCY,
+                            format!("Publishing error: {err}"),
+                        )) 
+                    }
+                },
+                Err(err) => return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Publishing error: {:?}", err),
+                )) 
+            }
+        },
+        Err(err) => return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            format!("Publishing error: {:?}", err),
+        ))
+    };
+
+    let certificate = format!("{:?}", cert).to_string();
+    let object_effects_summary = get_object_effects(effects);
+
+    Ok(HttpResponseOk(OrderResponse{
+        object_effects_summary,
+        certificate,
+    }))
+}
+
+/**
+* 'PublishRequest' represents the publish request
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct PublishRequest {
+    path: String,
+    gas_object_id: String,
+}
+
+/**
+ * [WALLET] Publish move module.
+ */
+#[endpoint {
+    method = PATCH,
+    path = "/wallet/publish",
+}]
+async fn publish(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    request: TypedBody<PublishRequest>,
+) -> Result<HttpResponseOk<OrderResponse>, HttpError> {
+    let server_context = rqctx.context();
+    let publish_params = request.into_inner();
+
+    // TODO: figure out what a move module path looks like? Convert bytes string to moudle?
+    let path = publish_params.path;
+
+    let gas_object_id = match AccountAddress::try_from(publish_params.gas_object_id){
+        Ok(gas_object_id) => gas_object_id,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("{error}"),
+            ))
+        }
+    };
+
+    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
+    if wallet_context.is_none() {
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."
+                .to_string(),
+        ));
+    }
+    let wallet_context = wallet_context.as_mut().unwrap();
+
+    let owner = match wallet_context.find_owner(&gas_object_id) {
+        Ok(account) => account,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("{error}"),
+            ))
+        }
+    };
+
+    let client_state = match wallet_context.get_or_create_client_state(&owner) {
+        Ok(client_state) => client_state,
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could not create or get client state for {:?}: {err}", owner),
+            ))
+        }
+    };
+
+    let gas_obj_ref = *client_state
+        .object_refs()
+        .get(&gas_object_id)
+        .expect("Gas object not found");
+
+    let (cert, effects) = match cb_thread::scope(|scope| {
+        scope
+            .spawn(|_| {
+                // publish 
+                let rt = Runtime::new().unwrap();
+                rt.block_on(async move {  
+                    client_state
+                        .publish(path, gas_obj_ref)
+                        .await
+                })
+            })
+            .join()
+    }) {
+        Ok(result) => {  
+            match result {
+                Ok(result) => {
+                    match result {
+                        Ok((cert, effects)) => {
+                            if effects.status != ExecutionStatus::Success {
+                                return Err(HttpError::for_client_error(
+                                    None,
+                                    hyper::StatusCode::FAILED_DEPENDENCY,
+                                    format!("Error publishing module: {:#?}", effects.status),
+                                )) 
+                            }
+                            (cert, effects)
+                        },
+                        Err(err) => return Err(HttpError::for_client_error(
+                            None,
+                            hyper::StatusCode::FAILED_DEPENDENCY,
+                            format!("Move call error: {err}"),
+                        )) 
+                    }
+                },
+                Err(err) => return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Move call error: {:?}", err),
+                )) 
+            }
+        },
+        Err(err) => return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            format!("Move call error: {:?}", err),
+        ))
+    };
+
+    let certificate = format!("{:?}", cert).to_string();
+    let object_effects_summary = get_object_effects(effects);
+
+    Ok(HttpResponseOk(OrderResponse{
+        object_effects_summary,
+        certificate,
+    }))
+}
+
+/**
+* 'CallRequest' represents the call request
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct CallRequest {
+    package_object_id: String,
+    module: String,
+    function: String,
+    type_args: Vec<String>,
+    object_args: Vec<String>,
+    pure_args: Vec<String>,
+    gas_object_id: String,
+    gas_budget: u64
+}
+
+/**
+ * [WALLET] Call move module.
+ */
+#[endpoint {
+    method = PATCH,
+    path = "/wallet/call",
+}]
+async fn call(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    request: TypedBody<CallRequest>,
+) -> Result<HttpResponseOk<OrderResponse>, HttpError> {
+    let server_context = rqctx.context();
+    let call_params = request.into_inner();
+
+    let module = call_params.module.to_owned();
+    let function = call_params.function.to_owned();
+
+    let mut pure_args = Vec::new();
+    let pure_args_strings = call_params.pure_args;
+    for pure_args_string in pure_args_strings {
+        println!("{}",pure_args_string);
+        pure_args.push(parse_transaction_argument(&pure_args_string).unwrap());
+    }
+
+    let mut type_args = Vec::new();
+    let type_args_strings = call_params.type_args;
+    for type_args_string in type_args_strings {
+        type_args.push(parse_type_tag(&type_args_string).unwrap());
+    }
+
+    let gas_object_id = match AccountAddress::try_from(call_params.gas_object_id){
+        Ok(gas_object_id) => gas_object_id,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Gas Object ID: {error}"),
+            ))
+        }
+    };
+
+    println!("{}", call_params.package_object_id);
+    
+    let package_object_id = match AccountAddress::from_hex_literal(&call_params.package_object_id){
+        Ok(package_object_id) => package_object_id,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Package Object ID: {error}"),
+            ))
+        }
+    };
+
+    let mut object_args = Vec::new();
+    let object_args_strings = call_params.object_args;
+    for object_args_string in object_args_strings {
+        let object_arg = match AccountAddress::try_from(object_args_string){
+            Ok(gas_object_id) => gas_object_id,
+            Err(error) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Object Args: {error}"),
+                ))
+            }
+        };
+        object_args.push(object_arg);
+    }
+
+    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
+    if wallet_context.is_none() {
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."
+                .to_string(),
+        ));
+    }
+    let wallet_context = wallet_context.as_mut().unwrap();
+
+    // Find owner of gas object
+    let sender = match wallet_context.find_owner(&gas_object_id) {
+        Ok(account) => account,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could not find owner for gas object: {error}"),
+            ))
+        }
+    };
+
+    let client_state = match wallet_context.get_or_create_client_state(&sender) {
+        Ok(client_state) => client_state,
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could not create or get client state for {:?}: {err}", sender),
+            ))
+        }
+    };
+
+    let package_obj_info = match cb_thread::scope(|scope| {
+        scope
+            .spawn(|_| {
+                // Get the object info
+                let rt = Runtime::new().unwrap();
+                rt.block_on(async move {
+                    if let Ok(ObjectRead::Exists(object_refs, object)) =
+                        client_state.get_object_info(package_object_id).await
+                    {
+                        Some(ObjectRead::Exists(object_refs, object))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .join()
+    }) {
+        Ok(result) => {
+            match result {
+                Ok(result) => result, 
+                Err(err) => {
+                    return Err(HttpError::for_client_error(
+                        None,
+                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        format!("Error while getting object info: {:?}", err),
+                    ))
+                }
+            }
+        }
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Error while getting object info: {:?}", err),
+            ))
+        }
+    };
+
+    let package_obj_info = match package_obj_info {
+        Some(object) => object,
+        None => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could not get object info for object_id {package_object_id}."),
+            ))
+        }
+    };
+    println!("{:?}", package_obj_info.object());
+    let package_obj_ref = package_obj_info.object().unwrap().to_object_reference();
+
+    let client_state = match wallet_context.get_or_create_client_state(&sender) {
+        Ok(client_state) => client_state,
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could not create or get client state for {:?}: {err}", sender),
+            ))
+        }
+    };
+
+    // Fetch the object info for the gas obj
+    let gas_obj_ref = *client_state
+        .object_refs()
+        .get(&gas_object_id)
+        .expect("Gas object not found");
+
+    // Fetch the objects for the object args
+    let mut object_args_refs = Vec::new();
+    for obj_id in object_args {
+        let client_state = match wallet_context.get_or_create_client_state(&sender) {
+            Ok(client_state) => client_state,
+            Err(err) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Could not create or get client state for {:?}: {err}", sender),
+                ))
+            }
+        };
+
+        let obj_info = match cb_thread::scope(|scope| {
+            scope
+                .spawn(|_| {
+                    // Get the object info
+                    let rt = Runtime::new().unwrap();
+                    rt.block_on(async move {
+                        if let Ok(ObjectRead::Exists(object_refs, object)) =
+                            client_state.get_object_info(obj_id).await
+                        {
+                            Some(ObjectRead::Exists(object_refs, object))
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .join()
+        }) {
+            Ok(result) => {
+                match result {
+                    Ok(result) => result, 
+                    Err(err) => {
+                        return Err(HttpError::for_client_error(
+                            None,
+                            hyper::StatusCode::FAILED_DEPENDENCY,
+                            format!("Error while getting object info: {:?}", err),
+                        ))
+                    }
+                }
+            }
+            Err(err) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Error while getting object info: {:?}", err),
+                ))
+            }
+        };
+    
+        let obj_info = match obj_info {
+            Some(object) => object,
+            None => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Could not get object info for object_id {obj_id}."),
+                ))
+            }
+        };
+
+        let obj = match obj_info.object() {
+            Ok(obj) => obj,
+            Err(err) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Could not get object info for object_id {obj_id}: {err}"),
+                ))
+            }
+        };
+
+        object_args_refs.push(obj.to_object_reference());
+    }
+
+    let client_state = match wallet_context.get_or_create_client_state(&sender) {
+        Ok(client_state) => client_state,
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could not create or get client state for {:?}: {err}", sender),
+            ))
+        }
+    };
+
+    let (cert, effects) =  match cb_thread::scope(|scope| {
+        scope
+            .spawn(|_| {
+                // execute move call 
+                let rt = Runtime::new().unwrap();
+                rt.block_on(async move {  
+                    client_state
+                        .move_call(
+                            package_obj_ref,
+                            Identifier::from_str(&module).unwrap(),
+                            Identifier::from_str(&function).unwrap(),
+                            type_args.clone(),
+                            gas_obj_ref,
+                            object_args_refs,
+                            convert_txn_args(&pure_args),
+                            call_params.gas_budget,
+                        )
+                        .await
+                })
+            })
+            .join()
+    }) {
+        Ok(result) => {  
+            match result {
+                Ok(result) => {
+                    match result {
+                        Ok((cert, effects)) => (cert, effects),
+                        Err(err) => return Err(HttpError::for_client_error(
+                            None,
+                            hyper::StatusCode::FAILED_DEPENDENCY,
+                            format!("Move call error: {err}"),
+                        )) 
+                    }
+                },
+                Err(err) => return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Move call error: {:?}", err),
+                )) 
+            }
+        },
+        Err(err) => return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            format!("Move call error: {:?}", err),
+        ))
+    };
+
+    let certificate = format!("{:?}", cert).to_string();
+    let object_effects_summary = get_object_effects(effects);
+
+    Ok(HttpResponseOk(OrderResponse{
+        object_effects_summary,
+        certificate,
+    }))
+}
+
+fn get_object_effects(order_effects: OrderEffects) -> Vec<String> {
+    let mut object_effects_summary = Vec::new();
+    if !order_effects.created.is_empty() {
+        println!("Created Objects:");
+        for (obj, _) in order_effects.created {
+            object_effects_summary.push(format!("{:?} {:?} {:?}", obj.0, obj.1, obj.2).to_string());
+        }
+    }
+    if !order_effects.mutated.is_empty() {
+        println!("Mutated Objects:");
+        for (obj, _) in order_effects.mutated {
+            object_effects_summary.push(format!("{:?} {:?} {:?}", obj.0, obj.1, obj.2).to_string());
+        }
+    }
+    if !order_effects.deleted.is_empty() {
+        println!("Deleted Objects:");
+        for obj in order_effects.deleted {
+            object_effects_summary.push(format!("{:?} {:?} {:?}", obj.0, obj.1, obj.2));
+        }
+    }
+    object_effects_summary
 }
 
 async fn make_server(

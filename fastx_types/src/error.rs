@@ -58,8 +58,8 @@ pub enum FastPayError {
     },
     #[error("Conflicting order already received: {pending_order:?}")]
     ConflictingOrder { pending_order: Order },
-    #[error("Transfer order was processed but no signature was produced by authority")]
-    ErrorWhileProcessingTransferOrder,
+    #[error("Order was processed but no signature was produced by authority")]
+    ErrorWhileProcessingOrder,
     #[error("Transaction order processing failed: {err}")]
     ErrorWhileProcessingTransactionOrder { err: String },
     #[error("Confirmation order processing failed: {err}")]

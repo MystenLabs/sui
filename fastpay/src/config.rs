@@ -41,7 +41,7 @@ pub struct AuthorityConfig {
 impl AuthorityConfig {
     pub fn print(&self) {
         let data = serde_json::to_string(self).unwrap();
-        println!("{}", data);
+        println!("test {}", data);
     }
 }
 
