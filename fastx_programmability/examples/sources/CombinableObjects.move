@@ -4,7 +4,7 @@ module Examples::CombinableObjects {
     use Examples::TrustedCoin::EXAMPLE;
     use FastX::Address::{Self, Address};
     use FastX::Coin::{Self, Coin};
-    use FastX::ID::ID;
+    use FastX::ID::{Self, ID};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
 
@@ -48,8 +48,10 @@ module Examples::CombinableObjects {
     public fun make_sandwich(
         ham: Ham, bread: Bread, ctx: &mut TxContext
     ): Sandwich {
-        let Ham { id: _ } = ham;
-        let Bread { id: _ } = bread;
+        let Ham { id: ham_id } = ham;
+        let Bread { id: bread_id } = bread;
+        ID::delete(ham_id);
+        ID::delete(bread_id);
         Sandwich { id: TxContext::new_id(ctx) }
     }
 

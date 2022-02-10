@@ -1,5 +1,6 @@
 #[test_only]
 module FastX::TxContextTests {
+    use FastX::ID;
     use FastX::TxContext;
 
     #[test]
@@ -11,8 +12,10 @@ module FastX::TxContextTests {
         let id2 = TxContext::new_id(&mut ctx);
 
         // new_id should always produce fresh ID's
-        assert!(id1 != id2, 1);
+        assert!(&id1 != &id2, 1);
         assert!(TxContext::get_ids_created(&ctx) == 2, 2);
+        ID::delete(id1);
+        ID::delete(id2);
     }
 
 }

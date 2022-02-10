@@ -7,7 +7,7 @@ module FastX::CollectionTests {
     const COLLECTION_SIZE_MISMATCH: u64 = 0;
     const OBJECT_NOT_FOUND: u64 = 1;
 
-    struct Object has key, drop {
+    struct Object has key {
         id: ID,
     }
 

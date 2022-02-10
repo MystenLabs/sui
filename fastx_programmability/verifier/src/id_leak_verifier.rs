@@ -14,7 +14,10 @@
 //! 4. Passed to a function call
 
 use crate::verification_failure;
-use fastx_types::error::{FastPayError, FastPayResult};
+use fastx_types::{
+    error::{FastPayError, FastPayResult},
+    FASTX_FRAMEWORK_ADDRESS,
+};
 use move_binary_format::{
     binary_views::{BinaryIndexedView, FunctionView},
     file_format::{
@@ -160,12 +163,27 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
 
 impl<'a> AbstractInterpreter for IDLeakAnalysis<'a> {}
 
+/// FastX::ID::delete function is allowed to take an ID by value.
+fn is_call_safe_to_leak(verifier: &IDLeakAnalysis, function_handle: &FunctionHandle) -> bool {
+    let m = verifier
+        .binary_view
+        .module_handle_at(function_handle.module);
+    verifier.binary_view.address_identifier_at(m.address) == &FASTX_FRAMEWORK_ADDRESS
+        && verifier.binary_view.identifier_at(m.name).as_str() == "ID"
+        && verifier
+            .binary_view
+            .identifier_at(function_handle.name)
+            .as_str()
+            == "delete"
+}
+
 fn call(verifier: &mut IDLeakAnalysis, function_handle: &FunctionHandle) -> FastPayResult {
+    let guaranteed_safe = is_call_safe_to_leak(verifier, function_handle);
     let parameters = verifier
         .binary_view
         .signature_at(function_handle.parameters);
     for _ in 0..parameters.len() {
-        if verifier.stack.pop().unwrap() == AbstractValue::ID {
+        if verifier.stack.pop().unwrap() == AbstractValue::ID && !guaranteed_safe {
             return Err(verification_failure(
                 "ID leaked through function call.".to_string(),
             ));
