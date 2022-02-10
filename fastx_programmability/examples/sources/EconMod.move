@@ -7,7 +7,7 @@ module Examples::EconMod {
     use Examples::Hero::Hero;
     use FastX::Address::Address;
     use FastX::Coin::{Self, Coin};
-    use FastX::ID::ID;
+    use FastX::ID::{Self, ID};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
 
@@ -61,11 +61,12 @@ module Examples::EconMod {
         hero: &Hero, wrapper: HelpMeSlayThisMonster, ctx: &mut TxContext,
     ): Coin<RUM> {
         let HelpMeSlayThisMonster {
-            id: _,
+            id,
             monster,
             monster_owner,
             helper_reward
         } = wrapper;
+        ID::delete(id);
         let owner_reward = HeroMod::slay(hero, monster);
         let helper_reward = Coin::withdraw(&mut owner_reward, helper_reward, ctx);
         Transfer::transfer(owner_reward, monster_owner);
@@ -76,11 +77,12 @@ module Examples::EconMod {
     /// to, and are willing to kindly return the monster to its owner.
     public fun return_to_owner(wrapper: HelpMeSlayThisMonster) {
         let HelpMeSlayThisMonster {
-            id: _,
+            id,
             monster,
             monster_owner,
             helper_reward: _
         } = wrapper;
+        ID::delete(id);
         HeroMod::transfer_monster(monster, monster_owner)
     }
 

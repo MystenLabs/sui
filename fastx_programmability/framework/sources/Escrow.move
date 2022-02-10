@@ -52,19 +52,21 @@ module FastX::Escrow {
         obj1: EscrowedObj<T1, T2>, obj2: EscrowedObj<T1, T2>
     ) {
         let EscrowedObj {
-            id: _,
+            id: id1,
             sender: sender1,
             recipient: recipient1,
             exchange_for: exchange_for1,
             escrowed: escrowed1,
         } = obj1;
         let EscrowedObj {
-            id: _,
+            id: id2,
             sender: sender2,
             recipient: recipient2,
             exchange_for: exchange_for2,
             escrowed: escrowed2,
         } = obj2;
+        ID::delete(id1);
+        ID::delete(id2);
         // check sender/recipient compatibility
         assert!(&sender1 == &recipient2, ETODO);
         assert!(&sender2 == &recipient1, ETODO);
@@ -81,8 +83,9 @@ module FastX::Escrow {
         obj: EscrowedObj<T, ExchangeForT>,
     ) {
         let EscrowedObj {
-            id: _, sender, recipient: _, exchange_for: _, escrowed
+            id, sender, recipient: _, exchange_for: _, escrowed
         } = obj;
+        ID::delete(id);
         Transfer::transfer(escrowed, sender)
     }
 }

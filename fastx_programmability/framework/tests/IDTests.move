@@ -5,7 +5,7 @@ module FastX::IDTests {
 
     const ID_BYTES_MISMATCH: u64 = 0;
 
-    struct Object has key, drop {
+    struct Object has key {
         id: ID::ID,
     }
 
@@ -16,5 +16,7 @@ module FastX::IDTests {
         let id_bytes = *ID::get_inner(&id);
         let obj = Object { id };
         assert!(ID::get_inner(ID::get_id(&obj)) == &id_bytes, ID_BYTES_MISMATCH);
+        let Object { id } = obj;
+        ID::delete(id);
     }
 }

@@ -387,6 +387,10 @@ fn process_successful_execution<
                 state_view,
                 &mut object_owner_map,
             ),
+            EventType::DeleteObjectID => {
+                // TODO: Process deleted object event.
+                Ok(())
+            }
             EventType::User => {
                 match type_ {
                     TypeTag::Struct(s) => state_view.log_event(Event::new(s, event_bytes)),
