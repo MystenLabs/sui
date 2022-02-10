@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::{AccountInfo, AuthorityInfo, WalletConfig};
+use crate::config::{AccountInfoConfig, AuthorityInfo, KeyPairConfig, WalletConfig};
 use fastpay_core::authority_client::AuthorityClient;
 use fastpay_core::client::{Client, ClientState};
 use fastx_network::network::NetworkClient;
 use fastx_types::base_types::{
-    decode_address_hex, encode_address_hex, get_key_pair, AuthorityName, FastPayAddress, ObjectID,
-    PublicKeyBytes,
+    decode_address_hex, encode_address_hex, AuthorityName, FastPayAddress, ObjectID, PublicKeyBytes,
 };
 use fastx_types::committee::Committee;
 use fastx_types::messages::{ExecutionStatus, OrderEffects};
@@ -132,14 +131,34 @@ impl WalletCommands {
         match self {
             WalletCommands::Publish { path, gas } => {
                 // Find owner of gas object
-                let owner = context.find_owner(gas)?;
+                let (owner, owner_kf_path) = context.find_owner_and_key_file_path(gas)?;
                 let client_state = context.get_or_create_client_state(&owner)?;
-                publish(client_state, path.clone(), *gas).await;
+                let gas_obj_ref = *client_state
+                    .object_refs()
+                    .get(gas)
+                    .expect("Gas object not found");
+
+                let publish_order = client_state
+                    .create_publish_order(path.to_string(), gas_obj_ref)
+                    .unwrap();
+                let signed_order = KeyPairConfig::sign_order(&owner_kf_path, publish_order)
+                    .expect("Could not sign publish order");
+                let pub_resp = client_state.execute_signed_order(signed_order).await;
+
+                match pub_resp {
+                    Ok((_, effects)) => {
+                        if effects.status != ExecutionStatus::Success {
+                            error!("Error publishing module: {:#?}", effects.status);
+                        }
+                        show_object_effects(effects);
+                    }
+                    Err(err) => error!("{:#?}", err),
+                }
             }
 
             WalletCommands::Object { id, deep } => {
                 // Pick the first (or any) account for use in finding obj info
-                let account = context.find_owner(id)?;
+                let (account, _) = context.find_owner_and_key_file_path(id)?;
                 // Fetch the object ref
                 let client_state = context.get_or_create_client_state(&account)?;
                 let object_read = client_state.get_object_info(*id).await?;
@@ -160,7 +179,7 @@ impl WalletCommands {
                 gas_budget,
             } => {
                 // Find owner of gas object
-                let sender = context.find_owner(gas)?;
+                let (sender, sender_kf_path) = context.find_owner_and_key_file_path(gas)?;
                 let client_state = context.get_or_create_client_state(&sender)?;
 
                 let package_obj_info = client_state.get_object_info(*package).await?;
@@ -179,8 +198,9 @@ impl WalletCommands {
                     object_args_refs.push(obj_info.object()?.to_object_reference());
                 }
 
-                let (cert, effects) = client_state
-                    .move_call(
+                // Make the order
+                let call_order = client_state
+                    .create_call_order(
                         package_obj_ref,
                         module.to_owned(),
                         function.to_owned(),
@@ -190,21 +210,30 @@ impl WalletCommands {
                         convert_txn_args(pure_args),
                         *gas_budget,
                     )
-                    .await?;
+                    .unwrap();
+                let signed_order = KeyPairConfig::sign_order(&sender_kf_path, call_order)
+                    .expect("Could not sign call order");
+                let (cert, effects) = client_state.execute_signed_order(signed_order).await?;
+
                 println!("Cert: {:?}", cert);
                 show_object_effects(effects);
             }
 
             WalletCommands::Transfer { to, object_id, gas } => {
-                let owner = context.find_owner(gas)?;
+                let (owner, owner_kf_path) = context.find_owner_and_key_file_path(gas)?;
 
                 let client_state = context.get_or_create_client_state(&owner)?;
                 info!("Starting transfer");
                 let time_start = Instant::now();
-                let cert = client_state
-                    .transfer_object(*object_id, *gas, *to)
-                    .await
+
+                let transfer_order = client_state
+                    .create_transfer_order(*object_id, *gas, *to)
                     .unwrap();
+                let signed_order = KeyPairConfig::sign_order(&owner_kf_path, transfer_order)
+                    .expect("Could not sign transfer order");
+
+                let (cert, _) = client_state.execute_signed_order(signed_order).await?;
+
                 let time_total = time_start.elapsed().as_micros();
                 info!("Transfer confirmed after {} us", time_total);
                 println!("{:?}", cert);
@@ -236,10 +265,10 @@ impl WalletCommands {
                 client_state.sync_client_state().await?;
             }
             WalletCommands::NewAddress => {
-                let (address, key) = get_key_pair();
-                context.config.accounts.push(AccountInfo {
+                let (path, address) = KeyPairConfig::create_and_get_public_key();
+                context.config.accounts.push(AccountInfoConfig {
                     address,
-                    key_pair: key,
+                    key_file_path: path,
                 });
                 context.config.save()?;
                 println!(
@@ -249,29 +278,6 @@ impl WalletCommands {
             }
         }
         Ok(())
-    }
-}
-
-async fn publish(
-    client_state: &mut ClientState<AuthorityClient>,
-    path: String,
-    gas_object_id: ObjectID,
-) {
-    let gas_obj_ref = *client_state
-        .object_refs()
-        .get(&gas_object_id)
-        .expect("Gas object not found");
-
-    let pub_resp = client_state.publish(path, gas_obj_ref).await;
-
-    match pub_resp {
-        Ok((_, effects)) => {
-            if effects.status != ExecutionStatus::Success {
-                error!("Error publishing module: {:#?}", effects.status);
-            }
-            show_object_effects(effects);
-        }
-        Err(err) => error!("{:#?}", err),
     }
 }
 
@@ -329,8 +335,12 @@ impl WalletContext {
         }
     }
 
-    pub fn find_owner(&self, object_id: &ObjectID) -> Result<FastPayAddress, FastPayError> {
-        self.client_states
+    pub fn find_owner_and_key_file_path(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<(FastPayAddress, String), FastPayError> {
+        let addr = self
+            .client_states
             .iter()
             .find_map(|(owner, client_state)| {
                 if client_state.get_owned_objects().contains(object_id) {
@@ -342,7 +352,17 @@ impl WalletContext {
             .copied()
             .ok_or(FastPayError::ObjectNotFound {
                 object_id: *object_id,
-            })
+            })?;
+        Ok((
+            addr,
+            self.config
+                .accounts
+                .iter()
+                .find(|a| a.address == addr)
+                .expect("No account config found")
+                .key_file_path
+                .clone(),
+        ))
     }
 
     pub fn get_or_create_client_state(
@@ -380,7 +400,6 @@ impl WalletContext {
         ClientState::new(
             path,
             client_info.address,
-            Box::pin(client_info.key_pair.copy()),
             committee,
             authority_clients,
             BTreeMap::new(),
@@ -388,7 +407,10 @@ impl WalletContext {
         )
     }
 
-    pub fn get_account_info(&self, address: &FastPayAddress) -> Result<&AccountInfo, FastPayError> {
+    pub fn get_account_info(
+        &self,
+        address: &FastPayAddress,
+    ) -> Result<&AccountInfoConfig, FastPayError> {
         self.config
             .accounts
             .iter()

@@ -41,8 +41,6 @@ pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 pub struct ClientState<AuthorityAPI> {
     /// Our FastPay address.
     address: FastPayAddress,
-    /// Our signature key.
-    secret: StableSyncSigner,
     /// Authority entry point.
     authorities: AuthorityAggregator<AuthorityAPI>,
     /// Persistent store for client
@@ -52,23 +50,25 @@ pub struct ClientState<AuthorityAPI> {
 // Operations are considered successful when they successfully reach a quorum of authorities.
 #[async_trait]
 pub trait Client {
-    /// Send object to a FastX account.
-    async fn transfer_object(
+    // Order creation
+
+    /// Create unsigned transfer order
+    fn create_transfer_order(
         &mut self,
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: FastPayAddress,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
+    ) -> Result<OrderKind, anyhow::Error>;
 
-    /// Try to complete all pending orders once. Return if any fails
-    async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError>;
+    /// Create unsigned package publish order
+    fn create_publish_order(
+        &mut self,
+        package_source_files_path: String,
+        gas_object_ref: ObjectRef,
+    ) -> Result<OrderKind, anyhow::Error>;
 
-    /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
-    /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
-    async fn sync_client_state(&mut self) -> Result<(), anyhow::Error>;
-
-    /// Call move functions in the module in the given package, with args supplied
-    async fn move_call(
+    /// Create an unsigned order for Move Call
+    fn create_call_order(
         &mut self,
         package_object_ref: ObjectRef,
         module: Identifier,
@@ -78,14 +78,20 @@ pub trait Client {
         object_arguments: Vec<ObjectRef>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
+    ) -> Result<OrderKind, anyhow::Error>;
+
+    /// Execute a signed order which was previously created
+    async fn execute_signed_order(
+        &mut self,
+        order: Order,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
 
-    /// Publish Move modules
-    async fn publish(
-        &mut self,
-        package_source_files_path: String,
-        gas_object_ref: ObjectRef,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
+    /// Try to complete all pending orders once. Return if any fails
+    async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError>;
+
+    /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
+    /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
+    async fn sync_client_state(&mut self) -> Result<(), anyhow::Error>;
 
     /// Get the object information
     async fn get_object_info(&mut self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
@@ -104,7 +110,6 @@ impl<A> ClientState<A> {
     pub fn new(
         path: PathBuf,
         address: FastPayAddress,
-        secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
@@ -112,7 +117,6 @@ impl<A> ClientState<A> {
     ) -> Result<Self, FastPayError> {
         let client_state = ClientState {
             address,
-            secret,
             authorities: AuthorityAggregator::new(committee, authority_clients),
             store: ClientStore::new(path),
         };
@@ -226,11 +230,6 @@ impl<A> ClientState<A> {
     #[cfg(test)]
     pub fn store(&self) -> &ClientStore {
         &self.store
-    }
-
-    #[cfg(test)]
-    pub fn secret(&self) -> &dyn signature::Signer<ed25519_dalek::Signature> {
-        &*self.secret
     }
 }
 
@@ -452,46 +451,6 @@ impl<A> Client for ClientState<A>
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
-    async fn transfer_object(
-        &mut self,
-        object_id: ObjectID,
-        gas_payment: ObjectID,
-        recipient: FastPayAddress,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
-        let object_ref = self
-            .store
-            .object_refs
-            .get(&object_id)?
-            .ok_or(FastPayError::ObjectNotFound { object_id })?;
-
-        let gas_payment =
-            self.store
-                .object_refs
-                .get(&gas_payment)?
-                .ok_or(FastPayError::ObjectNotFound {
-                    object_id: gas_payment,
-                })?;
-
-        let transfer = Transfer {
-            object_ref,
-            sender: self.address,
-            recipient,
-            gas_payment,
-        };
-        let order = Order::new_transfer(transfer, &*self.secret);
-        let (certificate, effects) = self.execute_transaction(order).await?;
-        self.authorities
-            .process_certificate(certificate.clone(), Duration::from_secs(60))
-            .await?;
-
-        // remove object from local storage if the recipient is not us.
-        if recipient != self.address {
-            self.remove_object_info(&object_id)?;
-        }
-
-        Ok((certificate, effects))
-    }
-
     async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError> {
         // Orders are idempotent so no need to prevent multiple executions
         let unique_pending_orders: HashSet<_> = self
@@ -541,48 +500,6 @@ where
         Ok(())
     }
 
-    async fn move_call(
-        &mut self,
-        package_object_ref: ObjectRef,
-        module: Identifier,
-        function: Identifier,
-        type_arguments: Vec<TypeTag>,
-        gas_object_ref: ObjectRef,
-        object_arguments: Vec<ObjectRef>,
-        pure_arguments: Vec<Vec<u8>>,
-        gas_budget: u64,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
-        let move_call_order = Order::new_move_call(
-            self.address,
-            package_object_ref,
-            module,
-            function,
-            type_arguments,
-            gas_object_ref,
-            object_arguments,
-            pure_arguments,
-            gas_budget,
-            &*self.secret,
-        );
-        self.execute_transaction(move_call_order).await
-    }
-
-    async fn publish(
-        &mut self,
-        package_source_files_path: String,
-        gas_object_ref: ObjectRef,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
-        // Try to compile the package at the given path
-        let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
-        let move_publish_order = Order::new_module(
-            self.address,
-            gas_object_ref,
-            compiled_modules,
-            &*self.secret,
-        );
-        self.execute_transaction(move_publish_order).await
-    }
-
     async fn get_object_info(&mut self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
         self.authorities.get_object_info_execute(object_id).await
     }
@@ -594,5 +511,86 @@ where
     async fn download_owned_objects_not_in_db(&self) -> Result<BTreeSet<ObjectRef>, FastPayError> {
         let object_refs: Vec<ObjectRef> = self.store.object_refs.iter().map(|q| q.1).collect();
         self.download_objects_not_in_db(object_refs).await
+    }
+
+    // Order creation
+    // We should probably sync before making an order so we have the latest object state
+
+    /// Create unsigned transfer order
+    fn create_transfer_order(
+        &mut self,
+        object_id: ObjectID,
+        gas_payment: ObjectID,
+        recipient: FastPayAddress,
+    ) -> Result<OrderKind, anyhow::Error> {
+        let object_ref = self
+            .store
+            .object_refs
+            .get(&object_id)?
+            .ok_or(FastPayError::ObjectNotFound { object_id })?;
+
+        let gas_payment =
+            self.store
+                .object_refs
+                .get(&gas_payment)?
+                .ok_or(FastPayError::ObjectNotFound {
+                    object_id: gas_payment,
+                })?;
+
+        Ok(OrderKind::Transfer(Transfer {
+            object_ref,
+            sender: self.address,
+            recipient,
+            gas_payment,
+        }))
+    }
+
+    /// Create unsigned package publish order
+    fn create_publish_order(
+        &mut self,
+        package_source_files_path: String,
+        gas_object_ref: ObjectRef,
+    ) -> Result<OrderKind, anyhow::Error> {
+        // Try to compile the package at the given path
+        // Could be a good candidate for pre-execution here
+        let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
+        Ok(OrderKind::Publish(MoveModulePublish {
+            sender: self.address,
+            gas_payment: gas_object_ref,
+            modules: compiled_modules,
+        }))
+    }
+
+    /// Create an unsigned order for Move Call
+    fn create_call_order(
+        &mut self,
+        package_object_ref: ObjectRef,
+        module: Identifier,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        gas_object_ref: ObjectRef,
+        object_arguments: Vec<ObjectRef>,
+        pure_arguments: Vec<Vec<u8>>,
+        gas_budget: u64,
+    ) -> Result<OrderKind, anyhow::Error> {
+        Ok(OrderKind::Call(MoveCall {
+            sender: self.address,
+            package: package_object_ref,
+            module,
+            function,
+            type_arguments,
+            gas_payment: gas_object_ref,
+            object_arguments,
+            pure_arguments,
+            gas_budget,
+        }))
+    }
+
+    /// Execute a signed order which was previously created
+    async fn execute_signed_order(
+        &mut self,
+        order: Order,
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+        self.execute_transaction(order).await
     }
 }

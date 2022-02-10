@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 use fastpay::config::{
-    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, WalletConfig,
+    AccountInfoConfig, AuthorityInfo, AuthorityPrivateInfo, KeyPairConfig, NetworkConfig,
+    WalletConfig,
 };
 use fastpay::utils::Config;
 use fastpay_core::authority::{AuthorityState, AuthorityStore};
@@ -141,8 +142,11 @@ async fn genesis(mut config: NetworkConfig) -> Result<(), anyhow::Error> {
 
     println!("Creating test objects...");
     for _ in 0..5 {
-        let (address, key_pair) = get_key_pair();
-        new_addresses.push(AccountInfo { address, key_pair });
+        let (path, address) = KeyPairConfig::create_and_get_public_key();
+        new_addresses.push(AccountInfoConfig {
+            address,
+            key_file_path: path,
+        });
         for _ in 0..5 {
             let new_object = Object::with_id_owner_gas_coin_object_for_testing(
                 ObjectID::random(),
