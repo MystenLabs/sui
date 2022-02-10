@@ -200,6 +200,10 @@ pub enum FastPayError {
     )]
     QuorumNotReached { errors: Vec<FastPayError> },
 
+    // Errors returned by authority and client read API's
+    #[error("Failure serializing object in the requested format")]
+    ObjectSerializationError,
+
     // Client side error
     #[error("Client state has a different pending transaction.")]
     ConcurrentTransactionError,
