@@ -319,8 +319,11 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
                 Ok(ExecutionStatus::Failure { gas_used, error }) => exec_failure!(gas_used, *error),
                 Err(err) => exec_failure!(gas::MIN_MOVE_CALL_GAS, err),
             };
-            // TODO: should we decrease gas budget on subsequent calls?
-            current_gas_budget -= gas_used;
+            if current_gas_budget > gas_used {
+                current_gas_budget -= gas_used;
+            } else {
+                current_gas_budget = 0;
+            }
             total_gas_used += gas_used;
         }
     }
