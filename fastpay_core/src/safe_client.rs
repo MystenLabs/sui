@@ -12,15 +12,15 @@ use fastx_types::{
 
 #[derive(Clone)]
 pub struct SafeClient<C> {
-    network_client: C,
+    authority_client: C,
     committee: Committee,
     address: FastPayAddress,
 }
 
 impl<C> SafeClient<C> {
-    pub fn new(network_client: C, committee: Committee, address: FastPayAddress) -> Self {
+    pub fn new(authority_client: C, committee: Committee, address: FastPayAddress) -> Self {
         Self {
-            network_client,
+            authority_client,
             committee,
             address,
         }
@@ -135,7 +135,7 @@ where
     /// Initiate a new transfer to a FastPay or Primary account.
     async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
         let digest = order.digest();
-        let order_info = self.network_client.handle_order(order).await?;
+        let order_info = self.authority_client.handle_order(order).await?;
         self.check_order_response(digest, &order_info)?;
         Ok(order_info)
     }
@@ -146,7 +146,7 @@ where
         order: ConfirmationOrder,
     ) -> Result<OrderInfoResponse, FastPayError> {
         let digest = order.certificate.order.digest();
-        let order_info = self.network_client.handle_confirmation_order(order).await?;
+        let order_info = self.authority_client.handle_confirmation_order(order).await?;
         self.check_order_response(digest, &order_info)?;
         Ok(order_info)
     }
@@ -155,7 +155,7 @@ where
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, FastPayError> {
-        self.network_client
+        self.authority_client
             .handle_account_info_request(request)
             .await
     }
@@ -165,7 +165,7 @@ where
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, FastPayError> {
         let response = self
-            .network_client
+            .authority_client
             .handle_object_info_request(request.clone())
             .await?;
         self.check_object_response(&request, &response)?;
@@ -179,7 +179,7 @@ where
     ) -> Result<OrderInfoResponse, FastPayError> {
         let digest = request.transaction_digest;
         let order_info = self
-            .network_client
+            .authority_client
             .handle_order_info_request(request)
             .await?;
         self.check_order_response(digest, &order_info)?;
