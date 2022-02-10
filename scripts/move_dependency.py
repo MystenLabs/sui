@@ -69,6 +69,8 @@ def switch_to_local():
     # go here as special cases. By default, we just use language/[name].
     path_map = {
         "move-bytecode-utils": "tools/move-bytecode-utils",
+        "move-disassembler": "tools/move-disassembler",
+        "move-ir-types": "move-ir/types",
         "move-cli": "tools/move-cli",
         "move-core-types": "move-core/types",
         "move-package": "tools/move-package",
