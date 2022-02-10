@@ -7,7 +7,7 @@ import re
 
 ROOT = os.path.join(os.path.dirname(__file__), "../")
 PATTERN = re.compile(
-    '(\s*)(.+) = { git = "https://github.com/.+/move", (?:rev|branch)=".+"(,.*)? }(\s*)'
+    '(.+)={git="https://github.com/.+/move",(?:rev|branch)=".+"(,.*)?}'
 )
 
 
@@ -50,6 +50,20 @@ def scan_files(path, process_line, depth=0):
             scan_file(full_path, process_line, depth)
 
 
+def try_match_line(line):
+    # Remove all spacing for easier pattern matching
+    line = line.strip().replace(' ', '')
+    m = PATTERN.match(line)
+    if m:
+        name = m.group(1)
+        if m.group(2) is None:
+            extra = ""
+        else:
+            # Add some spacing so it looks nicer
+            extra = m.group(2).replace(',', ', ').replace('=', ' = ')
+        return (name, extra)
+    return None
+
 def switch_to_local():
     # Packages that don't directly map to a directory under move/language
     # go here as special cases. By default, we just use language/[name].
@@ -64,15 +78,12 @@ def switch_to_local():
     }
 
     def process_line(line, depth):
-        m = PATTERN.match(line)
+        m = try_match_line(line)
         if m:
-            prefix = m.group(1)
-            name = m.group(2)
-            extra = "" if m.group(3) is None else m.group(3)
-            postfix = m.group(4)
+            (name, extra) = m
             go_back = "".join(["../"] * (depth + 1))
-            return '{}{} = {{ path = "{}move/language/{}"{} }}{}'.format(
-                prefix, name, go_back, path_map.get(name, name), extra, postfix
+            return '{} = {{ path = "{}move/language/{}"{} }}\n'.format(
+                name, go_back, path_map.get(name, name), extra
             )
         return line
 
@@ -82,18 +93,14 @@ def switch_to_local():
 def upgrade_revision(repo, rev, branch):
     assert (args.rev is None) != (args.branch is None)
     def process_line(line, _):
-        m = PATTERN.match(line)
+        m = try_match_line(line)
         if m:
-            prefix = m.group(1)
-            name = m.group(2)
-            extra = "" if m.group(3) is None else m.group(3)
-            postfix = m.group(4)
-            return '{}{} = {{ git = "https://github.com/{}/move", {}="{}"{} }}{}'.format(
-                prefix, name, repo,
+            (name, extra) = m
+            return '{} = {{ git = "https://github.com/{}/move", {} = "{}"{} }}\n'.format(
+                name, repo,
                 "branch" if branch else "rev",
                 branch if branch else rev,
-                extra,
-                postfix
+                extra
             )
         return line
 
