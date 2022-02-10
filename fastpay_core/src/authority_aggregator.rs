@@ -696,6 +696,8 @@ where
             signatures: Vec<(AuthorityName, Signature)>,
             // A certificate if we manage to make or find one
             certificate: Option<CertifiedOrder>,
+            // The list of errors gathered at any point
+            errors: Vec<FastPayError>,
             // Tally of stake for good vs bad responses.
             good_stake: usize,
             bad_stake: usize,
@@ -704,6 +706,7 @@ where
         let state = ProcessOrderState {
             signatures: vec![],
             certificate: None,
+            errors: vec![],
             good_stake: 0,
             bad_stake: 0,
         };
@@ -744,16 +747,32 @@ where
                                     });
                                 }
                             }
-
-                            // In all other cases we will not be able to use this response
+                            // If we get back an error, then we aggregate and check
+                            // if we have too many errors
+                            // In this case we will not be able to use this response
                             // to make a certificate. If this happens for more than f
                             // authorities we just stop, as there is no hope to finish.
-                            _ => {
+                            Err(err) => {
                                 // We have an error here.
+                                // Append to the list off errors
+                                state.errors.push(err);
                                 state.bad_stake += weight; // This is the bad stake counter
                                 if state.bad_stake > validity {
                                     // Too many errors
-                                    return Err(FastPayError::ErrorWhileProcessingTransferOrder);
+                                    return Err(FastPayError::QuorumNotReached {
+                                        errors: state.errors,
+                                    });
+                                }
+                            }
+                            // In case we don't get an error but also don't get a valid value
+                            _ => {
+                                state.errors.push(FastPayError::ErrorWhileProcessingOrder);
+                                state.bad_stake += weight; // This is the bad stake counter
+                                if state.bad_stake > validity {
+                                    // Too many errors
+                                    return Err(FastPayError::QuorumNotReached {
+                                        errors: state.errors,
+                                    });
                                 }
                             }
                         };
@@ -774,7 +793,7 @@ where
         // If we have some certificate return it, or return an error.
         state
             .certificate
-            .ok_or(FastPayError::ErrorWhileProcessingTransferOrder)
+            .ok_or(FastPayError::ErrorWhileProcessingOrder)
     }
 
     /// Process a certificate assuming that 2f+1 authorites already are up to date.
