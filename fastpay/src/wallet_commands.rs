@@ -383,8 +383,6 @@ impl WalletContext {
             Box::pin(client_info.key_pair.copy()),
             committee,
             authority_clients,
-            BTreeMap::new(),
-            BTreeMap::new(),
         )
     }
 
