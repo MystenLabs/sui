@@ -1205,8 +1205,8 @@ async fn test_module_publish_and_call_good() {
             ident_str!("mint").to_owned(),
             vec![],
             gas_object_ref,
-            vec![],
-            vec![],
+            vec![tres_cap_obj_info.object().unwrap().to_object_reference()],
+            vec![42u64.to_le_bytes().to_vec()],
             1000,
         )
         .await
@@ -1496,6 +1496,9 @@ fn test_client_store() {
 async fn test_object_store() {
     // Init the states
     let (authority_clients, committee) = init_local_authorities(4).await;
+    // We need admin account as we will be calling initializers on
+    // modules which check if the caller/publisher is the admin
+    // account.
     let mut client1 = make_admin_client(authority_clients.clone(), committee.clone());
 
     let gas_object_id = ObjectID::random();
@@ -1541,14 +1544,15 @@ async fn test_object_store() {
 
     let pub_res = client1.publish(hero_path, gas_object_ref, 1000).await;
 
-    let (_, published_effects) = pub_res.unwrap();
+    let (_, published_effects) = pub_res.as_ref().unwrap();
 
     assert!(matches!(
         published_effects.status,
         ExecutionStatus::Success { .. }
     ));
 
-    // Only package obj should be created
+    // A package obj and two objects resulting from two
+    // initializer runs in different modules should be created.
     assert_eq!(published_effects.created.len(), 3);
 
     // Verify gas obj

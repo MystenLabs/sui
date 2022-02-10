@@ -198,11 +198,14 @@ impl Storage for AuthorityTemporaryStore {
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
-        match self.objects.get(id) {
+        match self.written.get(id) {
             Some(x) => Some(x.clone()),
-            None => match self.object_store.get_object(id) {
-                Ok(o) => o,
-                Err(e) => panic!("Could not read object {}", e),
+            None => match self.objects.get(id) {
+                Some(x) => Some(x.clone()),
+                None => match self.object_store.get_object(id) {
+                    Ok(o) => o,
+                    Err(e) => panic!("Could not read object {}", e),
+                },
             },
         }
     }
@@ -264,19 +267,7 @@ impl ModuleResolver for AuthorityTemporaryStore {
                     error: "Expected module object".to_string(),
                 }),
             },
-            None => match self.written().get(module_id.address()) {
-                Some(o) => match &o.data {
-                    Data::Package(c) => Ok(c
-                        .get(module_id.name().as_str())
-                        .cloned()
-                        .map(|m| m.into_vec())),
-                    _ => Err(FastPayError::BadObjectType {
-                        error: "Expected module object".to_string(),
-                    }),
-                },
-
-                None => Ok(None),
-            },
+            None => Ok(None),
         }
     }
 }

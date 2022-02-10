@@ -6,6 +6,7 @@ use fastx_types::{
     base_types::{self, SequenceNumber},
     error::FastPayResult,
     gas_coin::GAS,
+    object::Data,
     storage::Storage,
     FASTX_FRAMEWORK_ADDRESS,
 };
@@ -104,7 +105,16 @@ impl Storage for InMemoryStorage {
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
-        self.persistent.get(id).cloned()
+        // try objects updated in temp memory first
+        match self.temporary.updated.get(id).cloned() {
+            Some(o) => Some(o),
+            // try objects creted in temp memory
+            None => match self.temporary.created.get(id).cloned() {
+                Some(o) => Some(o),
+                // try persistent memory
+                None => self.persistent.get(id).cloned(),
+            },
+        }
     }
 
     // buffer write to appropriate place in temporary storage
@@ -129,38 +139,13 @@ impl Storage for InMemoryStorage {
 
 impl ModuleResolver for InMemoryStorage {
     type Error = ();
-
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.read_object(module_id.address()) {
-            Some(o) => match &o.data {
-                Data::Package(c) => Ok(c
-                    .get(module_id.name().as_str())
-                    .cloned()
-                    .map(|m| m.into_vec())),
-                _ => panic!("Execpted a package"),
-            },
-            None => match self.created().get(module_id.address()) {
-                Some(o) => match &o.data {
-                    Data::Package(c) => Ok(c
-                        .get(module_id.name().as_str())
-                        .cloned()
-                        .map(|m| m.into_vec())),
-                    _ => panic!("Execpted a package"),
-                },
-
-                None => match self.updated().get(module_id.address()) {
-                    Some(o) => match &o.data {
-                        Data::Package(c) => Ok(c
-                            .get(module_id.name().as_str())
-                            .cloned()
-                            .map(|m| m.into_vec())),
-                        _ => panic!("Execpted a package"),
-                    },
-
-                    None => Ok(None),
-                },
-            },
-        }
+        Ok(self
+            .read_object(module_id.address())
+            .map(|o| match &o.data {
+                Data::Package(m) => m[module_id.name().as_str()].clone().into_vec(),
+                Data::Move(_) => panic!("Type error"),
+            }))
     }
 }
 
@@ -203,7 +188,7 @@ fn call(
         pure_args,
         gas_budget,
         gas_object,
-        &TxContext::random_for_testing_only(),
+        &mut TxContext::random_for_testing_only(),
     )
 }
 
@@ -747,7 +732,7 @@ fn test_move_call_incorrect_function() {
         vec![],
         GAS_BUDGET,
         gas_object.clone(),
-        &TxContext::random_for_testing_only(),
+        &mut TxContext::random_for_testing_only(),
     )
     .unwrap();
     let (gas_used, err) = status.unwrap_err();
@@ -966,7 +951,6 @@ fn publish_from_src(
         gas_object,
     );
     assert!(matches!(response.unwrap(), ExecutionStatus::Success { .. }));
-    storage.flush();
 }
 
 #[test]
@@ -987,6 +971,10 @@ fn test_simple_call() {
         "src/unit_tests/data/simple_call",
         gas_object.clone(),
     );
+    // TODO: to be honest I am not sure why this flush is needed but
+    // without it, the following assertion below fails:
+    // assert!(obj.owner.is_address(&addr));
+    storage.flush();
 
     // call published module function
     let obj_val = 42u64;
@@ -1024,6 +1012,8 @@ fn test_simple_call() {
 }
 
 #[test]
+/// Tests publishing of a module with a constructor that creates a
+/// single object with a single u64 value 42.
 fn test_publish_init() {
     let (genesis_objects, natives) = genesis::clone_genesis_data();
     let mut storage = InMemoryStorage::new(genesis_objects);
@@ -1041,4 +1031,20 @@ fn test_publish_init() {
         "src/unit_tests/data/publish_init",
         gas_object,
     );
+
+    // a package object and a fresh object in the constructor should
+    // have been crated
+    assert_eq!(storage.created().len(), 2);
+    let to_check = mem::take(&mut storage.temporary.created);
+    let mut move_obj_exists = false;
+    for o in to_check.values() {
+        if let Data::Move(move_obj) = &o.data {
+            move_obj_exists = true;
+            assert_eq!(
+                u64::from_le_bytes(move_obj.type_specific_contents().try_into().unwrap()),
+                42u64
+            );
+        }
+    }
+    assert!(move_obj_exists);
 }

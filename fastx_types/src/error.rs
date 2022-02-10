@@ -165,6 +165,8 @@ pub enum FastPayError {
     InsufficientGas { error: String },
 
     // Internal state errors
+    #[error("Attempt to update state of TxContext from a different instance than original.")]
+    InvalidTxUpdate,
     #[error("Attempt to re-initialize an order lock.")]
     OrderLockExists,
     #[error("Attempt to set an non-existing order lock.")]

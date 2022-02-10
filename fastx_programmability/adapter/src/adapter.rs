@@ -83,7 +83,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     pure_args: Vec<Vec<u8>>,
     gas_budget: u64,
     mut gas_object: Object,
-    ctx: &TxContext,
+    ctx: &mut TxContext,
 ) -> FastPayResult<ExecutionStatus> {
     let mut object_owner_map = HashMap::new();
     for object in object_args.iter().filter(|obj| !obj.is_read_only()) {
@@ -153,7 +153,7 @@ fn execute_internal<
     by_value_objects: BTreeMap<AccountAddress, Object>,
     object_owner_map: HashMap<AccountAddress, AccountAddress>,
     gas_budget: u64,
-    ctx: &TxContext,
+    ctx: &mut TxContext,
 ) -> FastPayResult<ExecutionStatus> {
     // TODO: Update Move gas constants to reflect the gas fee on fastx.
     let cost_table = &move_vm_types::gas_schedule::INITIAL_COST_SCHEDULE;
@@ -190,8 +190,16 @@ fn execute_internal<
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
             debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
             debug_assert!(gas_used <= gas_budget);
-            // discard the &mut TxContext arg
-            mutable_ref_values.pop().unwrap();
+            // Retrieve the serialized TxContext value which has
+            // potentially changed as a result of Move code execution
+            // (e.g., to reflect number of created objects) and use it
+            // to update the existing &mut TxContext instance.
+            let ctx_bytes = mutable_ref_values.pop().unwrap();
+            let updated_ctx: TxContext = bcs::from_bytes(ctx_bytes.as_slice()).unwrap();
+            if let Err(err) = ctx.update_state(updated_ctx) {
+                exec_failure!(gas::MIN_MOVE_CALL_GAS, err);
+            }
+
             let mutable_refs = mutable_ref_objects
                 .into_iter()
                 .zip(mutable_ref_values.into_iter());

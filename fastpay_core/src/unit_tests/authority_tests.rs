@@ -302,7 +302,7 @@ async fn test_handle_transfer_zero_balance() {
 }
 
 async fn send_and_confirm_order(
-    authority: &mut AuthorityState,
+    authority: &AuthorityState,
     order: Order,
 ) -> Result<OrderInfoResponse, FastPayError> {
     // Make the initial request
@@ -369,7 +369,7 @@ async fn test_publish_dependent_module_ok() {
         dependent_module.serialize(&mut bytes).unwrap();
         bytes
     };
-    let mut authority = init_state_with_objects(vec![gas_payment_object]).await;
+    let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
     let order = Order::new_module(
         sender,
@@ -386,7 +386,7 @@ async fn test_publish_dependent_module_ok() {
         .await
         .unwrap()
         .is_none());
-    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
+    let response = send_and_confirm_order(&authority, order).await.unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
 
     // check that the dependent module got published
@@ -403,7 +403,7 @@ async fn test_publish_module_no_dependencies_ok() {
     let gas_payment_object =
         Object::with_id_owner_gas_for_testing(gas_payment_object_id, gas_seq, sender, gas_balance);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
-    let mut authority = init_state_with_objects(vec![gas_payment_object]).await;
+    let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
     let module = file_format::empty_module();
     let mut module_bytes = Vec::new();
@@ -412,7 +412,7 @@ async fn test_publish_module_no_dependencies_ok() {
     let gas_cost = calculate_module_publish_cost(&module_bytes);
     let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, 0, &sender_key);
     let _module_object_id = TxContext::new(&sender, order.digest()).fresh_id();
-    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
+    let response = send_and_confirm_order(&authority, order).await.unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
 
     // check that the module actually got published
@@ -519,10 +519,10 @@ async fn test_handle_move_order() {
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_seq = gas_payment_object.version();
-    let mut authority_state = init_state_with_objects(vec![gas_payment_object]).await;
+    let authority_state = init_state_with_objects(vec![gas_payment_object]).await;
 
     let effects = create_move_object(
-        &mut authority_state,
+        &authority_state,
         &gas_payment_object_id,
         &sender,
         &sender_key,
@@ -994,16 +994,16 @@ async fn test_handle_confirmation_order_idempotent() {
 async fn test_move_call_mutable_object_not_mutated() {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let mut authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
-    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
     let (new_object_id1, seq1, _) = effects.created[0].0;
 
-    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
@@ -1011,7 +1011,7 @@ async fn test_move_call_mutable_object_not_mutated() {
     let (new_object_id2, seq2, _) = effects.created[0].0;
 
     let effects = call_framework_code(
-        &mut authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -1050,16 +1050,16 @@ async fn test_move_call_mutable_object_not_mutated() {
 async fn test_move_call_delete() {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let mut authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
-    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
     let (new_object_id1, _seq1, _) = effects.created[0].0;
 
-    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
@@ -1067,7 +1067,7 @@ async fn test_move_call_delete() {
     let (new_object_id2, _seq2, _) = effects.created[0].0;
 
     let effects = call_framework_code(
-        &mut authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -1083,7 +1083,7 @@ async fn test_move_call_delete() {
     assert_eq!((effects.created.len(), effects.mutated.len()), (0, 2));
 
     let effects = call_framework_code(
-        &mut authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -1103,20 +1103,20 @@ async fn test_move_call_delete() {
 async fn test_get_latest_parent_entry() {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let mut authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
-    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
     let (new_object_id1, _seq1, _) = effects.created[0].0;
 
-    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
     let (new_object_id2, _seq2, _) = effects.created[0].0;
 
     let effects = call_framework_code(
-        &mut authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -1140,7 +1140,7 @@ async fn test_get_latest_parent_entry() {
     assert_eq!(effects.transaction_digest, tx);
 
     let effects = call_framework_code(
-        &mut authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -1298,10 +1298,11 @@ async fn test_hero() {
     ]);
     let admin_gas_object = Object::with_id_owner_for_testing(ObjectID::random(), admin);
     let admin_gas_object_ref = admin_gas_object.to_object_reference();
+
     let (player, player_key) = get_key_pair();
     let player_gas_object = Object::with_id_owner_for_testing(ObjectID::random(), player);
     let player_gas_object_ref = player_gas_object.to_object_reference();
-    let mut authority = init_state_with_objects(vec![admin_gas_object, player_gas_object]).await;
+    let authority = init_state_with_objects(vec![admin_gas_object, player_gas_object]).await;
 
     // 3. Publish the Hero modules to FastX.
     let all_module_bytes = modules
@@ -1312,8 +1313,14 @@ async fn test_hero() {
             module_bytes
         })
         .collect();
-    let order = Order::new_module(admin, admin_gas_object_ref, all_module_bytes, 0, &admin_key);
-    let effects = send_and_confirm_order(&mut authority, order)
+    let order = Order::new_module(
+        admin,
+        admin_gas_object_ref,
+        all_module_bytes,
+        MAX_GAS,
+        &admin_key,
+    );
+    let effects = send_and_confirm_order(&authority, order)
         .await
         .unwrap()
         .signed_effects
@@ -1351,7 +1358,7 @@ async fn test_hero() {
     // client needs to own treasury cap so transfer it from admin to
     // client
     let effects = call_move(
-        &mut authority,
+        &authority,
         &admin_gas_object_ref.0,
         &admin,
         &admin_key,
@@ -1368,7 +1375,7 @@ async fn test_hero() {
 
     // 4. Mint 500 EXAMPLE TrustedCoin.
     let effects = call_move(
-        &mut authority,
+        &authority,
         &player_gas_object_ref.0,
         &player,
         &player_key,
@@ -1388,7 +1395,7 @@ async fn test_hero() {
 
     // 5. Purchase a sword using 500 coin. This sword will have magic = 4, sword_strength = 5.
     let effects = call_move(
-        &mut authority,
+        &authority,
         &player_gas_object_ref.0,
         &player,
         &player_key,
@@ -1410,7 +1417,7 @@ async fn test_hero() {
 
     // 6. Verify the hero is what we exepct with strength 5.
     let effects = call_move(
-        &mut authority,
+        &authority,
         &player_gas_object_ref.0,
         &player,
         &player_key,
@@ -1432,7 +1439,7 @@ async fn test_hero() {
         bcs::to_bytes(&player.to_vec()).unwrap(), // recipient
     ];
     let effects = call_move(
-        &mut authority,
+        &authority,
         &admin_gas_object_ref.0,
         &admin,
         &admin_key,
@@ -1449,9 +1456,9 @@ async fn test_hero() {
     let (boar, boar_owner) = effects.created[0];
     assert!(boar_owner.is_address(&player));
 
-    // 10. Slay the boar!
+    // 8. Slay the boar!
     let effects = call_move(
-        &mut authority,
+        &authority,
         &player_gas_object_ref.0,
         &player,
         &player_key,
@@ -1477,25 +1484,25 @@ async fn test_object_owning_another_object() {
     let (sender2, sender2_key) = get_key_pair();
     let gas1 = ObjectID::random();
     let gas2 = ObjectID::random();
-    let mut authority = init_state_with_ids(vec![(sender1, gas1), (sender2, gas2)]).await;
+    let authority = init_state_with_ids(vec![(sender1, gas1), (sender2, gas2)]).await;
 
     // Created 3 objects, all owned by sender1.
-    let effects = create_move_object(&mut authority, &gas1, &sender1, &sender1_key)
+    let effects = create_move_object(&authority, &gas1, &sender1, &sender1_key)
         .await
         .unwrap();
     let (obj1, _, _) = effects.created[0].0;
-    let effects = create_move_object(&mut authority, &gas1, &sender1, &sender1_key)
+    let effects = create_move_object(&authority, &gas1, &sender1, &sender1_key)
         .await
         .unwrap();
     let (obj2, _, _) = effects.created[0].0;
-    let effects = create_move_object(&mut authority, &gas1, &sender1, &sender1_key)
+    let effects = create_move_object(&authority, &gas1, &sender1, &sender1_key)
         .await
         .unwrap();
     let (obj3, _, _) = effects.created[0].0;
 
     // Transfer obj1 to obj2.
     let effects = call_framework_code(
-        &mut authority,
+        &authority,
         &gas1,
         &sender1,
         &sender1_key,
@@ -1517,7 +1524,7 @@ async fn test_object_owning_another_object() {
     // Try to transfer obj1 to obj3, this time it will fail since obj1 is now owned by obj2,
     // and obj2 must be in the input to mutate obj1.
     let effects = call_framework_code(
-        &mut authority,
+        &authority,
         &gas1,
         &sender1,
         &sender1_key,
@@ -1532,7 +1539,7 @@ async fn test_object_owning_another_object() {
 
     // Try to transfer obj2 to obj1, this will create circular ownership and fail.
     let effects = call_framework_code(
-        &mut authority,
+        &authority,
         &gas1,
         &sender1,
         &sender1_key,
@@ -1553,7 +1560,7 @@ async fn test_object_owning_another_object() {
 
     // Transfer obj2 to sender2, now sender 2 owns obj2, which owns obj1.
     let effects = call_framework_code(
-        &mut authority,
+        &authority,
         &gas1,
         &sender1,
         &sender1_key,
@@ -1575,7 +1582,7 @@ async fn test_object_owning_another_object() {
     // Sender 1 try to transfer obj1 to obj2 again.
     // This will fail since sender1 no longer owns obj2.
     let effects = call_framework_code(
-        &mut authority,
+        &authority,
         &gas1,
         &sender1,
         &sender1_key,
@@ -1591,7 +1598,7 @@ async fn test_object_owning_another_object() {
     // Sender2 transfers obj1 to obj2. This should be a successful noop
     // since obj1 is already owned by obj2.
     let effects = call_framework_code(
-        &mut authority,
+        &authority,
         &gas2,
         &sender2,
         &sender2_key,
@@ -1734,7 +1741,7 @@ fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> Ob
 }
 
 async fn call_move(
-    authority: &mut AuthorityState,
+    authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &PublicKeyBytes,
     sender_key: &KeyPair,
@@ -1775,7 +1782,7 @@ async fn call_move(
 }
 
 async fn call_framework_code(
-    authority: &mut AuthorityState,
+    authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &PublicKeyBytes,
     sender_key: &KeyPair,
@@ -1804,7 +1811,7 @@ async fn call_framework_code(
 }
 
 async fn create_move_object(
-    authority: &mut AuthorityState,
+    authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &PublicKeyBytes,
     sender_key: &KeyPair,
