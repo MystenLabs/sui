@@ -337,8 +337,6 @@ fn make_client(
         pb_secret,
         committee,
         authority_clients,
-        BTreeMap::new(),
-        BTreeMap::new(),
     )
     .unwrap()
 }

@@ -107,19 +107,13 @@ impl<A> ClientState<A> {
         secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-        certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
-        object_refs: BTreeMap<ObjectID, ObjectRef>,
     ) -> Result<Self, FastPayError> {
-        let client_state = ClientState {
+        Ok(ClientState {
             address,
             secret,
             authorities: AuthorityAggregator::new(committee, authority_clients),
             store: ClientStore::new(path),
-        };
-
-        // Backfill the DB
-        client_state.store.populate(object_refs, certificates)?;
-        Ok(client_state)
+        })
     }
 
     pub fn address(&self) -> FastPayAddress {
