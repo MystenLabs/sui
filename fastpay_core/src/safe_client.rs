@@ -146,7 +146,10 @@ where
         order: ConfirmationOrder,
     ) -> Result<OrderInfoResponse, FastPayError> {
         let digest = order.certificate.order.digest();
-        let order_info = self.authority_client.handle_confirmation_order(order).await?;
+        let order_info = self
+            .authority_client
+            .handle_confirmation_order(order)
+            .await?;
         self.check_order_response(digest, &order_info)?;
         Ok(order_info)
     }
