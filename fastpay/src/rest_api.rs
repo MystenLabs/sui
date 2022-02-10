@@ -127,14 +127,8 @@ async fn genesis(
     let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
 
     let genesis_params = request.into_inner();
-    let num_authorities = match genesis_params.num_authorities {
-        Some(num_authorities) => num_authorities,
-        None => 4,
-    };
-    let num_objects = match genesis_params.num_objects {
-        Some(num_objects) => num_objects,
-        None => 5,
-    };
+    let num_authorities = genesis_params.num_authorities.unwrap_or(4);
+    let num_objects = genesis_params.num_objects.unwrap_or(5);
 
     let mut network_config = match NetworkConfig::read_or_create(&network_config_path) {
         Ok(network_config) => network_config,
@@ -212,7 +206,7 @@ async fn genesis(
     let network_config_path = network_config.config_path().to_string();
     for authority in network_config.authorities.iter() {
         make_server(
-            &authority,
+            authority,
             &committee,
             &preload_objects,
             network_config.buffer_size,
@@ -441,7 +435,7 @@ async fn get_addresses(
     Ok(HttpResponseOk(GetAddressResponse {
         addresses: addresses
             .into_iter()
-            .map(|address| format!("{:?}", address).to_string())
+            .map(|address| format!("{:?}", address))
             .collect(),
     }))
 }
@@ -490,7 +484,7 @@ async fn get_objects(
         return Err(HttpError::for_client_error(
             None,
             hyper::StatusCode::FAILED_DEPENDENCY,
-            format!("Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."),
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses.".to_string(),
         ));
     }
 
@@ -560,7 +554,7 @@ async fn get_object_info(
         return Err(HttpError::for_client_error(
             None,
             hyper::StatusCode::FAILED_DEPENDENCY,
-            format!("Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."),
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses.".to_string(),
         ));
     }
     let wallet_context = wallet_context.as_mut().unwrap();
@@ -603,7 +597,7 @@ async fn get_object_info(
                     if let Ok(ObjectRead::Exists(_, object)) =
                         client_state.get_object_info(*object_id).await
                     {
-                        Some(object.clone())
+                        Some(object)
                     } else {
                         None
                     }
@@ -686,7 +680,7 @@ async fn transfer_object(
         return Err(HttpError::for_client_error(
             None,
             hyper::StatusCode::FAILED_DEPENDENCY,
-            format!("Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."),
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses.".to_string(),
         ));
     }
     let wallet_context = wallet_context.as_mut().unwrap();
@@ -742,8 +736,8 @@ async fn transfer_object(
     let time_total = time_start.elapsed().as_micros();
 
     Ok(HttpResponseOk(TransferOrderResponse {
-        confirmation_message: format!("Transfer confirmed after {} us", time_total).to_string(),
-        certificate: format!("{:?}", cert).to_string(),
+        confirmation_message: format!("Transfer confirmed after {} us", time_total),
+        certificate: format!("{:?}", cert),
     }))
 }
 
@@ -775,7 +769,7 @@ async fn sync(
         return Err(HttpError::for_client_error(
             None,
             hyper::StatusCode::FAILED_DEPENDENCY,
-            format!("Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."),
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses.".to_string(),
         ));
     }
     let wallet_context = wallet_context.as_mut().unwrap();
