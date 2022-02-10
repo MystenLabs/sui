@@ -921,6 +921,7 @@ fn publish_from_src(
     natives: &NativeFunctionTable,
     src_path: &str,
     gas_object: Object,
+    gas_budget: u64,
 ) {
     storage.write_object(gas_object.clone());
     storage.flush();
@@ -947,7 +948,7 @@ fn publish_from_src(
         all_module_bytes,
         base_types::FastPayAddress::default(),
         &mut tx_context,
-        GAS_BUDGET,
+        gas_budget,
         gas_object,
     );
     assert!(matches!(response.unwrap(), ExecutionStatus::Success { .. }));
@@ -970,6 +971,7 @@ fn test_simple_call() {
         &natives,
         "src/unit_tests/data/simple_call",
         gas_object.clone(),
+        0,
     );
     // TODO: to be honest I am not sure why this flush is needed but
     // without it, the following assertion below fails:
@@ -1030,6 +1032,7 @@ fn test_publish_init() {
         &natives,
         "src/unit_tests/data/publish_init",
         gas_object,
+        GAS_BUDGET,
     );
 
     // a package object and a fresh object in the constructor should
@@ -1068,6 +1071,7 @@ fn test_publish_init_public() {
         &natives,
         "src/unit_tests/data/publish_init_public",
         gas_object,
+        GAS_BUDGET,
     );
 
     // only a package object should have been crated
@@ -1093,6 +1097,7 @@ fn test_publish_init_ret() {
         &natives,
         "src/unit_tests/data/publish_init_ret",
         gas_object,
+        GAS_BUDGET,
     );
 
     // only a package object should have been crated
@@ -1118,6 +1123,7 @@ fn test_publish_init_param() {
         &natives,
         "src/unit_tests/data/publish_init_param",
         gas_object,
+        GAS_BUDGET,
     );
 
     // only a package object should have been crated
