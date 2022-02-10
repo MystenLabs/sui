@@ -1048,3 +1048,78 @@ fn test_publish_init() {
     }
     assert!(move_obj_exists);
 }
+
+#[test]
+/// Tests public initializer that should not be executed upon
+/// publishing the module.
+fn test_publish_init_public() {
+    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+    );
+
+    // publish modules at a given path
+    publish_from_src(
+        &mut storage,
+        &natives,
+        "src/unit_tests/data/publish_init_public",
+        gas_object,
+    );
+
+    // only a package object should have been crated
+    assert_eq!(storage.created().len(), 1);
+}
+
+#[test]
+/// Tests initializer returning a value that should not be executed
+/// upon publishing the module.
+fn test_publish_init_ret() {
+    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+    );
+
+    // publish modules at a given path
+    publish_from_src(
+        &mut storage,
+        &natives,
+        "src/unit_tests/data/publish_init_ret",
+        gas_object,
+    );
+
+    // only a package object should have been crated
+    assert_eq!(storage.created().len(), 1);
+}
+
+#[test]
+/// Tests initializer with parameters other than &mut TxContext that
+/// should not be executed upon publishing the module.
+fn test_publish_init_param() {
+    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+    );
+
+    // publish modules at a given path
+    publish_from_src(
+        &mut storage,
+        &natives,
+        "src/unit_tests/data/publish_init_param",
+        gas_object,
+    );
+
+    // only a package object should have been crated
+    assert_eq!(storage.created().len(), 1);
+}

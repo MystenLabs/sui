@@ -21,7 +21,7 @@ use fastx_types::{
 use fastx_verifier::verifier;
 use move_binary_format::{
     errors::PartialVMResult,
-    file_format::CompiledModule,
+    file_format::{CompiledModule, Visibility},
     normalized::{Function, Type},
 };
 
@@ -341,8 +341,16 @@ pub fn module_with_init(module: &CompiledModule) -> bool {
         Some(v) => v,
         None => return false,
     };
-    let param_len = function.parameters.len();
-    if param_len != 1 {
+    if function.visibility != Visibility::Private {
+        return false;
+    }
+    if !function.type_parameters.is_empty() {
+        return false;
+    }
+    if !function.return_.is_empty() {
+        return false;
+    }
+    if function.parameters.len() != 1 {
         return false;
     }
     is_param_tx_context(&function.parameters[0])

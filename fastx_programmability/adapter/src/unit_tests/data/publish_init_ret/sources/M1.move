@@ -9,9 +9,10 @@ module Test::M1 {
     }
 
     // initializer that should be executed upon publishing this module
-    fun init(ctx: &mut TxContext) {
+    fun init(ctx: &mut TxContext): u64 {
         let value = 42;
         let singleton = Object { id: TxContext::new_id(ctx), value };
-        Transfer::transfer(singleton, TxContext::get_signer_address(ctx))
+        Transfer::transfer(singleton, TxContext::get_signer_address(ctx));
+        value
     }
 }
