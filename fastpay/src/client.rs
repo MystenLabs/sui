@@ -1,13 +1,13 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(warnings)]
+#![deny(warnings)]
 
 use fastpay::config::*;
 use fastpay_core::{authority_client::AuthorityClient, client::*};
 use fastx_network::{network::NetworkClient, transport};
 use fastx_types::{base_types::*, committee::Committee, messages::*, serialize::*};
-use move_core_types::{account_address::AccountAddress, transaction_argument::convert_txn_args};
+use move_core_types::transaction_argument::convert_txn_args;
 
 use bytes::Bytes;
 use fastx_types::object::{Object, ObjectRead};
@@ -524,33 +524,50 @@ fn main() {
         }
 
         ClientCommands::GetObjInfo { obj_id, deep } => {
-            let object = get_object_info(
-                client_db_path,
-                &mut accounts_config,
-                &committee_config,
-                obj_id,
-                buffer_size,
-                send_timeout,
-                recv_timeout,
-            );
+            // Pick the first (or any) account for use in finding obj info
+            let account = accounts_config
+                .nth_account(0)
+                .expect("Account config is invalid")
+                .address;
+            let rt = Runtime::new().unwrap();
+            rt.block_on(async move {
+                // Fetch the object ref
+                let mut client_state = make_client_state_and_try_sync(
+                    client_db_path,
+                    &mut accounts_config,
+                    &committee_config,
+                    account,
+                    buffer_size,
+                    send_timeout,
+                    recv_timeout,
+                )
+                .await;
 
-            println!("Owner: {:#?}", object.owner);
-            println!("Version: {:#?}", object.version().value());
-            println!("ID: {:#?}", object.id());
-            println!("Readonly: {:#?}", object.is_read_only());
-            println!(
-                "Type: {:#?}",
-                object
-                    .data
-                    .type_()
-                    .map_or("Type Unwrap Failed".to_owned(), |type_| type_
-                        .module
-                        .as_ident_str()
-                        .to_string())
-            );
-            if deep {
-                println!("Full Info: {:#?}", object);
-            }
+                // Fetch the object info for the object
+                if let Ok(ObjectRead::Exists(_, object)) =
+                    client_state.get_object_info(obj_id).await
+                {
+                    println!("Owner: {:#?}", object.owner);
+                    println!("Version: {:#?}", object.version().value());
+                    println!("ID: {:#?}", object.id());
+                    println!("Readonly: {:#?}", object.is_read_only());
+                    println!(
+                        "Type: {:#?}",
+                        object
+                            .data
+                            .type_()
+                            .map_or("Type Unwrap Failed".to_owned(), |type_| type_
+                                .module
+                                .as_ident_str()
+                                .to_string())
+                    );
+                    if deep {
+                        println!("Full Info: {:#?}", object);
+                    }
+                } else {
+                    panic!("Object with id {:?} not found", obj_id);
+                }
+            });
         }
 
         ClientCommands::Call { path } => {
@@ -625,19 +642,52 @@ fn main() {
             object_id,
             gas_object_id,
         } => {
-            transfer_object(
-                client_db_path,
-                accounts_config_path,
-                &mut accounts_config,
-                &committee_config,
-                object_id,
-                gas_object_id,
-                to,
-                buffer_size,
-                send_timeout,
-                recv_timeout,
-            );
-            info!("Saved user account states");
+            let rt = Runtime::new().unwrap();
+            rt.block_on(async move {
+                let owner = find_cached_owner_by_object_id(&accounts_config, &gas_object_id)
+                    .expect("Cannot find owner for gas object");
+                let mut client_state = make_client_state_and_try_sync(
+                    client_db_path.clone(),
+                    &mut accounts_config,
+                    &committee_config,
+                    owner,
+                    buffer_size,
+                    send_timeout,
+                    recv_timeout,
+                )
+                .await;
+                info!("Starting transfer");
+                let time_start = Instant::now();
+                let (cert, _) = client_state
+                    .transfer_object(object_id, gas_object_id, to)
+                    .await
+                    .unwrap();
+                let time_total = time_start.elapsed().as_micros();
+                info!("Transfer confirmed after {} us", time_total);
+                println!("{:?}", cert);
+                accounts_config.update_from_state(&client_state);
+                info!("Updating recipient's local balance");
+
+                let client2_db_path = tempdir().unwrap().into_path();
+                // TODO: client should manage multiple addresses instead of each addr having DBs
+                // https://github.com/MystenLabs/fastnft/issues/332
+                let mut recipient_client_state = make_client_state_and_try_sync(
+                    client2_db_path,
+                    &mut accounts_config,
+                    &committee_config,
+                    to,
+                    buffer_size,
+                    send_timeout,
+                    recv_timeout,
+                )
+                .await;
+                recipient_client_state.sync_client_state().await.unwrap();
+                accounts_config.update_from_state(&recipient_client_state);
+                accounts_config
+                    .write(accounts_config_path)
+                    .expect("Unable to write user accounts");
+                info!("Saved user account states");
+            });
         }
 
         ClientCommands::QueryAccountAddresses {} => {
@@ -651,20 +701,30 @@ fn main() {
         }
 
         ClientCommands::QueryObjects { address } => {
-            let object_refs = query_objects(
-                client_db_path,
-                accounts_config_path,
-                &mut accounts_config,
-                &committee_config,
-                address,
-                buffer_size,
-                send_timeout,
-                recv_timeout,
-            );
+            let rt = Runtime::new().unwrap();
+            rt.block_on(async move {
+                let client_state = make_client_state_and_try_sync(
+                    client_db_path,
+                    &mut accounts_config,
+                    &committee_config,
+                    address,
+                    buffer_size,
+                    send_timeout,
+                    recv_timeout,
+                )
+                .await;
 
-            for (obj_id, object_ref) in object_refs {
-                println!("{}: {:?}", obj_id, object_ref);
-            }
+                let object_refs = client_state.object_refs();
+
+                accounts_config.update_from_state(&client_state);
+                accounts_config
+                    .write(accounts_config_path)
+                    .expect("Unable to write user accounts");
+
+                for (obj_id, object_ref) in object_refs {
+                    println!("{}: {:?}", obj_id, object_ref);
+                }
+            });
         }
 
         ClientCommands::Benchmark {
@@ -754,195 +814,41 @@ fn main() {
             value_per_obj,
             initial_state_config_path,
         } => {
-            create_account_configs(
-                num,
-                gas_objs_per_account,
-                value_per_obj,
-                accounts_config_path,
-                &mut accounts_config,
-                initial_state_config_path.as_str(),
-            );
+            let num_of_addresses: u32 = num;
+            let mut init_state_cfg: InitialStateConfig = InitialStateConfig::new();
+
+            for _ in 0..num_of_addresses {
+                let (address, key) = get_key_pair();
+                let mut objects = Vec::new();
+                let mut object_refs = Vec::new();
+                let mut gas_object_ids = Vec::new();
+                for _ in 0..gas_objs_per_account {
+                    let object = Object::with_id_owner_gas_for_testing(
+                        ObjectID::random(),
+                        SequenceNumber::default(),
+                        address,
+                        value_per_obj,
+                    );
+                    object_refs.push(object.to_object_reference());
+                    gas_object_ids.push(object.id());
+                    objects.push(object)
+                }
+
+                let account = UserAccount::new(address, key, object_refs, gas_object_ids);
+
+                init_state_cfg.config.push(InitialStateConfigEntry {
+                    address: account.address,
+                    objects,
+                });
+
+                accounts_config.insert(account);
+            }
+            init_state_cfg
+                .write(initial_state_config_path.as_str())
+                .expect("Unable to write to initial state config file");
+            accounts_config
+                .write(accounts_config_path)
+                .expect("Unable to write user accounts");
         }
     }
-}
-
-pub fn transfer_object(
-    client_db_path: PathBuf,
-    accounts_config_path: &str,
-    accounts_config: &mut AccountsConfig,
-    committee_config: &CommitteeConfig,
-    object_id: AccountAddress,
-    gas_object_id: AccountAddress,
-    to: PublicKeyBytes,
-    buffer_size: usize,
-    send_timeout: Duration,
-    recv_timeout: Duration,
-) {
-    let rt = Runtime::new().unwrap();
-    rt.block_on(async move {
-        let owner = find_cached_owner_by_object_id(&accounts_config, &gas_object_id)
-            .expect("Cannot find owner for gas object");
-        let mut client_state = make_client_state_and_try_sync(
-            client_db_path.clone(),
-            accounts_config,
-            &committee_config,
-            owner,
-            buffer_size,
-            send_timeout,
-            recv_timeout,
-        )
-        .await;
-        info!("Starting transfer");
-        let time_start = Instant::now();
-        let (cert, _) = client_state
-            .transfer_object(object_id, gas_object_id, to)
-            .await
-            .unwrap();
-        let time_total = time_start.elapsed().as_micros();
-        info!("Transfer confirmed after {} us", time_total);
-        println!("{:?}", cert);
-        accounts_config.update_from_state(&client_state);
-        info!("Updating recipient's local balance");
-
-        let client2_db_path = tempdir().unwrap().into_path();
-        // TODO: client should manage multiple addresses instead of each addr having DBs
-        // https://github.com/MystenLabs/fastnft/issues/332
-        let mut recipient_client_state = make_client_state_and_try_sync(
-            client2_db_path,
-            accounts_config,
-            &committee_config,
-            to,
-            buffer_size,
-            send_timeout,
-            recv_timeout,
-        )
-        .await;
-        recipient_client_state.sync_client_state().await.unwrap();
-        accounts_config.update_from_state(&recipient_client_state);
-        accounts_config
-            .write(accounts_config_path)
-            .expect("Unable to write user accounts");
-    });
-}
-
-pub fn get_object_info(
-    client_db_path: PathBuf,
-    accounts_config: &mut AccountsConfig,
-    committee_config: &CommitteeConfig,
-    obj_id: AccountAddress,
-    buffer_size: usize,
-    send_timeout: Duration,
-    recv_timeout: Duration,
-) -> Object {
-    // Pick the first (or any) account for use in finding obj info
-    let account = accounts_config
-        .nth_account(0)
-        .expect("Account config is invalid")
-        .address;
-    let rt = Runtime::new().unwrap();
-    rt.block_on(async move {
-        // Fetch the object ref
-        let mut client_state = make_client_state_and_try_sync(
-            client_db_path,
-            accounts_config,
-            &committee_config,
-            account,
-            buffer_size,
-            send_timeout,
-            recv_timeout,
-        )
-        .await;
-
-        // Fetch the object info for the object
-        let obj_info_req = ObjectInfoRequest {
-            object_id: obj_id,
-            request_sequence_number: None,
-        };
-        if let Ok(ObjectRead::Exists(_, object)) =
-            client_state.get_object_info(obj_id).await
-        {
-            object.clone()
-        } else {
-            panic!("Object with id {:?} not found", obj_id);
-        }
-    })
-}
-
-pub fn query_objects(
-    client_db_path: PathBuf,
-    accounts_config_path: &str,
-    accounts_config: &mut AccountsConfig,
-    committee_config: &CommitteeConfig,
-    address: PublicKeyBytes,
-    buffer_size: usize,
-    send_timeout: Duration,
-    recv_timeout: Duration,
-) -> BTreeMap<AccountAddress, (AccountAddress, SequenceNumber, ObjectDigest)> {
-    let rt = Runtime::new().unwrap();
-    rt.block_on(async move {
-        let client_state = make_client_state_and_try_sync(
-            client_db_path,
-            accounts_config,
-            &committee_config,
-            address,
-            buffer_size,
-            send_timeout,
-            recv_timeout,
-        )
-        .await;
-
-        accounts_config.update_from_state(&client_state);
-
-        accounts_config
-            .write(accounts_config_path)
-            .expect("Unable to write user accounts");
-
-        client_state.object_refs()
-    })
-}
-
-pub fn create_account_configs(
-    num: u32,
-    gas_objs_per_account: u32,
-    value_per_obj: u64,
-    accounts_config_path: &str,
-    accounts_config: &mut AccountsConfig,
-    initial_accounts_config_path: &str,
-) -> InitialStateConfig {
-    let num_of_addresses: u32 = num;
-    let mut init_state_cfg: InitialStateConfig = InitialStateConfig::new();
-
-    for _ in 0..num_of_addresses {
-        let (address, key) = get_key_pair();
-        let mut objects = Vec::new();
-        let mut object_refs = Vec::new();
-        let mut gas_object_ids = Vec::new();
-        for _ in 0..gas_objs_per_account {
-            let object = Object::with_id_owner_gas_for_testing(
-                ObjectID::random(),
-                SequenceNumber::default(),
-                address,
-                value_per_obj,
-            );
-            object_refs.push(object.to_object_reference());
-            gas_object_ids.push(object.id());
-            objects.push(object)
-        }
-
-        let account = UserAccount::new(address, key, object_refs, gas_object_ids);
-
-        init_state_cfg.config.push(InitialStateConfigEntry {
-            address: account.address,
-            objects,
-        });
-
-        accounts_config.insert(account);
-    }
-    init_state_cfg
-        .write(initial_accounts_config_path)
-        .expect("Unable to write to initial state config file");
-    accounts_config
-        .write(accounts_config_path)
-        .expect("Unable to write user accounts");
-    init_state_cfg
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(warnings)]
+#![deny(warnings)]
 
 use fastpay::config::*;
 use fastpay_core::{authority::*, authority_server::AuthorityServer};
@@ -112,7 +112,7 @@ enum ServerCommands {
         port: u16,
 
         /// Sets the path to the database folder
-        #[structopt(long, default_value = "")]
+        #[structopt(long)]
         database_path: String,
     },
 }
@@ -135,12 +135,32 @@ fn main() {
             initial_accounts,
         } => {
             // Run the server
-            run_server(
+
+            let server = make_server(
+                "0.0.0.0", // Allow local IP address to be different from the public one.
                 server_config_path,
                 &committee,
                 &initial_accounts,
                 buffer_size,
             );
+
+            let rt = Runtime::new().unwrap();
+            let mut handles = Vec::new();
+
+            handles.push(async move {
+                let spawned_server = match server.spawn().await {
+                    Ok(server) => server,
+                    Err(err) => {
+                        error!("Failed to start server: {}", err);
+                        return;
+                    }
+                };
+                if let Err(err) = spawned_server.join().await {
+                    error!("Server ended with an error: {}", err);
+                }
+            });
+
+            rt.block_on(join_all(handles));
         }
 
         ServerCommands::Generate {
@@ -148,60 +168,19 @@ fn main() {
             port,
             database_path,
         } => {
-            let server = create_server_config(server_config_path, host, port, database_path);
+            let (address, key) = get_key_pair();
+            let authority = AuthorityConfig {
+                address,
+                host,
+                base_port: port,
+                database_path,
+            };
+            let server = AuthorityServerConfig { authority, key };
+            server
+                .write(server_config_path)
+                .expect("Unable to write server config file");
+            info!("Wrote server config file");
             server.authority.print();
         }
     }
-}
-
-// Shared functions for REST API & CLI
-pub fn create_server_config(
-    server_config_path: &str,
-    host: String,
-    port: u16,
-    database_path: String,
-) -> AuthorityServerConfig {
-    let (address, key) = get_key_pair();
-    let authority = AuthorityConfig {
-        address,
-        host,
-        base_port: port,
-        database_path,
-    };
-    let server = AuthorityServerConfig { authority, key };
-    server
-        .write(server_config_path)
-        .expect("Unable to write server config file");
-    info!("Wrote server config file");
-    server
-}
-
-pub fn run_server(
-    server_config_path: &str,
-    committee_config_path: &str,
-    initial_accounts_config_path: &str,
-    buffer_size: usize,
-) {
-    let server = make_server(
-        "0.0.0.0", // Allow local IP address to be different from the public one.
-        server_config_path,
-        committee_config_path,
-        initial_accounts_config_path,
-        buffer_size,
-    );
-    let rt = Runtime::new().unwrap();
-    let mut handles = Vec::new();
-    handles.push(async move {
-        let spawned_server = match server.spawn().await {
-            Ok(server) => server,
-            Err(err) => {
-                error!("Failed to start server: {}", err);
-                return;
-            }
-        };
-        if let Err(err) = spawned_server.join().await {
-            error!("Server ended with an error: {}", err);
-        }
-    });
-    rt.block_on(join_all(handles));
 }

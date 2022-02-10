@@ -1,50 +1,41 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-mod client;
-mod server;
-
 use crossbeam::thread as cb_thread;
 
 use dropshot::endpoint;
 use dropshot::{
-    ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, 
-    HttpError, HttpResponseOk, HttpResponseUpdatedNoContent, HttpServerStarter,
-    RequestContext, TypedBody
+    ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
+    HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext, TypedBody,
 };
 
 use fastpay::config::{
-    AccountInfo, AccountsConfig, AuthorityInfo, AuthorityPrivateInfo, CommitteeConfig, 
-    NetworkConfig, PortAllocator, WalletConfig
+    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, PortAllocator, WalletConfig,
 };
 use fastpay::utils::Config;
-use fastpay::wallet_commands::{WalletContext, WalletCommands};
+use fastpay::wallet_commands::WalletContext;
 use fastpay_core::authority::{AuthorityState, AuthorityStore};
 use fastpay_core::authority_server::AuthorityServer;
 use fastpay_core::client::Client;
-use fastx_network::transport;
 use fastx_types::base_types::*;
 use fastx_types::committee::Committee;
-use fastx_types::object::Object as FastxObject;
+use fastx_types::object::{Object as FastxObject, ObjectRead};
 
 use futures::future::join_all;
 use move_core_types::account_address::AccountAddress;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use tempfile::tempdir;
-use tokio::runtime::Runtime;
-use tracing::error;
 use std::collections::BTreeMap;
 use std::fs;
-use std::fs::File;
-use std::io::Write;
 use std::net::{Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
+use tokio::runtime::Runtime;
+use tracing::error;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::Instant;
 
 const DEFAULT_WEIGHT: usize = 1;
 
@@ -70,20 +61,9 @@ async fn main() -> Result<(), String> {
     api.register(get_objects).unwrap();
     api.register(get_object_info).unwrap();
     api.register(transfer_object).unwrap();
+    api.register(sync).unwrap();
 
-    let accounts_config_path = "accounts.json".to_string();
-    let initial_accounts_config_path = "initial_accounts.toml".to_string();
-    File::create(&initial_accounts_config_path)
-        .expect("Couldn't create initial accounts config file");
-    let committee_config_path = "committee.json".to_string();
-    File::create(&committee_config_path).expect("Couldn't create committee config file");
-    let client_db_path = tempdir().unwrap().into_path();
-    let api_context = ServerContext::new(
-        accounts_config_path,
-        committee_config_path,
-        // initial_accounts_config_path,
-        client_db_path,
-    );
+    let api_context = ServerContext::new();
 
     let server = HttpServerStarter::new(&config_dropshot, api, api_context, &log)
         .map_err(|error| format!("failed to create server: {}", error))?
@@ -96,49 +76,19 @@ async fn main() -> Result<(), String> {
  * Server context (state shared by handler functions)
  */
 struct ServerContext {
-    buffer_size: usize,
-    send_timeout: Arc<Mutex<Duration>>,
-    recv_timeout: Arc<Mutex<Duration>>,
-    // initial_accounts_config_path: Arc<Mutex<String>>,
-    accounts_config_path: Arc<Mutex<String>>,
-    // committee_config_path: Arc<Mutex<String>>,
-    client_db_path: Arc<Mutex<PathBuf>>,
-    authority_db_path: Arc<Mutex<String>>, 
+    authority_db_path: Arc<Mutex<String>>,
     wallet_config_path: Arc<Mutex<String>>,
     network_config_path: Arc<Mutex<String>>,
     wallet_context: Arc<Mutex<Option<WalletContext>>>,
-    accounts_config: Arc<Mutex<AccountsConfig>>,
-    committee_config: Arc<Mutex<CommitteeConfig>>,
 }
 
 impl ServerContext {
-    pub fn new(
-        accounts_config_path: String,
-        committee_config_path: String,
-        // initial_accounts_config_path: String,
-        client_db_path: PathBuf,
-    ) -> ServerContext {
+    pub fn new() -> ServerContext {
         ServerContext {
-            buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE
-                .to_string()
-                .parse()
-                .unwrap(),
-            send_timeout: Arc::new(Mutex::new(Duration::new(0, 0))),
-            recv_timeout: Arc::new(Mutex::new(Duration::new(0, 0))),
-            // initial_accounts_config_path: Arc::new(Mutex::new(initial_accounts_config_path)),
-            accounts_config_path: Arc::new(Mutex::new(accounts_config_path.to_owned())),
-            // committee_config_path: Arc::new(Mutex::new(committee_config_path.to_owned())),
-            client_db_path: Arc::new(Mutex::new(client_db_path)),
             wallet_config_path: Arc::new(Mutex::new(String::from("./wallet.conf"))),
             network_config_path: Arc::new(Mutex::new(String::from("./network.conf"))),
             authority_db_path: Arc::new(Mutex::new(String::from("./authorities_db"))),
             wallet_context: Arc::new(Mutex::new(None)),
-            accounts_config: Arc::new(Mutex::new(
-                AccountsConfig::read_or_create(accounts_config_path.as_str()).unwrap(),
-            )),
-            committee_config: Arc::new(Mutex::new(
-                CommitteeConfig::read(committee_config_path.as_str()).unwrap(),
-            )),
         }
     }
 }
@@ -151,7 +101,6 @@ struct GenesisRequest {
     num_authorities: Option<u16>,
     num_objects: Option<u16>,
 }
-
 
 /**
  * 'GenesisResponse' returns the genesis of wallet & network config.
@@ -189,18 +138,20 @@ async fn genesis(
 
     let mut network_config = match NetworkConfig::read_or_create(&network_config_path) {
         Ok(network_config) => network_config,
-        Err(error) => return Err(
-            HttpError::for_client_error(
-                None, 
-                hyper::StatusCode::FAILED_DEPENDENCY, 
-                format!("Unable to read network config: {error}"))),
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Unable to read network config: {error}"),
+            ))
+        }
     };
 
     if !network_config.authorities.is_empty() {
         return Err(
             HttpError::for_client_error(
-                None, 
-                hyper::StatusCode::FAILED_DEPENDENCY, 
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
                 String::from("Cannot run genesis on a existing network, please delete network config file and try again.")));
     }
 
@@ -215,7 +166,7 @@ async fn genesis(
             address,
             key_pair,
             host: "127.0.0.1".to_string(),
-            port: port_allocator.next_port().expect("No free ports"),  // TODO: change to http error
+            port: port_allocator.next_port().expect("No free ports"), // TODO: change to http error
             db_path: format!("./authorities_db/{:?}", address),
         };
         authority_info.push(AuthorityInfo {
@@ -227,12 +178,16 @@ async fn genesis(
         network_config.authorities.push(info);
     }
 
-    network_config.save().map_err(|err| 
-        HttpError::for_client_error(
-            None, 
-            hyper::StatusCode::FAILED_DEPENDENCY, 
-            format!("Network config was unable to be saved: {err}"))
-        ).ok();
+    match network_config.save() {
+        Ok(_) => (),
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Network config was unable to be saved: {error}"),
+            ))
+        }
+    };
 
     let mut new_addresses = Vec::new();
     let mut preload_objects: Vec<FastxObject> = Vec::new();
@@ -256,24 +211,37 @@ async fn genesis(
     // Make server state to persist the objects.
     let network_config_path = network_config.config_path().to_string();
     for authority in network_config.authorities.iter() {
-        make_server(&authority, &committee, &preload_objects, network_config.buffer_size).await;
+        make_server(
+            &authority,
+            &committee,
+            &preload_objects,
+            network_config.buffer_size,
+        )
+        .await;
     }
 
     let mut wallet_config = match WalletConfig::create(&wallet_config_path) {
         Ok(wallet_config) => wallet_config,
-        Err(error) => return Err(HttpError::for_client_error(
-            None, 
-            hyper::StatusCode::FAILED_DEPENDENCY, 
-            format!("Wallet config was unable to be created: {error}")))
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Wallet config was unable to be created: {error}"),
+            ))
+        }
     };
     wallet_config.authorities = authority_info;
     wallet_config.accounts = new_addresses;
-    wallet_config.save().map_err(|err| 
-        HttpError::for_client_error(
-            None, 
-            hyper::StatusCode::FAILED_DEPENDENCY, 
-            format!("Wallet config was unable to be saved: {err}"))
-        ).ok();
+    match wallet_config.save() {
+        Ok(_) => (),
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Wallet config was unable to be saved: {error}"),
+            ))
+        }
+    };
 
     println!("Network genesis completed.");
     println!("Network config file is stored in {}.", network_config_path);
@@ -282,7 +250,7 @@ async fn genesis(
         wallet_config.config_path()
     );
 
-    // TODO: Print out the contents of wallet_config/network_config? Gated by request param 
+    // TODO: Print out the contents of wallet_config/network_config? Gated by request param
     let wallet_config_string = format!(
         "Wallet Config was created with {} accounts",
         wallet_config.accounts.len(),
@@ -292,9 +260,9 @@ async fn genesis(
         network_config.authorities.len(),
     );
 
-    Ok(HttpResponseOk(GenesisResponse { 
+    Ok(HttpResponseOk(GenesisResponse {
         wallet_config: wallet_config_string,
-        network_config: network_config_string
+        network_config: network_config_string,
     }))
 }
 
@@ -313,23 +281,25 @@ async fn start(
 
     let network_config = match NetworkConfig::read_or_create(&network_config_path) {
         Ok(network_config) => network_config,
-        Err(error) => return Err(
-            HttpError::for_client_error(
-                None, 
-                hyper::StatusCode::FAILED_DEPENDENCY, 
-                format!("Unable to read network config: {error}"))),
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Unable to read network config: {error}"),
+            ))
+        }
     };
 
     if network_config.authorities.is_empty() {
-        return Err(
-            HttpError::for_client_error(
-                None, 
-                hyper::StatusCode::FAILED_DEPENDENCY, 
-                String::from("No authority configured for the network, please run genesis.")));
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            String::from("No authority configured for the network, please run genesis."),
+        ));
     }
 
     // TODO check if thread/network is already started and stop if it is....
-    // JoinHandle::is_running() unstable feature :( 
+    // JoinHandle::is_running() unstable feature :(
     // https://github.com/rust-lang/rust/issues/90470
 
     println!(
@@ -371,11 +341,14 @@ async fn start(
         rt.block_on(join_all(handles));
     });
 
-    Ok(HttpResponseOk(format!("Started {} authorities", num_authorities)))
+    Ok(HttpResponseOk(format!(
+        "Started {} authorities",
+        num_authorities
+    )))
 }
 
 /**
- * [SERVER] Stop servers and delete storage.
+ * [FASTX] Stop servers and delete storage.
  */
 #[endpoint {
     method = POST,
@@ -389,9 +362,9 @@ async fn stop(
     let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
     let authority_db_path = server_context.authority_db_path.lock().unwrap().clone();
 
-    // TODO: kill authorities 
+    // TODO: kill authorities
 
-    // TODO: get client db path from server context
+    // TODO: get client db path from server context & error handle
     fs::remove_dir_all("./client_db").ok();
     fs::remove_dir_all(authority_db_path).ok();
     fs::remove_file(network_config_path).ok();
@@ -421,15 +394,16 @@ async fn get_addresses(
     let server_context = rqctx.context();
     let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
 
-    let config =
-        match WalletConfig::read_or_create(&wallet_config_path) {
-            Ok(network_config) => network_config,
-            Err(error) => return Err(
-                HttpError::for_client_error(
-                    None, 
-                    hyper::StatusCode::FAILED_DEPENDENCY, 
-                    format!("Unable to read wallet config: {error}"))),
-        };
+    let config = match WalletConfig::read_or_create(&wallet_config_path) {
+        Ok(network_config) => network_config,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Unable to read wallet config: {error}"),
+            ))
+        }
+    };
     let addresses = config
         .accounts
         .iter()
@@ -439,28 +413,36 @@ async fn get_addresses(
 
     // Sync all accounts.
     for address in addresses.iter() {
-        let client_state = wallet_context
-            .get_or_create_client_state(address).map_err(|err| 
-                HttpError::for_client_error(
-                None, 
-                hyper::StatusCode::FAILED_DEPENDENCY, 
-                format!("Can't create client state: {err}"))).ok().unwrap();
-        client_state.sync_client_state()
-            .await.map_err(|err| 
-                HttpError::for_client_error(
-                None, 
-                hyper::StatusCode::FAILED_DEPENDENCY, 
-                format!("Sync failed: {err}"))).ok();
+        let client_state = match wallet_context.get_or_create_client_state(address) {
+            Ok(client_state) => client_state,
+            Err(error) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Can't create client state: {error}"),
+                ))
+            }
+        };
+        match client_state.sync_client_state().await {
+            Ok(_) => (),
+            Err(err) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Sync failed: {err}"),
+                ))
+            }
+        };
     }
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
     // TODO: fix output to remove 'k#' as part of address
-    Ok(HttpResponseOk(GetAddressResponse { 
+    Ok(HttpResponseOk(GetAddressResponse {
         addresses: addresses
-                        .into_iter()
-                        .map(|address| format!("{:?}", address).to_string())
-                        .collect() 
+            .into_iter()
+            .map(|address| format!("{:?}", address).to_string())
+            .collect(),
     }))
 }
 
@@ -475,7 +457,7 @@ struct GetObjectsRequest {
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct Object {
     object_id: String,
-    object_ref: Option<String>,
+    object_ref: String,
 }
 
 /**
@@ -505,24 +487,27 @@ async fn get_objects(
     let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
 
     if wallet_context.is_none() {
-        return Err(
-            HttpError::for_client_error(
-            None, 
-            hyper::StatusCode::FAILED_DEPENDENCY, 
-            format!("Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."))
-        );
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            format!("Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."),
+        ));
     }
 
     let wallet_context = wallet_context.as_mut().unwrap();
 
-    let client_state = 
-        wallet_context.get_or_create_client_state(
-            &decode_address_hex(address.as_str()).unwrap())
-                    .map_err(|err| 
-                        HttpError::for_client_error(
-                        None, 
-                        hyper::StatusCode::FAILED_DEPENDENCY, 
-                        format!("Could not create client state: {err}."))).unwrap();
+    let client_state = match wallet_context
+        .get_or_create_client_state(&decode_address_hex(address.as_str()).unwrap())
+    {
+        Ok(client_state) => client_state,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could not get or create client state: {error}"),
+            ))
+        }
+    };
     let object_refs = client_state.object_refs();
     println!("Showing {} results.", object_refs.len());
 
@@ -531,17 +516,25 @@ async fn get_objects(
             .into_iter()
             .map(|e| Object {
                 object_id: e.0.to_string(),
-                object_ref: Some(format!("{:?}", e.1)),
+                object_ref: format!("{:?}", e.1),
             })
             .collect::<Vec<Object>>(),
     }))
 }
 
 /**
-* [OUTPUT] `ObjectInfo` represents the object info on the network.
+* `GetObjectInfoRequest` represents the request to get object info.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
-struct ObjectInfo {
+struct GetObjectInfoRequest {
+    object_id: String,
+}
+
+/**
+* 'ObjectInfoResponse' represents the object info on the network.
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct ObjectInfoResponse {
     owner: String,
     version: String,
     id: String,
@@ -550,52 +543,102 @@ struct ObjectInfo {
 }
 
 /**
- * [CLIENT] Return object info.
+ * [Wallet] Get object info.
  */
 #[endpoint {
     method = GET,
-    path = "/client/object_info",
+    path = "/wallet/object_info",
 }]
 async fn get_object_info(
     rqctx: Arc<RequestContext<ServerContext>>,
-    object: TypedBody<Object>,
-) -> Result<HttpResponseOk<ObjectInfo>, HttpError> {
+    request: TypedBody<GetObjectInfoRequest>,
+) -> Result<HttpResponseOk<ObjectInfoResponse>, HttpError> {
     let server_context = rqctx.context();
 
-    let send_timeout = *server_context.send_timeout.lock().unwrap();
-    let recv_timeout = *server_context.recv_timeout.lock().unwrap();
-    let buffer_size = server_context.buffer_size;
-    let account_config = &mut *server_context.accounts_config.lock().unwrap();
-    let committee_config = &*server_context.committee_config.lock().unwrap();
-    let client_db_path = server_context.client_db_path.lock().unwrap().clone();
+    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
+    if wallet_context.is_none() {
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            format!("Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."),
+        ));
+    }
+    let wallet_context = wallet_context.as_mut().unwrap();
 
-    let obj_info = cb_thread::scope(|scope| {
+    let object_id = &AccountAddress::try_from(request.into_inner().object_id).unwrap();
+
+    // Pick the first (or any) account for use in finding obj info
+    let account = match wallet_context.find_owner(object_id) {
+        Ok(account) => account,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("{error}"),
+            ))
+        }
+    };
+
+    // Fetch the object ref
+    let client_state = match wallet_context.get_or_create_client_state(&account) {
+        Ok(client_state) => client_state,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!(
+                    "Could not get client state for account {:?}: {error}",
+                    account
+                ),
+            ))
+        }
+    };
+
+    let object = cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
                 // Get the object info
-                client::get_object_info(
-                    client_db_path,
-                    account_config,
-                    committee_config,
-                    AccountAddress::try_from(object.into_inner().object_id).unwrap(),
-                    buffer_size,
-                    send_timeout,
-                    recv_timeout,
-                )
+                let rt = Runtime::new().unwrap();
+                rt.block_on(async move {
+                    if let Ok(ObjectRead::Exists(_, object)) =
+                        client_state.get_object_info(*object_id).await
+                    {
+                        Some(object.clone())
+                    } else {
+                        None
+                    }
+                })
             })
             .join()
             .unwrap()
     })
     .unwrap();
 
-    Ok(HttpResponseOk(ObjectInfo {
-        owner: format!("Owner: {:#?}", obj_info.owner),
-        version: format!("Version: {:#?}", obj_info.version().value()),
-        id: format!("ID: {:#?}", obj_info.id()),
-        readonly: format!("Readonly: {:#?}", obj_info.is_read_only()),
+    let object = match object {
+        Some(object) => object,
+        None => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could not get object info for object_id {object_id}."),
+            ))
+        }
+    };
+    println!("{}", object);
+
+    // TODO: add a way to print full object info i.e. raw bytes
+    // if *deep {
+    //     println!("Full Info: {:#?}", object);
+    // }
+
+    Ok(HttpResponseOk(ObjectInfoResponse {
+        owner: format!("{:?}", object.owner),
+        version: format!("{:?}", object.version().value()),
+        id: format!("{:?}", object.id()),
+        readonly: format!("{:?}", object.is_read_only()),
         obj_type: format!(
-            "Type: {:#?}",
-            obj_info
+            "{:?}",
+            object
                 .data
                 .type_()
                 .map_or("Type Unwrap Failed".to_owned(), |type_| type_
@@ -607,57 +650,164 @@ async fn get_object_info(
 }
 
 /**
-* [INPUT] `TransferOrder` represents the transaction to be sent to the network.
+* 'TransferOrderRequest' represents the transaction to be sent to the network.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
-struct TransferOrder {
+struct TransferOrderRequest {
     object_id: String,
     to_address: String,
     gas_object_id: String,
 }
 
 /**
- * [CLIENT] Transfer object.
+* 'TransferOrderResponse' represents the transaction to be sent to the network.
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct TransferOrderResponse {
+    confirmation_message: String,
+    certificate: String,
+}
+
+/**
+ * [WALLET] Transfer object.
  */
 #[endpoint {
     method = PATCH,
-    path = "/client/transfer",
+    path = "/wallet/transfer",
 }]
 async fn transfer_object(
     rqctx: Arc<RequestContext<ServerContext>>,
-    transfer_order_body: TypedBody<TransferOrder>,
-) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    request: TypedBody<TransferOrderRequest>,
+) -> Result<HttpResponseOk<TransferOrderResponse>, HttpError> {
     let server_context = rqctx.context();
-    let transfer_order = transfer_order_body.into_inner();
 
-    let send_timeout = *server_context.send_timeout.lock().unwrap();
-    let recv_timeout = *server_context.recv_timeout.lock().unwrap();
-    let buffer_size = server_context.buffer_size;
-    let account_config = &mut *server_context.accounts_config.lock().unwrap();
-    let committee_config = &*server_context.committee_config.lock().unwrap();
-    let client_db_path = server_context.client_db_path.lock().unwrap().clone();
-    let accounts_config_path = &*server_context.accounts_config_path.lock().unwrap();
+    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
+    if wallet_context.is_none() {
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            format!("Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."),
+        ));
+    }
+    let wallet_context = wallet_context.as_mut().unwrap();
 
-    let to_address = decode_address_hex(transfer_order.to_address.as_str()).unwrap();
-    let object_id = AccountAddress::try_from(transfer_order.object_id).unwrap();
-    let gas_object_id = AccountAddress::try_from(transfer_order.gas_object_id).unwrap();
+    let transfer_order_params = request.into_inner();
 
-    let _acc_obj_info = cb_thread::scope(|scope| {
+    let to_address = decode_address_hex(transfer_order_params.to_address.as_str()).unwrap();
+    let object_id = AccountAddress::try_from(transfer_order_params.object_id).unwrap();
+    let gas_object_id = AccountAddress::try_from(transfer_order_params.gas_object_id).unwrap();
+
+    let owner = match wallet_context.find_owner(&gas_object_id) {
+        Ok(owner) => owner,
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("{err}"),
+            ))
+        }
+    };
+
+    let client_state = match wallet_context.get_or_create_client_state(&owner) {
+        Ok(client_state) => client_state,
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could create or get client state for {:?}: {err}", owner),
+            ))
+        }
+    };
+    println!("Starting transfer");
+    let time_start = Instant::now();
+
+    // TODO: figure out how to bubble up error from transfer object
+    let cert = cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
-                // Transfer from ACC1 to ACC2
-                client::transfer_object(
-                    client_db_path,
-                    accounts_config_path,
-                    account_config,
-                    committee_config,
-                    object_id,
-                    gas_object_id,
-                    to_address,
-                    buffer_size,
-                    send_timeout,
-                    recv_timeout,
-                )
+                // transfer object
+                let rt = Runtime::new().unwrap();
+                rt.block_on(async move {
+                    client_state
+                        .transfer_object(object_id, gas_object_id, to_address)
+                        .await
+                        .unwrap()
+                })
+            })
+            .join()
+            .unwrap()
+    })
+    .unwrap();
+
+    let time_total = time_start.elapsed().as_micros();
+
+    Ok(HttpResponseOk(TransferOrderResponse {
+        confirmation_message: format!("Transfer confirmed after {} us", time_total).to_string(),
+        certificate: format!("{:?}", cert).to_string(),
+    }))
+}
+
+/**
+* 'SyncRequest' represents the sync request
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct SyncRequest {
+    address: String,
+}
+
+/**
+ * [WALLET] Sync wallet.
+ */
+#[endpoint {
+    method = PATCH,
+    path = "/wallet/sync",
+}]
+async fn sync(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    request: TypedBody<SyncRequest>,
+) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    let server_context = rqctx.context();
+    let sync_params = request.into_inner();
+    let address = decode_address_hex(sync_params.address.as_str()).unwrap();
+
+    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
+    if wallet_context.is_none() {
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            format!("Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."),
+        ));
+    }
+    let wallet_context = wallet_context.as_mut().unwrap();
+
+    let client_state = match wallet_context.get_or_create_client_state(&address) {
+        Ok(client_state) => client_state,
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could create or get client state for {:?}: {err}", address),
+            ))
+        }
+    };
+
+    cb_thread::scope(|scope| {
+        scope
+            .spawn(|_| {
+                // transfer object
+                let rt = Runtime::new().unwrap();
+                rt.block_on(async move {
+                    client_state.sync_client_state().await.ok()
+                    // TODO figure out how to bubble up error
+                    // {
+                    //     Ok(_) => (),
+                    //     Err(err) => Err(
+                    //         HttpError::for_client_error(
+                    //         None,
+                    //         hyper::StatusCode::FAILED_DEPENDENCY,
+                    //         format!("Could not sync client state: {err}")))
+                    // };
+                })
             })
             .join()
             .unwrap()

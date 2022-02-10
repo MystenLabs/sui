@@ -14,13 +14,16 @@ use move_core_types::language_storage::TypeTag;
 use move_core_types::{identifier::Identifier, transaction_argument::TransactionArgument};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::{fmt::{Debug, Display, Formatter}, net::TcpListener};
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, read_to_string, File, OpenOptions},
     io::{BufReader, BufWriter, Write},
     iter::FromIterator,
+};
+use std::{
+    fmt::{Debug, Display, Formatter},
+    net::TcpListener,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -64,7 +67,6 @@ impl AuthorityServerConfig {
     }
 }
 
-#[derive(Clone)]
 pub struct CommitteeConfig {
     pub authorities: Vec<AuthorityConfig>,
 }
@@ -283,12 +285,12 @@ impl AccountsConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct InitialStateConfigEntry {
     pub address: FastPayAddress,
     pub objects: Vec<Object>,
 }
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct InitialStateConfig {
     pub config: Vec<InitialStateConfigEntry>,
 }
