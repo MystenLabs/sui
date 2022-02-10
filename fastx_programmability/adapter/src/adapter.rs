@@ -284,7 +284,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
     let mut modules_to_init = Vec::new();
     for module in modules.iter() {
-        if module_with_init(module) {
+        if module_has_init(module) {
             modules_to_init.push(module.self_id());
         }
     }
@@ -345,7 +345,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
 const INIT_FN_NAME: &IdentStr = ident_str!("init");
 
-pub fn module_with_init(module: &CompiledModule) -> bool {
+pub fn module_has_init(module: &CompiledModule) -> bool {
     let function = match Function::new_from_name(module, INIT_FN_NAME) {
         Some(v) => v,
         None => return false,

@@ -108,7 +108,7 @@ impl Storage for InMemoryStorage {
         // try objects updated in temp memory first
         match self.temporary.updated.get(id).cloned() {
             Some(o) => Some(o),
-            // try objects creted in temp memory
+            // try objects created in temp memory
             None => match self.temporary.created.get(id).cloned() {
                 Some(o) => Some(o),
                 // try persistent memory
