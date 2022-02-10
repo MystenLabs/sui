@@ -484,7 +484,8 @@ async fn get_objects(
         return Err(HttpError::for_client_error(
             None,
             hyper::StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses.".to_string(),
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."
+                .to_string(),
         ));
     }
 
@@ -554,7 +555,8 @@ async fn get_object_info(
         return Err(HttpError::for_client_error(
             None,
             hyper::StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses.".to_string(),
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."
+                .to_string(),
         ));
     }
     let wallet_context = wallet_context.as_mut().unwrap();
@@ -680,7 +682,8 @@ async fn transfer_object(
         return Err(HttpError::for_client_error(
             None,
             hyper::StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses.".to_string(),
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."
+                .to_string(),
         ));
     }
     let wallet_context = wallet_context.as_mut().unwrap();
@@ -769,7 +772,8 @@ async fn sync(
         return Err(HttpError::for_client_error(
             None,
             hyper::StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses.".to_string(),
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."
+                .to_string(),
         ));
     }
     let wallet_context = wallet_context.as_mut().unwrap();
@@ -788,7 +792,7 @@ async fn sync(
     cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
-                // transfer object
+                // sync
                 let rt = Runtime::new().unwrap();
                 rt.block_on(async move {
                     client_state.sync_client_state().await.ok()
