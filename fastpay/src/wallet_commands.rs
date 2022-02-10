@@ -143,17 +143,11 @@ impl WalletCommands {
                     .unwrap();
                 let signed_order = KeyPairConfig::sign_order(&owner_kf_path, publish_order)
                     .expect("Could not sign publish order");
-                let pub_resp = client_state.execute_signed_order(signed_order).await;
-
-                match pub_resp {
-                    Ok((_, effects)) => {
-                        if effects.status != ExecutionStatus::Success {
-                            error!("Error publishing module: {:#?}", effects.status);
-                        }
-                        show_object_effects(effects);
-                    }
-                    Err(err) => error!("{:#?}", err),
+               let (_, effects) = client_state.execute_signed_order(signed_order).await?;
+                if effects.status != ExecutionStatus::Success {
+                    error!("Error publishing module: {:#?}", effects.status);
                 }
+                show_object_effects(effects);
             }
 
             WalletCommands::Object { id, deep } => {
