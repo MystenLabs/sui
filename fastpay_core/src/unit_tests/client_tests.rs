@@ -1326,7 +1326,7 @@ async fn test_module_publish_bad_path() {
     // Use a bad path
     hero_path.push_str("/../fastx_____programmability/examples/");
 
-    let pub_resp = client1.publish(hero_path, gas_object_ref, 0).await;
+    let pub_resp = client1.publish(hero_path, gas_object_ref, 1000).await;
     // Has to fail
     assert!(pub_resp.is_err());
 }
@@ -1359,7 +1359,7 @@ async fn test_module_publish_naughty_path() {
         // Use a bad path
         hero_path.push_str(&format!("/../{}", ns));
 
-        let pub_resp = client1.publish(hero_path, gas_object_ref, 0).await;
+        let pub_resp = client1.publish(hero_path, gas_object_ref, 1000).await;
         // Has to fail
         assert!(pub_resp.is_err());
     }

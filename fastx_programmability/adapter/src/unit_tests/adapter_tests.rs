@@ -526,7 +526,7 @@ fn test_publish_module_insufficient_gas() {
         module_bytes,
         base_types::FastPayAddress::default(),
         &mut tx_context,
-        0,
+        GAS_BUDGET,
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
@@ -821,7 +821,7 @@ fn test_publish_module_linker_error() {
         module_bytes,
         base_types::FastPayAddress::default(),
         &mut tx_context,
-        0,
+        GAS_BUDGET,
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
@@ -864,7 +864,7 @@ fn test_publish_module_non_zero_address() {
         module_bytes,
         base_types::FastPayAddress::default(),
         &mut tx_context,
-        0,
+        GAS_BUDGET,
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
