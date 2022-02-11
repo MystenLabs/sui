@@ -22,7 +22,7 @@ const FAST_X: &str = "   _____ __  ______
 
 #[derive(StructOpt)]
 #[structopt(
-    name = "FastX Demo Wallet",
+    name = "Sui Demo Wallet",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
@@ -68,12 +68,12 @@ async fn main() -> Result<(), anyhow::Error> {
     if !options.no_shell {
         let app: App = WalletCommands::clap();
         println!("{}", FAST_X.cyan().bold());
-        print!("--- FastX");
+        print!("--- Sui");
         app.write_long_version(&mut io::stdout())?;
         println!(" ---");
         println!("{}", context.config);
         println!();
-        println!("Welcome to the FastX interactive shell.");
+        println!("Welcome to the Sui interactive shell.");
         println!();
 
         let mut shell = Shell {
