@@ -65,7 +65,7 @@ module FastX::Geniteam {
     ): Player {
         Player {
             id: TxContext::new_id(ctx),
-            ASCII:string(player_name),
+            player_name: ASCII::string(player_name),
             farm,
             water_runes_count: 0,
             fire_runes_count: 0,
@@ -79,7 +79,7 @@ module FastX::Geniteam {
     ): Farm {
         Farm {
             id: TxContext::new_id(ctx),
-            ASCII:string(farm_name),
+            farm_name: ASCII::string(farm_name),
             farm_img_id,
             level: 0,
             total_monster_slots,
@@ -101,11 +101,11 @@ module FastX::Geniteam {
 
         Monster {
             id: TxContext::new_id(ctx),
-            ASCII:string(monster_name),
+            monster_name: ASCII::string(monster_name),
             monster_img_id,
             breed,
             monster_affinity,
-            ASCII:string(monster_description),
+            monster_description: ASCII::string(monster_description),
             monster_level: 0,
             hunger_level: 0,
             affection_level: 0,
@@ -141,8 +141,8 @@ module FastX::Geniteam {
     public fun create_player(
         player_name: vector<u8>, farm_name: vector<u8>, farm_img_id: u64, total_monster_slots: u64, ctx: &mut TxContext
     ) {
-        let farm = create_farm_(ASCII::string(farm_name), farm_img_id, total_monster_slots, ctx);
-        let player = create_player_(ASCII::string(player_name), farm, ctx);
+        let farm = create_farm_(farm_name, farm_img_id, total_monster_slots, ctx);
+        let player = create_player_(player_name, farm, ctx);
         Transfer::transfer(player, TxContext::get_signer_address(ctx))
     }
 
@@ -171,11 +171,11 @@ module FastX::Geniteam {
         ctx: &mut TxContext
     ) {
         let monster = create_monster_(
-            ASCII::string(monster_name),
+            monster_name,
             monster_img_id,
             breed,
             monster_affinity,
-            ASCII::string(monster_description),
+            monster_description,
             ctx
         );
         Transfer::transfer(monster, TxContext::get_signer_address(ctx))
