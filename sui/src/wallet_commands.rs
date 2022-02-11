@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 use crate::config::{AccountInfo, AuthorityInfo, WalletConfig};
-use fastpay_core::authority_client::AuthorityClient;
-use fastpay_core::client::{Client, ClientState};
 use fastx_network::network::NetworkClient;
 use fastx_types::base_types::{
     decode_address_hex, encode_address_hex, get_key_pair, AuthorityName, ObjectID, PublicKeyBytes,
@@ -10,6 +8,8 @@ use fastx_types::base_types::{
 };
 use fastx_types::committee::Committee;
 use fastx_types::messages::{ExecutionStatus, OrderEffects};
+use sui_core::authority_client::AuthorityClient;
+use sui_core::client::{Client, ClientState};
 
 use crate::utils::Config;
 use fastx_types::error::SuiError;

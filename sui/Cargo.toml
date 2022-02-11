@@ -1,5 +1,5 @@
 [package]
-name = "fastpay"
+name = "sui"
 version = "0.1.0"
 authors = ["Libra <oncall+libra@xmail.facebook.com>"]
 license = "Apache-2.0"
@@ -30,7 +30,7 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 
 bcs = "0.1.3"
-fastpay_core = { path = "../fastpay_core" }
+sui_core = { path = "../sui_core" }
 fastx-adapter = { path = "../fastx_programmability/adapter" }
 fastx-network = { path = "../network_utils" }
 fastx-types = { path = "../fastx_types" }

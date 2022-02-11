@@ -1,7 +1,7 @@
 [workspace]
 members = [
-        "fastpay_core",
-        "fastpay",
+        "sui_core",
+        "sui",
         "fastx_programmability/adapter",
         "fastx_programmability/framework",
 	"fastx_types",

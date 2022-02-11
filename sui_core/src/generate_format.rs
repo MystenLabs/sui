@@ -38,7 +38,7 @@ struct Options {
     action: Action,
 }
 
-const FILE_PATH: &str = "fastpay_core/tests/staged/fastpay.yaml";
+const FILE_PATH: &str = "sui_core/tests/staged/sui.yaml";
 
 fn main() {
     let options = Options::from_args();

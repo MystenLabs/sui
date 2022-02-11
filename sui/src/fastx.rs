@@ -1,11 +1,5 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
-use fastpay::config::{
-    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, WalletConfig,
-};
-use fastpay::utils::Config;
-use fastpay_core::authority::{AuthorityState, AuthorityStore};
-use fastpay_core::authority_server::AuthorityServer;
 use fastx_types::base_types::{get_key_pair, ObjectID, SequenceNumber};
 use fastx_types::committee::Committee;
 use fastx_types::object::Object;
@@ -16,6 +10,10 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 use structopt::StructOpt;
+use sui::config::{AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, WalletConfig};
+use sui::utils::Config;
+use sui_core::authority::{AuthorityState, AuthorityStore};
+use sui_core::authority_server::AuthorityServer;
 use tracing::error;
 use tracing::subscriber::set_global_default;
 use tracing_subscriber::EnvFilter;
