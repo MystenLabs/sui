@@ -296,8 +296,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     let mut total_gas_used = gas_cost;
     let no_init_calls = modules_to_init.is_empty();
     if !no_init_calls {
-        // decrease the budget by the cost of package publishing
-        let mut current_gas_budget = gas_budget - gas_cost;
+        let mut current_gas_budget = gas_budget;
         for module_id in modules_to_init {
             let args = vec![ctx.to_vec()];
 
