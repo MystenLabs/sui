@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    error::{FastPayError, FastPayResult},
+    error::{SuiError, SuiResult},
     gas_coin::GasCoin,
     messages::{Order, OrderKind},
     object::Object,
@@ -12,7 +12,7 @@ use std::convert::TryFrom;
 macro_rules! ok_or_gas_error {
     ($cond:expr, $e:expr) => {
         if !($cond) {
-            Err(FastPayError::InsufficientGas { error: $e })
+            Err(SuiError::InsufficientGas { error: $e })
         } else {
             Ok(())
         }
@@ -23,7 +23,7 @@ pub const MIN_MOVE_CALL_GAS: u64 = 10;
 pub const MIN_MOVE_PUBLISH_GAS: u64 = 10;
 pub const MIN_OBJ_TRANSFER_GAS: u64 = 8;
 
-pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResult {
+pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> SuiResult {
     match &order.kind {
         OrderKind::Transfer(t) => {
             debug_assert_eq!(t.gas_payment.0, gas_object.id());
@@ -69,7 +69,7 @@ pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> FastPayResul
 }
 
 /// Try subtract the gas balance of \p gas_object by \p amount.
-pub fn try_deduct_gas(gas_object: &mut Object, amount: u64) -> FastPayResult {
+pub fn try_deduct_gas(gas_object: &mut Object, amount: u64) -> SuiResult {
     // The object must be a gas coin as we have checked in order handle phase.
     let gas_coin = GasCoin::try_from(&*gas_object).unwrap();
     let balance = gas_coin.value();
@@ -83,7 +83,7 @@ pub fn try_deduct_gas(gas_object: &mut Object, amount: u64) -> FastPayResult {
     Ok(())
 }
 
-pub fn check_gas_balance(gas_object: &Object, amount: u64) -> FastPayResult {
+pub fn check_gas_balance(gas_object: &Object, amount: u64) -> SuiResult {
     let balance = get_gas_balance(gas_object)?;
     ok_or_gas_error!(
         balance >= amount,
@@ -98,7 +98,7 @@ pub fn deduct_gas(gas_object: &mut Object, amount: u64) {
     try_deduct_gas(gas_object, amount).unwrap();
 }
 
-pub fn get_gas_balance(gas_object: &Object) -> FastPayResult<u64> {
+pub fn get_gas_balance(gas_object: &Object) -> SuiResult<u64> {
     Ok(GasCoin::try_from(gas_object)?.value())
 }
 

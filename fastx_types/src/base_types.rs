@@ -1,6 +1,6 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
-use crate::error::FastPayError;
+use crate::error::SuiError;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 
@@ -47,10 +47,10 @@ impl PublicKeyBytes {
         self.0.to_vec()
     }
 
-    pub fn to_public_key(&self) -> Result<PublicKey, FastPayError> {
+    pub fn to_public_key(&self) -> Result<PublicKey, SuiError> {
         // TODO(https://github.com/MystenLabs/fastnft/issues/101): Do better key validation
         // to ensure the bytes represent a point on the curve.
-        PublicKey::from_bytes(self.as_ref()).map_err(|_| FastPayError::InvalidAuthenticator)
+        PublicKey::from_bytes(self.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
     }
 
     // for testing
@@ -69,17 +69,17 @@ impl AsRef<[u8]> for PublicKeyBytes {
 
 // TODO(https://github.com/MystenLabs/fastnft/issues/101): more robust key validation
 impl TryFrom<&[u8]> for PublicKeyBytes {
-    type Error = FastPayError;
+    type Error = SuiError;
 
-    fn try_from(bytes: &[u8]) -> Result<Self, FastPayError> {
+    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
         let arr: [u8; dalek::PUBLIC_KEY_LENGTH] = bytes
             .try_into()
-            .map_err(|_| FastPayError::InvalidAuthenticator)?;
+            .map_err(|_| SuiError::InvalidAuthenticator)?;
         Ok(Self(arr))
     }
 }
 
-pub type FastPayAddress = PublicKeyBytes;
+pub type SuiAddress = PublicKeyBytes;
 pub type AuthorityName = PublicKeyBytes;
 
 // Define digests and object IDs. For now, ID's are the same as Move account addresses
@@ -98,12 +98,12 @@ pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 // Refer details to https://github.com/MystenLabs/fastnft/pull/292.
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, PartialOrd, Ord, Serialize, Hash)]
 pub enum Authenticator {
-    Address(FastPayAddress),
+    Address(SuiAddress),
     Object(ObjectID),
 }
 
 impl Authenticator {
-    pub fn is_address(&self, address: &FastPayAddress) -> bool {
+    pub fn is_address(&self, address: &SuiAddress) -> bool {
         match self {
             Self::Address(addr) => addr == address,
             Self::Object(_) => false,
@@ -142,7 +142,7 @@ pub struct TxContext {
 }
 
 impl TxContext {
-    pub fn new(sender: &FastPayAddress, digest: TransactionDigest) -> Self {
+    pub fn new(sender: &SuiAddress, digest: TransactionDigest) -> Self {
         Self {
             sender: sender.to_vec(),
             digest: digest.0.to_vec(),
@@ -171,9 +171,9 @@ impl TxContext {
     /// when mutable context is passed over some boundary via
     /// serialize/deserialize and this is the reason why this method
     /// consumes the other contex..
-    pub fn update_state(&mut self, other: TxContext) -> Result<(), FastPayError> {
+    pub fn update_state(&mut self, other: TxContext) -> Result<(), SuiError> {
         if self.sender != other.sender || self.digest != other.digest {
-            return Err(FastPayError::InvalidTxUpdate);
+            return Err(SuiError::InvalidTxUpdate);
         }
         self.ids_created = other.ids_created;
         Ok(())
@@ -182,7 +182,7 @@ impl TxContext {
     // for testing
     pub fn random_for_testing_only() -> Self {
         Self::new(
-            &FastPayAddress::random_for_testing_only(),
+            &SuiAddress::random_for_testing_only(),
             TransactionDigest::random(),
         )
     }
@@ -235,13 +235,13 @@ impl ObjectDigest {
 }
 
 // TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
-pub fn get_key_pair() -> (FastPayAddress, KeyPair) {
+pub fn get_key_pair() -> (SuiAddress, KeyPair) {
     let mut csprng = OsRng;
     let keypair = dalek::Keypair::generate(&mut csprng);
     (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
 }
 
-pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (FastPayAddress, KeyPair) {
+pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, KeyPair) {
     let keypair = dalek::Keypair::from_bytes(bytes).unwrap();
     (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
 }
@@ -328,7 +328,7 @@ pub fn decode_address(s: &str) -> Result<PublicKeyBytes, anyhow::Error> {
     Ok(PublicKeyBytes(address))
 }
 
-pub fn dbg_addr(name: u8) -> FastPayAddress {
+pub fn dbg_addr(name: u8) -> SuiAddress {
     let addr = [name; dalek::PUBLIC_KEY_LENGTH];
     PublicKeyBytes(addr)
 }
@@ -433,10 +433,10 @@ impl SequenceNumber {
         Self(self.0 + 1)
     }
 
-    pub fn decrement(self) -> Result<SequenceNumber, FastPayError> {
+    pub fn decrement(self) -> Result<SequenceNumber, SuiError> {
         let val = self.0.checked_sub(1);
         match val {
-            None => Err(FastPayError::SequenceUnderflow),
+            None => Err(SuiError::SequenceUnderflow),
             Some(val) => Ok(Self(val)),
         }
     }
@@ -494,7 +494,7 @@ impl Signature {
         Signature(signature)
     }
 
-    pub fn check<T>(&self, value: &T, author: FastPayAddress) -> Result<(), FastPayError>
+    pub fn check<T>(&self, value: &T, author: SuiAddress) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>,
     {
@@ -503,7 +503,7 @@ impl Signature {
         let public_key = author.to_public_key()?;
         public_key
             .verify(&message, &self.0)
-            .map_err(|error| FastPayError::InvalidSignature {
+            .map_err(|error| SuiError::InvalidSignature {
                 error: format!("{}", error),
             })
     }
@@ -512,10 +512,10 @@ impl Signature {
         value: &'a T,
         votes: I,
         key_cache: &HashMap<PublicKeyBytes, PublicKey>,
-    ) -> Result<(), FastPayError>
+    ) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>,
-        I: IntoIterator<Item = &'a (FastPayAddress, Signature)>,
+        I: IntoIterator<Item = &'a (SuiAddress, Signature)>,
     {
         let mut msg = Vec::new();
         value.write(&mut msg);
@@ -531,7 +531,7 @@ impl Signature {
             }
         }
         dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..]).map_err(|error| {
-            FastPayError::InvalidSignature {
+            SuiError::InvalidSignature {
                 error: format!("{}", error),
             }
         })
@@ -546,12 +546,12 @@ pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
 }
 
 impl TryFrom<&[u8]> for TransactionDigest {
-    type Error = FastPayError;
+    type Error = SuiError;
 
-    fn try_from(bytes: &[u8]) -> Result<Self, FastPayError> {
+    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
         let arr: [u8; TRANSACTION_DIGEST_LENGTH] = bytes
             .try_into()
-            .map_err(|_| FastPayError::InvalidTransactionDigest)?;
+            .map_err(|_| SuiError::InvalidTransactionDigest)?;
         Ok(Self(arr))
     }
 }

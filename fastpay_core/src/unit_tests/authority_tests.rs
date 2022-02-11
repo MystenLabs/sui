@@ -164,7 +164,7 @@ async fn test_handle_transfer_order_unknown_sender() {
 fn test_handle_transfer_order_bad_sequence_number() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = random_object_id();
-    let recipient = Address::FastPay(dbg_addr(2));
+    let recipient = Address::Sui(dbg_addr(2));
     let authority_state = init_state_with_object(sender, object_id);
     let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
 
@@ -304,7 +304,7 @@ async fn test_handle_transfer_zero_balance() {
 async fn send_and_confirm_order(
     authority: &AuthorityState,
     order: Order,
-) -> Result<OrderInfoResponse, FastPayError> {
+) -> Result<OrderInfoResponse, SuiError> {
     // Make the initial request
     let response = authority.handle_order(order.clone()).await?;
     let vote = response.signed_order.unwrap();
@@ -645,11 +645,11 @@ async fn test_handle_confirmation_order_unknown_sender() {
 
     let object = Object::with_id_owner_for_testing(
         ObjectID::random(),
-        FastPayAddress::random_for_testing_only(),
+        SuiAddress::random_for_testing_only(),
     );
     let gas_object = Object::with_id_owner_for_testing(
         ObjectID::random(),
-        FastPayAddress::random_for_testing_only(),
+        SuiAddress::random_for_testing_only(),
     );
 
     let certified_transfer_order = init_certified_transfer_order(
@@ -1655,7 +1655,7 @@ async fn init_state() -> AuthorityState {
 }
 
 #[cfg(test)]
-async fn init_state_with_ids<I: IntoIterator<Item = (FastPayAddress, ObjectID)>>(
+async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
     objects: I,
 ) -> AuthorityState {
     let state = init_state().await;
@@ -1681,15 +1681,15 @@ async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> 
 }
 
 #[cfg(test)]
-async fn init_state_with_object_id(address: FastPayAddress, object: ObjectID) -> AuthorityState {
+async fn init_state_with_object_id(address: SuiAddress, object: ObjectID) -> AuthorityState {
     init_state_with_ids(std::iter::once((address, object))).await
 }
 
 #[cfg(test)]
 fn init_transfer_order(
-    sender: FastPayAddress,
+    sender: SuiAddress,
     secret: &KeyPair,
-    recipient: FastPayAddress,
+    recipient: SuiAddress,
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Order {
@@ -1704,9 +1704,9 @@ fn init_transfer_order(
 
 #[cfg(test)]
 fn init_certified_transfer_order(
-    sender: FastPayAddress,
+    sender: SuiAddress,
     secret: &KeyPair,
-    recipient: FastPayAddress,
+    recipient: SuiAddress,
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
     authority_state: &AuthorityState,
@@ -1752,7 +1752,7 @@ async fn call_move(
     type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
-) -> FastPayResult<OrderEffects> {
+) -> SuiResult<OrderEffects> {
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().to_object_reference();
     let mut object_args = vec![];
@@ -1792,7 +1792,7 @@ async fn call_framework_code(
     type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
-) -> FastPayResult<OrderEffects> {
+) -> SuiResult<OrderEffects> {
     let (genesis_package_objects, _) = genesis::clone_genesis_data();
     let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
 
@@ -1816,7 +1816,7 @@ async fn create_move_object(
     gas_object_id: &ObjectID,
     sender: &PublicKeyBytes,
     sender_key: &KeyPair,
-) -> FastPayResult<OrderEffects> {
+) -> SuiResult<OrderEffects> {
     call_framework_code(
         authority,
         gas_object_id,

@@ -50,7 +50,7 @@ impl MessageHandler for AuthorityServer {
         Box::pin(async move {
             let result = deserialize_message(buffer);
             let reply = match result {
-                Err(_) => Err(FastPayError::InvalidDecoding),
+                Err(_) => Err(SuiError::InvalidDecoding),
                 Ok(result) => {
                     match result {
                         SerializedMessage::Order(message) => self
@@ -89,7 +89,7 @@ impl MessageHandler for AuthorityServer {
                             .handle_order_info_request(*message)
                             .await
                             .map(|info| Some(serialize_order_info(&info))),
-                        _ => Err(FastPayError::UnexpectedMessage),
+                        _ => Err(SuiError::UnexpectedMessage),
                     }
                 }
             };

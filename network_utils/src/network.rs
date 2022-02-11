@@ -46,9 +46,9 @@ impl NetworkClient {
         time::timeout(self.recv_timeout, stream.read_data()).await?
     }
 
-    pub async fn send_recv_bytes(&self, buf: Vec<u8>) -> Result<SerializedMessage, FastPayError> {
+    pub async fn send_recv_bytes(&self, buf: Vec<u8>) -> Result<SerializedMessage, SuiError> {
         match self.send_recv_bytes_internal(buf).await {
-            Err(error) => Err(FastPayError::ClientIoError {
+            Err(error) => Err(SuiError::ClientIoError {
                 error: format!("{}", error),
             }),
             Ok(response) => {
@@ -56,8 +56,8 @@ impl NetworkClient {
                 match deserialize_message(&response[..]) {
                     Ok(SerializedMessage::Error(error)) => Err(*error),
                     Ok(message) => Ok(message),
-                    Err(_) => Err(FastPayError::InvalidDecoding),
-                    // _ => Err(FastPayError::UnexpectedMessage),
+                    Err(_) => Err(SuiError::InvalidDecoding),
+                    // _ => Err(SuiError::UnexpectedMessage),
                 }
             }
         }

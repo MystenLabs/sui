@@ -4,7 +4,7 @@
 use crate::{adapter, genesis};
 use fastx_types::{
     base_types::{self, SequenceNumber},
-    error::FastPayResult,
+    error::SuiResult,
     gas_coin::GAS,
     object::Data,
     storage::Storage,
@@ -172,7 +172,7 @@ fn call(
     type_args: Vec<TypeTag>,
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
-) -> FastPayResult<ExecutionStatus> {
+) -> SuiResult<ExecutionStatus> {
     let package = storage.find_package(module_name).unwrap();
 
     let vm = adapter::new_move_vm(native_functions.clone()).expect("No errors");
@@ -202,10 +202,8 @@ fn test_object_basics() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        base_types::FastPayAddress::default(),
-    );
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
     storage.write_object(gas_object.clone());
     storage.flush();
 
@@ -363,7 +361,7 @@ fn test_object_basics() {
 /// Ensure that the object's version is consistent
 #[test]
 fn test_wrap_unwrap() {
-    let addr = base_types::FastPayAddress::default();
+    let addr = base_types::SuiAddress::default();
 
     let (genesis_objects, native_functions) = genesis::clone_genesis_data();
     let mut storage = InMemoryStorage::new(genesis_objects);
@@ -467,10 +465,8 @@ fn test_move_call_insufficient_gas() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        base_types::FastPayAddress::default(),
-    );
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
     storage.write_object(gas_object.clone());
     storage.flush();
 
@@ -507,7 +503,7 @@ fn test_publish_module_insufficient_gas() {
     let gas_object = Object::with_id_owner_gas_for_testing(
         ObjectID::random(),
         SequenceNumber::from(1),
-        base_types::FastPayAddress::default(),
+        base_types::SuiAddress::default(),
         30,
     );
     storage.write_object(gas_object.clone());
@@ -524,7 +520,7 @@ fn test_publish_module_insufficient_gas() {
         &mut storage,
         natives,
         module_bytes,
-        base_types::FastPayAddress::default(),
+        base_types::SuiAddress::default(),
         &mut tx_context,
         GAS_BUDGET,
         gas_object,
@@ -547,10 +543,8 @@ fn test_transfer_and_freeze() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        base_types::FastPayAddress::default(),
-    );
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
     storage.write_object(gas_object.clone());
     storage.flush();
 
@@ -652,10 +646,8 @@ fn test_move_call_args_type_mismatch() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        base_types::FastPayAddress::default(),
-    );
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
     storage.write_object(gas_object.clone());
     storage.flush();
 
@@ -711,10 +703,8 @@ fn test_move_call_incorrect_function() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        base_types::FastPayAddress::default(),
-    );
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
     storage.write_object(gas_object.clone());
     storage.flush();
 
@@ -779,10 +769,8 @@ fn test_publish_module_linker_error() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        base_types::FastPayAddress::default(),
-    );
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
     storage.write_object(gas_object.clone());
     storage.flush();
 
@@ -819,7 +807,7 @@ fn test_publish_module_linker_error() {
         &mut storage,
         natives,
         module_bytes,
-        base_types::FastPayAddress::default(),
+        base_types::SuiAddress::default(),
         &mut tx_context,
         GAS_BUDGET,
         gas_object,
@@ -840,10 +828,8 @@ fn test_publish_module_non_zero_address() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        base_types::FastPayAddress::default(),
-    );
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
     storage.write_object(gas_object.clone());
     storage.flush();
 
@@ -862,7 +848,7 @@ fn test_publish_module_non_zero_address() {
         &mut storage,
         natives,
         module_bytes,
-        base_types::FastPayAddress::default(),
+        base_types::SuiAddress::default(),
         &mut tx_context,
         GAS_BUDGET,
         gas_object,
@@ -876,7 +862,7 @@ fn test_publish_module_non_zero_address() {
 
 #[test]
 fn test_coin_transfer() {
-    let addr = base_types::FastPayAddress::default();
+    let addr = base_types::SuiAddress::default();
 
     let (genesis_objects, native_functions) = genesis::clone_genesis_data();
 
@@ -946,7 +932,7 @@ fn publish_from_src(
         storage,
         natives.clone(),
         all_module_bytes,
-        base_types::FastPayAddress::default(),
+        base_types::SuiAddress::default(),
         &mut tx_context,
         gas_budget,
         gas_object,
@@ -960,10 +946,8 @@ fn test_simple_call() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        base_types::FastPayAddress::default(),
-    );
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
 
     // publish modules at a given path
     publish_from_src(
@@ -1021,10 +1005,8 @@ fn test_publish_init() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        base_types::FastPayAddress::default(),
-    );
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
 
     // publish modules at a given path
     publish_from_src(
@@ -1060,10 +1042,8 @@ fn test_publish_init_public() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        base_types::FastPayAddress::default(),
-    );
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
 
     // publish modules at a given path
     publish_from_src(
@@ -1086,10 +1066,8 @@ fn test_publish_init_ret() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        base_types::FastPayAddress::default(),
-    );
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
 
     // publish modules at a given path
     publish_from_src(
@@ -1112,10 +1090,8 @@ fn test_publish_init_param() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
-    let gas_object = Object::with_id_owner_for_testing(
-        ObjectID::random(),
-        base_types::FastPayAddress::default(),
-    );
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
 
     // publish modules at a given path
     publish_from_src(

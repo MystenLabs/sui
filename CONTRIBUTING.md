@@ -10,7 +10,7 @@ $ cargo test
 
 ## Coding Guidelines for Rust code
 
-For detailed guidance on how to contribute to the Rust code in the Fastpay repository refer to [Coding Guidelines](https://developers.libra.org/docs/coding-guidelines).
+For detailed guidance on how to contribute to the Rust code in the Sui repository refer to [Coding Guidelines](https://developers.libra.org/docs/coding-guidelines).
 
 ## Pull Requests
 

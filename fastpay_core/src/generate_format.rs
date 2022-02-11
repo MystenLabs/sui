@@ -14,7 +14,7 @@ fn get_registry() -> Result<Registry> {
 
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<messages::Address>(&samples)?;
-    tracer.trace_type::<error::FastPayError>(&samples)?;
+    tracer.trace_type::<error::SuiError>(&samples)?;
     tracer.trace_type::<serialize::SerializedMessage>(&samples)?;
     tracer.registry()
 }
@@ -30,8 +30,8 @@ enum Action {
 
 #[derive(Debug, StructOpt)]
 #[structopt(
-    name = "FastPay format generator",
-    about = "Trace serde (de)serialization to generate format descriptions for FastPay types"
+    name = "Sui format generator",
+    about = "Trace serde (de)serialization to generate format descriptions for Sui types"
 )]
 struct Options {
     #[structopt(possible_values = &Action::variants(), default_value = "Print", case_insensitive = true)]

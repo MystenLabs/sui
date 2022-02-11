@@ -18,7 +18,7 @@ use std::{
 use tokio::runtime::Runtime;
 use typed_store::Map;
 
-use fastx_types::error::FastPayError::ObjectNotFound;
+use fastx_types::error::SuiError::ObjectNotFound;
 use move_core_types::account_address::AccountAddress;
 use std::env;
 use std::fs;
@@ -43,7 +43,7 @@ struct LocalAuthorityClient(Arc<Mutex<AuthorityState>>);
 
 #[async_trait]
 impl AuthorityAPI for LocalAuthorityClient {
-    async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
+    async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, SuiError> {
         let state = self.0.clone();
         let result = state.lock().await.handle_order(order).await;
         result
@@ -52,7 +52,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_confirmation_order(
         &self,
         order: ConfirmationOrder,
-    ) -> Result<OrderInfoResponse, FastPayError> {
+    ) -> Result<OrderInfoResponse, SuiError> {
         let state = self.0.clone();
         let result = state.lock().await.handle_confirmation_order(order).await;
         result
@@ -61,7 +61,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, FastPayError> {
+    ) -> Result<AccountInfoResponse, SuiError> {
         let state = self.0.clone();
 
         let result = state
@@ -75,7 +75,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, FastPayError> {
+    ) -> Result<ObjectInfoResponse, SuiError> {
         let state = self.0.clone();
         let x = state.lock().await.handle_object_info_request(request).await;
         x
@@ -85,7 +85,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_order_info_request(
         &self,
         request: OrderInfoRequest,
-    ) -> Result<OrderInfoResponse, FastPayError> {
+    ) -> Result<OrderInfoResponse, SuiError> {
         let state = self.0.clone();
 
         let result = state.lock().await.handle_order_info_request(request).await;
@@ -134,9 +134,9 @@ async fn extract_cert(
 
 #[cfg(test)]
 fn order_create(
-    src: FastPayAddress,
+    src: SuiAddress,
     secret: &dyn signature::Signer<ed25519_dalek::Signature>,
-    dest: FastPayAddress,
+    dest: SuiAddress,
     value: u64,
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
@@ -163,9 +163,9 @@ fn order_create(
 
 #[cfg(test)]
 fn order_transfer(
-    src: FastPayAddress,
+    src: SuiAddress,
     secret: &dyn signature::Signer<ed25519_dalek::Signature>,
-    dest: FastPayAddress,
+    dest: SuiAddress,
     object_ref: ObjectRef,
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
@@ -188,7 +188,7 @@ fn order_transfer(
 
 #[cfg(test)]
 fn order_set(
-    src: FastPayAddress,
+    src: SuiAddress,
     secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     object_ref: ObjectRef,
     value: u64,
@@ -213,7 +213,7 @@ fn order_set(
 
 #[cfg(test)]
 fn order_delete(
-    src: FastPayAddress,
+    src: SuiAddress,
     secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     object_ref: ObjectRef,
     framework_obj_ref: ObjectRef,
@@ -469,7 +469,7 @@ fn test_initiating_valid_transfer() {
         .unwrap();
     assert_eq!(
         sender.next_sequence_number(&object_id_1),
-        Err(FastPayError::ObjectNotFound {
+        Err(SuiError::ObjectNotFound {
             object_id: object_id_1
         })
     );
@@ -1393,7 +1393,7 @@ fn test_transfer_object_error() {
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err().downcast_ref(),
-        Some(FastPayError::ObjectNotFound { .. })
+        Some(SuiError::ObjectNotFound { .. })
     ));
 
     // Test 2: Object not known to authorities
@@ -1445,7 +1445,7 @@ fn test_transfer_object_error() {
     // Fabricate a fake pending transfer
     let transfer = Transfer {
         sender: sender.address(),
-        recipient: FastPayAddress::random_for_testing_only(),
+        recipient: SuiAddress::random_for_testing_only(),
         object_ref: (object_id, Default::default(), ObjectDigest::new([0; 32])),
         gas_payment: (gas_object, Default::default(), ObjectDigest::new([0; 32])),
     };
@@ -1686,12 +1686,12 @@ async fn test_map_reducer() {
             0usize,
             |_name, _client| Box::pin(async move { Ok(()) }),
             |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(async move { Err(FastPayError::TooManyIncorrectAuthorities) })
+                Box::pin(async move { Err(SuiError::TooManyIncorrectAuthorities) })
             },
             Duration::from_millis(1000),
         )
         .await;
-    assert!(Err(FastPayError::TooManyIncorrectAuthorities) == res);
+    assert!(Err(SuiError::TooManyIncorrectAuthorities) == res);
 
     // Test: mapper errors do not get propagated up, reducer works
     let res = client1
@@ -1700,14 +1700,13 @@ async fn test_map_reducer() {
             0usize,
             |_name, _client| {
                 Box::pin(async move {
-                    let res: Result<usize, FastPayError> =
-                        Err(FastPayError::TooManyIncorrectAuthorities);
+                    let res: Result<usize, SuiError> = Err(SuiError::TooManyIncorrectAuthorities);
                     res
                 })
             },
             |mut accumulated_state, _authority_name, _authority_weight, result| {
                 Box::pin(async move {
-                    assert!(Err(FastPayError::TooManyIncorrectAuthorities) == result);
+                    assert!(Err(SuiError::TooManyIncorrectAuthorities) == result);
                     accumulated_state += 1;
                     Ok(ReduceOutput::Continue(accumulated_state))
                 })
@@ -1751,7 +1750,7 @@ async fn test_map_reducer() {
                 })
             },
             |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(async move { Err(FastPayError::TooManyIncorrectAuthorities) })
+                Box::pin(async move { Err(SuiError::TooManyIncorrectAuthorities) })
             },
             Duration::from_millis(10),
         )
@@ -2242,7 +2241,7 @@ async fn test_transfer_pending_orders() {
         .await;
     assert!(result.is_err());
     // assert!(matches!(result.unwrap_err().downcast_ref(),
-    //        Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::ObjectNotFound{..}, ..])));
+    //        Some(SuiError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [SuiError::ObjectNotFound{..}, ..])));
     // Pending order should be cleared
     assert!(sender_state.store().pending_orders.is_empty());
 
@@ -2264,7 +2263,7 @@ async fn test_transfer_pending_orders() {
         .await;
     assert!(result.is_err());
     //assert!(matches!(result.unwrap_err().downcast_ref(),
-    //        Some(FastPayError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [FastPayError::LockErrors{..}, ..])));
+    //        Some(SuiError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [SuiError::LockErrors{..}, ..])));
 
     // Pending order should be cleared
     assert!(sender_state.store().pending_orders.is_empty());
@@ -2274,7 +2273,7 @@ async fn test_transfer_pending_orders() {
     // Fabricate a fake pending transfer
     let transfer = Transfer {
         sender: sender_state.address(),
-        recipient: FastPayAddress::random_for_testing_only(),
+        recipient: SuiAddress::random_for_testing_only(),
         object_ref: (object_id, Default::default(), ObjectDigest::new([0; 32])),
         gas_payment: (gas_object, Default::default(), ObjectDigest::new([0; 32])),
     };
@@ -2292,7 +2291,7 @@ async fn test_transfer_pending_orders() {
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err().downcast_ref(),
-        Some(FastPayError::ConcurrentTransactionError)
+        Some(SuiError::ConcurrentTransactionError)
     ));
     // clear the pending orders
     sender_state.store().pending_orders.clear().unwrap();
