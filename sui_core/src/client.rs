@@ -31,12 +31,58 @@ use std::{
 pub type StableSyncSigner = Pin<Box<dyn signature::Signer<ed25519_dalek::Signature> + Send + Sync>>;
 
 pub mod client_store;
-use self::client_store::ClientStore;
 
 #[cfg(test)]
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
+
+pub struct ClientAddressManager<A> {
+    store: client_store::ClientAddressManagerStore,
+    address_states: BTreeMap<SuiAddress, ClientState<A>>,
+}
+impl<A> ClientAddressManager<A> {
+    /// Create a new manager which stores its managed addresses at `path`
+    pub fn new(path: PathBuf) -> Result<Self, SuiError> {
+        Ok(Self {
+            store: client_store::ClientAddressManagerStore::open(path),
+            address_states: BTreeMap::new(),
+        })
+    }
+
+    /// Get (if exists) or create a new managed address state
+    pub fn get_or_create_state_mut(
+        &mut self,
+        address: SuiAddress,
+        secret: StableSyncSigner,
+        committee: Committee,
+        authority_clients: BTreeMap<AuthorityName, A>,
+    ) -> Result<&mut ClientState<A>, SuiError> {
+        if let std::collections::btree_map::Entry::Vacant(e) = self.address_states.entry(address) {
+            // Load the records if available
+            let single_store = if self.store.is_managed_address(address)? {
+                // Unwrap is okay since we checked cond
+                self.store.get_managed_address(address)
+            } else {
+                self.store.manage_new_address(address)
+            }?;
+            e.insert(ClientState::new_for_manager(
+                address,
+                secret,
+                committee,
+                authority_clients,
+                single_store,
+            )?);
+        }
+
+        return Ok(self.address_states.get_mut(&address).unwrap());
+    }
+
+    /// Get all the states
+    pub fn get_managed_address_states(&self) -> &BTreeMap<PublicKeyBytes, ClientState<A>> {
+        &self.address_states
+    }
+}
 
 pub struct ClientState<AuthorityAPI> {
     /// Our Sui address.
@@ -46,7 +92,7 @@ pub struct ClientState<AuthorityAPI> {
     /// Authority entry point.
     authorities: AuthorityAggregator<AuthorityAPI>,
     /// Persistent store for client
-    store: ClientStore,
+    store: client_store::ClientSingleAddressStore,
 }
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
@@ -102,6 +148,7 @@ impl<A> ClientState<A> {
     /// right after constructor to fetch missing info form authorities
     /// TODO: client should manage multiple addresses instead of each addr having DBs
     /// https://github.com/MystenLabs/fastnft/issues/332
+    #[cfg(test)]
     pub fn new(
         path: PathBuf,
         address: SuiAddress,
@@ -113,7 +160,22 @@ impl<A> ClientState<A> {
             address,
             secret,
             authorities: AuthorityAggregator::new(committee, authority_clients),
-            store: ClientStore::new(path),
+            store: client_store::ClientSingleAddressStore::new(path),
+        })
+    }
+
+    pub fn new_for_manager(
+        address: SuiAddress,
+        secret: StableSyncSigner,
+        committee: Committee,
+        authority_clients: BTreeMap<AuthorityName, A>,
+        store: client_store::ClientSingleAddressStore,
+    ) -> Result<Self, SuiError> {
+        Ok(ClientState {
+            address,
+            secret,
+            authorities: AuthorityAggregator::new(committee, authority_clients),
+            store,
         })
     }
 
@@ -216,7 +278,7 @@ impl<A> ClientState<A> {
     }
 
     #[cfg(test)]
-    pub fn store(&self) -> &ClientStore {
+    pub fn store(&self) -> &client_store::ClientSingleAddressStore {
         &self.store
     }
 

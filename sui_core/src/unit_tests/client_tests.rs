@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::authority::{AuthorityState, AuthorityStore};
-use crate::client::client_store::ClientStore;
+use crate::client::client_store::ClientSingleAddressStore;
 use crate::client::{Client, ClientState};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -1462,8 +1462,9 @@ fn test_transfer_object_error() {
 
 #[test]
 fn test_client_store() {
-    let store =
-        ClientStore::new(env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())));
+    let store = ClientSingleAddressStore::new(
+        env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
+    );
 
     // Make random sequence numbers
     let keys_vals = (0..100)
@@ -2296,4 +2297,73 @@ async fn test_transfer_pending_orders() {
     // clear the pending orders
     sender_state.store().pending_orders.clear().unwrap();
     assert_eq!(sender_state.store().pending_orders.iter().count(), 0);
+}
+
+#[tokio::test]
+async fn test_address_manager() {
+    let mut address_manager: crate::client::ClientAddressManager<LocalAuthorityClient> =
+        crate::client::ClientAddressManager::new(std::path::PathBuf::from("TEST_PATH")).unwrap();
+
+    // Ensure nothing being managed
+    assert!(address_manager.get_managed_address_states().is_empty());
+
+    // Try adding new addresses to manage
+    let (address, secret) = get_key_pair();
+    let secret2 = secret.copy();
+    let secret = Box::pin(secret);
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let gas_object1 = ObjectID::random();
+    let gas_object2 = ObjectID::random();
+    let client1 = address_manager
+        .get_or_create_state_mut(
+            address,
+            secret,
+            committee.clone(),
+            authority_clients.clone(),
+        )
+        .unwrap();
+    fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        client1,
+        vec![gas_object1, gas_object2],
+    )
+    .await;
+
+    client1.sync_client_state().await.unwrap();
+    client1.download_owned_objects_not_in_db().await.unwrap();
+
+    // Confirm expected behavior
+    assert_eq!(client1.store().objects.iter().count(), 2);
+    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let sample_auth = &authority_clients.iter().next().unwrap().1;
+
+    // Make a transaction
+    let gas_ref_1 = get_latest_ref(sample_auth, gas_object1).await;
+    let pure_args = vec![
+        bcs::to_bytes(&100u64).unwrap(),
+        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+    ];
+    let call_response = client1
+        .move_call(
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_ref_1,
+            Vec::new(),
+            pure_args,
+            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+        )
+        .await;
+
+    // Check effects are good
+    let (_, order_effects) = call_response.unwrap();
+    // Status flag should be success
+    assert!(matches!(
+        order_effects.status,
+        ExecutionStatus::Success { .. }
+    ));
+
+    assert_eq!(order_effects.created.len(), 1);
+    assert_eq!(client1.store().objects.iter().count(), 4);
 }
