@@ -248,16 +248,13 @@ impl WalletCommands {
             }
 
             WalletCommands::Addresses => {
-                let addr_strings = context
-                    .address_manager
-                    .get_managed_address_states()
-                    .iter()
-                    .map(|(a, _)| encode_address_hex(a))
-                    .collect::<Vec<_>>();
-
-                let addr_text = addr_strings.join("\n");
-                info!("Showing {} results.", addr_strings.len());
-                info!("{}", addr_text);
+                info!(
+                    "Showing {} results.",
+                    context.address_manager.get_managed_address_states().len()
+                );
+                for address in context.address_manager.get_managed_address_states().keys() {
+                    info!("{}", encode_address_hex(address));
+                }
             }
 
             WalletCommands::Objects { address } => {
@@ -281,7 +278,7 @@ impl WalletCommands {
                 });
                 context.config.save()?;
                 // Create an address to be managed
-                let _ = context.get_or_create_client_state(&address)?;
+                context.get_or_create_client_state(&address)?;
                 info!(
                     "Created new keypair for address : {}",
                     encode_address_hex(&address)
@@ -300,10 +297,20 @@ pub struct WalletContext {
 impl WalletContext {
     pub fn new(config: WalletConfig) -> Result<Self, anyhow::Error> {
         let path = config.db_folder_path.clone();
-        Ok(Self {
+        let addresses = config
+            .accounts
+            .iter()
+            .map(|info| info.address)
+            .collect::<Vec<_>>();
+        let mut context = Self {
             config,
             address_manager: ClientAddressManager::new(path)?,
-        })
+        };
+        // Pre-populate client state for each address in the config.
+        for address in addresses {
+            context.get_or_create_client_state(&address)?;
+        }
+        Ok(context)
     }
 
     fn get_or_create_client_state(
