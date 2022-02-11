@@ -1165,7 +1165,9 @@ async fn test_get_latest_parent_entry() {
     // The objects just after the gas object also returns None
     let mut x = gas_object_id.to_vec();
     let last_index = x.len() - 1;
-    x[last_index] += 1;
+    // Prevent overflow
+    let v = x[last_index];
+    x[last_index] = if v == u8::MAX { v - 1 } else { v + 1 };
     let unknown_object_id: ObjectID = x.try_into().unwrap();
     assert!(authority_state
         .get_latest_parent_entry(unknown_object_id)
