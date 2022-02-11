@@ -5,6 +5,7 @@ use move_core_types::{
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
+    value::MoveStructLayout,
 };
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
@@ -68,6 +69,10 @@ impl GasCoin {
 
     pub fn to_object(&self) -> MoveObject {
         MoveObject::new(Self::type_(), self.to_bcs_bytes())
+    }
+
+    pub fn layout() -> MoveStructLayout {
+        Coin::layout(Self::type_())
     }
 }
 impl TryFrom<&MoveObject> for GasCoin {

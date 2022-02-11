@@ -5,6 +5,7 @@ use move_core_types::{
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
+    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
 use serde::{Deserialize, Serialize};
 
@@ -52,5 +53,18 @@ impl Coin {
 
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
         bcs::to_bytes(&self).unwrap()
+    }
+
+    pub fn layout(type_param: StructTag) -> MoveStructLayout {
+        MoveStructLayout::WithTypes {
+            type_: Self::type_(type_param),
+            fields: vec![
+                MoveFieldLayout::new(
+                    ident_str!("id").to_owned(),
+                    MoveTypeLayout::Struct(ID::layout()),
+                ),
+                MoveFieldLayout::new(ident_str!("value").to_owned(), MoveTypeLayout::U64),
+            ],
+        }
     }
 }

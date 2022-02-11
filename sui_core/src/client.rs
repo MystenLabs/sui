@@ -578,7 +578,7 @@ where
             .sync_all_owned_objects(self.address, Duration::from_secs(60))
             .await?;
 
-        for (object, option_cert) in active_object_certs {
+        for (object, option_layout, option_cert) in active_object_certs {
             let object_ref = object.to_object_reference();
             let (object_id, sequence_number, _) = object_ref;
             self.store
@@ -589,6 +589,13 @@ where
                 self.store
                     .certificates
                     .insert(&cert.order.digest(), &cert)?;
+            }
+            // Save the object layout, if any
+            if let Some(layout) = option_layout {
+                if let Some(type_) = object.type_() {
+                    // TODO: sanity check to add: if we're overwriting an old layout, it should be the same as the new one
+                    self.store.object_layouts.insert(type_, &layout)?;
+                }
             }
         }
 

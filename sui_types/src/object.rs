@@ -219,17 +219,28 @@ impl Data {
     /// Convert `self` to the JSON representation dictated by `format`.
     /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
     /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
-    pub fn to_json(
+    pub fn to_json_with_resolver(
         &self,
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
     ) -> Result<Value, SuiError> {
+        let layout = match self {
+            Data::Move(m) => Some(m.get_layout(format, resolver)?),
+            Data::Package(_) => None,
+        };
+        self.to_json(&layout)
+    }
+
+    /// Convert `self` to the JSON representation dictated by `format`.
+    /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
+    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
+    pub fn to_json(&self, layout: &Option<MoveStructLayout>) -> Result<Value, SuiError> {
         use Data::*;
         match self {
-            Move(m) => {
-                let layout = m.get_layout(format, resolver)?;
-                m.to_json(&layout)
-            }
+            Move(m) => match layout {
+                Some(l) => m.to_json(l),
+                None => Err(SuiError::ObjectSerializationError),
+            },
             Package(p) => {
                 let mut disassembled = serde_json::Map::new();
                 for (name, bytecode) in p {
@@ -300,6 +311,11 @@ impl Object {
             Data::Move(m) => m.is_read_only(),
             Data::Package(_) => true,
         }
+    }
+
+    /// Return true if this object is a Move package, false if it is a Move value
+    pub fn is_package(&self) -> bool {
+        matches!(&self.data, Data::Package(_))
     }
 
     pub fn to_object_reference(&self) -> ObjectRef {
@@ -418,12 +434,8 @@ impl Object {
     /// Convert `self` to the JSON representation dictated by `format`.
     /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
     /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
-    pub fn to_json(
-        &self,
-        format: ObjectFormatOptions,
-        resolver: &impl GetModule,
-    ) -> Result<Value, SuiError> {
-        let contents = self.data.to_json(format, resolver)?;
+    pub fn to_json(&self, layout: &Option<MoveStructLayout>) -> Result<Value, SuiError> {
+        let contents = self.data.to_json(layout)?;
         let owner =
             serde_json::to_value(&self.owner).map_err(|_e| SuiError::ObjectSerializationError)?;
         let previous_transaction = serde_json::to_value(&self.previous_transaction)
@@ -432,30 +444,41 @@ impl Object {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum ObjectRead {
     NotExists(ObjectID),
-    Exists(ObjectRef, Object),
+    Exists(ObjectRef, Object, Option<MoveStructLayout>),
     Deleted(ObjectRef),
 }
 
 impl ObjectRead {
     /// Returns a reference to the object if there is any, otherwise an Err if
-    /// the object does exist or is deleted.
+    /// the object does not exist or is deleted.
     pub fn object(&self) -> Result<&Object, SuiError> {
         match &self {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::Exists(_, o) => Ok(o),
+            Self::Exists(_, o, _) => Ok(o),
+        }
+    }
+
+    /// Returns the layout of the object if it was requested in the read, None if it was not requested or does not have a layout
+    /// Returns an Err if the object does not exist or is deleted.
+    pub fn layout(&self) -> Result<&Option<MoveStructLayout>, SuiError> {
+        match &self {
+            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
+            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
+            Self::Exists(_, _, layout) => Ok(layout),
         }
     }
 
     /// Returns the object ref if there is an object, otherwise an Err if
-    /// the object does exist or is deleted.
+    /// the object does not exist or is deleted.
     pub fn reference(&self) -> Result<ObjectRef, SuiError> {
         match &self {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
-            Self::Exists(oref, _) => Ok(*oref),
+            Self::Exists(oref, _, _) => Ok(*oref),
         }
     }
 }
@@ -466,12 +489,12 @@ impl Display for Object {
             .data
             .type_()
             .map_or("Type Unwrap Failed".to_owned(), |type_| {
-                type_.module.as_ident_str().to_string()
+                format!("{}", type_)
             });
 
         write!(
             f,
-            "Owner: {:?}\nVersion: {:?}\nID: {:?}\nReadonly: {:?}\nType: {:?}",
+            "Owner: {:?}\nVersion: {:?}\nID: {:?}\nReadonly: {:?}\nType: {}",
             self.owner,
             self.version().value(),
             self.id(),
