@@ -166,9 +166,11 @@ impl WalletCommands {
                 let client_state = context.get_or_create_client_state(owner)?;
                 let object_read = client_state.get_object_info(*id).await?;
                 let object = object_read.object()?;
-                println!("{}", object);
                 if *deep {
-                    println!("Full Info: {:#?}", object);
+                    let layout = object_read.layout()?;
+                    println!("{}", object.to_json(layout)?);
+                } else {
+                    println!("{}", object);
                 }
             }
             WalletCommands::Call {

@@ -133,7 +133,7 @@ impl From<ObjectRef> for ObjectInfoRequest {
         ObjectInfoRequest {
             object_id: object_ref.0,
             request_sequence_number: Some(object_ref.1),
-            request_layout: None,
+            request_layout: Some(ObjectFormatOptions::default()),
         }
     }
 }
@@ -143,7 +143,7 @@ impl From<ObjectID> for ObjectInfoRequest {
         ObjectInfoRequest {
             object_id,
             request_sequence_number: None,
-            request_layout: None,
+            request_layout: Some(ObjectFormatOptions::default()),
         }
     }
 }

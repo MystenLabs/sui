@@ -1,4 +1,6 @@
 use super::*;
+use move_core_types::language_storage::StructTag;
+use move_core_types::value::MoveStructLayout;
 use rocksdb::{DBWithThreadMode, MultiThreaded};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -11,6 +13,7 @@ const OBJ_REF_CF_NAME: &str = "object_refs";
 const TX_DIGEST_TO_CERT_CF_NAME: &str = "object_certs";
 const PENDING_ORDERS_CF_NAME: &str = "pending_orders";
 const OBJECT_CF_NAME: &str = "objects";
+const OBJECT_LAYOUTS_CF_NAME: &str = "object_layouts";
 
 const MANAGED_ADDRESS_PATHS_CF_NAME: &str = "managed_address_paths";
 const MANAGED_ADDRESS_SUBDIR: &str = "managed_addresses";
@@ -103,6 +106,10 @@ pub struct ClientSingleAddressStore {
     /// Map from object ref to actual object to track object history
     /// There can be duplicates and we never delete objects
     pub objects: DBMap<ObjectRef, Object>,
+    /// Map from Move object type to the layout of the object's Move contents.
+    /// Should contain the layouts for all object types in `objects`, and
+    /// possibly more.
+    pub object_layouts: DBMap<StructTag, MoveStructLayout>,
 }
 
 impl ClientSingleAddressStore {
@@ -117,6 +124,7 @@ impl ClientSingleAddressStore {
                 OBJ_REF_CF_NAME,
                 TX_DIGEST_TO_CERT_CF_NAME,
                 OBJECT_CF_NAME,
+                OBJECT_LAYOUTS_CF_NAME,
             ],
         );
 
@@ -127,6 +135,7 @@ impl ClientSingleAddressStore {
             object_refs: client_store::reopen_db(&db, OBJ_REF_CF_NAME),
             object_certs: client_store::reopen_db(&db, TX_DIGEST_TO_CERT_CF_NAME),
             objects: client_store::reopen_db(&db, OBJECT_CF_NAME),
+            object_layouts: client_store::reopen_db(&db, OBJECT_LAYOUTS_CF_NAME),
         }
     }
 }

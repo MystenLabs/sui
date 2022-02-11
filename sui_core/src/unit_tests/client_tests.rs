@@ -286,7 +286,7 @@ async fn init_local_authorities(
 }
 
 #[cfg(test)]
-fn init_local_authorities_bad_1(
+async fn init_local_authorities_bad_1(
     count: usize,
 ) -> (BTreeMap<AuthorityName, LocalAuthorityClient>, Committee) {
     let mut key_pairs = Vec::new();
@@ -313,12 +313,13 @@ fn init_local_authorities_bad_1(
         let mut opts = rocksdb::Options::default();
         opts.set_max_open_files(max_files_client_tests());
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
-        let state = AuthorityState::new_without_genesis_for_testing(
+        let state = AuthorityState::new_with_genesis_modules(
             committee.clone(),
             address,
             Box::pin(secret),
             store,
-        );
+        )
+        .await;
         clients.insert(address, LocalAuthorityClient::new(state));
     }
     (clients, committee)
@@ -424,7 +425,7 @@ async fn init_local_client_state(
 async fn init_local_client_state_with_bad_authority(
     object_ids: Vec<Vec<ObjectID>>,
 ) -> ClientState<LocalAuthorityClient> {
-    let (authority_clients, committee) = init_local_authorities_bad_1(object_ids.len());
+    let (authority_clients, committee) = init_local_authorities_bad_1(object_ids.len()).await;
     let mut client = make_client(authority_clients.clone(), committee);
     fund_account(
         authority_clients.values().collect(),
@@ -2046,7 +2047,7 @@ async fn test_sync_all_owned_objects() {
         2,
         owned_object
             .iter()
-            .filter(|(o, _)| o.owner.is_address(&client1.address()))
+            .filter(|(o, _, _)| o.owner.is_address(&client1.address()))
             .count()
     );
 }
@@ -2309,7 +2310,7 @@ async fn test_address_manager() {
 
     // Try adding new addresses to manage
     let (address, secret) = get_key_pair();
-    let secret2 = secret.copy();
+    let _secret2 = secret.copy();
     let secret = Box::pin(secret);
     let (authority_clients, committee) = init_local_authorities(4).await;
     let gas_object1 = ObjectID::random();

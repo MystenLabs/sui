@@ -5,7 +5,8 @@ use crate::authority_client::AuthorityAPI;
 use crate::safe_client::SafeClient;
 
 use futures::{future, StreamExt};
-use sui_types::object::{Object, ObjectRead};
+use move_core_types::value::MoveStructLayout;
+use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
 use sui_types::{
     base_types::*,
     committee::Committee,
@@ -339,7 +340,11 @@ where
         (
             BTreeMap<
                 (ObjectRef, TransactionDigest),
-                (Option<Object>, Vec<(AuthorityName, Option<SignedOrder>)>),
+                (
+                    Option<Object>,
+                    Option<MoveStructLayout>,
+                    Vec<(AuthorityName, Option<SignedOrder>)>,
+                ),
             >,
             HashMap<TransactionDigest, CertifiedOrder>,
         ),
@@ -398,7 +403,11 @@ where
         let mut error_list = Vec::new();
         let mut object_map = BTreeMap::<
             (ObjectRef, TransactionDigest),
-            (Option<Object>, Vec<(AuthorityName, Option<SignedOrder>)>),
+            (
+                Option<Object>,
+                Option<MoveStructLayout>,
+                Vec<(AuthorityName, Option<SignedOrder>)>,
+            ),
         >::new();
         let mut certificates = HashMap::new();
 
@@ -427,8 +436,7 @@ where
                 // None if the object was deleted at this authority
                 //
                 // NOTE: here we could also be gathering the locked orders to see if we could make a cert.
-                // TODO: pass along layout_option so the client can store it
-                let (object_option, signed_order_option, _layout_option) =
+                let (object_option, signed_order_option, layout_option) =
                     if let Some(ObjectResponse {
                         object,
                         lock,
@@ -443,8 +451,8 @@ where
                 // Update the map with the information from this authority
                 let entry = object_map
                     .entry((object_ref, transaction_digest))
-                    .or_insert((object_option, Vec::new()));
-                entry.1.push((name, signed_order_option));
+                    .or_insert((object_option, layout_option, Vec::new()));
+                entry.2.push((name, signed_order_option));
 
                 if let Some(cert) = cert_option {
                     certificates.insert(cert.order.digest(), cert);
@@ -545,7 +553,7 @@ where
         timeout_after_quorum: Duration,
     ) -> Result<
         (
-            Vec<(Object, Option<CertifiedOrder>)>,
+            Vec<(Object, Option<MoveStructLayout>, Option<CertifiedOrder>)>,
             Vec<(ObjectRef, Option<CertifiedOrder>)>,
         ),
         SuiError,
@@ -572,8 +580,10 @@ where
             // If more that one version of an object is available, we update all authorities with it.
             while !aggregate_object_info.is_empty() {
                 // This will be the very latest object version, because object_ref is ordered this way.
-                let ((object_ref, transaction_digest), (object_option, object_authorities)) =
-                    aggregate_object_info.pop().unwrap(); // safe due to check above
+                let (
+                    (object_ref, transaction_digest),
+                    (object_option, layout_option, object_authorities),
+                ) = aggregate_object_info.pop().unwrap(); // safe due to check above
 
                 // NOTE: Here we must check that the object is indeed an input to this transaction
                 //       but for the moment lets do the happy case.
@@ -584,7 +594,7 @@ where
                     //       Otherwise report the authority as potentially faulty.
 
                     if let Some(obj) = object_option {
-                        active_objects.push((obj, None));
+                        active_objects.push((obj, layout_option, None));
                     }
                     // Cannot be that the genesis contributes to deleted objects
 
@@ -611,7 +621,7 @@ where
 
                 // Return the latest version of an object, or a deleted object
                 match object_option {
-                    Some(obj) => active_objects.push((obj, Some(cert))),
+                    Some(obj) => active_objects.push((obj, layout_option, Some(cert))),
                     None => deleted_objects.push((object_ref, Some(cert))),
                 }
 
@@ -654,7 +664,7 @@ where
         timeout_after_quorum: Duration,
     ) -> Result<
         (
-            Vec<(Object, Option<CertifiedOrder>)>,
+            Vec<(Object, Option<MoveStructLayout>, Option<CertifiedOrder>)>,
             Vec<(ObjectRef, Option<CertifiedOrder>)>,
         ),
         SuiError,
@@ -973,7 +983,9 @@ where
             .await?;
         let mut object_ref_stack: Vec<_> = object_map.into_iter().collect();
 
-        while let Some(((obj_ref, tx_digest), (obj_option, authorities))) = object_ref_stack.pop() {
+        while let Some(((obj_ref, tx_digest), (obj_option, layout_option, authorities))) =
+            object_ref_stack.pop()
+        {
             let stake: usize = authorities
                 .iter()
                 .map(|(name, _)| self.committee.weight(name))
@@ -985,7 +997,11 @@ where
                     return Ok(ObjectRead::Deleted(obj_ref));
                 } else {
                     // safe due to check
-                    return Ok(ObjectRead::Exists(obj_ref, obj_option.unwrap()));
+                    return Ok(ObjectRead::Exists(
+                        obj_ref,
+                        obj_option.unwrap(),
+                        layout_option,
+                    ));
                 }
             } else if cert_map.contains_key(&tx_digest) {
                 // If we have less stake telling us about the latest state of an object
@@ -1035,7 +1051,11 @@ where
                         return Ok(ObjectRead::Deleted(obj_ref));
                     } else {
                         // safe due to check
-                        return Ok(ObjectRead::Exists(obj_ref, obj_option.unwrap()));
+                        return Ok(ObjectRead::Exists(
+                            obj_ref,
+                            obj_option.unwrap(),
+                            layout_option,
+                        ));
                     }
                 }
             }
@@ -1078,8 +1098,8 @@ where
         let request = ObjectInfoRequest {
             object_id,
             request_sequence_number: None,
-            // TODO: allow caller to specify layout
-            request_layout: None,
+            // TODO: allow caller to decide whether they want the layout, and which options. For now, we always ask, and get the default format
+            request_layout: Some(ObjectFormatOptions::default()),
         };
 
         // For now assume all authorities. Assume they're all honest
