@@ -52,14 +52,6 @@ move-core-types = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073
 move-bytecode-verifier = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
 
 [[bin]]
-name = "client"
-path = "src/client.rs"
-
-[[bin]]
-name = "server"
-path = "src/server.rs"
-
-[[bin]]
 name = "bench"
 path = "src/bench.rs"
 

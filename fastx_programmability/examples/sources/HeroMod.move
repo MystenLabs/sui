@@ -8,7 +8,7 @@
 module Examples::HeroMod {
     use Examples::Hero::{Self, Hero};
     use FastX::Address::Address;
-    use FastX::ID::ID;
+    use FastX::ID::{Self, ID};
     use FastX::Coin::{Self, Coin, TreasuryCap };
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
@@ -74,7 +74,8 @@ module Examples::HeroMod {
     /// exchange.
     /// Aborts if the hero is not strong enough to slay the monster
     public fun slay(hero: &Hero, monster: SeaMonster): Coin<RUM> {
-        let SeaMonster { id: _, reward } = monster;
+        let SeaMonster { id, reward } = monster;
+        ID::delete(id);
         // Hero needs strength greater than the reward value to defeat the
         // monster
         assert!(

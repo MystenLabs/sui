@@ -16,6 +16,7 @@ pub fn all_natives(
     const FASTX_NATIVES: &[(&str, &str, NativeFunction)] = &[
         ("Event", "emit", event::emit),
         ("ID", "bytes_to_address", id::bytes_to_address),
+        ("ID", "delete", id::delete),
         ("ID", "get_id", id::get_id),
         ("Transfer", "transfer_internal", transfer::transfer_internal),
         (
