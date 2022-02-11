@@ -17,12 +17,10 @@ use fastpay::wallet_commands::WalletContext;
 use fastpay_core::authority::{AuthorityState, AuthorityStore};
 use fastpay_core::authority_server::AuthorityServer;
 use fastpay_core::client::Client;
-use fastx_types::{
-    base_types::*, object::ObjectRead,
-};
 use fastx_types::committee::Committee;
 use fastx_types::messages::{ExecutionStatus, OrderEffects};
-use fastx_types::object::{Object as FastxObject};
+use fastx_types::object::Object as FastxObject;
+use fastx_types::{base_types::*, object::ObjectRead};
 
 use futures::future::join_all;
 use move_core_types::account_address::AccountAddress;
@@ -470,38 +468,38 @@ async fn get_addresses(
         match cb_thread::scope(|scope| {
             scope
                 .spawn(|_| {
-                    // synchronize with authorities 
+                    // synchronize with authorities
                     let rt = Runtime::new().unwrap();
-                    rt.block_on(async move {
-                        client_state.sync_client_state().await
-                    })
+                    rt.block_on(async move { client_state.sync_client_state().await })
                 })
                 .join()
         }) {
-            Ok(result) => {  
-                match result {
-                    Ok(result) => {
-                        match result {
-                            Ok(_) => (),
-                            Err(err) => return Err(HttpError::for_client_error(
-                                None,
-                                hyper::StatusCode::FAILED_DEPENDENCY,
-                                format!("Sync error: {err}"),
-                            )) 
-                        }
-                    },
-                    Err(err) => return Err(HttpError::for_client_error(
+            Ok(result) => match result {
+                Ok(result) => match result {
+                    Ok(_) => (),
+                    Err(err) => {
+                        return Err(HttpError::for_client_error(
+                            None,
+                            hyper::StatusCode::FAILED_DEPENDENCY,
+                            format!("Sync error: {err}"),
+                        ))
+                    }
+                },
+                Err(err) => {
+                    return Err(HttpError::for_client_error(
                         None,
                         hyper::StatusCode::FAILED_DEPENDENCY,
                         format!("Sync error: {:?}", err),
-                    )) 
+                    ))
                 }
             },
-            Err(err) => return Err(HttpError::for_client_error(
-                None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Sync error: {:?}", err),
-            ))
+            Err(err) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Sync error: {:?}", err),
+                ))
+            }
         };
     }
 
@@ -565,8 +563,8 @@ async fn get_objects(
 
     let wallet_context = wallet_context.as_mut().unwrap();
 
-    let client_state = match wallet_context
-        .get_or_create_client_state(match &decode_address_hex(address.as_str()) {
+    let client_state = match wallet_context.get_or_create_client_state(
+        match &decode_address_hex(address.as_str()) {
             Ok(address) => address,
             Err(error) => {
                 return Err(HttpError::for_client_error(
@@ -575,8 +573,8 @@ async fn get_objects(
                     format!("Could not decode address from hex {error}"),
                 ))
             }
-        })
-    {
+        },
+    ) {
         Ok(client_state) => client_state,
         Err(error) => {
             return Err(HttpError::for_client_error(
@@ -698,18 +696,16 @@ async fn get_object_info(
             })
             .join()
     }) {
-        Ok(result) => {
-            match result {
-                Ok(result) => result, 
-                Err(err) => {
-                    return Err(HttpError::for_client_error(
-                        None,
-                        hyper::StatusCode::FAILED_DEPENDENCY,
-                        format!("Error while getting object info: {:?}", err),
-                    ))
-                }
+        Ok(result) => match result {
+            Ok(result) => result,
+            Err(err) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Error while getting object info: {:?}", err),
+                ))
             }
-        }
+        },
         Err(err) => {
             return Err(HttpError::for_client_error(
                 None,
@@ -803,7 +799,10 @@ async fn sync(
             return Err(HttpError::for_client_error(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Could not create or get client state for {:?}: {err}", address),
+                format!(
+                    "Could not create or get client state for {:?}: {err}",
+                    address
+                ),
             ))
         }
     };
@@ -813,36 +812,36 @@ async fn sync(
             .spawn(|_| {
                 // synchronize with authorities
                 let rt = Runtime::new().unwrap();
-                rt.block_on(async move {
-                    client_state.sync_client_state().await
-                })
+                rt.block_on(async move { client_state.sync_client_state().await })
             })
             .join()
     }) {
-        Ok(result) => {  
-            match result {
-                Ok(result) => {
-                    match result {
-                        Ok(_) => (),
-                        Err(err) => return Err(HttpError::for_client_error(
-                            None,
-                            hyper::StatusCode::FAILED_DEPENDENCY,
-                            format!("Sync error: {err}"),
-                        )) 
-                    }
-                },
-                Err(err) => return Err(HttpError::for_client_error(
+        Ok(result) => match result {
+            Ok(result) => match result {
+                Ok(_) => (),
+                Err(err) => {
+                    return Err(HttpError::for_client_error(
+                        None,
+                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        format!("Sync error: {err}"),
+                    ))
+                }
+            },
+            Err(err) => {
+                return Err(HttpError::for_client_error(
                     None,
                     hyper::StatusCode::FAILED_DEPENDENCY,
                     format!("Sync error: {:?}", err),
-                )) 
+                ))
             }
         },
-        Err(err) => return Err(HttpError::for_client_error(
-            None,
-            hyper::StatusCode::FAILED_DEPENDENCY,
-            format!("Sync error: {:?}", err),
-        ))
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Sync error: {:?}", err),
+            ))
+        }
     };
 
     Ok(HttpResponseUpdatedNoContent())
@@ -941,7 +940,10 @@ async fn transfer_object(
             return Err(HttpError::for_client_error(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Could not create or get client state for {:?}: {err}", owner),
+                format!(
+                    "Could not create or get client state for {:?}: {err}",
+                    owner
+                ),
             ))
         }
     };
@@ -959,45 +961,47 @@ async fn transfer_object(
             })
             .join()
     }) {
-        Ok(result) => {  
-            match result {
-                Ok(result) => {
-                    match result {
-                        Ok((cert, effects)) => {
-                            if effects.status != ExecutionStatus::Success {
-                                return Err(HttpError::for_client_error(
-                                    None,
-                                    hyper::StatusCode::FAILED_DEPENDENCY,
-                                    format!("Error publishing module: {:#?}", effects.status),
-                                )) 
-                            }
-                            (cert, effects)
-                        },
-                        Err(err) => return Err(HttpError::for_client_error(
+        Ok(result) => match result {
+            Ok(result) => match result {
+                Ok((cert, effects)) => {
+                    if effects.status != ExecutionStatus::Success {
+                        return Err(HttpError::for_client_error(
                             None,
                             hyper::StatusCode::FAILED_DEPENDENCY,
-                            format!("Publishing error: {err}"),
-                        )) 
+                            format!("Error publishing module: {:#?}", effects.status),
+                        ));
                     }
-                },
-                Err(err) => return Err(HttpError::for_client_error(
+                    (cert, effects)
+                }
+                Err(err) => {
+                    return Err(HttpError::for_client_error(
+                        None,
+                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        format!("Publishing error: {err}"),
+                    ))
+                }
+            },
+            Err(err) => {
+                return Err(HttpError::for_client_error(
                     None,
                     hyper::StatusCode::FAILED_DEPENDENCY,
                     format!("Publishing error: {:?}", err),
-                )) 
+                ))
             }
         },
-        Err(err) => return Err(HttpError::for_client_error(
-            None,
-            hyper::StatusCode::FAILED_DEPENDENCY,
-            format!("Publishing error: {:?}", err),
-        ))
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Publishing error: {:?}", err),
+            ))
+        }
     };
 
     let certificate = format!("{:?}", cert).to_string();
     let object_effects_summary = get_object_effects(effects);
 
-    Ok(HttpResponseOk(OrderResponse{
+    Ok(HttpResponseOk(OrderResponse {
         object_effects_summary,
         certificate,
     }))
@@ -1029,7 +1033,7 @@ async fn publish(
     // TODO: figure out what a move module path looks like? Convert bytes string to moudle?
     let path = publish_params.path;
 
-    let gas_object_id = match AccountAddress::try_from(publish_params.gas_object_id){
+    let gas_object_id = match AccountAddress::try_from(publish_params.gas_object_id) {
         Ok(gas_object_id) => gas_object_id,
         Err(error) => {
             return Err(HttpError::for_client_error(
@@ -1068,7 +1072,10 @@ async fn publish(
             return Err(HttpError::for_client_error(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Could not create or get client state for {:?}: {err}", owner),
+                format!(
+                    "Could not create or get client state for {:?}: {err}",
+                    owner
+                ),
             ))
         }
     };
@@ -1081,55 +1088,53 @@ async fn publish(
     let (cert, effects) = match cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
-                // publish 
+                // publish
                 let rt = Runtime::new().unwrap();
-                rt.block_on(async move {  
-                    client_state
-                        .publish(path, gas_obj_ref)
-                        .await
-                })
+                rt.block_on(async move { client_state.publish(path, gas_obj_ref).await })
             })
             .join()
     }) {
-        Ok(result) => {  
-            match result {
-                Ok(result) => {
-                    match result {
-                        Ok((cert, effects)) => {
-                            if effects.status != ExecutionStatus::Success {
-                                return Err(HttpError::for_client_error(
-                                    None,
-                                    hyper::StatusCode::FAILED_DEPENDENCY,
-                                    format!("Error publishing module: {:#?}", effects.status),
-                                )) 
-                            }
-                            (cert, effects)
-                        },
-                        Err(err) => return Err(HttpError::for_client_error(
+        Ok(result) => match result {
+            Ok(result) => match result {
+                Ok((cert, effects)) => {
+                    if effects.status != ExecutionStatus::Success {
+                        return Err(HttpError::for_client_error(
                             None,
                             hyper::StatusCode::FAILED_DEPENDENCY,
-                            format!("Move call error: {err}"),
-                        )) 
+                            format!("Error publishing module: {:#?}", effects.status),
+                        ));
                     }
-                },
-                Err(err) => return Err(HttpError::for_client_error(
+                    (cert, effects)
+                }
+                Err(err) => {
+                    return Err(HttpError::for_client_error(
+                        None,
+                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        format!("Move call error: {err}"),
+                    ))
+                }
+            },
+            Err(err) => {
+                return Err(HttpError::for_client_error(
                     None,
                     hyper::StatusCode::FAILED_DEPENDENCY,
                     format!("Move call error: {:?}", err),
-                )) 
+                ))
             }
         },
-        Err(err) => return Err(HttpError::for_client_error(
-            None,
-            hyper::StatusCode::FAILED_DEPENDENCY,
-            format!("Move call error: {:?}", err),
-        ))
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Move call error: {:?}", err),
+            ))
+        }
     };
 
     let certificate = format!("{:?}", cert).to_string();
     let object_effects_summary = get_object_effects(effects);
 
-    Ok(HttpResponseOk(OrderResponse{
+    Ok(HttpResponseOk(OrderResponse {
         object_effects_summary,
         certificate,
     }))
@@ -1147,7 +1152,7 @@ struct CallRequest {
     object_args: Vec<String>,
     pure_args: Vec<String>,
     gas_object_id: String,
-    gas_budget: u64
+    gas_budget: u64,
 }
 
 /**
@@ -1170,7 +1175,7 @@ async fn call(
     let mut pure_args = Vec::new();
     let pure_args_strings = call_params.pure_args;
     for pure_args_string in pure_args_strings {
-        println!("{}",pure_args_string);
+        println!("{}", pure_args_string);
         pure_args.push(parse_transaction_argument(&pure_args_string).unwrap());
     }
 
@@ -1180,7 +1185,7 @@ async fn call(
         type_args.push(parse_type_tag(&type_args_string).unwrap());
     }
 
-    let gas_object_id = match AccountAddress::try_from(call_params.gas_object_id){
+    let gas_object_id = match AccountAddress::try_from(call_params.gas_object_id) {
         Ok(gas_object_id) => gas_object_id,
         Err(error) => {
             return Err(HttpError::for_client_error(
@@ -1192,8 +1197,8 @@ async fn call(
     };
 
     println!("{}", call_params.package_object_id);
-    
-    let package_object_id = match AccountAddress::from_hex_literal(&call_params.package_object_id){
+
+    let package_object_id = match AccountAddress::from_hex_literal(&call_params.package_object_id) {
         Ok(package_object_id) => package_object_id,
         Err(error) => {
             return Err(HttpError::for_client_error(
@@ -1207,7 +1212,7 @@ async fn call(
     let mut object_args = Vec::new();
     let object_args_strings = call_params.object_args;
     for object_args_string in object_args_strings {
-        let object_arg = match AccountAddress::try_from(object_args_string){
+        let object_arg = match AccountAddress::try_from(object_args_string) {
             Ok(gas_object_id) => gas_object_id,
             Err(error) => {
                 return Err(HttpError::for_client_error(
@@ -1249,7 +1254,10 @@ async fn call(
             return Err(HttpError::for_client_error(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Could not create or get client state for {:?}: {err}", sender),
+                format!(
+                    "Could not create or get client state for {:?}: {err}",
+                    sender
+                ),
             ))
         }
     };
@@ -1271,18 +1279,16 @@ async fn call(
             })
             .join()
     }) {
-        Ok(result) => {
-            match result {
-                Ok(result) => result, 
-                Err(err) => {
-                    return Err(HttpError::for_client_error(
-                        None,
-                        hyper::StatusCode::FAILED_DEPENDENCY,
-                        format!("Error while getting object info: {:?}", err),
-                    ))
-                }
+        Ok(result) => match result {
+            Ok(result) => result,
+            Err(err) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Error while getting object info: {:?}", err),
+                ))
             }
-        }
+        },
         Err(err) => {
             return Err(HttpError::for_client_error(
                 None,
@@ -1311,7 +1317,10 @@ async fn call(
             return Err(HttpError::for_client_error(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Could not create or get client state for {:?}: {err}", sender),
+                format!(
+                    "Could not create or get client state for {:?}: {err}",
+                    sender
+                ),
             ))
         }
     };
@@ -1331,7 +1340,10 @@ async fn call(
                 return Err(HttpError::for_client_error(
                     None,
                     hyper::StatusCode::FAILED_DEPENDENCY,
-                    format!("Could not create or get client state for {:?}: {err}", sender),
+                    format!(
+                        "Could not create or get client state for {:?}: {err}",
+                        sender
+                    ),
                 ))
             }
         };
@@ -1353,18 +1365,16 @@ async fn call(
                 })
                 .join()
         }) {
-            Ok(result) => {
-                match result {
-                    Ok(result) => result, 
-                    Err(err) => {
-                        return Err(HttpError::for_client_error(
-                            None,
-                            hyper::StatusCode::FAILED_DEPENDENCY,
-                            format!("Error while getting object info: {:?}", err),
-                        ))
-                    }
+            Ok(result) => match result {
+                Ok(result) => result,
+                Err(err) => {
+                    return Err(HttpError::for_client_error(
+                        None,
+                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        format!("Error while getting object info: {:?}", err),
+                    ))
                 }
-            }
+            },
             Err(err) => {
                 return Err(HttpError::for_client_error(
                     None,
@@ -1373,7 +1383,7 @@ async fn call(
                 ))
             }
         };
-    
+
         let obj_info = match obj_info {
             Some(object) => object,
             None => {
@@ -1405,17 +1415,20 @@ async fn call(
             return Err(HttpError::for_client_error(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Could not create or get client state for {:?}: {err}", sender),
+                format!(
+                    "Could not create or get client state for {:?}: {err}",
+                    sender
+                ),
             ))
         }
     };
 
-    let (cert, effects) =  match cb_thread::scope(|scope| {
+    let (cert, effects) = match cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
-                // execute move call 
+                // execute move call
                 let rt = Runtime::new().unwrap();
-                rt.block_on(async move {  
+                rt.block_on(async move {
                     client_state
                         .move_call(
                             package_obj_ref,
@@ -1432,36 +1445,38 @@ async fn call(
             })
             .join()
     }) {
-        Ok(result) => {  
-            match result {
-                Ok(result) => {
-                    match result {
-                        Ok((cert, effects)) => (cert, effects),
-                        Err(err) => return Err(HttpError::for_client_error(
-                            None,
-                            hyper::StatusCode::FAILED_DEPENDENCY,
-                            format!("Move call error: {err}"),
-                        )) 
-                    }
-                },
-                Err(err) => return Err(HttpError::for_client_error(
+        Ok(result) => match result {
+            Ok(result) => match result {
+                Ok((cert, effects)) => (cert, effects),
+                Err(err) => {
+                    return Err(HttpError::for_client_error(
+                        None,
+                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        format!("Move call error: {err}"),
+                    ))
+                }
+            },
+            Err(err) => {
+                return Err(HttpError::for_client_error(
                     None,
                     hyper::StatusCode::FAILED_DEPENDENCY,
                     format!("Move call error: {:?}", err),
-                )) 
+                ))
             }
         },
-        Err(err) => return Err(HttpError::for_client_error(
-            None,
-            hyper::StatusCode::FAILED_DEPENDENCY,
-            format!("Move call error: {:?}", err),
-        ))
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Move call error: {:?}", err),
+            ))
+        }
     };
 
     let certificate = format!("{:?}", cert).to_string();
     let object_effects_summary = get_object_effects(effects);
 
-    Ok(HttpResponseOk(OrderResponse{
+    Ok(HttpResponseOk(OrderResponse {
         object_effects_summary,
         certificate,
     }))
