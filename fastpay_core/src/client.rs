@@ -42,13 +42,15 @@ pub struct ClientAddressManager<A> {
     address_states: BTreeMap<FastPayAddress, ClientState<A>>,
 }
 impl<A> ClientAddressManager<A> {
-    // Create a new manager which stores its managed addresses at `path`
+    /// Create a new manager which stores its managed addresses at `path`
     pub fn new(path: PathBuf) -> Result<Self, FastPayError> {
         Ok(Self {
             store: client_store::ClientAddressManagerStore::open(path),
             address_states: BTreeMap::new(),
         })
     }
+
+    /// Get (if exists) or create a new managed address state
     pub fn get_or_create_state_mut(
         &mut self,
         address: FastPayAddress,
@@ -75,7 +77,8 @@ impl<A> ClientAddressManager<A> {
 
         return Ok(self.address_states.get_mut(&address).unwrap());
     }
-
+ 
+    /// Get all the states
     pub fn get_managed_address_states(&self) -> &BTreeMap<PublicKeyBytes, ClientState<A>> {
         &self.address_states
     }

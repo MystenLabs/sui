@@ -13,22 +13,25 @@ const PENDING_ORDERS_CF_NAME: &str = "pending_orders";
 const OBJECT_CF_NAME: &str = "objects";
 
 const MANAGED_ADDRESS_PATHS_CF_NAME: &str = "managed_address_paths";
-const MANAGED_ADDRESS_SUBDIR: &str = "addresses";
+const MANAGED_ADDRESS_SUBDIR: &str = "managed_addresses";
 
-// Dir Structure
-// AddressManagerStore
-//     |
-//     ------ SingleAddressStore1
-//     |
-//     ------ SingleAddressStore2
-//     |
-//     ------ SingleAddressStore3
-//     |
-//     ------ SingleAddressStore4
+/// The address manager allows multiple addresses to be managed by one client
+/// It also manages the different DB locations and in future, the configurations
+/// Dir Structure
+/// AddressManagerStore
+///     |
+///     ------ SingleAddressStore1
+///     |
+///     ------ SingleAddressStore2
+///     |
+///     ------ SingleAddressStore3
+///     |
+///     ------ SingleAddressStore4
 pub struct ClientAddressManagerStore {
-    // Address manager path
+    // Address manager store path
     pub path: PathBuf,
     // Table of managed addresses to their paths
+    // This is in the subdirectory MANAGED_ADDRESS_SUBDIR
     pub managed_address_paths: DBMap<FastPayAddress, PathBuf>,
 }
 impl ClientAddressManagerStore {
@@ -56,7 +59,6 @@ impl ClientAddressManagerStore {
     }
 
     /// Add an address to be managed
-    /// Overwites existing if present
     pub fn manage_new_address(
         &self,
         address: FastPayAddress,
@@ -88,8 +90,9 @@ impl ClientAddressManagerStore {
     }
 }
 
+/// This is the store of one address
 pub struct ClientSingleAddressStore {
-    // Table of objects to orders pending on the objects
+    /// Table of objects to orders pending on the objects
     pub pending_orders: DBMap<ObjectID, Order>,
     // The remaining fields are used to minimize networking, and may not always be persisted locally.
     /// Known certificates, indexed by TX digest.
@@ -131,9 +134,11 @@ impl ClientSingleAddressStore {
     }
 }
 
+/// General helper function for init a store
 pub fn init_store(path: PathBuf, names: Vec<&str>) -> Arc<DBWithThreadMode<MultiThreaded>> {
     open_cf(&path, None, &names).expect("Cannot open DB.")
 }
+/// General helper function for (re-)opening a store
 fn reopen_db<K, V>(db: &Arc<DBWithThreadMode<MultiThreaded>>, name: &str) -> DBMap<K, V> {
     DBMap::reopen(db, Some(name)).expect(&format!("Cannot open {} CF.", name)[..])
 }
