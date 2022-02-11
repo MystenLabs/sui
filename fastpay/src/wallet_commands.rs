@@ -48,6 +48,10 @@ pub enum WalletCommands {
     /// Publish Move modules
     #[structopt(name = "publish")]
     Publish {
+        /// Sender address
+        #[structopt(long, parse(try_from_str = decode_address_hex))]
+        sender: PublicKeyBytes,
+
         /// Path to directory containing a Move package
         #[structopt(long)]
         path: String,
@@ -64,6 +68,9 @@ pub enum WalletCommands {
     /// Call Move
     #[structopt(name = "call")]
     Call {
+        /// Sender address
+        #[structopt(long, parse(try_from_str = decode_address_hex))]
+        sender: PublicKeyBytes,
         /// Object ID of the package, which contains the module
         #[structopt(long)]
         package: ObjectID,
@@ -96,6 +103,10 @@ pub enum WalletCommands {
     /// Transfer funds
     #[structopt(name = "transfer")]
     Transfer {
+        /// Sender address
+        #[structopt(long, parse(try_from_str = decode_address_hex))]
+        from: PublicKeyBytes,
+
         /// Recipient address
         #[structopt(long, parse(try_from_str = decode_address_hex))]
         to: PublicKeyBytes,
@@ -136,19 +147,25 @@ impl WalletCommands {
     pub async fn execute(&mut self, context: &mut WalletContext) -> Result<(), anyhow::Error> {
         match self {
             WalletCommands::Publish {
+                sender,
                 path,
                 gas,
                 gas_budget,
             } => {
                 // Find owner of gas object
-                let owner = context.find_owner(gas)?;
-                let client_state = context.get_or_create_client_state(&owner)?;
+                let client_state = context.get_or_create_client_state(sender)?;
                 publish(client_state, path.clone(), *gas, *gas_budget).await;
             }
 
             WalletCommands::Object { id, deep } => {
                 // Pick the first (or any) account for use in finding obj info
-                let account = context.find_owner(id)?;
+                let account = *context
+                    .address_manager
+                    .get_managed_address_states()
+                    .iter()
+                    .next()
+                    .expect("Unable to find any managed account")
+                    .0;
                 // Fetch the object ref
                 let client_state = context.get_or_create_client_state(&account)?;
                 let object_read = client_state.get_object_info(*id).await?;
@@ -159,6 +176,7 @@ impl WalletCommands {
                 }
             }
             WalletCommands::Call {
+                sender,
                 package,
                 module,
                 function,
@@ -168,9 +186,7 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                // Find owner of gas object
-                let sender = context.find_owner(gas)?;
-                let client_state = context.get_or_create_client_state(&sender)?;
+                let client_state = context.get_or_create_client_state(sender)?;
 
                 let package_obj_info = client_state.get_object_info(*package).await?;
                 let package_obj_ref = package_obj_info.object().unwrap().to_object_reference();
@@ -204,10 +220,13 @@ impl WalletCommands {
                 show_object_effects(effects);
             }
 
-            WalletCommands::Transfer { to, object_id, gas } => {
-                let owner = context.find_owner(gas)?;
-
-                let client_state = context.get_or_create_client_state(&owner)?;
+            WalletCommands::Transfer {
+                to,
+                object_id,
+                gas,
+                from,
+            } => {
+                let client_state = context.get_or_create_client_state(from)?;
                 info!("Starting transfer");
                 let time_start = Instant::now();
                 let cert = client_state
@@ -220,14 +239,16 @@ impl WalletCommands {
             }
 
             WalletCommands::Addresses => {
-                let addr_strings: Vec<_> = context
-                    .config
-                    .accounts
+                let addresses = context
+                    .address_manager
+                    .get_managed_address_states()
                     .iter()
-                    .map(|account| encode_address_hex(&account.address))
-                    .collect();
+                    .map(|(a, _)| *a)
+                    .collect::<Vec<_>>();
+
+                let addr_strings: Vec<_> = addresses.iter().map(encode_address_hex).collect();
                 let addr_text = addr_strings.join("\n");
-                println!("Showing {} results.", context.config.accounts.len());
+                println!("Showing {} results.", addresses.len());
                 println!("{}", addr_text);
             }
 
@@ -251,6 +272,8 @@ impl WalletCommands {
                     key_pair: key,
                 });
                 context.config.save()?;
+                // Create an address to be managed
+                let _ = context.get_or_create_client_state(&address)?;
                 println!(
                     "Created new keypair for address : {}",
                     encode_address_hex(&address)
@@ -329,7 +352,6 @@ fn make_authority_clients(
 pub struct WalletContext {
     pub config: WalletConfig,
     pub address_manager: ClientAddressManager<AuthorityClient>,
-    pub client_states: BTreeMap<FastPayAddress, ClientState<AuthorityClient>>,
 }
 
 impl WalletContext {
@@ -339,44 +361,14 @@ impl WalletContext {
             config,
             address_manager: ClientAddressManager::new(PathBuf::from_str(&path).unwrap())
                 .expect("Unable to create address manager"),
-            client_states: Default::default(),
         }
     }
-
-    pub fn find_owner(&self, object_id: &ObjectID) -> Result<FastPayAddress, FastPayError> {
-        self.client_states
-            .iter()
-            .find_map(|(owner, client_state)| {
-                if client_state.get_owned_objects().contains(object_id) {
-                    Some(owner)
-                } else {
-                    None
-                }
-            })
-            .copied()
-            .ok_or(FastPayError::ObjectNotFound {
-                object_id: *object_id,
-            })
-    }
-
-    // pub fn get_or_crea_te_client_state(
-    //     &mut self,
-    //     owner: &FastPayAddress,
-    // ) -> Result<&mut ClientState<AuthorityClient>, anyhow::Error> {
-    //     Ok(if !self.client_states.contains_key(owner) {
-    //         let new_client = self.create_client_state(owner)?;
-    //         self.client_states.entry(*owner).or_insert(new_client)
-    //     } else {
-    //         self.client_states.get_mut(owner).unwrap()
-    //     })
-    // }
 
     fn get_or_create_client_state(
         &mut self,
         owner: &FastPayAddress,
     ) -> Result<&mut ClientState<AuthorityClient>, FastPayError> {
-        let address = self.get_account_info(owner)?.address;
-        let kp = Box::pin(self.get_account_info(owner)?.key_pair.copy());
+        let kp = Box::pin(self.get_account_cfg_info(owner)?.key_pair.copy());
 
         let voting_rights = self
             .config
@@ -391,15 +383,14 @@ impl WalletContext {
             self.config.send_timeout,
             self.config.recv_timeout,
         );
-        self.address_manager.get_or_create_state_mut(
-            address,
-            kp,
-            committee,
-            authority_clients,
-        )
+        self.address_manager
+            .get_or_create_state_mut(*owner, kp, committee, authority_clients)
     }
 
-    pub fn get_account_info(&self, address: &FastPayAddress) -> Result<&AccountInfo, FastPayError> {
+    pub fn get_account_cfg_info(
+        &self,
+        address: &FastPayAddress,
+    ) -> Result<&AccountInfo, FastPayError> {
         self.config
             .accounts
             .iter()

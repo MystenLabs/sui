@@ -12,27 +12,19 @@ const TX_DIGEST_TO_CERT_CF_NAME: &str = "object_certs";
 const PENDING_ORDERS_CF_NAME: &str = "pending_orders";
 const OBJECT_CF_NAME: &str = "objects";
 
-pub fn init_store(path: PathBuf, names: Vec<&str>) -> Arc<DBWithThreadMode<MultiThreaded>> {
-    open_cf(&path, None, &names).expect("Cannot open DB.")
-}
-
-fn reopen_db<K, V>(db: &Arc<DBWithThreadMode<MultiThreaded>>, name: &str) -> DBMap<K, V> {
-    DBMap::reopen(db, Some(name)).expect(&format!("Cannot open {} CF.", name)[..])
-}
-
 const MANAGED_ADDRESS_PATHS_CF_NAME: &str = "managed_address_paths";
+const MANAGED_ADDRESS_SUBDIR: &str = "addresses";
 
-// Structure
-// AddressManagerStore1
-//     |
-//     |
-//     ------ SingleAddressStore1
+// Dir Structure
+// AddressManagerStore
 //     |
 //     ------ SingleAddressStore1
 //     |
-//     ------ SingleAddressStore1
+//     ------ SingleAddressStore2
 //     |
-//     ------ SingleAddressStore1
+//     ------ SingleAddressStore3
+//     |
+//     ------ SingleAddressStore4
 pub struct ClientAddressManagerStore {
     // Address manager path
     pub path: PathBuf,
@@ -56,7 +48,10 @@ impl ClientAddressManagerStore {
         sha3::Digest::update(&mut hasher, address);
         let hash = sha3::Digest::finalize(hasher);
         let mut path = self.path.clone();
-        path.push(PathBuf::from(format!("/addresses/{:02x}", hash)));
+        path.push(PathBuf::from(format!(
+            "{}/{:02X}",
+            MANAGED_ADDRESS_SUBDIR, hash
+        )));
         path
     }
 
@@ -65,8 +60,7 @@ impl ClientAddressManagerStore {
     pub fn manage_new_address(
         &self,
         address: FastPayAddress,
-    ) -> Result<client_store::ClientSingleAddressStore, typed_store::rocks::TypedStoreError>
-    {
+    ) -> Result<client_store::ClientSingleAddressStore, typed_store::rocks::TypedStoreError> {
         // Create an a path for this address
         let path = self.make_db_path_for_address(address);
         self.managed_address_paths.insert(&address, &path)?;
@@ -77,10 +71,10 @@ impl ClientAddressManagerStore {
     pub fn get_managed_address(
         &self,
         address: FastPayAddress,
-    ) -> Result<client_store::ClientSingleAddressStore, typed_store::rocks::TypedStoreError>
-    {
+    ) -> Result<client_store::ClientSingleAddressStore, typed_store::rocks::TypedStoreError> {
         // Create an a path for this address
         let path = self.make_db_path_for_address(address);
+
         self.managed_address_paths.get(&address)?;
         Ok(ClientSingleAddressStore::new(path))
     }
@@ -135,4 +129,11 @@ impl ClientSingleAddressStore {
             objects: client_store::reopen_db(&db, OBJECT_CF_NAME),
         }
     }
+}
+
+pub fn init_store(path: PathBuf, names: Vec<&str>) -> Arc<DBWithThreadMode<MultiThreaded>> {
+    open_cf(&path, None, &names).expect("Cannot open DB.")
+}
+fn reopen_db<K, V>(db: &Arc<DBWithThreadMode<MultiThreaded>>, name: &str) -> DBMap<K, V> {
+    DBMap::reopen(db, Some(name)).expect(&format!("Cannot open {} CF.", name)[..])
 }
