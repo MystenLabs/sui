@@ -1,5 +1,5 @@
 [package]
-name = "fastx-network"
+name = "sui-network"
 version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
@@ -14,7 +14,7 @@ net2 = "0.2.37"
 tokio = { version = "1.15.0", features = ["full"] }
 tracing = { version = "0.1", features = ["log"] }
 
-fastx-types = { path = "../fastx_types" }
+sui-types = { path = "../sui_types" }
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["net2"]

@@ -2,9 +2,9 @@
 members = [
         "sui_core",
         "sui",
-        "fastx_programmability/adapter",
-        "fastx_programmability/framework",
-	"fastx_types",
+        "sui_programmability/adapter",
+        "sui_programmability/framework",
+	"sui_types",
 ]
 
 [profile.release]

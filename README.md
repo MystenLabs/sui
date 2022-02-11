@@ -20,12 +20,12 @@ cargo build --release
 cd target/release
 ```
 
-This will create `fastx` and `wallet` binaries in `target/release` directory.
+This will create `sui` and `wallet` binaries in `target/release` directory.
 
 ### 2. Genesis
 
 ```shell
-./fastx genesis
+./sui genesis
 ```
 
 The genesis command creates 4 authorities, 5 user accounts each with 5 gas objects.
@@ -37,13 +37,13 @@ A `wallet.conf` will also be generated to be used by the `wallet` binary to mana
 Run the following command to start the local Sui network:
 
 ```shell
-./fastx start 
+./sui start 
 ```
 
 or
 
 ```shell
-./fastx start --config [config file path]
+./sui start --config [config file path]
 ```
 
 The network config file path is defaulted to `./network.conf` if not specified.  
