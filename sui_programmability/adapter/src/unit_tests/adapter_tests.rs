@@ -8,7 +8,7 @@ use move_binary_format::file_format::{
 };
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
-use std::{mem, path::PathBuf};
+use std::{collections::BTreeSet, mem, path::PathBuf};
 use sui_types::{
     base_types::{self, SequenceNumber},
     error::SuiResult,
@@ -27,7 +27,7 @@ const GAS_BUDGET: u64 = 10000;
 struct ScratchPad {
     updated: BTreeMap<ObjectID, Object>,
     created: BTreeMap<ObjectID, Object>,
-    deleted: Vec<ObjectID>,
+    deleted: BTreeSet<ObjectID>,
     events: Vec<Event>,
 }
 
@@ -86,7 +86,7 @@ impl InMemoryStorage {
         &self.temporary.updated
     }
 
-    pub fn deleted(&self) -> &[ObjectID] {
+    pub fn deleted(&self) -> &BTreeSet<ObjectID> {
         &self.temporary.deleted
     }
 
@@ -105,6 +105,8 @@ impl Storage for InMemoryStorage {
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
+        // there should be no read after delete
+        assert!(!self.temporary.deleted.contains(id));
         // try objects updated in temp memory first
         match self.temporary.updated.get(id).cloned() {
             Some(o) => Some(o),
@@ -120,6 +122,8 @@ impl Storage for InMemoryStorage {
     // buffer write to appropriate place in temporary storage
     fn write_object(&mut self, object: Object) {
         let id = object.id();
+        // there should be no write after delete
+        assert!(!self.temporary.deleted.contains(&id));
         if self.persistent.contains_key(&id) {
             self.temporary.updated.insert(id, object);
         } else {
@@ -133,7 +137,11 @@ impl Storage for InMemoryStorage {
 
     // buffer delete
     fn delete_object(&mut self, id: &ObjectID) {
-        self.temporary.deleted.push(*id)
+        // there should be no deletion after write
+        assert!(self.temporary.updated.get(id) == None);
+        let fresh_id = self.temporary.deleted.insert(*id);
+        // this object was not previously deleted
+        assert!(fresh_id);
     }
 }
 
@@ -418,7 +426,7 @@ fn test_wrap_unwrap() {
     // wrapping should create wrapper object and "delete" wrapped object
     assert_eq!(storage.created().len(), 1);
     assert_eq!(storage.deleted().len(), 1);
-    assert_eq!(storage.deleted()[0].clone(), id1);
+    assert_eq!(storage.deleted().iter().next().unwrap(), &id1);
     let id2 = storage.get_created_keys().pop().unwrap();
     storage.flush();
     assert!(storage.read_object(&id1).is_none());
@@ -441,7 +449,7 @@ fn test_wrap_unwrap() {
     // wrapping should delete wrapped object and "create" unwrapped object
     assert_eq!(storage.created().len(), 1);
     assert_eq!(storage.deleted().len(), 1);
-    assert_eq!(storage.deleted()[0].clone(), id2);
+    assert_eq!(storage.deleted().iter().next().unwrap(), &id2);
     assert_eq!(id1, storage.get_created_keys().pop().unwrap());
     storage.flush();
     assert!(storage.read_object(&id2).is_none());
