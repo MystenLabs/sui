@@ -199,7 +199,7 @@ impl Storage for AuthorityTemporaryStore {
 
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
         // there should be no read after delete
-        assert!(self.deleted.get(id) == None);
+        debug_assert!(self.deleted.get(id) == None);
         match self.written.get(id) {
             Some(x) => Some(x.clone()),
             None => match self.objects.get(id) {
@@ -220,7 +220,7 @@ impl Storage for AuthorityTemporaryStore {
 
     fn write_object(&mut self, mut object: Object) {
         // there should be no write after delete
-        assert!(self.deleted.get(&object.id()) == None);
+        debug_assert!(self.deleted.get(&object.id()) == None);
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
         if let Some(existing_object) = self.read_object(&object.id()) {
@@ -239,7 +239,7 @@ impl Storage for AuthorityTemporaryStore {
 
     fn delete_object(&mut self, id: &ObjectID) {
         // there should be no deletion after write
-        assert!(self.written.get(id) == None);
+        debug_assert!(self.written.get(id) == None);
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
         if let Some(object) = self.read_object(id) {

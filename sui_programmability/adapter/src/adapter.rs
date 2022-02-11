@@ -324,7 +324,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             // (before the call) must be larger than gas_used (after
             // the call) in order for the call to succeed in the first
             // place.
-            assert!(current_gas_budget > gas_used);
+            debug_assert!(current_gas_budget >= gas_used);
             current_gas_budget -= gas_used;
             total_gas_used += gas_used;
         }
