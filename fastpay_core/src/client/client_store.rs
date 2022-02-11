@@ -47,13 +47,10 @@ impl ClientAddressManagerStore {
 
     /// Make a DB path for a given address
     fn make_db_path_for_address(&self, address: FastPayAddress) -> PathBuf {
-        let mut hasher = sha3::Sha3_256::default();
-        sha3::Digest::update(&mut hasher, address);
-        let hash = sha3::Digest::finalize(hasher);
         let mut path = self.path.clone();
         path.push(PathBuf::from(format!(
             "{}/{:02X}",
-            MANAGED_ADDRESS_SUBDIR, hash
+            MANAGED_ADDRESS_SUBDIR, address
         )));
         path
     }
