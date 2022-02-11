@@ -6,6 +6,7 @@ use fastx_types::{
     base_types::{self, SequenceNumber},
     error::FastPayResult,
     gas_coin::GAS,
+    object::Data,
     storage::Storage,
     FASTX_FRAMEWORK_ADDRESS,
 };
@@ -14,7 +15,8 @@ use move_binary_format::file_format::{
     StructHandle,
 };
 use move_core_types::{account_address::AccountAddress, ident_str};
-use std::mem;
+use move_package::BuildConfig;
+use std::{mem, path::PathBuf};
 
 use super::*;
 
@@ -103,7 +105,16 @@ impl Storage for InMemoryStorage {
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
-        self.persistent.get(id).cloned()
+        // try objects updated in temp memory first
+        match self.temporary.updated.get(id).cloned() {
+            Some(o) => Some(o),
+            // try objects created in temp memory
+            None => match self.temporary.created.get(id).cloned() {
+                Some(o) => Some(o),
+                // try persistent memory
+                None => self.persistent.get(id).cloned(),
+            },
+        }
     }
 
     // buffer write to appropriate place in temporary storage
@@ -128,7 +139,6 @@ impl Storage for InMemoryStorage {
 
 impl ModuleResolver for InMemoryStorage {
     type Error = ();
-
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self
             .read_object(module_id.address())
@@ -178,7 +188,7 @@ fn call(
         pure_args,
         gas_budget,
         gas_object,
-        &TxContext::random_for_testing_only(),
+        &mut TxContext::random_for_testing_only(),
     )
 }
 
@@ -516,6 +526,7 @@ fn test_publish_module_insufficient_gas() {
         module_bytes,
         base_types::FastPayAddress::default(),
         &mut tx_context,
+        GAS_BUDGET,
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
@@ -721,7 +732,7 @@ fn test_move_call_incorrect_function() {
         vec![],
         GAS_BUDGET,
         gas_object.clone(),
-        &TxContext::random_for_testing_only(),
+        &mut TxContext::random_for_testing_only(),
     )
     .unwrap();
     let (gas_used, err) = status.unwrap_err();
@@ -810,6 +821,7 @@ fn test_publish_module_linker_error() {
         module_bytes,
         base_types::FastPayAddress::default(),
         &mut tx_context,
+        GAS_BUDGET,
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
@@ -852,6 +864,7 @@ fn test_publish_module_non_zero_address() {
         module_bytes,
         base_types::FastPayAddress::default(),
         &mut tx_context,
+        GAS_BUDGET,
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
@@ -899,5 +912,220 @@ fn test_coin_transfer() {
     // should update gas object and input coin
     assert_eq!(storage.updated().len(), 2);
     // should create one new coin
+    assert_eq!(storage.created().len(), 1);
+}
+
+/// A helper function for publishing modules stored in source files.
+fn publish_from_src(
+    storage: &mut InMemoryStorage,
+    natives: &NativeFunctionTable,
+    src_path: &str,
+    gas_object: Object,
+    gas_budget: u64,
+) {
+    storage.write_object(gas_object.clone());
+    storage.flush();
+
+    // build modules to be published
+    let build_config = BuildConfig::default();
+    let mut module_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    module_path.push(src_path);
+    let modules = fastx_framework::build_move_package(&module_path, build_config, false).unwrap();
+
+    // publish modules
+    let all_module_bytes = modules
+        .iter()
+        .map(|m| {
+            let mut module_bytes = Vec::new();
+            m.serialize(&mut module_bytes).unwrap();
+            module_bytes
+        })
+        .collect();
+    let mut tx_context = TxContext::random_for_testing_only();
+    let response = adapter::publish(
+        storage,
+        natives.clone(),
+        all_module_bytes,
+        base_types::FastPayAddress::default(),
+        &mut tx_context,
+        gas_budget,
+        gas_object,
+    );
+    assert!(matches!(response.unwrap(), ExecutionStatus::Success { .. }));
+}
+
+#[test]
+fn test_simple_call() {
+    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+    );
+
+    // publish modules at a given path
+    publish_from_src(
+        &mut storage,
+        &natives,
+        "src/unit_tests/data/simple_call",
+        gas_object.clone(),
+        0,
+    );
+    // TODO: to be honest I am not sure why this flush is needed but
+    // without it, the following assertion below fails:
+    // assert!(obj.owner.is_address(&addr));
+    storage.flush();
+
+    // call published module function
+    let obj_val = 42u64;
+
+    let addr = base_types::get_key_pair().0;
+    let pure_args = vec![
+        obj_val.to_le_bytes().to_vec(),
+        bcs::to_bytes(&addr.to_vec()).unwrap(),
+    ];
+
+    let response = call(
+        &mut storage,
+        &natives,
+        "M1",
+        "create",
+        gas_object,
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        pure_args,
+    );
+    assert!(matches!(response.unwrap(), ExecutionStatus::Success { .. }));
+
+    // check if the object was created and if it has the right value
+    let id = storage.get_created_keys().pop().unwrap();
+    storage.flush();
+    let obj = storage.read_object(&id).unwrap();
+    assert!(obj.owner.is_address(&addr));
+    assert_eq!(obj.version(), SequenceNumber::from(1));
+    let move_obj = obj.data.try_as_move().unwrap();
+    assert_eq!(
+        u64::from_le_bytes(move_obj.type_specific_contents().try_into().unwrap()),
+        obj_val
+    );
+}
+
+#[test]
+/// Tests publishing of a module with a constructor that creates a
+/// single object with a single u64 value 42.
+fn test_publish_init() {
+    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+    );
+
+    // publish modules at a given path
+    publish_from_src(
+        &mut storage,
+        &natives,
+        "src/unit_tests/data/publish_init",
+        gas_object,
+        GAS_BUDGET,
+    );
+
+    // a package object and a fresh object in the constructor should
+    // have been crated
+    assert_eq!(storage.created().len(), 2);
+    let to_check = mem::take(&mut storage.temporary.created);
+    let mut move_obj_exists = false;
+    for o in to_check.values() {
+        if let Data::Move(move_obj) = &o.data {
+            move_obj_exists = true;
+            assert_eq!(
+                u64::from_le_bytes(move_obj.type_specific_contents().try_into().unwrap()),
+                42u64
+            );
+        }
+    }
+    assert!(move_obj_exists);
+}
+
+#[test]
+/// Tests public initializer that should not be executed upon
+/// publishing the module.
+fn test_publish_init_public() {
+    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+    );
+
+    // publish modules at a given path
+    publish_from_src(
+        &mut storage,
+        &natives,
+        "src/unit_tests/data/publish_init_public",
+        gas_object,
+        GAS_BUDGET,
+    );
+
+    // only a package object should have been crated
+    assert_eq!(storage.created().len(), 1);
+}
+
+#[test]
+/// Tests initializer returning a value that should not be executed
+/// upon publishing the module.
+fn test_publish_init_ret() {
+    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+    );
+
+    // publish modules at a given path
+    publish_from_src(
+        &mut storage,
+        &natives,
+        "src/unit_tests/data/publish_init_ret",
+        gas_object,
+        GAS_BUDGET,
+    );
+
+    // only a package object should have been crated
+    assert_eq!(storage.created().len(), 1);
+}
+
+#[test]
+/// Tests initializer with parameters other than &mut TxContext that
+/// should not be executed upon publishing the module.
+fn test_publish_init_param() {
+    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object = Object::with_id_owner_for_testing(
+        ObjectID::random(),
+        base_types::FastPayAddress::default(),
+    );
+
+    // publish modules at a given path
+    publish_from_src(
+        &mut storage,
+        &natives,
+        "src/unit_tests/data/publish_init_param",
+        gas_object,
+        GAS_BUDGET,
+    );
+
+    // only a package object should have been crated
     assert_eq!(storage.created().len(), 1);
 }

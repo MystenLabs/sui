@@ -44,6 +44,7 @@ pub struct MoveModulePublish {
     pub sender: FastPayAddress,
     pub gas_payment: ObjectRef,
     pub modules: Vec<Vec<u8>>,
+    pub gas_budget: u64,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -208,9 +209,11 @@ pub struct OrderInfoResponse {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionStatus {
-    Success,
+    // Gas used in the success case.
+    Success {
+        gas_used: u64,
+    },
     // Gas used in the failed case, and the error.
-    // TODO: Eventually we should return gas_used in both cases.
     Failure {
         gas_used: u64,
         error: Box<FastPayError>,
@@ -218,9 +221,9 @@ pub enum ExecutionStatus {
 }
 
 impl ExecutionStatus {
-    pub fn unwrap(self) {
+    pub fn unwrap(self) -> u64 {
         match self {
-            ExecutionStatus::Success => (),
+            ExecutionStatus::Success { gas_used } => gas_used,
             ExecutionStatus::Failure { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
@@ -229,7 +232,7 @@ impl ExecutionStatus {
 
     pub fn unwrap_err(self) -> (u64, FastPayError) {
         match self {
-            ExecutionStatus::Success => {
+            ExecutionStatus::Success { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
             ExecutionStatus::Failure { gas_used, error } => (gas_used, *error),
@@ -372,12 +375,14 @@ impl Order {
         sender: FastPayAddress,
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
+        gas_budget: u64,
         secret: &dyn signature::Signer<ed25519::Signature>,
     ) -> Self {
         let kind = OrderKind::Publish(MoveModulePublish {
             sender,
             gas_payment,
             modules,
+            gas_budget,
         });
         Self::new(kind, secret)
     }
