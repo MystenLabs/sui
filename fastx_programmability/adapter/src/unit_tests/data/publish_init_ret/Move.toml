@@ -1,0 +1,10 @@
+[package]
+name = "publish_init_ret"
+version = "0.0.0"
+
+[addresses]
+Test = "0x0"
+
+[dependencies]
+MoveStdlib = { local = "../../../../../framework/deps/move-stdlib/" }
+FastX =      { local = "../../../../../framework" }

@@ -55,6 +55,10 @@ pub enum WalletCommands {
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         #[structopt(long)]
         gas: ObjectID,
+
+        /// gas budget for running module initializers
+        #[structopt(default_value = "0")]
+        gas_budget: u64,
     },
 
     /// Call Move
@@ -131,11 +135,15 @@ pub enum WalletCommands {
 impl WalletCommands {
     pub async fn execute(&mut self, context: &mut WalletContext) -> Result<(), anyhow::Error> {
         match self {
-            WalletCommands::Publish { path, gas } => {
+            WalletCommands::Publish {
+                path,
+                gas,
+                gas_budget,
+            } => {
                 // Find owner of gas object
                 let owner = context.find_owner(gas)?;
                 let client_state = context.get_or_create_client_state(&owner)?;
-                publish(client_state, path.clone(), *gas).await;
+                publish(client_state, path.clone(), *gas, *gas_budget).await;
             }
 
             WalletCommands::Object { id, deep } => {
@@ -257,17 +265,18 @@ async fn publish(
     client_state: &mut ClientState<AuthorityClient>,
     path: String,
     gas_object_id: ObjectID,
+    gas_budget: u64,
 ) {
     let gas_obj_ref = *client_state
         .object_refs()
         .get(&gas_object_id)
         .expect("Gas object not found");
 
-    let pub_resp = client_state.publish(path, gas_obj_ref).await;
+    let pub_resp = client_state.publish(path, gas_obj_ref, gas_budget).await;
 
     match pub_resp {
         Ok((_, effects)) => {
-            if effects.status != ExecutionStatus::Success {
+            if !matches!(effects.status, ExecutionStatus::Success { .. }) {
                 error!("Error publishing module: {:#?}", effects.status);
             }
             show_object_effects(effects);

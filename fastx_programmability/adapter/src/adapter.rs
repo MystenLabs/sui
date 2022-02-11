@@ -21,14 +21,15 @@ use fastx_types::{
 use fastx_verifier::verifier;
 use move_binary_format::{
     errors::PartialVMResult,
-    file_format::CompiledModule,
+    file_format::{CompiledModule, Visibility},
     normalized::{Function, Type},
 };
 
 use move_cli::sandbox::utils::get_gas_status;
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::Identifier,
+    ident_str,
+    identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
@@ -82,7 +83,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     pure_args: Vec<Vec<u8>>,
     gas_budget: u64,
     mut gas_object: Object,
-    ctx: &TxContext,
+    ctx: &mut TxContext,
 ) -> FastPayResult<ExecutionStatus> {
     let mut object_owner_map = HashMap::new();
     for object in object_args.iter().filter(|obj| !obj.is_read_only()) {
@@ -110,6 +111,52 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         }
     };
 
+    match execute_internal(
+        vm,
+        state_view,
+        &module_id,
+        function,
+        type_args,
+        args,
+        mutable_ref_objects,
+        by_value_objects,
+        object_owner_map,
+        gas_budget,
+        ctx,
+        false,
+    ) {
+        Ok(ExecutionStatus::Success { gas_used }) => {
+            match gas::try_deduct_gas(&mut gas_object, gas_used) {
+                Ok(()) => {
+                    state_view.write_object(gas_object);
+                    Ok(ExecutionStatus::Success { gas_used })
+                }
+                Err(err) => exec_failure!(gas_budget, err),
+            }
+        }
+        Ok(ExecutionStatus::Failure { gas_used, error }) => exec_failure!(gas_used, *error),
+        Err(err) => Err(err),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_internal<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+>(
+    vm: &MoveVM,
+    state_view: &mut S,
+    module_id: &ModuleId,
+    function: &Identifier,
+    type_args: Vec<TypeTag>,
+    args: Vec<Vec<u8>>,
+    mutable_ref_objects: Vec<Object>,
+    by_value_objects: BTreeMap<AccountAddress, Object>,
+    object_owner_map: HashMap<AccountAddress, AccountAddress>,
+    gas_budget: u64,
+    ctx: &mut TxContext,
+    for_publish: bool,
+) -> FastPayResult<ExecutionStatus> {
     // TODO: Update Move gas constants to reflect the gas fee on fastx.
     let cost_table = &move_vm_types::gas_schedule::INITIAL_COST_SCHEDULE;
     let mut gas_status = match get_gas_status(cost_table, Some(gas_budget)).map_err(|e| {
@@ -124,7 +171,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     };
     let session = vm.new_session(state_view);
     match session.execute_function_for_effects(
-        &module_id,
+        module_id,
         function,
         type_args,
         args,
@@ -145,8 +192,22 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
             debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
             debug_assert!(gas_used <= gas_budget);
-            // discard the &mut TxContext arg
-            mutable_ref_values.pop().unwrap();
+            if for_publish {
+                // When this function is used during publishing, it
+                // may be executed several times, with objects being
+                // created in the Move VM in each Move call. In such
+                // case, we need to update TxContext value so that it
+                // reflects what happened each time we call into the
+                // Move VM (e.g. to account for the number of created
+                // objects). We guard it with a flag to avoid
+                // serialization cost for non-publishing calls.
+                let ctx_bytes = mutable_ref_values.pop().unwrap();
+                let updated_ctx: TxContext = bcs::from_bytes(ctx_bytes.as_slice()).unwrap();
+                if let Err(err) = ctx.update_state(updated_ctx) {
+                    exec_failure!(gas::MIN_MOVE_CALL_GAS, err);
+                }
+            }
+
             let mutable_refs = mutable_ref_objects
                 .into_iter()
                 .zip(mutable_ref_values.into_iter());
@@ -163,13 +224,9 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
                 // Cap total_gas by gas_budget in the fail case.
                 exec_failure!(std::cmp::min(total_gas, gas_budget), err);
             }
-            match gas::try_deduct_gas(&mut gas_object, total_gas) {
-                Ok(()) => {
-                    state_view.write_object(gas_object);
-                    Ok(ExecutionStatus::Success)
-                }
-                Err(err) => exec_failure!(gas_budget, err),
-            }
+            Ok(ExecutionStatus::Success {
+                gas_used: total_gas,
+            })
         }
         ExecutionResult::Fail { error, gas_used } => exec_failure!(
             gas_used,
@@ -188,15 +245,9 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     module_bytes: Vec<Vec<u8>>,
     sender: FastPayAddress,
     ctx: &mut TxContext,
+    gas_budget: u64,
     mut gas_object: Object,
 ) -> FastPayResult<ExecutionStatus> {
-    // Deduct gas upfront, if not enough balance, bail out early.
-    let gas_cost = gas::calculate_module_publish_cost(&module_bytes);
-    if let Err(err) = gas::try_deduct_gas(&mut gas_object, gas_cost) {
-        exec_failure!(gas::MIN_MOVE_PUBLISH_GAS, err);
-    }
-    state_view.write_object(gas_object);
-
     let result = module_bytes
         .iter()
         .map(|b| CompiledModule::deserialize(b))
@@ -226,15 +277,95 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         Ok(ok) => ok,
         Err(err) => exec_failure!(gas::MIN_MOVE_PUBLISH_GAS, err),
     };
-    if let Err(err) = verify_and_link(state_view, &modules, package_id, natives) {
-        exec_failure!(gas::MIN_MOVE_PUBLISH_GAS, err);
+    let vm = match verify_and_link(state_view, &modules, package_id, natives) {
+        Ok(ok) => ok,
+        Err(err) => exec_failure!(gas::MIN_MOVE_PUBLISH_GAS, err),
+    };
+
+    let mut modules_to_init = Vec::new();
+    for module in modules.iter() {
+        if module_has_init(module) {
+            modules_to_init.push(module.self_id());
+        }
     }
 
     // wrap the modules in an object, write it to the store
     let package_object = Object::new_package(modules, Authenticator::Address(sender), ctx.digest());
     state_view.write_object(package_object);
 
-    Ok(ExecutionStatus::Success)
+    let gas_cost = gas::calculate_module_publish_cost(&module_bytes);
+    let mut total_gas_used = gas_cost;
+    let no_init_calls = modules_to_init.is_empty();
+    if !no_init_calls {
+        let mut current_gas_budget = gas_budget;
+        for module_id in modules_to_init {
+            let args = vec![ctx.to_vec()];
+
+            let gas_used = match execute_internal(
+                &vm,
+                state_view,
+                &module_id,
+                &Identifier::new(INIT_FN_NAME.as_str()).unwrap(),
+                Vec::new(),
+                args,
+                Vec::new(),
+                BTreeMap::new(),
+                HashMap::new(),
+                current_gas_budget,
+                ctx,
+                true,
+            ) {
+                Ok(ExecutionStatus::Success { gas_used }) => gas_used,
+                Ok(ExecutionStatus::Failure { gas_used, error }) => exec_failure!(gas_used, *error),
+                Err(err) => exec_failure!(gas::MIN_MOVE_CALL_GAS, err),
+            };
+            if current_gas_budget > gas_used {
+                current_gas_budget -= gas_used;
+            } else {
+                current_gas_budget = 0;
+            }
+            total_gas_used += gas_used;
+        }
+    }
+
+    match gas::try_deduct_gas(&mut gas_object, total_gas_used) {
+        Ok(()) => state_view.write_object(gas_object),
+        Err(err) => {
+            if no_init_calls {
+                // no init calls so charge the "usual" publishing fee
+                exec_failure!(gas::MIN_MOVE_PUBLISH_GAS, err);
+            } else {
+                // charge the same as for failed gas deduction for Move calls
+                exec_failure!(gas_budget, err);
+            }
+        }
+    };
+
+    Ok(ExecutionStatus::Success {
+        gas_used: total_gas_used,
+    })
+}
+
+const INIT_FN_NAME: &IdentStr = ident_str!("init");
+
+pub fn module_has_init(module: &CompiledModule) -> bool {
+    let function = match Function::new_from_name(module, INIT_FN_NAME) {
+        Some(v) => v,
+        None => return false,
+    };
+    if function.visibility != Visibility::Private {
+        return false;
+    }
+    if !function.type_parameters.is_empty() {
+        return false;
+    }
+    if !function.return_.is_empty() {
+        return false;
+    }
+    if function.parameters.len() != 1 {
+        return false;
+    }
+    is_param_tx_context(&function.parameters[0])
 }
 
 /// Given a list of `modules`, links each module against its
@@ -248,7 +379,7 @@ pub fn verify_and_link<
     modules: &[CompiledModule],
     package_id: ObjectID,
     natives: NativeFunctionTable,
-) -> Result<(), FastPayError> {
+) -> Result<MoveVM, FastPayError> {
     // Run the Move bytecode verifier and linker.
     // It is important to do this before running the FastX verifier, since the fastX
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
@@ -279,7 +410,7 @@ pub fn verify_and_link<
         // Run FastX bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
         verifier::verify_module(module)?;
     }
-    Ok(())
+    Ok(vm)
 }
 
 /// Given a list of `modules`, use `ctx` to generate a fresh ID for the new packages.
@@ -559,34 +690,12 @@ fn resolve_and_type_check(
         });
     }
     // check that the last arg is `&mut TxContext`
-    if let Type::MutableReference(s) =
-        &function_signature.parameters[function_signature.parameters.len() - 1]
-    {
-        // TODO: does Rust let you pattern match on a nested box? can simplify big time if so...
-        match s.borrow() {
-            Type::Struct {
-            address,
-            module,
-            name,
-            type_arguments,
-        } if address == &FASTX_FRAMEWORK_ADDRESS
-            && module.as_ident_str() == TX_CONTEXT_MODULE_NAME
-            && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME
-            && type_arguments.is_empty() => {}
-        t => {
-            return Err(FastPayError::InvalidFunctionSignature {
-                error: format!(
-                    "Expected last parameter of function signature to be &mut {}::{}::{}, but found {}",
-                    FASTX_FRAMEWORK_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, t
-                ),
-            })
-        }
-    }
-    } else {
+    let last_param = &function_signature.parameters[function_signature.parameters.len() - 1];
+    if !is_param_tx_context(last_param) {
         return Err(FastPayError::InvalidFunctionSignature {
             error: format!(
-                "Expected last parameter of function signature to be &mut {}::{}::{}, but found non-reference_type",
-                FASTX_FRAMEWORK_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME
+                "Expected last parameter of function signature to be &mut {}::{}::{}, but found {}",
+                FASTX_FRAMEWORK_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, last_param
             ),
         });
     }
@@ -684,6 +793,27 @@ fn resolve_and_type_check(
         by_value_objects,
         mutable_ref_objects,
     })
+}
+
+fn is_param_tx_context(param: &Type) -> bool {
+    if let Type::MutableReference(typ) = param {
+        match &**typ {
+            Type::Struct {
+                address,
+                module,
+                name,
+                type_arguments,
+            } if address == &FASTX_FRAMEWORK_ADDRESS
+                && module.as_ident_str() == TX_CONTEXT_MODULE_NAME
+                && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME
+                && type_arguments.is_empty() =>
+            {
+                return true
+            }
+            _ => return false,
+        }
+    }
+    false
 }
 
 fn type_check_struct(arg_type: &StructTag, param_type: &Type) -> Result<(), FastPayError> {

@@ -183,6 +183,7 @@ pub trait Client {
         &mut self,
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
+        gas_budget: u64,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
 
     /// Get the object information
@@ -678,6 +679,7 @@ where
         &mut self,
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
+        gas_budget: u64,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         // Try to compile the package at the given path
         let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
@@ -685,6 +687,7 @@ where
             self.address,
             gas_object_ref,
             compiled_modules,
+            gas_budget,
             &*self.secret,
         );
         self.execute_transaction(move_publish_order).await

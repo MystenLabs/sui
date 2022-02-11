@@ -302,7 +302,7 @@ async fn test_handle_transfer_zero_balance() {
 }
 
 async fn send_and_confirm_order(
-    authority: &mut AuthorityState,
+    authority: &AuthorityState,
     order: Order,
 ) -> Result<OrderInfoResponse, FastPayError> {
     // Make the initial request
@@ -369,12 +369,13 @@ async fn test_publish_dependent_module_ok() {
         dependent_module.serialize(&mut bytes).unwrap();
         bytes
     };
-    let mut authority = init_state_with_objects(vec![gas_payment_object]).await;
+    let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
     let order = Order::new_module(
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
+        0,
         &sender_key,
     );
     let dependent_module_id = TxContext::new(&sender, order.digest()).fresh_id();
@@ -385,7 +386,7 @@ async fn test_publish_dependent_module_ok() {
         .await
         .unwrap()
         .is_none());
-    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
+    let response = send_and_confirm_order(&authority, order).await.unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
 
     // check that the dependent module got published
@@ -402,16 +403,16 @@ async fn test_publish_module_no_dependencies_ok() {
     let gas_payment_object =
         Object::with_id_owner_gas_for_testing(gas_payment_object_id, gas_seq, sender, gas_balance);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
-    let mut authority = init_state_with_objects(vec![gas_payment_object]).await;
+    let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
     let module = file_format::empty_module();
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
     let gas_cost = calculate_module_publish_cost(&module_bytes);
-    let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, &sender_key);
+    let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, 0, &sender_key);
     let _module_object_id = TxContext::new(&sender, order.digest()).fresh_id();
-    let response = send_and_confirm_order(&mut authority, order).await.unwrap();
+    let response = send_and_confirm_order(&authority, order).await.unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
 
     // check that the module actually got published
@@ -463,6 +464,7 @@ async fn test_publish_non_existing_dependent_module() {
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
+        0,
         &sender_key,
     );
 
@@ -504,7 +506,7 @@ async fn test_publish_module_insufficient_gas() {
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
-    let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, &sender_key);
+    let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, 0, &sender_key);
     let response = authority.handle_order(order.clone()).await.unwrap_err();
     assert!(response
         .to_string()
@@ -517,10 +519,10 @@ async fn test_handle_move_order() {
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_seq = gas_payment_object.version();
-    let mut authority_state = init_state_with_objects(vec![gas_payment_object]).await;
+    let authority_state = init_state_with_objects(vec![gas_payment_object]).await;
 
     let effects = create_move_object(
-        &mut authority_state,
+        &authority_state,
         &gas_payment_object_id,
         &sender,
         &sender_key,
@@ -528,7 +530,7 @@ async fn test_handle_move_order() {
     .await
     .unwrap();
 
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!(effects.created.len(), 1);
     assert!(effects.mutated.is_empty());
 
@@ -960,19 +962,19 @@ async fn test_handle_confirmation_order_idempotent() {
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .await
         .unwrap();
-    assert_eq!(
+    assert!(matches!(
         info.signed_effects.as_ref().unwrap().effects.status,
-        ExecutionStatus::Success
-    );
+        ExecutionStatus::Success { .. }
+    ));
 
     let info2 = authority_state
         .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
         .await
         .unwrap();
-    assert_eq!(
+    assert!(matches!(
         info2.signed_effects.as_ref().unwrap().effects.status,
-        ExecutionStatus::Success
-    );
+        ExecutionStatus::Success { .. }
+    ));
 
     // this is valid because we're checking the authority state does not change the certificate
     compare_order_info_responses(&info, &info2);
@@ -992,24 +994,24 @@ async fn test_handle_confirmation_order_idempotent() {
 async fn test_move_call_mutable_object_not_mutated() {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let mut authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
-    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
     let (new_object_id1, seq1, _) = effects.created[0].0;
 
-    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
     let (new_object_id2, seq2, _) = effects.created[0].0;
 
     let effects = call_framework_code(
-        &mut authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -1021,7 +1023,7 @@ async fn test_move_call_mutable_object_not_mutated() {
     )
     .await
     .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!((effects.created.len(), effects.mutated.len()), (0, 2));
     // Verify that both objects' version increased, even though only one object was updated.
     assert_eq!(
@@ -1048,24 +1050,24 @@ async fn test_move_call_mutable_object_not_mutated() {
 async fn test_move_call_delete() {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let mut authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
-    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
     let (new_object_id1, _seq1, _) = effects.created[0].0;
 
-    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
     let (new_object_id2, _seq2, _) = effects.created[0].0;
 
     let effects = call_framework_code(
-        &mut authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -1077,11 +1079,11 @@ async fn test_move_call_delete() {
     )
     .await
     .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!((effects.created.len(), effects.mutated.len()), (0, 2));
 
     let effects = call_framework_code(
-        &mut authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -1093,7 +1095,7 @@ async fn test_move_call_delete() {
     )
     .await
     .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!((effects.deleted.len(), effects.mutated.len()), (1, 0));
 }
 
@@ -1101,20 +1103,20 @@ async fn test_move_call_delete() {
 async fn test_get_latest_parent_entry() {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let mut authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
-    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
     let (new_object_id1, _seq1, _) = effects.created[0].0;
 
-    let effects = create_move_object(&mut authority_state, &gas_object_id, &sender, &sender_key)
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
     let (new_object_id2, _seq2, _) = effects.created[0].0;
 
     let effects = call_framework_code(
-        &mut authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -1138,7 +1140,7 @@ async fn test_get_latest_parent_entry() {
     assert_eq!(effects.transaction_digest, tx);
 
     let effects = call_framework_code(
-        &mut authority_state,
+        &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
@@ -1296,10 +1298,11 @@ async fn test_hero() {
     ]);
     let admin_gas_object = Object::with_id_owner_for_testing(ObjectID::random(), admin);
     let admin_gas_object_ref = admin_gas_object.to_object_reference();
+
     let (player, player_key) = get_key_pair();
     let player_gas_object = Object::with_id_owner_for_testing(ObjectID::random(), player);
     let player_gas_object_ref = player_gas_object.to_object_reference();
-    let mut authority = init_state_with_objects(vec![admin_gas_object, player_gas_object]).await;
+    let authority = init_state_with_objects(vec![admin_gas_object, player_gas_object]).await;
 
     // 3. Publish the Hero modules to FastX.
     let all_module_bytes = modules
@@ -1310,81 +1313,93 @@ async fn test_hero() {
             module_bytes
         })
         .collect();
-    let order = Order::new_module(admin, admin_gas_object_ref, all_module_bytes, &admin_key);
-    let effects = send_and_confirm_order(&mut authority, order)
+    let order = Order::new_module(
+        admin,
+        admin_gas_object_ref,
+        all_module_bytes,
+        MAX_GAS,
+        &admin_key,
+    );
+    let effects = send_and_confirm_order(&authority, order)
         .await
         .unwrap()
         .signed_effects
         .unwrap()
         .effects;
-    assert_eq!(effects.status, ExecutionStatus::Success);
-    let package_object = effects.created[0].0;
 
-    // 4. Init the game by minting the GameAdmin.
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+
+    let mut successful_checks = 0;
+    let mut admin_object = None;
+    let mut cap = None;
+    let mut package_object = None;
+    for (obj_ref, _) in &effects.created {
+        let new_obj = authority.get_object(&obj_ref.0).await.unwrap().unwrap();
+        if let Data::Package(_) = &new_obj.data {
+            package_object = Some(obj_ref);
+            successful_checks += 1;
+        } else if let Data::Move(move_obj) = &new_obj.data {
+            if move_obj.type_.module == Identifier::new("Hero").unwrap()
+                && move_obj.type_.name == Identifier::new("GameAdmin").unwrap()
+            {
+                successful_checks += 1;
+                admin_object = Some(obj_ref);
+            } else if move_obj.type_.module == Identifier::new("Coin").unwrap()
+                && move_obj.type_.name == Identifier::new("TreasuryCap").unwrap()
+            {
+                successful_checks += 1;
+                cap = Some(obj_ref);
+            }
+        }
+    }
+    // there should be exactly 3 created objects
+    assert!(successful_checks == 3);
+
+    // client needs to own treasury cap so transfer it from admin to
+    // client
     let effects = call_move(
-        &mut authority,
+        &authority,
         &admin_gas_object_ref.0,
         &admin,
         &admin_key,
-        &package_object,
-        ident_str!("Hero").to_owned(),
-        ident_str!("init").to_owned(),
-        vec![],
-        vec![],
-        vec![],
-    )
-    .await
-    .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
-    let (admin_object, admin_object_owner) = effects.created[0];
-    assert!(admin_object_owner.is_address(&admin));
-
-    // 5. Create Trusted Coin Treasury.
-    let effects = call_move(
-        &mut authority,
-        &player_gas_object_ref.0,
-        &player,
-        &player_key,
-        &package_object,
+        package_object.unwrap(),
         ident_str!("TrustedCoin").to_owned(),
-        ident_str!("init").to_owned(),
+        ident_str!("transfer").to_owned(),
         vec![],
-        vec![],
-        vec![],
+        vec![cap.unwrap().0],
+        vec![bcs::to_bytes(&player).unwrap()],
     )
     .await
     .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
-    let (cap, cap_owner) = effects.created[0];
-    assert!(cap_owner.is_address(&player));
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
-    // 6. Mint 500 EXAMPLE TrustedCoin.
+    // 4. Mint 500 EXAMPLE TrustedCoin.
     let effects = call_move(
-        &mut authority,
+        &authority,
         &player_gas_object_ref.0,
         &player,
         &player_key,
-        &package_object,
+        package_object.unwrap(),
         ident_str!("TrustedCoin").to_owned(),
         ident_str!("mint").to_owned(),
         vec![],
-        vec![cap.0],
+        vec![cap.unwrap().0],
         vec![bcs::to_bytes(&500_u64).unwrap()],
     )
     .await
     .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!(effects.mutated.len(), 1); // cap
     let (coin, coin_owner) = effects.created[0];
     assert!(coin_owner.is_address(&player));
 
-    // 7. Purchase a sword using 500 coin. This sword will have magic = 4, sword_strength = 5.
+    // 5. Purchase a sword using 500 coin. This sword will have magic = 4, sword_strength = 5.
     let effects = call_move(
-        &mut authority,
+        &authority,
         &player_gas_object_ref.0,
         &player,
         &player_key,
-        &package_object,
+        package_object.unwrap(),
         ident_str!("Hero").to_owned(),
         ident_str!("acquire_hero").to_owned(),
         vec![],
@@ -1393,20 +1408,20 @@ async fn test_hero() {
     )
     .await
     .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!(effects.mutated.len(), 1); // coin
     let (hero, hero_owner) = effects.created[0];
     assert!(hero_owner.is_address(&player));
     // The payment goes to the admin.
     assert!(effects.mutated[0].1.is_address(&admin));
 
-    // 8. Verify the hero is what we exepct with strength 5.
+    // 6. Verify the hero is what we exepct with strength 5.
     let effects = call_move(
-        &mut authority,
+        &authority,
         &player_gas_object_ref.0,
         &player,
         &player_key,
-        &package_object,
+        package_object.unwrap(),
         ident_str!("Hero").to_owned(),
         ident_str!("assert_hero_strength").to_owned(),
         vec![],
@@ -1415,39 +1430,39 @@ async fn test_hero() {
     )
     .await
     .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
-    // 9. Give them a boar!
+    // 7. Give them a boar!
     let pure_args = vec![
         bcs::to_bytes(&10_u64).unwrap(),          // hp
         bcs::to_bytes(&10_u64).unwrap(),          // strength
         bcs::to_bytes(&player.to_vec()).unwrap(), // recipient
     ];
     let effects = call_move(
-        &mut authority,
+        &authority,
         &admin_gas_object_ref.0,
         &admin,
         &admin_key,
-        &package_object,
+        package_object.unwrap(),
         ident_str!("Hero").to_owned(),
         ident_str!("send_boar").to_owned(),
         vec![],
-        vec![admin_object.0],
+        vec![admin_object.unwrap().0],
         pure_args,
     )
     .await
     .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     let (boar, boar_owner) = effects.created[0];
     assert!(boar_owner.is_address(&player));
 
-    // 10. Slay the boar!
+    // 8. Slay the boar!
     let effects = call_move(
-        &mut authority,
+        &authority,
         &player_gas_object_ref.0,
         &player,
         &player_key,
-        &package_object,
+        package_object.unwrap(),
         ident_str!("Hero").to_owned(),
         ident_str!("slay").to_owned(),
         vec![],
@@ -1456,7 +1471,7 @@ async fn test_hero() {
     )
     .await
     .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     let events = effects.events;
     // should emit one BoarSlainEvent
     assert_eq!(events.len(), 1);
@@ -1469,25 +1484,25 @@ async fn test_object_owning_another_object() {
     let (sender2, sender2_key) = get_key_pair();
     let gas1 = ObjectID::random();
     let gas2 = ObjectID::random();
-    let mut authority = init_state_with_ids(vec![(sender1, gas1), (sender2, gas2)]).await;
+    let authority = init_state_with_ids(vec![(sender1, gas1), (sender2, gas2)]).await;
 
     // Created 3 objects, all owned by sender1.
-    let effects = create_move_object(&mut authority, &gas1, &sender1, &sender1_key)
+    let effects = create_move_object(&authority, &gas1, &sender1, &sender1_key)
         .await
         .unwrap();
     let (obj1, _, _) = effects.created[0].0;
-    let effects = create_move_object(&mut authority, &gas1, &sender1, &sender1_key)
+    let effects = create_move_object(&authority, &gas1, &sender1, &sender1_key)
         .await
         .unwrap();
     let (obj2, _, _) = effects.created[0].0;
-    let effects = create_move_object(&mut authority, &gas1, &sender1, &sender1_key)
+    let effects = create_move_object(&authority, &gas1, &sender1, &sender1_key)
         .await
         .unwrap();
     let (obj3, _, _) = effects.created[0].0;
 
     // Transfer obj1 to obj2.
     let effects = call_framework_code(
-        &mut authority,
+        &authority,
         &gas1,
         &sender1,
         &sender1_key,
@@ -1499,7 +1514,7 @@ async fn test_object_owning_another_object() {
     )
     .await
     .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!(effects.mutated.len(), 2);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
@@ -1509,7 +1524,7 @@ async fn test_object_owning_another_object() {
     // Try to transfer obj1 to obj3, this time it will fail since obj1 is now owned by obj2,
     // and obj2 must be in the input to mutate obj1.
     let effects = call_framework_code(
-        &mut authority,
+        &authority,
         &gas1,
         &sender1,
         &sender1_key,
@@ -1524,7 +1539,7 @@ async fn test_object_owning_another_object() {
 
     // Try to transfer obj2 to obj1, this will create circular ownership and fail.
     let effects = call_framework_code(
-        &mut authority,
+        &authority,
         &gas1,
         &sender1,
         &sender1_key,
@@ -1545,7 +1560,7 @@ async fn test_object_owning_another_object() {
 
     // Transfer obj2 to sender2, now sender 2 owns obj2, which owns obj1.
     let effects = call_framework_code(
-        &mut authority,
+        &authority,
         &gas1,
         &sender1,
         &sender1_key,
@@ -1557,7 +1572,7 @@ async fn test_object_owning_another_object() {
     )
     .await
     .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!(effects.mutated.len(), 1);
     assert_eq!(
         authority.get_object(&obj2).await.unwrap().unwrap().owner,
@@ -1567,7 +1582,7 @@ async fn test_object_owning_another_object() {
     // Sender 1 try to transfer obj1 to obj2 again.
     // This will fail since sender1 no longer owns obj2.
     let effects = call_framework_code(
-        &mut authority,
+        &authority,
         &gas1,
         &sender1,
         &sender1_key,
@@ -1583,7 +1598,7 @@ async fn test_object_owning_another_object() {
     // Sender2 transfers obj1 to obj2. This should be a successful noop
     // since obj1 is already owned by obj2.
     let effects = call_framework_code(
-        &mut authority,
+        &authority,
         &gas2,
         &sender2,
         &sender2_key,
@@ -1595,7 +1610,7 @@ async fn test_object_owning_another_object() {
     )
     .await
     .unwrap();
-    assert_eq!(effects.status, ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!(effects.mutated.len(), 2);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
@@ -1726,7 +1741,7 @@ fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> Ob
 }
 
 async fn call_move(
-    authority: &mut AuthorityState,
+    authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &PublicKeyBytes,
     sender_key: &KeyPair,
@@ -1767,7 +1782,7 @@ async fn call_move(
 }
 
 async fn call_framework_code(
-    authority: &mut AuthorityState,
+    authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &PublicKeyBytes,
     sender_key: &KeyPair,
@@ -1796,7 +1811,7 @@ async fn call_framework_code(
 }
 
 async fn create_move_object(
-    authority: &mut AuthorityState,
+    authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &PublicKeyBytes,
     sender_key: &KeyPair,

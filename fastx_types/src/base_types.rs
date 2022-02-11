@@ -167,6 +167,18 @@ impl TxContext {
         bcs::to_bytes(&self).unwrap()
     }
 
+    /// Updates state of the context instance. It's intended to use
+    /// when mutable context is passed over some boundary via
+    /// serialize/deserialize and this is the reason why this method
+    /// consumes the other contex..
+    pub fn update_state(&mut self, other: TxContext) -> Result<(), FastPayError> {
+        if self.sender != other.sender || self.digest != other.digest {
+            return Err(FastPayError::InvalidTxUpdate);
+        }
+        self.ids_created = other.ids_created;
+        Ok(())
+    }
+
     // for testing
     pub fn random_for_testing_only() -> Self {
         Self::new(
