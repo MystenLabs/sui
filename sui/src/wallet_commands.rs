@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::config::{AccountInfo, AuthorityInfo, WalletConfig};
 use sui_core::authority_client::AuthorityClient;
-use sui_core::client::{Client, ClientState, ClientAddressManager};
+use sui_core::client::{Client, ClientAddressManager, ClientState};
 use sui_network::network::NetworkClient;
 use sui_types::base_types::{
     decode_address_hex, encode_address_hex, get_key_pair, AuthorityName, ObjectID, PublicKeyBytes,
@@ -386,10 +386,7 @@ impl WalletContext {
             .get_or_create_state_mut(*owner, kp, committee, authority_clients)
     }
 
-    pub fn get_account_cfg_info(
-        &self,
-        address: &SuiAddress,
-    ) -> Result<&AccountInfo, SuiError> {
+    pub fn get_account_cfg_info(&self, address: &SuiAddress) -> Result<&AccountInfo, SuiError> {
         self.config
             .accounts
             .iter()
