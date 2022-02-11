@@ -1,6 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag},
@@ -439,8 +440,19 @@ impl AuthorityState {
                 } else {
                     self.get_order_lock(&object.to_object_reference()).await?
                 };
+                let layout = match request.request_layout {
+                    Some(format) => {
+                        let resolver = ModuleCache::new(&self);
+                        object.get_layout(format, &resolver)?
+                    }
+                    None => None,
+                };
 
-                Some(ObjectResponse { object, lock })
+                Some(ObjectResponse {
+                    object,
+                    lock,
+                    layout,
+                })
             }
             Err(e) => return Err(e),
             _ => None,
@@ -628,5 +640,13 @@ impl AuthorityState {
             .filter_map(|((object_id, _object), d)| d.map(|_| *object_id))
             .collect();
         Ok(filtered)
+    }
+}
+
+impl ModuleResolver for AuthorityState {
+    type Error = SuiError;
+
+    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        self._database.get_module(module_id)
     }
 }

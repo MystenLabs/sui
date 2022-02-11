@@ -427,11 +427,17 @@ where
                 // None if the object was deleted at this authority
                 //
                 // NOTE: here we could also be gathering the locked orders to see if we could make a cert.
-                let (object_option, signed_order_option) =
-                    if let Some(ObjectResponse { object, lock }) = object_and_lock {
-                        (Some(object), lock)
+                // TODO: pass along layout_option so the client can store it
+                let (object_option, signed_order_option, _layout_option) =
+                    if let Some(ObjectResponse {
+                        object,
+                        lock,
+                        layout,
+                    }) = object_and_lock
+                    {
+                        (Some(object), lock, layout)
                     } else {
-                        (None, None)
+                        (None, None, None)
                     };
 
                 // Update the map with the information from this authority
@@ -1072,6 +1078,8 @@ where
         let request = ObjectInfoRequest {
             object_id,
             request_sequence_number: None,
+            // TODO: allow caller to specify layout
+            request_layout: None,
         };
 
         // For now assume all authorities. Assume they're all honest
