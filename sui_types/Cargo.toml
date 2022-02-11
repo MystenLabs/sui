@@ -27,9 +27,9 @@ static_assertions = "1.1.0"
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="d04c29e686aba380e6f9fc0c60a2dfdb974c5f8a"}
 
-move-binary-format = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
-move-bytecode-utils = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
-move-core-types = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5", features=["address20"] }
-move-disassembler = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
-move-ir-types = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
+move-binary-format = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-bytecode-utils = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-core-types = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7", features = ["address20"] }
+move-disassembler = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-ir-types = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
 
