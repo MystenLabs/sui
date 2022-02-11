@@ -30,8 +30,8 @@ use strum_macros::EnumString;
 
 #[derive(Debug, Clone, StructOpt)]
 #[structopt(
-    name = "FastPay Benchmark",
-    about = "Local end-to-end test and benchmark of the FastPay protocol"
+    name = "Sui Benchmark",
+    about = "Local end-to-end test and benchmark of the Sui protocol"
 )]
 struct ClientServerBenchmark {
     /// Hostname
@@ -43,7 +43,7 @@ struct ClientServerBenchmark {
     /// Base port number
     #[structopt(long, default_value = "9555")]
     port: u16,
-    /// Size of the FastPay committee
+    /// Size of the Sui committee
     #[structopt(long, default_value = "10")]
     committee_size: usize,
     /// Maximum number of requests in flight (0 for blocking client)

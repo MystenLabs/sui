@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::verification_failure;
-use fastx_types::error::FastPayResult;
+use fastx_types::error::SuiResult;
 use move_binary_format::{
     binary_views::BinaryIndexedView,
     file_format::{Bytecode, CompiledModule},
 };
 
-pub fn verify_module(module: &CompiledModule) -> FastPayResult {
+pub fn verify_module(module: &CompiledModule) -> SuiResult {
     verify_global_storage_access(module)
 }
 
 /// Global storage in fastx is handled by fastx instead of within Move.
 /// Hence we want to forbid any global storage access in Move.
-fn verify_global_storage_access(module: &CompiledModule) -> FastPayResult {
+fn verify_global_storage_access(module: &CompiledModule) -> SuiResult {
     let view = BinaryIndexedView::Module(module);
     for func_def in &module.function_defs {
         if func_def.code.is_none() {

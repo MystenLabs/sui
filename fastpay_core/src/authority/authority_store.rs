@@ -22,7 +22,7 @@ pub struct AuthorityStore {
     order_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
-    /// composite key of the FastPayAddress of their owner and the object ID of the object.
+    /// composite key of the SuiAddress of their owner and the object ID of the object.
     /// This composite index allows an efficient iterator to list all objected currently owned
     /// by a specific user, and their object reference.
     owner_index: DBMap<(Authenticator, ObjectID), ObjectRef>,
@@ -108,10 +108,7 @@ impl AuthorityStore {
 
     // Methods to read the store
 
-    pub fn get_account_objects(
-        &self,
-        account: FastPayAddress,
-    ) -> Result<Vec<ObjectRef>, FastPayError> {
+    pub fn get_account_objects(&self, account: SuiAddress) -> Result<Vec<ObjectRef>, SuiError> {
         let auth = Authenticator::Address(account);
         Ok(self
             .owner_index
@@ -126,7 +123,7 @@ impl AuthorityStore {
     pub fn get_order_info(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> Result<OrderInfoResponse, FastPayError> {
+    ) -> Result<OrderInfoResponse, SuiError> {
         Ok(OrderInfoResponse {
             signed_order: self.signed_orders.get(transaction_digest)?,
             certified_order: self.certificates.get(transaction_digest)?,
@@ -135,24 +132,21 @@ impl AuthorityStore {
     }
 
     /// Read an object and return it, or Err(ObjectNotFound) if the object was not found.
-    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, FastPayError> {
+    pub fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.objects.get(object_id).map_err(|e| e.into())
     }
 
     /// Get many objects
-    pub fn get_objects(&self, _objects: &[ObjectID]) -> Result<Vec<Option<Object>>, FastPayError> {
+    pub fn get_objects(&self, _objects: &[ObjectID]) -> Result<Vec<Option<Object>>, SuiError> {
         self.objects.multi_get(_objects).map_err(|e| e.into())
     }
 
     /// Read a lock or returns Err(OrderLockDoesNotExist) if the lock does not exist.
-    pub fn get_order_lock(
-        &self,
-        object_ref: &ObjectRef,
-    ) -> Result<Option<SignedOrder>, FastPayError> {
+    pub fn get_order_lock(&self, object_ref: &ObjectRef) -> Result<Option<SignedOrder>, SuiError> {
         let order_option = self
             .order_lock
             .get(object_ref)?
-            .ok_or(FastPayError::OrderLockDoesNotExist)?;
+            .ok_or(SuiError::OrderLockDoesNotExist)?;
 
         match order_option {
             Some(tx_digest) => Ok(Some(
@@ -168,16 +162,13 @@ impl AuthorityStore {
     pub fn read_certificate(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<CertifiedOrder>, FastPayError> {
+    ) -> Result<Option<CertifiedOrder>, SuiError> {
         self.certificates.get(digest).map_err(|e| e.into())
     }
 
     /// Read the transactionDigest that is the parent of an object reference
     /// (ie. the transaction that created an object at this version.)
-    pub fn parent(
-        &self,
-        object_ref: &ObjectRef,
-    ) -> Result<Option<TransactionDigest>, FastPayError> {
+    pub fn parent(&self, object_ref: &ObjectRef) -> Result<Option<TransactionDigest>, SuiError> {
         self.parent_sync.get(object_ref).map_err(|e| e.into())
     }
 
@@ -185,7 +176,7 @@ impl AuthorityStore {
     pub fn multi_get_parents(
         &self,
         object_refs: &[ObjectRef],
-    ) -> Result<Vec<Option<TransactionDigest>>, FastPayError> {
+    ) -> Result<Vec<Option<TransactionDigest>>, SuiError> {
         self.parent_sync
             .multi_get(object_refs)
             .map_err(|e| e.into())
@@ -197,7 +188,7 @@ impl AuthorityStore {
         &self,
         object_id: ObjectID,
         seq: Option<SequenceNumber>,
-    ) -> Result<Vec<(ObjectRef, TransactionDigest)>, FastPayError> {
+    ) -> Result<Vec<(ObjectRef, TransactionDigest)>, SuiError> {
         let seq_inner = seq.unwrap_or_else(|| SequenceNumber::from(0));
         let obj_dig_inner = ObjectDigest::new([0; 32]);
 
@@ -219,7 +210,7 @@ impl AuthorityStore {
     // Methods to mutate the store
 
     /// Insert an object
-    pub fn insert_object(&self, object: Object) -> Result<(), FastPayError> {
+    pub fn insert_object(&self, object: Object) -> Result<(), SuiError> {
         self.objects.insert(&object.id(), &object)?;
 
         // Update the index
@@ -238,7 +229,7 @@ impl AuthorityStore {
 
     /// Initialize a lock to an object reference to None, but keep it
     /// as it is if a value is already present.
-    pub fn init_order_lock(&self, object_ref: ObjectRef) -> Result<(), FastPayError> {
+    pub fn init_order_lock(&self, object_ref: ObjectRef) -> Result<(), SuiError> {
         self.order_lock.get_or_insert(&object_ref, || None)?;
         Ok(())
     }
@@ -253,7 +244,7 @@ impl AuthorityStore {
         &self,
         mutable_input_objects: &[ObjectRef],
         signed_order: SignedOrder,
-    ) -> Result<(), FastPayError> {
+    ) -> Result<(), SuiError> {
         let tx_digest = signed_order.order.digest();
         let lock_batch = self
             .order_lock
@@ -279,7 +270,7 @@ impl AuthorityStore {
 
             for (obj_ref, lock) in mutable_input_objects.iter().zip(locks) {
                 // The object / version must exist, and therefore lock initialized.
-                let lock = lock.ok_or(FastPayError::OrderLockDoesNotExist)?;
+                let lock = lock.ok_or(SuiError::OrderLockDoesNotExist)?;
 
                 if let Some(previous_tx_digest) = lock {
                     if previous_tx_digest != tx_digest {
@@ -288,7 +279,7 @@ impl AuthorityStore {
                             .expect("If we have a lock we should have an order.");
 
                         // TODO: modify ConflictingOrder to only return the order digest here.
-                        return Err(FastPayError::ConflictingOrder {
+                        return Err(SuiError::ConflictingOrder {
                             pending_order: prev_order.order,
                         });
                     }
@@ -311,7 +302,7 @@ impl AuthorityStore {
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedOrder,
         signed_effects: SignedOrderEffects,
-    ) -> Result<OrderInfoResponse, FastPayError> {
+    ) -> Result<OrderInfoResponse, SuiError> {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
@@ -414,7 +405,7 @@ impl AuthorityStore {
             // TODO: maybe we could just check if the certificate is there instead?
             let locks = self.order_lock.multi_get(&active_inputs[..])?;
             for object_lock in locks {
-                object_lock.ok_or(FastPayError::OrderLockDoesNotExist)?;
+                object_lock.ok_or(SuiError::OrderLockDoesNotExist)?;
             }
 
             // Atomic write of all locks & other data
@@ -444,7 +435,7 @@ impl AuthorityStore {
     pub fn get_latest_parent_entry(
         &self,
         object_id: ObjectID,
-    ) -> Result<Option<(ObjectRef, TransactionDigest)>, FastPayError> {
+    ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         let mut iterator = self
             .parent_sync
             .iter()

@@ -3,7 +3,7 @@
 
 //! This module contains the public APIs supported by the bytecode verifier.
 
-use fastx_types::error::FastPayResult;
+use fastx_types::error::SuiResult;
 use move_binary_format::file_format::CompiledModule;
 
 use crate::{
@@ -12,7 +12,7 @@ use crate::{
 };
 
 /// Helper for a "canonical" verification of a module.
-pub fn verify_module(module: &CompiledModule) -> FastPayResult {
+pub fn verify_module(module: &CompiledModule) -> SuiResult {
     struct_with_key_verifier::verify_module(module)?;
     global_storage_access_verifier::verify_module(module)?;
     id_immutable_verifier::verify_module(module)?;

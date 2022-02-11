@@ -3,7 +3,7 @@
 
 use fastx_framework::{self};
 use fastx_types::{
-    base_types::{Authenticator, FastPayAddress, TransactionDigest},
+    base_types::{Authenticator, SuiAddress, TransactionDigest},
     object::Object,
     FASTX_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS,
 };
@@ -29,7 +29,7 @@ fn create_genesis_module_objects() -> Genesis {
     let std_modules = fastx_framework::get_move_stdlib_modules();
     let native_functions =
         fastx_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, FASTX_FRAMEWORK_ADDRESS);
-    let owner = FastPayAddress::default();
+    let owner = SuiAddress::default();
     let objects = vec![
         Object::new_package(
             fastx_modules,

@@ -7,10 +7,10 @@ use crate::bytecode_rewriter::ModuleHandleRewriter;
 use fastx_framework::EventType;
 use fastx_types::{
     base_types::{
-        Authenticator, FastPayAddress, ObjectID, TransactionDigest, TxContext,
-        TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+        Authenticator, ObjectID, SuiAddress, TransactionDigest, TxContext, TX_CONTEXT_MODULE_NAME,
+        TX_CONTEXT_STRUCT_NAME,
     },
-    error::{FastPayError, FastPayResult},
+    error::{SuiError, SuiResult},
     event::Event,
     gas,
     messages::ExecutionStatus,
@@ -57,9 +57,9 @@ macro_rules! exec_failure {
 #[path = "unit_tests/adapter_tests.rs"]
 mod adapter_tests;
 
-pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<MoveVM>, FastPayError> {
+pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<MoveVM>, SuiError> {
     Ok(Arc::new(
-        MoveVM::new(natives).map_err(|_| FastPayError::ExecutionInvariantViolation)?,
+        MoveVM::new(natives).map_err(|_| SuiError::ExecutionInvariantViolation)?,
     ))
 }
 
@@ -84,7 +84,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     gas_budget: u64,
     mut gas_object: Object,
     ctx: &mut TxContext,
-) -> FastPayResult<ExecutionStatus> {
+) -> SuiResult<ExecutionStatus> {
     let mut object_owner_map = HashMap::new();
     for object in object_args.iter().filter(|obj| !obj.is_read_only()) {
         if let Authenticator::Object(owner_object_id) = object.owner {
@@ -156,19 +156,18 @@ fn execute_internal<
     gas_budget: u64,
     ctx: &mut TxContext,
     for_publish: bool,
-) -> FastPayResult<ExecutionStatus> {
+) -> SuiResult<ExecutionStatus> {
     // TODO: Update Move gas constants to reflect the gas fee on fastx.
     let cost_table = &move_vm_types::gas_schedule::INITIAL_COST_SCHEDULE;
-    let mut gas_status = match get_gas_status(cost_table, Some(gas_budget)).map_err(|e| {
-        FastPayError::GasBudgetTooHigh {
+    let mut gas_status =
+        match get_gas_status(cost_table, Some(gas_budget)).map_err(|e| SuiError::GasBudgetTooHigh {
             error: e.to_string(),
-        }
-    }) {
-        Ok(ok) => ok,
-        Err(err) => {
-            exec_failure!(gas::MIN_MOVE_CALL_GAS, err);
-        }
-    };
+        }) {
+            Ok(ok) => ok,
+            Err(err) => {
+                exec_failure!(gas::MIN_MOVE_CALL_GAS, err);
+            }
+        };
     let session = vm.new_session(state_view);
     match session.execute_function_for_effects(
         module_id,
@@ -230,7 +229,7 @@ fn execute_internal<
         }
         ExecutionResult::Fail { error, gas_used } => exec_failure!(
             gas_used,
-            FastPayError::AbortedExecution {
+            SuiError::AbortedExecution {
                 error: error.to_string(),
             }
         ),
@@ -243,11 +242,11 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     state_view: &mut S,
     natives: NativeFunctionTable,
     module_bytes: Vec<Vec<u8>>,
-    sender: FastPayAddress,
+    sender: SuiAddress,
     ctx: &mut TxContext,
     gas_budget: u64,
     mut gas_object: Object,
-) -> FastPayResult<ExecutionStatus> {
+) -> SuiResult<ExecutionStatus> {
     let result = module_bytes
         .iter()
         .map(|b| CompiledModule::deserialize(b))
@@ -257,7 +256,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         Err(err) => {
             exec_failure!(
                 gas::MIN_MOVE_PUBLISH_GAS,
-                FastPayError::ModuleDeserializationFailure {
+                SuiError::ModuleDeserializationFailure {
                     error: err.to_string(),
                 }
             );
@@ -268,7 +267,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     if modules.is_empty() {
         exec_failure!(
             gas::MIN_MOVE_PUBLISH_GAS,
-            FastPayError::ModulePublishFailure {
+            SuiError::ModulePublishFailure {
                 error: "Publishing empty list of modules".to_string(),
             }
         );
@@ -379,7 +378,7 @@ pub fn verify_and_link<
     modules: &[CompiledModule],
     package_id: ObjectID,
     natives: NativeFunctionTable,
-) -> Result<MoveVM, FastPayError> {
+) -> Result<MoveVM, SuiError> {
     // Run the Move bytecode verifier and linker.
     // It is important to do this before running the FastX verifier, since the fastX
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
@@ -401,7 +400,7 @@ pub fn verify_and_link<
         .collect();
     session
         .publish_module_bundle(new_module_bytes, package_id, &mut gas_status)
-        .map_err(|e| FastPayError::ModulePublishFailure {
+        .map_err(|e| SuiError::ModulePublishFailure {
             error: e.to_string(),
         })?;
 
@@ -422,20 +421,20 @@ pub fn verify_and_link<
 pub fn generate_package_id(
     modules: &mut [CompiledModule],
     ctx: &mut TxContext,
-) -> Result<ObjectID, FastPayError> {
+) -> Result<ObjectID, SuiError> {
     let mut sub_map = BTreeMap::new();
     let package_id = ctx.fresh_id();
     for module in modules.iter() {
         let old_module_id = module.self_id();
         let old_address = *old_module_id.address();
         if old_address != AccountAddress::ZERO {
-            return Err(FastPayError::ModulePublishFailure {
+            return Err(SuiError::ModulePublishFailure {
                 error: "Publishing modules with non-zero address is not allowed".to_string(),
             });
         }
         let new_module_id = ModuleId::new(package_id, old_module_id.name().to_owned());
         if sub_map.insert(old_module_id, new_module_id).is_some() {
-            return Err(FastPayError::ModulePublishFailure {
+            return Err(SuiError::ModulePublishFailure {
                 error: "Publishing two modules with the same ID".to_string(),
             });
         }
@@ -468,7 +467,7 @@ fn process_successful_execution<
     events: Vec<MoveEvent>,
     ctx: &TxContext,
     mut object_owner_map: HashMap<ObjectID, ObjectID>,
-) -> (u64, u64, FastPayResult) {
+) -> (u64, u64, SuiResult) {
     for (mut obj, new_contents) in mutable_refs {
         // update contents and increment sequence number
         obj.data
@@ -486,7 +485,7 @@ fn process_successful_execution<
             .expect("Safe because event_type is derived from an EventType enum")
         {
             EventType::TransferToAddress => handle_transfer(
-                Authenticator::Address(FastPayAddress::try_from(recipient.borrow()).unwrap()),
+                Authenticator::Address(SuiAddress::try_from(recipient.borrow()).unwrap()),
                 type_,
                 event_bytes,
                 false, /* should_freeze */
@@ -497,7 +496,7 @@ fn process_successful_execution<
                 &mut object_owner_map,
             ),
             EventType::TransferToAddressAndFreeze => handle_transfer(
-                Authenticator::Address(FastPayAddress::try_from(recipient.borrow()).unwrap()),
+                Authenticator::Address(SuiAddress::try_from(recipient.borrow()).unwrap()),
                 type_,
                 event_bytes,
                 true, /* should_freeze */
@@ -564,7 +563,7 @@ fn handle_transfer<
     gas_used: &mut u64,
     state_view: &mut S,
     object_owner_map: &mut HashMap<ObjectID, ObjectID>,
-) -> FastPayResult {
+) -> SuiResult {
     match type_ {
         TypeTag::Struct(s_type) => {
             let mut move_obj = MoveObject::new(s_type, contents);
@@ -601,7 +600,7 @@ fn handle_transfer<
                     parent = *object_owner_map.get(&parent).unwrap();
                 }
                 if parent == obj_id {
-                    return Err(FastPayError::CircularObjectOwnership);
+                    return Err(SuiError::CircularObjectOwnership);
                 }
                 object_owner_map.insert(obj_id, owner_object_id);
             }
@@ -632,20 +631,20 @@ fn resolve_and_type_check(
     object_args: Vec<Object>,
     mut pure_args: Vec<Vec<u8>>,
     ctx: &TxContext,
-) -> Result<TypeCheckSuccess, FastPayError> {
+) -> Result<TypeCheckSuccess, SuiError> {
     // resolve the function we are calling
     let (function_signature, module_id) = match package_object.data {
         Data::Package(modules) => {
             let bytes = modules
                 .get(module.as_str())
-                .ok_or(FastPayError::ModuleNotFound {
+                .ok_or(SuiError::ModuleNotFound {
                     module_name: module.to_string(),
                 })?;
             let m = CompiledModule::deserialize(bytes).expect(
                 "Unwrap safe because FastX serializes/verifies modules before publishing them",
             );
             (
-                Function::new_from_name(&m, function).ok_or(FastPayError::FunctionNotFound {
+                Function::new_from_name(&m, function).ok_or(SuiError::FunctionNotFound {
                     error: format!(
                         "Could not resolve function '{}' in module {}",
                         function,
@@ -656,20 +655,20 @@ fn resolve_and_type_check(
             )
         }
         Data::Move(_) => {
-            return Err(FastPayError::ModuleLoadFailure {
+            return Err(SuiError::ModuleLoadFailure {
                 error: "Expected a module object, but found a Move object".to_string(),
             })
         }
     };
     // check validity conditions on the invoked function
     if !function_signature.return_.is_empty() {
-        return Err(FastPayError::InvalidFunctionSignature {
+        return Err(SuiError::InvalidFunctionSignature {
             error: "Invoked function must not return a value".to_string(),
         });
     }
     // check arity of type and value arguments
     if function_signature.type_parameters.len() != type_args.len() {
-        return Err(FastPayError::InvalidFunctionSignature {
+        return Err(SuiError::InvalidFunctionSignature {
             error: format!(
                 "Expected {:?} type arguments, but found {:?}",
                 function_signature.type_parameters.len(),
@@ -680,7 +679,7 @@ fn resolve_and_type_check(
     // total number of args is |objects| + |pure_args| + 1 for the the `TxContext` object
     let num_args = object_args.len() + pure_args.len() + 1;
     if function_signature.parameters.len() != num_args {
-        return Err(FastPayError::InvalidFunctionSignature {
+        return Err(SuiError::InvalidFunctionSignature {
             error: format!(
                 "Expected {:?} arguments calling function '{}', but found {:?}",
                 function_signature.parameters.len(),
@@ -692,7 +691,7 @@ fn resolve_and_type_check(
     // check that the last arg is `&mut TxContext`
     let last_param = &function_signature.parameters[function_signature.parameters.len() - 1];
     if !is_param_tx_context(last_param) {
-        return Err(FastPayError::InvalidFunctionSignature {
+        return Err(SuiError::InvalidFunctionSignature {
             error: format!(
                 "Expected last parameter of function signature to be &mut {}::{}::{}, but found {}",
                 FASTX_FRAMEWORK_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, last_param
@@ -722,7 +721,7 @@ fn resolve_and_type_check(
                 match &param_type {
                     Type::MutableReference(inner_t) => {
                         if m.is_read_only() {
-                            return Err(FastPayError::TypeError {
+                            return Err(SuiError::TypeError {
                                 error: format!(
                                     "Argument {} is expected to be mutable, immutable object found",
                                     idx
@@ -741,7 +740,7 @@ fn resolve_and_type_check(
                     }
                     Type::Struct { .. } => {
                         if m.is_read_only() {
-                            return Err(FastPayError::TypeError {
+                            return Err(SuiError::TypeError {
                                 error: format!(
                                     "Argument {} is expected to be mutable, immutable object found",
                                     idx
@@ -754,7 +753,7 @@ fn resolve_and_type_check(
                         debug_assert!(res.is_none())
                     }
                     t => {
-                        return Err(FastPayError::TypeError {
+                        return Err(SuiError::TypeError {
                             error: format!(
                                 "Found object argument {}, but function expects {}",
                                 m.type_, t
@@ -764,7 +763,7 @@ fn resolve_and_type_check(
                 }
             }
             Data::Package(_) => {
-                return Err(FastPayError::TypeError {
+                return Err(SuiError::TypeError {
                     error: format!("Found module argument, but function expects {}", param_type),
                 })
             }
@@ -779,7 +778,7 @@ fn resolve_and_type_check(
         &function_signature.parameters[args.len()..function_signature.parameters.len() - 1]
     {
         if !is_primitive(param_type) {
-            return Err(FastPayError::TypeError {
+            return Err(SuiError::TypeError {
                 error: format!("Expected primitive type, but found {}", param_type),
             });
         }
@@ -816,10 +815,10 @@ fn is_param_tx_context(param: &Type) -> bool {
     false
 }
 
-fn type_check_struct(arg_type: &StructTag, param_type: &Type) -> Result<(), FastPayError> {
+fn type_check_struct(arg_type: &StructTag, param_type: &Type) -> Result<(), SuiError> {
     if let Some(param_struct_type) = param_type.clone().into_struct_tag() {
         if arg_type != &param_struct_type {
-            Err(FastPayError::TypeError {
+            Err(SuiError::TypeError {
                 error: format!(
                     "Expected argument of type {}, but found type {}",
                     param_struct_type, arg_type
@@ -829,7 +828,7 @@ fn type_check_struct(arg_type: &StructTag, param_type: &Type) -> Result<(), Fast
             Ok(())
         }
     } else {
-        Err(FastPayError::TypeError {
+        Err(SuiError::TypeError {
             error: format!(
                 "Expected argument of type {}, but found struct type {}",
                 param_type, arg_type

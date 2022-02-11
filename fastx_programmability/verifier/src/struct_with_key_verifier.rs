@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::verification_failure;
-use fastx_types::{error::FastPayResult, fp_ensure, FASTX_FRAMEWORK_ADDRESS};
+use fastx_types::{error::SuiResult, fp_ensure, FASTX_FRAMEWORK_ADDRESS};
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
     file_format::{CompiledModule, SignatureToken},
 };
 
-pub fn verify_module(module: &CompiledModule) -> FastPayResult {
+pub fn verify_module(module: &CompiledModule) -> SuiResult {
     verify_key_structs(module)
 }
 
-fn verify_key_structs(module: &CompiledModule) -> FastPayResult {
+fn verify_key_structs(module: &CompiledModule) -> SuiResult {
     let view = BinaryIndexedView::Module(module);
     let struct_defs = &module.struct_defs;
     for def in struct_defs {

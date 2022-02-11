@@ -8,7 +8,7 @@ use fastx_types::object::{Object, ObjectRead};
 use fastx_types::{
     base_types::*,
     committee::Committee,
-    error::{FastPayError, FastPayResult},
+    error::{SuiError, SuiResult},
     messages::*,
 };
 use futures::{future, StreamExt};
@@ -30,7 +30,7 @@ mod client_tests;
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 pub struct AuthorityAggregator<AuthorityAPI> {
-    /// Our FastPay committee.
+    /// Our Sui committee.
     pub committee: Committee,
     /// How to talk to this committee.
     authority_clients: BTreeMap<AuthorityName, SafeClient<AuthorityAPI>>,
@@ -72,7 +72,7 @@ where
         cert: ConfirmationOrder,
         source_authority: AuthorityName,
         destination_authority: AuthorityName,
-    ) -> Result<(), FastPayError> {
+    ) -> Result<(), SuiError> {
         let source_client = self.authority_clients[&source_authority].clone();
         let destination_client = self.authority_clients[&destination_authority].clone();
 
@@ -95,7 +95,7 @@ where
                 .await
             {
                 Ok(_) => continue,
-                Err(FastPayError::LockErrors { .. }) => {}
+                Err(SuiError::LockErrors { .. }) => {}
                 Err(e) => return Err(e),
             }
 
@@ -108,7 +108,7 @@ where
             // to update its dependencies, so we should just admit failure.
             let cert_digest = target_cert.certificate.order.digest();
             if attempted_certificates.contains(&cert_digest) {
-                return Err(FastPayError::AuthorityInformationUnavailable);
+                return Err(SuiError::AuthorityInformationUnavailable);
             }
             attempted_certificates.insert(cert_digest);
 
@@ -147,7 +147,7 @@ where
             missing_certificates.push(target_cert);
             let signed_effects = &order_info
                 .signed_effects
-                .ok_or(FastPayError::AuthorityInformationUnavailable)?;
+                .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
             for returned_digest in &signed_effects.effects.dependencies {
                 // We check that we are not processing twice the same certificate, as
@@ -165,11 +165,11 @@ where
 
                     let returned_certificate = inner_order_info
                         .certified_order
-                        .ok_or(FastPayError::AuthorityInformationUnavailable)?;
+                        .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
                     // Check & Add it to the list of certificates to sync
                     returned_certificate.check(&self.committee).map_err(|_| {
-                        FastPayError::ByzantineAuthoritySuspicion {
+                        SuiError::ByzantineAuthoritySuspicion {
                             authority: source_authority,
                         }
                     })?;
@@ -194,7 +194,7 @@ where
         destination_authority: AuthorityName,
         timeout_period: Duration,
         retries: usize,
-    ) -> Result<(), FastPayError> {
+    ) -> Result<(), SuiError> {
         // Extract the set of authorities that should have this certificate
         // and its full history. We should be able to use these are source authorities.
         let mut candidate_source_authorties: HashSet<AuthorityName> = cert
@@ -250,7 +250,7 @@ where
 
         // Eventually we should add more information to this error about the destination
         // and maybe event the certificiate.
-        Err(FastPayError::AuthorityUpdateFailure)
+        Err(SuiError::AuthorityUpdateFailure)
     }
 
     /// This function takes an initial state, than executes an asynchronous function (FMap) for each
@@ -280,15 +280,15 @@ where
         reduce_result: FReduce,
         // The initial timeout applied to all
         initial_timeout: Duration,
-    ) -> Result<S, FastPayError>
+    ) -> Result<S, SuiError>
     where
-        FMap: FnOnce(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, V, FastPayError> + Clone,
+        FMap: FnOnce(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, V, SuiError> + Clone,
         FReduce: Fn(
             S,
             AuthorityName,
             usize,
-            Result<V, FastPayError>,
-        ) -> AsyncResult<'a, ReduceOutput<S>, FastPayError>,
+            Result<V, SuiError>,
+        ) -> AsyncResult<'a, ReduceOutput<S>, SuiError>,
     {
         // TODO: shuffle here according to stake
         let authority_clients = &self.authority_clients;
@@ -343,7 +343,7 @@ where
             >,
             HashMap<TransactionDigest, CertifiedOrder>,
         ),
-        FastPayError,
+        SuiError,
     > {
         let initial_state = ((0usize, 0usize), Vec::new());
         let threshold = self.committee.quorum_threshold();
@@ -372,7 +372,7 @@ where
                             // since either there are too many faulty authorities or we are not connected to the network.
                             total_stake.1 += weight;
                             if total_stake.1 > validity {
-                                return Err(FastPayError::TooManyIncorrectAuthorities);
+                                return Err(SuiError::TooManyIncorrectAuthorities);
                             }
                         }
 
@@ -462,9 +462,9 @@ where
     /// Clients should use `sync_all_owned_objects` instead.
     async fn get_all_owned_objects(
         &self,
-        address: FastPayAddress,
+        address: SuiAddress,
         timeout_after_quorum: Duration,
-    ) -> Result<(BTreeMap<ObjectRef, Vec<AuthorityName>>, Vec<AuthorityName>), FastPayError> {
+    ) -> Result<(BTreeMap<ObjectRef, Vec<AuthorityName>>, Vec<AuthorityName>), SuiError> {
         let initial_state = (
             (0usize, 0usize),
             BTreeMap::<ObjectRef, Vec<AuthorityName>>::new(),
@@ -508,7 +508,7 @@ where
 
                             state.0 .1 += weight;
                             if state.0 .1 > validity {
-                                return Err(FastPayError::TooManyIncorrectAuthorities);
+                                return Err(SuiError::TooManyIncorrectAuthorities);
                             }
                         }
 
@@ -542,7 +542,7 @@ where
             Vec<(Object, Option<CertifiedOrder>)>,
             Vec<(ObjectRef, Option<CertifiedOrder>)>,
         ),
-        FastPayError,
+        SuiError,
     > {
         let mut active_objects = Vec::new();
         let mut deleted_objects = Vec::new();
@@ -644,14 +644,14 @@ where
     /// deleted object references.
     pub async fn sync_all_owned_objects(
         &self,
-        address: FastPayAddress,
+        address: SuiAddress,
         timeout_after_quorum: Duration,
     ) -> Result<
         (
             Vec<(Object, Option<CertifiedOrder>)>,
             Vec<(ObjectRef, Option<CertifiedOrder>)>,
         ),
-        FastPayError,
+        SuiError,
     > {
         // Contact a quorum of authorities, and return all objects they report we own.
         let (object_map, _authority_list) = self
@@ -674,7 +674,7 @@ where
         &self,
         order: Order,
         timeout_after_quorum: Duration,
-    ) -> Result<CertifiedOrder, FastPayError> {
+    ) -> Result<CertifiedOrder, SuiError> {
         // Find out which objects are required by this order and
         // ensure they are synced on authorities.
         let required_ids: Vec<ObjectID> = order
@@ -697,7 +697,7 @@ where
             // A certificate if we manage to make or find one
             certificate: Option<CertifiedOrder>,
             // The list of errors gathered at any point
-            errors: Vec<FastPayError>,
+            errors: Vec<SuiError>,
             // Tally of stake for good vs bad responses.
             good_stake: usize,
             bad_stake: usize,
@@ -759,18 +759,18 @@ where
                                 state.bad_stake += weight; // This is the bad stake counter
                                 if state.bad_stake > validity {
                                     // Too many errors
-                                    return Err(FastPayError::QuorumNotReached {
+                                    return Err(SuiError::QuorumNotReached {
                                         errors: state.errors,
                                     });
                                 }
                             }
                             // In case we don't get an error but also don't get a valid value
                             _ => {
-                                state.errors.push(FastPayError::ErrorWhileProcessingOrder);
+                                state.errors.push(SuiError::ErrorWhileProcessingOrder);
                                 state.bad_stake += weight; // This is the bad stake counter
                                 if state.bad_stake > validity {
                                     // Too many errors
-                                    return Err(FastPayError::QuorumNotReached {
+                                    return Err(SuiError::QuorumNotReached {
                                         errors: state.errors,
                                     });
                                 }
@@ -791,9 +791,7 @@ where
             .await?;
 
         // If we have some certificate return it, or return an error.
-        state
-            .certificate
-            .ok_or(FastPayError::ErrorWhileProcessingOrder)
+        state.certificate.ok_or(SuiError::ErrorWhileProcessingOrder)
     }
 
     /// Process a certificate assuming that 2f+1 authorites already are up to date.
@@ -806,7 +804,7 @@ where
         &self,
         certificate: CertifiedOrder,
         timeout_after_quorum: Duration,
-    ) -> Result<OrderEffects, FastPayError> {
+    ) -> Result<OrderEffects, SuiError> {
         struct ProcessCertificateState {
             effects_map: HashMap<[u8; 32], (usize, OrderEffects)>,
             bad_stake: usize,
@@ -884,7 +882,7 @@ where
                         // If instead we have more than f bad responses, then we fail.
                         state.bad_stake += weight;
                         if state.bad_stake > validity {
-                            return Err(FastPayError::ErrorWhileRequestingCertificate);
+                            return Err(SuiError::ErrorWhileRequestingCertificate);
                         }
 
                         Ok(ReduceOutput::Continue(state))
@@ -904,16 +902,16 @@ where
         }
 
         // If none has, fail.
-        Err(FastPayError::ErrorWhileRequestingCertificate)
+        Err(SuiError::ErrorWhileRequestingCertificate)
     }
 
     #[cfg(test)]
     async fn request_certificate(
         &self,
-        _sender: FastPayAddress,
+        _sender: SuiAddress,
         object_id: ObjectID,
         _sequence_number: SequenceNumber,
-    ) -> Result<CertifiedOrder, FastPayError> {
+    ) -> Result<CertifiedOrder, SuiError> {
         let (object_map, transaction_map) = self
             .get_object_by_id(object_id, Duration::from_secs(10))
             .await?;
@@ -1044,7 +1042,7 @@ where
     pub fn fetch_objects_from_authorities(
         &self,
         object_refs: BTreeSet<ObjectRef>,
-    ) -> Receiver<FastPayResult<Object>> {
+    ) -> Receiver<SuiResult<Object>> {
         let (sender, receiver) = tokio::sync::mpsc::channel(OBJECT_DOWNLOAD_CHANNEL_BOUND);
         for object_ref in object_refs {
             let sender = sender.clone();
@@ -1067,7 +1065,7 @@ where
         authority_clients: BTreeMap<PublicKeyBytes, SafeClient<A>>,
         object_ref: ObjectRef,
         timeout: Duration,
-        sender: tokio::sync::mpsc::Sender<Result<Object, FastPayError>>,
+        sender: tokio::sync::mpsc::Sender<Result<Object, SuiError>>,
     ) {
         let object_id = object_ref.0;
         // Prepare the request
@@ -1084,7 +1082,7 @@ where
         }))
         .await;
 
-        let mut ret_val: Result<Object, FastPayError> = Err(FastPayError::ObjectFetchFailed {
+        let mut ret_val: Result<Object, SuiError> = Err(SuiError::ObjectFetchFailed {
             object_id,
             err: "No authority returned the correct object".to_string(),
         });

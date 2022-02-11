@@ -15,7 +15,7 @@
 
 use crate::verification_failure;
 use fastx_types::{
-    error::{FastPayError, FastPayResult},
+    error::{SuiError, SuiResult},
     FASTX_FRAMEWORK_ADDRESS,
 };
 use move_binary_format::{
@@ -47,11 +47,11 @@ impl AbstractValue {
     }
 }
 
-pub fn verify_module(module: &CompiledModule) -> FastPayResult {
+pub fn verify_module(module: &CompiledModule) -> SuiResult {
     verify_id_leak(module)
 }
 
-fn verify_id_leak(module: &CompiledModule) -> FastPayResult {
+fn verify_id_leak(module: &CompiledModule) -> SuiResult {
     let binary_view = BinaryIndexedView::Module(module);
     for (index, func_def) in module.function_defs.iter().enumerate() {
         let code = match func_def.code.as_ref() {
@@ -68,8 +68,8 @@ fn verify_id_leak(module: &CompiledModule) -> FastPayResult {
         for (_block_id, BlockInvariant { post, .. }) in inv_map {
             match post {
                 BlockPostcondition::Error(err) => match err {
-                    FastPayError::ModuleVerificationFailure { error } => {
-                        return Err(FastPayError::ModuleVerificationFailure {
+                    SuiError::ModuleVerificationFailure { error } => {
+                        return Err(SuiError::ModuleVerificationFailure {
                             error: format!(
                                 "ID leak detected in function {}: {}",
                                 binary_view.identifier_at(handle.name),
@@ -147,7 +147,7 @@ impl<'a> IDLeakAnalysis<'a> {
 
 impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
     type State = AbstractState;
-    type AnalysisError = FastPayError;
+    type AnalysisError = SuiError;
 
     fn execute(
         &mut self,
@@ -177,7 +177,7 @@ fn is_call_safe_to_leak(verifier: &IDLeakAnalysis, function_handle: &FunctionHan
             == "delete"
 }
 
-fn call(verifier: &mut IDLeakAnalysis, function_handle: &FunctionHandle) -> FastPayResult {
+fn call(verifier: &mut IDLeakAnalysis, function_handle: &FunctionHandle) -> SuiResult {
     let guaranteed_safe = is_call_safe_to_leak(verifier, function_handle);
     let parameters = verifier
         .binary_view
@@ -240,7 +240,7 @@ fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     _: CodeOffset,
-) -> FastPayResult {
+) -> SuiResult {
     // TODO: Better dianostics with location
     match bytecode {
         Bytecode::Pop => {
