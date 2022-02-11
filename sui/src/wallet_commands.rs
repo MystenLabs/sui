@@ -36,6 +36,10 @@ pub enum WalletCommands {
     /// Get obj info
     #[structopt(name = "object")]
     Object {
+        /// Owner address
+        #[structopt(long, parse(try_from_str = decode_address_hex))]
+        owner: PublicKeyBytes,
+
         /// Object ID of the object to fetch
         #[structopt(long)]
         id: ObjectID,
@@ -157,17 +161,9 @@ impl WalletCommands {
                 publish(client_state, path.clone(), *gas, *gas_budget).await;
             }
 
-            WalletCommands::Object { id, deep } => {
-                // Pick the first (or any) account for use in finding obj info
-                let account = *context
-                    .address_manager
-                    .get_managed_address_states()
-                    .iter()
-                    .next()
-                    .expect("Unable to find any managed account")
-                    .0;
+            WalletCommands::Object { id, deep, owner } => {
                 // Fetch the object ref
-                let client_state = context.get_or_create_client_state(&account)?;
+                let client_state = context.get_or_create_client_state(owner)?;
                 let object_read = client_state.get_object_info(*id).await?;
                 let object = object_read.object()?;
                 println!("{}", object);
@@ -239,16 +235,15 @@ impl WalletCommands {
             }
 
             WalletCommands::Addresses => {
-                let addresses = context
+                let addr_strings = context
                     .address_manager
                     .get_managed_address_states()
                     .iter()
-                    .map(|(a, _)| *a)
+                    .map(|(a, _)| encode_address_hex(a))
                     .collect::<Vec<_>>();
 
-                let addr_strings: Vec<_> = addresses.iter().map(encode_address_hex).collect();
                 let addr_text = addr_strings.join("\n");
-                println!("Showing {} results.", addresses.len());
+                println!("Showing {} results.", addr_strings.len());
                 println!("{}", addr_text);
             }
 
@@ -355,13 +350,12 @@ pub struct WalletContext {
 }
 
 impl WalletContext {
-    pub fn new(config: WalletConfig) -> Self {
+    pub fn new(config: WalletConfig) -> Result<Self, anyhow::Error> {
         let path = config.db_folder_path.clone();
-        Self {
+        Ok(Self {
             config,
-            address_manager: ClientAddressManager::new(PathBuf::from_str(&path).unwrap())
-                .expect("Unable to create address manager"),
-        }
+            address_manager: ClientAddressManager::new(PathBuf::from_str(&path)?)?,
+        })
     }
 
     fn get_or_create_client_state(

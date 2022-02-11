@@ -54,7 +54,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .iter()
         .map(|info| info.address)
         .collect::<Vec<_>>();
-    let mut context = WalletContext::new(config);
+    let mut context = WalletContext::new(config)?;
 
     // Sync all accounts on start up.
     for address in addresses {
