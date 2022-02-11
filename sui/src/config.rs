@@ -1,11 +1,11 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastpay_core::client::ClientState;
 use fastx_types::{
     base_types::*,
     messages::{CertifiedOrder, OrderKind},
 };
+use sui_core::client::ClientState;
 
 use crate::utils::Config;
 use fastx_network::transport;

@@ -4,7 +4,6 @@
 #![deny(warnings)]
 
 use bytes::Bytes;
-use fastpay_core::{authority::*, authority_server::AuthorityServer};
 use fastx_network::{network::NetworkClient, transport};
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
 use fastx_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
@@ -14,6 +13,7 @@ use rand::rngs::StdRng;
 use rand::Rng;
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
+use sui_core::{authority::*, authority_server::AuthorityServer};
 use tokio::runtime::Runtime;
 use tokio::{runtime::Builder, time};
 use tracing::subscriber::set_global_default;
