@@ -77,7 +77,7 @@ impl<A> ClientAddressManager<A> {
 
         return Ok(self.address_states.get_mut(&address).unwrap());
     }
- 
+
     /// Get all the states
     pub fn get_managed_address_states(&self) -> &BTreeMap<PublicKeyBytes, ClientState<A>> {
         &self.address_states
