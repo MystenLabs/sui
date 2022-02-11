@@ -40,9 +40,9 @@ rustyline-derive = "0.6.0"
 colored = "2.0.0"
 unescape = "0.1.0"
 
-move-package = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
-move-core-types = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5", features=["address20"] }
-move-bytecode-verifier = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
+move-package = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-core-types = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7", features = ["address20"] }
+move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
 
 [[bin]]
 name = "bench"

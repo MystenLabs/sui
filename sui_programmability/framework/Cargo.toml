@@ -15,15 +15,15 @@ num_enum = "0.5.6"
 sui-types = { path = "../../sui_types" }
 sui-verifier = { path = "../verifier" }
 
-move-binary-format = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
-move-bytecode-verifier = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
-move-cli = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
-move-core-types = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5", features=["address20"] }
-move-package = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
-move-stdlib = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
-move-unit-test = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
-move-vm-runtime = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
-move-vm-types = { git = "https://github.com/diem/move", rev="1e5e36cb1fede8073c8688886a0943bb5bfe40d5" }
+move-binary-format = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-cli = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-core-types = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7", features = ["address20"] }
+move-package = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-stdlib = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-unit-test = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-vm-runtime = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-vm-types = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
 
 
 [package.metadata.cargo-udeps.ignore]
