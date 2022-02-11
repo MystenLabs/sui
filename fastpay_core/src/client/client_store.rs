@@ -66,7 +66,7 @@ impl ClientStore {
         &self,
         object_refs: BTreeMap<ObjectID, ObjectRef>,
         certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
-    ) -> Result<(), FastPayError> {
+    ) -> Result<(), SuiError> {
         self.certificates
             .batch()
             .insert_batch(&self.certificates, certificates.iter())?

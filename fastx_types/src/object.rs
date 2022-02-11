@@ -19,11 +19,11 @@ use std::fmt::{Debug, Display, Formatter};
 use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 
-use crate::error::FastPayError;
+use crate::error::SuiError;
 use crate::{
     base_types::{
-        sha3_hash, Authenticator, BcsSignable, FastPayAddress, ObjectDigest, ObjectID, ObjectRef,
-        SequenceNumber, TransactionDigest,
+        sha3_hash, Authenticator, BcsSignable, ObjectDigest, ObjectID, ObjectRef, SequenceNumber,
+        SuiAddress, TransactionDigest,
     },
     gas_coin::GasCoin,
 };
@@ -144,14 +144,14 @@ impl MoveObject {
         &self,
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
-    ) -> Result<MoveStructLayout, FastPayError> {
+    ) -> Result<MoveStructLayout, SuiError> {
         let type_ = TypeTag::Struct(self.type_.clone());
         let layout = if format.include_types {
             TypeLayoutBuilder::build_with_types(&type_, resolver)
         } else {
             TypeLayoutBuilder::build_with_fields(&type_, resolver)
         }
-        .map_err(|_e| FastPayError::ObjectSerializationError)?;
+        .map_err(|_e| SuiError::ObjectSerializationError)?;
         match layout {
             MoveTypeLayout::Struct(l) => Ok(l),
             _ => unreachable!(
@@ -161,10 +161,10 @@ impl MoveObject {
     }
 
     /// Convert `self` to the JSON representation dictated by `layout`.
-    pub fn to_json(&self, layout: &MoveStructLayout) -> Result<Value, FastPayError> {
+    pub fn to_json(&self, layout: &MoveStructLayout) -> Result<Value, SuiError> {
         let move_value = MoveStruct::simple_deserialize(&self.contents, layout)
-            .map_err(|_e| FastPayError::ObjectSerializationError)?;
-        serde_json::to_value(&move_value).map_err(|_e| FastPayError::ObjectSerializationError)
+            .map_err(|_e| SuiError::ObjectSerializationError)?;
+        serde_json::to_value(&move_value).map_err(|_e| SuiError::ObjectSerializationError)
     }
 }
 
@@ -222,7 +222,7 @@ impl Data {
         &self,
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
-    ) -> Result<Value, FastPayError> {
+    ) -> Result<Value, SuiError> {
         use Data::*;
         match self {
             Move(m) => {
@@ -236,10 +236,10 @@ impl Data {
                         .expect("Adapter publish flow ensures that this bytecode deserializes");
                     let view = BinaryIndexedView::Module(&module);
                     let d = Disassembler::from_view(view, Spanned::unsafe_no_loc(()).loc)
-                        .map_err(|_e| FastPayError::ObjectSerializationError)?;
+                        .map_err(|_e| SuiError::ObjectSerializationError)?;
                     let bytecode_str = d
                         .disassemble()
-                        .map_err(|_e| FastPayError::ObjectSerializationError)?;
+                        .map_err(|_e| SuiError::ObjectSerializationError)?;
                     disassembled.insert(name.to_string(), Value::String(bytecode_str));
                 }
                 Ok(Value::Object(disassembled))
@@ -340,7 +340,7 @@ impl Object {
 
     /// Change the owner of `self` to `new_owner`
     pub fn transfer(&mut self, new_owner: Authenticator) {
-        // TODO: these should be raised FastPayError's instead of panic's
+        // TODO: these should be raised SuiError's instead of panic's
         assert!(!self.is_read_only(), "Cannot transfer an immutable object");
         match &mut self.data {
             Data::Move(m) => {
@@ -359,7 +359,7 @@ impl Object {
     pub fn with_id_owner_gas_for_testing(
         id: ObjectID,
         version: SequenceNumber,
-        owner: FastPayAddress,
+        owner: SuiAddress,
         gas: u64,
     ) -> Self {
         let data = Data::Move(MoveObject {
@@ -374,7 +374,7 @@ impl Object {
         }
     }
 
-    pub fn with_id_owner_for_testing(id: ObjectID, owner: FastPayAddress) -> Self {
+    pub fn with_id_owner_for_testing(id: ObjectID, owner: SuiAddress) -> Self {
         // For testing, we provide sufficient gas by default.
         Self::with_id_owner_gas_for_testing(id, SequenceNumber::new(), owner, GAS_VALUE_FOR_TESTING)
     }
@@ -383,7 +383,7 @@ impl Object {
     pub fn with_id_owner_gas_coin_object_for_testing(
         id: ObjectID,
         version: SequenceNumber,
-        owner: FastPayAddress,
+        owner: SuiAddress,
         value: u64,
     ) -> Self {
         let obj = GasCoin::new(id, version, value);
@@ -407,12 +407,12 @@ impl Object {
         &self,
         format: ObjectFormatOptions,
         resolver: &impl GetModule,
-    ) -> Result<Value, FastPayError> {
+    ) -> Result<Value, SuiError> {
         let contents = self.data.to_json(format, resolver)?;
-        let owner = serde_json::to_value(&self.owner)
-            .map_err(|_e| FastPayError::ObjectSerializationError)?;
+        let owner =
+            serde_json::to_value(&self.owner).map_err(|_e| SuiError::ObjectSerializationError)?;
         let previous_transaction = serde_json::to_value(&self.previous_transaction)
-            .map_err(|_e| FastPayError::ObjectSerializationError)?;
+            .map_err(|_e| SuiError::ObjectSerializationError)?;
         Ok(json!({ "contents": contents, "owner": owner, "tx_digest": previous_transaction }))
     }
 }
@@ -426,20 +426,20 @@ pub enum ObjectRead {
 impl ObjectRead {
     /// Returns a reference to the object if there is any, otherwise an Err if
     /// the object does exist or is deleted.
-    pub fn object(&self) -> Result<&Object, FastPayError> {
+    pub fn object(&self) -> Result<&Object, SuiError> {
         match &self {
-            Self::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
-            Self::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
+            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
+            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
             Self::Exists(_, o) => Ok(o),
         }
     }
 
     /// Returns the object ref if there is an object, otherwise an Err if
     /// the object does exist or is deleted.
-    pub fn reference(&self) -> Result<ObjectRef, FastPayError> {
+    pub fn reference(&self) -> Result<ObjectRef, SuiError> {
         match &self {
-            Self::Deleted(oref) => Err(FastPayError::ObjectDeleted { object_ref: *oref }),
-            Self::NotExists(id) => Err(FastPayError::ObjectNotFound { object_id: *id }),
+            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
+            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
             Self::Exists(oref, _) => Ok(*oref),
         }
     }

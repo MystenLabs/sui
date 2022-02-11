@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 
-use fastx_types::error::{FastPayError, FastPayResult};
+use fastx_types::error::{SuiError, SuiResult};
 use fastx_verifier::verifier as fastx_bytecode_verifier;
 use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, ident_str};
@@ -58,7 +58,7 @@ pub fn get_move_stdlib_modules() -> Vec<CompiledModule> {
 /// This is useful for when publishing
 /// If we are building the FastX framework, `is_framework` will be true;
 /// Otherwise `is_framework` should be false (e.g. calling from client).
-pub fn build_move_package_to_bytes(path: &Path) -> Result<Vec<Vec<u8>>, FastPayError> {
+pub fn build_move_package_to_bytes(path: &Path) -> Result<Vec<Vec<u8>>, SuiError> {
     build_move_package(
         path,
         BuildConfig {
@@ -84,9 +84,9 @@ pub fn build_move_package(
     path: &Path,
     build_config: BuildConfig,
     is_framework: bool,
-) -> FastPayResult<Vec<CompiledModule>> {
+) -> SuiResult<Vec<CompiledModule>> {
     match build_config.compile_package(path, &mut Vec::new()) {
-        Err(error) => Err(FastPayError::ModuleBuildFailure {
+        Err(error) => Err(SuiError::ModuleBuildFailure {
             error: error.to_string(),
         }),
         Ok(package) => {
@@ -97,7 +97,7 @@ pub fn build_move_package(
                     .iter()
                     .find(|m| m.self_id().address() != &AccountAddress::ZERO)
                 {
-                    return Err(FastPayError::ModulePublishFailure {
+                    return Err(SuiError::ModulePublishFailure {
                         error: format!(
                             "Modules must all have 0x0 as their addresses. Violated by module {:?}",
                             m.self_id()
@@ -123,7 +123,7 @@ pub fn build_move_package(
                         && m.self_id().address() == &AccountAddress::ZERO
                 })
             {
-                return Err(FastPayError::ModulePublishFailure { error: format!("Denpendent modules must have been published on-chain with non-0 addresses, unlike module {:?}", m.self_id()) });
+                return Err(SuiError::ModulePublishFailure { error: format!("Denpendent modules must have been published on-chain with non-0 addresses, unlike module {:?}", m.self_id()) });
             }
             Ok(package
                 .transitive_compiled_modules()

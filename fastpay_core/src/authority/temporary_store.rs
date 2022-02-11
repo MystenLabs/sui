@@ -255,7 +255,7 @@ impl Storage for AuthorityTemporaryStore {
 }
 
 impl ModuleResolver for AuthorityTemporaryStore {
-    type Error = FastPayError;
+    type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         match self.read_object(module_id.address()) {
             Some(o) => match &o.data {
@@ -263,7 +263,7 @@ impl ModuleResolver for AuthorityTemporaryStore {
                     .get(module_id.name().as_str())
                     .cloned()
                     .map(|m| m.into_vec())),
-                _ => Err(FastPayError::BadObjectType {
+                _ => Err(SuiError::BadObjectType {
                     error: "Expected module object".to_string(),
                 }),
             },
@@ -273,7 +273,7 @@ impl ModuleResolver for AuthorityTemporaryStore {
 }
 
 impl ResourceResolver for AuthorityTemporaryStore {
-    type Error = FastPayError;
+    type Error = SuiError;
 
     fn get_resource(
         &self,
@@ -286,7 +286,7 @@ impl ResourceResolver for AuthorityTemporaryStore {
                 None => return Ok(None),
                 Some(x) => {
                     if !x.is_read_only() {
-                        fp_bail!(FastPayError::ExecutionInvariantViolation);
+                        fp_bail!(SuiError::ExecutionInvariantViolation);
                     }
                     x
                 }

@@ -29,7 +29,7 @@ pub struct AuthorityConfig {
         serialize_with = "address_as_hex",
         deserialize_with = "address_from_hex"
     )]
-    pub address: FastPayAddress,
+    pub address: SuiAddress,
     pub host: String,
     pub base_port: u16,
     pub database_path: String,
@@ -104,7 +104,7 @@ pub struct UserAccount {
         serialize_with = "address_as_hex",
         deserialize_with = "address_from_hex"
     )]
-    pub address: FastPayAddress,
+    pub address: SuiAddress,
     pub key: KeyPair,
     pub object_refs: BTreeMap<ObjectID, ObjectRef>,
     pub gas_object_ids: BTreeSet<ObjectID>, // Every id in gas_object_ids should also be in object_ids.
@@ -114,7 +114,7 @@ pub struct UserAccount {
 
 impl UserAccount {
     pub fn new(
-        address: FastPayAddress,
+        address: SuiAddress,
         key: KeyPair,
         object_refs: Vec<ObjectRef>,
         gas_object_ids: Vec<ObjectID>,
@@ -195,13 +195,13 @@ impl MoveCallConfig {
 }
 
 pub struct AccountsConfig {
-    accounts: BTreeMap<FastPayAddress, UserAccount>,
+    accounts: BTreeMap<SuiAddress, UserAccount>,
 }
 
 impl AccountsConfig {
     /// Beware: this removes the account from the `AccountConfig` map!
     /// better make sure we only use this once per account!
-    pub fn remove(&mut self, address: &FastPayAddress) -> Option<UserAccount> {
+    pub fn remove(&mut self, address: &SuiAddress) -> Option<UserAccount> {
         self.accounts.remove(address)
     }
 
@@ -226,7 +226,7 @@ impl AccountsConfig {
         self.accounts.values_mut()
     }
 
-    pub fn addresses(&mut self) -> impl Iterator<Item = &FastPayAddress> {
+    pub fn addresses(&mut self) -> impl Iterator<Item = &SuiAddress> {
         self.accounts.keys()
     }
 
@@ -284,7 +284,7 @@ impl AccountsConfig {
 
 #[derive(Serialize, Deserialize)]
 pub struct InitialStateConfigEntry {
-    pub address: FastPayAddress,
+    pub address: SuiAddress,
     pub objects: Vec<Object>,
 }
 #[derive(Serialize, Deserialize)]
@@ -334,7 +334,7 @@ pub struct AccountInfo {
         serialize_with = "address_as_hex",
         deserialize_with = "address_from_hex"
     )]
-    pub address: FastPayAddress,
+    pub address: SuiAddress,
     pub key_pair: KeyPair,
 }
 
@@ -344,7 +344,7 @@ pub struct AuthorityInfo {
         serialize_with = "address_as_hex",
         deserialize_with = "address_from_hex"
     )]
-    pub address: FastPayAddress,
+    pub address: SuiAddress,
     pub host: String,
     pub base_port: u16,
 }
@@ -355,7 +355,7 @@ pub struct AuthorityPrivateInfo {
         serialize_with = "address_as_hex",
         deserialize_with = "address_from_hex"
     )]
-    pub address: FastPayAddress,
+    pub address: SuiAddress,
     pub key_pair: KeyPair,
     pub host: String,
     pub port: u16,

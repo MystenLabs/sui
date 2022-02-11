@@ -5,14 +5,14 @@ use fastpay_core::authority_client::AuthorityClient;
 use fastpay_core::client::{Client, ClientState};
 use fastx_network::network::NetworkClient;
 use fastx_types::base_types::{
-    decode_address_hex, encode_address_hex, get_key_pair, AuthorityName, FastPayAddress, ObjectID,
-    PublicKeyBytes,
+    decode_address_hex, encode_address_hex, get_key_pair, AuthorityName, ObjectID, PublicKeyBytes,
+    SuiAddress,
 };
 use fastx_types::committee::Committee;
 use fastx_types::messages::{ExecutionStatus, OrderEffects};
 
 use crate::utils::Config;
-use fastx_types::error::FastPayError;
+use fastx_types::error::SuiError;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::{parse_transaction_argument, parse_type_tag};
@@ -327,7 +327,7 @@ fn make_authority_clients(
 
 pub struct WalletContext {
     pub config: WalletConfig,
-    pub client_states: BTreeMap<FastPayAddress, ClientState<AuthorityClient>>,
+    pub client_states: BTreeMap<SuiAddress, ClientState<AuthorityClient>>,
 }
 
 impl WalletContext {
@@ -338,7 +338,7 @@ impl WalletContext {
         }
     }
 
-    pub fn find_owner(&self, object_id: &ObjectID) -> Result<FastPayAddress, FastPayError> {
+    pub fn find_owner(&self, object_id: &ObjectID) -> Result<SuiAddress, SuiError> {
         self.client_states
             .iter()
             .find_map(|(owner, client_state)| {
@@ -349,14 +349,14 @@ impl WalletContext {
                 }
             })
             .copied()
-            .ok_or(FastPayError::ObjectNotFound {
+            .ok_or(SuiError::ObjectNotFound {
                 object_id: *object_id,
             })
     }
 
     pub fn get_or_create_client_state(
         &mut self,
-        owner: &FastPayAddress,
+        owner: &SuiAddress,
     ) -> Result<&mut ClientState<AuthorityClient>, anyhow::Error> {
         Ok(if !self.client_states.contains_key(owner) {
             let new_client = self.create_client_state(owner)?;
@@ -368,8 +368,8 @@ impl WalletContext {
 
     fn create_client_state(
         &self,
-        owner: &FastPayAddress,
-    ) -> Result<ClientState<AuthorityClient>, FastPayError> {
+        owner: &SuiAddress,
+    ) -> Result<ClientState<AuthorityClient>, SuiError> {
         let client_info = self.get_account_info(owner)?;
 
         let voting_rights = self
@@ -395,11 +395,11 @@ impl WalletContext {
         )
     }
 
-    pub fn get_account_info(&self, address: &FastPayAddress) -> Result<&AccountInfo, FastPayError> {
+    pub fn get_account_info(&self, address: &SuiAddress) -> Result<&AccountInfo, SuiError> {
         self.config
             .accounts
             .iter()
             .find(|info| &info.address == address)
-            .ok_or(FastPayError::AccountNotFound)
+            .ok_or(SuiError::AccountNotFound)
     }
 }

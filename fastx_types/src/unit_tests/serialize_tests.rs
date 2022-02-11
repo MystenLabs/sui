@@ -35,7 +35,7 @@ fn compare_object_info_responses(o1: &ObjectInfoResponse, o2: &ObjectInfoRespons
 
 #[test]
 fn test_error() {
-    let err = FastPayError::UnknownSigner;
+    let err = SuiError::UnknownSigner;
     let buf = serialize_error(&err);
     let result = deserialize_message(buf.as_slice());
     assert!(result.is_ok());

@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use fastx_types::{base_types::*, committee::*, fp_ensure};
 
 use fastx_types::{
-    error::{FastPayError, FastPayResult},
+    error::{SuiError, SuiResult},
     messages::*,
 };
 
@@ -14,11 +14,11 @@ use fastx_types::{
 pub struct SafeClient<C> {
     authority_client: C,
     committee: Committee,
-    address: FastPayAddress,
+    address: SuiAddress,
 }
 
 impl<C> SafeClient<C> {
-    pub fn new(authority_client: C, committee: Committee, address: FastPayAddress) -> Self {
+    pub fn new(authority_client: C, committee: Committee, address: SuiAddress) -> Self {
         Self {
             authority_client,
             committee,
@@ -31,21 +31,21 @@ impl<C> SafeClient<C> {
         &self,
         digest: TransactionDigest,
         response: &OrderInfoResponse,
-    ) -> FastPayResult {
+    ) -> SuiResult {
         if let Some(signed_order) = &response.signed_order {
             // Check the order signature
             signed_order.check(&self.committee)?;
             // Check it has the right signer
             fp_ensure!(
                 signed_order.authority == self.address,
-                FastPayError::ByzantineAuthoritySuspicion {
+                SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
             );
             // Check it's the right order
             fp_ensure!(
                 signed_order.order.digest() == digest,
-                FastPayError::ByzantineAuthoritySuspicion {
+                SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
             );
@@ -57,7 +57,7 @@ impl<C> SafeClient<C> {
             // Check it's the right order
             fp_ensure!(
                 certificate.order.digest() == digest,
-                FastPayError::ByzantineAuthoritySuspicion {
+                SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
             );
@@ -71,14 +71,14 @@ impl<C> SafeClient<C> {
             // Checks it concerns the right tx
             fp_ensure!(
                 signed_effects.effects.transaction_digest == digest,
-                FastPayError::ByzantineAuthoritySuspicion {
+                SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
             );
             // Check it has the right signer
             fp_ensure!(
                 signed_effects.authority == self.address,
-                FastPayError::ByzantineAuthoritySuspicion {
+                SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
             );
@@ -91,7 +91,7 @@ impl<C> SafeClient<C> {
         &self,
         request: &ObjectInfoRequest,
         response: &ObjectInfoResponse,
-    ) -> FastPayResult {
+    ) -> SuiResult {
         // If we get a certificate make sure it is a valid certificate
         if let Some(certificate) = &response.parent_certificate {
             certificate.check(&self.committee)?;
@@ -102,7 +102,7 @@ impl<C> SafeClient<C> {
             if let Some(object_ref) = &response.requested_object_reference {
                 fp_ensure!(
                     object_ref.1 == *requested_version,
-                    FastPayError::ByzantineAuthoritySuspicion {
+                    SuiError::ByzantineAuthoritySuspicion {
                         authority: self.address
                     }
                 );
@@ -116,7 +116,7 @@ impl<C> SafeClient<C> {
                 // Check it has the right signer
                 fp_ensure!(
                     signed_order.authority == self.address,
-                    FastPayError::ByzantineAuthoritySuspicion {
+                    SuiError::ByzantineAuthoritySuspicion {
                         authority: self.address
                     }
                 );
@@ -132,19 +132,19 @@ impl<C> AuthorityAPI for SafeClient<C>
 where
     C: AuthorityAPI + Send + Sync + Clone + 'static,
 {
-    /// Initiate a new transfer to a FastPay or Primary account.
-    async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, FastPayError> {
+    /// Initiate a new transfer to a Sui or Primary account.
+    async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, SuiError> {
         let digest = order.digest();
         let order_info = self.authority_client.handle_order(order).await?;
         self.check_order_response(digest, &order_info)?;
         Ok(order_info)
     }
 
-    /// Confirm a transfer to a FastPay or Primary account.
+    /// Confirm a transfer to a Sui or Primary account.
     async fn handle_confirmation_order(
         &self,
         order: ConfirmationOrder,
-    ) -> Result<OrderInfoResponse, FastPayError> {
+    ) -> Result<OrderInfoResponse, SuiError> {
         let digest = order.certificate.order.digest();
         let order_info = self
             .authority_client
@@ -157,7 +157,7 @@ where
     async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
-    ) -> Result<AccountInfoResponse, FastPayError> {
+    ) -> Result<AccountInfoResponse, SuiError> {
         self.authority_client
             .handle_account_info_request(request)
             .await
@@ -166,7 +166,7 @@ where
     async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
-    ) -> Result<ObjectInfoResponse, FastPayError> {
+    ) -> Result<ObjectInfoResponse, SuiError> {
         let response = self
             .authority_client
             .handle_object_info_request(request.clone())
@@ -179,7 +179,7 @@ where
     async fn handle_order_info_request(
         &self,
         request: OrderInfoRequest,
-    ) -> Result<OrderInfoResponse, FastPayError> {
+    ) -> Result<OrderInfoResponse, SuiError> {
         let digest = request.transaction_digest;
         let order_info = self
             .authority_client

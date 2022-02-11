@@ -5,7 +5,7 @@ use crate::{authority_aggregator::AuthorityAggregator, authority_client::Authori
 use async_trait::async_trait;
 use fastx_framework::build_move_package_to_bytes;
 use fastx_types::{
-    base_types::*, committee::Committee, error::FastPayError, fp_ensure, messages::*,
+    base_types::*, committee::Committee, error::SuiError, fp_ensure, messages::*,
     object::ObjectRead,
 };
 use futures::future;
@@ -39,8 +39,8 @@ use fastx_types::FASTX_FRAMEWORK_ADDRESS;
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 pub struct ClientState<AuthorityAPI> {
-    /// Our FastPay address.
-    address: FastPayAddress,
+    /// Our Sui address.
+    address: SuiAddress,
     /// Our signature key.
     secret: StableSyncSigner,
     /// Authority entry point.
@@ -57,11 +57,11 @@ pub trait Client {
         &mut self,
         object_id: ObjectID,
         gas_payment: ObjectID,
-        recipient: FastPayAddress,
+        recipient: SuiAddress,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
 
     /// Try to complete all pending orders once. Return if any fails
-    async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError>;
+    async fn try_complete_pending_orders(&mut self) -> Result<(), SuiError>;
 
     /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
     /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
@@ -94,7 +94,7 @@ pub trait Client {
     /// Get all object we own.
     fn get_owned_objects(&self) -> Vec<ObjectID>;
 
-    async fn download_owned_objects_not_in_db(&self) -> Result<BTreeSet<ObjectRef>, FastPayError>;
+    async fn download_owned_objects_not_in_db(&self) -> Result<BTreeSet<ObjectRef>, SuiError>;
 }
 
 impl<A> ClientState<A> {
@@ -104,11 +104,11 @@ impl<A> ClientState<A> {
     /// https://github.com/MystenLabs/fastnft/issues/332
     pub fn new(
         path: PathBuf,
-        address: FastPayAddress,
+        address: SuiAddress,
         secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-    ) -> Result<Self, FastPayError> {
+    ) -> Result<Self, SuiError> {
         Ok(ClientState {
             address,
             secret,
@@ -117,14 +117,11 @@ impl<A> ClientState<A> {
         })
     }
 
-    pub fn address(&self) -> FastPayAddress {
+    pub fn address(&self) -> SuiAddress {
         self.address
     }
 
-    pub fn next_sequence_number(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<SequenceNumber, FastPayError> {
+    pub fn next_sequence_number(&self, object_id: &ObjectID) -> Result<SequenceNumber, SuiError> {
         if self.store.object_sequence_numbers.contains_key(object_id)? {
             Ok(self
                 .store
@@ -132,16 +129,16 @@ impl<A> ClientState<A> {
                 .get(object_id)?
                 .expect("Unable to get sequence number"))
         } else {
-            Err(FastPayError::ObjectNotFound {
+            Err(SuiError::ObjectNotFound {
                 object_id: *object_id,
             })
         }
     }
-    pub fn object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, FastPayError> {
+    pub fn object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, SuiError> {
         self.store
             .object_refs
             .get(&object_id)?
-            .ok_or(FastPayError::ObjectNotFound { object_id })
+            .ok_or(SuiError::ObjectNotFound { object_id })
     }
 
     pub fn object_refs(&self) -> BTreeMap<ObjectID, ObjectRef> {
@@ -174,7 +171,7 @@ impl<A> ClientState<A> {
         &mut self,
         object_ref: &ObjectRef,
         parent_tx_digest: &TransactionDigest,
-    ) -> Result<(), FastPayError> {
+    ) -> Result<(), SuiError> {
         let (object_id, seq, _) = object_ref;
         let mut tx_digests = self.store.object_certs.get(object_id)?.unwrap_or_default();
         tx_digests.push(*parent_tx_digest);
@@ -201,7 +198,7 @@ impl<A> ClientState<A> {
         Ok(())
     }
 
-    pub fn remove_object_info(&mut self, object_id: &ObjectID) -> Result<(), FastPayError> {
+    pub fn remove_object_info(&mut self, object_id: &ObjectID) -> Result<(), SuiError> {
         // Multi table atomic delete using batches
         let batch = self
             .store
@@ -271,7 +268,7 @@ where
             let next_sequence_number = self.next_sequence_number(&object_id).unwrap_or_default();
             fp_ensure!(
                 object_kind.version() >= next_sequence_number,
-                FastPayError::UnexpectedSequenceNumber {
+                SuiError::UnexpectedSequenceNumber {
                     object_id,
                     expected_sequence: next_sequence_number,
                 }
@@ -300,7 +297,7 @@ where
     /// The caller has to explicitly find which objects are locked
     /// TODO: always return true for immutable objects https://github.com/MystenLabs/fastnft/issues/305
     /// TODO: this function can fail. Need to handle it https://github.com/MystenLabs/fastnft/issues/383
-    fn can_lock_or_unlock(&self, order: &Order) -> Result<bool, FastPayError> {
+    fn can_lock_or_unlock(&self, order: &Order) -> Result<bool, SuiError> {
         let iter_matches = self.store.pending_orders.multi_get(
             &order
                 .input_objects()
@@ -324,9 +321,9 @@ where
     /// If the object is already locked, ensure it is unlocked by calling unlock_pending_order_objects
     /// Client runs sequentially right now so access to this is safe
     /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/fastnft/issues/335
-    pub fn lock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
+    pub fn lock_pending_order_objects(&self, order: &Order) -> Result<(), SuiError> {
         if !self.can_lock_or_unlock(order)? {
-            return Err(FastPayError::ConcurrentTransactionError);
+            return Err(SuiError::ConcurrentTransactionError);
         }
         self.store
             .pending_orders
@@ -340,9 +337,9 @@ where
     }
     /// Unlocks the objects for the given order
     /// Unlocking an already unlocked object, is a no-op and does not Err
-    fn unlock_pending_order_objects(&self, order: &Order) -> Result<(), FastPayError> {
+    fn unlock_pending_order_objects(&self, order: &Order) -> Result<(), SuiError> {
         if !self.can_lock_or_unlock(order)? {
-            return Err(FastPayError::ConcurrentTransactionError);
+            return Err(SuiError::ConcurrentTransactionError);
         }
         self.store
             .pending_orders
@@ -354,7 +351,7 @@ where
         &mut self,
         cert: CertifiedOrder,
         effects: OrderEffects,
-    ) -> Result<(CertifiedOrder, OrderEffects), FastPayError> {
+    ) -> Result<(CertifiedOrder, OrderEffects), SuiError> {
         // The cert should be included in the response
         let parent_tx_digest = cert.order.digest();
         self.store.certificates.insert(&parent_tx_digest, &cert)?;
@@ -408,7 +405,7 @@ where
     async fn download_objects_not_in_db(
         &self,
         object_refs: Vec<ObjectRef>,
-    ) -> Result<BTreeSet<ObjectRef>, FastPayError> {
+    ) -> Result<BTreeSet<ObjectRef>, SuiError> {
         // Check the DB
         // This could be expensive. Might want to use object_ref table
         // We want items that are NOT in the table
@@ -451,19 +448,19 @@ where
         &mut self,
         object_id: ObjectID,
         gas_payment: ObjectID,
-        recipient: FastPayAddress,
+        recipient: SuiAddress,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         let object_ref = self
             .store
             .object_refs
             .get(&object_id)?
-            .ok_or(FastPayError::ObjectNotFound { object_id })?;
+            .ok_or(SuiError::ObjectNotFound { object_id })?;
 
         let gas_payment =
             self.store
                 .object_refs
                 .get(&gas_payment)?
-                .ok_or(FastPayError::ObjectNotFound {
+                .ok_or(SuiError::ObjectNotFound {
                     object_id: gas_payment,
                 })?;
 
@@ -487,7 +484,7 @@ where
         Ok((certificate, effects))
     }
 
-    async fn try_complete_pending_orders(&mut self) -> Result<(), FastPayError> {
+    async fn try_complete_pending_orders(&mut self) -> Result<(), SuiError> {
         // Orders are idempotent so no need to prevent multiple executions
         let unique_pending_orders: HashSet<_> = self
             .store
@@ -499,7 +496,7 @@ where
         // TODO: https://github.com/MystenLabs/fastnft/issues/330
         for order in unique_pending_orders {
             self.execute_transaction(order.clone()).await.map_err(|e| {
-                FastPayError::ErrorWhileProcessingTransactionOrder { err: e.to_string() }
+                SuiError::ErrorWhileProcessingTransactionOrder { err: e.to_string() }
             })?;
         }
         Ok(())
@@ -588,7 +585,7 @@ where
         self.store.object_sequence_numbers.keys().collect()
     }
 
-    async fn download_owned_objects_not_in_db(&self) -> Result<BTreeSet<ObjectRef>, FastPayError> {
+    async fn download_owned_objects_not_in_db(&self) -> Result<BTreeSet<ObjectRef>, SuiError> {
         let object_refs: Vec<ObjectRef> = self.store.object_refs.iter().map(|q| q.1).collect();
         self.download_objects_not_in_db(object_refs).await
     }
