@@ -1,16 +1,6 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastx_adapter::{adapter, genesis};
-use fastx_types::{
-    base_types::*,
-    committee::Committee,
-    error::{SuiError, SuiResult},
-    fp_bail, fp_ensure, gas,
-    messages::*,
-    object::{Data, Object},
-    storage::Storage,
-};
 use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag},
@@ -21,6 +11,16 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     pin::Pin,
     sync::Arc,
+};
+use sui_adapter::{adapter, genesis};
+use sui_types::{
+    base_types::*,
+    committee::Committee,
+    error::{SuiError, SuiResult},
+    fp_bail, fp_ensure, gas,
+    messages::*,
+    object::{Data, Object},
+    storage::Storage,
 };
 
 #[cfg(test)]

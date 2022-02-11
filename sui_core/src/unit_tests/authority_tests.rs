@@ -3,19 +3,19 @@
 
 use super::*;
 use bcs;
-use fastx_adapter::genesis;
-use fastx_types::{
-    base_types::dbg_addr,
-    gas::{calculate_module_publish_cost, get_gas_balance},
-    messages::ExecutionStatus,
-    object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
-};
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
 };
 use move_core_types::{ident_str, identifier::Identifier, language_storage::TypeTag};
 use move_package::BuildConfig;
+use sui_adapter::genesis;
+use sui_types::{
+    base_types::dbg_addr,
+    gas::{calculate_module_publish_cost, get_gas_balance},
+    messages::ExecutionStatus,
+    object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
+};
 
 use std::fs;
 use std::path::PathBuf;
@@ -1284,8 +1284,8 @@ async fn test_hero() {
     // 1. Compile the Hero Move code.
     let build_config = BuildConfig::default();
     let mut hero_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    hero_path.push("../fastx_programmability/examples/");
-    let modules = fastx_framework::build_move_package(&hero_path, build_config, false).unwrap();
+    hero_path.push("../sui_programmability/examples/");
+    let modules = sui_framework::build_move_package(&hero_path, build_config, false).unwrap();
 
     // 2. Create an admin account, and a player account.
     // Using a hard-coded key to match the address in the Move code.

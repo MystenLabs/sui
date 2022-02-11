@@ -1,8 +1,8 @@
 use super::*;
-use fastx_types::object::Object;
 use rocksdb::{DBWithThreadMode, MultiThreaded};
 use std::path::PathBuf;
 use std::sync::Arc;
+use sui_types::object::Object;
 use typed_store::rocks::DBMap;
 
 const CERT_CF_NAME: &str = "certificates";

@@ -3,9 +3,9 @@
 
 use crate::transport::*;
 use bytes::Bytes;
-use fastx_types::{error::*, serialize::*};
 use futures::future::FutureExt;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use sui_types::{error::*, serialize::*};
 use tracing::*;
 
 use std::io;

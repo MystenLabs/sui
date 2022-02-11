@@ -3,15 +3,15 @@
 
 use crate::{authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI};
 use async_trait::async_trait;
-use fastx_framework::build_move_package_to_bytes;
-use fastx_types::{
-    base_types::*, committee::Committee, error::SuiError, fp_ensure, messages::*,
-    object::ObjectRead,
-};
 use futures::future;
 use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
+use sui_framework::build_move_package_to_bytes;
+use sui_types::{
+    base_types::*, committee::Committee, error::SuiError, fp_ensure, messages::*,
+    object::ObjectRead,
+};
 use typed_store::rocks::open_cf;
 use typed_store::Map;
 
@@ -34,7 +34,7 @@ pub mod client_store;
 use self::client_store::ClientStore;
 
 #[cfg(test)]
-use fastx_types::FASTX_FRAMEWORK_ADDRESS;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
@@ -237,7 +237,7 @@ where
 
     #[cfg(test)]
     pub async fn get_framework_object_ref(&mut self) -> Result<ObjectRef, anyhow::Error> {
-        let info = self.get_object_info(FASTX_FRAMEWORK_ADDRESS).await?;
+        let info = self.get_object_info(SUI_FRAMEWORK_ADDRESS).await?;
         Ok(info.reference()?)
     }
 

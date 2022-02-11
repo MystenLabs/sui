@@ -7,7 +7,6 @@ use crate::authority::{AuthorityState, AuthorityStore};
 use crate::client::client_store::ClientStore;
 use crate::client::{Client, ClientState};
 use async_trait::async_trait;
-use fastx_types::object::{Data, Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use futures::lock::Mutex;
 use move_core_types::{ident_str, identifier::Identifier};
 use std::{
@@ -15,13 +14,14 @@ use std::{
     convert::TryInto,
     sync::Arc,
 };
+use sui_types::object::{Data, Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use tokio::runtime::Runtime;
 use typed_store::Map;
 
-use fastx_types::error::SuiError::ObjectNotFound;
 use move_core_types::account_address::AccountAddress;
 use std::env;
 use std::fs;
+use sui_types::error::SuiError::ObjectNotFound;
 
 // Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
 fn compare_certified_orders(o1: &CertifiedOrder, o2: &CertifiedOrder) {
@@ -1137,7 +1137,7 @@ async fn test_module_publish_and_call_good() {
 
     // Provide path to well formed package sources
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
-    hero_path.push_str("/../fastx_programmability/examples/");
+    hero_path.push_str("/../sui_programmability/examples/");
 
     let pub_res = client1.publish(hero_path, gas_object_ref, 1000).await;
 
@@ -1256,7 +1256,7 @@ async fn test_module_publish_file_path() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
 
     // Use a path pointing to a different file
-    hero_path.push_str("/../fastx_programmability/examples/Hero.move");
+    hero_path.push_str("/../sui_programmability/examples/Hero.move");
 
     let pub_resp = client1.publish(hero_path, gas_object_ref, 1000).await;
 
@@ -1324,7 +1324,7 @@ async fn test_module_publish_bad_path() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
 
     // Use a bad path
-    hero_path.push_str("/../fastx_____programmability/examples/");
+    hero_path.push_str("/../sui_____programmability/examples/");
 
     let pub_resp = client1.publish(hero_path, gas_object_ref, 1000).await;
     // Has to fail
@@ -1540,7 +1540,7 @@ async fn test_object_store() {
 
     // Provide path to well formed package sources
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
-    hero_path.push_str("/../fastx_programmability/examples/");
+    hero_path.push_str("/../sui_programmability/examples/");
 
     let pub_res = client1.publish(hero_path, gas_object_ref, 1000).await;
 

@@ -1,15 +1,13 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastx_types::{
+use sui_core::client::ClientState;
+use sui_types::{
     base_types::*,
     messages::{CertifiedOrder, OrderKind},
 };
-use sui_core::client::ClientState;
 
 use crate::utils::Config;
-use fastx_network::transport;
-use fastx_types::object::Object;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::{identifier::Identifier, transaction_argument::TransactionArgument};
 use serde::{Deserialize, Serialize};
@@ -22,6 +20,8 @@ use std::{
     io::{BufReader, BufWriter, Write},
     iter::FromIterator,
 };
+use sui_network::transport;
+use sui_types::object::Object;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthorityConfig {

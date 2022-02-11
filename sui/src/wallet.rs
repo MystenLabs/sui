@@ -75,7 +75,7 @@ async fn main() -> Result<(), anyhow::Error> {
         println!();
 
         let mut shell = Shell {
-            prompt: "fastx>-$ ",
+            prompt: "sui>-$ ",
             state: context,
             handler: ClientCommandHandler,
             description: String::new(),
