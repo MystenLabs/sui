@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::config::{AccountInfo, AuthorityInfo, WalletConfig};
 use fastpay_core::authority_client::AuthorityClient;
-use fastpay_core::client::{Client, ClientState};
+use fastpay_core::client::{Client, ClientAddressManager, ClientState};
 use fastx_network::network::NetworkClient;
 use fastx_types::base_types::{
     decode_address_hex, encode_address_hex, get_key_pair, AuthorityName, FastPayAddress, ObjectID,
@@ -19,6 +19,7 @@ use move_core_types::parser::{parse_transaction_argument, parse_type_tag};
 use move_core_types::transaction_argument::{convert_txn_args, TransactionArgument};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
@@ -318,13 +319,17 @@ fn make_authority_clients(
 
 pub struct WalletContext {
     pub config: WalletConfig,
+    pub address_manager: ClientAddressManager<AuthorityClient>,
     pub client_states: BTreeMap<FastPayAddress, ClientState<AuthorityClient>>,
 }
 
 impl WalletContext {
     pub fn new(config: WalletConfig) -> Self {
+        let path = config.db_folder_path.clone();
         Self {
             config,
+            address_manager: ClientAddressManager::new(PathBuf::from_str(&path).unwrap())
+                .expect("Unable to create address manager"),
             client_states: Default::default(),
         }
     }
@@ -345,23 +350,24 @@ impl WalletContext {
             })
     }
 
-    pub fn get_or_create_client_state(
+    // pub fn get_or_crea_te_client_state(
+    //     &mut self,
+    //     owner: &FastPayAddress,
+    // ) -> Result<&mut ClientState<AuthorityClient>, anyhow::Error> {
+    //     Ok(if !self.client_states.contains_key(owner) {
+    //         let new_client = self.create_client_state(owner)?;
+    //         self.client_states.entry(*owner).or_insert(new_client)
+    //     } else {
+    //         self.client_states.get_mut(owner).unwrap()
+    //     })
+    // }
+
+    fn get_or_create_client_state(
         &mut self,
         owner: &FastPayAddress,
-    ) -> Result<&mut ClientState<AuthorityClient>, anyhow::Error> {
-        Ok(if !self.client_states.contains_key(owner) {
-            let new_client = self.create_client_state(owner)?;
-            self.client_states.entry(*owner).or_insert(new_client)
-        } else {
-            self.client_states.get_mut(owner).unwrap()
-        })
-    }
-
-    fn create_client_state(
-        &self,
-        owner: &FastPayAddress,
-    ) -> Result<ClientState<AuthorityClient>, FastPayError> {
-        let client_info = self.get_account_info(owner)?;
+    ) -> Result<&mut ClientState<AuthorityClient>, FastPayError> {
+        let address = self.get_account_info(owner)?.address;
+        let kp = Box::pin(self.get_account_info(owner)?.key_pair.copy());
 
         let voting_rights = self
             .config
@@ -376,11 +382,9 @@ impl WalletContext {
             self.config.send_timeout,
             self.config.recv_timeout,
         );
-        let path = PathBuf::from(format!("{}/{:?}", self.config.db_folder_path, owner));
-        ClientState::new(
-            path,
-            client_info.address,
-            Box::pin(client_info.key_pair.copy()),
+        self.address_manager.get_or_create_state_mut(
+            address,
+            kp,
             committee,
             authority_clients,
         )

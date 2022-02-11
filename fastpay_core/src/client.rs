@@ -16,6 +16,7 @@ use typed_store::rocks::open_cf;
 use typed_store::Map;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
@@ -31,12 +32,109 @@ use std::{
 pub type StableSyncSigner = Pin<Box<dyn signature::Signer<ed25519_dalek::Signature> + Send + Sync>>;
 
 pub mod client_store;
-use self::client_store::ClientStore;
 
 #[cfg(test)]
 use fastx_types::FASTX_FRAMEWORK_ADDRESS;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
+
+pub struct ClientAddressManager<A> {
+    store: client_store::ClientAddressManagerStore,
+    address_states: BTreeMap<FastPayAddress, ClientState<A>>,
+}
+impl<A> ClientAddressManager<A> {
+    // Create a new manager which stores its managed addresses at `path`
+    pub fn new(path: PathBuf) -> Result<Self, FastPayError> {
+        Ok(Self {
+            store: client_store::ClientAddressManagerStore::open(path),
+            address_states: BTreeMap::new(),
+        })
+    }
+    pub fn get_or_create_state_mut(
+        &mut self,
+        address: FastPayAddress,
+        secret: StableSyncSigner,
+        committee: Committee,
+        authority_clients: BTreeMap<AuthorityName, A>,
+    ) -> Result<&mut ClientState<A>, FastPayError> {
+        if let std::collections::btree_map::Entry::Vacant(e) = self.address_states.entry(address) {
+            // Load the records if available
+            let single_store = if self.store.is_managed_address(address)? {
+                // Unwrap is okay since we checked cond
+                self.store.get_managed_address(address)
+            } else {
+                self.store.manage_new_address(address)
+            }?;
+
+            e.insert(ClientState::new_from_manager(
+                address,
+                secret,
+                committee,
+                authority_clients,
+                single_store,
+            )?);
+        }
+
+        return Ok(self.address_states.get_mut(&address).unwrap());
+    }
+    pub fn get_or_create_state(
+        &mut self,
+        address: FastPayAddress,
+        secret: StableSyncSigner,
+        committee: Committee,
+        authority_clients: BTreeMap<AuthorityName, A>,
+    ) -> Result<&mut ClientState<A>, FastPayError> {
+        if let std::collections::btree_map::Entry::Vacant(e) = self.address_states.entry(address) {
+            // Load the records if available
+            let single_store = if self.store.is_managed_address(address)? {
+                // Unwrap is okay since we checked cond
+                self.store.get_managed_address(address)
+            } else {
+                self.store.manage_new_address(address)
+            }?;
+
+            e.insert(ClientState::new_from_manager(
+                address,
+                secret,
+                committee,
+                authority_clients,
+                single_store,
+            )?);
+        }
+
+        return Ok(self.address_states.get_mut(&address).unwrap());
+    }
+    // pub fn get_or_create_state(
+    //     &mut self,
+    //     address: FastPayAddress,
+    //     secret: StableSyncSigner,
+    //     committee: Committee,
+    //     authority_clients: BTreeMap<AuthorityName, A>,
+    // ) -> Result<&ClientState<A>, FastPayError> {
+    //     if let std::collections::btree_map::Entry::Vacant(e) = self.address_states.entry(address) {
+    //         // Load the records if available
+    //         let single_store = if self.store.is_managed_address(address)? {
+    //             // Unwrap is okay since we checked cond
+    //             self.store.get_managed_address(address)
+    //         } else {
+    //             self.store.manage_new_address(address)
+    //         }?;
+
+    //         e.insert(Arc::new(ClientState::new_from_manager(
+    //             address,
+    //             secret,
+    //             committee,
+    //             authority_clients,
+    //             single_store,
+    //         )?));
+    //     }
+
+    //     return Ok(self.address_states.get(&address).unwrap());
+    // }
+    pub fn get_all_managed_addresses(&self) -> Vec<FastPayAddress> {
+        self.address_states.iter().map(|(a, _)| *a).collect()
+    }
+}
 
 pub struct ClientState<AuthorityAPI> {
     /// Our FastPay address.
@@ -46,7 +144,7 @@ pub struct ClientState<AuthorityAPI> {
     /// Authority entry point.
     authorities: AuthorityAggregator<AuthorityAPI>,
     /// Persistent store for client
-    store: ClientStore,
+    store: client_store::ClientSingleAddressStore,
 }
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
@@ -101,18 +199,33 @@ impl<A> ClientState<A> {
     /// right after constructor to fetch missing info form authorities
     /// TODO: client should manage multiple addresses instead of each addr having DBs
     /// https://github.com/MystenLabs/fastnft/issues/332
-    pub fn new(
-        path: PathBuf,
+    // pub fn new(
+    //     path: PathBuf,
+    //     address: FastPayAddress,
+    //     secret: StableSyncSigner,
+    //     committee: Committee,
+    //     authority_clients: BTreeMap<AuthorityName, A>,
+    // ) -> Result<Self, FastPayError> {
+    //     Ok(ClientState {
+    //         address,
+    //         secret,
+    //         authorities: AuthorityAggregator::new(committee, authority_clients),
+    //         store: std::sync::Arc<client::client_store::ClientSingleAddressStore>::new(path),
+    //     })
+    // }
+
+    pub fn new_from_manager(
         address: FastPayAddress,
         secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
+        store: client_store::ClientSingleAddressStore,
     ) -> Result<Self, FastPayError> {
         Ok(ClientState {
             address,
             secret,
             authorities: AuthorityAggregator::new(committee, authority_clients),
-            store: ClientStore::new(path),
+            store,
         })
     }
 
@@ -218,7 +331,7 @@ impl<A> ClientState<A> {
     }
 
     #[cfg(test)]
-    pub fn store(&self) -> &ClientStore {
+    pub fn store(&self) -> &client_store::ClientSingleAddressStore {
         &self.store
     }
 
