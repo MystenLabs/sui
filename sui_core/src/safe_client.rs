@@ -3,9 +3,9 @@
 
 use crate::authority_client::AuthorityAPI;
 use async_trait::async_trait;
-use fastx_types::{base_types::*, committee::*, fp_ensure};
+use sui_types::{base_types::*, committee::*, fp_ensure};
 
-use fastx_types::{
+use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };

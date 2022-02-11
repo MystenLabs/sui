@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
-use fastx_network::{
+use sui_network::{
     network::NetworkServer,
     transport::{spawn_server, MessageHandler, SpawnedServer},
 };
-use fastx_types::{error::*, messages::*, serialize::*};
+use sui_types::{error::*, messages::*, serialize::*};
 
 use std::io;
 use tracing::*;

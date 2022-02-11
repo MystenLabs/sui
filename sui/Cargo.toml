@@ -31,9 +31,9 @@ tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 
 bcs = "0.1.3"
 sui_core = { path = "../sui_core" }
-fastx-adapter = { path = "../fastx_programmability/adapter" }
-fastx-network = { path = "../network_utils" }
-fastx-types = { path = "../fastx_types" }
+sui-adapter = { path = "../sui_programmability/adapter" }
+sui-network = { path = "../network_utils" }
+sui-types = { path = "../sui_types" }
 
 rustyline = "9.1.2"
 rustyline-derive = "0.6.0"
@@ -53,5 +53,5 @@ name = "wallet"
 path = "src/wallet.rs"
 
 [[bin]]
-name = "fastx"
-path = "src/fastx.rs"
+name = "sui"
+path = "src/sui.rs"

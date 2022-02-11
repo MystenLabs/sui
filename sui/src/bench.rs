@@ -4,9 +4,6 @@
 #![deny(warnings)]
 
 use bytes::Bytes;
-use fastx_network::{network::NetworkClient, transport};
-use fastx_types::FASTX_FRAMEWORK_ADDRESS;
-use fastx_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use futures::stream::StreamExt;
 use move_core_types::ident_str;
 use rand::rngs::StdRng;
@@ -14,6 +11,9 @@ use rand::Rng;
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use sui_core::{authority::*, authority_server::AuthorityServer};
+use sui_network::{network::NetworkClient, transport};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use tokio::runtime::Runtime;
 use tokio::{runtime::Builder, time};
 use tracing::subscriber::set_global_default;
@@ -209,7 +209,7 @@ impl ClientServerBenchmark {
             let order = if self.use_move {
                 // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
                 let framework_obj_ref = (
-                    FASTX_FRAMEWORK_ADDRESS,
+                    SUI_FRAMEWORK_ADDRESS,
                     SequenceNumber::new(),
                     ObjectDigest::new([0; 32]),
                 );
