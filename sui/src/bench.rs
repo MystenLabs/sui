@@ -313,7 +313,7 @@ impl ClientServerBenchmark {
                 match reply_message {
                     Ok(SerializedMessage::OrderResp(res)) => {
                         if let Some(e) = res.signed_effects {
-                            if matches!(e.effects.status, ExecutionStatus::Success { .. }) {
+                            if matches!(e.effects.status, ExecutionStatus::Failure { .. }) {
                                 info!("Execution Error {:?}", e.effects.status);
                             }
                         }
