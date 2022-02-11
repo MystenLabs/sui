@@ -998,7 +998,7 @@ async fn transfer_object(
         }
     };
 
-    let certificate = format!("{:?}", cert).to_string();
+    let certificate = format!("{:?}", cert);
     let object_effects_summary = get_object_effects(effects);
 
     Ok(HttpResponseOk(OrderResponse {
@@ -1131,7 +1131,7 @@ async fn publish(
         }
     };
 
-    let certificate = format!("{:?}", cert).to_string();
+    let certificate = format!("{:?}", cert);
     let object_effects_summary = get_object_effects(effects);
 
     Ok(HttpResponseOk(OrderResponse {
@@ -1473,7 +1473,7 @@ async fn call(
         }
     };
 
-    let certificate = format!("{:?}", cert).to_string();
+    let certificate = format!("{:?}", cert);
     let object_effects_summary = get_object_effects(effects);
 
     Ok(HttpResponseOk(OrderResponse {
