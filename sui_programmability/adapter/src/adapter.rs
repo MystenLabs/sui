@@ -203,7 +203,7 @@ fn execute_internal<
                 let ctx_bytes = mutable_ref_values.pop().unwrap();
                 let updated_ctx: TxContext = bcs::from_bytes(ctx_bytes.as_slice()).unwrap();
                 if let Err(err) = ctx.update_state(updated_ctx) {
-                    exec_failure!(gas::MIN_MOVE_CALL_GAS, err);
+                    exec_failure!(gas_used, err);
                 }
             }
 
@@ -296,7 +296,8 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     let mut total_gas_used = gas_cost;
     let no_init_calls = modules_to_init.is_empty();
     if !no_init_calls {
-        let mut current_gas_budget = gas_budget;
+        // decrease the budget by the cost of package publishing
+        let mut current_gas_budget = gas_budget - gas_cost;
         for module_id in modules_to_init {
             let args = vec![ctx.to_vec()];
 
@@ -315,14 +316,17 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
                 true,
             ) {
                 Ok(ExecutionStatus::Success { gas_used }) => gas_used,
-                Ok(ExecutionStatus::Failure { gas_used, error }) => exec_failure!(gas_used, *error),
-                Err(err) => exec_failure!(gas::MIN_MOVE_CALL_GAS, err),
+                Ok(ExecutionStatus::Failure { gas_used, error }) => {
+                    exec_failure!(total_gas_used + gas_used, *error)
+                }
+                Err(err) => exec_failure!(total_gas_used, err),
             };
-            if current_gas_budget > gas_used {
-                current_gas_budget -= gas_used;
-            } else {
-                current_gas_budget = 0;
-            }
+            // This should never be the case as current_gas_budget
+            // (before the call) must be larger than gas_used (after
+            // the call) in order for the call to succeed in the first
+            // place.
+            assert!(current_gas_budget > gas_used);
+            current_gas_budget -= gas_used;
             total_gas_used += gas_used;
         }
     }
