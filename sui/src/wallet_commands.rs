@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::{AccountInfo, AuthorityInfo, WalletConfig};
+use crate::config::{AccountInfo, WalletConfig};
 use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientAddressManager, ClientState};
 use sui_network::network::NetworkClient;
@@ -9,9 +9,10 @@ use sui_types::base_types::{
     SuiAddress,
 };
 use sui_types::committee::Committee;
-use sui_types::messages::{ExecutionStatus, OrderEffects};
+use sui_types::messages::ExecutionStatus;
 
 use crate::utils::Config;
+use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::{parse_transaction_argument, parse_type_tag};
@@ -19,7 +20,7 @@ use move_core_types::transaction_argument::{convert_txn_args, TransactionArgumen
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
 use sui_types::error::SuiError;
@@ -148,7 +149,11 @@ pub enum WalletCommands {
 }
 
 impl WalletCommands {
-    pub async fn execute(&mut self, context: &mut WalletContext) -> Result<(), anyhow::Error> {
+    pub async fn execute<W: std::io::Write>(
+        &mut self,
+        context: &mut WalletContext,
+        writer: &mut W,
+    ) -> Result<(), anyhow::Error> {
         match self {
             WalletCommands::Publish {
                 sender,
@@ -158,7 +163,19 @@ impl WalletCommands {
             } => {
                 // Find owner of gas object
                 let client_state = context.get_or_create_client_state(sender)?;
-                publish(client_state, path.clone(), *gas, *gas_budget).await;
+                let gas_obj_ref = *client_state
+                    .object_refs()
+                    .get(gas)
+                    .ok_or(anyhow!("Gas object not found"))?;
+
+                let (_, effects) = client_state
+                    .publish(path.clone(), gas_obj_ref, *gas_budget)
+                    .await?;
+
+                if !matches!(effects.status, ExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!("Error publishing module: {:#?}", effects.status));
+                }
+                writeln!(writer, "{}", effects)?;
             }
 
             WalletCommands::Object { id, deep, owner } => {
@@ -168,9 +185,9 @@ impl WalletCommands {
                 let object = object_read.object()?;
                 if *deep {
                     let layout = object_read.layout()?;
-                    println!("{}", object.to_json(layout)?);
+                    writeln!(writer, "{}", object.to_json(layout)?)?;
                 } else {
-                    println!("{}", object);
+                    writeln!(writer, "{}", object)?;
                 }
             }
             WalletCommands::Call {
@@ -214,8 +231,8 @@ impl WalletCommands {
                         *gas_budget,
                     )
                     .await?;
-                println!("Cert: {:?}", cert);
-                show_object_effects(effects);
+                writeln!(writer, "Cert: {:?}", cert)?;
+                writeln!(writer, "{}", effects)?;
             }
 
             WalletCommands::Transfer {
@@ -233,7 +250,7 @@ impl WalletCommands {
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Transfer confirmed after {} us", time_total);
-                println!("{:?}", cert);
+                writeln!(writer, "{:?}", cert)?;
             }
 
             WalletCommands::Addresses => {
@@ -245,16 +262,16 @@ impl WalletCommands {
                     .collect::<Vec<_>>();
 
                 let addr_text = addr_strings.join("\n");
-                println!("Showing {} results.", addr_strings.len());
-                println!("{}", addr_text);
+                writeln!(writer, "Showing {} results.", addr_strings.len())?;
+                writeln!(writer, "{}", addr_text)?;
             }
 
             WalletCommands::Objects { address } => {
                 let client_state = context.get_or_create_client_state(address)?;
                 let object_refs = client_state.object_refs();
-                println!("Showing {} results.", object_refs.len());
+                writeln!(writer, "Showing {} results.", object_refs.len())?;
                 for (obj_id, object_ref) in object_refs {
-                    println!("{}: {:?}", obj_id, object_ref);
+                    writeln!(writer, "{}: {:?}", obj_id, object_ref)?;
                 }
             }
 
@@ -271,79 +288,15 @@ impl WalletCommands {
                 context.config.save()?;
                 // Create an address to be managed
                 let _ = context.get_or_create_client_state(&address)?;
-                println!(
+                writeln!(
+                    writer,
                     "Created new keypair for address : {}",
                     encode_address_hex(&address)
-                );
+                )?;
             }
         }
         Ok(())
     }
-}
-
-async fn publish(
-    client_state: &mut ClientState<AuthorityClient>,
-    path: String,
-    gas_object_id: ObjectID,
-    gas_budget: u64,
-) {
-    let gas_obj_ref = *client_state
-        .object_refs()
-        .get(&gas_object_id)
-        .expect("Gas object not found");
-
-    let pub_resp = client_state.publish(path, gas_obj_ref, gas_budget).await;
-
-    match pub_resp {
-        Ok((_, effects)) => {
-            if !matches!(effects.status, ExecutionStatus::Success { .. }) {
-                error!("Error publishing module: {:#?}", effects.status);
-            }
-            show_object_effects(effects);
-        }
-        Err(err) => error!("{:#?}", err),
-    }
-}
-
-fn show_object_effects(order_effects: OrderEffects) {
-    if !order_effects.created.is_empty() {
-        println!("Created Objects:");
-        for (obj, _) in order_effects.created {
-            println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
-        }
-    }
-    if !order_effects.mutated.is_empty() {
-        println!("Mutated Objects:");
-        for (obj, _) in order_effects.mutated {
-            println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
-        }
-    }
-    if !order_effects.deleted.is_empty() {
-        println!("Deleted Objects:");
-        for obj in order_effects.deleted {
-            println!("{:?} {:?} {:?}", obj.0, obj.1, obj.2);
-        }
-    }
-}
-
-fn make_authority_clients(
-    authorities: &[AuthorityInfo],
-    buffer_size: usize,
-    send_timeout: Duration,
-    recv_timeout: Duration,
-) -> BTreeMap<AuthorityName, AuthorityClient> {
-    let mut authority_clients = BTreeMap::new();
-    for authority in authorities {
-        let client = AuthorityClient::new(NetworkClient::new(
-            authority.host.clone(),
-            authority.base_port,
-            buffer_size,
-            send_timeout,
-            recv_timeout,
-        ));
-        authority_clients.insert(authority.address, client);
-    }
-    authority_clients
 }
 
 pub struct WalletContext {
@@ -372,14 +325,24 @@ impl WalletContext {
             .map(|authority| (authority.address, 1))
             .collect();
         let committee = Committee::new(voting_rights);
-        let authority_clients = make_authority_clients(
-            &self.config.authorities,
-            self.config.buffer_size,
-            self.config.send_timeout,
-            self.config.recv_timeout,
-        );
+        let authority_clients = self.make_authority_clients();
         self.address_manager
             .get_or_create_state_mut(*owner, kp, committee, authority_clients)
+    }
+
+    fn make_authority_clients(&self) -> BTreeMap<AuthorityName, AuthorityClient> {
+        let mut authority_clients = BTreeMap::new();
+        for authority in &self.config.authorities {
+            let client = AuthorityClient::new(NetworkClient::new(
+                authority.host.clone(),
+                authority.base_port,
+                self.config.buffer_size,
+                self.config.send_timeout,
+                self.config.recv_timeout,
+            ));
+            authority_clients.insert(authority.address, client);
+        }
+        authority_clients
     }
 
     pub fn get_account_cfg_info(&self, address: &SuiAddress) -> Result<&AccountInfo, SuiError> {

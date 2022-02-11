@@ -12,6 +12,8 @@ mod messages_tests;
 use move_binary_format::{access::ModuleAccess, CompiledModule};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
 use serde::{Deserialize, Serialize};
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
 use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
@@ -277,6 +279,31 @@ impl OrderEffects {
 }
 
 impl BcsSignable for OrderEffects {}
+
+impl Display for OrderEffects {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        if !self.created.is_empty() {
+            writeln!(writer, "Created Objects:")?;
+            for (obj, _) in &self.created {
+                writeln!(writer, "{:?} {:?} {:?}", obj.0, obj.1, obj.2)?;
+            }
+        }
+        if !self.mutated.is_empty() {
+            writeln!(writer, "Mutated Objects:")?;
+            for (obj, _) in &self.mutated {
+                writeln!(writer, "{:?} {:?} {:?}", obj.0, obj.1, obj.2)?;
+            }
+        }
+        if !self.deleted.is_empty() {
+            writeln!(writer, "Deleted Objects:")?;
+            for obj in &self.deleted {
+                writeln!(writer, "{:?} {:?} {:?}", obj.0, obj.1, obj.2)?;
+            }
+        }
+        write!(f, "{}", writer)
+    }
+}
 
 /// An order signed by a single authority
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]

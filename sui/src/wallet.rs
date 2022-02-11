@@ -3,6 +3,7 @@
 use async_trait::async_trait;
 use colored::Colorize;
 use std::io;
+use std::io::stdout;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
 use sui::config::WalletConfig;
@@ -12,13 +13,11 @@ use sui::wallet_commands::*;
 use tracing::subscriber::set_global_default;
 use tracing_subscriber::EnvFilter;
 
-const FAST_X: &str = "   _____ __  ______
-  / ___// / / /  _/
-  \\__ \\/ / / // /  
- ___/ / /_/ // /   
-/____/\\____/___/   
-
-";
+const FAST_X: &str = "   _____       _    _       __      ____     __
+  / ___/__  __(_)  | |     / /___ _/ / /__  / /_
+  \\__ \\/ / / / /   | | /| / / __ `/ / / _ \\/ __/
+ ___/ / /_/ / /    | |/ |/ / /_/ / / /  __/ /_
+/____/\\__,_/_/     |__/|__/\\__,_/_/_/\\___/\\__/";
 
 #[derive(StructOpt)]
 #[structopt(
@@ -61,7 +60,7 @@ async fn main() -> Result<(), anyhow::Error> {
     // Sync all accounts on start up.
     for address in addresses {
         WalletCommands::SyncClientState { address }
-            .execute(&mut context)
+            .execute(&mut context, &mut stdout())
             .await?;
     }
 
@@ -85,7 +84,7 @@ async fn main() -> Result<(), anyhow::Error> {
         };
         shell.run_async().await?;
     } else if let Some(mut cmd) = options.cmd {
-        cmd.execute(&mut context).await?;
+        cmd.execute(&mut context, &mut stdout()).await?;
     }
     Ok(())
 }
@@ -98,7 +97,7 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
         let command: Result<WalletCommands, _> = WalletCommands::from_iter_safe(args);
         match command {
             Ok(mut cmd) => {
-                if let Err(e) = cmd.execute(context).await {
+                if let Err(e) = cmd.execute(context, &mut stdout()).await {
                     eprintln!("{}", format!("{}", e).red());
                 }
             }

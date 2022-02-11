@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
+use anyhow::anyhow;
 use futures::future::join_all;
 use std::collections::BTreeMap;
+use std::io::stdout;
 use std::net::TcpListener;
 use std::path::PathBuf;
-use std::process::exit;
 use std::sync::Arc;
 use structopt::StructOpt;
 use sui::config::{AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, WalletConfig};
@@ -22,20 +23,20 @@ const DEFAULT_WEIGHT: usize = 1;
 
 #[derive(StructOpt)]
 #[structopt(
-    name = "FastX Local",
+    name = "Sui Local",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
-struct FastXOpt {
+struct SuiOpt {
     #[structopt(subcommand)]
-    command: FastXCommand,
+    command: SuiCommand,
     #[structopt(long, default_value = "./network.conf")]
     config: String,
 }
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
-pub enum FastXCommand {
+pub enum SuiCommand {
     /// Start sui network.
     #[structopt(name = "start")]
     Start,
@@ -51,26 +52,33 @@ async fn main() -> Result<(), anyhow::Error> {
     let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
     set_global_default(subscriber).expect("Failed to set subscriber");
 
-    let options: FastXOpt = FastXOpt::from_args();
+    let options: SuiOpt = SuiOpt::from_args();
     let network_conf_path = options.config;
     let config =
         NetworkConfig::read_or_create(&network_conf_path).expect("Unable to read network config.");
 
+    let mut writer = stdout();
+
     match options.command {
-        FastXCommand::Start => start_network(config).await,
-        FastXCommand::Genesis => genesis(config).await,
+        SuiCommand::Start => start_network(config, &mut writer).await,
+        SuiCommand::Genesis => genesis(config, &mut writer).await,
     }
 }
 
-async fn start_network(config: NetworkConfig) -> Result<(), anyhow::Error> {
+async fn start_network<W: std::io::Write>(
+    config: NetworkConfig,
+    writer: &mut W,
+) -> Result<(), anyhow::Error> {
     if config.authorities.is_empty() {
-        println!("No authority configured for the network, please run genesis.");
-        exit(1);
+        return Err(anyhow!(
+            "No authority configured for the network, please run genesis."
+        ));
     }
-    println!(
+    writeln!(
+        writer,
         "Starting network with {} authorities",
         config.authorities.len()
-    );
+    )?;
     let mut handles = Vec::new();
 
     let committee = Committee::new(
@@ -96,24 +104,26 @@ async fn start_network(config: NetworkConfig) -> Result<(), anyhow::Error> {
             }
         });
     }
-    println!("Started {} authorities", handles.len());
+    writeln!(writer, "Started {} authorities", handles.len())?;
     join_all(handles).await;
-    println!("All server stopped.");
+    writeln!(writer, "All server stopped.")?;
 
     Ok(())
 }
 
-async fn genesis(mut config: NetworkConfig) -> Result<(), anyhow::Error> {
+async fn genesis<W: std::io::Write>(
+    mut config: NetworkConfig,
+    writer: &mut W,
+) -> Result<(), anyhow::Error> {
     if !config.authorities.is_empty() {
-        println!("Cannot run genesis on a existing network, please delete network config file and try again.");
-        exit(1);
+        return Err(anyhow!("Cannot run genesis on a existing network, please delete network config file and try again."));
     }
 
     let mut authorities = BTreeMap::new();
     let mut authority_info = Vec::new();
     let mut port_allocator = PortAllocator::new(10000);
 
-    println!("Creating new authorities...");
+    writeln!(writer, "Creating new authorities...")?;
     for _ in 0..4 {
         let (address, key_pair) = get_key_pair();
         let info = AuthorityPrivateInfo {
@@ -137,7 +147,7 @@ async fn genesis(mut config: NetworkConfig) -> Result<(), anyhow::Error> {
     let mut new_addresses = Vec::new();
     let mut preload_objects = Vec::new();
 
-    println!("Creating test objects...");
+    writeln!(writer, "Creating test objects...")?;
     for _ in 0..5 {
         let (address, key_pair) = get_key_pair();
         new_addresses.push(AccountInfo { address, key_pair });
@@ -164,12 +174,13 @@ async fn genesis(mut config: NetworkConfig) -> Result<(), anyhow::Error> {
     wallet_config.accounts = new_addresses;
     wallet_config.save()?;
 
-    println!("Network genesis completed.");
-    println!("Network config file is stored in {}.", config_path);
-    println!(
+    writeln!(writer, "Network genesis completed.")?;
+    writeln!(writer, "Network config file is stored in {}.", config_path)?;
+    writeln!(
+        writer,
         "Wallet config file is stored in {}.",
         wallet_config.config_path()
-    );
+    )?;
 
     Ok(())
 }
