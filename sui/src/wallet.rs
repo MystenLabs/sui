@@ -12,11 +12,13 @@ use sui::wallet_commands::*;
 use tracing::subscriber::set_global_default;
 use tracing_subscriber::EnvFilter;
 
-const FAST_X: &str = "    ______           __ _  __
-   / ____/___ ______/ /| |/ /
-  / /_  / __ `/ ___/ __/   / 
- / __/ / /_/ (__  ) /_/   |  
-/_/    \\__,_/____/\\__/_/|_|        ";
+const FAST_X: &str = "   _____ __  ______
+  / ___// / / /  _/
+  \\__ \\/ / / // /  
+ ___/ / /_/ // /   
+/____/\\____/___/   
+
+";
 
 #[derive(StructOpt)]
 #[structopt(
