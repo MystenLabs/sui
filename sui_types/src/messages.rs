@@ -1,7 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::object::{Object, OBJECT_START_VERSION};
+use crate::object::{Object, ObjectFormatOptions, OBJECT_START_VERSION};
 
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 
@@ -10,7 +10,7 @@ use super::{base_types::*, committee::Committee, error::*, event::Event};
 mod messages_tests;
 
 use move_binary_format::{access::ModuleAccess, CompiledModule};
-use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeSet, HashSet},
@@ -124,6 +124,8 @@ pub struct ObjectInfoRequest {
     pub object_id: ObjectID,
     /// The version of the object for which the parent certificate is sought.
     pub request_sequence_number: Option<SequenceNumber>,
+    /// If true, the request will return the layout of the object in the given format
+    pub request_layout: Option<ObjectFormatOptions>,
 }
 
 impl From<ObjectRef> for ObjectInfoRequest {
@@ -131,6 +133,7 @@ impl From<ObjectRef> for ObjectInfoRequest {
         ObjectInfoRequest {
             object_id: object_ref.0,
             request_sequence_number: Some(object_ref.1),
+            request_layout: None,
         }
     }
 }
@@ -140,6 +143,7 @@ impl From<ObjectID> for ObjectInfoRequest {
         ObjectInfoRequest {
             object_id,
             request_sequence_number: None,
+            request_layout: None,
         }
     }
 }
@@ -157,6 +161,9 @@ pub struct ObjectResponse {
     /// Order the object is locked on in this authority.
     /// None if the object is not currently locked by this authority.
     pub lock: Option<SignedOrder>,
+    /// Schema of the Move value inside this object.
+    /// None if the object is a Move package, or the request did not ask for the layout
+    pub layout: Option<MoveStructLayout>,
 }
 
 /// This message provides information about the latest object and its lock

@@ -451,3 +451,22 @@ impl AuthorityStore {
         }))
     }
 }
+
+impl ModuleResolver for AuthorityStore {
+    type Error = SuiError;
+
+    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        match self.get_object(module_id.address())? {
+            Some(o) => match &o.data {
+                Data::Package(c) => Ok(c
+                    .get(module_id.name().as_str())
+                    .cloned()
+                    .map(|m| m.into_vec())),
+                _ => Err(SuiError::BadObjectType {
+                    error: "Expected module object".to_string(),
+                }),
+            },
+            None => Ok(None),
+        }
+    }
+}

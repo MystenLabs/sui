@@ -47,7 +47,8 @@ const ID_END_INDEX: usize = AccountAddress::LENGTH;
 /// Index marking the end of the object's version + the beginning of type-specific data
 const VERSION_END_INDEX: usize = ID_END_INDEX + 8;
 
-/// Different schemes for converting a Move object to JSON
+/// Different schemes for converting a Move value into a structured representation
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct ObjectFormatOptions {
     /// If true, include the type of each object as well as its fields; e.g.:
     /// `{ "fields": { "f": 20, "g": { "fields" { "h": true }, "type": "0x0::MyModule::MyNestedType" }, "type": "0x0::MyModule::MyType" }`
@@ -400,6 +401,20 @@ impl Object {
         }
     }
 
+    /// Get a `MoveStructLayout` for `self`.
+    /// The `resolver` value must contain the module that declares `self.type_` and the (transitive)
+    /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
+    pub fn get_layout(
+        &self,
+        format: ObjectFormatOptions,
+        resolver: &impl GetModule,
+    ) -> Result<Option<MoveStructLayout>, SuiError> {
+        match &self.data {
+            Data::Move(m) => Ok(Some(m.get_layout(format, resolver)?)),
+            Data::Package(_) => Ok(None),
+        }
+    }
+
     /// Convert `self` to the JSON representation dictated by `format`.
     /// If `self` is a Move value, the `resolver` value must contain the module that declares `self.type_` and the (transitive)
     /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
@@ -463,5 +478,13 @@ impl Display for Object {
             self.is_read_only(),
             type_string
         )
+    }
+}
+
+impl Default for ObjectFormatOptions {
+    fn default() -> Self {
+        ObjectFormatOptions {
+            include_types: true,
+        }
     }
 }

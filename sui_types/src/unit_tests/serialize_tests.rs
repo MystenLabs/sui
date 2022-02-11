@@ -51,10 +51,12 @@ fn test_info_request() {
     let req1 = ObjectInfoRequest {
         object_id: dbg_object_id(0x20),
         request_sequence_number: None,
+        request_layout: None,
     };
     let req2 = ObjectInfoRequest {
         object_id: dbg_object_id(0x20),
         request_sequence_number: Some(SequenceNumber::from(129)),
+        request_layout: None,
     };
 
     let buf1 = serialize_object_info_request(&req1);
@@ -244,6 +246,7 @@ fn test_info_response() {
         object_and_lock: Some(ObjectResponse {
             object: object.clone(),
             lock: Some(vote),
+            layout: None,
         }),
         parent_certificate: None,
         requested_object_reference: Some(object.to_object_reference()),
