@@ -1,5 +1,6 @@
 /// Example coin with a trusted owner responsible for minting/burning (e.g., a stablecoin)
 module Examples::TrustedCoin {
+    use FastX::Address;
     use FastX::Coin::{Self, TreasuryCap};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
@@ -10,9 +11,6 @@ module Examples::TrustedCoin {
     /// Register the trusted currency to acquire its `TreasuryCap`. Because
     /// this is a module initializer, it ensures the currency only gets
     /// registered once.
-    // TODO: this uses a module initializer, which doesn't exist in Move.
-    // However, we can (and I think should) choose to support this in the FastX
-    // adapter to enable us -cases that require at-most-once semantics
     fun init(ctx: &mut TxContext) {
         // Get a treasury cap for the coin and give it to the transaction
         // sender
@@ -23,5 +21,9 @@ module Examples::TrustedCoin {
     fun mint(treasury_cap: &mut TreasuryCap<EXAMPLE>, amount: u64, ctx: &mut TxContext) {
         let coin = Coin::mint<EXAMPLE>(amount, treasury_cap, ctx);
         Coin::transfer(coin, TxContext::get_signer_address(ctx));
+    }
+
+    fun transfer(treasury_cap: TreasuryCap<EXAMPLE>, recipient: vector<u8>, _ctx: &mut TxContext) {
+        Coin::transfer_cap<EXAMPLE>(treasury_cap, Address::new(recipient));
     }
 }

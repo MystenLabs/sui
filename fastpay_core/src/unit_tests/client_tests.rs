@@ -7,9 +7,9 @@ use crate::authority::{AuthorityState, AuthorityStore};
 use crate::client::client_store::ClientStore;
 use crate::client::{Client, ClientState};
 use async_trait::async_trait;
-use fastx_types::object::{Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
+use fastx_types::object::{Data, Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use futures::lock::Mutex;
-use move_core_types::ident_str;
+use move_core_types::{ident_str, identifier::Identifier};
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
@@ -334,6 +334,28 @@ fn make_client(
     ClientState::new(
         env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
         address,
+        pb_secret,
+        committee,
+        authority_clients,
+    )
+    .unwrap()
+}
+
+#[cfg(test)]
+fn make_admin_client(
+    authority_clients: BTreeMap<AuthorityName, LocalAuthorityClient>,
+    committee: Committee,
+) -> ClientState<LocalAuthorityClient> {
+    let (admin, admin_key) = get_key_pair_from_bytes(&[
+        10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
+        92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
+        90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
+        105, 254, 59, 163,
+    ]);
+    let pb_secret = Box::pin(admin_key);
+    ClientState::new(
+        env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
+        admin,
         pb_secret,
         committee,
         authority_clients,
@@ -804,7 +826,10 @@ async fn test_move_calls_object_create() {
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
     // Status flag should be success
-    assert_eq!(order_effects.status, ExecutionStatus::Success);
+    assert!(matches!(
+        order_effects.status,
+        ExecutionStatus::Success { .. }
+    ));
     // Nothing should be deleted during a creation
     assert!(order_effects.deleted.is_empty());
     // A new object is created.
@@ -881,7 +906,10 @@ async fn test_move_calls_object_transfer() {
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
     // Status flag should be success
-    assert_eq!(order_effects.status, ExecutionStatus::Success);
+    assert!(matches!(
+        order_effects.status,
+        ExecutionStatus::Success { .. }
+    ));
     // Nothing should be deleted during a transfer
     assert!(order_effects.deleted.is_empty());
     // The object being transfered will be in mutated.
@@ -965,7 +993,10 @@ async fn test_move_calls_object_transfer_and_freeze() {
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
     // Status flag should be success
-    assert_eq!(order_effects.status, ExecutionStatus::Success);
+    assert!(matches!(
+        order_effects.status,
+        ExecutionStatus::Success { .. }
+    ));
     // Nothing should be deleted during a transfer
     assert!(order_effects.deleted.is_empty());
     // Item being transfered is mutated.
@@ -1047,7 +1078,10 @@ async fn test_move_calls_object_delete() {
     // Check effects are good
     let (_, order_effects) = call_response.unwrap();
     // Status flag should be success
-    assert_eq!(order_effects.status, ExecutionStatus::Success);
+    assert!(matches!(
+        order_effects.status,
+        ExecutionStatus::Success { .. }
+    ));
     // Object be deleted during a delete
     assert_eq!(order_effects.deleted.len(), 1);
     // No item is mutated.
@@ -1064,11 +1098,27 @@ async fn test_move_calls_object_delete() {
     }
 }
 
+async fn get_package_obj(
+    client: &mut ClientState<LocalAuthorityClient>,
+    objects: &[(ObjectRef, Authenticator)],
+    gas_object_ref: &ObjectRef,
+) -> Option<ObjectRead> {
+    let mut pkg_obj_opt = None;
+    for (new_obj_ref, _) in objects {
+        assert_ne!(gas_object_ref, new_obj_ref);
+        let new_obj = client.get_object_info(new_obj_ref.0).await.unwrap();
+        if let Data::Package(_) = new_obj.object().unwrap().data {
+            pkg_obj_opt = Some(new_obj);
+        }
+    }
+    pkg_obj_opt
+}
+
 #[tokio::test]
 async fn test_module_publish_and_call_good() {
     // Init the states
     let (authority_clients, committee) = init_local_authorities(4).await;
-    let mut client1 = make_client(authority_clients.clone(), committee);
+    let mut client1 = make_admin_client(authority_clients.clone(), committee);
 
     let gas_object_id = ObjectID::random();
 
@@ -1089,54 +1139,81 @@ async fn test_module_publish_and_call_good() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/../fastx_programmability/examples/");
 
-    let pub_res = client1.publish(hero_path, gas_object_ref).await;
+    let pub_res = client1.publish(hero_path, gas_object_ref, 1000).await;
 
     let (_, published_effects) = pub_res.unwrap();
 
-    // Only package obj should be created
-    assert_eq!(published_effects.created.len(), 1);
+    assert!(matches!(
+        published_effects.status,
+        ExecutionStatus::Success { .. }
+    ));
 
-    // Verif gas obj
+    // A package obj and two objects resulting from two
+    // initializer runs in different modules should be created.
+    assert_eq!(published_effects.created.len(), 3);
+
+    // Verify gas obj
     assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
 
-    let (new_obj_ref, _) = published_effects.created.get(0).unwrap();
-    assert_ne!(gas_object_ref, *new_obj_ref);
+    for (new_obj_ref, _) in &published_effects.created {
+        assert_ne!(gas_object_ref, *new_obj_ref);
+    }
 
-    // We now have the module obj ref
-    // We can inspect it
-    let (new_obj_ref, new_obj) = client_object(&mut client1, new_obj_ref.0).await;
+    // find the package object and inspect it
+
+    let new_obj = get_package_obj(&mut client1, &published_effects.created, &gas_object_ref)
+        .await
+        .unwrap();
 
     // Version should be 1 for all modules
-    assert_eq!(new_obj.version(), OBJECT_START_VERSION);
+    assert_eq!(new_obj.object().unwrap().version(), OBJECT_START_VERSION);
     // Must be immutable
-    assert!(new_obj.is_read_only());
+    assert!(new_obj.object().unwrap().is_read_only());
 
     // StructTag type is not defined for package
-    assert!(new_obj.type_().is_none());
+    assert!(new_obj.object().unwrap().type_().is_none());
 
     // Data should be castable as a package
-    assert!(new_obj.data.try_as_package().is_some());
+    assert!(new_obj.object().unwrap().data.try_as_package().is_some());
+
+    // This gets the treasury cap for the coin and gives it to the sender
+    let mut tres_cap_opt = None;
+    for (new_obj_ref, _) in &published_effects.created {
+        let new_obj = client1.get_object_info(new_obj_ref.0).await.unwrap();
+        if let Data::Move(move_obj) = &new_obj.object().unwrap().data {
+            if move_obj.type_.module == Identifier::new("Coin").unwrap()
+                && move_obj.type_.name == Identifier::new("TreasuryCap").unwrap()
+            {
+                tres_cap_opt = Some(new_obj);
+            }
+        }
+    }
+
+    let tres_cap_obj_info = tres_cap_opt.unwrap();
 
     // Retrieve latest gas obj spec
     let (gas_object_ref, gas_object) = client_object(&mut client1, gas_object_id).await;
 
+    // Confirm we own this object
+    assert_eq!(tres_cap_obj_info.object().unwrap().owner, gas_object.owner);
+
     //Try to call a function in TrustedCoin module
     let call_resp = client1
         .move_call(
-            new_obj_ref,
+            new_obj.object().unwrap().to_object_reference(),
             ident_str!("TrustedCoin").to_owned(),
-            ident_str!("init").to_owned(),
+            ident_str!("mint").to_owned(),
             vec![],
             gas_object_ref,
-            vec![],
-            vec![],
+            vec![tres_cap_obj_info.object().unwrap().to_object_reference()],
+            vec![42u64.to_le_bytes().to_vec()],
             1000,
         )
         .await
         .unwrap();
 
     let effects = call_resp.1;
-    assert!(effects.status == ExecutionStatus::Success);
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // This gets the treasury cap for the coin and gives it to the sender
     let tres_cap_ref = effects
@@ -1158,7 +1235,7 @@ async fn test_module_publish_and_call_good() {
 async fn test_module_publish_file_path() {
     // Init the states
     let (authority_clients, committee) = init_local_authorities(4).await;
-    let mut client1 = make_client(authority_clients.clone(), committee);
+    let mut client1 = make_admin_client(authority_clients.clone(), committee);
 
     let gas_object_id = ObjectID::random();
 
@@ -1181,53 +1258,45 @@ async fn test_module_publish_file_path() {
     // Use a path pointing to a different file
     hero_path.push_str("/../fastx_programmability/examples/Hero.move");
 
-    let pub_resp = client1.publish(hero_path, gas_object_ref).await;
+    let pub_resp = client1.publish(hero_path, gas_object_ref, 1000).await;
 
     let (_, published_effects) = pub_resp.unwrap();
 
-    // Only package obj should be created
-    assert_eq!(published_effects.created.len(), 1);
+    assert!(matches!(
+        published_effects.status,
+        ExecutionStatus::Success { .. }
+    ));
 
-    // Verif gas
+    // Even though we provided a path to Hero.move, the builder is
+    // able to find the package root build all in the package,
+    // including TrustedCoin module
+    //
+    // Consequently,a package obj and two objects resulting from two
+    // initializer runs in different modules should be created.
+    assert_eq!(published_effects.created.len(), 3);
+
+    // Verify gas
     assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
 
-    let (new_obj_ref, _) = published_effects.created.get(0).unwrap();
-    assert_ne!(gas_object_ref, *new_obj_ref);
+    for (new_obj_ref, _) in &published_effects.created {
+        assert_ne!(gas_object_ref, *new_obj_ref);
+    }
+    // find the package object and inspect it
 
-    // We now have the module obj ref
-    // We can inspect it
-    let (new_obj_ref, new_obj) = client_object(&mut client1, new_obj_ref.0).await;
+    let new_obj = get_package_obj(&mut client1, &published_effects.created, &gas_object_ref)
+        .await
+        .unwrap();
 
     // Version should be 1 for all modules
-    assert_eq!(new_obj.version(), OBJECT_START_VERSION);
+    assert_eq!(new_obj.object().unwrap().version(), OBJECT_START_VERSION);
     // Must be immutable
-    assert!(new_obj.is_read_only());
+    assert!(new_obj.object().unwrap().is_read_only());
 
     // StructTag type is not defined for package
-    assert!(new_obj.type_().is_none());
+    assert!(new_obj.object().unwrap().type_().is_none());
 
     // Data should be castable as a package
-    assert!(new_obj.data.try_as_package().is_some());
-
-    // Retrieve latest gas obj spec
-    let (gas_object_ref, _) = client_object(&mut client1, gas_object_id).await;
-
-    // Even though we provided a path to Hero.move, the builder is able to find the package root
-    // build all in the package, including TrustedCoin module
-    //Try to call a function in TrustedCoin module
-    let call_resp = client1
-        .move_call(
-            new_obj_ref,
-            ident_str!("TrustedCoin").to_owned(),
-            ident_str!("init").to_owned(),
-            vec![],
-            gas_object_ref,
-            vec![],
-            vec![],
-            1000,
-        )
-        .await;
-    assert!(call_resp.is_ok());
+    assert!(new_obj.object().unwrap().data.try_as_package().is_some());
 }
 
 #[tokio::test]
@@ -1257,7 +1326,7 @@ async fn test_module_publish_bad_path() {
     // Use a bad path
     hero_path.push_str("/../fastx_____programmability/examples/");
 
-    let pub_resp = client1.publish(hero_path, gas_object_ref).await;
+    let pub_resp = client1.publish(hero_path, gas_object_ref, 1000).await;
     // Has to fail
     assert!(pub_resp.is_err());
 }
@@ -1290,7 +1359,7 @@ async fn test_module_publish_naughty_path() {
         // Use a bad path
         hero_path.push_str(&format!("/../{}", ns));
 
-        let pub_resp = client1.publish(hero_path, gas_object_ref).await;
+        let pub_resp = client1.publish(hero_path, gas_object_ref, 1000).await;
         // Has to fail
         assert!(pub_resp.is_err());
     }
@@ -1427,7 +1496,10 @@ fn test_client_store() {
 async fn test_object_store() {
     // Init the states
     let (authority_clients, committee) = init_local_authorities(4).await;
-    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    // We need admin account as we will be calling initializers on
+    // modules which check if the caller/publisher is the admin
+    // account.
+    let mut client1 = make_admin_client(authority_clients.clone(), committee.clone());
 
     let gas_object_id = ObjectID::random();
 
@@ -1470,30 +1542,44 @@ async fn test_object_store() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/../fastx_programmability/examples/");
 
-    let pub_res = client1.publish(hero_path, gas_object_ref).await;
+    let pub_res = client1.publish(hero_path, gas_object_ref, 1000).await;
 
-    let (_, published_effects) = pub_res.unwrap();
+    let (_, published_effects) = pub_res.as_ref().unwrap();
 
-    // Only package obj should be created
-    assert_eq!(published_effects.created.len(), 1);
+    assert!(matches!(
+        published_effects.status,
+        ExecutionStatus::Success { .. }
+    ));
 
-    // Verif gas obj
+    // A package obj and two objects resulting from two
+    // initializer runs in different modules should be created.
+    assert_eq!(published_effects.created.len(), 3);
+
+    // Verify gas obj
     assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
 
-    let (new_obj_ref, _) = published_effects.created.get(0).unwrap();
-    assert_ne!(gas_object_ref, *new_obj_ref);
+    for (new_obj_ref, _) in &published_effects.created {
+        assert_ne!(gas_object_ref, *new_obj_ref);
+    }
 
-    // We now have the module obj ref
-    // We can inspect it
-    let new_obj = client_object(&mut client1, new_obj_ref.0).await.1;
+    // find the package object and inspect it
+
+    let new_obj = get_package_obj(&mut client1, &published_effects.created, &gas_object_ref)
+        .await
+        .unwrap();
 
     // Published object should be in storage now
-    // But also the new gas object should be in storage, so 2 new items, plus 1 from before
-    assert_eq!(client1.store().objects.iter().count(), 3);
+    // But also the new gas object should be in storage, so 2 new items, plus 3 from before
+    assert_eq!(client1.store().objects.iter().count(), 5);
 
     // Verify that we indeed have the new module object
-    let mod_obj_from_store = client1.store().objects.get(new_obj_ref).unwrap().unwrap();
-    assert_eq!(mod_obj_from_store, new_obj);
+    let mod_obj_from_store = client1
+        .store()
+        .objects
+        .get(&new_obj.reference().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(mod_obj_from_store, *new_obj.object().unwrap());
 }
 
 #[tokio::test]

@@ -335,6 +335,7 @@ impl AuthorityState {
                 m.modules,
                 m.sender,
                 tx_ctx,
+                m.gas_budget,
                 gas_object.clone(),
             ),
         }?;
@@ -383,7 +384,7 @@ impl AuthorityState {
 
         output_object.transfer(Authenticator::Address(recipient));
         temporary_store.write_object(output_object);
-        Ok(ExecutionStatus::Success)
+        Ok(ExecutionStatus::Success { gas_used })
     }
 
     pub async fn handle_order_info_request(

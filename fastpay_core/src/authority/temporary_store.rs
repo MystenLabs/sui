@@ -198,11 +198,14 @@ impl Storage for AuthorityTemporaryStore {
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
-        match self.objects.get(id) {
+        match self.written.get(id) {
             Some(x) => Some(x.clone()),
-            None => match self.object_store.get_object(id) {
-                Ok(o) => o,
-                Err(e) => panic!("Could not read object {}", e),
+            None => match self.objects.get(id) {
+                Some(x) => Some(x.clone()),
+                None => match self.object_store.get_object(id) {
+                    Ok(o) => o,
+                    Err(e) => panic!("Could not read object {}", e),
+                },
             },
         }
     }
