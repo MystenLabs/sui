@@ -1010,7 +1010,7 @@ async fn publish(
             return Err(HttpError::for_client_error(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Gas object (gas_object_id) not found").to_string(),
+                "Gas object (gas_object_id) not found".to_string(),
             ))
         }
     };
@@ -1219,7 +1219,7 @@ async fn call(
             return Err(HttpError::for_client_error(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Gas object (gas_object_id) not found").to_string(),
+                "Gas object (gas_object_id) not found".to_string(),
             ))
         }
     };
