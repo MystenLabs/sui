@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use colored::Colorize;
 use std::io;
 use std::io::stdout;
+use std::path::PathBuf;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
 use sui::config::WalletConfig;
@@ -30,7 +31,7 @@ struct ClientOpt {
     no_shell: bool,
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
     #[structopt(long, default_value = "./wallet.conf")]
-    config: String,
+    config: PathBuf,
     /// Subcommands. Acceptable values are transfer, query_objects, benchmark, and create_accounts.
     #[structopt(subcommand)]
     cmd: Option<WalletCommands>,

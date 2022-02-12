@@ -12,12 +12,16 @@ use sui::config::{AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfi
 use sui::utils::Config;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
-use sui_types::base_types::{get_key_pair, ObjectID, SequenceNumber};
+use sui_types::base_types::{encode_address_hex, get_key_pair, ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
 use sui_types::object::Object;
 use tracing::error;
 use tracing::subscriber::set_global_default;
 use tracing_subscriber::EnvFilter;
+
+#[cfg(test)]
+#[path = "unit_tests/sui_tests.rs"]
+mod sui_tests;
 
 const DEFAULT_WEIGHT: usize = 1;
 
@@ -31,7 +35,7 @@ struct SuiOpt {
     #[structopt(subcommand)]
     command: SuiCommand,
     #[structopt(long, default_value = "./network.conf")]
-    config: String,
+    config: PathBuf,
 }
 
 #[derive(StructOpt)]
@@ -54,19 +58,18 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let options: SuiOpt = SuiOpt::from_args();
     let network_conf_path = options.config;
-    let config =
-        NetworkConfig::read_or_create(&network_conf_path).expect("Unable to read network config.");
+    let mut config = NetworkConfig::read_or_create(&network_conf_path)?;
 
     let mut writer = stdout();
 
     match options.command {
-        SuiCommand::Start => start_network(config, &mut writer).await,
-        SuiCommand::Genesis => genesis(config, &mut writer).await,
+        SuiCommand::Start => start_network(&config, &mut writer).await,
+        SuiCommand::Genesis => genesis(&mut config, &mut writer).await,
     }
 }
 
 async fn start_network<W: std::io::Write>(
-    config: NetworkConfig,
+    config: &NetworkConfig,
     writer: &mut W,
 ) -> Result<(), anyhow::Error> {
     if config.authorities.is_empty() {
@@ -89,8 +92,8 @@ async fn start_network<W: std::io::Write>(
             .collect(),
     );
 
-    for authority in config.authorities {
-        let server = make_server(&authority, &committee, &[], config.buffer_size).await;
+    for authority in &config.authorities {
+        let server = make_server(authority, &committee, &[], config.buffer_size).await;
         handles.push(async move {
             let spawned_server = match server.spawn().await {
                 Ok(server) => server,
@@ -112,9 +115,11 @@ async fn start_network<W: std::io::Write>(
 }
 
 async fn genesis<W: std::io::Write>(
-    mut config: NetworkConfig,
+    config: &mut NetworkConfig,
     writer: &mut W,
 ) -> Result<(), anyhow::Error> {
+    // We have created the config file, safe to unwrap the path here.
+    let working_dir = &config.config_path().parent().unwrap().to_path_buf();
     if !config.authorities.is_empty() {
         return Err(anyhow!("Cannot run genesis on a existing network, please delete network config file and try again."));
     }
@@ -124,6 +129,7 @@ async fn genesis<W: std::io::Write>(
     let mut port_allocator = PortAllocator::new(10000);
 
     writeln!(writer, "Creating new authorities...")?;
+    let authorities_db_path = working_dir.join("authorities_db");
     for _ in 0..4 {
         let (address, key_pair) = get_key_pair();
         let info = AuthorityPrivateInfo {
@@ -131,7 +137,7 @@ async fn genesis<W: std::io::Write>(
             key_pair,
             host: "127.0.0.1".to_string(),
             port: port_allocator.next_port().expect("No free ports"),
-            db_path: format!("./authorities_db/{:?}", address),
+            db_path: authorities_db_path.join(encode_address_hex(&address)),
         };
         authority_info.push(AuthorityInfo {
             address,
@@ -164,21 +170,27 @@ async fn genesis<W: std::io::Write>(
     let committee = Committee::new(authorities);
 
     // Make server state to persist the objects.
-    let config_path = config.config_path().to_string();
-    for authority in config.authorities {
-        make_server(&authority, &committee, &preload_objects, config.buffer_size).await;
+    let config_path = config.config_path();
+    for authority in &config.authorities {
+        make_server(authority, &committee, &preload_objects, config.buffer_size).await;
     }
 
-    let mut wallet_config = WalletConfig::create("./wallet.conf")?;
+    let wallet_path = working_dir.join("wallet.conf");
+    let mut wallet_config = WalletConfig::create(&wallet_path)?;
     wallet_config.authorities = authority_info;
     wallet_config.accounts = new_addresses;
+    wallet_config.db_folder_path = working_dir.join("client_db");
     wallet_config.save()?;
 
     writeln!(writer, "Network genesis completed.")?;
-    writeln!(writer, "Network config file is stored in {}.", config_path)?;
     writeln!(
         writer,
-        "Wallet config file is stored in {}.",
+        "Network config file is stored in {:?}.",
+        config_path
+    )?;
+    writeln!(
+        writer,
+        "Wallet config file is stored in {:?}.",
         wallet_config.config_path()
     )?;
 
@@ -191,8 +203,7 @@ async fn make_server(
     pre_load_objects: &[Object],
     buffer_size: usize,
 ) -> AuthorityServer {
-    let path = PathBuf::from(authority.db_path.clone());
-    let store = Arc::new(AuthorityStore::open(path, None));
+    let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
 
     let state = AuthorityState::new_with_genesis_modules(
         committee.clone(),
