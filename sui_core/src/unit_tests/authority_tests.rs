@@ -375,7 +375,7 @@ async fn test_publish_dependent_module_ok() {
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
-        0,
+        MAX_GAS,
         &sender_key,
     );
     let dependent_module_id = TxContext::new(&sender, order.digest()).fresh_id();
@@ -410,7 +410,13 @@ async fn test_publish_module_no_dependencies_ok() {
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
     let gas_cost = calculate_module_publish_cost(&module_bytes);
-    let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, 0, &sender_key);
+    let order = Order::new_module(
+        sender,
+        gas_payment_object_ref,
+        module_bytes,
+        MAX_GAS,
+        &sender_key,
+    );
     let _module_object_id = TxContext::new(&sender, order.digest()).fresh_id();
     let response = send_and_confirm_order(&authority, order).await.unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
@@ -464,7 +470,7 @@ async fn test_publish_non_existing_dependent_module() {
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
-        0,
+        MAX_GAS,
         &sender_key,
     );
 
@@ -506,11 +512,17 @@ async fn test_publish_module_insufficient_gas() {
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
-    let order = Order::new_module(sender, gas_payment_object_ref, module_bytes, 0, &sender_key);
+    let order = Order::new_module(
+        sender,
+        gas_payment_object_ref,
+        module_bytes,
+        10,
+        &sender_key,
+    );
     let response = authority.handle_order(order.clone()).await.unwrap_err();
     assert!(response
         .to_string()
-        .contains("Gas balance is 9, smaller than minimum requirement of 10 for module publish"));
+        .contains("Gas balance is 9, smaller than the budget 10 for move operation"));
 }
 
 #[tokio::test]
@@ -598,7 +610,7 @@ async fn test_handle_move_order_insufficient_budget() {
         .unwrap_err();
     assert!(response
         .to_string()
-        .contains("Gas budget is 9, smaller than minimum requirement of 10 for move call"));
+        .contains("Gas budget is 9, smaller than minimum requirement of 10 for move operation"));
 }
 
 #[tokio::test]

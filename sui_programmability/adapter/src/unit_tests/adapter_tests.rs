@@ -538,8 +538,6 @@ fn test_publish_module_insufficient_gas() {
         .1
         .to_string()
         .contains("Gas balance is 30, not enough to pay"));
-    // Minimum gas is charged.
-    assert_eq!(err.0, gas::MIN_MOVE_PUBLISH_GAS);
 }
 
 #[test]
@@ -622,7 +620,7 @@ fn test_transfer_and_freeze() {
         .contains("Argument 0 is expected to be mutable, immutable object found"));
     // Since it failed before VM execution, during type resolving,
     // only minimum gas will be charged.
-    assert_eq!(err.0, gas::MIN_MOVE_CALL_GAS);
+    assert_eq!(err.0, gas::MIN_MOVE);
 
     // 4. Call set_value (pass as mutable reference) should fail as well.
     let obj1 = storage.read_object(&id1).unwrap();
@@ -645,7 +643,7 @@ fn test_transfer_and_freeze() {
         .contains("Argument 0 is expected to be mutable, immutable object found"));
     // Since it failed before VM execution, during type resolving,
     // only minimum gas will be charged.
-    assert_eq!(err.0, gas::MIN_MOVE_CALL_GAS);
+    assert_eq!(err.0, gas::MIN_MOVE);
 }
 
 #[test]
@@ -675,7 +673,7 @@ fn test_move_call_args_type_mismatch() {
     )
     .unwrap();
     let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE_CALL_GAS);
+    assert_eq!(gas_used, gas::MIN_MOVE);
     assert!(err
         .to_string()
         .contains("Expected 3 arguments calling function 'create', but found 2"));
@@ -700,7 +698,7 @@ fn test_move_call_args_type_mismatch() {
     )
     .unwrap();
     let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE_CALL_GAS);
+    assert_eq!(gas_used, gas::MIN_MOVE);
     // Assert on the error message as well.
     */
 }
@@ -734,7 +732,7 @@ fn test_move_call_incorrect_function() {
     )
     .unwrap();
     let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE_CALL_GAS);
+    assert_eq!(gas_used, gas::MIN_MOVE);
     assert!(err
         .to_string()
         .contains("Expected a module object, but found a Move object"));
@@ -754,7 +752,7 @@ fn test_move_call_incorrect_function() {
     )
     .unwrap();
     let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE_CALL_GAS);
+    assert_eq!(gas_used, gas::MIN_MOVE);
     assert!(err.to_string().contains(&format!(
         "Could not resolve function 'foo' in module {}::ObjectBasics",
         SUI_FRAMEWORK_ADDRESS
@@ -821,7 +819,7 @@ fn test_publish_module_linker_error() {
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
-    assert_eq!(err.0, gas::MIN_MOVE_PUBLISH_GAS);
+    assert_eq!(err.0, gas::MIN_MOVE);
     let err_str = err.1.to_string();
     // make sure it's a linker error
     assert!(err_str.contains("VMError with status LOOKUP_FAILED"));
@@ -862,7 +860,7 @@ fn test_publish_module_non_zero_address() {
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
-    assert_eq!(err.0, gas::MIN_MOVE_PUBLISH_GAS);
+    assert_eq!(err.0, gas::MIN_MOVE);
     let err_str = err.1.to_string();
     println!("{:?}", err_str);
     assert!(err_str.contains("Publishing modules with non-zero address is not allowed"));
@@ -963,7 +961,7 @@ fn test_simple_call() {
         &natives,
         "src/unit_tests/data/simple_call",
         gas_object.clone(),
-        0,
+        GAS_BUDGET,
     );
     // TODO: to be honest I am not sure why this flush is needed but
     // without it, the following assertion below fails:
