@@ -18,8 +18,6 @@ use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::{parse_transaction_argument, parse_type_tag};
 use move_core_types::transaction_argument::{convert_txn_args, TransactionArgument};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::str::FromStr;
 use std::time::Instant;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
@@ -309,7 +307,7 @@ impl WalletContext {
         let path = config.db_folder_path.clone();
         Ok(Self {
             config,
-            address_manager: ClientAddressManager::new(PathBuf::from_str(&path)?)?,
+            address_manager: ClientAddressManager::new(path)?,
         })
     }
 
