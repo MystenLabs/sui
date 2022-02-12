@@ -1010,7 +1010,7 @@ async fn publish(
             return Err(HttpError::for_client_error(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Gas object (gas_object_id) not found"),
+                format!("Gas object (gas_object_id) not found").to_string(),
             ))
         }
     };
@@ -1219,7 +1219,7 @@ async fn call(
             return Err(HttpError::for_client_error(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Gas object (gas_object_id) not found"),
+                format!("Gas object (gas_object_id) not found").to_string(),
             ))
         }
     };
@@ -1397,15 +1397,13 @@ fn get_object_info(
     };
 
     match obj_info {
-        Some(object) => return Ok(object),
-        None => {
-            return Err(HttpError::for_client_error(
-                None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Could not get object info for object_id: {object_id}."),
-            ))
-        }
-    };
+        Some(object) => Ok(object),
+        None => Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            format!("Could not get object info for object_id: {object_id}."),
+        )),
+    }
 }
 
 fn sync_client_state(client_state: &mut ClientState<AuthorityClient>) -> Option<HttpError> {
@@ -1420,29 +1418,23 @@ fn sync_client_state(client_state: &mut ClientState<AuthorityClient>) -> Option<
     }) {
         Ok(result) => match result {
             Ok(result) => match result {
-                Ok(_) => return None,
-                Err(err) => {
-                    return Some(HttpError::for_client_error(
-                        None,
-                        hyper::StatusCode::FAILED_DEPENDENCY,
-                        format!("Sync error: {err}"),
-                    ))
-                }
-            },
-            Err(err) => {
-                return Some(HttpError::for_client_error(
+                Ok(_) => None,
+                Err(err) => Some(HttpError::for_client_error(
                     None,
                     hyper::StatusCode::FAILED_DEPENDENCY,
-                    format!("Sync error: {:?}", err),
-                ))
-            }
-        },
-        Err(err) => {
-            return Some(HttpError::for_client_error(
+                    format!("Sync error: {err}"),
+                )),
+            },
+            Err(err) => Some(HttpError::for_client_error(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
                 format!("Sync error: {:?}", err),
-            ))
-        }
-    };
+            )),
+        },
+        Err(err) => Some(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            format!("Sync error: {:?}", err),
+        )),
+    }
 }
