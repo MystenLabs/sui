@@ -169,11 +169,15 @@ async fn genesis(
             host: "127.0.0.1".to_string(),
             port: match port_allocator.next_port() {
                 Some(port) => port,
-                None => return Err(HttpError::for_client_error(
-                    None,
-                    hyper::StatusCode::FAILED_DEPENDENCY,
-                    String::from("Could not create authority beacause there were no free ports")
-                ))
+                None => {
+                    return Err(HttpError::for_client_error(
+                        None,
+                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        String::from(
+                            "Could not create authority beacause there were no free ports",
+                        ),
+                    ))
+                }
             },
             db_path: format!("./authorities_db/{:?}", address),
         };
@@ -366,11 +370,13 @@ async fn start(
         .collect::<Vec<_>>();
     let mut wallet_context = match WalletContext::new(config) {
         Ok(wallet_context) => wallet_context,
-        Err(error) => return Err(HttpError::for_client_error(
-            None,
-            hyper::StatusCode::FAILED_DEPENDENCY,
-            format!("Can't create new wallet context: {error}")
-        ))
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Can't create new wallet context: {error}"),
+            ))
+        }
     };
 
     // Sync all accounts.
@@ -472,7 +478,7 @@ async fn get_addresses(
                 ))
             }
         };
-        
+
         if let Some(err) = sync_client_state(client_state) {
             return Err(err);
         }
@@ -657,16 +663,20 @@ async fn object_info(
 
     let object = match get_object_info(client_state, object_id) {
         Ok(ObjectRead::Exists(_, object, _)) => object,
-        Ok(ObjectRead::Deleted(_)) => return Err(
-            HttpError::for_client_error(
-                None, 
-                hyper::StatusCode::FAILED_DEPENDENCY, 
-                format!("Object ({object_id}) was deleted."))),
-        Ok(ObjectRead::NotExists(_)) => return Err(
-            HttpError::for_client_error(
-                None, 
-                hyper::StatusCode::FAILED_DEPENDENCY, 
-                format!("Object ({object_id}) does not exist."))),
+        Ok(ObjectRead::Deleted(_)) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({object_id}) was deleted."),
+            ))
+        }
+        Ok(ObjectRead::NotExists(_)) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({object_id}) does not exist."),
+            ))
+        }
         Err(err) => return Err(err),
     };
 
@@ -994,25 +1004,27 @@ async fn publish(
     };
 
     // Fetch the object info for the gas obj
-    let gas_obj_ref = match (*client_state)
-        .object_refs()
-        .get(&gas_object_id) {
-            Some(gas_obj_ref) => *gas_obj_ref,
-            None =>  {
-                return Err(HttpError::for_client_error(
-                    None,
-                    hyper::StatusCode::FAILED_DEPENDENCY,
-                    format!("Gas object (gas_object_id) not found"),
-                ))
-            }
-        };
+    let gas_obj_ref = match (*client_state).object_refs().get(&gas_object_id) {
+        Some(gas_obj_ref) => *gas_obj_ref,
+        None => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Gas object (gas_object_id) not found"),
+            ))
+        }
+    };
 
     let (cert, effects) = match cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
                 // publish
                 let rt = Runtime::new().unwrap();
-                rt.block_on(async move { client_state.publish(path, gas_obj_ref, publish_params.gas_budget).await })
+                rt.block_on(async move {
+                    client_state
+                        .publish(path, gas_obj_ref, publish_params.gas_budget)
+                        .await
+                })
             })
             .join()
     }) {
@@ -1183,52 +1195,57 @@ async fn call(
 
     let package_obj_ref = match get_object_info(client_state, package_object_id) {
         Ok(ObjectRead::Exists(object_ref, _, _)) => object_ref,
-        Ok(ObjectRead::Deleted(_)) => return Err(
-            HttpError::for_client_error(
-                None, 
-                hyper::StatusCode::FAILED_DEPENDENCY, 
-                format!("Object ({package_object_id}) was deleted."))),
-        Ok(ObjectRead::NotExists(_)) => return Err(
-            HttpError::for_client_error(
-                None, 
-                hyper::StatusCode::FAILED_DEPENDENCY, 
-                format!("Object ({package_object_id}) does not exist."))),
+        Ok(ObjectRead::Deleted(_)) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({package_object_id}) was deleted."),
+            ))
+        }
+        Ok(ObjectRead::NotExists(_)) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({package_object_id}) does not exist."),
+            ))
+        }
         Err(err) => return Err(err),
     };
 
     // Fetch the object info for the gas obj
-    let gas_obj_ref = match (*client_state)
-        .object_refs()
-        .get(&gas_object_id) {
-            Some(gas_obj_ref) => *gas_obj_ref,
-            None =>  {
-                return Err(HttpError::for_client_error(
-                    None,
-                    hyper::StatusCode::FAILED_DEPENDENCY,
-                    format!("Gas object (gas_object_id) not found"),
-                ))
-            }
-        };
+    let gas_obj_ref = match (*client_state).object_refs().get(&gas_object_id) {
+        Some(gas_obj_ref) => *gas_obj_ref,
+        None => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Gas object (gas_object_id) not found"),
+            ))
+        }
+    };
 
     // Fetch the objects for the object args
     let mut object_args_refs = Vec::new();
     for obj_id in object_args {
-
         let obj = match get_object_info(client_state, obj_id) {
             Ok(ObjectRead::Exists(_, obj, _)) => obj,
-            Ok(ObjectRead::Deleted(_)) => return Err(
-                HttpError::for_client_error(
-                    None, 
-                    hyper::StatusCode::FAILED_DEPENDENCY, 
-                    format!("Object ({obj_id}) was deleted."))),
-            Ok(ObjectRead::NotExists(_)) => return Err(
-                HttpError::for_client_error(
-                    None, 
-                    hyper::StatusCode::FAILED_DEPENDENCY, 
-                    format!("Object ({obj_id}) does not exist."))),
+            Ok(ObjectRead::Deleted(_)) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Object ({obj_id}) was deleted."),
+                ))
+            }
+            Ok(ObjectRead::NotExists(_)) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Object ({obj_id}) does not exist."),
+                ))
+            }
             Err(err) => return Err(err),
         };
-        
+
         object_args_refs.push(obj.to_object_reference());
     }
 
@@ -1339,7 +1356,10 @@ async fn make_server(
     AuthorityServer::new(authority.host.clone(), authority.port, buffer_size, state)
 }
 
-fn get_object_info(client_state: &mut ClientState<AuthorityClient>, object_id: AccountAddress) -> Result<ObjectRead, HttpError> {
+fn get_object_info(
+    client_state: &mut ClientState<AuthorityClient>,
+    object_id: AccountAddress,
+) -> Result<ObjectRead, HttpError> {
     let obj_info = match cb_thread::scope(|scope| {
         scope
             .spawn(|_| {

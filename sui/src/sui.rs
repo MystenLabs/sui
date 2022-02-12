@@ -6,7 +6,9 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 use structopt::StructOpt;
-use sui::config::{AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, PortAllocator, WalletConfig};
+use sui::config::{
+    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, PortAllocator, WalletConfig,
+};
 use sui::utils::Config;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
