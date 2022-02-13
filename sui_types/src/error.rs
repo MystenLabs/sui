@@ -141,6 +141,8 @@ pub enum SuiError {
     ModuleBuildFailure { error: String },
     #[error("Dependent package not found on-chain: {package_id:?}")]
     DependentPackageNotFound { package_id: ObjectID },
+    #[error("Move unit tests failed: {error:?}")]
+    MoveUnitTestFailure { error: String },
 
     // Move call related errors
     #[error("Function resolution failure: {error:?}.")]
