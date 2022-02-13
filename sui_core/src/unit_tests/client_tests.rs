@@ -2367,4 +2367,7 @@ async fn test_address_manager() {
 
     assert_eq!(order_effects.created.len(), 1);
     assert_eq!(client1.store().objects.iter().count(), 4);
+
+    // Cleanup
+    fs::remove_dir_all(path).unwrap();
 }
