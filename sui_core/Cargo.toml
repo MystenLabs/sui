@@ -21,6 +21,8 @@ tempfile = "3.3.0"
 tracing = { version = "0.1", features = ["log"] }
 signature = "1.5.0"
 ed25519-dalek = "1.0.1"
+regex = "1"
+hex-slice = "0.1.4"
 
 sui-adapter = { path = "../sui_programmability/adapter" }
 sui-framework = { path = "../sui_programmability/framework" }

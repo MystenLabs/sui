@@ -40,6 +40,9 @@ rustyline = "9.1.2"
 rustyline-derive = "0.6.0"
 colored = "2.0.0"
 unescape = "0.1.0"
+regex = "1"
+hex-slice = "0.1.4"
+
 
 # Deps for REST API
 crossbeam = "0.8.1"
@@ -51,6 +54,7 @@ schemars = "0.8.8"
 move-package = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
 move-core-types = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7", features = ["address20"] }
 move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-binary-format = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
 
 [[bin]]
 name = "bench"

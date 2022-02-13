@@ -33,7 +33,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
-use std::net::{Ipv6Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
 use tokio::runtime::Runtime;
@@ -47,7 +47,7 @@ const DEFAULT_WEIGHT: usize = 1;
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let config_dropshot: ConfigDropshot = ConfigDropshot {
-        bind_address: SocketAddr::from((Ipv6Addr::LOCALHOST, 5000)),
+        bind_address: SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 5001)),
         ..Default::default()
     };
 
@@ -69,6 +69,7 @@ async fn main() -> Result<(), String> {
     api.register(sync).unwrap();
     api.register(publish).unwrap();
     api.register(call).unwrap();
+    api.register(call_simple).unwrap();
 
     let api_context = ServerContext::new();
 
@@ -1264,6 +1265,148 @@ async fn call(
                             gas_obj_ref,
                             object_args_refs,
                             convert_txn_args(&pure_args),
+                            call_params.gas_budget,
+                        )
+                        .await
+                })
+            })
+            .join()
+    }) {
+        Ok(result) => match result {
+            Ok(result) => match result {
+                Ok((cert, effects)) => (cert, effects),
+                Err(err) => {
+                    return Err(HttpError::for_client_error(
+                        None,
+                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        format!("Move call error: {err}"),
+                    ))
+                }
+            },
+            Err(err) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Move call error: {:?}", err),
+                ))
+            }
+        },
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Move call error: {:?}", err),
+            ))
+        }
+    };
+
+    let certificate = format!("{:?}", cert);
+    let object_effects_summary = get_object_effects(effects);
+
+    Ok(HttpResponseOk(OrderResponse {
+        object_effects_summary,
+        certificate,
+    }))
+}
+
+/**
+* 'CallRequest' represents the call request
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct CallSimpleRequest {
+    sender: String,
+    package_object_id: String,
+    function: String,
+    gas_object_id: String,
+    gas_budget: u64,
+}
+
+/**
+ * [WALLET] Call simple syntax move module.
+ */
+#[endpoint {
+    method = PATCH,
+    path = "/wallet/call_simple",
+}]
+async fn call_simple(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    request: TypedBody<CallSimpleRequest>,
+) -> Result<HttpResponseOk<OrderResponse>, HttpError> {
+    let server_context = rqctx.context();
+    let call_params = request.into_inner();
+
+    let function = call_params.function.to_owned();
+
+    let gas_object_id = match AccountAddress::try_from(call_params.gas_object_id) {
+        Ok(gas_object_id) => gas_object_id,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Gas Object ID: {error}"),
+            ))
+        }
+    };
+
+    let package_object_id = match AccountAddress::from_hex_literal(&call_params.package_object_id) {
+        Ok(package_object_id) => package_object_id,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Package Object ID: {error}"),
+            ))
+        }
+    };
+
+    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
+    if wallet_context.is_none() {
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."
+                .to_string(),
+        ));
+    }
+    let wallet_context = wallet_context.as_mut().unwrap();
+
+    let sender = match decode_address_hex(call_params.sender.as_str()) {
+        Ok(sender) => sender,
+        Err(error) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Could not decode address from hex {error}"),
+            ))
+        }
+    };
+
+    let client_state = match wallet_context.get_or_create_client_state(&sender) {
+        Ok(client_state) => client_state,
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!(
+                    "Could not create or get client state for {:?}: {err}",
+                    sender
+                ),
+            ))
+        }
+    };
+    println!("{}", gas_object_id);
+
+    let (cert, effects) = match cb_thread::scope(|scope| {
+        scope
+            .spawn(|_| {
+                // execute move call
+                let rt = Runtime::new().unwrap();
+                rt.block_on(async move {
+                    client_state
+                        .move_call_simple(
+                            package_object_id,
+                            function,
+                            gas_object_id,
                             call_params.gas_budget,
                         )
                         .await

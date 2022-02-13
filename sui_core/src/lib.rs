@@ -7,3 +7,4 @@ pub mod authority_client;
 pub mod authority_server;
 pub mod client;
 pub mod safe_client;
+pub mod utils;

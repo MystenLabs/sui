@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI};
+use anyhow::{anyhow, Error, Result};
 use async_trait::async_trait;
 use futures::future;
 use itertools::Itertools;
@@ -123,6 +124,15 @@ pub trait Client {
         gas_object_ref: ObjectRef,
         object_arguments: Vec<ObjectRef>,
         pure_arguments: Vec<Vec<u8>>,
+        gas_budget: u64,
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
+
+    /// Call move function using simple syntax in the module in the given package, with args supplied
+    async fn move_call_simple(
+        &mut self,
+        package_object_id: ObjectID,
+        function: String,
+        gas_object_id: ObjectID,
         gas_budget: u64,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
 
@@ -626,6 +636,55 @@ where
             &*self.secret,
         );
         self.execute_transaction(move_call_order).await
+    }
+
+    /// Call move function using simple syntax in the module in the given package, with args supplied
+    async fn move_call_simple(
+        &mut self,
+        package_object_id: ObjectID,
+        function: String,
+        gas_object_id: ObjectID,
+        gas_budget: u64,
+    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+        // Derive the pieces
+        let package_obj = match self.get_object_info(package_object_id).await? {
+            sui_types::object::ObjectRead::Exists(_, q, _) => q,
+
+            _ => {
+                return Err(anyhow!(
+                    "Could not find package at id {}",
+                    package_object_id
+                ))
+            }
+        };
+        let package_ref = package_obj.to_object_reference();
+        let gas_obj_ref = *self
+            .object_refs()
+            .get(&gas_object_id)
+            .expect("Gas object not found");
+        let (mod_name, fn_name, type_tags, obj_args, pure_args) =
+            crate::utils::resolve_move_function_text(
+                package_obj,
+                std::collections::BTreeMap::new(),
+                function.to_string(),
+                Identifier::new("FastX").unwrap(),
+            )?;
+        let mut object_args_refs = Vec::new();
+        for obj_id in obj_args {
+            let obj_info = self.get_object_info(obj_id).await?;
+            object_args_refs.push(obj_info.object()?.to_object_reference());
+        }
+        self.move_call(
+            package_ref,
+            mod_name,
+            fn_name,
+            type_tags,
+            gas_obj_ref,
+            object_args_refs,
+            pure_args,
+            gas_budget,
+        )
+        .await
     }
 
     async fn publish(

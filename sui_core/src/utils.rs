@@ -1,60 +1,19 @@
+use std::fmt;
+
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
     transaction_argument::TransactionArgument,
 };
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use std::fs;
-use std::fs::File;
-use std::io::BufReader;
-use std::path::PathBuf;
+
 use sui_types::{
     base_types::ObjectID,
     error::SuiError,
     object::{Data, Object},
 };
-use tracing::log::trace;
 
 use anyhow::{anyhow, Result};
-pub trait Config
-where
-    Self: DeserializeOwned + Serialize,
-{
-    fn read_or_create(path: &str) -> Result<Self, anyhow::Error> {
-        let path_buf = PathBuf::from(path);
-        Ok(if path_buf.exists() {
-            trace!("Reading config from '{}'", path);
-            let reader = BufReader::new(File::open(path_buf)?);
-            let mut config: Self = serde_json::from_reader(reader)?;
-            config.set_config_path(path);
-            config
-        } else {
-            trace!("Config file not found, creating new config '{}'", path);
-            let new_config = Self::create(path)?;
-            new_config.write(path)?;
-            new_config
-        })
-    }
-
-    fn write(&self, path: &str) -> Result<(), anyhow::Error> {
-        trace!("Writing config to '{}'", path);
-        let config = serde_json::to_string_pretty(self).unwrap();
-        fs::write(path, config).expect("Unable to write to config file");
-        Ok(())
-    }
-
-    fn save(&self) -> Result<(), anyhow::Error> {
-        self.write(self.config_path())
-    }
-
-    fn create(path: &str) -> Result<Self, anyhow::Error>;
-
-    fn set_config_path(&mut self, path: &str);
-    fn config_path(&self) -> &str;
-}
-
 use move_binary_format::{
     file_format::CompiledModule,
     normalized::{Function, Type},
@@ -116,7 +75,7 @@ use regex::Regex;
 //     vec![]
 // }
 
-pub fn make_order(
+pub fn resolve_move_function_text(
     package: Object,
     type_alias_map: std::collections::BTreeMap<String, String>,
     full_text: String,
@@ -352,6 +311,8 @@ fn parse_args(
     args: &mut Vec<String>,
     function_signature: Function,
 ) -> Result<(Vec<ObjectID>, Vec<TransactionArgument>)> {
+    println!("{:?}", args);
+
     // Cant return anything
     if !function_signature.return_.is_empty() {
         return Err(anyhow!("Function should return nothing"));
@@ -454,7 +415,8 @@ fn parse_args(
                             .as_bytes()
                             .as_hex()
                     );
-                    transformed_arg.push_str(&bytes_str);
+
+                    transformed_arg.push_str(&trim_hex_repr(bytes_str));
                 } else {
                     let mut tmp = curr_pure_arg.to_lowercase();
                     // Must be bytes at this point
@@ -474,6 +436,7 @@ fn parse_args(
         // We now have a hopefully conformant arg
         // Next is to try parsing it
         let p = move_core_types::parser::parse_transaction_argument(&t);
+        println!("{}", t);
         if p.is_err() {
             return Err(anyhow!(
                 "Unable to parse arg at pos: {}, err: {:?}",
@@ -502,4 +465,9 @@ fn is_primitive(t: &Type) -> bool {
         Vector(inner_t) => is_primitive(inner_t),
         Signer | Struct { .. } | TypeParameter(_) | Reference(_) | MutableReference(_) => false,
     }
+}
+
+// Hack because tired
+fn trim_hex_repr(s: String) -> String {
+    s.replace(" ", "").replace("]", "").replace("[", "")
 }
