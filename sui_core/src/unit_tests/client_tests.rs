@@ -2368,3 +2368,86 @@ async fn test_address_manager() {
     assert_eq!(order_effects.created.len(), 1);
     assert_eq!(client1.store().objects.iter().count(), 4);
 }
+
+#[tokio::test]
+async fn test_move_calls_by_text0() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee.clone());
+    let client2 = make_client(authority_clients.clone(), committee);
+
+    let object_value: u64 = 100;
+    let framework_obj_id = client1.get_framework_object_ref().await.unwrap().0;
+    let gas_object_id = fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client1,
+        vec![ObjectID::random()],
+    )
+    .await
+    .iter()
+    .next()
+    .unwrap()
+    .1
+    .to_object_reference()
+    .0;
+
+    let fn_text = format!(
+        "ObjectBasics::create({},{:02X})",
+        object_value,
+        client1.address()
+    );
+
+    let call_response = client1
+        .move_call_by_text(framework_obj_id, None, None, fn_text, gas_object_id, 100)
+        .await;
+
+    // Check effects are good
+    let (_, order_effects) = call_response.unwrap();
+    // Status flag should be success
+    assert!(matches!(
+        order_effects.status,
+        ExecutionStatus::Success { .. }
+    ));
+    // Nothing should be deleted during a creation
+    assert!(order_effects.deleted.is_empty());
+    // A new object is created.
+    assert_eq!(
+        (order_effects.created.len(), order_effects.mutated.len()),
+        (1, 0)
+    );
+    assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
+
+    // Get the object created from the call
+    let (new_obj_ref, _) = order_effects.created[0];
+
+    let fn_text = format!(
+        "ObjectBasics::transfer({:02X},{:02X})",
+        new_obj_ref.0,
+        client2.address()
+    );
+    let call_response = client1
+        .move_call_by_text(framework_obj_id, None, None, fn_text, gas_object_id, 100)
+        .await;
+
+    // Check effects are good
+    let (_, order_effects) = call_response.unwrap();
+    // Status flag should be success
+    assert!(matches!(
+        order_effects.status,
+        ExecutionStatus::Success { .. }
+    ));
+    // Nothing should be deleted during a transfer
+    assert!(order_effects.deleted.is_empty());
+    // The object being transfered will be in mutated.
+    assert_eq!(order_effects.mutated.len(), 1);
+    // Confirm the items
+    assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
+
+    let (transferred_obj_ref, _) = order_effects.mutated[0];
+
+    assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
+
+    let transferred_obj = client_object(&mut client1, new_obj_ref.0).await.1;
+
+    // Confirm new owner
+    assert!(transferred_obj.owner.is_address(&client2.address()));
+}
