@@ -49,7 +49,7 @@ pub struct MoveFunctionComponents {
 /// 2. function: This is the function to call which must be a VALID_IDENTIFIER
 /// 3. T1, T2, ...: these are optional alias for the type/generic args. These aliases are uses so the text is shortet. T1 and T2 just aliases
 ///    for the actual types which may be longer. For example T1 could represent FastX::Coin::Gas::...
-/// 4. Type Alias Map: The actual mappings of the type aliases are provided in an optional map `type_alias_map`.
+/// 4. Type Alias Map: The actual mappings of the type aliases are provided in an optional map `type_alias_map`. This is similar to using the `where` clause in Rust to define generics
 ///    Hence in the previous example the map will contain an entry ("T1", "FastX::Coin::Gas::...") which helps resolve the actual type
 ///    Type aliases have to be VALID_IDENTIFIER
 /// 5. arg1, arg2,..: These are the arguments represented as strings and must either be numbers (8,2944,..), boolean (true/false), addresses (0x...), u8 vectors (0v...)
@@ -57,6 +57,7 @@ pub struct MoveFunctionComponents {
 ///    Numbers are converted to the expected type matching the function signature. If the number is too large, an error is returned. For example 432 cannot be a u8.
 ///    Note vectore are raw ascii bytes prefixed with 0v
 /// 6. ARG_ALIAS1, ARG_ALIAS2, ...: Similar to Type Aliases, this allows one represent arguments with simpler names in order to reduce the text length.
+///    This is similar to defining a constant and using it in a function
 ///    The mappings have to be defined in `var_alias_map` and must be VALID_IDENTIFIER
 ///
 ///    For example instead of calling:
@@ -81,7 +82,7 @@ pub struct MoveFunctionComponents {
 /// Most functions should look like the following: Module::function(a,b,c,f)
 ///
 /// TODO:
-///     1. Text input currently does not allow commas and parentheses. Easy fix
+///     1. Text input currently does not allow commas or parentheses. Easy fix with more parser work
 ///     2. Object args are not checked to match the actual object args expected. Easy fix but requires sending all objects to resolveer
 ///
 pub fn resolve_move_function_text(
