@@ -223,6 +223,13 @@ pub enum ExecutionStatus {
 }
 
 impl ExecutionStatus {
+    pub fn new_failure(gas_used: u64, error: SuiError) -> ExecutionStatus {
+        ExecutionStatus::Failure {
+            gas_used,
+            error: Box::new(error),
+        }
+    }
+
     pub fn unwrap(self) -> u64 {
         match self {
             ExecutionStatus::Success { gas_used } => gas_used,

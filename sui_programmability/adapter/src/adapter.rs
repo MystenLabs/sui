@@ -45,18 +45,9 @@ use std::{
 
 pub use move_vm_runtime::move_vm::MoveVM;
 
-macro_rules! exec_error {
-    ($gas:expr, $err:expr) => {
-        ExecutionStatus::Failure {
-            gas_used: $gas,
-            error: Box::new($err),
-        }
-    };
-}
-
 macro_rules! exec_failure {
     ($gas:expr, $err:expr) => {
-        return Ok(exec_error!($gas, $err))
+        return Ok(ExecutionStatus::new_failure($gas, $err))
     };
 }
 
@@ -175,7 +166,7 @@ fn execute_internal<
             error: e.to_string(),
         }) {
             Ok(ok) => ok,
-            Err(err) => return exec_error!(gas::MIN_MOVE, err),
+            Err(err) => return ExecutionStatus::new_failure(gas::MIN_MOVE, err),
         };
     let session = vm.new_session(state_view);
     match session.execute_function_for_effects(
@@ -212,7 +203,7 @@ fn execute_internal<
                 let ctx_bytes = mutable_ref_values.pop().unwrap();
                 let updated_ctx: TxContext = bcs::from_bytes(ctx_bytes.as_slice()).unwrap();
                 if let Err(err) = ctx.update_state(updated_ctx) {
-                    return exec_error!(gas_used, err);
+                    return ExecutionStatus::new_failure(gas_used, err);
                 }
             }
 
@@ -230,18 +221,18 @@ fn execute_internal<
             let total_gas = gas::aggregate_gas(gas_used + extra_gas_used, gas_refund);
             if let Err(err) = result {
                 // Cap total_gas by gas_budget in the fail case.
-                return exec_error!(cmp::min(total_gas, gas_budget), err);
+                return ExecutionStatus::new_failure(cmp::min(total_gas, gas_budget), err);
             }
             ExecutionStatus::Success {
                 gas_used: total_gas,
             }
         }
         // charge for all computations so far
-        ExecutionResult::Fail { error, gas_used } => exec_error!(
+        ExecutionResult::Fail { error, gas_used } => ExecutionStatus::new_failure(
             gas_used,
             SuiError::AbortedExecution {
                 error: error.to_string(),
-            }
+            },
         ),
     }
 }
