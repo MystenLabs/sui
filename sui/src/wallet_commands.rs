@@ -22,7 +22,7 @@ use std::time::Instant;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
 use sui_types::error::SuiError;
-use tracing::*;
+use tracing::info;
 
 #[derive(StructOpt)]
 #[structopt(
@@ -147,11 +147,7 @@ pub enum WalletCommands {
 }
 
 impl WalletCommands {
-    pub async fn execute<W: std::io::Write>(
-        &mut self,
-        context: &mut WalletContext,
-        writer: &mut W,
-    ) -> Result<(), anyhow::Error> {
+    pub async fn execute(&mut self, context: &mut WalletContext) -> Result<(), anyhow::Error> {
         match self {
             WalletCommands::Publish {
                 sender,
@@ -173,7 +169,7 @@ impl WalletCommands {
                 if !matches!(effects.status, ExecutionStatus::Failure { .. }) {
                     return Err(anyhow!("Error publishing module: {:#?}", effects.status));
                 }
-                writeln!(writer, "{}", effects)?;
+                info!("{}", effects);
             }
 
             WalletCommands::Object { id, deep, owner } => {
@@ -183,9 +179,9 @@ impl WalletCommands {
                 let object = object_read.object()?;
                 if *deep {
                     let layout = object_read.layout()?;
-                    writeln!(writer, "{}", object.to_json(layout)?)?;
+                    info!("{}", object.to_json(layout)?);
                 } else {
-                    writeln!(writer, "{}", object)?;
+                    info!("{}", object);
                 }
             }
             WalletCommands::Call {
@@ -229,8 +225,8 @@ impl WalletCommands {
                         *gas_budget,
                     )
                     .await?;
-                writeln!(writer, "Cert: {:?}", cert)?;
-                writeln!(writer, "{}", effects)?;
+                info!("Cert: {:?}", cert);
+                info!("{}", effects);
             }
 
             WalletCommands::Transfer {
@@ -248,7 +244,7 @@ impl WalletCommands {
                     .unwrap();
                 let time_total = time_start.elapsed().as_micros();
                 info!("Transfer confirmed after {} us", time_total);
-                writeln!(writer, "{:?}", cert)?;
+                info!("{:?}", cert);
             }
 
             WalletCommands::Addresses => {
@@ -260,16 +256,16 @@ impl WalletCommands {
                     .collect::<Vec<_>>();
 
                 let addr_text = addr_strings.join("\n");
-                writeln!(writer, "Showing {} results.", addr_strings.len())?;
-                writeln!(writer, "{}", addr_text)?;
+                info!("Showing {} results.", addr_strings.len());
+                info!("{}", addr_text);
             }
 
             WalletCommands::Objects { address } => {
                 let client_state = context.get_or_create_client_state(address)?;
                 let object_refs = client_state.object_refs();
-                writeln!(writer, "Showing {} results.", object_refs.len())?;
+                info!("Showing {} results.", object_refs.len());
                 for (obj_id, object_ref) in object_refs {
-                    writeln!(writer, "{}: {:?}", obj_id, object_ref)?;
+                    info!("{}: {:?}", obj_id, object_ref);
                 }
             }
 
@@ -286,11 +282,10 @@ impl WalletCommands {
                 context.config.save()?;
                 // Create an address to be managed
                 let _ = context.get_or_create_client_state(&address)?;
-                writeln!(
-                    writer,
+                info!(
                     "Created new keypair for address : {}",
                     encode_address_hex(&address)
-                )?;
+                );
             }
         }
         Ok(())

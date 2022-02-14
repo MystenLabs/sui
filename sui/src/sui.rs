@@ -1,9 +1,10 @@
+extern crate core;
+
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::anyhow;
 use futures::future::join_all;
 use std::collections::BTreeMap;
-use std::io::stdout;
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -15,9 +16,7 @@ use sui_core::authority_server::AuthorityServer;
 use sui_types::base_types::{encode_address_hex, get_key_pair, ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
 use sui_types::object::Object;
-use tracing::error;
-use tracing::subscriber::set_global_default;
-use tracing_subscriber::EnvFilter;
+use tracing::{error, info};
 
 #[cfg(test)]
 #[path = "unit_tests/sui_tests.rs"]
@@ -50,38 +49,28 @@ pub enum SuiCommand {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let subscriber_builder =
-        tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
-    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
-    set_global_default(subscriber).expect("Failed to set subscriber");
+    tracing_subscriber::fmt().init();
 
     let options: SuiOpt = SuiOpt::from_args();
     let network_conf_path = options.config;
     let mut config = NetworkConfig::read_or_create(&network_conf_path)?;
 
-    let mut writer = stdout();
-
     match options.command {
-        SuiCommand::Start => start_network(&config, &mut writer).await,
-        SuiCommand::Genesis => genesis(&mut config, &mut writer).await,
+        SuiCommand::Start => start_network(&config).await,
+        SuiCommand::Genesis => genesis(&mut config).await,
     }
 }
 
-async fn start_network<W: std::io::Write>(
-    config: &NetworkConfig,
-    writer: &mut W,
-) -> Result<(), anyhow::Error> {
+async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
     if config.authorities.is_empty() {
         return Err(anyhow!(
             "No authority configured for the network, please run genesis."
         ));
     }
-    writeln!(
-        writer,
+    info!(
         "Starting network with {} authorities",
         config.authorities.len()
-    )?;
+    );
     let mut handles = Vec::new();
 
     let committee = Committee::new(
@@ -107,17 +96,14 @@ async fn start_network<W: std::io::Write>(
             }
         });
     }
-    writeln!(writer, "Started {} authorities", handles.len())?;
+    info!("Started {} authorities", handles.len());
     join_all(handles).await;
-    writeln!(writer, "All server stopped.")?;
+    info!("All server stopped.");
 
     Ok(())
 }
 
-async fn genesis<W: std::io::Write>(
-    config: &mut NetworkConfig,
-    writer: &mut W,
-) -> Result<(), anyhow::Error> {
+async fn genesis(config: &mut NetworkConfig) -> Result<(), anyhow::Error> {
     // We have created the config file, safe to unwrap the path here.
     let working_dir = &config.config_path().parent().unwrap().to_path_buf();
     if !config.authorities.is_empty() {
@@ -128,7 +114,7 @@ async fn genesis<W: std::io::Write>(
     let mut authority_info = Vec::new();
     let mut port_allocator = PortAllocator::new(10000);
 
-    writeln!(writer, "Creating new authorities...")?;
+    info!("Creating new authorities...");
     let authorities_db_path = working_dir.join("authorities_db");
     for _ in 0..4 {
         let (address, key_pair) = get_key_pair();
@@ -153,7 +139,7 @@ async fn genesis<W: std::io::Write>(
     let mut new_addresses = Vec::new();
     let mut preload_objects = Vec::new();
 
-    writeln!(writer, "Creating test objects...")?;
+    info!("Creating test objects...");
     for _ in 0..5 {
         let (address, key_pair) = get_key_pair();
         new_addresses.push(AccountInfo { address, key_pair });
@@ -182,17 +168,12 @@ async fn genesis<W: std::io::Write>(
     wallet_config.db_folder_path = working_dir.join("client_db");
     wallet_config.save()?;
 
-    writeln!(writer, "Network genesis completed.")?;
-    writeln!(
-        writer,
-        "Network config file is stored in {:?}.",
-        config_path
-    )?;
-    writeln!(
-        writer,
+    info!("Network genesis completed.");
+    info!("Network config file is stored in {:?}.", config_path);
+    info!(
         "Wallet config file is stored in {:?}.",
         wallet_config.config_path()
-    )?;
+    );
 
     Ok(())
 }

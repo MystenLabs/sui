@@ -3,7 +3,6 @@
 use async_trait::async_trait;
 use colored::Colorize;
 use std::io;
-use std::io::stdout;
 use std::path::PathBuf;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
@@ -11,8 +10,6 @@ use sui::config::WalletConfig;
 use sui::shell::{AsyncHandler, CommandStructure, Shell};
 use sui::utils::Config;
 use sui::wallet_commands::*;
-use tracing::subscriber::set_global_default;
-use tracing_subscriber::EnvFilter;
 
 const FAST_X: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
@@ -39,11 +36,14 @@ struct ClientOpt {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let subscriber_builder =
-        tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
-    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
-    set_global_default(subscriber).expect("Failed to set subscriber");
+    let format = tracing_subscriber::fmt::format()
+        .with_level(false)
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_thread_names(false)
+        .without_time()
+        .compact();
+    tracing_subscriber::fmt().event_format(format).init();
 
     let mut app: App = ClientOpt::clap();
     app = app.unset_setting(AppSettings::NoBinaryName);
@@ -61,7 +61,7 @@ async fn main() -> Result<(), anyhow::Error> {
     // Sync all accounts on start up.
     for address in addresses {
         WalletCommands::SyncClientState { address }
-            .execute(&mut context, &mut stdout())
+            .execute(&mut context)
             .await?;
     }
 
@@ -85,7 +85,7 @@ async fn main() -> Result<(), anyhow::Error> {
         };
         shell.run_async().await?;
     } else if let Some(mut cmd) = options.cmd {
-        cmd.execute(&mut context, &mut stdout()).await?;
+        cmd.execute(&mut context).await?;
     }
     Ok(())
 }
@@ -98,7 +98,7 @@ impl AsyncHandler<WalletContext> for ClientCommandHandler {
         let command: Result<WalletCommands, _> = WalletCommands::from_iter_safe(args);
         match command {
             Ok(mut cmd) => {
-                if let Err(e) = cmd.execute(context, &mut stdout()).await {
+                if let Err(e) = cmd.execute(context).await {
                     eprintln!("{}", format!("{}", e).red());
                 }
             }

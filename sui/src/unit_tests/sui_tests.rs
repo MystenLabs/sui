@@ -1,18 +1,20 @@
 use super::*;
 use std::fs::read_dir;
 use sui::config::NetworkConfig;
+use tracing_test::traced_test;
 
+#[traced_test]
 #[tokio::test]
 async fn test_sui() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
     let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
-    let mut outputs = Vec::new();
 
     // Start network without authorities
-    let start = start_network(&config, &mut outputs).await;
+    let start = start_network(&config).await;
     assert!(matches!(start, Err(..)));
     // Genesis
-    genesis(&mut config, &mut outputs).await?;
+    genesis(&mut config).await?;
+    assert!(logs_contain("Network genesis completed."));
 
     // Get all the new file names
     let files = read_dir(working_dir.path())?
@@ -38,7 +40,7 @@ async fn test_sui() -> Result<(), anyhow::Error> {
     );
 
     // Genesis 2nd time should fail
-    let result = genesis(&mut config, &mut outputs).await;
+    let result = genesis(&mut config).await;
     assert!(matches!(result, Err(..)));
 
     working_dir.close()?;
