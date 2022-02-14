@@ -45,6 +45,9 @@ move-package = { git = "https://github.com/diem/move", rev = "7683d09732dd930c58
 move-core-types = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7", features = ["address20"] }
 move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
 
+[dev-dependencies]
+tracing-test = "0.1.0"
+
 [[bin]]
 name = "bench"
 path = "src/bench.rs"

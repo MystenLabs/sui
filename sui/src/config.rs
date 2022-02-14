@@ -13,6 +13,7 @@ use move_core_types::{identifier::Identifier, transaction_argument::TransactionA
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fmt::{Debug, Display, Formatter};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -359,7 +360,7 @@ pub struct AuthorityPrivateInfo {
     pub key_pair: KeyPair,
     pub host: String,
     pub port: u16,
-    pub db_path: String,
+    pub db_path: PathBuf,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -369,31 +370,31 @@ pub struct WalletConfig {
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
     pub buffer_size: usize,
-    pub db_folder_path: String,
+    pub db_folder_path: PathBuf,
 
     #[serde(skip)]
-    config_path: String,
+    config_path: PathBuf,
 }
 
 impl Config for WalletConfig {
-    fn create(path: &str) -> Result<Self, anyhow::Error> {
+    fn create(path: &Path) -> Result<Self, anyhow::Error> {
         Ok(WalletConfig {
             accounts: Vec::new(),
             authorities: Vec::new(),
             send_timeout: Duration::from_micros(4000000),
             recv_timeout: Duration::from_micros(4000000),
             buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE.to_string().parse()?,
-            db_folder_path: "./client_db".to_string(),
-            config_path: path.to_string(),
+            db_folder_path: PathBuf::from("./client_db"),
+            config_path: path.to_path_buf(),
         })
     }
 
-    fn set_config_path(&mut self, path: &str) {
-        self.config_path = path.to_string();
+    fn set_config_path(&mut self, path: &Path) {
+        self.config_path = path.to_path_buf();
     }
 
-    fn config_path(&self) -> &str {
-        &*self.config_path
+    fn config_path(&self) -> &Path {
+        &self.config_path
     }
 }
 
@@ -401,7 +402,7 @@ impl Display for WalletConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Config path : {}\nClient state DB folder path : {}\nManaged addresses : {}",
+            "Config path : {:?}\nClient state DB folder path : {:?}\nManaged addresses : {}",
             self.config_path,
             self.db_folder_path,
             self.accounts.len()
@@ -414,23 +415,23 @@ pub struct NetworkConfig {
     pub authorities: Vec<AuthorityPrivateInfo>,
     pub buffer_size: usize,
     #[serde(skip)]
-    config_path: String,
+    config_path: PathBuf,
 }
 
 impl Config for NetworkConfig {
-    fn create(path: &str) -> Result<Self, anyhow::Error> {
+    fn create(path: &Path) -> Result<Self, anyhow::Error> {
         Ok(Self {
             authorities: Vec::new(),
             buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE.to_string().parse()?,
-            config_path: path.to_string(),
+            config_path: path.to_path_buf(),
         })
     }
 
-    fn set_config_path(&mut self, path: &str) {
-        self.config_path = path.to_string()
+    fn set_config_path(&mut self, path: &Path) {
+        self.config_path = path.to_path_buf();
     }
 
-    fn config_path(&self) -> &str {
-        &*self.config_path
+    fn config_path(&self) -> &Path {
+        &self.config_path
     }
 }
