@@ -68,8 +68,10 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     }
     let mut context = WalletContext::new(wallet_config)?;
 
+    // Print all addresses
     WalletCommands::Addresses.execute(&mut context).await?;
 
+    // Check log output contains all addresses
     for address in context.config.accounts.iter().map(|info| info.address) {
         assert!(logs_contain(&&*encode_address_hex(&address)));
     }
@@ -86,24 +88,24 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     SuiCommand::Genesis.execute(&mut config).await?;
 
     // Start network
-    let network = task::spawn(async move {
-        let mut config = config;
-        SuiCommand::Start.execute(&mut config).await
-    });
+    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
 
+    // Wait for authorities to come alive.
     while !logs_contain("Listening to TCP traffic on 127.0.0.1") {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
+    // Create Wallet context.
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
     let address = wallet_conf.accounts.first().unwrap().address;
     let mut context = WalletContext::new(wallet_conf)?;
 
-    // Sync client
+    // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
         .execute(&mut context)
         .await?;
 
+    // Print objects owned by `address`
     WalletCommands::Objects { address }
         .execute(&mut context)
         .await?;
@@ -114,6 +116,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
         .get(&address)
         .unwrap();
 
+    // Check log output contains all object ids.
     for (object_id, _) in state.object_refs() {
         assert!(logs_contain(format!("{}", object_id).as_str()))
     }
