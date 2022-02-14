@@ -45,12 +45,18 @@ use std::{
 
 pub use move_vm_runtime::move_vm::MoveVM;
 
-macro_rules! exec_failure {
+macro_rules! exec_error {
     ($gas:expr, $err:expr) => {
-        return Ok(ExecutionStatus::Failure {
+        ExecutionStatus::Failure {
             gas_used: $gas,
             error: Box::new($err),
-        })
+        }
+    };
+}
+
+macro_rules! exec_failure {
+    ($gas:expr, $err:expr) => {
+        return Ok(exec_error!($gas, $err))
     };
 }
 
@@ -122,13 +128,14 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         mutable_ref_objects,
         by_value_objects,
         object_owner_map,
-        gas_budget, // total budget
-        gas_budget, // budget for this single call (same as total in this case)
-        0,          // gas_already_used
+        gas_budget,
         ctx,
         false,
     ) {
-        Ok(ExecutionStatus::Success { gas_used }) => {
+        ExecutionStatus::Failure { gas_used, error } => {
+            exec_failure!(gas_used, *error)
+        }
+        ExecutionStatus::Success { gas_used } => {
             match gas::try_deduct_gas(&mut gas_object, gas_used) {
                 Ok(()) => {
                     state_view.write_object(gas_object);
@@ -137,11 +144,12 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
                 Err(err) => exec_failure!(gas_budget, err),
             }
         }
-        Ok(ExecutionStatus::Failure { gas_used, error }) => exec_failure!(gas_used, *error),
-        Err(err) => Err(err),
     }
 }
 
+/// This function calls into Move VM to execute a Move function
+/// call. It returns gas that needs to be colleted for this particular
+/// Move call both on successful and failed execution.
 #[allow(clippy::too_many_arguments)]
 fn execute_internal<
     E: Debug,
@@ -156,28 +164,19 @@ fn execute_internal<
     mutable_ref_objects: Vec<Object>,
     by_value_objects: BTreeMap<AccountAddress, Object>,
     object_owner_map: HashMap<AccountAddress, AccountAddress>,
-    total_gas_budget: u64, // gas budget for all operations in this transaction
-    current_gas_budget: u64, // gas budget for the current call operation
-    gas_previously_used: u64,
+    gas_budget: u64, // gas budget for the current call operation
     ctx: &mut TxContext,
     for_publish: bool,
-) -> SuiResult<ExecutionStatus> {
+) -> ExecutionStatus {
     // TODO: Update Move gas constants to reflect the gas fee on sui.
     let cost_table = &move_vm_types::gas_schedule::INITIAL_COST_SCHEDULE;
-    let mut gas_status = match get_gas_status(cost_table, Some(current_gas_budget)).map_err(|e| {
-        SuiError::GasBudgetTooHigh {
+    let mut gas_status =
+        match get_gas_status(cost_table, Some(gas_budget)).map_err(|e| SuiError::GasBudgetTooHigh {
             error: e.to_string(),
-        }
-    }) {
-        Ok(ok) => ok,
-        Err(err) => {
-            // some work might have been already completed
-            // (e.g. during publishing), so charge max between the
-            // default value and what the computation so far had
-            // cost
-            exec_failure!(cmp::max(gas::MIN_MOVE, gas_previously_used), err);
-        }
-    };
+        }) {
+            Ok(ok) => ok,
+            Err(err) => return exec_error!(gas::MIN_MOVE, err),
+        };
     let session = vm.new_session(state_view);
     match session.execute_function_for_effects(
         module_id,
@@ -200,7 +199,7 @@ fn execute_internal<
             debug_assert!(change_set.accounts().is_empty());
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
             debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
-            debug_assert!(gas_used <= current_gas_budget);
+            debug_assert!(gas_used <= gas_budget);
             if for_publish {
                 // When this function is used during publishing, it
                 // may be executed several times, with objects being
@@ -213,7 +212,7 @@ fn execute_internal<
                 let ctx_bytes = mutable_ref_values.pop().unwrap();
                 let updated_ctx: TxContext = bcs::from_bytes(ctx_bytes.as_slice()).unwrap();
                 if let Err(err) = ctx.update_state(updated_ctx) {
-                    exec_failure!(gas_used, err);
+                    return exec_error!(gas_used, err);
                 }
             }
 
@@ -228,21 +227,18 @@ fn execute_internal<
                 ctx,
                 object_owner_map,
             );
-            let aggregate_gas_used = gas::aggregate_gas(gas_used + extra_gas_used, gas_refund);
+            let total_gas = gas::aggregate_gas(gas_used + extra_gas_used, gas_refund);
             if let Err(err) = result {
-                // Cap total_gas by current_gas_budget in the fail case.
-                exec_failure!(
-                    cmp::min(gas_previously_used + aggregate_gas_used, total_gas_budget),
-                    err
-                );
+                // Cap total_gas by gas_budget in the fail case.
+                return exec_error!(cmp::min(total_gas, gas_budget), err);
             }
-            Ok(ExecutionStatus::Success {
-                gas_used: aggregate_gas_used,
-            })
+            ExecutionStatus::Success {
+                gas_used: total_gas,
+            }
         }
-        ExecutionResult::Fail { error, gas_used } => exec_failure!(
-            // charge for all computations so far
-            gas_previously_used + gas_used,
+        // charge for all computations so far
+        ExecutionResult::Fail { error, gas_used } => exec_error!(
+            gas_used,
             SuiError::AbortedExecution {
                 error: error.to_string(),
             }
@@ -332,17 +328,14 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
                 Vec::new(),
                 BTreeMap::new(),
                 HashMap::new(),
-                gas_budget,
                 current_gas_budget,
-                total_gas_used,
                 ctx,
                 true,
             ) {
-                Ok(ExecutionStatus::Success { gas_used }) => gas_used,
-                Ok(ExecutionStatus::Failure { gas_used, error }) => {
+                ExecutionStatus::Success { gas_used } => gas_used,
+                ExecutionStatus::Failure { gas_used, error } => {
                     exec_failure!(total_gas_used + gas_used, *error)
                 }
-                Err(err) => exec_failure!(total_gas_used, err),
             };
             // This should never be the case as current_gas_budget
             // (before the call) must be larger than gas_used (after
@@ -354,14 +347,17 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         }
     }
 
+    // successful execution of both publishign operation and or all
+    // (optional) initializer calls
     match gas::try_deduct_gas(&mut gas_object, total_gas_used) {
-        Ok(()) => state_view.write_object(gas_object),
-        Err(err) => exec_failure!(total_gas_used, err),
-    };
-
-    Ok(ExecutionStatus::Success {
-        gas_used: total_gas_used,
-    })
+        Ok(()) => {
+            state_view.write_object(gas_object);
+            Ok(ExecutionStatus::Success {
+                gas_used: total_gas_used,
+            })
+        }
+        Err(err) => exec_failure!(gas_budget, err),
+    }
 }
 
 const INIT_FN_NAME: &IdentStr = ident_str!("init");
