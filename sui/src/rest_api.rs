@@ -1341,7 +1341,7 @@ async fn make_server(
     pre_load_objects: &[SuiObject],
     buffer_size: usize,
 ) -> AuthorityServer {
-    let path = PathBuf::from(authority.db_path.clone());
+    let path = authority.db_path.clone();
     let store = Arc::new(AuthorityStore::open(path, None));
 
     let state = AuthorityState::new_with_genesis_modules(
