@@ -3,6 +3,7 @@
 
 mod event;
 mod id;
+mod test_helper;
 mod transfer;
 mod tx_context;
 
@@ -18,6 +19,11 @@ pub fn all_natives(
         ("ID", "bytes_to_address", id::bytes_to_address),
         ("ID", "delete", id::delete),
         ("ID", "get_id", id::get_id),
+        (
+            "TestHelper",
+            "get_last_received_object_internal",
+            test_helper::get_last_received_object,
+        ),
         ("Transfer", "transfer_internal", transfer::transfer_internal),
         (
             "Transfer",

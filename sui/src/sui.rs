@@ -1,9 +1,11 @@
+extern crate core;
+
 // Copyright (c) Mysten Labs
 // SPDX-License-Identifier: Apache-2.0
+use anyhow::anyhow;
 use futures::future::join_all;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::process::exit;
 use std::sync::Arc;
 use structopt::StructOpt;
 use sui::config::{
@@ -12,31 +14,33 @@ use sui::config::{
 use sui::utils::Config;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
-use sui_types::base_types::{get_key_pair, ObjectID, SequenceNumber};
+use sui_types::base_types::{encode_address_hex, get_key_pair, ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
 use sui_types::object::Object;
-use tracing::error;
-use tracing::subscriber::set_global_default;
-use tracing_subscriber::EnvFilter;
+use tracing::{error, info};
+
+#[cfg(test)]
+#[path = "unit_tests/sui_tests.rs"]
+mod sui_tests;
 
 const DEFAULT_WEIGHT: usize = 1;
 
 #[derive(StructOpt)]
 #[structopt(
-    name = "FastX Local",
+    name = "Sui Local",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
-struct FastXOpt {
+struct SuiOpt {
     #[structopt(subcommand)]
-    command: FastXCommand,
+    command: SuiCommand,
     #[structopt(long, default_value = "./network.conf")]
-    config: String,
+    config: PathBuf,
 }
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
-pub enum FastXCommand {
+pub enum SuiCommand {
     /// Start sui network.
     #[structopt(name = "start")]
     Start,
@@ -46,29 +50,25 @@ pub enum FastXCommand {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let subscriber_builder =
-        tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
-    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
-    set_global_default(subscriber).expect("Failed to set subscriber");
+    tracing_subscriber::fmt().init();
 
-    let options: FastXOpt = FastXOpt::from_args();
+    let options: SuiOpt = SuiOpt::from_args();
     let network_conf_path = options.config;
-    let config =
-        NetworkConfig::read_or_create(&network_conf_path).expect("Unable to read network config.");
+    let mut config = NetworkConfig::read_or_create(&network_conf_path)?;
 
     match options.command {
-        FastXCommand::Start => start_network(config).await,
-        FastXCommand::Genesis => genesis(config).await,
+        SuiCommand::Start => start_network(&config).await,
+        SuiCommand::Genesis => genesis(&mut config).await,
     }
 }
 
-async fn start_network(config: NetworkConfig) -> Result<(), anyhow::Error> {
+async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
     if config.authorities.is_empty() {
-        println!("No authority configured for the network, please run genesis.");
-        exit(1);
+        return Err(anyhow!(
+            "No authority configured for the network, please run genesis."
+        ));
     }
-    println!(
+    info!(
         "Starting network with {} authorities",
         config.authorities.len()
     );
@@ -82,8 +82,8 @@ async fn start_network(config: NetworkConfig) -> Result<(), anyhow::Error> {
             .collect(),
     );
 
-    for authority in config.authorities {
-        let server = make_server(&authority, &committee, &[], config.buffer_size).await;
+    for authority in &config.authorities {
+        let server = make_server(authority, &committee, &[], config.buffer_size).await;
         handles.push(async move {
             let spawned_server = match server.spawn().await {
                 Ok(server) => server,
@@ -97,24 +97,26 @@ async fn start_network(config: NetworkConfig) -> Result<(), anyhow::Error> {
             }
         });
     }
-    println!("Started {} authorities", handles.len());
+    info!("Started {} authorities", handles.len());
     join_all(handles).await;
-    println!("All server stopped.");
+    info!("All server stopped.");
 
     Ok(())
 }
 
-async fn genesis(mut config: NetworkConfig) -> Result<(), anyhow::Error> {
+async fn genesis(config: &mut NetworkConfig) -> Result<(), anyhow::Error> {
+    // We have created the config file, safe to unwrap the path here.
+    let working_dir = &config.config_path().parent().unwrap().to_path_buf();
     if !config.authorities.is_empty() {
-        println!("Cannot run genesis on a existing network, please delete network config file and try again.");
-        exit(1);
+        return Err(anyhow!("Cannot run genesis on a existing network, please delete network config file and try again."));
     }
 
     let mut authorities = BTreeMap::new();
     let mut authority_info = Vec::new();
     let mut port_allocator = PortAllocator::new(10000);
 
-    println!("Creating new authorities...");
+    info!("Creating new authorities...");
+    let authorities_db_path = working_dir.join("authorities_db");
     for _ in 0..4 {
         let (address, key_pair) = get_key_pair();
         let info = AuthorityPrivateInfo {
@@ -122,7 +124,7 @@ async fn genesis(mut config: NetworkConfig) -> Result<(), anyhow::Error> {
             key_pair,
             host: "127.0.0.1".to_string(),
             port: port_allocator.next_port().expect("No free ports"),
-            db_path: format!("./authorities_db/{:?}", address),
+            db_path: authorities_db_path.join(encode_address_hex(&address)),
         };
         authority_info.push(AuthorityInfo {
             address,
@@ -138,7 +140,7 @@ async fn genesis(mut config: NetworkConfig) -> Result<(), anyhow::Error> {
     let mut new_addresses = Vec::new();
     let mut preload_objects = Vec::new();
 
-    println!("Creating test objects...");
+    info!("Creating test objects...");
     for _ in 0..5 {
         let (address, key_pair) = get_key_pair();
         new_addresses.push(AccountInfo { address, key_pair });
@@ -155,20 +157,22 @@ async fn genesis(mut config: NetworkConfig) -> Result<(), anyhow::Error> {
     let committee = Committee::new(authorities);
 
     // Make server state to persist the objects.
-    let config_path = config.config_path().to_string();
-    for authority in config.authorities {
-        make_server(&authority, &committee, &preload_objects, config.buffer_size).await;
+    let config_path = config.config_path();
+    for authority in &config.authorities {
+        make_server(authority, &committee, &preload_objects, config.buffer_size).await;
     }
 
-    let mut wallet_config = WalletConfig::create("./wallet.conf")?;
+    let wallet_path = working_dir.join("wallet.conf");
+    let mut wallet_config = WalletConfig::create(&wallet_path)?;
     wallet_config.authorities = authority_info;
     wallet_config.accounts = new_addresses;
+    wallet_config.db_folder_path = working_dir.join("client_db");
     wallet_config.save()?;
 
-    println!("Network genesis completed.");
-    println!("Network config file is stored in {}.", config_path);
-    println!(
-        "Wallet config file is stored in {}.",
+    info!("Network genesis completed.");
+    info!("Network config file is stored in {:?}.", config_path);
+    info!(
+        "Wallet config file is stored in {:?}.",
         wallet_config.config_path()
     );
 
@@ -181,8 +185,7 @@ async fn make_server(
     pre_load_objects: &[Object],
     buffer_size: usize,
 ) -> AuthorityServer {
-    let path = PathBuf::from(authority.db_path.clone());
-    let store = Arc::new(AuthorityStore::open(path, None));
+    let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
 
     let state = AuthorityState::new_with_genesis_modules(
         committee.clone(),

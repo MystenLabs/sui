@@ -13,7 +13,6 @@ use sui_verifier::verifier as sui_bytecode_verifier;
 pub mod natives;
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
-#[cfg(test)]
 const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
 
 #[derive(TryFromPrimitive)]
@@ -36,7 +35,8 @@ pub enum EventType {
 
 pub fn get_sui_framework_modules() -> Vec<CompiledModule> {
     let modules = build_framework(".");
-    verify_modules(&modules);
+    // TODO: Consider not unwrap.
+    verify_modules(&modules).unwrap();
     modules
 }
 
@@ -50,7 +50,8 @@ pub fn get_move_stdlib_modules() -> Vec<CompiledModule> {
         .into_iter()
         .filter(|m| !denylist.contains(&m.self_id().name().to_owned()))
         .collect();
-    verify_modules(&modules);
+    // TODO: Consider not unwrap.
+    verify_modules(&modules).unwrap();
     modules
 }
 
@@ -137,11 +138,25 @@ pub fn build_move_package(
     }
 }
 
-fn verify_modules(modules: &[CompiledModule]) {
+pub fn build_and_verify_user_package(path: &Path, dev_mode: bool) -> SuiResult {
+    let build_config = BuildConfig {
+        dev_mode,
+        ..Default::default()
+    };
+    let modules = build_move_package(path, build_config, false)?;
+    verify_modules(&modules)
+}
+
+fn verify_modules(modules: &[CompiledModule]) -> SuiResult {
     for m in modules {
-        move_bytecode_verifier::verify_module(m).unwrap();
-        sui_bytecode_verifier::verify_module(m).unwrap();
+        move_bytecode_verifier::verify_module(m).map_err(|err| {
+            SuiError::ModuleVerificationFailure {
+                error: err.to_string(),
+            }
+        })?;
+        sui_bytecode_verifier::verify_module(m)?;
     }
+    Ok(())
     // TODO(https://github.com/MystenLabs/fastnft/issues/69): Run Move linker
 }
 
@@ -152,7 +167,36 @@ fn build_framework(sub_dir: &str) -> Vec<CompiledModule> {
         dev_mode: false,
         ..Default::default()
     };
+    // TODO: Consider not unwrap.
     build_move_package(&framework_dir, build_config, true).unwrap()
+}
+
+pub fn run_move_unit_tests(path: &Path) -> SuiResult {
+    use move_cli::package::cli::{self, UnitTestResult};
+    use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
+
+    use move_unit_test::UnitTestingConfig;
+
+    let result = cli::run_move_unit_tests(
+        path,
+        BuildConfig {
+            dev_mode: false,
+            ..Default::default()
+        },
+        UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)),
+        natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
+        /* compute_coverage */ false,
+    )
+    .map_err(|err| SuiError::MoveUnitTestFailure {
+        error: err.to_string(),
+    })?;
+    if result == UnitTestResult::Failure {
+        Err(SuiError::MoveUnitTestFailure {
+            error: "Test failed".to_string(),
+        })
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -164,7 +208,7 @@ fn get_examples() -> Vec<CompiledModule> {
         ..Default::default()
     };
     let modules = build_move_package(&framework_dir, build_config, true).unwrap();
-    verify_modules(&modules);
+    verify_modules(&modules).unwrap();
     modules
 }
 
@@ -175,24 +219,6 @@ fn check_that_move_code_can_be_built_verified_tested() {
 }
 
 #[test]
-fn run_move_unit_tests() {
-    use move_cli::package::cli::{self, UnitTestResult};
-    use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
-
-    use move_unit_test::UnitTestingConfig;
-    use std::path::Path;
-
-    let framework_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let result = cli::run_move_unit_tests(
-        framework_dir,
-        BuildConfig {
-            dev_mode: false,
-            ..Default::default()
-        },
-        UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)),
-        natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
-        /* compute_coverage */ false,
-    )
-    .unwrap();
-    assert!(result == UnitTestResult::Success);
+fn run_framework_move_unit_tests() {
+    run_move_unit_tests(Path::new(env!("CARGO_MANIFEST_DIR"))).unwrap();
 }
