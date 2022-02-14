@@ -3,22 +3,19 @@
 use async_trait::async_trait;
 use colored::Colorize;
 use std::io;
+use std::path::PathBuf;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
 use sui::config::WalletConfig;
 use sui::shell::{AsyncHandler, CommandStructure, Shell};
 use sui::utils::Config;
 use sui::wallet_commands::*;
-use tracing::subscriber::set_global_default;
-use tracing_subscriber::EnvFilter;
 
-const FAST_X: &str = "   _____ __  ______
-  / ___// / / /  _/
-  \\__ \\/ / / // /  
- ___/ / /_/ // /   
-/____/\\____/___/   
-
-";
+const FAST_X: &str = "   _____       _    _       __      ____     __
+  / ___/__  __(_)  | |     / /___ _/ / /__  / /_
+  \\__ \\/ / / / /   | | /| / / __ `/ / / _ \\/ __/
+ ___/ / /_/ / /    | |/ |/ / /_/ / / /  __/ /_
+/____/\\__,_/_/     |__/|__/\\__,_/_/_/\\___/\\__/";
 
 #[derive(StructOpt)]
 #[structopt(
@@ -31,7 +28,7 @@ struct ClientOpt {
     no_shell: bool,
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
     #[structopt(long, default_value = "./wallet.conf")]
-    config: String,
+    config: PathBuf,
     /// Subcommands. Acceptable values are transfer, query_objects, benchmark, and create_accounts.
     #[structopt(subcommand)]
     cmd: Option<WalletCommands>,
@@ -39,11 +36,14 @@ struct ClientOpt {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let subscriber_builder =
-        tracing_subscriber::fmt::Subscriber::builder().with_env_filter(env_filter);
-    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
-    set_global_default(subscriber).expect("Failed to set subscriber");
+    let format = tracing_subscriber::fmt::format()
+        .with_level(false)
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_thread_names(false)
+        .without_time()
+        .compact();
+    tracing_subscriber::fmt().event_format(format).init();
 
     let mut app: App = ClientOpt::clap();
     app = app.unset_setting(AppSettings::NoBinaryName);
