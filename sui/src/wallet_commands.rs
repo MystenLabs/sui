@@ -69,6 +69,26 @@ pub enum WalletCommands {
         gas_budget: u64,
     },
 
+    /// Call Move using simple syntax
+    #[structopt(name = "call-simple")]
+    CallSimple {
+        /// Sender address
+        #[structopt(long, parse(try_from_str = decode_address_hex))]
+        sender: PublicKeyBytes,
+        /// Object ID of the package, which contains the module
+        #[structopt(long)]
+        package: ObjectID,
+        /// The text of the function to call. For example "ObjectBasics::create(200,f23e4ca6ddd3fd3dfcc2275f51444fbc274837c41f569a2cff213a29332b74c8)"
+        #[structopt(long)]
+        function_text: String,
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        #[structopt(long)]
+        gas: ObjectID,
+        /// Gas budget for this call
+        #[structopt(long)]
+        gas_budget: u64,
+    },
+
     /// Call Move
     #[structopt(name = "call")]
     Call {
@@ -275,6 +295,32 @@ impl WalletCommands {
                     "Created new keypair for address : {}",
                     encode_address_hex(&address)
                 );
+            }
+            WalletCommands::CallSimple {
+                sender,
+                package,
+                function_text,
+                gas,
+                gas_budget,
+            } => {
+                let client_state = context.get_or_create_client_state(sender)?;
+                let resp = client_state
+                    .move_call_by_text(
+                        *package,
+                        None,
+                        None,
+                        function_text.to_string(),
+                        *gas,
+                        *gas_budget,
+                    )
+                    .await;
+                match resp {
+                    Ok((cert, effects)) => {
+                        println!("Cert: {:?}", cert);
+                        show_object_effects(effects);
+                    }
+                    Err(r) => println!("Error making Move call: {} ", r),
+                };
             }
         }
         Ok(())

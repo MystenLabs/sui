@@ -209,7 +209,7 @@ fn split_fn_and_args(s: String) -> Result<(String, String)> {
             "Parentheses are not allowed in function args or body"
         ));
     }
-    let s = s.trim().to_owned();
+    let s = s.trim().to_owned().trim_matches('"').to_owned();
 
     let re = Regex::new(r"\b[^()]+\((.*)\)$").unwrap();
 
@@ -314,7 +314,7 @@ fn is_valid_ident(s: String) -> bool {
 
 // Objects args have to come first then be followed by pure args
 fn parse_args(
-    args: &mut Vec<String>,
+    args: &mut [String],
     function_signature: Function,
 ) -> Result<(Vec<ObjectID>, Vec<TransactionArgument>)> {
     // Cant return anything
