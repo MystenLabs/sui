@@ -2302,9 +2302,9 @@ async fn test_transfer_pending_orders() {
 
 #[tokio::test]
 async fn test_address_manager() {
-    let path = "TEST_PATH";
+    let path = tempfile::tempdir().unwrap().into_path();
     let mut address_manager: crate::client::ClientAddressManager<LocalAuthorityClient> =
-        crate::client::ClientAddressManager::new(std::path::PathBuf::from(path)).unwrap();
+        crate::client::ClientAddressManager::new(path).unwrap();
 
     // Ensure nothing being managed
     assert!(address_manager.get_managed_address_states().is_empty());
@@ -2368,7 +2368,4 @@ async fn test_address_manager() {
 
     assert_eq!(order_effects.created.len(), 1);
     assert_eq!(client1.store().objects.iter().count(), 4);
-
-    // Cleanup
-    fs::remove_dir_all(path).unwrap();
 }
