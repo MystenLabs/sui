@@ -137,16 +137,17 @@ async fn genesis(
     let num_authorities = genesis_params.num_authorities.unwrap_or(4);
     let num_objects = genesis_params.num_objects.unwrap_or(5);
 
-    let mut network_config = match NetworkConfig::read_or_create(&PathBuf::from(network_config_path)) {
-        Ok(network_config) => network_config,
-        Err(error) => {
-            return Err(HttpError::for_client_error(
-                None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Unable to read network config: {error}"),
-            ))
-        }
-    };
+    let mut network_config =
+        match NetworkConfig::read_or_create(&PathBuf::from(network_config_path)) {
+            Ok(network_config) => network_config,
+            Err(error) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Unable to read network config: {error}"),
+                ))
+            }
+        };
 
     if !network_config.authorities.is_empty() {
         return Err(
@@ -256,8 +257,14 @@ async fn genesis(
     };
 
     println!("Network genesis completed.");
-    println!("Network config file is stored in {:?}.", network_config_path);
-    println!("Wallet config file is stored in {:?}.", wallet_config.config_path());
+    println!(
+        "Network config file is stored in {:?}.",
+        network_config_path
+    );
+    println!(
+        "Wallet config file is stored in {:?}.",
+        wallet_config.config_path()
+    );
 
     // TODO: Print out the contents of wallet_config/network_config?
     let wallet_config_string = format!(
