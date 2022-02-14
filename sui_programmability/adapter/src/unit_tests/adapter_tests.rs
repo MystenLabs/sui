@@ -8,7 +8,7 @@ use move_binary_format::file_format::{
 };
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
-use std::{mem, path::PathBuf};
+use std::{collections::BTreeSet, mem, path::PathBuf};
 use sui_types::{
     base_types::{self, SequenceNumber},
     error::SuiResult,
@@ -27,7 +27,7 @@ const GAS_BUDGET: u64 = 10000;
 struct ScratchPad {
     updated: BTreeMap<ObjectID, Object>,
     created: BTreeMap<ObjectID, Object>,
-    deleted: Vec<ObjectID>,
+    deleted: BTreeSet<ObjectID>,
     events: Vec<Event>,
 }
 
@@ -86,7 +86,7 @@ impl InMemoryStorage {
         &self.temporary.updated
     }
 
-    pub fn deleted(&self) -> &[ObjectID] {
+    pub fn deleted(&self) -> &BTreeSet<ObjectID> {
         &self.temporary.deleted
     }
 
@@ -105,6 +105,8 @@ impl Storage for InMemoryStorage {
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
+        // there should be no read after delete
+        assert!(!self.temporary.deleted.contains(id));
         // try objects updated in temp memory first
         match self.temporary.updated.get(id).cloned() {
             Some(o) => Some(o),
@@ -120,6 +122,8 @@ impl Storage for InMemoryStorage {
     // buffer write to appropriate place in temporary storage
     fn write_object(&mut self, object: Object) {
         let id = object.id();
+        // there should be no write after delete
+        assert!(!self.temporary.deleted.contains(&id));
         if self.persistent.contains_key(&id) {
             self.temporary.updated.insert(id, object);
         } else {
@@ -133,7 +137,11 @@ impl Storage for InMemoryStorage {
 
     // buffer delete
     fn delete_object(&mut self, id: &ObjectID) {
-        self.temporary.deleted.push(*id)
+        // there should be no deletion after write
+        assert!(self.temporary.updated.get(id) == None);
+        let fresh_id = self.temporary.deleted.insert(*id);
+        // this object was not previously deleted
+        assert!(fresh_id);
     }
 }
 
@@ -418,7 +426,7 @@ fn test_wrap_unwrap() {
     // wrapping should create wrapper object and "delete" wrapped object
     assert_eq!(storage.created().len(), 1);
     assert_eq!(storage.deleted().len(), 1);
-    assert_eq!(storage.deleted()[0].clone(), id1);
+    assert_eq!(storage.deleted().iter().next().unwrap(), &id1);
     let id2 = storage.get_created_keys().pop().unwrap();
     storage.flush();
     assert!(storage.read_object(&id1).is_none());
@@ -441,7 +449,7 @@ fn test_wrap_unwrap() {
     // wrapping should delete wrapped object and "create" unwrapped object
     assert_eq!(storage.created().len(), 1);
     assert_eq!(storage.deleted().len(), 1);
-    assert_eq!(storage.deleted()[0].clone(), id2);
+    assert_eq!(storage.deleted().iter().next().unwrap(), &id2);
     assert_eq!(id1, storage.get_created_keys().pop().unwrap());
     storage.flush();
     assert!(storage.read_object(&id2).is_none());
@@ -530,8 +538,6 @@ fn test_publish_module_insufficient_gas() {
         .1
         .to_string()
         .contains("Gas balance is 30, not enough to pay"));
-    // Minimum gas is charged.
-    assert_eq!(err.0, gas::MIN_MOVE_PUBLISH_GAS);
 }
 
 #[test]
@@ -614,7 +620,7 @@ fn test_transfer_and_freeze() {
         .contains("Argument 0 is expected to be mutable, immutable object found"));
     // Since it failed before VM execution, during type resolving,
     // only minimum gas will be charged.
-    assert_eq!(err.0, gas::MIN_MOVE_CALL_GAS);
+    assert_eq!(err.0, gas::MIN_MOVE);
 
     // 4. Call set_value (pass as mutable reference) should fail as well.
     let obj1 = storage.read_object(&id1).unwrap();
@@ -637,7 +643,7 @@ fn test_transfer_and_freeze() {
         .contains("Argument 0 is expected to be mutable, immutable object found"));
     // Since it failed before VM execution, during type resolving,
     // only minimum gas will be charged.
-    assert_eq!(err.0, gas::MIN_MOVE_CALL_GAS);
+    assert_eq!(err.0, gas::MIN_MOVE);
 }
 
 #[test]
@@ -667,7 +673,7 @@ fn test_move_call_args_type_mismatch() {
     )
     .unwrap();
     let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE_CALL_GAS);
+    assert_eq!(gas_used, gas::MIN_MOVE);
     assert!(err
         .to_string()
         .contains("Expected 3 arguments calling function 'create', but found 2"));
@@ -692,7 +698,7 @@ fn test_move_call_args_type_mismatch() {
     )
     .unwrap();
     let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE_CALL_GAS);
+    assert_eq!(gas_used, gas::MIN_MOVE);
     // Assert on the error message as well.
     */
 }
@@ -726,7 +732,7 @@ fn test_move_call_incorrect_function() {
     )
     .unwrap();
     let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE_CALL_GAS);
+    assert_eq!(gas_used, gas::MIN_MOVE);
     assert!(err
         .to_string()
         .contains("Expected a module object, but found a Move object"));
@@ -746,7 +752,7 @@ fn test_move_call_incorrect_function() {
     )
     .unwrap();
     let (gas_used, err) = status.unwrap_err();
-    assert_eq!(gas_used, gas::MIN_MOVE_CALL_GAS);
+    assert_eq!(gas_used, gas::MIN_MOVE);
     assert!(err.to_string().contains(&format!(
         "Could not resolve function 'foo' in module {}::ObjectBasics",
         SUI_FRAMEWORK_ADDRESS
@@ -813,7 +819,7 @@ fn test_publish_module_linker_error() {
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
-    assert_eq!(err.0, gas::MIN_MOVE_PUBLISH_GAS);
+    assert_eq!(err.0, gas::MIN_MOVE);
     let err_str = err.1.to_string();
     // make sure it's a linker error
     assert!(err_str.contains("VMError with status LOOKUP_FAILED"));
@@ -854,7 +860,7 @@ fn test_publish_module_non_zero_address() {
         gas_object,
     );
     let err = response.unwrap().unwrap_err();
-    assert_eq!(err.0, gas::MIN_MOVE_PUBLISH_GAS);
+    assert_eq!(err.0, gas::MIN_MOVE);
     let err_str = err.1.to_string();
     println!("{:?}", err_str);
     assert!(err_str.contains("Publishing modules with non-zero address is not allowed"));
@@ -955,7 +961,7 @@ fn test_simple_call() {
         &natives,
         "src/unit_tests/data/simple_call",
         gas_object.clone(),
-        0,
+        GAS_BUDGET,
     );
     // TODO: to be honest I am not sure why this flush is needed but
     // without it, the following assertion below fails:
