@@ -169,7 +169,7 @@ impl WalletCommands {
                 if !matches!(effects.status, ExecutionStatus::Failure { .. }) {
                     return Err(anyhow!("Error publishing module: {:#?}", effects.status));
                 }
-                info!("{}", effects);
+                info!("{:?}", effects);
             }
 
             WalletCommands::Object { id, deep, owner } => {
@@ -226,7 +226,7 @@ impl WalletCommands {
                     )
                     .await?;
                 info!("Cert: {:?}", cert);
-                info!("{}", effects);
+                info!("{:?}", effects);
             }
 
             WalletCommands::Transfer {

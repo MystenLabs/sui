@@ -137,7 +137,7 @@ async fn genesis(
     let num_authorities = genesis_params.num_authorities.unwrap_or(4);
     let num_objects = genesis_params.num_objects.unwrap_or(5);
 
-    let mut network_config = match NetworkConfig::read_or_create(&network_config_path) {
+    let mut network_config = match NetworkConfig::read_or_create(&PathBuf::from(network_config_path)) {
         Ok(network_config) => network_config,
         Err(error) => {
             return Err(HttpError::for_client_error(
@@ -179,7 +179,7 @@ async fn genesis(
                     ))
                 }
             },
-            db_path: format!("./authorities_db/{:?}", address),
+            db_path: PathBuf::from(format!("./authorities_db/{:?}", address)),
         };
         authority_info.push(AuthorityInfo {
             address,
@@ -221,7 +221,7 @@ async fn genesis(
     let committee = Committee::new(authorities);
 
     // Make server state to persist the objects.
-    let network_config_path = network_config.config_path().to_string();
+    let network_config_path = network_config.config_path();
     for authority in network_config.authorities.iter() {
         make_server(
             authority,
@@ -232,7 +232,7 @@ async fn genesis(
         .await;
     }
 
-    let mut wallet_config = match WalletConfig::create(&wallet_config_path) {
+    let mut wallet_config = match WalletConfig::create(&PathBuf::from(wallet_config_path)) {
         Ok(wallet_config) => wallet_config,
         Err(error) => {
             return Err(HttpError::for_client_error(
@@ -256,11 +256,8 @@ async fn genesis(
     };
 
     println!("Network genesis completed.");
-    println!("Network config file is stored in {}.", network_config_path);
-    println!(
-        "Wallet config file is stored in {}.",
-        wallet_config.config_path()
-    );
+    println!("Network config file is stored in {:?}.", network_config_path);
+    println!("Wallet config file is stored in {:?}.", wallet_config.config_path());
 
     // TODO: Print out the contents of wallet_config/network_config?
     let wallet_config_string = format!(
@@ -291,7 +288,7 @@ async fn start(
     let server_context = rqctx.context();
     let network_config_path = server_context.network_config_path.lock().unwrap().clone();
 
-    let network_config = match NetworkConfig::read_or_create(&network_config_path) {
+    let network_config = match NetworkConfig::read_or_create(&PathBuf::from(network_config_path)) {
         Ok(network_config) => network_config,
         Err(error) => {
             return Err(HttpError::for_client_error(
@@ -353,7 +350,7 @@ async fn start(
 
     let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
 
-    let config = match WalletConfig::read_or_create(&wallet_config_path) {
+    let config = match WalletConfig::read_or_create(&PathBuf::from(wallet_config_path)) {
         Ok(network_config) => network_config,
         Err(error) => {
             return Err(HttpError::for_client_error(
