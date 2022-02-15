@@ -5,6 +5,14 @@ use std::collections::BTreeMap;
 
 use super::*;
 
+fn random_object_ref() -> ObjectRef {
+    (
+        ObjectID::random(),
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    )
+}
+
 #[test]
 fn test_signed_values() {
     let mut authorities = BTreeMap::new();
@@ -16,22 +24,8 @@ fn test_signed_values() {
     authorities.insert(/* address */ a2, /* voting right */ 0);
     let committee = Committee::new(authorities);
 
-    let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-        sender: a1,
-        recipient: a2,
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-    };
-    let order = Order::new_transfer(transfer.clone(), &sec1);
-    let bad_order = Order::new_transfer(transfer, &sec2);
+    let order = Order::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec1);
+    let bad_order = Order::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec2);
 
     let v = SignedOrder::new(order.clone(), a1, &sec1);
     assert!(v.check(&committee).is_ok());
@@ -57,22 +51,8 @@ fn test_certificates() {
     authorities.insert(/* address */ a2, /* voting right */ 1);
     let committee = Committee::new(authorities);
 
-    let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-        sender: a1,
-        recipient: a2,
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-    };
-    let order = Order::new_transfer(transfer.clone(), &sec1);
-    let bad_order = Order::new_transfer(transfer, &sec2);
+    let order = Order::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec1);
+    let bad_order = Order::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec2);
 
     let v1 = SignedOrder::new(order.clone(), a1, &sec1);
     let v2 = SignedOrder::new(order.clone(), a2, &sec2);

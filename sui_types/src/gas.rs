@@ -24,9 +24,9 @@ pub const MIN_MOVE: u64 = 10;
 pub const MIN_OBJ_TRANSFER_GAS: u64 = 8;
 
 pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> SuiResult {
-    match &order.kind {
-        OrderKind::Transfer(t) => {
-            debug_assert_eq!(t.gas_payment.0, gas_object.id());
+    debug_assert_eq!(order.gas_payment_object_ref().0, gas_object.id());
+    match &order.data.kind {
+        OrderKind::Transfer(_) => {
             let balance = get_gas_balance(gas_object)?;
             ok_or_gas_error!(
                 balance >= MIN_OBJ_TRANSFER_GAS,
@@ -37,17 +37,17 @@ pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> SuiResult {
             )
         }
         OrderKind::Call(op) => {
-            check_move_gas_requirement(gas_object, op.gas_payment, op.gas_budget)
+            check_move_gas_requirement(gas_object, order.gas_payment_object_ref(), op.gas_budget)
         }
         OrderKind::Publish(op) => {
-            check_move_gas_requirement(gas_object, op.gas_payment, op.gas_budget)
+            check_move_gas_requirement(gas_object, order.gas_payment_object_ref(), op.gas_budget)
         }
     }
 }
 
 pub fn check_move_gas_requirement(
     gas_object: &Object,
-    gas_payment: ObjectRef,
+    gas_payment: &ObjectRef,
     gas_budget: u64,
 ) -> SuiResult {
     debug_assert_eq!(gas_payment.0, gas_object.id());

@@ -73,7 +73,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 
     // Check log output contains all addresses
     for address in context.config.accounts.iter().map(|info| info.address) {
-        assert!(logs_contain(&&*encode_address_hex(&address)));
+        assert!(logs_contain(&*encode_address_hex(&address)));
     }
 
     Ok(())

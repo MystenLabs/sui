@@ -12,8 +12,10 @@ mod messages_tests;
 use move_binary_format::{access::ModuleAccess, CompiledModule};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
 use serde::{Deserialize, Serialize};
+use static_assertions::const_assert_eq;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
+use std::mem::size_of;
 use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
@@ -21,21 +23,17 @@ use std::{
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Transfer {
-    pub sender: SuiAddress,
     pub recipient: SuiAddress,
     pub object_ref: ObjectRef,
-    pub gas_payment: ObjectRef,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveCall {
-    pub sender: SuiAddress,
     // TODO: For package object, we only need object id, as it's always read-only.
     pub package: ObjectRef,
     pub module: Identifier,
     pub function: Identifier,
     pub type_arguments: Vec<TypeTag>,
-    pub gas_payment: ObjectRef,
     pub object_arguments: Vec<ObjectRef>,
     pub pure_arguments: Vec<Vec<u8>>,
     pub gas_budget: u64,
@@ -43,8 +41,6 @@ pub struct MoveCall {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveModulePublish {
-    pub sender: SuiAddress,
-    pub gas_payment: ObjectRef,
     pub modules: Vec<Vec<u8>>,
     pub gas_budget: u64,
 }
@@ -60,13 +56,25 @@ pub enum OrderKind {
     // .. more order types go here
 }
 
-/// An order signed by a client
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct OrderData {
+    pub kind: OrderKind,
+    sender: SuiAddress,
+    gas_payment: ObjectRef,
+}
+
+/// An order signed by a client. signature is applied on data.
+/// Any extension to Order should add fields to OrderData, not Order.
 // TODO: this should maybe be called ClientSignedOrder + SignedOrder -> AuthoritySignedOrder
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
 pub struct Order {
-    pub kind: OrderKind,
+    pub data: OrderData,
     pub signature: Signature,
 }
+const_assert_eq!(
+    size_of::<OrderData>() + size_of::<Signature>(),
+    size_of::<Order>()
+);
 
 /// An order signed by a single authority
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
@@ -322,13 +330,13 @@ pub struct SignedOrderEffects {
 
 impl Hash for Order {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.kind.hash(state);
+        self.data.hash(state);
     }
 }
 
 impl PartialEq for Order {
     fn eq(&self, other: &Self) -> bool {
-        self.kind == other.kind
+        self.data == other.data
     }
 }
 
@@ -375,9 +383,19 @@ impl InputObjectKind {
 }
 
 impl Order {
-    pub fn new(kind: OrderKind, secret: &dyn signature::Signer<ed25519_dalek::Signature>) -> Self {
-        let signature = Signature::new(&kind, secret);
-        Order { kind, signature }
+    pub fn new(
+        kind: OrderKind,
+        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+    ) -> Self {
+        let data = OrderData {
+            kind,
+            sender,
+            gas_payment,
+        };
+        let signature = Signature::new(&data, secret);
+        Order { data, signature }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -394,17 +412,15 @@ impl Order {
         secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     ) -> Self {
         let kind = OrderKind::Call(MoveCall {
-            sender,
             package,
             module,
             function,
             type_arguments,
-            gas_payment,
             object_arguments,
             pure_arguments,
             gas_budget,
         });
-        Self::new(kind, secret)
+        Self::new(kind, secret, sender, gas_payment)
     }
 
     pub fn new_module(
@@ -415,23 +431,36 @@ impl Order {
         secret: &dyn signature::Signer<ed25519::Signature>,
     ) -> Self {
         let kind = OrderKind::Publish(MoveModulePublish {
-            sender,
-            gas_payment,
             modules,
             gas_budget,
         });
-        Self::new(kind, secret)
+        Self::new(kind, secret, sender, gas_payment)
     }
 
     pub fn new_transfer(
-        transfer: Transfer,
+        recipient: SuiAddress,
+        object_ref: ObjectRef,
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
         secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     ) -> Self {
-        Self::new(OrderKind::Transfer(transfer), secret)
+        let kind = OrderKind::Transfer(Transfer {
+            recipient,
+            object_ref,
+        });
+        Self::new(kind, secret, sender, gas_payment)
     }
 
     pub fn check_signature(&self) -> Result<(), SuiError> {
-        self.signature.check(&self.kind, *self.sender())
+        self.signature.check(&self.data, self.data.sender)
+    }
+
+    pub fn sender(&self) -> &SuiAddress {
+        &self.data.sender
+    }
+
+    pub fn gas_payment_object_ref(&self) -> &ObjectRef {
+        &self.data.gas_payment
     }
 
     /// Return the metadata of each of the input objects for the order.
@@ -439,12 +468,9 @@ impl Order {
     /// for a Move package, we provide the object id only since they never change on chain.
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
     pub fn input_objects(&self) -> Vec<InputObjectKind> {
-        match &self.kind {
+        let mut inputs = match &self.data.kind {
             OrderKind::Transfer(t) => {
-                vec![
-                    InputObjectKind::MoveObject(t.object_ref),
-                    InputObjectKind::MoveObject(t.gas_payment),
-                ]
+                vec![InputObjectKind::MoveObject(t.object_ref)]
             }
             OrderKind::Call(c) => {
                 let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
@@ -456,7 +482,6 @@ impl Order {
                         .collect::<Vec<_>>(),
                 );
                 call_inputs.push(InputObjectKind::MovePackage(c.package.0));
-                call_inputs.push(InputObjectKind::MoveObject(c.gas_payment));
                 call_inputs
             }
             OrderKind::Publish(m) => {
@@ -485,54 +510,19 @@ impl Order {
                 }
                 // We don't care about the digest of the dependent packages.
                 // They are all read-only on-chain and their digest never changes.
-                let mut publish_inputs = dependent_packages
+                dependent_packages
                     .into_iter()
                     .map(InputObjectKind::MovePackage)
-                    .collect::<Vec<_>>();
-                publish_inputs.push(InputObjectKind::MoveObject(m.gas_payment));
-                publish_inputs
+                    .collect::<Vec<_>>()
             }
-        }
-    }
-
-    // TODO: support orders with multiple objects (https://github.com/MystenLabs/fastnft/issues/8)
-    pub fn object_id(&self) -> &ObjectID {
-        use OrderKind::*;
-        match &self.kind {
-            Transfer(t) => &t.object_ref.0,
-            Publish(m) => &m.gas_payment.0,
-            Call(c) => {
-                assert!(
-                    c.object_arguments.is_empty(),
-                    "Unimplemented: non-gas object arguments"
-                );
-                &c.gas_payment.0
-            }
-        }
-    }
-
-    pub fn gas_payment_object_id(&self) -> &ObjectID {
-        use OrderKind::*;
-        match &self.kind {
-            Transfer(t) => &t.gas_payment.0,
-            Publish(m) => &m.gas_payment.0,
-            Call(c) => &c.gas_payment.0,
-        }
-    }
-
-    // TODO: make sender a field of Order
-    pub fn sender(&self) -> &SuiAddress {
-        use OrderKind::*;
-        match &self.kind {
-            Transfer(t) => &t.sender,
-            Publish(m) => &m.sender,
-            Call(c) => &c.sender,
-        }
+        };
+        inputs.push(InputObjectKind::MoveObject(*self.gas_payment_object_ref()));
+        inputs
     }
 
     // Derive a cryptographic hash of the transaction.
     pub fn digest(&self) -> TransactionDigest {
-        TransactionDigest::new(sha3_hash(&self.kind))
+        TransactionDigest::new(sha3_hash(&self.data))
     }
 }
 
@@ -543,7 +533,7 @@ impl SignedOrder {
         authority: AuthorityName,
         secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     ) -> Self {
-        let signature = Signature::new(&order.kind, secret);
+        let signature = Signature::new(&order.data, secret);
         Self {
             order,
             authority,
@@ -556,7 +546,7 @@ impl SignedOrder {
         self.order.check_signature()?;
         let weight = committee.weight(&self.authority);
         fp_ensure!(weight > 0, SuiError::UnknownSigner);
-        self.signature.check(&self.order.kind, self.authority)?;
+        self.signature.check(&self.order.data, self.authority)?;
         Ok(weight)
     }
 }
@@ -596,7 +586,7 @@ impl<'a> SignatureAggregator<'a> {
         authority: AuthorityName,
         signature: Signature,
     ) -> Result<Option<CertifiedOrder>, SuiError> {
-        signature.check(&self.partial.order.kind, authority)?;
+        signature.check(&self.partial.order.data, authority)?;
         // Check that each authority only appears once.
         fp_ensure!(
             !self.used_authorities.contains(&authority),
@@ -643,7 +633,7 @@ impl CertifiedOrder {
         // All that is left is checking signatures!
         let inner_sig = (*self.order.sender(), self.order.signature);
         Signature::verify_batch(
-            &self.order.kind,
+            &self.order.data,
             std::iter::once(&inner_sig).chain(&self.signatures),
             &committee.expanded_keys,
         )
@@ -656,4 +646,4 @@ impl ConfirmationOrder {
     }
 }
 
-impl BcsSignable for OrderKind {}
+impl BcsSignable for OrderData {}

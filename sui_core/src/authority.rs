@@ -111,7 +111,7 @@ impl AuthorityState {
                 if object.is_read_only() {
                     // Gas object must not be immutable.
                     fp_ensure!(
-                        &object_id != order.gas_payment_object_id(),
+                        object_id != order.gas_payment_object_ref().0,
                         SuiError::InsufficientGas {
                             error: "Gas object should not be immutable".to_string()
                         }
@@ -129,7 +129,7 @@ impl AuthorityState {
                     SuiError::IncorrectSigner
                 );
 
-                if &object_id == order.gas_payment_object_id() {
+                if object_id == order.gas_payment_object_ref().0 {
                     gas::check_gas_requirement(order, object)?;
                 }
             }
@@ -260,7 +260,7 @@ impl AuthorityState {
         // Insert into the certificates map
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
-        let gas_object_id = *order.gas_payment_object_id();
+        let gas_object_id = order.gas_payment_object_ref().0;
         let (mut temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx)?;
 
         // Remove from dependencies the generic hash
@@ -291,7 +291,8 @@ impl AuthorityState {
         // unwraps here are safe because we built `inputs`
         let mut gas_object = inputs.pop().unwrap();
 
-        let status = match order.kind {
+        let sender = *order.sender();
+        let status = match order.data.kind {
             OrderKind::Transfer(t) => AuthorityState::transfer(
                 &mut temporary_store,
                 inputs,
@@ -320,7 +321,7 @@ impl AuthorityState {
                 &mut temporary_store,
                 self._native_functions.clone(),
                 m.modules,
-                m.sender,
+                sender,
                 tx_ctx,
                 m.gas_budget,
                 gas_object.clone(),
