@@ -507,7 +507,8 @@ impl Display for Object {
 impl Default for ObjectFormatOptions {
     fn default() -> Self {
         ObjectFormatOptions {
-            include_types: true,
+            // Fix for demo
+            include_types: false,
         }
     }
 }

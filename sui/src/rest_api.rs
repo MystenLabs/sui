@@ -31,6 +31,7 @@ use move_core_types::transaction_argument::convert_txn_args;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fs;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -130,13 +131,17 @@ async fn genesis(
     rqctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<GenesisRequest>,
 ) -> Result<HttpResponseOk<GenesisResponse>, HttpError> {
+    println!("Reading files");
+
     let server_context = rqctx.context();
-    let network_config_path = server_context.network_config_path.lock().unwrap().clone();
-    let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
+    let network_config_path = "network.conf".to_owned(); //server_context.network_config_path.lock().unwrap().clone();
+    let wallet_config_path = "wallet.conf".to_owned(); //server_context.wallet_config_path.lock().unwrap().clone();
 
     let genesis_params = request.into_inner();
     let num_authorities = genesis_params.num_authorities.unwrap_or(4);
     let num_objects = genesis_params.num_objects.unwrap_or(5);
+
+    println!("Reading files");
 
     let mut network_config = match NetworkConfig::read_or_create(&network_config_path) {
         Ok(network_config) => network_config,
@@ -163,6 +168,7 @@ async fn genesis(
 
     println!("Creating new authorities...");
     for _ in 0..num_authorities {
+        println!("Starting");
         let (address, key_pair) = get_key_pair();
         let info = AuthorityPrivateInfo {
             address,
@@ -206,19 +212,51 @@ async fn genesis(
     let mut preload_objects: Vec<SuiObject> = Vec::new();
 
     println!("Creating test objects...");
-    for _ in 0..num_objects {
-        let (address, key_pair) = get_key_pair();
-        new_addresses.push(AccountInfo { address, key_pair });
-        for _ in 0..num_objects {
-            let new_object = SuiObject::with_id_owner_gas_coin_object_for_testing(
-                ObjectID::random(),
-                SequenceNumber::new(),
-                address,
-                1000000,
-            );
-            preload_objects.push(new_object);
-        }
-    }
+    let q = r#"{
+        "address": "e29a7386cacb8b385498664c2743dcbde65dff60e0ea48725115d2847060e85a",
+        "key_pair": "XzcEHpEIX5Etomj0mbEXAsdjRSXmEHvB3fta9nHZbS/imnOGysuLOFSYZkwnQ9y95l3/YODqSHJRFdKEcGDoWg=="
+      }"#;
+    let acc: AccountInfo = serde_json::from_str(q).unwrap();
+
+    // let addr_str = "e29a7386cacb8b385498664c2743dcbde65dff60e0ea48725115d2847060e85a";
+
+    // let json_keypair = r#""keypair"="XzcEHpEIX5Etomj0mbEXAsdjRSXmEHvB3fta9nHZbS/imnOGysuLOFSYZkwnQ9y95l3/YODqSHJRFdKEcGDoWg=="}"#;
+    let address = acc.address; //decode_address_hex(addr_str).unwrap();
+    println!("{:?}", address);
+
+    let kp: KeyPair = acc.key_pair; //= serde_json::from_str(json_keypair).unwrap();
+
+    let new_object = SuiObject::with_id_owner_gas_coin_object_for_testing(
+        ObjectID::from_hex_literal("0x3").unwrap(),
+        SequenceNumber::new(),
+        address,
+        u64::MAX - 1,
+    );
+    new_addresses.push(AccountInfo {
+        address,
+        key_pair: kp.copy(),
+    });
+    preload_objects.push(new_object.clone());
+
+    println!("{:?}", address);
+    println!("{:?}", kp);
+    println!("{:?}", new_object);
+    // for _ in 0..num_objects {
+    //     let (address, key_pair) = get_key_pair();
+    //     new_addresses.push(AccountInfo { address, key_pair });
+    //     for _ in 0..num_objects {
+    //         let new_object = SuiObject::with_id_owner_gas_coin_object_for_testing(
+    //             ObjectID::random(),
+    //             SequenceNumber::new(),
+    //             address,
+    //             1000000,
+    //         );
+    //         preload_objects.push(new_object);
+    //     }
+    // }
+
+    //
+
     let committee = Committee::new(authorities);
 
     // Make server state to persist the objects.
@@ -599,6 +637,7 @@ struct ObjectInfoResponse {
     id: String,
     readonly: String,
     obj_type: String,
+    data: Value,
 }
 
 /**
@@ -662,8 +701,8 @@ async fn object_info(
         }
     };
 
-    let object = match get_object_info(client_state, object_id) {
-        Ok(ObjectRead::Exists(_, object, _)) => object,
+    let (object, layout) = match get_object_info(client_state, object_id) {
+        Ok(ObjectRead::Exists(_, object, layout)) => (object, layout),
         Ok(ObjectRead::Deleted(_)) => {
             return Err(HttpError::for_client_error(
                 None,
@@ -685,6 +724,8 @@ async fn object_info(
     // if *deep {
     //     println!("Full Info: {:#?}", object);
     // }
+    let empty_json = serde_json::to_value("").unwrap();
+    let object_data = object.to_json(&layout).unwrap_or(empty_json);
 
     Ok(HttpResponseOk(ObjectInfoResponse {
         owner: format!("{:?}", object.owner),
@@ -699,8 +740,9 @@ async fn object_info(
                 .map_or("Type Unwrap Failed".to_owned(), |type_| type_
                     .module
                     .as_ident_str()
-                    .to_string())
+                    .to_string()),
         ),
+        data: object_data,
     }))
 }
 
