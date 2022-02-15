@@ -1140,7 +1140,9 @@ async fn test_module_publish_and_call_good() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/../sui_programmability/examples/");
 
-    let pub_res = client1.publish(hero_path, gas_object_ref, 1000).await;
+    let pub_res = client1
+        .publish(hero_path, gas_object_ref, GAS_VALUE_FOR_TESTING / 2)
+        .await;
 
     let (_, published_effects) = pub_res.unwrap();
 
@@ -1259,7 +1261,9 @@ async fn test_module_publish_file_path() {
     // Use a path pointing to a different file
     hero_path.push_str("/../sui_programmability/examples/Hero.move");
 
-    let pub_resp = client1.publish(hero_path, gas_object_ref, 1000).await;
+    let pub_resp = client1
+        .publish(hero_path, gas_object_ref, GAS_VALUE_FOR_TESTING / 2)
+        .await;
 
     let (_, published_effects) = pub_resp.unwrap();
 
@@ -1544,7 +1548,9 @@ async fn test_object_store() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/../sui_programmability/examples/");
 
-    let pub_res = client1.publish(hero_path, gas_object_ref, 1000).await;
+    let pub_res = client1
+        .publish(hero_path, gas_object_ref, GAS_VALUE_FOR_TESTING / 2)
+        .await;
 
     let (_, published_effects) = pub_res.as_ref().unwrap();
 

@@ -1,6 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::base_types::*;
 use crate::{
     error::{SuiError, SuiResult},
     gas_coin::GasCoin,
@@ -19,8 +20,7 @@ macro_rules! ok_or_gas_error {
     };
 }
 
-pub const MIN_MOVE_CALL_GAS: u64 = 10;
-pub const MIN_MOVE_PUBLISH_GAS: u64 = 10;
+pub const MIN_MOVE: u64 = 10;
 pub const MIN_OBJ_TRANSFER_GAS: u64 = 8;
 
 pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> SuiResult {
@@ -36,36 +36,36 @@ pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> SuiResult {
                 )
             )
         }
-        OrderKind::Publish(publish) => {
-            debug_assert_eq!(publish.gas_payment.0, gas_object.id());
-            let balance = get_gas_balance(gas_object)?;
-            ok_or_gas_error!(
-                balance >= MIN_MOVE_PUBLISH_GAS,
-                format!(
-                    "Gas balance is {}, smaller than minimum requirement of {} for module publish.",
-                    balance, MIN_MOVE_PUBLISH_GAS
-                )
-            )
+        OrderKind::Call(op) => {
+            check_move_gas_requirement(gas_object, op.gas_payment, op.gas_budget)
         }
-        OrderKind::Call(call) => {
-            debug_assert_eq!(call.gas_payment.0, gas_object.id());
-            ok_or_gas_error!(
-                call.gas_budget >= MIN_MOVE_CALL_GAS,
-                format!(
-                    "Gas budget is {}, smaller than minimum requirement of {} for move call.",
-                    call.gas_budget, MIN_MOVE_CALL_GAS
-                )
-            )?;
-            let balance = get_gas_balance(gas_object)?;
-            ok_or_gas_error!(
-                balance >= call.gas_budget,
-                format!(
-                    "Gas balance is {}, smaller than the budget {} for move call.",
-                    balance, call.gas_budget
-                )
-            )
+        OrderKind::Publish(op) => {
+            check_move_gas_requirement(gas_object, op.gas_payment, op.gas_budget)
         }
     }
+}
+
+pub fn check_move_gas_requirement(
+    gas_object: &Object,
+    gas_payment: ObjectRef,
+    gas_budget: u64,
+) -> SuiResult {
+    debug_assert_eq!(gas_payment.0, gas_object.id());
+    ok_or_gas_error!(
+        gas_budget >= MIN_MOVE,
+        format!(
+            "Gas budget is {}, smaller than minimum requirement of {} for move operation.",
+            gas_budget, MIN_MOVE
+        )
+    )?;
+    let balance = get_gas_balance(gas_object)?;
+    ok_or_gas_error!(
+        balance >= gas_budget,
+        format!(
+            "Gas balance is {}, smaller than the budget {} for move operation.",
+            balance, gas_budget
+        )
+    )
 }
 
 /// Try subtract the gas balance of \p gas_object by \p amount.
@@ -105,7 +105,7 @@ pub fn get_gas_balance(gas_object: &Object) -> SuiResult<u64> {
 pub fn calculate_module_publish_cost(module_bytes: &[Vec<u8>]) -> u64 {
     // TODO: Figure out module publish gas formula.
     // Currently just use the size in bytes of the modules plus a default minimum.
-    module_bytes.iter().map(|v| v.len() as u64).sum::<u64>() + MIN_MOVE_PUBLISH_GAS
+    module_bytes.iter().map(|v| v.len() as u64).sum::<u64>() + MIN_MOVE
 }
 
 pub fn calculate_object_transfer_cost(object: &Object) -> u64 {
