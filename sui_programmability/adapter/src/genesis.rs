@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use std::sync::Mutex;
 use sui_framework::{self};
 use sui_types::{
-    base_types::{Authenticator, SuiAddress, TransactionDigest},
+    base_types::{SuiAddress, TransactionDigest},
     object::Object,
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -31,16 +31,8 @@ fn create_genesis_module_objects() -> Genesis {
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
     let owner = SuiAddress::default();
     let objects = vec![
-        Object::new_package(
-            sui_modules,
-            Authenticator::Address(owner),
-            TransactionDigest::genesis(),
-        ),
-        Object::new_package(
-            std_modules,
-            Authenticator::Address(owner),
-            TransactionDigest::genesis(),
-        ),
+        Object::new_package(sui_modules, owner, TransactionDigest::genesis()),
+        Object::new_package(std_modules, owner, TransactionDigest::genesis()),
     ];
     Genesis {
         objects,

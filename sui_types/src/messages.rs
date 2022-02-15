@@ -259,14 +259,14 @@ pub struct OrderEffects {
     // The transaction digest
     pub transaction_digest: TransactionDigest,
     // ObjectRef and owner of new objects created.
-    pub created: Vec<(ObjectRef, Authenticator)>,
+    pub created: Vec<(ObjectRef, SuiAddress)>,
     // ObjectRef and owner of mutated objects.
     // mutated does not include gas object or created objects.
-    pub mutated: Vec<(ObjectRef, Authenticator)>,
+    pub mutated: Vec<(ObjectRef, SuiAddress)>,
     // Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
     // The updated gas object reference.
-    pub gas_object: (ObjectRef, Authenticator),
+    pub gas_object: (ObjectRef, SuiAddress),
     /// The events emitted during execution. Note that only successful transactions emit events
     pub events: Vec<Event>,
     /// The set of transaction digests this order depends on.
@@ -277,7 +277,7 @@ impl OrderEffects {
     /// Return an iterator that iterates throguh all mutated objects,
     /// including all from mutated, created and the gas_object.
     /// It doesn't include deleted.
-    pub fn all_mutated(&self) -> impl Iterator<Item = &(ObjectRef, Authenticator)> {
+    pub fn all_mutated(&self) -> impl Iterator<Item = &(ObjectRef, SuiAddress)> {
         self.mutated
             .iter()
             .chain(self.created.iter())

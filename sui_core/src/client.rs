@@ -429,13 +429,13 @@ where
                 .unwrap_or_default();
             // only update if data is new
             if old_seq < seq {
-                if owner.is_address(&self.address) {
+                if owner == self.address {
                     self.insert_object_info(&object_ref, &parent_tx_digest)?;
                     objs_to_download.push(object_ref);
                 } else {
                     self.remove_object_info(&object_id)?;
                 }
-            } else if old_seq == seq && owner.is_address(&self.address) {
+            } else if old_seq == seq && owner == self.address {
                 // ObjectRef can be 1 version behind because it's only updated after confirmation.
                 self.store.object_refs.insert(&object_id, &object_ref)?;
             }
