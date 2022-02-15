@@ -493,7 +493,7 @@ struct GetObjectsRequest {
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct Object {
     object_id: String,
-    object_ref: String,
+    object_ref: serde_json::Value,
 }
 
 /**
@@ -562,7 +562,7 @@ async fn get_objects(
             .into_iter()
             .map(|e| Object {
                 object_id: e.0.to_string(),
-                object_ref: format!("{:?}", e.1),
+                object_ref: json!(e.1),
             })
             .collect::<Vec<Object>>(),
     }))
@@ -587,6 +587,7 @@ struct ObjectInfoResponse {
     id: String,
     readonly: String,
     obj_type: String,
+    data: serde_json::Value,
 }
 
 /**
@@ -669,11 +670,6 @@ async fn object_info(
         Err(err) => return Err(err),
     };
 
-    // TODO: add a way to print full object info i.e. raw bytes?
-    // if *deep {
-    //     println!("Full Info: {:#?}", object);
-    // }
-
     Ok(HttpResponseOk(ObjectInfoResponse {
         owner: format!("{:?}", object.owner),
         version: format!("{:?}", object.version().value()),
@@ -689,6 +685,7 @@ async fn object_info(
                     .as_ident_str()
                     .to_string())
         ),
+        data: json!(object),
     }))
 }
 
@@ -704,7 +701,7 @@ struct SyncRequest {
  * [WALLET] Synchronize client state with authorities.
  */
 #[endpoint {
-    method = PATCH,
+    method = POST,
     path = "/wallet/sync",
 }]
 async fn sync(
@@ -773,14 +770,14 @@ struct TransferOrderRequest {
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct OrderResponse {
     object_effects_summary: Vec<String>,
-    certificate: String,
+    certificate: serde_json::Value,
 }
 
 /**
  * [WALLET] Transfer object.
  */
 #[endpoint {
-    method = PATCH,
+    method = POST,
     path = "/wallet/transfer",
 }]
 async fn transfer_object(
@@ -908,12 +905,11 @@ async fn transfer_object(
         }
     };
 
-    let certificate = format!("{:?}", cert);
     let object_effects_summary = get_object_effects(effects);
 
     Ok(HttpResponseOk(OrderResponse {
         object_effects_summary,
-        certificate,
+        certificate: json!(cert),
     }))
 }
 
@@ -932,7 +928,7 @@ struct PublishRequest {
  * [WALLET] Publish move module.
  */
 #[endpoint {
-    method = PATCH,
+    method = POST,
     path = "/wallet/publish",
 }]
 async fn publish(
@@ -1054,12 +1050,11 @@ async fn publish(
         }
     };
 
-    let certificate = format!("{:?}", cert);
     let object_effects_summary = get_object_effects(effects);
 
     Ok(HttpResponseOk(OrderResponse {
         object_effects_summary,
-        certificate,
+        certificate: json!(cert),
     }))
 }
 
@@ -1083,7 +1078,7 @@ struct CallRequest {
  * [WALLET] Call move module.
  */
 #[endpoint {
-    method = PATCH,
+    method = POST,
     path = "/wallet/call",
 }]
 async fn call(
@@ -1288,31 +1283,30 @@ async fn call(
         }
     };
 
-    let certificate = format!("{:?}", cert);
     let object_effects_summary = get_object_effects(effects);
 
     Ok(HttpResponseOk(OrderResponse {
         object_effects_summary,
-        certificate,
+        certificate: json!(cert),
     }))
 }
 
 fn get_object_effects(order_effects: OrderEffects) -> Vec<String> {
     let mut object_effects_summary = Vec::new();
     if !order_effects.created.is_empty() {
-        println!("Created Objects:");
+        object_effects_summary.push(String::from("Created Objects:"));
         for (obj, _) in order_effects.created {
             object_effects_summary.push(format!("{:?} {:?} {:?}", obj.0, obj.1, obj.2).to_string());
         }
     }
     if !order_effects.mutated.is_empty() {
-        println!("Mutated Objects:");
+        object_effects_summary.push(String::from("Mutated Objects:"));
         for (obj, _) in order_effects.mutated {
             object_effects_summary.push(format!("{:?} {:?} {:?}", obj.0, obj.1, obj.2).to_string());
         }
     }
     if !order_effects.deleted.is_empty() {
-        println!("Deleted Objects:");
+        object_effects_summary.push(String::from("Deleted Objects:"));
         for obj in order_effects.deleted {
             object_effects_summary.push(format!("{:?} {:?} {:?}", obj.0, obj.1, obj.2));
         }
