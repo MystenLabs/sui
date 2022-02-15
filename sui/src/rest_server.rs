@@ -3,7 +3,7 @@
 
 use crossbeam::thread as cb_thread;
 
-use dropshot::endpoint;
+use dropshot::{endpoint, Query};
 use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext, TypedBody,
@@ -513,11 +513,11 @@ struct GetObjectsResponse {
 }]
 async fn get_objects(
     rqctx: Arc<RequestContext<ServerContext>>,
-    request: TypedBody<GetObjectsRequest>,
+    query: Query<GetObjectsRequest>,
 ) -> Result<HttpResponseOk<GetObjectsResponse>, HttpError> {
     let server_context = rqctx.context();
 
-    let get_objects_params = request.into_inner();
+    let get_objects_params = query.into_inner();
     let address = get_objects_params.address;
 
     let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
@@ -599,10 +599,10 @@ struct ObjectInfoResponse {
 }]
 async fn object_info(
     rqctx: Arc<RequestContext<ServerContext>>,
-    request: TypedBody<GetObjectInfoRequest>,
+    query: Query<GetObjectInfoRequest>,
 ) -> Result<HttpResponseOk<ObjectInfoResponse>, HttpError> {
     let server_context = rqctx.context();
-    let object_info_params = request.into_inner();
+    let object_info_params = query.into_inner();
 
     let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
     if wallet_context.is_none() {
