@@ -5,6 +5,7 @@ use serde::Serialize;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use tracing::log::trace;
 
@@ -43,4 +44,25 @@ where
 
     fn set_config_path(&mut self, path: &Path);
     fn config_path(&self) -> &Path;
+}
+
+pub struct PortAllocator {
+    next_port: u16,
+}
+
+impl PortAllocator {
+    pub fn new(starting_port: u16) -> Self {
+        Self {
+            next_port: starting_port,
+        }
+    }
+    pub fn next_port(&mut self) -> Option<u16> {
+        for port in self.next_port..65535 {
+            if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+                self.next_port = port + 1;
+                return Some(port);
+            }
+        }
+        None
+    }
 }

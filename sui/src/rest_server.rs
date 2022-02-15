@@ -10,10 +10,8 @@ use dropshot::{
 };
 
 use serde_json::json;
-use sui::config::{
-    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, PortAllocator, WalletConfig,
-};
-use sui::utils::Config;
+use sui::config::{AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, WalletConfig};
+use sui::utils::{Config, PortAllocator};
 use sui::wallet_commands::WalletContext;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_client::AuthorityClient;

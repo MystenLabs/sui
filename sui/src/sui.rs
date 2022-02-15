@@ -8,10 +8,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
-use sui::config::{
-    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, PortAllocator, WalletConfig,
-};
-use sui::utils::Config;
+use sui::config::{AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, WalletConfig};
+use sui::utils::{Config, PortAllocator};
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
 use sui_types::base_types::{encode_address_hex, get_key_pair, ObjectID, SequenceNumber};
