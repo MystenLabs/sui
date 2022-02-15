@@ -4,6 +4,7 @@ use crate::error::SuiError;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 
+use anyhow::{anyhow, Result};
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Digest, PublicKey, Verifier};
 use move_core_types::account_address::AccountAddress;
@@ -555,3 +556,219 @@ impl TryFrom<&[u8]> for TransactionDigest {
         Ok(Self(arr))
     }
 }
+pub const SUI_ADDRESS_LENGTH: usize = dalek::PUBLIC_KEY_LENGTH;
+
+const HEX_PREFIX: &str = "0x";
+// const VECTOR_PREFIX: &str = "0v";
+// const DOUBLE_COLON: &str = "::";
+// const VECTOR_LEFT_PAD: &str = "x\"";
+// const VECTOR_RIGHT_PAD: char = '"';
+// const STRING_QUOTE: char = '"';
+
+/// We support different types of args as inputs
+/// However these args are transfomed into Move types later on
+/// Bool: true/false
+/// UInt128: this ends up as a u8, u64, or u128
+/// String: this ends up as a u8 vec
+/// U8 Vector: this is a vec of u8s
+/// Vector: this is a vector of the aforementioned types
+// Each type is tried in descending order until one works
+// Be careful when changing the order
+#[derive(Deserialize, Serialize, Debug, Clone, schemars::JsonSchema)]
+#[serde(untagged)]
+pub enum ClientArgsInputElem {
+    Bool(bool),
+    Unsigned8(u8),
+    Unsigned64(u64),
+    Unsigned128(u128),
+    // This could translate to VecU8, Address, or ObjectID if it starts with 0x, or even a Move Type
+    AsciiString(String),
+    // Issue here: VecU8 could also be Vec<PureArgsJsonInputElem(Unsigned8)>
+    // This is because depending on the data, a vecu8 could be a vecu64 and even vecu128 and vice versa
+    // So we need to allow both and check which the function signature wants
+    //Bytes(Vec<u8>),
+    Vector(Vec<ClientArgsInputElem>),
+}
+
+impl TryFrom<ClientArgsInputElem> for bool {
+    type Error = anyhow::Error;
+    fn try_from(value: ClientArgsInputElem) -> Result<Self, Self::Error> {
+        match value {
+            ClientArgsInputElem::Bool(b) => Ok(b),
+            _ => Err(anyhow!("Expected bool (true/false), found {:?}", value)),
+        }
+    }
+}
+impl TryFrom<ClientArgsInputElem> for u8 {
+    type Error = anyhow::Error;
+    fn try_from(value: ClientArgsInputElem) -> Result<Self, Self::Error> {
+        match value {
+            ClientArgsInputElem::Unsigned8(b) => Ok(b),
+            _ => Err(anyhow!("Expected u8, found {:?}", value)),
+        }
+    }
+}
+impl TryFrom<ClientArgsInputElem> for u64 {
+    type Error = anyhow::Error;
+    fn try_from(value: ClientArgsInputElem) -> Result<Self, Self::Error> {
+        match value {
+            ClientArgsInputElem::Unsigned8(b) => Ok(b as u64),
+            ClientArgsInputElem::Unsigned64(b) => Ok(b),
+            _ => Err(anyhow!("Expected u64, found {:?}", value)),
+        }
+    }
+}
+impl TryFrom<ClientArgsInputElem> for u128 {
+    type Error = anyhow::Error;
+    fn try_from(value: ClientArgsInputElem) -> Result<Self, Self::Error> {
+        match value {
+            ClientArgsInputElem::Unsigned8(b) => Ok(b as u128),
+            ClientArgsInputElem::Unsigned64(b) => Ok(b as u128),
+            ClientArgsInputElem::Unsigned128(b) => Ok(b),
+            _ => Err(anyhow!("Expected u128, found {:?}", value)),
+        }
+    }
+}
+impl TryFrom<ClientArgsInputElem> for String {
+    type Error = anyhow::Error;
+    fn try_from(value: ClientArgsInputElem) -> Result<Self, Self::Error> {
+        match value {
+            ClientArgsInputElem::AsciiString(b) => Ok(b),
+            _ => Err(anyhow!("Expected ASCII String, found {:?}", value)),
+        }
+    }
+}
+impl TryFrom<ClientArgsInputElem> for Vec<u8> {
+    type Error = anyhow::Error;
+    fn try_from(value: ClientArgsInputElem) -> Result<Self, Self::Error> {
+        match value {
+            ClientArgsInputElem::Vector(b) => {
+                // All have to u8
+                let mut v = vec![];
+                for i in b {
+                    match i {
+                        ClientArgsInputElem::Unsigned8(q) => v.push(q),
+                        _ => return Err(anyhow!("Unable to convert to Vec<u8>")),
+                    }
+                }
+                Ok(v)
+            }
+            ClientArgsInputElem::AsciiString(b) => {
+                // If this starts with 0x, treat as Hex vector
+                // This means other strings cannot have 0x to start
+                let k = if b.starts_with(HEX_PREFIX) {
+                    hex::decode(b.trim_start_matches(HEX_PREFIX))?
+                } else {
+                    b.trim_start_matches(HEX_PREFIX).as_bytes().to_vec()
+                };
+                //println!("{:?}", w);
+                println!("{:?}", k);
+                Ok(k)
+            }
+            _ => Err(anyhow!("Unable to convert to Vec<u8>, found {:?}", value)),
+        }
+    }
+}
+
+// Additional conversions for derived types
+
+// Object ID must be String
+impl TryFrom<ClientArgsInputElem> for ObjectID {
+    type Error = anyhow::Error;
+    fn try_from(value: ClientArgsInputElem) -> Result<Self, Self::Error> {
+        match value.clone() {
+            ClientArgsInputElem::AsciiString(b) => {
+                let mut s = b.trim().to_lowercase();
+                if !s.starts_with(HEX_PREFIX) {
+                    s = format!("{}{}", HEX_PREFIX, s);
+                }
+                let v = AccountAddress::from_hex_literal(&s);
+                if v.is_err() {
+                    return Err(anyhow!(
+                        "Expected {}byte ObjectID (0x...), found {:?} with err {:?}",
+                        ObjectID::LENGTH,
+                        value,
+                        v.err()
+                    ));
+                }
+                Ok(v.unwrap())
+            }
+            _ => Err(anyhow!(
+                "Expected {}byte ObjectID (0x...), found {:?}",
+                ObjectID::LENGTH,
+                value
+            )),
+        }
+    }
+}
+// Address can be string or u8 vec
+impl TryFrom<ClientArgsInputElem> for SuiAddress {
+    type Error = anyhow::Error;
+    fn try_from(value: ClientArgsInputElem) -> Result<Self, Self::Error> {
+        match value.clone() {
+            ClientArgsInputElem::AsciiString(b) => {
+                let mut s = b.trim().to_lowercase();
+                if s.starts_with(HEX_PREFIX) {
+                    s = s.strip_prefix(HEX_PREFIX).unwrap().to_string();
+                }
+                let v = decode_address_hex(&s);
+                if v.is_err() {
+                    return Err(anyhow!(
+                        "Expected {}byte Address (0x...), found {:?} with err {:?}",
+                        SUI_ADDRESS_LENGTH,
+                        value,
+                        v.err()
+                    ));
+                }
+                Ok(v.unwrap())
+            }
+            ClientArgsInputElem::Vector(elems) => {
+                let v = Vec::<u8>::try_from(ClientArgsInputElem::Vector(elems));
+                if v.is_err() {
+                    return Err(anyhow!(
+                        "Expected {}byte Address (0x...), found {:?} with err {:?}",
+                        SUI_ADDRESS_LENGTH,
+                        value,
+                        v.err()
+                    ));
+                }
+                let ret = v.unwrap();
+                if ret.len() != SUI_ADDRESS_LENGTH {
+                    return Err(anyhow!(
+                        "Expected {}byte Address (0x...), found {:?}",
+                        SUI_ADDRESS_LENGTH,
+                        value,
+                    ));
+                }
+                SuiAddress::try_from(&ret[..]).map_err(|e| e.into())
+            }
+            _ => Err(anyhow!(
+                "Expected {}byte Address (0x...), found {:?}",
+                SUI_ADDRESS_LENGTH,
+                value
+            )),
+        }
+    }
+}
+// Type Tag must be JSON String
+impl TryFrom<ClientArgsInputElem> for move_core_types::language_storage::TypeTag {
+    type Error = anyhow::Error;
+    fn try_from(value: ClientArgsInputElem) -> Result<Self, Self::Error> {
+        match value {
+            ClientArgsInputElem::AsciiString(b) => move_core_types::parser::parse_type_tag(&b),
+            _ => Err(anyhow!(
+                "Expected TypeTag encoded as Json String, found {:?}",
+                value
+            )),
+        }
+    }
+}
+// impl TryFrom<ArgsJsonInputElem> for Vec<ArgsJsonInputElem> {
+//     type Error = anyhow::Error;
+//     fn try_from(value: ArgsJsonInputElem) -> Result<Self, Self::Error> {
+//         match value {
+//             ArgsJsonInputElem::Bytes(b) => Ok(b),
+//             _ => Err(anyhow!("Expected Vec<u8>, found {:?}", value)),
+//         }
+//     }
+// }

@@ -25,6 +25,15 @@ serde_with = "1.11.0"
 signature = "1.5.0"
 static_assertions = "1.1.0"
 
+# Deps for REST API
+crossbeam = "0.8.1"
+dropshot = "0.6.0"
+http = "0.2.6"
+hyper = "0.14.16"
+schemars = "0.8.8"
+
+
+
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="d04c29e686aba380e6f9fc0c60a2dfdb974c5f8a"}
 
 move-binary-format = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }

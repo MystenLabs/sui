@@ -218,6 +218,9 @@ pub enum SuiError {
 
     #[error("Account not found.")]
     AccountNotFound,
+
+    #[error("Expected {} arg but found {}.", s, found)]
+    InputArgParseError { s: String, found: String },
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

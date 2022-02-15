@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI};
-use anyhow::{anyhow, Error, Result};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::future;
 use itertools::Itertools;
@@ -22,6 +22,8 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     pin::Pin,
 };
+
+const DEFAULT_MOVE_MODULE: &str = "FastX";
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -128,10 +130,12 @@ pub trait Client {
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
 
     /// Call move function using simple syntax in the module in the given package, with args supplied
-    async fn move_call_simple(
+    async fn move_call_by_text(
         &mut self,
         package_object_id: ObjectID,
-        function: String,
+        module_name: Identifier,
+        function_name: Identifier,
+        args: Vec<ClientArgsInputElem>,
         gas_object_id: ObjectID,
         gas_budget: u64,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
@@ -639,54 +643,69 @@ where
     }
 
     /// Call move function using simple syntax in the module in the given package, with args supplied
-    async fn move_call_simple(
+    async fn move_call_by_text(
         &mut self,
         package_object_id: ObjectID,
-        function: String,
+        module_name: Identifier,
+        function_name: Identifier,
+        args: Vec<ClientArgsInputElem>,
         gas_object_id: ObjectID,
         gas_budget: u64,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         // Derive the pieces
+        // Get package
         let package_obj = match self.get_object_info(package_object_id).await? {
             sui_types::object::ObjectRead::Exists(_, q, _) => q,
 
             _ => {
                 return Err(anyhow!(
-                    "Could not find package at id {}",
+                    "Could not find package with id {}",
                     package_object_id
                 ))
             }
         };
         let package_ref = package_obj.to_object_reference();
-        let gas_obj_ref = *self
-            .object_refs()
-            .get(&gas_object_id)
-            .expect("Gas object not found");
-        let (mod_name, fn_name, type_tags, obj_args, pure_args) =
-            crate::utils::resolve_move_function_text(
-                package_obj,
-                std::collections::BTreeMap::new(),
-                function.to_string(),
-                Identifier::new("FastX").unwrap(),
-            )?;
+        // Get gas object to use
+        let gas_obj_ref = match self.get_object_info(gas_object_id).await? {
+            sui_types::object::ObjectRead::Exists(_, q, _) => q,
+            _ => {
+                return Err(anyhow!(
+                    "Could not find Gas object with id {}",
+                    gas_object_id
+                ))
+            }
+        }
+        .to_object_reference();
+
+        // Extract the components of the function call
+        let fn_components = crate::utils::resolve_move_function(
+            package_obj,
+            module_name,
+            function_name,
+            args,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            Identifier::new(DEFAULT_MOVE_MODULE).unwrap(),
+        )?;
+        // Derive the object refs. This can probably be moved into the resolver
         let mut object_args_refs = Vec::new();
-        for obj_id in obj_args {
+        for obj_id in fn_components.object_args {
             let obj_info = self.get_object_info(obj_id).await?;
             object_args_refs.push(obj_info.object()?.to_object_reference());
         }
+        // Make the actual call
         self.move_call(
             package_ref,
-            mod_name,
-            fn_name,
-            type_tags,
+            fn_components.module_name,
+            fn_components.function_name,
+            fn_components.type_tags,
             gas_obj_ref,
             object_args_refs,
-            pure_args,
+            fn_components.pure_args_serialized,
             gas_budget,
         )
         .await
     }
-
     async fn publish(
         &mut self,
         package_source_files_path: String,

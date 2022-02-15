@@ -786,6 +786,7 @@ struct TransferOrderRequest {
 struct OrderResponse {
     object_effects_summary: Vec<String>,
     certificate: String,
+    gas_used: u64,
 }
 
 /**
@@ -870,7 +871,7 @@ async fn transfer_object(
         }
     };
 
-    let (cert, effects) = match cb_thread::scope(|scope| {
+    let (cert, effects, gas_used) = match cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
                 // transfer object
@@ -886,14 +887,21 @@ async fn transfer_object(
         Ok(result) => match result {
             Ok(result) => match result {
                 Ok((cert, effects)) => {
-                    if !matches!(effects.status, ExecutionStatus::Success { .. }) {
-                        return Err(HttpError::for_client_error(
-                            None,
-                            hyper::StatusCode::FAILED_DEPENDENCY,
-                            format!("Error transferring object: {:#?}", effects.status),
-                        ));
-                    }
-                    (cert, effects)
+                    let gas_used_: u64;
+                    match effects.status {
+                        ExecutionStatus::Success { gas_used } => gas_used_ = gas_used,
+                        ExecutionStatus::Failure { gas_used, error } => {
+                            return Err(HttpError::for_client_error(
+                                None,
+                                hyper::StatusCode::FAILED_DEPENDENCY,
+                                format!(
+                                    "Error calling move function: {:#?}, gas used {}",
+                                    error, gas_used
+                                ),
+                            ));
+                        }
+                    };
+                    (cert, effects, gas_used_)
                 }
                 Err(err) => {
                     return Err(HttpError::for_client_error(
@@ -926,6 +934,7 @@ async fn transfer_object(
     Ok(HttpResponseOk(OrderResponse {
         object_effects_summary,
         certificate,
+        gas_used,
     }))
 }
 
@@ -1016,7 +1025,7 @@ async fn publish(
         }
     };
 
-    let (cert, effects) = match cb_thread::scope(|scope| {
+    let (cert, effects, gas_used) = match cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
                 // publish
@@ -1032,14 +1041,21 @@ async fn publish(
         Ok(result) => match result {
             Ok(result) => match result {
                 Ok((cert, effects)) => {
-                    if !matches!(effects.status, ExecutionStatus::Success { .. }) {
-                        return Err(HttpError::for_client_error(
-                            None,
-                            hyper::StatusCode::FAILED_DEPENDENCY,
-                            format!("Error publishing module: {:#?}", effects.status),
-                        ));
-                    }
-                    (cert, effects)
+                    let gas_used_: u64;
+                    match effects.status {
+                        ExecutionStatus::Success { gas_used } => gas_used_ = gas_used,
+                        ExecutionStatus::Failure { gas_used, error } => {
+                            return Err(HttpError::for_client_error(
+                                None,
+                                hyper::StatusCode::FAILED_DEPENDENCY,
+                                format!(
+                                    "Error calling move function: {:#?}, gas used {}",
+                                    error, gas_used
+                                ),
+                            ));
+                        }
+                    };
+                    (cert, effects, gas_used_)
                 }
                 Err(err) => {
                     return Err(HttpError::for_client_error(
@@ -1072,6 +1088,7 @@ async fn publish(
     Ok(HttpResponseOk(OrderResponse {
         object_effects_summary,
         certificate,
+        gas_used,
     }))
 }
 
@@ -1306,17 +1323,25 @@ async fn call(
     Ok(HttpResponseOk(OrderResponse {
         object_effects_summary,
         certificate,
+        // Need to fix
+        gas_used: 0u64,
     }))
 }
 
 /**
 * 'CallRequest' represents the call request
 */
-#[derive(Deserialize, Serialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema, Debug)]
 struct CallSimpleRequest {
     sender: String,
     package_object_id: String,
-    function: String,
+    module_name: String,
+    function_name: String,
+    type_tags: Vec<String>,
+    args: Vec<ClientArgsInputElem>,
+    // var_alias_map: Option<BTreeMap<String, String>>,
+    // type_alias_map: Option<BTreeMap<String, String>>,
+    // function: String,
     gas_object_id: String,
     gas_budget: u64,
 }
@@ -1334,9 +1359,7 @@ async fn call_simple(
 ) -> Result<HttpResponseOk<OrderResponse>, HttpError> {
     let server_context = rqctx.context();
     let call_params = request.into_inner();
-
-    let function = call_params.function.to_owned();
-
+    println!("{:?}", call_params);
     let gas_object_id = match AccountAddress::try_from(call_params.gas_object_id) {
         Ok(gas_object_id) => gas_object_id,
         Err(error) => {
@@ -1355,6 +1378,27 @@ async fn call_simple(
                 None,
                 hyper::StatusCode::FAILED_DEPENDENCY,
                 format!("Package Object ID: {error}"),
+            ))
+        }
+    };
+
+    let module_name = match Identifier::from_str(&call_params.module_name) {
+        Ok(q) => q,
+        Err(e) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Module name conversion: {e}"),
+            ))
+        }
+    };
+    let function_name = match Identifier::from_str(&call_params.function_name) {
+        Ok(q) => q,
+        Err(e) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Function name conversion: {e}"),
             ))
         }
     };
@@ -1394,7 +1438,6 @@ async fn call_simple(
             ))
         }
     };
-    println!("{}", gas_object_id);
 
     let (cert, effects) = match cb_thread::scope(|scope| {
         scope
@@ -1403,9 +1446,11 @@ async fn call_simple(
                 let rt = Runtime::new().unwrap();
                 rt.block_on(async move {
                     client_state
-                        .move_call_simple(
+                        .move_call_by_text(
                             package_object_id,
-                            function,
+                            module_name,
+                            function_name,
+                            call_params.args.clone(),
                             gas_object_id,
                             call_params.gas_budget,
                         )
@@ -1448,29 +1493,49 @@ async fn call_simple(
     Ok(HttpResponseOk(OrderResponse {
         object_effects_summary,
         certificate,
+        gas_used: 0,
     }))
 }
 
 fn get_object_effects(order_effects: OrderEffects) -> Vec<String> {
+    let gas_used_: u64;
     let mut object_effects_summary = Vec::new();
+
+    match order_effects.status {
+        ExecutionStatus::Success { gas_used } => gas_used_ = gas_used,
+        ExecutionStatus::Failure { gas_used, error } => {
+            object_effects_summary.push(format!(
+                "Error calling move function: {:#?}, gas used {}",
+                error, gas_used
+            ));
+            gas_used_ = gas_used;
+        }
+    }
+
     if !order_effects.created.is_empty() {
-        println!("Created Objects:");
         for (obj, _) in order_effects.created {
-            object_effects_summary.push(format!("{:?} {:?} {:?}", obj.0, obj.1, obj.2).to_string());
+            object_effects_summary
+                .push(format!("Created {:?} {:?} {:?}", obj.0, obj.1, obj.2).to_string());
         }
     }
     if !order_effects.mutated.is_empty() {
-        println!("Mutated Objects:");
         for (obj, _) in order_effects.mutated {
-            object_effects_summary.push(format!("{:?} {:?} {:?}", obj.0, obj.1, obj.2).to_string());
+            object_effects_summary
+                .push(format!("Mutated {:?} {:?} {:?}", obj.0, obj.1, obj.2).to_string());
         }
     }
     if !order_effects.deleted.is_empty() {
-        println!("Deleted Objects:");
         for obj in order_effects.deleted {
-            object_effects_summary.push(format!("{:?} {:?} {:?}", obj.0, obj.1, obj.2));
+            object_effects_summary.push(format!("Deleted {:?} {:?} {:?}", obj.0, obj.1, obj.2));
         }
     }
+    let (obj, owner) = order_effects.gas_object;
+    object_effects_summary.push(format!(
+        "Gas {:?} {:?} {:?}, owner: {:?}",
+        obj.0, obj.1, obj.2, owner
+    ));
+
+    object_effects_summary.push(format!("Gas used {:?}", gas_used_));
     object_effects_summary
 }
 
