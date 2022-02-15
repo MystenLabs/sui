@@ -60,8 +60,8 @@ name = "bench"
 path = "src/bench.rs"
 
 [[bin]]
-name = "rest_api"
-path = "src/rest_api.rs"
+name = "rest_server"
+path = "src/rest_server.rs"
 
 [[bin]]
 name = "wallet"

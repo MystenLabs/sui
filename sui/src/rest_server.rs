@@ -9,6 +9,7 @@ use dropshot::{
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext, TypedBody,
 };
 
+use serde_json::json;
 use sui::config::{
     AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, PortAllocator, WalletConfig,
 };
@@ -36,6 +37,7 @@ use std::fs;
 use std::net::{Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::runtime::Runtime;
 use tracing::error;
 
@@ -83,18 +85,23 @@ async fn main() -> Result<(), String> {
  * Server context (state shared by handler functions)
  */
 struct ServerContext {
-    authority_db_path: Arc<Mutex<String>>,
-    wallet_config_path: Arc<Mutex<String>>,
-    network_config_path: Arc<Mutex<String>>,
+    wallet_config_path: String,
+    network_config_path: String,
+    authority_db_path: String,
+    client_db_path: String,
+    server_lock: Arc<AtomicBool>,
     wallet_context: Arc<Mutex<Option<WalletContext>>>,
 }
 
 impl ServerContext {
     pub fn new() -> ServerContext {
         ServerContext {
-            wallet_config_path: Arc::new(Mutex::new(String::from("./wallet.conf"))),
-            network_config_path: Arc::new(Mutex::new(String::from("./network.conf"))),
-            authority_db_path: Arc::new(Mutex::new(String::from("./authorities_db"))),
+            // TODO: Make configurable (will look similar to fastnft/issues/400)
+            wallet_config_path: String::from("./wallet.conf"),
+            network_config_path: String::from("./network.conf"),
+            authority_db_path: String::from("./authorities_db"),
+            client_db_path: String::from("./client_db"),
+            server_lock: Arc::new(AtomicBool::new(false)),
             wallet_context: Arc::new(Mutex::new(None)),
         }
     }
@@ -114,8 +121,8 @@ struct GenesisRequest {
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct GenesisResponse {
-    wallet_config: String,
-    network_config: String,
+    wallet_config: serde_json::Value,
+    network_config: serde_json::Value,
 }
 
 /**
@@ -130,8 +137,8 @@ async fn genesis(
     request: TypedBody<GenesisRequest>,
 ) -> Result<HttpResponseOk<GenesisResponse>, HttpError> {
     let server_context = rqctx.context();
-    let network_config_path = server_context.network_config_path.lock().unwrap().clone();
-    let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
+    let network_config_path = &server_context.network_config_path;
+    let wallet_config_path = &server_context.wallet_config_path;
 
     let genesis_params = request.into_inner();
     let num_authorities = genesis_params.num_authorities.unwrap_or(4);
@@ -143,25 +150,24 @@ async fn genesis(
             Err(error) => {
                 return Err(HttpError::for_client_error(
                     None,
-                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    hyper::StatusCode::CONFLICT,
                     format!("Unable to read network config: {error}"),
                 ))
             }
         };
 
     if !network_config.authorities.is_empty() {
-        return Err(
-            HttpError::for_client_error(
-                None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
-                String::from("Cannot run genesis on a existing network, please delete network config file and try again.")));
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::CONFLICT,
+            String::from("Cannot run genesis on a existing network, stop network to try again."),
+        ));
     }
 
     let mut authorities = BTreeMap::new();
     let mut authority_info = Vec::new();
     let mut port_allocator = PortAllocator::new(10000);
 
-    println!("Creating new authorities...");
     for _ in 0..num_authorities {
         let (address, key_pair) = get_key_pair();
         let info = AuthorityPrivateInfo {
@@ -173,7 +179,7 @@ async fn genesis(
                 None => {
                     return Err(HttpError::for_client_error(
                         None,
-                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        hyper::StatusCode::CONFLICT,
                         String::from(
                             "Could not create authority beacause there were no free ports",
                         ),
@@ -196,7 +202,7 @@ async fn genesis(
         Err(error) => {
             return Err(HttpError::for_client_error(
                 None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
+                hyper::StatusCode::CONFLICT,
                 format!("Network config was unable to be saved: {error}"),
             ))
         }
@@ -205,7 +211,6 @@ async fn genesis(
     let mut new_addresses = Vec::new();
     let mut preload_objects: Vec<SuiObject> = Vec::new();
 
-    println!("Creating test objects...");
     for _ in 0..num_objects {
         let (address, key_pair) = get_key_pair();
         new_addresses.push(AccountInfo { address, key_pair });
@@ -222,7 +227,6 @@ async fn genesis(
     let committee = Committee::new(authorities);
 
     // Make server state to persist the objects.
-    let network_config_path = network_config.config_path();
     for authority in network_config.authorities.iter() {
         make_server(
             authority,
@@ -238,7 +242,7 @@ async fn genesis(
         Err(error) => {
             return Err(HttpError::for_client_error(
                 None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
+                hyper::StatusCode::CONFLICT,
                 format!("Wallet config was unable to be created: {error}"),
             ))
         }
@@ -250,35 +254,15 @@ async fn genesis(
         Err(error) => {
             return Err(HttpError::for_client_error(
                 None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
+                hyper::StatusCode::CONFLICT,
                 format!("Wallet config was unable to be saved: {error}"),
             ))
         }
     };
 
-    println!("Network genesis completed.");
-    println!(
-        "Network config file is stored in {:?}.",
-        network_config_path
-    );
-    println!(
-        "Wallet config file is stored in {:?}.",
-        wallet_config.config_path()
-    );
-
-    // TODO: Print out the contents of wallet_config/network_config?
-    let wallet_config_string = format!(
-        "Wallet Config was created with {} accounts",
-        wallet_config.accounts.len(),
-    );
-    let network_config_string = format!(
-        "Network Config was created with {} authorities",
-        network_config.authorities.len(),
-    );
-
     Ok(HttpResponseOk(GenesisResponse {
-        wallet_config: wallet_config_string,
-        network_config: network_config_string,
+        wallet_config: json!(wallet_config),
+        network_config: json!(network_config),
     }))
 }
 
@@ -293,14 +277,14 @@ async fn start(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
     let server_context = rqctx.context();
-    let network_config_path = server_context.network_config_path.lock().unwrap().clone();
+    let network_config_path = &server_context.network_config_path;
 
     let network_config = match NetworkConfig::read_or_create(&PathBuf::from(network_config_path)) {
         Ok(network_config) => network_config,
         Err(error) => {
             return Err(HttpError::for_client_error(
                 None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
+                hyper::StatusCode::CONFLICT,
                 format!("Unable to read network config: {error}"),
             ))
         }
@@ -309,17 +293,18 @@ async fn start(
     if network_config.authorities.is_empty() {
         return Err(HttpError::for_client_error(
             None,
-            hyper::StatusCode::FAILED_DEPENDENCY,
+            hyper::StatusCode::CONFLICT,
             String::from("No authority configured for the network, please run genesis."),
         ));
     }
 
-    // TODO: check if thread/network is already before proceeding (use mutex to indicate if server has been started)
-
-    println!(
-        "Starting network with {} authorities",
-        network_config.authorities.len()
-    );
+    if server_context.server_lock.load(Ordering::SeqCst) {
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FORBIDDEN,
+            String::from("Sui network is already running."),
+        ));
+    }
 
     let committee = Committee::new(
         network_config
@@ -335,7 +320,6 @@ async fn start(
         let server = make_server(&authority, &committee, &[], network_config.buffer_size).await;
 
         handles.push(async move {
-            // TODO: bubble up async server errors as a http error
             let spawned_server = match server.spawn().await {
                 Ok(server) => server,
                 Err(err) => {
@@ -351,18 +335,21 @@ async fn start(
 
     let num_authorities = handles.len();
 
-    thread::spawn(move || {
-        rt.block_on(join_all(handles));
+    server_context.server_lock.store(true, Ordering::SeqCst);
+    thread::spawn({
+        move || {
+            rt.block_on(join_all(handles));
+        }
     });
 
-    let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
+    let wallet_config_path = &server_context.wallet_config_path;
 
     let config = match WalletConfig::read_or_create(&PathBuf::from(wallet_config_path)) {
         Ok(network_config) => network_config,
         Err(error) => {
             return Err(HttpError::for_client_error(
                 None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
+                hyper::StatusCode::CONFLICT,
                 format!("Unable to read wallet config: {error}"),
             ))
         }
@@ -377,7 +364,7 @@ async fn start(
         Err(error) => {
             return Err(HttpError::for_client_error(
                 None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
+                hyper::StatusCode::CONFLICT,
                 format!("Can't create new wallet context: {error}"),
             ))
         }
@@ -390,7 +377,7 @@ async fn start(
             Err(error) => {
                 return Err(HttpError::for_client_error(
                     None,
-                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    hyper::StatusCode::CONFLICT,
                     format!("Can't create client state: {error}"),
                 ))
             }
@@ -419,16 +406,14 @@ async fn stop(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     let server_context = rqctx.context();
-    let network_config_path = server_context.network_config_path.lock().unwrap().clone();
-    let wallet_config_path = server_context.wallet_config_path.lock().unwrap().clone();
-    let authority_db_path = server_context.authority_db_path.lock().unwrap().clone();
 
-    // TODO: kill thread that is hosting the authorities
-    // TODO: get client db path from server context & error handle
-    fs::remove_dir_all("./client_db").ok();
-    fs::remove_dir_all(authority_db_path).ok();
-    fs::remove_file(network_config_path).ok();
-    fs::remove_file(wallet_config_path).ok();
+    // TODO: Figure out how kill thread that is hosting the authorities.
+    // server_context.server_lock.store(false, Ordering::SeqCst);
+
+    fs::remove_dir_all(&server_context.client_db_path).ok();
+    fs::remove_dir_all(&server_context.authority_db_path).ok();
+    fs::remove_file(&server_context.network_config_path).ok();
+    fs::remove_file(&server_context.wallet_config_path).ok();
 
     Ok(HttpResponseUpdatedNoContent())
 }
