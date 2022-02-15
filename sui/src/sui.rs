@@ -5,11 +5,12 @@ extern crate core;
 use anyhow::anyhow;
 use futures::future::join_all;
 use std::collections::BTreeMap;
-use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
-use sui::config::{AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, WalletConfig};
+use sui::config::{
+    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, PortAllocator, WalletConfig,
+};
 use sui::utils::Config;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
@@ -200,25 +201,4 @@ async fn make_server(
     }
 
     AuthorityServer::new(authority.host.clone(), authority.port, buffer_size, state)
-}
-
-struct PortAllocator {
-    next_port: u16,
-}
-
-impl PortAllocator {
-    pub fn new(starting_port: u16) -> Self {
-        Self {
-            next_port: starting_port,
-        }
-    }
-    fn next_port(&mut self) -> Option<u16> {
-        for port in self.next_port..65535 {
-            if TcpListener::bind(("127.0.0.1", port)).is_ok() {
-                self.next_port = port + 1;
-                return Some(port);
-            }
-        }
-        None
-    }
 }
