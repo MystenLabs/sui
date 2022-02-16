@@ -194,9 +194,9 @@ module FastX::Geniteam {
         Transfer::transfer(monster, TxContext::get_signer_address(ctx))
     }
 
-    /// Update the attributes of a farm
-    public fun update_farm(self: &mut Farm, level: u64, _ctx: &mut TxContext) {
-        self.level = level;
+    /// Update the attributes of a player's farm
+    public fun update_farm(self: &mut Player, level: u64, _ctx: &mut TxContext) {
+        self.farm.level = level;
     }
 
     /// Add cosmetics to a farm's first slot
