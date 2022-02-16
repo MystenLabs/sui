@@ -5,7 +5,7 @@ use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientAddressManager, ClientState};
 use sui_network::network::NetworkClient;
 use sui_types::base_types::{
-    decode_address_hex, encode_address_hex, get_key_pair, AuthorityName, ObjectID, PublicKeyBytes,
+    decode_bytes_hex, encode_bytes_hex, get_key_pair, AuthorityName, ObjectID, PublicKeyBytes,
     SuiAddress,
 };
 use sui_types::committee::Committee;
@@ -36,7 +36,7 @@ pub enum WalletCommands {
     #[structopt(name = "object")]
     Object {
         /// Owner address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
         owner: PublicKeyBytes,
 
         /// Object ID of the object to fetch
@@ -52,7 +52,7 @@ pub enum WalletCommands {
     #[structopt(name = "publish")]
     Publish {
         /// Sender address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
         sender: PublicKeyBytes,
 
         /// Path to directory containing a Move package
@@ -72,7 +72,7 @@ pub enum WalletCommands {
     #[structopt(name = "call")]
     Call {
         /// Sender address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
         sender: PublicKeyBytes,
         /// Object ID of the package, which contains the module
         #[structopt(long)]
@@ -107,11 +107,11 @@ pub enum WalletCommands {
     #[structopt(name = "transfer")]
     Transfer {
         /// Sender address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
         from: PublicKeyBytes,
 
         /// Recipient address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
         to: PublicKeyBytes,
 
         /// Object to transfer, in 20 bytes Hex string
@@ -125,7 +125,7 @@ pub enum WalletCommands {
     /// Synchronize client state with authorities.
     #[structopt(name = "sync")]
     SyncClientState {
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
         address: PublicKeyBytes,
     },
 
@@ -141,7 +141,7 @@ pub enum WalletCommands {
     #[structopt(name = "objects")]
     Objects {
         /// Address of the account
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
         address: PublicKeyBytes,
     },
 }
@@ -253,7 +253,7 @@ impl WalletCommands {
                     context.address_manager.get_managed_address_states().len()
                 );
                 for address in context.address_manager.get_managed_address_states().keys() {
-                    info!("{}", encode_address_hex(address));
+                    info!("{}", encode_bytes_hex(address));
                 }
             }
 
@@ -281,7 +281,7 @@ impl WalletCommands {
                 context.get_or_create_client_state(&address)?;
                 info!(
                     "Created new keypair for address : {}",
-                    encode_address_hex(&address)
+                    encode_bytes_hex(&address)
                 );
             }
         }
