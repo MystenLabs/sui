@@ -951,7 +951,7 @@ where
     /// Return owner address and sequence number of an object backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_latest_owner(&self, object_id: ObjectID) -> (Authenticator, SequenceNumber) {
+    async fn get_latest_owner(&self, object_id: ObjectID) -> (SuiAddress, SequenceNumber) {
         let (object_infos, _certificates) = self
             .get_object_by_id(object_id, Duration::from_secs(60))
             .await

@@ -453,17 +453,11 @@ fn test_initiating_valid_transfer() {
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
     assert_eq!(
         rt.block_on(sender.authorities().get_latest_owner(object_id_1)),
-        (
-            Authenticator::Address(sender.address()),
-            SequenceNumber::from(0)
-        )
+        (sender.address(), SequenceNumber::from(0))
     );
     assert_eq!(
         rt.block_on(sender.authorities().get_latest_owner(object_id_2)),
-        (
-            Authenticator::Address(sender.address()),
-            SequenceNumber::from(0)
-        )
+        (sender.address(), SequenceNumber::from(0))
     );
     let (certificate, _) = rt
         .block_on(sender.transfer_object(object_id_1, gas_object, recipient))
@@ -477,14 +471,11 @@ fn test_initiating_valid_transfer() {
     assert!(sender.store().pending_orders.is_empty());
     assert_eq!(
         rt.block_on(sender.authorities().get_latest_owner(object_id_1)),
-        (Authenticator::Address(recipient), SequenceNumber::from(1))
+        (recipient, SequenceNumber::from(1))
     );
     assert_eq!(
         rt.block_on(sender.authorities().get_latest_owner(object_id_2)),
-        (
-            Authenticator::Address(sender.address()),
-            SequenceNumber::from(0)
-        )
+        (sender.address(), SequenceNumber::from(0))
     );
     // valid since our test authority should not update its certificate set
     compare_certified_orders(
@@ -523,7 +514,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     assert!(sender.store().pending_orders.is_empty());
     assert_eq!(
         rt.block_on(sender.authorities().get_latest_owner(object_id)),
-        (Authenticator::Address(recipient), SequenceNumber::from(1))
+        (recipient, SequenceNumber::from(1))
     );
     // valid since our test authority shouldn't update its certificate set
     compare_certified_orders(
@@ -562,10 +553,7 @@ fn test_initiating_transfer_low_funds() {
     // assert_eq!(sender.pending_transfer, None);
     assert_eq!(
         rt.block_on(sender.authorities().get_latest_owner(object_id_1)),
-        (
-            Authenticator::Address(sender.address()),
-            SequenceNumber::from(0)
-        ),
+        (sender.address(), SequenceNumber::from(0)),
     );
     assert_eq!(
         rt.block_on(sender.authorities().get_latest_owner(object_id_2))
@@ -600,18 +588,12 @@ async fn test_bidirectional_transfer() {
     // Confirm client1 have ownership of the object.
     assert_eq!(
         client1.authorities().get_latest_owner(object_id).await,
-        (
-            Authenticator::Address(client1.address()),
-            SequenceNumber::from(0)
-        )
+        (client1.address(), SequenceNumber::from(0))
     );
     // Confirm client2 doesn't have ownership of the object.
     assert_eq!(
         client2.authorities().get_latest_owner(object_id).await,
-        (
-            Authenticator::Address(client1.address()),
-            SequenceNumber::from(0)
-        )
+        (client1.address(), SequenceNumber::from(0))
     );
     // Transfer object to client2.
     let (certificate, _) = client1
@@ -623,18 +605,12 @@ async fn test_bidirectional_transfer() {
     // Confirm client1 lose ownership of the object.
     assert_eq!(
         client1.authorities().get_latest_owner(object_id).await,
-        (
-            Authenticator::Address(client2.address()),
-            SequenceNumber::from(1)
-        )
+        (client2.address(), SequenceNumber::from(1))
     );
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
         client2.authorities().get_latest_owner(object_id).await,
-        (
-            Authenticator::Address(client2.address()),
-            SequenceNumber::from(1)
-        )
+        (client2.address(), SequenceNumber::from(1))
     );
 
     // Confirm certificate is consistent between authorities and client.
@@ -654,10 +630,7 @@ async fn test_bidirectional_transfer() {
     // Confirm sequence number are consistent between clients.
     assert_eq!(
         client2.authorities().get_latest_owner(object_id).await,
-        (
-            Authenticator::Address(client2.address()),
-            SequenceNumber::from(1)
-        )
+        (client2.address(), SequenceNumber::from(1))
     );
 
     // Transfer the object back to Client1
@@ -671,10 +644,7 @@ async fn test_bidirectional_transfer() {
     // Confirm client2 lose ownership of the object.
     assert_eq!(
         client2.authorities().get_latest_owner(object_id).await,
-        (
-            Authenticator::Address(client1.address()),
-            SequenceNumber::from(2)
-        )
+        (client1.address(), SequenceNumber::from(2))
     );
     assert_eq!(
         client2
@@ -686,10 +656,7 @@ async fn test_bidirectional_transfer() {
     // Confirm client1 acquired ownership of the object.
     assert_eq!(
         client1.authorities().get_latest_owner(object_id).await,
-        (
-            Authenticator::Address(client1.address()),
-            SequenceNumber::from(2)
-        )
+        (client1.address(), SequenceNumber::from(2))
     );
 
     // Should fail if Client 2 double spend the object
@@ -764,10 +731,7 @@ async fn test_client_state_sync_with_transferred_object() {
     // Confirm client2 acquired ownership of the object.
     assert_eq!(
         client2.authorities().get_latest_owner(object_id).await,
-        (
-            Authenticator::Address(client2.address()),
-            SequenceNumber::from(1)
-        )
+        (client2.address(), SequenceNumber::from(1))
     );
 
     // Client 2's local object_id and cert should be empty before sync
@@ -926,7 +890,7 @@ async fn test_move_calls_object_transfer() {
     let transferred_obj = client_object(&mut client1, new_obj_ref.0).await.1;
 
     // Confirm new owner
-    assert!(transferred_obj.owner.is_address(&client2.address()));
+    assert!(transferred_obj.owner == client2.address());
 }
 
 #[tokio::test]
@@ -1011,7 +975,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
     let transferred_obj = client_object(&mut client1, new_obj_ref.0).await.1;
 
     // Confirm new owner
-    assert!(transferred_obj.owner.is_address(&client2.address()));
+    assert!(transferred_obj.owner == client2.address());
 
     // Confirm read only
     assert!(transferred_obj.is_read_only());
@@ -1101,7 +1065,7 @@ async fn test_move_calls_object_delete() {
 
 async fn get_package_obj(
     client: &mut ClientState<LocalAuthorityClient>,
-    objects: &[(ObjectRef, Authenticator)],
+    objects: &[(ObjectRef, SuiAddress)],
     gas_object_ref: &ObjectRef,
 ) -> Option<ObjectRead> {
     let mut pkg_obj_opt = None;
@@ -2053,7 +2017,7 @@ async fn test_sync_all_owned_objects() {
         2,
         owned_object
             .iter()
-            .filter(|(o, _, _)| o.owner.is_address(&client1.address()))
+            .filter(|(o, _, _)| o.owner == client1.address())
             .count()
     );
 }

@@ -79,15 +79,24 @@ impl TryFrom<&[u8]> for PublicKeyBytes {
     }
 }
 
-pub type SuiAddress = PublicKeyBytes;
 pub type AuthorityName = PublicKeyBytes;
 
-// Define digests and object IDs. For now, ID's are the same as Move account addresses
-// (16 bytes) for easy compatibility with Move. However, we'll probably want 20+ byte
-// addresses, either by changing Move to allow different address lengths or by decoupling
-// addresses and ID's
+// TODO: Have ObjectID wrap AccountAddress instead of type alias.
 pub type ObjectID = AccountAddress;
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
+
+pub const SUI_ADDRESS_LENGTH: usize = 32;
+// TODO: Decouple SuiAddress and PublicKeyBytes
+pub type SuiAddress = PublicKeyBytes;
+
+impl From<ObjectID> for SuiAddress {
+    fn from(object_id: ObjectID) -> SuiAddress {
+        // TODO: Use proper hashing to convert ObjectID to SuiAddress
+        let mut address = [0u8; SUI_ADDRESS_LENGTH];
+        address[..AccountAddress::LENGTH].clone_from_slice(&object_id.into_bytes());
+        PublicKeyBytes(address)
+    }
+}
 
 /// An object can be either owned by an account address, or another object.
 // TODO: A few things to improve:
@@ -100,15 +109,6 @@ pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 pub enum Authenticator {
     Address(SuiAddress),
     Object(ObjectID),
-}
-
-impl Authenticator {
-    pub fn is_address(&self, address: &SuiAddress) -> bool {
-        match self {
-            Self::Address(addr) => addr == address,
-            Self::Object(_) => false,
-        }
-    }
 }
 
 // We use SHA3-256 hence 32 bytes here
