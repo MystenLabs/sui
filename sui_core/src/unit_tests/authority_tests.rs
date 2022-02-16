@@ -77,10 +77,9 @@ async fn test_handle_transfer_order_bad_signature() {
         object.to_object_reference(),
         gas_object.to_object_reference(),
     );
-    let object_id = *transfer_order.object_id();
     let (_unknown_address, unknown_key) = get_key_pair();
     let mut bad_signature_transfer_order = transfer_order.clone();
-    bad_signature_transfer_order.signature = Signature::new(&transfer_order.kind, &unknown_key);
+    bad_signature_transfer_order.signature = Signature::new(&transfer_order.data, &unknown_key);
     assert!(authority_state
         .handle_order(bad_signature_transfer_order)
         .await
@@ -106,7 +105,7 @@ async fn test_handle_transfer_order_bad_signature() {
 
 #[tokio::test]
 async fn test_handle_transfer_order_unknown_sender() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, _) = get_key_pair();
     let (unknown_address, unknown_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -124,16 +123,14 @@ async fn test_handle_transfer_order_unknown_sender() {
         .unwrap()
         .unwrap();
 
-    let transfer_order = init_transfer_order(
+    let unknown_sender_transfer_order = init_transfer_order(
         unknown_address,
-        &sender_key,
+        &unknown_key,
         recipient,
         object.to_object_reference(),
         gas_object.to_object_reference(),
     );
 
-    let unknown_sender_transfer = transfer_order.kind;
-    let unknown_sender_transfer_order = Order::new(unknown_sender_transfer, &unknown_key);
     assert!(authority_state
         .handle_order(unknown_sender_transfer_order)
         .await
@@ -259,8 +256,8 @@ async fn test_handle_transfer_order_ok() {
             .as_ref()
             .unwrap()
             .order
-            .kind,
-        transfer_order.kind
+            .data,
+        transfer_order.data
     );
 }
 
@@ -1705,13 +1702,7 @@ fn init_transfer_order(
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Order {
-    let transfer = Transfer {
-        object_ref,
-        sender,
-        recipient,
-        gas_payment: gas_object_ref,
-    };
-    Order::new_transfer(transfer, secret)
+    Order::new_transfer(recipient, object_ref, sender, gas_object_ref, secret)
 }
 
 #[cfg(test)]

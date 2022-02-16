@@ -227,13 +227,13 @@ impl ClientServerBenchmark {
                     secret,
                 )
             } else {
-                let transfer = Transfer {
-                    sender: *account_addr,
-                    recipient: next_recipient,
+                Order::new_transfer(
+                    next_recipient,
                     object_ref,
-                    gas_payment: gas_object_ref,
-                };
-                Order::new_transfer(transfer, secret)
+                    *account_addr,
+                    gas_object_ref,
+                    secret,
+                )
             };
 
             // Set the next recipient to current
@@ -250,7 +250,7 @@ impl ClientServerBenchmark {
             };
             for i in 0..committee.quorum_threshold() {
                 let (pubx, secx) = keys.get(i).unwrap();
-                let sig = Signature::new(&certificate.order.kind, secx);
+                let sig = Signature::new(&certificate.order.data, secx);
                 certificate.signatures.push((*pubx, sig));
             }
 

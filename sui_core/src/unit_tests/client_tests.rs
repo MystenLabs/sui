@@ -1412,15 +1412,12 @@ fn test_transfer_object_error() {
     // Test 5: The client does not allow concurrent transfer;
     let object_id = *objects.next().unwrap();
     // Fabricate a fake pending transfer
-    let transfer = Transfer {
-        sender: sender.address(),
-        recipient: SuiAddress::random_for_testing_only(),
-        object_ref: (object_id, Default::default(), ObjectDigest::new([0; 32])),
-        gas_payment: (gas_object, Default::default(), ObjectDigest::new([0; 32])),
-    };
     sender
-        .lock_pending_order_objects(&Order::new(
-            OrderKind::Transfer(transfer),
+        .lock_pending_order_objects(&Order::new_transfer(
+            SuiAddress::random_for_testing_only(),
+            (object_id, Default::default(), ObjectDigest::new([0; 32])),
+            sender.address(),
+            (gas_object, Default::default(), ObjectDigest::new([0; 32])),
             &get_key_pair().1,
         ))
         .unwrap();
@@ -2242,17 +2239,13 @@ async fn test_transfer_pending_orders() {
 
     // Test 4: Conflicting orders touching same objects
     let object_id = *objects.next().unwrap();
-    // Fabricate a fake pending transfer
-    let transfer = Transfer {
-        sender: sender_state.address(),
-        recipient: SuiAddress::random_for_testing_only(),
-        object_ref: (object_id, Default::default(), ObjectDigest::new([0; 32])),
-        gas_payment: (gas_object, Default::default(), ObjectDigest::new([0; 32])),
-    };
-    // Simulate locking some objects
+    // Fabricate a fake pending transfer and simulate locking some objects
     sender_state
-        .lock_pending_order_objects(&Order::new(
-            OrderKind::Transfer(transfer),
+        .lock_pending_order_objects(&Order::new_transfer(
+            SuiAddress::random_for_testing_only(),
+            (object_id, Default::default(), ObjectDigest::new([0; 32])),
+            sender_state.address(),
+            (gas_object, Default::default(), ObjectDigest::new([0; 32])),
             &get_key_pair().1,
         ))
         .unwrap();
