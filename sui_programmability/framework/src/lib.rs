@@ -6,14 +6,19 @@ use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
 use num_enum::TryFromPrimitive;
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use sui_types::error::{SuiError, SuiResult};
 use sui_verifier::verifier as sui_bytecode_verifier;
+
+#[cfg(test)]
+use std::path::PathBuf;
 
 pub mod natives;
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
 const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
+
+pub const DEFAULT_FRAMEWORK_PATH: &str = env!("CARGO_MANIFEST_DIR");
 
 #[derive(TryFromPrimitive)]
 #[repr(u8)]
@@ -33,26 +38,24 @@ pub enum EventType {
     User,
 }
 
-pub fn get_sui_framework_modules() -> Vec<CompiledModule> {
-    let modules = build_framework(".");
-    // TODO: Consider not unwrap.
-    verify_modules(&modules).unwrap();
-    modules
+pub fn get_sui_framework_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
+    let modules = build_framework(lib_dir)?;
+    verify_modules(&modules)?;
+    Ok(modules)
 }
 
-pub fn get_move_stdlib_modules() -> Vec<CompiledModule> {
+pub fn get_move_stdlib_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
     let denylist = vec![
         ident_str!("Capability").to_owned(),
         ident_str!("Event").to_owned(),
         ident_str!("GUID").to_owned(),
     ];
-    let modules: Vec<CompiledModule> = build_framework("deps/move-stdlib")
+    let modules: Vec<CompiledModule> = build_framework(lib_dir)?
         .into_iter()
         .filter(|m| !denylist.contains(&m.self_id().name().to_owned()))
         .collect();
-    // TODO: Consider not unwrap.
-    verify_modules(&modules).unwrap();
-    modules
+    verify_modules(&modules)?;
+    Ok(modules)
 }
 
 /// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as Vec<Vec<u8>>.
@@ -160,15 +163,12 @@ fn verify_modules(modules: &[CompiledModule]) -> SuiResult {
     // TODO(https://github.com/MystenLabs/fastnft/issues/69): Run Move linker
 }
 
-fn build_framework(sub_dir: &str) -> Vec<CompiledModule> {
-    let mut framework_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    framework_dir.push(sub_dir);
+fn build_framework(framework_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
     let build_config = BuildConfig {
         dev_mode: false,
         ..Default::default()
     };
-    // TODO: Consider not unwrap.
-    build_move_package(&framework_dir, build_config, true).unwrap()
+    build_move_package(framework_dir, build_config, true)
 }
 
 pub fn run_move_unit_tests(path: &Path) -> SuiResult {
@@ -198,7 +198,7 @@ pub fn run_move_unit_tests(path: &Path) -> SuiResult {
 
 #[test]
 fn run_framework_move_unit_tests() {
-    get_sui_framework_modules();
+    get_sui_framework_modules(&PathBuf::from(DEFAULT_FRAMEWORK_PATH));
     run_move_unit_tests(Path::new(env!("CARGO_MANIFEST_DIR"))).unwrap();
 }
 
