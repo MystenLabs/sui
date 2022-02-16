@@ -1,7 +1,15 @@
-import appStyles from './App.module.scss';
+import NavigationHeader from '../nav-header/NavigationHeader';
+import AppRoutes from '../pages/config/AppRoutes';
 
 function App() {
-    return <div className={appStyles.app}>No transactions here yet</div>;
+    return (
+        <>
+            <NavigationHeader />
+            <main>
+                <AppRoutes />
+            </main>
+        </>
+    );
 }
 
 export default App;
