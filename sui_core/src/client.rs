@@ -526,13 +526,13 @@ where
                     object_id: gas_payment,
                 })?;
 
-        let transfer = Transfer {
-            object_ref,
-            sender: self.address,
+        let order = Order::new_transfer(
             recipient,
+            object_ref,
+            self.address,
             gas_payment,
-        };
-        let order = Order::new_transfer(transfer, &*self.secret);
+            &*self.secret,
+        );
         let (certificate, effects) = self.execute_transaction(order).await?;
         self.authorities
             .process_certificate(certificate.clone(), Duration::from_secs(60))

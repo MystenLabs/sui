@@ -33,6 +33,14 @@ fn compare_object_info_responses(o1: &ObjectInfoResponse, o2: &ObjectInfoRespons
     }
 }
 
+fn random_object_ref() -> ObjectRef {
+    (
+        ObjectID::random(),
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    )
+}
+
 #[test]
 fn test_error() {
     let err = SuiError::UnknownSigner;
@@ -83,21 +91,13 @@ fn test_info_request() {
 fn test_order() {
     let (sender_name, sender_key) = get_key_pair();
 
-    let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-        sender: sender_name,
-        recipient: dbg_addr(0x20),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-    };
-    let transfer_order = Order::new_transfer(transfer, &sender_key);
+    let transfer_order = Order::new_transfer(
+        dbg_addr(0x20),
+        random_object_ref(),
+        sender_name,
+        random_object_ref(),
+        &sender_key,
+    );
 
     let buf = serialize_order(&transfer_order);
     let result = deserialize_message(buf.as_slice());
@@ -109,21 +109,13 @@ fn test_order() {
     }
 
     let (sender_name, sender_key) = get_key_pair();
-    let transfer2 = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-        sender: sender_name,
-        recipient: dbg_addr(0x20),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-    };
-    let transfer_order2 = Order::new_transfer(transfer2, &sender_key);
+    let transfer_order2 = Order::new_transfer(
+        dbg_addr(0x20),
+        random_object_ref(),
+        sender_name,
+        random_object_ref(),
+        &sender_key,
+    );
 
     let buf = serialize_order(&transfer_order2);
     let result = deserialize_message(buf.as_slice());
@@ -138,21 +130,13 @@ fn test_order() {
 #[test]
 fn test_vote() {
     let (sender_name, sender_key) = get_key_pair();
-    let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-        sender: sender_name,
-        recipient: dbg_addr(0x20),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-    };
-    let order = Order::new_transfer(transfer, &sender_key);
+    let order = Order::new_transfer(
+        dbg_addr(0x20),
+        random_object_ref(),
+        sender_name,
+        random_object_ref(),
+        &sender_key,
+    );
 
     let (authority_name, authority_key) = get_key_pair();
     let vote = SignedOrder::new(order, authority_name, &authority_key);
@@ -170,21 +154,13 @@ fn test_vote() {
 #[test]
 fn test_cert() {
     let (sender_name, sender_key) = get_key_pair();
-    let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-        sender: sender_name,
-        recipient: dbg_addr(0x20),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-    };
-    let order = Order::new_transfer(transfer, &sender_key);
+    let order = Order::new_transfer(
+        dbg_addr(0x20),
+        random_object_ref(),
+        sender_name,
+        random_object_ref(),
+        &sender_key,
+    );
     let mut cert = CertifiedOrder {
         order,
         signatures: Vec::new(),
@@ -192,7 +168,7 @@ fn test_cert() {
 
     for _ in 0..3 {
         let (authority_name, authority_key) = get_key_pair();
-        let sig = Signature::new(&cert.order.kind, &authority_key);
+        let sig = Signature::new(&cert.order.data, &authority_key);
 
         cert.signatures.push((authority_name, sig));
     }
@@ -210,21 +186,13 @@ fn test_cert() {
 #[test]
 fn test_info_response() {
     let (sender_name, sender_key) = get_key_pair();
-    let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-        sender: sender_name,
-        recipient: dbg_addr(0x20),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-    };
-    let order = Order::new_transfer(transfer, &sender_key);
+    let order = Order::new_transfer(
+        dbg_addr(0x20),
+        random_object_ref(),
+        sender_name,
+        random_object_ref(),
+        &sender_key,
+    );
 
     let (auth_name, auth_key) = get_key_pair();
     let vote = SignedOrder::new(order.clone(), auth_name, &auth_key);
@@ -236,7 +204,7 @@ fn test_info_response() {
 
     for _ in 0..3 {
         let (authority_name, authority_key) = get_key_pair();
-        let sig = Signature::new(&cert.order.kind, &authority_key);
+        let sig = Signature::new(&cert.order.data, &authority_key);
 
         cert.signatures.push((authority_name, sig));
     }
@@ -270,25 +238,17 @@ fn test_info_response() {
 #[test]
 fn test_time_order() {
     let (sender_name, sender_key) = get_key_pair();
-    let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-        sender: sender_name,
-        recipient: dbg_addr(0x20),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-    };
 
     let mut buf = Vec::new();
     let now = Instant::now();
     for _ in 0..100 {
-        let transfer_order = Order::new_transfer(transfer.clone(), &sender_key);
+        let transfer_order = Order::new_transfer(
+            dbg_addr(0x20),
+            random_object_ref(),
+            sender_name,
+            random_object_ref(),
+            &sender_key,
+        );
         serialize_transfer_order_into(&mut buf, &transfer_order).unwrap();
     }
     println!("Write Order: {} microsec", now.elapsed().as_micros() / 100);
@@ -310,21 +270,13 @@ fn test_time_order() {
 #[test]
 fn test_time_vote() {
     let (sender_name, sender_key) = get_key_pair();
-    let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-        sender: sender_name,
-        recipient: dbg_addr(0x20),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-    };
-    let order = Order::new_transfer(transfer, &sender_key);
+    let order = Order::new_transfer(
+        dbg_addr(0x20),
+        random_object_ref(),
+        sender_name,
+        random_object_ref(),
+        &sender_key,
+    );
 
     let (authority_name, authority_key) = get_key_pair();
 
@@ -341,7 +293,7 @@ fn test_time_vote() {
     for _ in 0..100 {
         if let SerializedMessage::Vote(vote) = deserialize_message(&mut buf2).unwrap() {
             vote.signature
-                .check(&vote.order.kind, vote.authority)
+                .check(&vote.order.data, vote.authority)
                 .unwrap();
         }
     }
@@ -356,21 +308,13 @@ fn test_time_vote() {
 fn test_time_cert() {
     let count = 100;
     let (sender_name, sender_key) = get_key_pair();
-    let transfer = Transfer {
-        object_ref: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-        sender: sender_name,
-        recipient: dbg_addr(0),
-        gas_payment: (
-            ObjectID::random(),
-            SequenceNumber::new(),
-            ObjectDigest::new([0; 32]),
-        ),
-    };
-    let order = Order::new_transfer(transfer, &sender_key);
+    let order = Order::new_transfer(
+        dbg_addr(0x20),
+        random_object_ref(),
+        sender_name,
+        random_object_ref(),
+        &sender_key,
+    );
     let mut cert = CertifiedOrder {
         order,
         signatures: Vec::new(),
@@ -381,7 +325,7 @@ fn test_time_cert() {
     let mut cache = HashMap::new();
     for _ in 0..7 {
         let (authority_name, authority_key) = get_key_pair();
-        let sig = Signature::new(&cert.order.kind, &authority_key);
+        let sig = Signature::new(&cert.order.data, &authority_key);
         cert.signatures.push((authority_name, sig));
         cache.insert(
             authority_name,
@@ -401,7 +345,7 @@ fn test_time_cert() {
     let mut buf2 = buf.as_slice();
     for _ in 0..count {
         if let SerializedMessage::Cert(cert) = deserialize_message(&mut buf2).unwrap() {
-            Signature::verify_batch(&cert.order.kind, &cert.signatures, &cache).unwrap();
+            Signature::verify_batch(&cert.order.data, &cert.signatures, &cache).unwrap();
         }
     }
     assert!(deserialize_message(buf2).is_err());
