@@ -169,16 +169,17 @@ impl ClientServerBenchmark {
             let mut rnd = <StdRng as rand::SeedableRng>::seed_from_u64(0);
             for _ in 0..self.num_accounts {
                 let keypair = get_key_pair();
+                let address = keypair.0.into();
                 let object_id: ObjectID = ObjectID::random();
                 let object = if self.use_move {
                     Object::with_id_owner_gas_coin_object_for_testing(
                         ObjectID::random(),
                         SequenceNumber::new(),
-                        keypair.0,
+                        address,
                         rnd.gen::<u64>(),
                     )
                 } else {
-                    Object::with_id_owner_for_testing(object_id, keypair.0)
+                    Object::with_id_owner_for_testing(object_id, address)
                 };
 
                 assert!(object.version() == SequenceNumber::from(0));
@@ -188,7 +189,7 @@ impl ClientServerBenchmark {
                 state.insert_object(object).await;
 
                 let gas_object_id = ObjectID::random();
-                let gas_object = Object::with_id_owner_for_testing(gas_object_id, keypair.0);
+                let gas_object = Object::with_id_owner_for_testing(gas_object_id, address);
                 assert!(gas_object.version() == SequenceNumber::from(0));
                 let gas_object_ref = gas_object.to_object_reference();
                 state.init_order_lock(gas_object_ref).await;
@@ -201,7 +202,7 @@ impl ClientServerBenchmark {
         info!("Preparing transactions.");
         // Make one transaction per account (transfer order + confirmation).
         let mut orders: Vec<Bytes> = Vec::new();
-        let mut next_recipient = get_key_pair().0;
+        let mut next_recipient: SuiAddress = get_key_pair().0.into();
         for ((account_addr, object, secret), gas_obj) in account_objects.iter().zip(gas_objects) {
             let object_ref = object.to_object_reference();
             let gas_object_ref = gas_obj.to_object_reference();
@@ -237,7 +238,7 @@ impl ClientServerBenchmark {
             };
 
             // Set the next recipient to current
-            next_recipient = *account_addr;
+            next_recipient = account_addr.into();
 
             // Serialize order
             let serialized_order = serialize_order(&order);

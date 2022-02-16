@@ -486,7 +486,7 @@ fn process_successful_execution<
             .expect("Safe because event_type is derived from an EventType enum")
         {
             EventType::TransferToAddress => handle_transfer(
-                SuiAddress::try_from(recipient.borrow()).unwrap(),
+                SuiAddress::try_from(recipient.as_slice()).unwrap(),
                 type_,
                 event_bytes,
                 false, /* should_freeze */
@@ -497,7 +497,7 @@ fn process_successful_execution<
                 &mut object_owner_map,
             ),
             EventType::TransferToAddressAndFreeze => handle_transfer(
-                SuiAddress::try_from(recipient.borrow()).unwrap(),
+                SuiAddress::try_from(recipient.as_slice()).unwrap(),
                 type_,
                 event_bytes,
                 true, /* should_freeze */

@@ -124,7 +124,7 @@ impl AuthorityState {
                 // Check the object owner is either the transaction sender, or
                 // another mutable object in the input.
                 fp_ensure!(
-                    order.sender() == &object.owner
+                    order.sender_address() == object.owner
                         || mutable_object_addresses.contains(&object.owner),
                     SuiError::IncorrectSigner
                 );
@@ -258,7 +258,7 @@ impl AuthorityState {
             .collect();
 
         // Insert into the certificates map
-        let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
+        let mut tx_ctx = TxContext::new(&order.sender_address(), transaction_digest);
 
         let gas_object_id = order.gas_payment_object_ref().0;
         let (mut temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx)?;
@@ -291,7 +291,7 @@ impl AuthorityState {
         // unwraps here are safe because we built `inputs`
         let mut gas_object = inputs.pop().unwrap();
 
-        let sender = *order.sender();
+        let sender = order.sender_address();
         let status = match order.data.kind {
             OrderKind::Transfer(t) => AuthorityState::transfer(
                 &mut temporary_store,

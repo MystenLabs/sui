@@ -32,12 +32,19 @@ pub struct UserData(pub Option<[u8; 32]>);
 #[derive(Debug)]
 pub struct KeyPair(dalek::Keypair);
 
+impl KeyPair {
+    pub fn public(&self) -> PublicKeyBytes {
+        PublicKeyBytes(self.0.public.to_bytes())
+    }
+}
+
 impl signature::Signer<ed25519::Signature> for KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<ed25519::Signature, ed25519::Error> {
         self.0.try_sign(msg)
     }
 }
 
+// TODO: PublicKeyBytes should belong to a separate crypto library.
 #[serde_as]
 #[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 pub struct PublicKeyBytes(#[serde_as(as = "Bytes")] [u8; dalek::PUBLIC_KEY_LENGTH]);
@@ -94,29 +101,67 @@ pub type ObjectID = AccountAddress;
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
 pub const SUI_ADDRESS_LENGTH: usize = 32;
-// TODO: Decouple SuiAddress and PublicKeyBytes
-pub type SuiAddress = PublicKeyBytes;
+#[serde_as]
+#[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
+pub struct SuiAddress(#[serde_as(as = "Bytes")] [u8; SUI_ADDRESS_LENGTH]);
+
+impl SuiAddress {
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+
+    // for testing
+    pub fn random_for_testing_only() -> Self {
+        use rand::Rng;
+        let random_bytes = rand::thread_rng().gen::<[u8; SUI_ADDRESS_LENGTH]>();
+        Self(random_bytes)
+    }
+}
 
 impl From<ObjectID> for SuiAddress {
     fn from(object_id: ObjectID) -> SuiAddress {
         // TODO: Use proper hashing to convert ObjectID to SuiAddress
         let mut address = [0u8; SUI_ADDRESS_LENGTH];
         address[..AccountAddress::LENGTH].clone_from_slice(&object_id.into_bytes());
-        PublicKeyBytes(address)
+        Self(address)
     }
 }
 
-/// An object can be either owned by an account address, or another object.
-// TODO: A few things to improve:
-// 1. We may want to support multiple signing schemas, rename Authenticator to Address,
-//    and rename the Address enum to Ed25519PublicKey, so that we could add more.
-// 2. We may want to make Authenticator a fix-sized array instead of having different size
-//    for different variants, through hashing.
-// Refer details to https://github.com/MystenLabs/fastnft/pull/292.
-#[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, PartialOrd, Ord, Serialize, Hash)]
-pub enum Authenticator {
-    Address(SuiAddress),
-    Object(ObjectID),
+impl From<PublicKeyBytes> for SuiAddress {
+    fn from(key: PublicKeyBytes) -> SuiAddress {
+        // TODO: Properly hash public key bytes to address.
+        Self(key.0)
+    }
+}
+
+impl From<&PublicKeyBytes> for SuiAddress {
+    fn from(key: &PublicKeyBytes) -> SuiAddress {
+        key.into()
+    }
+}
+
+impl TryFrom<&[u8]> for SuiAddress {
+    type Error = SuiError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
+        let arr: [u8; SUI_ADDRESS_LENGTH] =
+            bytes.try_into().map_err(|_| SuiError::InvalidAddress)?;
+        Ok(Self(arr))
+    }
+}
+
+impl AsRef<[u8]> for SuiAddress {
+    fn as_ref(&self) -> &[u8] {
+        &self.0[..]
+    }
+}
+
+impl From<Vec<u8>> for SuiAddress {
+    fn from(bytes: Vec<u8>) -> Self {
+        let mut result = [0u8; SUI_ADDRESS_LENGTH];
+        result.copy_from_slice(&bytes[..SUI_ADDRESS_LENGTH]);
+        Self(result)
+    }
 }
 
 // We use SHA3-256 hence 32 bytes here
@@ -243,15 +288,19 @@ impl ObjectDigest {
 }
 
 // TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
-pub fn get_key_pair() -> (SuiAddress, KeyPair) {
+pub fn get_key_pair() -> (PublicKeyBytes, KeyPair) {
     let mut csprng = OsRng;
     let keypair = dalek::Keypair::generate(&mut csprng);
     (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
 }
 
-pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, KeyPair) {
+pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (PublicKeyBytes, KeyPair) {
     let keypair = dalek::Keypair::from_bytes(bytes).unwrap();
     (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
+}
+
+pub fn get_new_address() -> SuiAddress {
+    get_key_pair().0.into()
 }
 
 pub fn bytes_as_hex<B, S>(bytes: &B, serializer: S) -> Result<S::Ok, S::Error>
@@ -281,7 +330,7 @@ pub fn decode_bytes_hex<T: From<Vec<u8>>>(s: &str) -> Result<T, hex::FromHexErro
     Ok(value.into())
 }
 
-impl std::fmt::LowerHex for PublicKeyBytes {
+impl std::fmt::LowerHex for SuiAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
             write!(f, "0x")?;
@@ -295,7 +344,7 @@ impl std::fmt::LowerHex for PublicKeyBytes {
     }
 }
 
-impl std::fmt::UpperHex for PublicKeyBytes {
+impl std::fmt::UpperHex for SuiAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
             write!(f, "0x")?;
@@ -309,14 +358,14 @@ impl std::fmt::UpperHex for PublicKeyBytes {
     }
 }
 
-pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
+pub fn address_as_base64<S>(address: &SuiAddress, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::ser::Serializer,
 {
-    serializer.serialize_str(&encode_address(key))
+    serializer.serialize_str(&encode_address(address))
 }
 
-pub fn address_from_base64<'de, D>(deserializer: D) -> Result<PublicKeyBytes, D::Error>
+pub fn address_from_base64<'de, D>(deserializer: D) -> Result<SuiAddress, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
@@ -325,20 +374,20 @@ where
     Ok(value)
 }
 
-pub fn encode_address(key: &PublicKeyBytes) -> String {
-    base64::encode(&key.0[..])
+pub fn encode_address(address: &SuiAddress) -> String {
+    base64::encode(&address.0[..])
 }
 
-pub fn decode_address(s: &str) -> Result<PublicKeyBytes, anyhow::Error> {
+pub fn decode_address(s: &str) -> Result<SuiAddress, anyhow::Error> {
     let value = base64::decode(s)?;
     let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
     address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
-    Ok(PublicKeyBytes(address))
+    Ok(SuiAddress(address))
 }
 
 pub fn dbg_addr(name: u8) -> SuiAddress {
-    let addr = [name; dalek::PUBLIC_KEY_LENGTH];
-    PublicKeyBytes(addr)
+    let addr = [name; SUI_ADDRESS_LENGTH];
+    SuiAddress(addr)
 }
 
 pub fn dbg_object_id(name: u8) -> ObjectID {
@@ -390,6 +439,14 @@ impl std::fmt::Debug for Signature {
 }
 
 impl std::fmt::Debug for PublicKeyBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let s = hex::encode(&self.0);
+        write!(f, "k#{}", s)?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for SuiAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let s = hex::encode(&self.0);
         write!(f, "k#{}", s)?;
@@ -502,7 +559,7 @@ impl Signature {
         Signature(signature)
     }
 
-    pub fn check<T>(&self, value: &T, author: SuiAddress) -> Result<(), SuiError>
+    pub fn check<T>(&self, value: &T, author: PublicKeyBytes) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>,
     {
@@ -523,7 +580,7 @@ impl Signature {
     ) -> Result<(), SuiError>
     where
         T: Signable<Vec<u8>>,
-        I: IntoIterator<Item = &'a (SuiAddress, Signature)>,
+        I: IntoIterator<Item = &'a (PublicKeyBytes, Signature)>,
     {
         let mut msg = Vec::new();
         value.write(&mut msg);

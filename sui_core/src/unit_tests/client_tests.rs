@@ -134,7 +134,7 @@ async fn extract_cert(
 
 #[cfg(test)]
 fn order_create(
-    src: SuiAddress,
+    src: PublicKeyBytes,
     secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     dest: SuiAddress,
     value: u64,
@@ -163,7 +163,7 @@ fn order_create(
 
 #[cfg(test)]
 fn order_transfer(
-    src: SuiAddress,
+    src: PublicKeyBytes,
     secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     dest: SuiAddress,
     object_ref: ObjectRef,
@@ -188,7 +188,7 @@ fn order_transfer(
 
 #[cfg(test)]
 fn order_set(
-    src: SuiAddress,
+    src: PublicKeyBytes,
     secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     object_ref: ObjectRef,
     value: u64,
@@ -213,7 +213,7 @@ fn order_set(
 
 #[cfg(test)]
 fn order_delete(
-    src: SuiAddress,
+    src: PublicKeyBytes,
     secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     object_ref: ObjectRef,
     framework_obj_ref: ObjectRef,
@@ -439,7 +439,7 @@ async fn init_local_client_state_with_bad_authority(
 #[test]
 fn test_initiating_valid_transfer() {
     let rt = Runtime::new().unwrap();
-    let (recipient, _) = get_key_pair();
+    let recipient = get_new_address();
     let object_id_1 = ObjectID::random();
     let object_id_2 = ObjectID::random();
     let gas_object = ObjectID::random();
@@ -492,7 +492,7 @@ fn test_initiating_valid_transfer() {
 #[test]
 fn test_initiating_valid_transfer_despite_bad_authority() {
     let rt = Runtime::new().unwrap();
-    let (recipient, _) = get_key_pair();
+    let recipient = get_new_address();
     let object_id = ObjectID::random();
     let gas_object = ObjectID::random();
     let authority_objects = vec![
@@ -531,7 +531,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
 #[test]
 fn test_initiating_transfer_low_funds() {
     let rt = Runtime::new().unwrap();
-    let (recipient, _) = get_key_pair();
+    let recipient = get_new_address();
     let object_id_1 = ObjectID::random();
     let object_id_2 = ObjectID::random();
     let gas_object = ObjectID::random();
@@ -1337,7 +1337,7 @@ async fn test_module_publish_naughty_path() {
 #[test]
 fn test_transfer_object_error() {
     let rt = Runtime::new().unwrap();
-    let (recipient, _) = get_key_pair();
+    let recipient = get_new_address();
 
     let objects: Vec<ObjectID> = (0..10).map(|_| ObjectID::random()).collect();
     let gas_object = ObjectID::random();
@@ -1416,7 +1416,7 @@ fn test_transfer_object_error() {
         .lock_pending_order_objects(&Order::new_transfer(
             SuiAddress::random_for_testing_only(),
             (object_id, Default::default(), ObjectDigest::new([0; 32])),
-            sender.address(),
+            sender.pub_key(),
             (gas_object, Default::default(), ObjectDigest::new([0; 32])),
             &get_key_pair().1,
         ))
@@ -1795,7 +1795,7 @@ async fn test_get_all_owned_objects() {
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
     let create1 = order_create(
-        client1.address(),
+        client1.pub_key(),
         client1.secret(),
         client1.address(),
         100,
@@ -1844,7 +1844,7 @@ async fn test_get_all_owned_objects() {
     // Make a delete order
     let gas_ref_del = get_latest_ref(&auth_vec[0], gas_object1).await;
     let delete1 = order_delete(
-        client1.address(),
+        client1.pub_key(),
         client1.secret(),
         created_ref,
         framework_obj_ref,
@@ -1906,7 +1906,7 @@ async fn test_sync_all_owned_objects() {
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
     let create1 = order_create(
-        client1.address(),
+        client1.pub_key(),
         client1.secret(),
         client1.address(),
         100,
@@ -1916,7 +1916,7 @@ async fn test_sync_all_owned_objects() {
 
     let gas_ref_2 = get_latest_ref(&auth_vec[0], gas_object2).await;
     let create2 = order_create(
-        client1.address(),
+        client1.pub_key(),
         client1.secret(),
         client1.address(),
         101,
@@ -1963,7 +1963,7 @@ async fn test_sync_all_owned_objects() {
     // Make a delete order
     let gas_ref_del = get_latest_ref(&auth_vec[0], gas_object1).await;
     let delete1 = order_delete(
-        client1.address(),
+        client1.pub_key(),
         client1.secret(),
         new_ref_1,
         framework_obj_ref,
@@ -1973,7 +1973,7 @@ async fn test_sync_all_owned_objects() {
     // Make a transfer order
     let gas_ref_trans = get_latest_ref(&auth_vec[0], gas_object2).await;
     let transfer1 = order_transfer(
-        client1.address(),
+        client1.pub_key(),
         client1.secret(),
         client2.address(),
         new_ref_2,
@@ -2040,7 +2040,7 @@ async fn test_process_order() {
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
     let create1 = order_create(
-        client1.address(),
+        client1.pub_key(),
         client1.secret(),
         client1.address(),
         100,
@@ -2061,7 +2061,7 @@ async fn test_process_order() {
     // Make a schedule of transactions
     let gas_ref_set = get_latest_ref(&auth_vec[0], gas_object1).await;
     let create2 = order_set(
-        client1.address(),
+        client1.pub_key(),
         client1.secret(),
         new_ref_1,
         100,
@@ -2105,7 +2105,7 @@ async fn test_process_certificate() {
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
     let create1 = order_create(
-        client1.address(),
+        client1.pub_key(),
         client1.secret(),
         client1.address(),
         100,
@@ -2132,7 +2132,7 @@ async fn test_process_certificate() {
     // Make a schedule of transactions
     let gas_ref_set = get_latest_ref(&auth_vec[0], gas_object1).await;
     let create2 = order_set(
-        client1.address(),
+        client1.pub_key(),
         client1.secret(),
         new_ref_1,
         100,
@@ -2244,7 +2244,7 @@ async fn test_transfer_pending_orders() {
         .lock_pending_order_objects(&Order::new_transfer(
             SuiAddress::random_for_testing_only(),
             (object_id, Default::default(), ObjectDigest::new([0; 32])),
-            sender_state.address(),
+            sender_state.pub_key(),
             (gas_object, Default::default(), ObjectDigest::new([0; 32])),
             &get_key_pair().1,
         ))
