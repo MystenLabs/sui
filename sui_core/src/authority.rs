@@ -73,7 +73,7 @@ impl AuthorityState {
         order: &Order,
         object_kind: InputObjectKind,
         object: &Object,
-        mutable_object_ids: &HashSet<ObjectID>,
+        mutable_object_addresses: &HashSet<SuiAddress>,
     ) -> SuiResult {
         match object_kind {
             InputObjectKind::MovePackage(package_id) => {
@@ -111,7 +111,7 @@ impl AuthorityState {
                 if object.is_read_only() {
                     // Gas object must not be immutable.
                     fp_ensure!(
-                        &object_id != order.gas_payment_object_id(),
+                        object_id != order.gas_payment_object_ref().0,
                         SuiError::InsufficientGas {
                             error: "Gas object should not be immutable".to_string()
                         }
@@ -121,20 +121,15 @@ impl AuthorityState {
                 }
 
                 // Additional checks for mutable objects
-                // Check the transaction sender is also the object owner
-                // If the object is owned by another object, we make sure the owner object
-                // is also a mutable input to this order.
-                match &object.owner {
-                    // TODO: More detailed error message for IncorrectSigner.
-                    Authenticator::Address(addr) => {
-                        fp_ensure!(order.sender() == addr, SuiError::IncorrectSigner);
-                    }
-                    Authenticator::Object(id) => {
-                        fp_ensure!(mutable_object_ids.contains(id), SuiError::IncorrectSigner);
-                    }
-                };
+                // Check the object owner is either the transaction sender, or
+                // another mutable object in the input.
+                fp_ensure!(
+                    order.sender() == &object.owner
+                        || mutable_object_addresses.contains(&object.owner),
+                    SuiError::IncorrectSigner
+                );
 
-                if &object_id == order.gas_payment_object_id() {
+                if object_id == order.gas_payment_object_ref().0 {
                     gas::check_gas_requirement(order, object)?;
                 }
             }
@@ -162,10 +157,10 @@ impl AuthorityState {
         let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
 
         let objects = self.get_objects(&ids[..]).await?;
-        let mutable_object_ids: HashSet<_> = objects
+        let mutable_object_addresses: HashSet<_> = objects
             .iter()
             .flat_map(|opt_obj| match opt_obj {
-                Some(obj) if !obj.is_read_only() => Some(obj.id()),
+                Some(obj) if !obj.is_read_only() => Some(obj.id().into()),
                 _ => None,
             })
             .collect();
@@ -179,7 +174,7 @@ impl AuthorityState {
                 }
             };
 
-            match self.check_one_lock(order, object_kind, &object, &mutable_object_ids) {
+            match self.check_one_lock(order, object_kind, &object, &mutable_object_addresses) {
                 Ok(()) => all_objects.push((object_kind, object)),
                 Err(e) => {
                     errors.push(e);
@@ -265,7 +260,7 @@ impl AuthorityState {
         // Insert into the certificates map
         let mut tx_ctx = TxContext::new(order.sender(), transaction_digest);
 
-        let gas_object_id = *order.gas_payment_object_id();
+        let gas_object_id = order.gas_payment_object_ref().0;
         let (mut temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx)?;
 
         // Remove from dependencies the generic hash
@@ -296,7 +291,8 @@ impl AuthorityState {
         // unwraps here are safe because we built `inputs`
         let mut gas_object = inputs.pop().unwrap();
 
-        let status = match order.kind {
+        let sender = *order.sender();
+        let status = match order.data.kind {
             OrderKind::Transfer(t) => AuthorityState::transfer(
                 &mut temporary_store,
                 inputs,
@@ -325,7 +321,7 @@ impl AuthorityState {
                 &mut temporary_store,
                 self._native_functions.clone(),
                 m.modules,
-                m.sender,
+                sender,
                 tx_ctx,
                 m.gas_budget,
                 gas_object.clone(),
@@ -374,7 +370,7 @@ impl AuthorityState {
             });
         }
 
-        output_object.transfer(Authenticator::Address(recipient));
+        output_object.transfer(recipient);
         temporary_store.write_object(output_object);
         Ok(ExecutionStatus::Success { gas_used })
     }

@@ -60,6 +60,8 @@ async fn main() -> Result<(), String> {
         .to_logger("rest-api")
         .map_err(|error| format!("failed to create logger: {}", error))?;
 
+    tracing_subscriber::fmt().init();
+
     let mut api = ApiDescription::new();
     api.register(start).unwrap();
     api.register(genesis).unwrap();

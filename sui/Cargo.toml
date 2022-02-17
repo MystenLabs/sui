@@ -53,7 +53,7 @@ move-core-types = { git = "https://github.com/diem/move", rev = "7683d09732dd930
 move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
 
 [dev-dependencies]
-tracing-test = "0.1.0"
+tracing-test = "0.2.1"
 
 [[bin]]
 name = "bench"
