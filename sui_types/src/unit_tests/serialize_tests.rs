@@ -5,7 +5,7 @@
 use super::*;
 use crate::{
     base_types::*,
-    crypto::{get_key_pair, Signature},
+    crypto::{get_key_pair, AuthoritySignature},
     object::Object,
 };
 use std::time::Instant;
@@ -142,8 +142,8 @@ fn test_vote() {
         &sender_key,
     );
 
-    let (authority_name, authority_key) = get_key_pair();
-    let vote = SignedOrder::new(order, authority_name, &authority_key);
+    let (_, authority_key) = get_key_pair();
+    let vote = SignedOrder::new(order, *authority_key.public_key_bytes(), &authority_key);
 
     let buf = serialize_vote(&vote);
     let result = deserialize_message(buf.as_slice());
@@ -171,10 +171,11 @@ fn test_cert() {
     };
 
     for _ in 0..3 {
-        let (authority_name, authority_key) = get_key_pair();
-        let sig = Signature::new(&cert.order.data, &authority_key);
+        let (_, authority_key) = get_key_pair();
+        let sig = AuthoritySignature::new(&cert.order.data, &authority_key);
 
-        cert.signatures.push((authority_name, sig));
+        cert.signatures
+            .push((*authority_key.public_key_bytes(), sig));
     }
 
     let buf = serialize_cert(&cert);
@@ -198,8 +199,8 @@ fn test_info_response() {
         &sender_key,
     );
 
-    let (auth_name, auth_key) = get_key_pair();
-    let vote = SignedOrder::new(order.clone(), auth_name, &auth_key);
+    let (_, auth_key) = get_key_pair();
+    let vote = SignedOrder::new(order.clone(), *auth_key.public_key_bytes(), &auth_key);
 
     let mut cert = CertifiedOrder {
         order,
@@ -207,10 +208,11 @@ fn test_info_response() {
     };
 
     for _ in 0..3 {
-        let (authority_name, authority_key) = get_key_pair();
-        let sig = Signature::new(&cert.order.data, &authority_key);
+        let (_, authority_key) = get_key_pair();
+        let sig = AuthoritySignature::new(&cert.order.data, &authority_key);
 
-        cert.signatures.push((authority_name, sig));
+        cert.signatures
+            .push((*authority_key.public_key_bytes(), sig));
     }
 
     let object = Object::with_id_owner_for_testing(dbg_object_id(0x20), dbg_addr(0x20));
@@ -282,12 +284,16 @@ fn test_time_vote() {
         &sender_key,
     );
 
-    let (authority_name, authority_key) = get_key_pair();
+    let (_, authority_key) = get_key_pair();
 
     let mut buf = Vec::new();
     let now = Instant::now();
     for _ in 0..100 {
-        let vote = SignedOrder::new(order.clone(), authority_name, &authority_key);
+        let vote = SignedOrder::new(
+            order.clone(),
+            *authority_key.public_key_bytes(),
+            &authority_key,
+        );
         serialize_vote_into(&mut buf, &vote).unwrap();
     }
     println!("Write Vote: {} microsec", now.elapsed().as_micros() / 100);
@@ -324,16 +330,17 @@ fn test_time_cert() {
         signatures: Vec::new(),
     };
 
-    use ed25519_dalek::PublicKey;
     use std::collections::HashMap;
     let mut cache = HashMap::new();
     for _ in 0..7 {
-        let (authority_name, authority_key) = get_key_pair();
-        let sig = Signature::new(&cert.order.data, &authority_key);
-        cert.signatures.push((authority_name, sig));
+        let (_, authority_key) = get_key_pair();
+        let sig = AuthoritySignature::new(&cert.order.data, &authority_key);
+        cert.signatures
+            .push((*authority_key.public_key_bytes(), sig));
         cache.insert(
-            authority_name,
-            PublicKey::from_bytes(authority_name.as_ref()).expect("No problem parsing key."),
+            *authority_key.public_key_bytes(),
+            ed25519_dalek::PublicKey::from_bytes(authority_key.public_key_bytes().as_ref())
+                .expect("No problem parsing key."),
         );
     }
 
@@ -349,7 +356,7 @@ fn test_time_cert() {
     let mut buf2 = buf.as_slice();
     for _ in 0..count {
         if let SerializedMessage::Cert(cert) = deserialize_message(&mut buf2).unwrap() {
-            Signature::verify_batch(&cert.order.data, &cert.signatures, &cache).unwrap();
+            AuthoritySignature::verify_batch(&cert.order.data, &cert.signatures, &cache).unwrap();
         }
     }
     assert!(deserialize_message(buf2).is_err());

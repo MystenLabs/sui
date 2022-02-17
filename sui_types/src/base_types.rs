@@ -61,18 +61,12 @@ impl From<ObjectID> for SuiAddress {
     }
 }
 
-impl From<PublicKeyBytes> for SuiAddress {
-    fn from(key: PublicKeyBytes) -> SuiAddress {
+impl From<&PublicKeyBytes> for SuiAddress {
+    fn from(key: &PublicKeyBytes) -> SuiAddress {
         let mut sha3 = Sha3_256::new();
         sha3.update(key.as_ref());
         let g_arr = sha3.finalize();
         Self(*(g_arr.as_ref()))
-    }
-}
-
-impl From<&PublicKeyBytes> for SuiAddress {
-    fn from(key: &PublicKeyBytes) -> SuiAddress {
-        key.into()
     }
 }
 
@@ -224,7 +218,7 @@ impl ObjectDigest {
 }
 
 pub fn get_new_address() -> SuiAddress {
-    crate::crypto::get_key_pair().0.into()
+    crate::crypto::get_key_pair().0
 }
 
 pub fn bytes_as_hex<B, S>(bytes: &B, serializer: S) -> Result<S::Ok, S::Error>
