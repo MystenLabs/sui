@@ -76,7 +76,7 @@ impl PublicKeyBytes {
 
 impl AsRef<[u8]> for PublicKeyBytes {
     fn as_ref(&self) -> &[u8] {
-        &self.0[..]
+        self.0.as_ref()
     }
 }
 
