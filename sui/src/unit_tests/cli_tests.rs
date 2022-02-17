@@ -3,7 +3,8 @@ use std::fs::read_dir;
 use std::time::Duration;
 use sui::config::{AccountInfo, NetworkConfig, WalletConfig};
 use sui::wallet_commands::{WalletCommands, WalletContext};
-use sui_types::base_types::{encode_bytes_hex, get_key_pair};
+use sui_types::base_types::encode_bytes_hex;
+use sui_types::crypto::get_key_pair;
 use tokio::task;
 use tracing_test::traced_test;
 

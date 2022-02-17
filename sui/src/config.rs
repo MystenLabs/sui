@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_types::base_types::*;
+use sui_types::crypto::KeyPair;
 
 use crate::utils::Config;
 use serde::{Deserialize, Serialize};

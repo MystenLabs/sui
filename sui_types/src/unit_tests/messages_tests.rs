@@ -3,6 +3,8 @@
 
 use std::collections::BTreeMap;
 
+use crate::crypto::get_key_pair;
+
 use super::*;
 
 fn random_object_ref() -> ObjectRef {

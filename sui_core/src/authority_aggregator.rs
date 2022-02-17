@@ -6,6 +6,7 @@ use crate::safe_client::SafeClient;
 
 use futures::{future, StreamExt};
 use move_core_types::value::MoveStructLayout;
+use sui_types::crypto::{Signature, sha3_hash, PublicKeyBytes};
 use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
 use sui_types::{
     base_types::*,

@@ -8,6 +8,7 @@ use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use sui_framework::build_move_package_to_bytes;
+use sui_types::crypto::PublicKeyBytes;
 use sui_types::{
     base_types::*, committee::Committee, error::SuiError, fp_ensure, messages::*,
     object::ObjectRead,
