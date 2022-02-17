@@ -26,4 +26,10 @@ module Examples::TrustedCoin {
     fun transfer(treasury_cap: TreasuryCap<EXAMPLE>, recipient: vector<u8>, _ctx: &mut TxContext) {
         Coin::transfer_cap<EXAMPLE>(treasury_cap, Address::new(recipient));
     }
+
+    #[test_only]
+    /// Wrapper of module initializer for testing
+    public fun test_init(ctx: &mut TxContext) {
+        init(ctx)
+    }
 }
