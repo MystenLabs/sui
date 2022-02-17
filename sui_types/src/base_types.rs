@@ -38,8 +38,8 @@ impl KeyPair {
     }
 }
 
-impl signature::Signer<ed25519::Signature> for KeyPair {
-    fn try_sign(&self, msg: &[u8]) -> Result<ed25519::Signature, ed25519::Error> {
+impl signature::Signer<ed25519_dalek::Signature> for KeyPair {
+    fn try_sign(&self, msg: &[u8]) -> Result<ed25519_dalek::Signature, signature::Error> {
         self.0.try_sign(msg)
     }
 }
