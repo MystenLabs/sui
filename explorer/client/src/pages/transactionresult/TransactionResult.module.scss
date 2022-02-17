@@ -1,0 +1,17 @@
+.label {
+    @apply font-bold text-lg mt-[1rem];
+}
+
+.result {
+    @apply font-mono text-gray-900 overflow-hidden break-all 
+  text-sm h-[2.5rem] sm:h-[1.5rem]
+  border-solid border-gray-500 rounded-md p-1 align-middle;
+}
+
+.result:last-child {
+    @apply mb-[10vh];
+}
+
+.data {
+    @apply mx-[5vw];
+}
