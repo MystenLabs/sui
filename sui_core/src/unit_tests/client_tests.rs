@@ -15,6 +15,7 @@ use std::{
     sync::Arc,
 };
 use sui_types::crypto::get_key_pair;
+use sui_types::crypto::Signature;
 use sui_types::object::{Data, Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use tokio::runtime::Runtime;
 use typed_store::Map;
@@ -135,14 +136,15 @@ async fn extract_cert(
 
 #[cfg(test)]
 fn order_create(
-    src: PublicKeyBytes,
-    secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+    src: SuiAddress,
+    secret: &dyn signature::Signer<Signature>,
     dest: SuiAddress,
     value: u64,
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Order {
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
+
     let pure_arguments = vec![
         value.to_le_bytes().to_vec(),
         bcs::to_bytes(&dest.to_vec()).unwrap(),
@@ -164,8 +166,8 @@ fn order_create(
 
 #[cfg(test)]
 fn order_transfer(
-    src: PublicKeyBytes,
-    secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+    src: SuiAddress,
+    secret: &dyn signature::Signer<Signature>,
     dest: SuiAddress,
     object_ref: ObjectRef,
     framework_obj_ref: ObjectRef,
@@ -189,8 +191,8 @@ fn order_transfer(
 
 #[cfg(test)]
 fn order_set(
-    src: PublicKeyBytes,
-    secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+    src: SuiAddress,
+    secret: &dyn signature::Signer<Signature>,
     object_ref: ObjectRef,
     value: u64,
     framework_obj_ref: ObjectRef,
@@ -214,8 +216,8 @@ fn order_set(
 
 #[cfg(test)]
 fn order_delete(
-    src: PublicKeyBytes,
-    secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+    src: SuiAddress,
+    secret: &dyn signature::Signer<Signature>,
     object_ref: ObjectRef,
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
@@ -257,14 +259,14 @@ async fn init_local_authorities(
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for _ in 0..count {
-        let key_pair = get_key_pair();
-        voting_rights.insert(key_pair.0, 1);
+        let (_, key_pair) = get_key_pair();
+        voting_rights.insert(*key_pair.public_key_bytes(), 1);
         key_pairs.push(key_pair);
     }
     let committee = Committee::new(voting_rights);
 
     let mut clients = BTreeMap::new();
-    for (address, secret) in key_pairs {
+    for secret in key_pairs {
         // Random directory for the DB
         let dir = env::temp_dir();
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
@@ -273,15 +275,16 @@ async fn init_local_authorities(
         let mut opts = rocksdb::Options::default();
         opts.set_max_open_files(max_files_client_tests());
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+        let authority_name = *secret.public_key_bytes();
 
         let state = AuthorityState::new_with_genesis_modules(
             committee.clone(),
-            address,
+            authority_name,
             Box::pin(secret),
             store,
         )
         .await;
-        clients.insert(address, LocalAuthorityClient::new(state));
+        clients.insert(authority_name, LocalAuthorityClient::new(state));
     }
     (clients, committee)
 }
@@ -293,13 +296,19 @@ async fn init_local_authorities_bad_1(
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for i in 0..count {
-        let key_pair = get_key_pair();
-        voting_rights.insert(key_pair.0, 1);
+        let (_, secret) = get_key_pair();
+        let authority_name = *secret.public_key_bytes();
+        voting_rights.insert(authority_name, 1);
         if i + 1 < (count + 2) / 3 {
             // init 1 authority with a bad keypair
-            key_pairs.push(get_key_pair());
+            let kp = {
+                let (_, secret) = get_key_pair();
+                let authority_name = *secret.public_key_bytes();
+                (authority_name, secret)
+            };
+            key_pairs.push(kp);
         } else {
-            key_pairs.push(key_pair);
+            key_pairs.push((authority_name, secret));
         }
     }
     let committee = Committee::new(voting_rights);
@@ -1419,7 +1428,7 @@ fn test_transfer_object_error() {
         .lock_pending_order_objects(&Order::new_transfer(
             SuiAddress::random_for_testing_only(),
             (object_id, Default::default(), ObjectDigest::new([0; 32])),
-            sender.pub_key(),
+            sender.address(),
             (gas_object, Default::default(), ObjectDigest::new([0; 32])),
             &get_key_pair().1,
         ))
@@ -1798,7 +1807,7 @@ async fn test_get_all_owned_objects() {
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
     let create1 = order_create(
-        client1.pub_key(),
+        client1.address(),
         client1.secret(),
         client1.address(),
         100,
@@ -1847,7 +1856,7 @@ async fn test_get_all_owned_objects() {
     // Make a delete order
     let gas_ref_del = get_latest_ref(&auth_vec[0], gas_object1).await;
     let delete1 = order_delete(
-        client1.pub_key(),
+        client1.address(),
         client1.secret(),
         created_ref,
         framework_obj_ref,
@@ -1909,7 +1918,7 @@ async fn test_sync_all_owned_objects() {
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
     let create1 = order_create(
-        client1.pub_key(),
+        client1.address(),
         client1.secret(),
         client1.address(),
         100,
@@ -1919,7 +1928,7 @@ async fn test_sync_all_owned_objects() {
 
     let gas_ref_2 = get_latest_ref(&auth_vec[0], gas_object2).await;
     let create2 = order_create(
-        client1.pub_key(),
+        client1.address(),
         client1.secret(),
         client1.address(),
         101,
@@ -1966,7 +1975,7 @@ async fn test_sync_all_owned_objects() {
     // Make a delete order
     let gas_ref_del = get_latest_ref(&auth_vec[0], gas_object1).await;
     let delete1 = order_delete(
-        client1.pub_key(),
+        client1.address(),
         client1.secret(),
         new_ref_1,
         framework_obj_ref,
@@ -1976,7 +1985,7 @@ async fn test_sync_all_owned_objects() {
     // Make a transfer order
     let gas_ref_trans = get_latest_ref(&auth_vec[0], gas_object2).await;
     let transfer1 = order_transfer(
-        client1.pub_key(),
+        client1.address(),
         client1.secret(),
         client2.address(),
         new_ref_2,
@@ -2043,7 +2052,7 @@ async fn test_process_order() {
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
     let create1 = order_create(
-        client1.pub_key(),
+        client1.address(),
         client1.secret(),
         client1.address(),
         100,
@@ -2064,7 +2073,7 @@ async fn test_process_order() {
     // Make a schedule of transactions
     let gas_ref_set = get_latest_ref(&auth_vec[0], gas_object1).await;
     let create2 = order_set(
-        client1.pub_key(),
+        client1.address(),
         client1.secret(),
         new_ref_1,
         100,
@@ -2108,7 +2117,7 @@ async fn test_process_certificate() {
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
     let create1 = order_create(
-        client1.pub_key(),
+        client1.address(),
         client1.secret(),
         client1.address(),
         100,
@@ -2135,7 +2144,7 @@ async fn test_process_certificate() {
     // Make a schedule of transactions
     let gas_ref_set = get_latest_ref(&auth_vec[0], gas_object1).await;
     let create2 = order_set(
-        client1.pub_key(),
+        client1.address(),
         client1.secret(),
         new_ref_1,
         100,
@@ -2247,7 +2256,7 @@ async fn test_transfer_pending_orders() {
         .lock_pending_order_objects(&Order::new_transfer(
             SuiAddress::random_for_testing_only(),
             (object_id, Default::default(), ObjectDigest::new([0; 32])),
-            sender_state.pub_key(),
+            sender_state.address(),
             (gas_object, Default::default(), ObjectDigest::new([0; 32])),
             &get_key_pair().1,
         ))

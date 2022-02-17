@@ -1,4 +1,4 @@
-use sui_types::{event::Event, crypto::Signature};
+use sui_types::event::Event;
 
 use super::*;
 
@@ -110,7 +110,7 @@ impl AuthorityTemporaryStore {
     pub fn to_signed_effects(
         &self,
         authority_name: &AuthorityName,
-        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+        secret: &dyn signature::Signer<AuthoritySignature>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
@@ -142,7 +142,7 @@ impl AuthorityTemporaryStore {
             events: self.events.clone(),
             dependencies: transaction_dependencies,
         };
-        let signature = Signature::new(&effects, secret);
+        let signature = AuthoritySignature::new(&effects, secret);
 
         SignedOrderEffects {
             effects,
