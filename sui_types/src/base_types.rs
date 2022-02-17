@@ -231,7 +231,7 @@ where
 
 pub fn bytes_from_hex<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
-    T: From<Vec<u8>>,
+    T: for<'a> TryFrom<&'a [u8]>,
     D: serde::de::Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
@@ -243,9 +243,9 @@ pub fn encode_bytes_hex<B: AsRef<[u8]>>(bytes: &B) -> String {
     hex::encode(bytes.as_ref())
 }
 
-pub fn decode_bytes_hex<T: From<Vec<u8>>>(s: &str) -> Result<T, hex::FromHexError> {
+pub fn decode_bytes_hex<T: for<'a> TryFrom<&'a [u8]>>(s: &str) -> Result<T, anyhow::Error> {
     let value = hex::decode(s)?;
-    Ok(value.into())
+    T::try_from(&value[..]).map_err(|_| anyhow::anyhow!("byte deserialization failed"))
 }
 
 impl std::fmt::LowerHex for SuiAddress {

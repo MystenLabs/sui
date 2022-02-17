@@ -63,11 +63,8 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     // Add 3 accounts
     for _ in 0..3 {
         wallet_config.accounts.push({
-            let (pub_key, key_pair) = get_key_pair();
-            AccountInfo {
-                address: pub_key.into(),
-                key_pair,
-            }
+            let (address, key_pair) = get_key_pair();
+            AccountInfo { address, key_pair }
         });
     }
     let mut context = WalletContext::new(wallet_config)?;

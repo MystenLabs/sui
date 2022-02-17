@@ -8,11 +8,11 @@ use futures::stream::StreamExt;
 use move_core_types::ident_str;
 use rand::rngs::StdRng;
 use rand::Rng;
-use sui_types::crypto::{get_key_pair, Signature};
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use sui_core::{authority::*, authority_server::AuthorityServer};
 use sui_network::{network::NetworkClient, transport};
+use sui_types::crypto::{get_key_pair, AuthoritySignature};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use tokio::runtime::Runtime;
@@ -133,7 +133,9 @@ impl ClientServerBenchmark {
         info!("Preparing accounts.");
         let mut keys = Vec::new();
         for _ in 0..self.committee_size {
-            keys.push(get_key_pair());
+            let (_, key_pair) = get_key_pair();
+            let name = *key_pair.public_key_bytes();
+            keys.push((name, key_pair));
         }
         let committee = Committee::new(keys.iter().map(|(k, _)| (*k, 1)).collect());
 
@@ -169,8 +171,8 @@ impl ClientServerBenchmark {
             .await;
             let mut rnd = <StdRng as rand::SeedableRng>::seed_from_u64(0);
             for _ in 0..self.num_accounts {
-                let keypair = get_key_pair();
-                let address = keypair.0.into();
+                let (address, keypair) = get_key_pair();
+
                 let object_id: ObjectID = ObjectID::random();
                 let object = if self.use_move {
                     Object::with_id_owner_gas_coin_object_for_testing(
@@ -186,7 +188,7 @@ impl ClientServerBenchmark {
                 assert!(object.version() == SequenceNumber::from(0));
                 let object_ref = object.to_object_reference();
                 state.init_order_lock(object_ref).await;
-                account_objects.push((keypair.0, object.clone(), keypair.1));
+                account_objects.push((address, object.clone(), keypair));
                 state.insert_object(object).await;
 
                 let gas_object_id = ObjectID::random();
@@ -203,7 +205,7 @@ impl ClientServerBenchmark {
         info!("Preparing transactions.");
         // Make one transaction per account (transfer order + confirmation).
         let mut orders: Vec<Bytes> = Vec::new();
-        let mut next_recipient: SuiAddress = get_key_pair().0.into();
+        let mut next_recipient: SuiAddress = get_key_pair().0;
         for ((account_addr, object, secret), gas_obj) in account_objects.iter().zip(gas_objects) {
             let object_ref = object.to_object_reference();
             let gas_object_ref = gas_obj.to_object_reference();
@@ -239,7 +241,7 @@ impl ClientServerBenchmark {
             };
 
             // Set the next recipient to current
-            next_recipient = account_addr.into();
+            next_recipient = *account_addr;
 
             // Serialize order
             let serialized_order = serialize_order(&order);
@@ -252,7 +254,7 @@ impl ClientServerBenchmark {
             };
             for i in 0..committee.quorum_threshold() {
                 let (pubx, secx) = keys.get(i).unwrap();
-                let sig = Signature::new(&certificate.order.data, secx);
+                let sig = AuthoritySignature::new(&certificate.order.data, secx);
                 certificate.signatures.push((*pubx, sig));
             }
 
