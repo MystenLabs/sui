@@ -1,7 +1,7 @@
-import Footer from '../footer/Footer';
-import Header from '../header/Header';
+import Footer from '../components/footer/Footer';
+import Header from '../components/header/Header';
+import Search from '../components/search/Search';
 import AppRoutes from '../pages/config/AppRoutes';
-import Search from '../pages/search/Search';
 import styles from './App.module.scss';
 
 function App() {
