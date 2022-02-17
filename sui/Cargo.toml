@@ -41,6 +41,13 @@ rustyline-derive = "0.6.0"
 colored = "2.0.0"
 unescape = "0.1.0"
 
+# Deps for REST API
+crossbeam = "0.8.1"
+dropshot = "0.6.0"
+http = "0.2.6"
+hyper = "0.14.16"
+schemars = "0.8.8"
+
 move-package = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
 move-core-types = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7", features = ["address20"] }
 move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
@@ -51,6 +58,10 @@ tracing-test = "0.2.1"
 [[bin]]
 name = "bench"
 path = "src/bench.rs"
+
+[[bin]]
+name = "rest_server"
+path = "src/rest_server.rs"
 
 [[bin]]
 name = "wallet"
