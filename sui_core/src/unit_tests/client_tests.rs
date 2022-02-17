@@ -14,6 +14,7 @@ use std::{
     convert::TryInto,
     sync::Arc,
 };
+use sui_types::crypto::get_key_pair;
 use sui_types::object::{Data, Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use tokio::runtime::Runtime;
 use typed_store::Map;
@@ -347,6 +348,8 @@ fn make_admin_client(
     authority_clients: BTreeMap<AuthorityName, LocalAuthorityClient>,
     committee: Committee,
 ) -> ClientState<LocalAuthorityClient> {
+    use sui_types::crypto::get_key_pair_from_bytes;
+
     let (admin, admin_key) = get_key_pair_from_bytes(&[
         10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
         92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,

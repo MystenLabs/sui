@@ -1,4 +1,4 @@
-use sui_types::event::Event;
+use sui_types::{event::Event, crypto::Signature};
 
 use super::*;
 

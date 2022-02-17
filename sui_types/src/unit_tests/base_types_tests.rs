@@ -3,7 +3,7 @@
 
 #![allow(clippy::blacklisted_name)]
 
-use crate::gas_coin::GasCoin;
+use crate::{gas_coin::GasCoin, crypto::{BcsSignable, get_key_pair, Signature}};
 
 use super::*;
 

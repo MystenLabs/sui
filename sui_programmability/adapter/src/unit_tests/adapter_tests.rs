@@ -11,6 +11,7 @@ use move_package::BuildConfig;
 use std::{collections::BTreeSet, mem, path::PathBuf};
 use sui_types::{
     base_types::{self, SequenceNumber},
+    crypto::get_key_pair,
     error::SuiResult,
     gas_coin::GAS,
     object::Data,
@@ -480,7 +481,7 @@ fn test_move_call_insufficient_gas() {
 
     // 1. Create obj1 owned by addr1
     // ObjectBasics::create expects integer value and recipient address
-    let addr1 = base_types::get_key_pair().0;
+    let addr1 = get_key_pair().0;
     let pure_args = vec![
         10u64.to_le_bytes().to_vec(),
         bcs::to_bytes(&addr1.to_vec()).unwrap(),
@@ -882,7 +883,7 @@ fn test_coin_transfer() {
     storage.write_object(to_transfer.clone());
     storage.flush();
 
-    let addr1 = base_types::get_key_pair().0;
+    let addr1 = sui_types::crypto::get_key_pair().0;
 
     call(
         &mut storage,

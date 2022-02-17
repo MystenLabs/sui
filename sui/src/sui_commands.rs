@@ -10,8 +10,9 @@ use std::sync::Arc;
 use structopt::StructOpt;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
-use sui_types::base_types::{encode_bytes_hex, get_key_pair, ObjectID, SequenceNumber};
+use sui_types::base_types::{encode_bytes_hex, ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
+use sui_types::crypto::get_key_pair;
 use sui_types::object::Object;
 use tracing::{error, info};
 
