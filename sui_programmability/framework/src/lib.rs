@@ -181,7 +181,10 @@ pub fn run_move_unit_tests(path: &Path) -> SuiResult {
         path,
         BuildConfig::default(),
         UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)),
-        natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
+        natives::all_natives(
+            move_core_types::account_address::AccountAddress::from(MOVE_STDLIB_ADDRESS),
+            move_core_types::account_address::AccountAddress::from(SUI_FRAMEWORK_ADDRESS),
+        ),
         /* compute_coverage */ false,
     )
     .map_err(|err| SuiError::MoveUnitTestFailure {

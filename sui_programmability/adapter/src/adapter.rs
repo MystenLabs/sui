@@ -24,7 +24,6 @@ use sui_verifier::verifier;
 
 use move_cli::sandbox::utils::get_gas_status;
 use move_core_types::{
-    account_address::AccountAddress,
     ident_str,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
@@ -148,7 +147,7 @@ fn execute_internal<
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
     mutable_ref_objects: Vec<Object>,
-    by_value_objects: BTreeMap<AccountAddress, Object>,
+    by_value_objects: BTreeMap<ObjectID, Object>,
     object_owner_map: HashMap<SuiAddress, SuiAddress>,
     gas_budget: u64, // gas budget for the current call operation
     ctx: &mut TxContext,
@@ -400,7 +399,11 @@ pub fn verify_and_link<
         })
         .collect();
     session
-        .publish_module_bundle(new_module_bytes, package_id, &mut gas_status)
+        .publish_module_bundle(
+            new_module_bytes,
+            move_core_types::account_address::AccountAddress::from(package_id),
+            &mut gas_status,
+        )
         .map_err(|e| SuiError::ModulePublishFailure {
             error: e.to_string(),
         })?;
@@ -428,12 +431,15 @@ pub fn generate_package_id(
     for module in modules.iter() {
         let old_module_id = module.self_id();
         let old_address = *old_module_id.address();
-        if old_address != AccountAddress::ZERO {
+        if old_address != move_core_types::account_address::AccountAddress::from(ObjectID::ZERO) {
             return Err(SuiError::ModulePublishFailure {
                 error: "Publishing modules with non-zero address is not allowed".to_string(),
             });
         }
-        let new_module_id = ModuleId::new(package_id, old_module_id.name().to_owned());
+        let new_module_id = ModuleId::new(
+            move_core_types::account_address::AccountAddress::from(package_id),
+            old_module_id.name().to_owned(),
+        );
         if sub_map.insert(old_module_id, new_module_id).is_some() {
             return Err(SuiError::ModulePublishFailure {
                 error: "Publishing two modules with the same ID".to_string(),
@@ -801,7 +807,10 @@ fn is_param_tx_context(param: &Type) -> bool {
                 module,
                 name,
                 type_arguments,
-            } if address == &SUI_FRAMEWORK_ADDRESS
+            } if address
+                == &move_core_types::account_address::AccountAddress::from(
+                    SUI_FRAMEWORK_ADDRESS,
+                )
                 && module.as_ident_str() == TX_CONTEXT_MODULE_NAME
                 && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME
                 && type_arguments.is_empty() =>

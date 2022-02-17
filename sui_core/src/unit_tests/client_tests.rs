@@ -18,7 +18,6 @@ use sui_types::object::{Data, Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSIO
 use tokio::runtime::Runtime;
 use typed_store::Map;
 
-use move_core_types::account_address::AccountAddress;
 use std::env;
 use std::fs;
 use sui_types::error::SuiError::ObjectNotFound;
@@ -369,7 +368,7 @@ async fn fund_account_with_same_objects(
     authorities: Vec<&LocalAuthorityClient>,
     client: &mut ClientState<LocalAuthorityClient>,
     object_ids: Vec<ObjectID>,
-) -> HashMap<AccountAddress, Object> {
+) -> HashMap<ObjectID, Object> {
     let objs: Vec<_> = (0..authorities.len()).map(|_| object_ids.clone()).collect();
     fund_account(authorities, client, objs).await
 }
@@ -379,7 +378,7 @@ async fn fund_account(
     authorities: Vec<&LocalAuthorityClient>,
     client: &mut ClientState<LocalAuthorityClient>,
     object_ids: Vec<Vec<ObjectID>>,
-) -> HashMap<AccountAddress, Object> {
+) -> HashMap<ObjectID, Object> {
     let mut created_objects = HashMap::new();
     for (authority, object_ids) in authorities.into_iter().zip(object_ids.into_iter()) {
         for object_id in object_ids {

@@ -52,7 +52,10 @@ impl ModuleBuilder {
     /// Creates the "ID" module in framework address, along with the "ID" struct.
     /// Both the module and the ID struct information are returned.
     pub fn default() -> (Self, StructInfo) {
-        let mut module = Self::new(SUI_FRAMEWORK_ADDRESS, "ID");
+        let mut module = Self::new(
+            move_core_types::account_address::AccountAddress::from(SUI_FRAMEWORK_ADDRESS),
+            "ID",
+        );
         let id = module.add_struct(
             module.get_self_index(),
             "ID",

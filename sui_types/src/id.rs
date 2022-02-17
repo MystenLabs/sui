@@ -41,7 +41,7 @@ impl ID {
 
     pub fn type_() -> StructTag {
         StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
+            address: move_core_types::account_address::AccountAddress::from(SUI_FRAMEWORK_ADDRESS),
             name: ID_STRUCT_NAME.to_owned(),
             module: ID_MODULE_NAME.to_owned(),
             type_params: Vec::new(),
@@ -81,7 +81,7 @@ impl IDBytes {
 
     pub fn type_() -> StructTag {
         StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
+            address: move_core_types::account_address::AccountAddress::from(SUI_FRAMEWORK_ADDRESS),
             name: ID_BYTES_STRUCT_NAME.to_owned(),
             module: ID_MODULE_NAME.to_owned(),
             type_params: Vec::new(),

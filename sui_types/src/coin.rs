@@ -32,7 +32,7 @@ impl Coin {
 
     pub fn type_(type_param: StructTag) -> StructTag {
         StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
+            address: move_core_types::account_address::AccountAddress::from(SUI_FRAMEWORK_ADDRESS),
             name: COIN_STRUCT_NAME.to_owned(),
             module: COIN_MODULE_NAME.to_owned(),
             type_params: vec![TypeTag::Struct(type_param)],

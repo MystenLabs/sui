@@ -263,7 +263,7 @@ impl Storage for AuthorityTemporaryStore {
 impl ModuleResolver for AuthorityTemporaryStore {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.read_object(module_id.address()) {
+        match self.read_object(&ObjectID::from(*module_id.address())) {
             Some(o) => match &o.data {
                 Data::Package(c) => Ok(c
                     .get(module_id.name().as_str())
@@ -283,12 +283,12 @@ impl ResourceResolver for AuthorityTemporaryStore {
 
     fn get_resource(
         &self,
-        address: &AccountAddress,
+        id: &move_core_types::account_address::AccountAddress,
         struct_tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let object = match self.read_object(address) {
+        let object = match self.read_object(&ObjectID::from(*id)) {
             Some(x) => x,
-            None => match self.read_object(address) {
+            None => match self.read_object(&ObjectID::from(*id)) {
                 None => return Ok(None),
                 Some(x) => {
                     if !x.is_read_only() {

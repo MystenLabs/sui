@@ -28,7 +28,9 @@ pub fn fresh_id(
     // TODO(https://github.com/MystenLabs/fastnft/issues/58): finalize digest format
     // unwrap safe because all digests in Move are serialized from the Rust `TransactionDigest`
     let digest = TransactionDigest::try_from(inputs_hash.as_slice()).unwrap();
-    let id = Value::address(digest.derive_id(ids_created));
+    let id = Value::address(move_core_types::account_address::AccountAddress::from(
+        digest.derive_id(ids_created),
+    ));
 
     // TODO: choose cost
     let cost = native_gas(context.cost_table(), NativeCostIndex::CREATE_SIGNER, 0);

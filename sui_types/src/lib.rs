@@ -8,7 +8,7 @@
 )]
 #![deny(warnings)]
 
-use move_core_types::account_address::AccountAddress;
+use base_types::ObjectID;
 
 #[macro_use]
 pub mod error;
@@ -26,13 +26,13 @@ pub mod serialize;
 pub mod storage;
 
 /// 0x1-- account address where Move stdlib modules are stored
-pub const MOVE_STDLIB_ADDRESS: AccountAddress = AccountAddress::ONE;
+pub const MOVE_STDLIB_ADDRESS: ObjectID = ObjectID::ONE;
 
 /// 0x2-- account address where fastX framework modules are stored
-pub const SUI_FRAMEWORK_ADDRESS: AccountAddress = get_hex_address_two();
+pub const SUI_FRAMEWORK_ADDRESS: ObjectID = get_hex_address_two();
 
-const fn get_hex_address_two() -> AccountAddress {
-    let mut addr = [0u8; AccountAddress::LENGTH];
-    addr[AccountAddress::LENGTH - 1] = 2u8;
-    AccountAddress::new(addr)
+const fn get_hex_address_two() -> ObjectID {
+    let mut addr = [0u8; ObjectID::LENGTH];
+    addr[ObjectID::LENGTH - 1] = 2u8;
+    ObjectID::new(addr)
 }

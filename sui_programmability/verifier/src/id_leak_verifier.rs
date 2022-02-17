@@ -168,7 +168,8 @@ fn is_call_safe_to_leak(verifier: &IDLeakAnalysis, function_handle: &FunctionHan
     let m = verifier
         .binary_view
         .module_handle_at(function_handle.module);
-    verifier.binary_view.address_identifier_at(m.address) == &SUI_FRAMEWORK_ADDRESS
+    verifier.binary_view.address_identifier_at(m.address)
+        == &move_core_types::account_address::AccountAddress::from(SUI_FRAMEWORK_ADDRESS)
         && verifier.binary_view.identifier_at(m.name).as_str() == "ID"
         && verifier
             .binary_view
