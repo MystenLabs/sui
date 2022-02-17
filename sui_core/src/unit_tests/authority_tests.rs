@@ -13,8 +13,8 @@ use move_package::BuildConfig;
 use sui_adapter::genesis;
 use sui_types::{
     base_types::dbg_addr,
+    crypto::KeyPair,
     crypto::{get_key_pair, get_key_pair_from_bytes, Signature},
-    crypto::{KeyPair, PublicKeyBytes},
     gas::{calculate_module_publish_cost, get_gas_balance},
     messages::ExecutionStatus,
     object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
@@ -61,11 +61,8 @@ async fn test_handle_transfer_order_bad_signature() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![
-        (sender.into(), object_id),
-        (sender.into(), gas_object_id),
-    ])
-    .await;
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -383,7 +380,7 @@ async fn test_publish_dependent_module_ok() {
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
     let order = Order::new_module(
-        sender_key.public(),
+        sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
         MAX_GAS,
@@ -1268,10 +1265,10 @@ async fn test_account_state_unknown_account() {
 
 #[tokio::test]
 async fn test_authority_persist() {
-    let (authority_address, authority_key) = get_key_pair();
+    let (_, authority_key) = get_key_pair();
     let mut authorities = BTreeMap::new();
     authorities.insert(
-        /* address */ authority_address,
+        /* address */ *authority_key.public_key_bytes(),
         /* voting right */ 1,
     );
     let committee = Committee::new(authorities);
@@ -1287,7 +1284,7 @@ async fn test_authority_persist() {
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
     let authority = AuthorityState::new_without_genesis_for_testing(
         committee.clone(),
-        authority_address,
+        *authority_key.public_key_bytes(),
         // we assume that the node runner is in charge for its key -> it's ok to reopen a copy below.
         Box::pin(authority_key.copy()),
         store,
@@ -1313,7 +1310,7 @@ async fn test_authority_persist() {
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
     let authority2 = AuthorityState::new_without_genesis_for_testing(
         committee,
-        authority_address,
+        *authority_key.public_key_bytes(),
         Box::pin(authority_key),
         store,
     );
@@ -1342,11 +1339,11 @@ async fn test_hero() {
         90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
         105, 254, 59, 163,
     ]);
-    let admin_gas_object = Object::with_id_owner_for_testing(ObjectID::random(), admin.into());
+    let admin_gas_object = Object::with_id_owner_for_testing(ObjectID::random(), admin);
     let admin_gas_object_ref = admin_gas_object.to_object_reference();
 
     let (player, player_key) = get_key_pair();
-    let player_gas_object = Object::with_id_owner_for_testing(ObjectID::random(), player.into());
+    let player_gas_object = Object::with_id_owner_for_testing(ObjectID::random(), player);
     let player_gas_object_ref = player_gas_object.to_object_reference();
     let authority = init_state_with_objects(vec![admin_gas_object, player_gas_object]).await;
 
@@ -1667,11 +1664,11 @@ async fn test_object_owning_another_object() {
 // helpers
 
 #[cfg(test)]
-fn init_state_parameters() -> (Committee, PublicKeyBytes, KeyPair, Arc<AuthorityStore>) {
+fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStore>) {
     let (authority_address, authority_key) = get_key_pair();
     let mut authorities = BTreeMap::new();
     authorities.insert(
-        /* address */ authority_address,
+        /* address */ *authority_key.public_key_bytes(),
         /* voting right */ 1,
     );
     let committee = Committee::new(authorities);
@@ -1690,10 +1687,10 @@ fn init_state_parameters() -> (Committee, PublicKeyBytes, KeyPair, Arc<Authority
 
 #[cfg(test)]
 async fn init_state() -> AuthorityState {
-    let (committee, authority_address, authority_key, store) = init_state_parameters();
+    let (committee, _, authority_key, store) = init_state_parameters();
     AuthorityState::new_with_genesis_modules(
         committee,
-        authority_address,
+        *authority_key.public_key_bytes(),
         Box::pin(authority_key),
         store,
     )
@@ -1733,7 +1730,7 @@ async fn init_state_with_object_id(address: SuiAddress, object: ObjectID) -> Aut
 
 #[cfg(test)]
 fn init_transfer_order(
-    sender: PublicKeyBytes,
+    sender: SuiAddress,
     secret: &KeyPair,
     recipient: SuiAddress,
     object_ref: ObjectRef,
@@ -1744,7 +1741,7 @@ fn init_transfer_order(
 
 #[cfg(test)]
 fn init_certified_transfer_order(
-    sender: PublicKeyBytes,
+    sender: SuiAddress,
     secret: &KeyPair,
     recipient: SuiAddress,
     object_ref: ObjectRef,
@@ -1784,7 +1781,7 @@ fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> Ob
 async fn call_move(
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
-    sender: &PublicKeyBytes,
+    sender: &SuiAddress,
     sender_key: &KeyPair,
     package: &ObjectRef,
     module: Identifier,
@@ -1825,7 +1822,7 @@ async fn call_move(
 async fn call_framework_code(
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
-    sender: &PublicKeyBytes,
+    sender: &SuiAddress,
     sender_key: &KeyPair,
     module: &'static str,
     function: &'static str,
@@ -1854,7 +1851,7 @@ async fn call_framework_code(
 async fn create_move_object(
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
-    sender: &PublicKeyBytes,
+    sender: &SuiAddress,
     sender_key: &KeyPair,
 ) -> SuiResult<OrderEffects> {
     call_framework_code(

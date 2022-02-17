@@ -326,7 +326,7 @@ impl Display for OrderEffects {
 pub struct SignedOrderEffects {
     pub effects: OrderEffects,
     pub authority: AuthorityName,
-    pub signature: Signature,
+    pub signature: AuthoritySignature,
 }
 
 impl Hash for Order {
