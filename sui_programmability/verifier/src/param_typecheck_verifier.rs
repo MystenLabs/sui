@@ -226,7 +226,6 @@ fn is_tx_context(view: &BinaryIndexedView, p: &SignatureToken) -> bool {
                 module_name == TX_CONTEXT_MODULE_NAME
                     && module_addr == &SUI_FRAMEWORK_ADDRESS
                     && struct_name == TX_CONTEXT_STRUCT_NAME
-                    && struct_handle.type_parameters.is_empty()
             }
             _ => false,
         },
