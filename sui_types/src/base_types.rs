@@ -579,9 +579,7 @@ impl ObjectID {
 
     /// Random ObjectID
     pub fn random() -> Self {
-        let mut rng = OsRng;
-        let buf: [u8; Self::LENGTH] = rng.gen();
-        Self::from(buf)
+        Self::from(AccountAddress::random())
     }
 
     /// Trims leading zeroes
@@ -690,6 +688,14 @@ impl From<[u8; ObjectID::LENGTH]> for ObjectID {
     }
 }
 
+impl std::ops::Deref for ObjectID {
+    type Target = [u8; Self::LENGTH];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl From<AccountAddress> for ObjectID {
     fn from(address: AccountAddress) -> Self {
         Self(address)
@@ -699,12 +705,6 @@ impl From<AccountAddress> for ObjectID {
 impl From<ObjectID> for AccountAddress {
     fn from(obj_id: ObjectID) -> Self {
         obj_id.0
-    }
-}
-
-impl AsRef<[u8]> for ObjectID {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
     }
 }
 
@@ -740,7 +740,7 @@ impl fmt::UpperHex for ObjectID {
 impl TryFrom<&[u8]> for ObjectID {
     type Error = ObjectIDParseError;
 
-    /// Tries to convert the provided byte array into Address.
+    /// Tries to convert the provided byte array into ObjectID.
     fn try_from(bytes: &[u8]) -> Result<ObjectID, ObjectIDParseError> {
         Self::from_bytes(bytes)
     }
@@ -749,39 +749,9 @@ impl TryFrom<&[u8]> for ObjectID {
 impl TryFrom<Vec<u8>> for ObjectID {
     type Error = ObjectIDParseError;
 
-    /// Tries to convert the provided byte buffer into Address.
+    /// Tries to convert the provided byte buffer into ObjectID.
     fn try_from(bytes: Vec<u8>) -> Result<ObjectID, ObjectIDParseError> {
         Self::from_bytes(bytes)
-    }
-}
-
-impl From<ObjectID> for Vec<u8> {
-    fn from(obj_id: ObjectID) -> Vec<u8> {
-        Vec::<u8>::from(obj_id.0)
-    }
-}
-
-impl From<&ObjectID> for Vec<u8> {
-    fn from(obj_id: &ObjectID) -> Vec<u8> {
-        Vec::<u8>::from(obj_id.0)
-    }
-}
-
-impl From<ObjectID> for [u8; ObjectID::LENGTH] {
-    fn from(obj_id: ObjectID) -> Self {
-        <[u8; ObjectID::LENGTH]>::from(obj_id.0)
-    }
-}
-
-impl From<&ObjectID> for [u8; ObjectID::LENGTH] {
-    fn from(obj_id: &ObjectID) -> Self {
-        <[u8; ObjectID::LENGTH]>::from(obj_id.0)
-    }
-}
-
-impl From<&ObjectID> for String {
-    fn from(obj_id: &ObjectID) -> String {
-        ::hex::encode(obj_id.as_ref())
     }
 }
 
