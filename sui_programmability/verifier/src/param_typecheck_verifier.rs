@@ -50,14 +50,14 @@ pub fn check_params(module: &CompiledModule) -> SuiResult {
             continue;
         }
         let params = view.signature_at(handle.parameters);
-        let param_nums = match is_entry_candidate(&view, params) {
+        let param_num = match is_entry_candidate(&view, params) {
             Some(v) => v,
             None => continue,
         };
         // iterate over all object params and make sure that each
         // template-typed (either by itself or in a vector) argument
         // has the Key ability
-        for (pos, p) in params.0[0..param_nums].iter().enumerate() {
+        for (pos, p) in params.0[0..param_num].iter().enumerate() {
             if let SignatureToken::TypeParameter(_) = p {
                 if !is_template_param_ok(handle, p) {
                     return Err(SuiError::ModuleVerificationFailure {
@@ -212,6 +212,8 @@ fn is_template_vector_param_ok(handle: &FunctionHandle, p: &SignatureToken) -> b
     }
 }
 
+/// It's a mirror of the is_param_tx_context function in the adapter
+/// module that operates on Type-s.
 fn is_tx_context(view: &BinaryIndexedView, p: &SignatureToken) -> bool {
     match p {
         SignatureToken::MutableReference(m) => match &**m {
