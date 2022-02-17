@@ -2,12 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{adapter, genesis};
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{
-        self, AbilitySet, AddressIdentifierIndex, IdentifierIndex, ModuleHandle, ModuleHandleIndex,
-        StructHandle,
-    },
+use move_binary_format::file_format::{
+    self, AbilitySet, AddressIdentifierIndex, IdentifierIndex, ModuleHandle, ModuleHandleIndex,
+    StructHandle,
 };
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
@@ -926,24 +923,6 @@ fn publish_from_src(
     let mut module_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     module_path.push(src_path);
     let modules = sui_framework::build_move_package(&module_path, build_config, false).unwrap();
-
-    let m = modules.get(0).unwrap().clone();
-
-    for f in &m.function_handles {
-        let n = m.identifier_at(f.name);
-        if n.to_string() == "foo" {
-            println!("FUNCTION {:?}", n);
-            println!("PARAMS");
-            for p in &m.signature_at(f.parameters).0 {
-                println!("{:?}", p);
-            }
-
-            println!("TYPE PARAMS");
-            for t in &f.type_parameters {
-                println!("{:?}", t);
-            }
-        }
-    }
 
     // publish modules
     let all_module_bytes = modules

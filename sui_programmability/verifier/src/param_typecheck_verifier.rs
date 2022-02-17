@@ -15,8 +15,26 @@ use sui_types::{
 pub fn verify_module(module: &CompiledModule) -> SuiResult {
     check_params(module)
 }
-/// This checks if parameters of functions that can become entry
+/// Checks if parameters of functions that can become entry
 /// functions (functions called directly from Sui) have correct types.
+///
+/// We first identify functions that can be entry functions by looking
+/// for functions with the following properties:
+/// 1. Public
+/// 2. No return value
+/// 3. Parameter order: objects, primitives, &mut TxContext
+///
+/// Note that this can be ambiguous in presence of the following
+/// templated parameters:
+/// - param: T
+/// - param: vector<T> // and nested vectors
+///
+/// A function is considered an entry function if such templated
+/// arguments are part of "object parameters" only.
+///
+/// In order for the parameter types of an entry function to be
+/// correct, all generic types used in templated arguments mentioned
+/// above must have the `key` ability.
 pub fn check_params(module: &CompiledModule) -> SuiResult {
     let view = BinaryIndexedView::Module(module);
     for func_def in module.function_defs.iter() {
@@ -32,10 +50,10 @@ pub fn check_params(module: &CompiledModule) -> SuiResult {
             continue;
         }
         let params = view.signature_at(handle.parameters);
-        let (candidate, param_nums) = is_entry_candidate(&view, params);
-        if !candidate {
-            continue;
-        }
+        let param_nums = match is_entry_candidate(&view, params) {
+            Some(v) => v,
+            None => continue,
+        };
         // iterate over all object params and make sure that each
         // template-typed (either by itself or in a vector) argument
         // has the Key ability
@@ -44,7 +62,7 @@ pub fn check_params(module: &CompiledModule) -> SuiResult {
                 if !is_template_param_ok(handle, p) {
                     return Err(SuiError::ModuleVerificationFailure {
                         error: format!(
-                            "No Key ability for the template parameter at position {} in entry function {}",
+                            "No `key` ability for the template parameter at position {} in entry function {}",
                             pos,
                             view.identifier_at(handle.name)
                         ),
@@ -55,7 +73,7 @@ pub fn check_params(module: &CompiledModule) -> SuiResult {
                 if !is_template_vector_param_ok(handle, p) {
                     return Err(SuiError::ModuleVerificationFailure {
                         error: format!(
-                            "No Key ability for the template vector parameter at position {} in entry function {}",
+                            "No `key` ability for the template vector parameter at position {} in entry function {}",
                             pos,
                             view.identifier_at(handle.name)
                         ),
@@ -67,62 +85,64 @@ pub fn check_params(module: &CompiledModule) -> SuiResult {
     Ok(())
 }
 
-fn is_entry_candidate(view: &BinaryIndexedView, params: &Signature) -> (bool, usize) {
+/// Checks if a function can possibly be an entry function (without
+/// checking correctness of the function's parameters).
+fn is_entry_candidate(view: &BinaryIndexedView, params: &Signature) -> Option<usize> {
     let mut obj_params_num = 0;
     if params.is_empty() {
         // must have at least on &mut TxContext param
-        return (false, obj_params_num);
+        return None;
     }
     let last_param = params.0.get(params.len() - 1).unwrap();
     if !is_tx_context(view, last_param) {
-        return (false, obj_params_num);
+        return None;
     }
     if params.len() == 1 {
         // only one &mut TxContext param
-        return (true, obj_params_num);
+        return Some(obj_params_num);
     }
     // currently, an entry function has object parameters followed by
-    // ground-type parameters (followed by the &mut TxContext param,
-    // but we already checked this one)
-    let mut ground_params_phase = false; // becomes true once we start seeing ground-type params
+    // primitive type parameters (followed by the &mut TxContext
+    // param, but we already checked this one)
+    let mut primitive_params_phase = false; // becomes true once we start seeing primitive type params
     for p in &params.0[0..params.len() - 1] {
-        if is_ground_type(p) {
-            ground_params_phase = true;
+        if is_primitive_type(p) {
+            primitive_params_phase = true;
         } else {
             obj_params_num += 1;
-            if ground_params_phase {
-                // We encounter a non ground-type parameter after the
-                // first one was encountered. This cannot be an entry
-                // function as it would get rejected by the
-                // resolve_and_type_check function in the adapter upon its
-                // call attempt from Sui
-                return (false, obj_params_num);
+            if primitive_params_phase {
+                // We encounter a non primitive type parameter after
+                // the first one was encountered. This cannot be an
+                // entry function as it would get rejected by the
+                // resolve_and_type_check function in the adapter upon
+                // its call attempt from Sui
+                return None;
             }
             if !is_object(view, p)
                 && !is_template(p)
                 && !is_object_vector(view, p)
                 && !is_template_vector(p)
             {
-                // A non-ground type for entry functions must be an
+                // A non-primitive type for entry functions must be an
                 // object, or a generic type, or a vector (possibly
                 // nested) of objects, or a templeted vector (possibly
                 // nested). Otherwise it is not an entry function as
                 // we cannot pass non-object types from Sui).
-                return (false, obj_params_num);
+                return None;
             }
         }
     }
-    (true, obj_params_num)
+    Some(obj_params_num)
 }
 
-/// Checks if a given parameter is of ground type. It's a mirror of
-/// the is_primitive function in the adapter module that operates on
-/// Type-s.
-fn is_ground_type(p: &SignatureToken) -> bool {
+/// Checks if a given parameter is of a primitive type. It's a mirror
+/// of the is_primitive function in the adapter module that operates
+/// on Type-s.
+fn is_primitive_type(p: &SignatureToken) -> bool {
     use SignatureToken::*;
     match p {
         Bool | U8 | U64 | U128 | Address => true,
-        Vector(t) => is_ground_type(t),
+        Vector(t) => is_primitive_type(t),
         Signer
         | Struct(_)
         | StructInstantiation(..)

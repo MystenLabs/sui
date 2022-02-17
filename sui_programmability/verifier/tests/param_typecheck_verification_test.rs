@@ -250,7 +250,7 @@ fn template_param_after_primitive() {
     }
 
     it's not a valid entry function (an entry function cannot have
-    template parameter after the first ground-type parameter) and
+    template parameter after the first primitive type parameter) and
     verification should SUCCEED
     */
     let (mut builder, _) = ModuleBuilder::default();
