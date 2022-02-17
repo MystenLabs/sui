@@ -8,6 +8,7 @@ use futures::stream::StreamExt;
 use move_core_types::ident_str;
 use rand::rngs::StdRng;
 use rand::Rng;
+use sui_types::crypto::{get_key_pair, Signature};
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use sui_core::{authority::*, authority_server::AuthorityServer};

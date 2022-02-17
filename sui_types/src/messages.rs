@@ -1,6 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::crypto::{sha3_hash, BcsSignable, PublicKeyBytes, Signature};
 use crate::object::{Object, ObjectFormatOptions, OBJECT_START_VERSION};
 
 use super::{base_types::*, committee::Committee, error::*, event::Event};

@@ -5,9 +5,10 @@ use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientAddressManager, ClientState};
 use sui_network::network::NetworkClient;
 use sui_types::base_types::{
-    decode_bytes_hex, encode_bytes_hex, get_key_pair, AuthorityName, ObjectID, SuiAddress,
+    decode_bytes_hex, encode_bytes_hex, AuthorityName, ObjectID, SuiAddress,
 };
 use sui_types::committee::Committee;
+use sui_types::crypto::get_key_pair;
 use sui_types::messages::ExecutionStatus;
 
 use crate::utils::Config;

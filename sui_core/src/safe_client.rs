@@ -3,6 +3,7 @@
 
 use crate::authority_client::AuthorityAPI;
 use async_trait::async_trait;
+use sui_types::crypto::PublicKeyBytes;
 use sui_types::{base_types::*, committee::*, fp_ensure};
 
 use sui_types::{

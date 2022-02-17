@@ -3,7 +3,11 @@
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
 use super::*;
-use crate::{base_types::*, object::Object};
+use crate::{
+    base_types::*,
+    crypto::{get_key_pair, Signature},
+    object::Object,
+};
 use std::time::Instant;
 
 // Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
