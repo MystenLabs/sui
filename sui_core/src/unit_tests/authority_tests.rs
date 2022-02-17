@@ -191,11 +191,8 @@ async fn test_handle_transfer_order_ok() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![
-        (sender.into(), object_id),
-        (sender.into(), gas_object_id),
-    ])
-    .await;
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -272,7 +269,7 @@ async fn test_handle_transfer_zero_balance() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender.into(), object_id)]).await;
+    let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -281,12 +278,8 @@ async fn test_handle_transfer_zero_balance() {
 
     // Create a gas object with 0 balance.
     let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_gas_for_testing(
-        gas_object_id,
-        SequenceNumber::new(),
-        sender.into(),
-        0,
-    );
+    let gas_object =
+        Object::with_id_owner_gas_for_testing(gas_object_id, SequenceNumber::new(), sender, 0);
     authority_state
         .init_order_lock((gas_object_id, 0.into(), gas_object.digest()))
         .await;
@@ -361,8 +354,7 @@ fn check_gas_object(
 async fn test_publish_dependent_module_ok() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object =
-        Object::with_id_owner_for_testing(gas_payment_object_id, sender.into());
+    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
     let (genesis_module_objects, _) = genesis::clone_genesis_data();
@@ -386,7 +378,7 @@ async fn test_publish_dependent_module_ok() {
         MAX_GAS,
         &sender_key,
     );
-    let dependent_module_id = TxContext::new(&sender.into(), order.digest()).fresh_id();
+    let dependent_module_id = TxContext::new(&sender, order.digest()).fresh_id();
 
     // Object does not exist
     assert!(authority
@@ -408,12 +400,8 @@ async fn test_publish_module_no_dependencies_ok() {
     let gas_payment_object_id = ObjectID::random();
     let gas_balance = MAX_GAS;
     let gas_seq = SequenceNumber::new();
-    let gas_payment_object = Object::with_id_owner_gas_for_testing(
-        gas_payment_object_id,
-        gas_seq,
-        sender.into(),
-        gas_balance,
-    );
+    let gas_payment_object =
+        Object::with_id_owner_gas_for_testing(gas_payment_object_id, gas_seq, sender, gas_balance);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
@@ -429,7 +417,7 @@ async fn test_publish_module_no_dependencies_ok() {
         MAX_GAS,
         &sender_key,
     );
-    let _module_object_id = TxContext::new(&sender.into(), order.digest()).fresh_id();
+    let _module_object_id = TxContext::new(&sender, order.digest()).fresh_id();
     let response = send_and_confirm_order(&authority, order).await.unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
 
@@ -453,8 +441,7 @@ async fn test_publish_module_no_dependencies_ok() {
 async fn test_publish_non_existing_dependent_module() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object =
-        Object::with_id_owner_for_testing(gas_payment_object_id, sender.into());
+    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
     let (genesis_module_objects, _) = genesis::clone_genesis_data();
@@ -515,7 +502,7 @@ async fn test_publish_module_insufficient_gas() {
     let gas_payment_object = Object::with_id_owner_gas_for_testing(
         gas_payment_object_id,
         SequenceNumber::new(),
-        sender.into(),
+        sender,
         gas_balance,
     );
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
@@ -542,8 +529,7 @@ async fn test_publish_module_insufficient_gas() {
 async fn test_handle_move_order() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object =
-        Object::with_id_owner_for_testing(gas_payment_object_id, sender.into());
+    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_seq = gas_payment_object.version();
     let authority_state = init_state_with_objects(vec![gas_payment_object]).await;
 
@@ -567,7 +553,7 @@ async fn test_handle_move_order() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(created_obj.owner, sender.into());
+    assert_eq!(created_obj.owner, sender);
     assert_eq!(created_obj.id(), created_object_id);
     assert_eq!(created_obj.version(), OBJECT_START_VERSION);
 
@@ -593,8 +579,7 @@ async fn test_handle_move_order() {
 async fn test_handle_move_order_insufficient_budget() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object =
-        Object::with_id_owner_for_testing(gas_payment_object_id, sender.into());
+    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // find the function Object::create and call it to create a new object
     let (genesis_package_objects, _) = genesis::clone_genesis_data();
@@ -634,11 +619,8 @@ async fn test_handle_transfer_order_double_spend() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![
-        (sender.into(), object_id),
-        (sender.into(), gas_object_id),
-    ])
-    .await;
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -709,11 +691,8 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![
-        (sender.into(), object_id),
-        (sender.into(), gas_object_id),
-    ])
-    .await;
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -784,11 +763,8 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
     let (address, key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![
-        (address.into(), object_id),
-        (address.into(), gas_object_id),
-    ])
-    .await;
+    let authority_state =
+        init_state_with_ids(vec![(address, object_id), (address, gas_object_id)]).await;
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -803,7 +779,7 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
     let certified_transfer_order = init_certified_transfer_order(
         address,
         &key,
-        address.into(),
+        address,
         object.to_object_reference(),
         gas_object.to_object_reference(),
         &authority_state,
@@ -832,7 +808,7 @@ async fn test_handle_confirmation_order_gas() {
         let (sender, sender_key) = get_key_pair();
         let recipient = dbg_addr(2);
         let object_id = ObjectID::random();
-        let authority_state = init_state_with_ids(vec![(sender.into(), object_id)]).await;
+        let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
         let object = authority_state
             .get_object(&object_id)
             .await
@@ -844,7 +820,7 @@ async fn test_handle_confirmation_order_gas() {
         let gas_object = Object::with_id_owner_gas_for_testing(
             gas_object_id,
             SequenceNumber::new(),
-            sender.into(),
+            sender,
             gas,
         );
         authority_state
@@ -885,11 +861,8 @@ async fn test_handle_confirmation_order_ok() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![
-        (sender.into(), object_id),
-        (sender.into(), gas_object_id),
-    ])
-    .await;
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -975,11 +948,8 @@ async fn test_handle_confirmation_order_idempotent() {
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![
-        (sender.into(), object_id),
-        (sender.into(), gas_object_id),
-    ])
-    .await;
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
     let object = authority_state
         .get_object(&object_id)
         .await
@@ -1036,7 +1006,7 @@ async fn test_handle_confirmation_order_idempotent() {
 async fn test_move_call_mutable_object_not_mutated() {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender.into(), gas_object_id)]).await;
+    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
     let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
@@ -1092,7 +1062,7 @@ async fn test_move_call_mutable_object_not_mutated() {
 async fn test_move_call_delete() {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender.into(), gas_object_id)]).await;
+    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
     let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
@@ -1145,7 +1115,7 @@ async fn test_move_call_delete() {
 async fn test_get_latest_parent_entry() {
     let (sender, sender_key) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender.into(), gas_object_id)]).await;
+    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
     let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
@@ -1370,7 +1340,11 @@ async fn test_hero() {
         .unwrap()
         .effects;
 
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
 
     let mut successful_checks = 0;
     let mut admin_object = None;
@@ -1434,7 +1408,7 @@ async fn test_hero() {
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!(effects.mutated.len(), 1); // cap
     let (coin, coin_owner) = effects.created[0];
-    assert_eq!(coin_owner, player.into());
+    assert_eq!(coin_owner, player);
 
     // 5. Purchase a sword using 500 coin. This sword will have magic = 4, sword_strength = 5.
     let effects = call_move(
@@ -1454,9 +1428,9 @@ async fn test_hero() {
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!(effects.mutated.len(), 1); // coin
     let (hero, hero_owner) = effects.created[0];
-    assert_eq!(hero_owner, player.into());
+    assert_eq!(hero_owner, player);
     // The payment goes to the admin.
-    assert_eq!(effects.mutated[0].1, admin.into());
+    assert_eq!(effects.mutated[0].1, admin);
 
     // 6. Verify the hero is what we exepct with strength 5.
     let effects = call_move(
@@ -1497,7 +1471,7 @@ async fn test_hero() {
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     let (boar, boar_owner) = effects.created[0];
-    assert_eq!(boar_owner, player.into());
+    assert_eq!(boar_owner, player);
 
     // 8. Slay the boar!
     let effects = call_move(
@@ -1527,7 +1501,7 @@ async fn test_object_owning_another_object() {
     let (sender2, sender2_key) = get_key_pair();
     let gas1 = ObjectID::random();
     let gas2 = ObjectID::random();
-    let authority = init_state_with_ids(vec![(sender1.into(), gas1), (sender2.into(), gas2)]).await;
+    let authority = init_state_with_ids(vec![(sender1, gas1), (sender2, gas2)]).await;
 
     // Created 3 objects, all owned by sender1.
     let effects = create_move_object(&authority, &gas1, &sender1, &sender1_key)
@@ -1619,7 +1593,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.mutated.len(), 1);
     assert_eq!(
         authority.get_object(&obj2).await.unwrap().unwrap().owner,
-        sender2.into()
+        sender2
     );
 
     // Sender 1 try to transfer obj1 to obj2 again.
