@@ -800,11 +800,10 @@ fn is_param_tx_context(param: &Type) -> bool {
                 address,
                 module,
                 name,
-                type_arguments,
+                ..
             } if address == &SUI_FRAMEWORK_ADDRESS
                 && module.as_ident_str() == TX_CONTEXT_MODULE_NAME
-                && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME
-                && type_arguments.is_empty() =>
+                && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME =>
             {
                 return true
             }
