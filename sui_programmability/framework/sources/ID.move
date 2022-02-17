@@ -1,5 +1,6 @@
 /// FastX object identifiers
 module FastX::ID {
+    use Std::BCS;
     // TODO(): bring this back
     //friend FastX::TxContext;
 
@@ -59,9 +60,15 @@ module FastX::ID {
         get_version(obj) == INITIAL_VERSION
     }
 
-    /// Get the raw bytes of `i`
+    /// Get the raw bytes of `i` in its underlying representation
+    // TODO: we should probably not expose that this is an `address`
     public fun get_bytes(i: &IDBytes): &address {
         &i.bytes
+    }
+
+    /// Get the raw bytes of `i` as a vector
+    public fun get_bytes_as_vec(i: &IDBytes): vector<u8> {
+        BCS::to_bytes(get_bytes(i))
     }
 
     /// Get the ID for `obj`. Safe because fastX has an extra

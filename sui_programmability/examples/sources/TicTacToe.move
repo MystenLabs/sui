@@ -164,6 +164,10 @@ module Examples::TicTacToe {
         ID::delete(id);
     }
 
+    public fun get_status(game: &TicTacToe): u8 {
+        game.game_status
+    }
+
     fun mint_mark(cap: &mut MarkMintCap, row: u64, col: u64, ctx: &mut TxContext): Mark {
         if (cap.remaining_supply == 0) {
             abort NO_MORE_MARK
@@ -247,5 +251,17 @@ module Examples::TicTacToe {
     fun delete_mark(mark: Mark) {
         let Mark { id, player: _, row: _, col: _ } = mark;
         ID::delete(id);
+    }
+
+    public fun mark_player(mark: &Mark): &Address {
+        &mark.player
+    }
+
+    public fun mark_row(mark: &Mark): u64 {
+        mark.row
+    }
+
+    public fun mark_col(mark: &Mark): u64 {
+        mark.col
     }
 }
