@@ -20,7 +20,7 @@ const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 100_000;
 
 pub const DEFAULT_FRAMEWORK_PATH: &str = env!("CARGO_MANIFEST_DIR");
 
-#[derive(TryFromPrimitive)]
+#[derive(TryFromPrimitive, PartialEq, Eq)]
 #[repr(u8)]
 pub enum EventType {
     /// System event: transfer between addresses

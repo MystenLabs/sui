@@ -65,6 +65,12 @@ module FastX::TxContext {
     }
 
     #[test_only]
+    /// Create a `TxContext` with sender `a` for testing, and an inputs hash derived from `hint`
+    public fun new_from_address(a: Address, hint: u8): TxContext {
+        new(Address::new_signer_from_address(a), dummy_inputs_hash_with_hint(hint), 0)
+    }
+
+    #[test_only]
     /// Create a dummy `TxContext` for testing
     public fun dummy(): TxContext {
         let inputs_hash = x"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532";
@@ -72,9 +78,8 @@ module FastX::TxContext {
     }
 
     #[test_only]
-    /// Create a dummy `TxContext` for testing
-    /// Use the `hint` to set the address and input hash.
-    public fun dummy_with_hint(hint: u8): TxContext {
+    /// Utility for creating 256 unique input hashes
+    fun dummy_inputs_hash_with_hint(hint: u8): vector<u8> {
         let inputs_hash = Vector::empty<u8>();
         let i = 0;
         while (i < INPUTS_HASH_LENGTH - 1) {
@@ -82,6 +87,13 @@ module FastX::TxContext {
             i = i + 1;
         };
         Vector::push_back(&mut inputs_hash, hint);
-        new(Address::dummy_signer_with_hint(hint), inputs_hash, 0)
+        inputs_hash
+    }
+
+    #[test_only]
+    /// Create a dummy `TxContext` for testing
+    /// Use the `hint` to set the address and input hash.
+    public fun dummy_with_hint(hint: u8): TxContext {     
+        new(Address::dummy_signer_with_hint(hint), dummy_inputs_hash_with_hint(hint), 0)
     }
 }

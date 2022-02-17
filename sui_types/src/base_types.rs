@@ -279,6 +279,12 @@ impl std::fmt::UpperHex for SuiAddress {
     }
 }
 
+impl fmt::Display for SuiAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:X}", self)
+    }
+}
+
 pub fn address_as_base64<S>(address: &SuiAddress, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::ser::Serializer,
