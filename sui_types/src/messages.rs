@@ -429,7 +429,7 @@ impl Order {
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
         gas_budget: u64,
-        secret: &dyn signature::Signer<ed25519::Signature>,
+        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     ) -> Self {
         let kind = OrderKind::Publish(MoveModulePublish {
             modules,
