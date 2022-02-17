@@ -18,39 +18,34 @@ fn random_object_ref() -> ObjectRef {
 #[test]
 fn test_signed_values() {
     let mut authorities = BTreeMap::new();
+    // TODO: refactor this test to not reuse the same keys for user and authority signing
     let (a1, sec1) = get_key_pair();
     let (a2, sec2) = get_key_pair();
-    let (a3, sec3) = get_key_pair();
+    let (_, sec3) = get_key_pair();
 
-    authorities.insert(/* address */ a1, /* voting right */ 1);
-    authorities.insert(/* address */ a2, /* voting right */ 0);
+    authorities.insert(
+        /* address */ *sec1.public_key_bytes(),
+        /* voting right */ 1,
+    );
+    authorities.insert(
+        /* address */ *sec2.public_key_bytes(),
+        /* voting right */ 0,
+    );
     let committee = Committee::new(authorities);
 
-    let order = Order::new_transfer(
-        a2.into(),
-        random_object_ref(),
-        a1,
-        random_object_ref(),
-        &sec1,
-    );
-    let bad_order = Order::new_transfer(
-        a2.into(),
-        random_object_ref(),
-        a1,
-        random_object_ref(),
-        &sec2,
-    );
+    let order = Order::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec1);
+    let bad_order = Order::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec2);
 
-    let v = SignedOrder::new(order.clone(), a1, &sec1);
+    let v = SignedOrder::new(order.clone(), *sec1.public_key_bytes(), &sec1);
     assert!(v.check(&committee).is_ok());
 
-    let v = SignedOrder::new(order.clone(), a2, &sec2);
+    let v = SignedOrder::new(order.clone(), *sec2.public_key_bytes(), &sec2);
     assert!(v.check(&committee).is_err());
 
-    let v = SignedOrder::new(order, a3, &sec3);
+    let v = SignedOrder::new(order, *sec3.public_key_bytes(), &sec3);
     assert!(v.check(&committee).is_err());
 
-    let v = SignedOrder::new(bad_order, a1, &sec1);
+    let v = SignedOrder::new(bad_order, *sec1.public_key_bytes(), &sec1);
     assert!(v.check(&committee).is_err());
 }
 
@@ -58,31 +53,25 @@ fn test_signed_values() {
 fn test_certificates() {
     let (a1, sec1) = get_key_pair();
     let (a2, sec2) = get_key_pair();
-    let (a3, sec3) = get_key_pair();
+    let (_, sec3) = get_key_pair();
 
     let mut authorities = BTreeMap::new();
-    authorities.insert(/* address */ a1, /* voting right */ 1);
-    authorities.insert(/* address */ a2, /* voting right */ 1);
+    authorities.insert(
+        /* address */ *sec1.public_key_bytes(),
+        /* voting right */ 1,
+    );
+    authorities.insert(
+        /* address */ *sec2.public_key_bytes(),
+        /* voting right */ 1,
+    );
     let committee = Committee::new(authorities);
 
-    let order = Order::new_transfer(
-        a2.into(),
-        random_object_ref(),
-        a1,
-        random_object_ref(),
-        &sec1,
-    );
-    let bad_order = Order::new_transfer(
-        a2.into(),
-        random_object_ref(),
-        a1,
-        random_object_ref(),
-        &sec2,
-    );
+    let order = Order::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec1);
+    let bad_order = Order::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec2);
 
-    let v1 = SignedOrder::new(order.clone(), a1, &sec1);
-    let v2 = SignedOrder::new(order.clone(), a2, &sec2);
-    let v3 = SignedOrder::new(order.clone(), a3, &sec3);
+    let v1 = SignedOrder::new(order.clone(), *sec1.public_key_bytes(), &sec1);
+    let v2 = SignedOrder::new(order.clone(), *sec2.public_key_bytes(), &sec2);
+    let v3 = SignedOrder::new(order.clone(), *sec3.public_key_bytes(), &sec3);
 
     let mut builder = SignatureAggregator::try_new(order.clone(), &committee).unwrap();
     assert!(builder
