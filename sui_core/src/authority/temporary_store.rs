@@ -1,3 +1,4 @@
+use move_core_types::account_address::AccountAddress;
 use sui_types::event::Event;
 
 use super::*;
@@ -283,12 +284,12 @@ impl ResourceResolver for AuthorityTemporaryStore {
 
     fn get_resource(
         &self,
-        id: &move_core_types::account_address::AccountAddress,
+        address: &AccountAddress,
         struct_tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let object = match self.read_object(&ObjectID::from(*id)) {
+        let object = match self.read_object(&ObjectID::from(*address)) {
             Some(x) => x,
-            None => match self.read_object(&ObjectID::from(*id)) {
+            None => match self.read_object(&ObjectID::from(*address)) {
                 None => return Ok(None),
                 Some(x) => {
                     if !x.is_read_only() {

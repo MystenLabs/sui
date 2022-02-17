@@ -71,10 +71,7 @@ fn verify_key_structs(module: &CompiledModule) -> SuiResult {
         let id_type_module_name = module.identifier_at(id_type_module.name).to_string();
         fp_ensure!(
             id_type_struct_name == "ID"
-                && id_type_module_address
-                    == &move_core_types::account_address::AccountAddress::from(
-                        SUI_FRAMEWORK_ADDRESS
-                    )
+                && id_type_module_address == &SUI_FRAMEWORK_ADDRESS
                 && id_type_module_name == "ID",
             verification_failure(format!(
                 "First field of struct {} must be of type {}::ID::ID, {}::{}::{} type found",

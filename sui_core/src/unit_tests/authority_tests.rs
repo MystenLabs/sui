@@ -7,7 +7,9 @@ use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
 };
-use move_core_types::{ident_str, identifier::Identifier, language_storage::TypeTag};
+use move_core_types::{
+    account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
+};
 use move_package::BuildConfig;
 use sui_adapter::genesis;
 use sui_types::{
@@ -449,9 +451,9 @@ async fn test_publish_non_existing_dependent_module() {
     // create a module that depends on a genesis module
     let mut dependent_module = make_dependent_module(&genesis_module);
     // Add another dependent module that points to a random address, hence does not exist on-chain.
-    dependent_module.address_identifiers.push(
-        move_core_types::account_address::AccountAddress::from(ObjectID::random()),
-    );
+    dependent_module
+        .address_identifiers
+        .push(AccountAddress::from(ObjectID::random()));
     dependent_module.module_handles.push(ModuleHandle {
         address: AddressIdentifierIndex((dependent_module.address_identifiers.len() - 1) as u16),
         name: IdentifierIndex(0),

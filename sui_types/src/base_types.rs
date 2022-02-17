@@ -8,6 +8,7 @@ use std::fmt;
 use ed25519_dalek as dalek;
 use ed25519_dalek::{Digest, PublicKey, Verifier};
 use hex::FromHex;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use rand::rngs::OsRng;
@@ -84,7 +85,7 @@ impl TryFrom<&[u8]> for PublicKeyBytes {
 pub type AuthorityName = PublicKeyBytes;
 
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash)]
-pub struct ObjectID(move_core_types::account_address::AccountAddress);
+pub struct ObjectID(AccountAddress);
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
@@ -560,7 +561,7 @@ impl TryFrom<&[u8]> for TransactionDigest {
 
 impl ObjectID {
     /// The number of bytes in an address.
-    pub const LENGTH: usize = move_core_types::account_address::AccountAddress::LENGTH;
+    pub const LENGTH: usize = AccountAddress::LENGTH;
     /// Hex address: 0x0
     pub const ZERO: Self = Self::new([0u8; Self::LENGTH]);
     /// Hex address: 0x1
@@ -568,9 +569,7 @@ impl ObjectID {
 
     /// Creates a new ObjectID
     pub const fn new(obj_id: [u8; Self::LENGTH]) -> Self {
-        Self(move_core_types::account_address::AccountAddress::new(
-            obj_id,
-        ))
+        Self(AccountAddress::new(obj_id))
     }
     const fn get_hex_address_one() -> Self {
         let mut addr = [0u8; ObjectID::LENGTH];
@@ -691,13 +690,13 @@ impl From<[u8; ObjectID::LENGTH]> for ObjectID {
     }
 }
 
-impl From<move_core_types::account_address::AccountAddress> for ObjectID {
-    fn from(address: move_core_types::account_address::AccountAddress) -> Self {
+impl From<AccountAddress> for ObjectID {
+    fn from(address: AccountAddress) -> Self {
         Self(address)
     }
 }
 
-impl From<ObjectID> for move_core_types::account_address::AccountAddress {
+impl From<ObjectID> for AccountAddress {
     fn from(obj_id: ObjectID) -> Self {
         obj_id.0
     }
