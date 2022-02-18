@@ -108,6 +108,8 @@ pub enum SuiError {
     InvalidCrossShardUpdate,
     #[error("Invalid authenticator")]
     InvalidAuthenticator,
+    #[error("Invalid address")]
+    InvalidAddress,
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
     #[error(
