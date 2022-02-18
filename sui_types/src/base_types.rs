@@ -4,11 +4,11 @@ use crate::crypto::PublicKeyBytes;
 use crate::error::SuiError;
 use ed25519_dalek::Digest;
 
-use std::convert::{TryFrom, TryInto};
-use std::fmt;
 use hex::FromHex;
 use rand::Rng;
 use serde::{de::Error as _, Deserialize, Serialize};
+use std::convert::{TryFrom, TryInto};
+use std::fmt;
 
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;

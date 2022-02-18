@@ -3,11 +3,11 @@
 
 #![allow(clippy::blacklisted_name)]
 
-use std::str::FromStr;
 use crate::{
     crypto::{get_key_pair, BcsSignable, Signature},
     gas_coin::GasCoin,
 };
+use std::str::FromStr;
 
 use super::*;
 
