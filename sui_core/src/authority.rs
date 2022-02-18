@@ -3,7 +3,6 @@
 
 use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
-    account_address::AccountAddress,
     language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };

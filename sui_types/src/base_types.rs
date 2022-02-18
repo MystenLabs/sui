@@ -4,13 +4,16 @@ use crate::crypto::PublicKeyBytes;
 use crate::error::SuiError;
 use ed25519_dalek::Digest;
 
+use hex::FromHex;
+use rand::Rng;
+use serde::{de::Error as _, Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
+use std::fmt;
 
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 
-use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
 
@@ -30,8 +33,9 @@ pub struct UserData(pub Option<[u8; 32]>);
 
 pub type AuthorityName = PublicKeyBytes;
 
-// TODO: Have ObjectID wrap AccountAddress instead of type alias.
-pub type ObjectID = AccountAddress;
+#[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash)]
+pub struct ObjectID(AccountAddress);
+
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
 pub const SUI_ADDRESS_LENGTH: usize = 32;
@@ -46,7 +50,6 @@ impl SuiAddress {
 
     // for testing
     pub fn random_for_testing_only() -> Self {
-        use rand::Rng;
         let random_bytes = rand::thread_rng().gen::<[u8; SUI_ADDRESS_LENGTH]>();
         Self(random_bytes)
     }
@@ -179,7 +182,7 @@ impl TransactionDigest {
     /// A digest we use to signify the parent transaction was the genesis,
     /// ie. for an object there is no parent digest.
     ///
-    /// TODO(https://github.com/MystenLabs/fastnft/issues/65): we can pick anything here    
+    /// TODO(https://github.com/MystenLabs/fastnft/issues/65): we can pick anything here
     pub fn genesis() -> Self {
         Self::new([0; 32])
     }
@@ -195,12 +198,11 @@ impl TransactionDigest {
         let hash = hasher.finalize();
 
         // truncate into an ObjectID.
-        AccountAddress::try_from(&hash[0..AccountAddress::LENGTH]).unwrap()
+        ObjectID::try_from(&hash[0..ObjectID::LENGTH]).unwrap()
     }
 
     // for testing
     pub fn random() -> Self {
-        use rand::Rng;
         let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
         Self::new(random_bytes)
     }
@@ -399,5 +401,216 @@ impl TryFrom<&[u8]> for TransactionDigest {
             .try_into()
             .map_err(|_| SuiError::InvalidTransactionDigest)?;
         Ok(Self(arr))
+    }
+}
+
+impl ObjectID {
+    /// The number of bytes in an address.
+    pub const LENGTH: usize = AccountAddress::LENGTH;
+    /// Hex address: 0x0
+    pub const ZERO: Self = Self::new([0u8; Self::LENGTH]);
+    /// Creates a new ObjectID
+    pub const fn new(obj_id: [u8; Self::LENGTH]) -> Self {
+        Self(AccountAddress::new(obj_id))
+    }
+
+    /// Random ObjectID
+    pub fn random() -> Self {
+        Self::from(AccountAddress::random())
+    }
+
+    /// Converts from hex string to ObjectID where the string is prefixed with 0x
+    /// Its okay if the strings are less than expected
+    pub fn from_hex_literal(literal: &str) -> Result<Self, ObjectIDParseError> {
+        if !literal.starts_with("0x") {
+            return Err(ObjectIDParseError::HexLiteralPrefixMissing);
+        }
+
+        let hex_len = literal.len() - 2;
+
+        // If the string is too short, pad it
+        if hex_len < Self::LENGTH * 2 {
+            let mut hex_str = String::with_capacity(Self::LENGTH * 2);
+            for _ in 0..Self::LENGTH * 2 - hex_len {
+                hex_str.push('0');
+            }
+            hex_str.push_str(&literal[2..]);
+            Self::from_hex(hex_str)
+        } else {
+            Self::from_hex(&literal[2..])
+        }
+    }
+
+    pub fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, ObjectIDParseError> {
+        <[u8; Self::LENGTH]>::from_hex(hex)
+            .map_err(ObjectIDParseError::from)
+            .map(ObjectID::from)
+    }
+
+    pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, ObjectIDParseError> {
+        <[u8; Self::LENGTH]>::try_from(bytes.as_ref())
+            .map_err(|_| ObjectIDParseError::TryFromSliceError)
+            .map(ObjectID::from)
+    }
+}
+
+#[derive(PartialEq, Clone, Debug, thiserror::Error)]
+pub enum ObjectIDParseError {
+    #[error("ObjectID hex literal must start with 0x")]
+    HexLiteralPrefixMissing,
+
+    #[error("{err} (ObjectID hex string should only contain 0-9, A-F, a-f)")]
+    InvalidHexCharacter { err: hex::FromHexError },
+
+    #[error("{err} (hex string must be even-numbered. Two chars maps to one byte).")]
+    OddLength { err: hex::FromHexError },
+
+    #[error("{err} (ObjectID must be {} bytes long).", ObjectID::LENGTH)]
+    InvalidLength { err: hex::FromHexError },
+
+    #[error("Could not convert from bytes slice")]
+    TryFromSliceError,
+    // #[error("Internal hex parser error: {err}")]
+    // HexParserError { err: hex::FromHexError },
+}
+/// Wraps the underlying parsing errors
+impl From<hex::FromHexError> for ObjectIDParseError {
+    fn from(err: hex::FromHexError) -> Self {
+        match err {
+            hex::FromHexError::InvalidHexCharacter { c, index } => {
+                ObjectIDParseError::InvalidHexCharacter {
+                    err: hex::FromHexError::InvalidHexCharacter { c, index },
+                }
+            }
+            hex::FromHexError::OddLength => ObjectIDParseError::OddLength {
+                err: hex::FromHexError::OddLength,
+            },
+            hex::FromHexError::InvalidStringLength => ObjectIDParseError::InvalidLength {
+                err: hex::FromHexError::InvalidStringLength,
+            },
+        }
+    }
+}
+
+impl From<[u8; ObjectID::LENGTH]> for ObjectID {
+    fn from(bytes: [u8; ObjectID::LENGTH]) -> Self {
+        Self::new(bytes)
+    }
+}
+
+impl std::ops::Deref for ObjectID {
+    type Target = AccountAddress;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<AccountAddress> for ObjectID {
+    fn from(address: AccountAddress) -> Self {
+        Self(address)
+    }
+}
+
+impl From<ObjectID> for AccountAddress {
+    fn from(obj_id: ObjectID) -> Self {
+        obj_id.0
+    }
+}
+
+impl fmt::Display for ObjectID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl fmt::Debug for ObjectID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl fmt::LowerHex for ObjectID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl fmt::UpperHex for ObjectID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl TryFrom<&[u8]> for ObjectID {
+    type Error = ObjectIDParseError;
+
+    /// Tries to convert the provided byte array into ObjectID.
+    fn try_from(bytes: &[u8]) -> Result<ObjectID, ObjectIDParseError> {
+        Self::from_bytes(bytes)
+    }
+}
+
+impl TryFrom<Vec<u8>> for ObjectID {
+    type Error = ObjectIDParseError;
+
+    /// Tries to convert the provided byte buffer into ObjectID.
+    fn try_from(bytes: Vec<u8>) -> Result<ObjectID, ObjectIDParseError> {
+        Self::from_bytes(bytes)
+    }
+}
+
+impl TryFrom<String> for ObjectID {
+    type Error = ObjectIDParseError;
+
+    fn try_from(s: String) -> Result<ObjectID, ObjectIDParseError> {
+        match Self::from_hex(s.clone()) {
+            Ok(q) => Ok(q),
+            Err(_) => Self::from_hex_literal(&s),
+        }
+    }
+}
+
+impl std::str::FromStr for ObjectID {
+    type Err = ObjectIDParseError;
+    // Try to match both the literal (0xABC..) and the normal (ABC)
+    fn from_str(s: &str) -> Result<Self, ObjectIDParseError> {
+        match Self::from_hex(s) {
+            Ok(q) => Ok(q),
+            Err(_) => Self::from_hex_literal(s),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ObjectID {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = <String>::deserialize(deserializer)?;
+            ObjectID::from_hex(s).map_err(D::Error::custom)
+        } else {
+            // In order to preserve the Serde data model and help analysis tools,
+            // make sure to wrap our value in a container with the same name
+            // as the original type.
+            #[derive(::serde::Deserialize)]
+            #[serde(rename = "ObjectID")]
+            struct Value([u8; ObjectID::LENGTH]);
+
+            let value = Value::deserialize(deserializer)?;
+            Ok(ObjectID::new(value.0))
+        }
+    }
+}
+
+impl Serialize for ObjectID {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            self.to_hex().serialize(serializer)
+        } else {
+            // See comment in deserialize.
+            serializer.serialize_newtype_struct("ObjectID", &self.0)
+        }
     }
 }
