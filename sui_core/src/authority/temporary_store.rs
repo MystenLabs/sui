@@ -129,8 +129,7 @@ impl AuthorityTemporaryStore {
             mutated: self
                 .written
                 .iter()
-                // Exclude gas_object from the mutated list.
-                .filter(|(id, _)| *id != gas_object_id && self.objects.contains_key(*id))
+                .filter(|(id, _)| self.objects.contains_key(*id))
                 .map(|(_, object)| (object.to_object_reference(), object.owner))
                 .collect(),
             deleted: self

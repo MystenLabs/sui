@@ -809,10 +809,10 @@ async fn test_move_calls_object_create() {
     ));
     // Nothing should be deleted during a creation
     assert!(order_effects.deleted.is_empty());
-    // A new object is created.
+    // A new object is created. Gas is mutated.
     assert_eq!(
         (order_effects.created.len(), order_effects.mutated.len()),
-        (1, 0)
+        (1, 1)
     );
     assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 }
@@ -890,11 +890,11 @@ async fn test_move_calls_object_transfer() {
     // Nothing should be deleted during a transfer
     assert!(order_effects.deleted.is_empty());
     // The object being transfered will be in mutated.
-    assert_eq!(order_effects.mutated.len(), 1);
+    assert_eq!(order_effects.mutated.len(), 2);
     // Confirm the items
     assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
-    let (transferred_obj_ref, _) = order_effects.mutated[0];
+    let (transferred_obj_ref, _) = *order_effects.mutated_excluding_gas().next().unwrap();
     assert_ne!(gas_object_ref, transferred_obj_ref);
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
@@ -976,10 +976,10 @@ async fn test_move_calls_object_transfer_and_freeze() {
     ));
     // Nothing should be deleted during a transfer
     assert!(order_effects.deleted.is_empty());
-    // Item being transfered is mutated.
-    assert_eq!(order_effects.mutated.len(), 1);
+    // Item being transfered is mutated. Plus gas object.
+    assert_eq!(order_effects.mutated.len(), 2);
 
-    let (transferred_obj_ref, _) = order_effects.mutated[0];
+    let (transferred_obj_ref, _) = *order_effects.mutated_excluding_gas().next().unwrap();
     assert_ne!(gas_object_ref, transferred_obj_ref);
 
     assert_eq!(transferred_obj_ref.0, new_obj_ref.0);
@@ -1061,8 +1061,8 @@ async fn test_move_calls_object_delete() {
     ));
     // Object be deleted during a delete
     assert_eq!(order_effects.deleted.len(), 1);
-    // No item is mutated.
-    assert_eq!(order_effects.mutated.len(), 0);
+    // Only gas is mutated.
+    assert_eq!(order_effects.mutated.len(), 1);
     // Confirm the items
     assert_eq!(order_effects.gas_object.0 .0, gas_object_id);
 
