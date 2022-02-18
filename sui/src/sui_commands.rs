@@ -10,8 +10,9 @@ use std::sync::Arc;
 use structopt::StructOpt;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
-use sui_types::base_types::{encode_bytes_hex, get_key_pair, ObjectID, SequenceNumber};
+use sui_types::base_types::{encode_bytes_hex, ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
+use sui_types::crypto::get_key_pair;
 use sui_types::object::Object;
 use tracing::{error, info};
 
@@ -52,7 +53,7 @@ async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
         config
             .authorities
             .iter()
-            .map(|info| (info.key_pair.public(), DEFAULT_WEIGHT))
+            .map(|info| (*info.key_pair.public_key_bytes(), DEFAULT_WEIGHT))
             .collect(),
     );
 
@@ -91,13 +92,15 @@ async fn genesis(config: &mut NetworkConfig) -> Result<(), anyhow::Error> {
     info!("Creating new authorities...");
     let authorities_db_path = working_dir.join("authorities_db");
     for _ in 0..4 {
-        let (pub_key, key_pair) = get_key_pair();
+        let (_, key_pair) = get_key_pair();
+        let pub_key = *key_pair.public_key_bytes();
         let info = AuthorityPrivateInfo {
             key_pair,
             host: "127.0.0.1".to_string(),
             port: port_allocator.next_port().expect("No free ports"),
             db_path: authorities_db_path.join(encode_bytes_hex(&pub_key)),
         };
+
         authority_info.push(AuthorityInfo {
             name: pub_key,
             host: info.host.clone(),
@@ -114,8 +117,7 @@ async fn genesis(config: &mut NetworkConfig) -> Result<(), anyhow::Error> {
 
     info!("Creating test objects...");
     for _ in 0..5 {
-        let (pub_key, key_pair) = get_key_pair();
-        let address = pub_key.into();
+        let (address, key_pair) = get_key_pair();
         new_addresses.push(AccountInfo { address, key_pair });
         for _ in 0..5 {
             let new_object = Object::with_id_owner_gas_coin_object_for_testing(
@@ -159,10 +161,11 @@ async fn make_server(
     buffer_size: usize,
 ) -> AuthorityServer {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
+    let name = *authority.key_pair.public_key_bytes();
 
     let state = AuthorityState::new_with_genesis_modules(
         committee.clone(),
-        authority.key_pair.public(),
+        name,
         Box::pin(authority.key_pair.copy()),
         store,
     )

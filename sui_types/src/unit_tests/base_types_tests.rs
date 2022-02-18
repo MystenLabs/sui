@@ -4,8 +4,10 @@
 #![allow(clippy::blacklisted_name)]
 
 use std::str::FromStr;
-
-use crate::gas_coin::GasCoin;
+use crate::{
+    crypto::{get_key_pair, BcsSignable, Signature},
+    gas_coin::GasCoin,
+};
 
 use super::*;
 

@@ -68,7 +68,7 @@ module Examples::Hero {
     }
 
     /// Address of the admin account that receives payment for swords
-    const ADMIN: vector<u8> = vector[189, 215, 127, 86, 129, 189, 1, 4, 90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181, 105, 254, 59, 163];
+    const ADMIN: vector<u8> = vector[238, 4, 55, 207, 98, 91, 119, 175, 77, 18, 191, 249, 138, 241, 168, 131, 50, 176, 6, 56, 183, 70, 48, 207, 116, 119, 225, 167, 57, 74, 80, 180];
     /// Upper bound on player's HP
     const MAX_HP: u64 = 1000;
     /// Upper bound on how magical a sword can be

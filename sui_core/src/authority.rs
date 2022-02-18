@@ -16,6 +16,7 @@ use sui_adapter::{adapter, genesis};
 use sui_types::{
     base_types::*,
     committee::Committee,
+    crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
     fp_bail, fp_ensure, gas,
     messages::*,
@@ -39,7 +40,7 @@ pub use authority_store::AuthorityStore;
 ///
 /// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
 ///
-type StableSyncSigner = Pin<Box<dyn signature::Signer<ed25519_dalek::Signature> + Send + Sync>>;
+type StableSyncAuthoritySigner = Pin<Box<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
 
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
@@ -48,7 +49,7 @@ pub struct AuthorityState {
     /// Committee of this Sui instance.
     pub committee: Committee,
     /// The signature key of the authority.
-    pub secret: StableSyncSigner,
+    pub secret: StableSyncAuthoritySigner,
 
     /// Move native functions that are available to invoke
     _native_functions: NativeFunctionTable,
@@ -463,7 +464,7 @@ impl AuthorityState {
     pub async fn new_with_genesis_modules(
         committee: Committee,
         name: AuthorityName,
-        secret: StableSyncSigner,
+        secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
     ) -> Self {
         let (genesis_modules, native_functions) = genesis::clone_genesis_data();
@@ -493,7 +494,7 @@ impl AuthorityState {
     pub fn new_without_genesis_for_testing(
         committee: Committee,
         name: AuthorityName,
-        secret: StableSyncSigner,
+        secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
     ) -> Self {
         let native_functions = NativeFunctionTable::new();

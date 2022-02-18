@@ -8,6 +8,7 @@ use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use sui_framework::build_move_package_to_bytes;
+use sui_types::crypto::Signature;
 use sui_types::{
     base_types::*, committee::Committee, error::SuiError, fp_ensure, messages::*,
     object::ObjectRead,
@@ -28,7 +29,7 @@ use std::{
 ///
 /// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
 ///
-pub type StableSyncSigner = Pin<Box<dyn signature::Signer<ed25519_dalek::Signature> + Send + Sync>>;
+pub type StableSyncSigner = Pin<Box<dyn signature::Signer<Signature> + Send + Sync>>;
 
 pub mod client_store;
 
@@ -53,12 +54,11 @@ impl<A> ClientAddressManager<A> {
     /// Get (if exists) or create a new managed address state
     pub fn get_or_create_state_mut(
         &mut self,
-        pub_key: PublicKeyBytes,
+        address: SuiAddress,
         secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
     ) -> Result<&mut ClientState<A>, SuiError> {
-        let address = pub_key.into();
         if let std::collections::btree_map::Entry::Vacant(e) = self.address_states.entry(address) {
             // Load the records if available
             let single_store = if self.store.is_managed_address(address)? {
@@ -68,7 +68,7 @@ impl<A> ClientAddressManager<A> {
                 self.store.manage_new_address(address)
             }?;
             e.insert(ClientState::new_for_manager(
-                pub_key,
+                address,
                 secret,
                 committee,
                 authority_clients,
@@ -88,8 +88,6 @@ impl<A> ClientAddressManager<A> {
 pub struct ClientState<AuthorityAPI> {
     /// Our Sui address.
     address: SuiAddress,
-    // TODO: We will need to embed pub_key into secret.
-    pub_key: PublicKeyBytes,
     /// Our signature key.
     secret: StableSyncSigner,
     /// Authority entry point.
@@ -154,14 +152,13 @@ impl<A> ClientState<A> {
     #[cfg(test)]
     pub fn new(
         path: PathBuf,
-        pub_key: PublicKeyBytes,
+        address: SuiAddress,
         secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
     ) -> Result<Self, SuiError> {
         Ok(ClientState {
-            address: pub_key.into(),
-            pub_key,
+            address,
             secret,
             authorities: AuthorityAggregator::new(committee, authority_clients),
             store: client_store::ClientSingleAddressStore::new(path),
@@ -169,15 +166,14 @@ impl<A> ClientState<A> {
     }
 
     pub fn new_for_manager(
-        pub_key: PublicKeyBytes,
+        address: SuiAddress,
         secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         store: client_store::ClientSingleAddressStore,
     ) -> Result<Self, SuiError> {
         Ok(ClientState {
-            address: pub_key.into(),
-            pub_key,
+            address,
             secret,
             authorities: AuthorityAggregator::new(committee, authority_clients),
             store,
@@ -186,10 +182,6 @@ impl<A> ClientState<A> {
 
     pub fn address(&self) -> SuiAddress {
         self.address
-    }
-
-    pub fn pub_key(&self) -> PublicKeyBytes {
-        self.pub_key
     }
 
     pub fn next_sequence_number(&self, object_id: &ObjectID) -> Result<SequenceNumber, SuiError> {
@@ -292,7 +284,7 @@ impl<A> ClientState<A> {
     }
 
     #[cfg(test)]
-    pub fn secret(&self) -> &dyn signature::Signer<ed25519_dalek::Signature> {
+    pub fn secret(&self) -> &dyn signature::Signer<Signature> {
         &*self.secret
     }
 }
@@ -431,7 +423,7 @@ where
 
         let mut objs_to_download = Vec::new();
 
-        for &(object_ref, owner) in effects.all_mutated() {
+        for &(object_ref, owner) in effects.mutated_and_created() {
             let (object_id, seq, _) = object_ref;
             let old_seq = self
                 .store
@@ -540,7 +532,7 @@ where
         let order = Order::new_transfer(
             recipient,
             object_ref,
-            self.pub_key,
+            self.address,
             gas_payment,
             &*self.secret,
         );
@@ -625,7 +617,7 @@ where
         gas_budget: u64,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         let move_call_order = Order::new_move_call(
-            self.pub_key,
+            self.address,
             package_object_ref,
             module,
             function,
@@ -648,7 +640,7 @@ where
         // Try to compile the package at the given path
         let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
         let move_publish_order = Order::new_module(
-            self.pub_key,
+            self.address,
             gas_object_ref,
             compiled_modules,
             gas_budget,

@@ -1,6 +1,7 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature};
 use crate::object::{Object, ObjectFormatOptions, OBJECT_START_VERSION};
 
 use super::{base_types::*, committee::Committee, error::*, event::Event};
@@ -59,8 +60,7 @@ pub enum OrderKind {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct OrderData {
     pub kind: OrderKind,
-    // TODO: sender should be SuiAddress, and the public key should be embedded into signature.
-    sender: PublicKeyBytes,
+    sender: SuiAddress,
     gas_payment: ObjectRef,
 }
 
@@ -82,7 +82,7 @@ const_assert_eq!(
 pub struct SignedOrder {
     pub order: Order,
     pub authority: AuthorityName,
-    pub signature: Signature,
+    pub signature: AuthoritySignature,
 }
 
 /// An order signed by a quorum of authorities
@@ -95,7 +95,7 @@ pub struct SignedOrder {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CertifiedOrder {
     pub order: Order,
-    pub signatures: Vec<(AuthorityName, Signature)>,
+    pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
 }
 
 // Note: if you meet an error due to this line it may be because you need an Eq implementation for `CertifiedOrder`,
@@ -269,12 +269,12 @@ pub struct OrderEffects {
     pub transaction_digest: TransactionDigest,
     // ObjectRef and owner of new objects created.
     pub created: Vec<(ObjectRef, SuiAddress)>,
-    // ObjectRef and owner of mutated objects.
-    // mutated does not include gas object or created objects.
+    // ObjectRef and owner of mutated objects, including gas object.
     pub mutated: Vec<(ObjectRef, SuiAddress)>,
     // Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
-    // The updated gas object reference.
+    // The updated gas object reference. Have a dedicated field for convenient access.
+    // It's also included in mutated.
     pub gas_object: (ObjectRef, SuiAddress),
     /// The events emitted during execution. Note that only successful transactions emit events
     pub events: Vec<Event>,
@@ -283,14 +283,16 @@ pub struct OrderEffects {
 }
 
 impl OrderEffects {
-    /// Return an iterator that iterates throguh all mutated objects,
-    /// including all from mutated, created and the gas_object.
-    /// It doesn't include deleted.
-    pub fn all_mutated(&self) -> impl Iterator<Item = &(ObjectRef, SuiAddress)> {
-        self.mutated
-            .iter()
-            .chain(self.created.iter())
-            .chain(std::iter::once(&self.gas_object))
+    /// Return an iterator that iterates through both mutated and
+    /// created objects.
+    /// It doesn't include deleted objects.
+    pub fn mutated_and_created(&self) -> impl Iterator<Item = &(ObjectRef, SuiAddress)> {
+        self.mutated.iter().chain(self.created.iter())
+    }
+
+    /// Return an iterator of mutated objects, but excluding the gas object.
+    pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &(ObjectRef, SuiAddress)> {
+        self.mutated.iter().filter(|o| *o != &self.gas_object)
     }
 }
 
@@ -326,7 +328,7 @@ impl Display for OrderEffects {
 pub struct SignedOrderEffects {
     pub effects: OrderEffects,
     pub authority: AuthorityName,
-    pub signature: Signature,
+    pub signature: AuthoritySignature,
 }
 
 impl Hash for Order {
@@ -386,8 +388,8 @@ impl InputObjectKind {
 impl Order {
     pub fn new(
         kind: OrderKind,
-        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
-        sender: PublicKeyBytes,
+        secret: &dyn signature::Signer<Signature>,
+        sender: SuiAddress,
         gas_payment: ObjectRef,
     ) -> Self {
         let data = OrderData {
@@ -401,7 +403,7 @@ impl Order {
 
     #[allow(clippy::too_many_arguments)]
     pub fn new_move_call(
-        sender: PublicKeyBytes,
+        sender: SuiAddress,
         package: ObjectRef,
         module: Identifier,
         function: Identifier,
@@ -410,7 +412,7 @@ impl Order {
         object_arguments: Vec<ObjectRef>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+        secret: &dyn signature::Signer<Signature>,
     ) -> Self {
         let kind = OrderKind::Call(MoveCall {
             package,
@@ -425,11 +427,11 @@ impl Order {
     }
 
     pub fn new_module(
-        sender: PublicKeyBytes,
+        sender: SuiAddress,
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
         gas_budget: u64,
-        secret: &dyn signature::Signer<ed25519::Signature>,
+        secret: &dyn signature::Signer<Signature>,
     ) -> Self {
         let kind = OrderKind::Publish(MoveModulePublish {
             modules,
@@ -441,9 +443,9 @@ impl Order {
     pub fn new_transfer(
         recipient: SuiAddress,
         object_ref: ObjectRef,
-        sender: PublicKeyBytes,
+        sender: SuiAddress,
         gas_payment: ObjectRef,
-        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+        secret: &dyn signature::Signer<Signature>,
     ) -> Self {
         let kind = OrderKind::Transfer(Transfer {
             recipient,
@@ -457,7 +459,7 @@ impl Order {
     }
 
     pub fn sender_address(&self) -> SuiAddress {
-        self.data.sender.into()
+        self.data.sender
     }
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
@@ -532,9 +534,9 @@ impl SignedOrder {
     pub fn new(
         order: Order,
         authority: AuthorityName,
-        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+        secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
-        let signature = Signature::new(&order.data, secret);
+        let signature = AuthoritySignature::new(&order.data, secret);
         Self {
             order,
             authority,
@@ -585,7 +587,7 @@ impl<'a> SignatureAggregator<'a> {
     pub fn append(
         &mut self,
         authority: AuthorityName,
-        signature: Signature,
+        signature: AuthoritySignature,
     ) -> Result<Option<CertifiedOrder>, SuiError> {
         signature.check(&self.partial.order.data, authority)?;
         // Check that each authority only appears once.
@@ -632,10 +634,14 @@ impl CertifiedOrder {
             SuiError::CertificateRequiresQuorum
         );
         // All that is left is checking signatures!
-        let inner_sig = (self.order.data.sender, self.order.signature);
-        Signature::verify_batch(
+        // one user signature
+        self.order
+            .signature
+            .check(&self.order.data, self.order.data.sender)?;
+        // a batch of authority signatures
+        AuthoritySignature::verify_batch(
             &self.order.data,
-            std::iter::once(&inner_sig).chain(&self.signatures),
+            &self.signatures,
             &committee.expanded_keys,
         )
     }

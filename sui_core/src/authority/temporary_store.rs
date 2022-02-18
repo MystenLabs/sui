@@ -111,7 +111,7 @@ impl AuthorityTemporaryStore {
     pub fn to_signed_effects(
         &self,
         authority_name: &AuthorityName,
-        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+        secret: &dyn signature::Signer<AuthoritySignature>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
@@ -130,8 +130,7 @@ impl AuthorityTemporaryStore {
             mutated: self
                 .written
                 .iter()
-                // Exclude gas_object from the mutated list.
-                .filter(|(id, _)| *id != gas_object_id && self.objects.contains_key(*id))
+                .filter(|(id, _)| self.objects.contains_key(*id))
                 .map(|(_, object)| (object.to_object_reference(), object.owner))
                 .collect(),
             deleted: self
@@ -143,7 +142,7 @@ impl AuthorityTemporaryStore {
             events: self.events.clone(),
             dependencies: transaction_dependencies,
         };
-        let signature = Signature::new(&effects, secret);
+        let signature = AuthoritySignature::new(&effects, secret);
 
         SignedOrderEffects {
             effects,

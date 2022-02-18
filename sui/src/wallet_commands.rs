@@ -5,9 +5,10 @@ use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientAddressManager, ClientState};
 use sui_network::network::NetworkClient;
 use sui_types::base_types::{
-    decode_bytes_hex, encode_bytes_hex, get_key_pair, AuthorityName, ObjectID, SuiAddress,
+    decode_bytes_hex, encode_bytes_hex, AuthorityName, ObjectID, SuiAddress,
 };
 use sui_types::committee::Committee;
+use sui_types::crypto::get_key_pair;
 use sui_types::messages::ExecutionStatus;
 
 use crate::utils::Config;
@@ -270,8 +271,7 @@ impl WalletCommands {
                 client_state.sync_client_state().await?;
             }
             WalletCommands::NewAddress => {
-                let (pub_key, key) = get_key_pair();
-                let address = pub_key.into();
+                let (address, key) = get_key_pair();
                 context.config.accounts.push(AccountInfo {
                     address,
                     key_pair: key,
@@ -327,7 +327,7 @@ impl WalletContext {
         let committee = Committee::new(voting_rights);
         let authority_clients = self.make_authority_clients();
         self.address_manager
-            .get_or_create_state_mut(kp.public(), kp, committee, authority_clients)
+            .get_or_create_state_mut(*owner, kp, committee, authority_clients)
     }
 
     fn make_authority_clients(&self) -> BTreeMap<AuthorityName, AuthorityClient> {

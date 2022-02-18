@@ -19,11 +19,11 @@ use std::fmt::{Debug, Display, Formatter};
 use move_binary_format::CompiledModule;
 use move_core_types::language_storage::StructTag;
 
+use crate::crypto::{sha3_hash, BcsSignable};
 use crate::error::SuiError;
 use crate::{
     base_types::{
-        sha3_hash, BcsSignable, ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress,
-        TransactionDigest,
+        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
     },
     gas_coin::GasCoin,
 };
