@@ -17,7 +17,7 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Formatter};
 
 use move_binary_format::CompiledModule;
-use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
+use move_core_types::language_storage::StructTag;
 
 use crate::crypto::{sha3_hash, BcsSignable};
 use crate::error::SuiError;
@@ -43,7 +43,7 @@ pub struct MoveObject {
 /// Byte encoding of a 64 byte unsigned integer in BCS
 type BcsU64 = [u8; 8];
 /// Index marking the end of the object's ID + the beginning of its version
-const ID_END_INDEX: usize = AccountAddress::LENGTH;
+const ID_END_INDEX: usize = ObjectID::LENGTH;
 /// Index marking the end of the object's version + the beginning of type-specific data
 const VERSION_END_INDEX: usize = ID_END_INDEX + 8;
 
@@ -67,7 +67,7 @@ impl MoveObject {
     }
 
     pub fn id(&self) -> ObjectID {
-        AccountAddress::try_from(&self.contents[0..ID_END_INDEX]).unwrap()
+        ObjectID::try_from(&self.contents[0..ID_END_INDEX]).unwrap()
     }
 
     pub fn version(&self) -> SequenceNumber {
@@ -330,10 +330,12 @@ impl Object {
             Package(m) => {
                 // All modules in the same package must have the same address.
                 // TODO: Use byte trick to get ID directly without deserialization.
-                *CompiledModule::deserialize(m.values().next().unwrap())
-                    .unwrap()
-                    .self_id()
-                    .address()
+                ObjectID::from(
+                    *CompiledModule::deserialize(m.values().next().unwrap())
+                        .unwrap()
+                        .self_id()
+                        .address(),
+                )
             }
         }
     }

@@ -455,7 +455,7 @@ impl ModuleResolver for AuthorityStore {
     type Error = SuiError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.get_object(module_id.address())? {
+        match self.get_object(&ObjectID::from(*module_id.address()))? {
             Some(o) => match &o.data {
                 Data::Package(c) => Ok(c
                     .get(module_id.name().as_str())

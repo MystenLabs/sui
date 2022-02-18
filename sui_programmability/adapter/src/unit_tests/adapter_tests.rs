@@ -150,7 +150,7 @@ impl ModuleResolver for InMemoryStorage {
     type Error = ();
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self
-            .read_object(module_id.address())
+            .read_object(&ObjectID::from(*module_id.address()))
             .map(|o| match &o.data {
                 Data::Package(m) => m[module_id.name().as_str()].clone().into_vec(),
                 Data::Move(_) => panic!("Type error"),

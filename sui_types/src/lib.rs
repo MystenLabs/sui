@@ -27,9 +27,11 @@ pub mod serialize;
 pub mod storage;
 
 /// 0x1-- account address where Move stdlib modules are stored
+/// Same as the ObjectID
 pub const MOVE_STDLIB_ADDRESS: AccountAddress = AccountAddress::ONE;
 
 /// 0x2-- account address where fastX framework modules are stored
+/// Same as the ObjectID
 pub const SUI_FRAMEWORK_ADDRESS: AccountAddress = get_hex_address_two();
 
 const fn get_hex_address_two() -> AccountAddress {

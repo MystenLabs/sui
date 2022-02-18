@@ -148,7 +148,7 @@ fn execute_internal<
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
     mutable_ref_objects: Vec<Object>,
-    by_value_objects: BTreeMap<AccountAddress, Object>,
+    by_value_objects: BTreeMap<ObjectID, Object>,
     object_owner_map: HashMap<SuiAddress, SuiAddress>,
     gas_budget: u64, // gas budget for the current call operation
     ctx: &mut TxContext,
@@ -400,7 +400,11 @@ pub fn verify_and_link<
         })
         .collect();
     session
-        .publish_module_bundle(new_module_bytes, package_id, &mut gas_status)
+        .publish_module_bundle(
+            new_module_bytes,
+            AccountAddress::from(package_id),
+            &mut gas_status,
+        )
         .map_err(|e| SuiError::ModulePublishFailure {
             error: e.to_string(),
         })?;
@@ -433,7 +437,10 @@ pub fn generate_package_id(
                 error: "Publishing modules with non-zero address is not allowed".to_string(),
             });
         }
-        let new_module_id = ModuleId::new(package_id, old_module_id.name().to_owned());
+        let new_module_id = ModuleId::new(
+            AccountAddress::from(package_id),
+            old_module_id.name().to_owned(),
+        );
         if sub_map.insert(old_module_id, new_module_id).is_some() {
             return Err(SuiError::ModulePublishFailure {
                 error: "Publishing two modules with the same ID".to_string(),

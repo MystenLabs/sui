@@ -300,7 +300,9 @@ where
 
     #[cfg(test)]
     pub async fn get_framework_object_ref(&mut self) -> Result<ObjectRef, anyhow::Error> {
-        let info = self.get_object_info(SUI_FRAMEWORK_ADDRESS).await?;
+        let info = self
+            .get_object_info(ObjectID::from(SUI_FRAMEWORK_ADDRESS))
+            .await?;
         Ok(info.reference()?)
     }
 

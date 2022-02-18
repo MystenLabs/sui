@@ -505,7 +505,7 @@ impl Order {
                         }
                     };
                     for handle in module.module_handles.iter() {
-                        let address = *module.address_identifier_at(handle.address);
+                        let address = ObjectID::from(*module.address_identifier_at(handle.address));
                         if address != ObjectID::ZERO {
                             dependent_packages.insert(address);
                         }
