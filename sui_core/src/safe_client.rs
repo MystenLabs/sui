@@ -98,11 +98,17 @@ impl<C> SafeClient<C> {
             certificate.check(&self.committee)?;
         }
 
-        // Check the right version is returned
-        if let Some(requested_version) = &request.request_sequence_number {
-            if let Some(object_ref) = &response.requested_object_reference {
+        // Check the right object ID and version is returned
+        if let Some((object_id, version, _)) = &response.requested_object_reference {
+            fp_ensure!(
+                object_id == &request.object_id,
+                SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address
+                }
+            );
+            if let Some(requested_version) = &request.request_sequence_number {
                 fp_ensure!(
-                    object_ref.1 == *requested_version,
+                    version == requested_version,
                     SuiError::ByzantineAuthoritySuspicion {
                         authority: self.address
                     }
@@ -110,8 +116,31 @@ impl<C> SafeClient<C> {
             }
         }
 
-        // If an order lock is returned it is valid.
         if let Some(object_and_lock) = &response.object_and_lock {
+            if request.request_sequence_number.is_none() {
+                // If request_sequence_number is none, we are requesting the latest version.
+                match response.requested_object_reference {
+                    Some(obj_ref) => {
+                        // Since we are requesting the latest version, we should validate that if the object's
+                        // reference actually match with the one from the responded object reference.
+                        fp_ensure!(
+                            object_and_lock.object.to_object_reference() == obj_ref,
+                            SuiError::ByzantineAuthoritySuspicion {
+                                authority: self.address
+                            }
+                        );
+                    }
+                    None => {
+                        // Since we are returning the object for the latest version,
+                        // we must also have the requested object reference in the response.
+                        // Otherwise the authority has inconsistent data.
+                        return Err(SuiError::ByzantineAuthoritySuspicion {
+                            authority: self.address,
+                        });
+                    }
+                }
+            }
+
             if let Some(signed_order) = &object_and_lock.lock {
                 signed_order.check(&self.committee)?;
                 // Check it has the right signer

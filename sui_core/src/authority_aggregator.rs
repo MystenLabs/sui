@@ -331,8 +331,13 @@ where
         Ok(accumulated_state)
     }
 
-    /// Return all the information in the network about a specific object, including all versions of it
-    /// as well as all certificates that lead to the versions and the authorities at that version.
+    /// Return all the information in the network regarding the latest state of a specific object.
+    /// For each authority queried, we obtain the latest object state along with the certificate that
+    /// lead up to that state. The results from each authority are aggreated for the return.
+    /// The first part of the return value is a map from each unique (ObjectRef, TransactionDigest)
+    /// pair to the content of the object as well as a list of authorities that responded this
+    /// pair.
+    /// The second part of the return value is a map from transaction digest to the cert.
     async fn get_object_by_id(
         &self,
         object_id: ObjectID,
@@ -992,18 +997,10 @@ where
                 .map(|(name, _)| self.committee.weight(name))
                 .sum();
 
-            // If we have f+1 stake telling us of the latest version of the object, we just accept it.
+            let mut is_ok = false;
             if stake >= self.committee.validity_threshold() {
-                if obj_option.is_none() {
-                    return Ok(ObjectRead::Deleted(obj_ref));
-                } else {
-                    // safe due to check
-                    return Ok(ObjectRead::Exists(
-                        obj_ref,
-                        obj_option.unwrap(),
-                        layout_option,
-                    ));
-                }
+                // If we have f+1 stake telling us of the latest version of the object, we just accept it.
+                is_ok = true;
             } else if cert_map.contains_key(&tx_digest) {
                 // If we have less stake telling us about the latest state of an object
                 // we re-run the certificate on all authorities to ensure it is correct.
@@ -1011,21 +1008,10 @@ where
                     .process_certificate(cert_map[&tx_digest].clone(), AUTHORITY_REQUEST_TIMEOUT)
                     .await
                 {
-                    let mut is_ok = false;
-
                     // The mutated or created case
                     if _effects
-                        .mutated
-                        .iter()
-                        .filter(|(oref, _)| *oref == obj_ref)
-                        .count()
-                        != 0
-                        || _effects
-                            .created
-                            .iter()
-                            .filter(|(oref, _)| *oref == obj_ref)
-                            .count()
-                            != 0
+                        .mutated_and_created()
+                        .any(|(oref, _)| *oref == obj_ref)
                     {
                         is_ok = true;
                     }
@@ -1035,30 +1021,26 @@ where
                         && _effects
                             .deleted
                             .iter()
-                            .filter(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
-                            .count()
-                            != 0
+                            .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
                     {
                         is_ok = true;
                     }
 
                     if !is_ok {
-                        // Report a byzantine fault here
+                        // TODO: Report a byzantine fault here
                         continue;
                     }
-
-                    // NOTE: here we should validate the object is correct from the effects
-                    if obj_option.is_none() {
-                        return Ok(ObjectRead::Deleted(obj_ref));
-                    } else {
-                        // safe due to check
-                        return Ok(ObjectRead::Exists(
-                            obj_ref,
-                            obj_option.unwrap(),
-                            layout_option,
-                        ));
-                    }
                 }
+            }
+            if is_ok {
+                match obj_option {
+                    Some(obj) => {
+                        return Ok(ObjectRead::Exists(obj_ref, obj, layout_option));
+                    }
+                    None => {
+                        return Ok(ObjectRead::Deleted(obj_ref));
+                    }
+                };
             }
         }
 
