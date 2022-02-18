@@ -190,7 +190,7 @@ module FastX::Geniteam {
 
     /// Remove a monster from a farm amd transfer it to the transaction sender
     public fun remove_monster(self: &mut Player, monster_id: vector<u8>, ctx: &mut TxContext) {
-        let monster = remove_monster_(self.farm, &ID::new_bytes(monster_id));
+        let monster = remove_monster_(&mut self.farm, &ID::new_bytes(monster_id));
         Transfer::transfer(monster, TxContext::get_signer_address(ctx))
     }
 
