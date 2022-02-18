@@ -739,30 +739,22 @@ impl From<ObjectID> for AccountAddress {
 
 impl fmt::Display for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:X}", self)
+        self.0.fmt(f)
     }
 }
 impl fmt::Debug for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:X}", self)
+        self.0.fmt(f)
     }
 }
 impl fmt::LowerHex for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{:02x}", self.0)?;
-        Ok(())
+        self.0.fmt(f)
     }
 }
 impl fmt::UpperHex for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() {
-            write!(f, "0x")?;
-        }
-        write!(f, "{:02X}", self.0)?;
-        Ok(())
+        self.0.fmt(f)
     }
 }
 
