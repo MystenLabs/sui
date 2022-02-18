@@ -544,7 +544,7 @@ async fn test_handle_move_order() {
 
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!(effects.created.len(), 1);
-    assert!(effects.mutated.is_empty());
+    assert_eq!(effects.mutated.len(), 1);
 
     let created_object_id = effects.created[0].0 .0;
     // check that order actually created an object with the expected ID, owner, sequence number
@@ -1012,14 +1012,14 @@ async fn test_move_call_mutable_object_not_mutated() {
         .await
         .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
     let (new_object_id1, seq1, _) = effects.created[0].0;
 
     let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
     let (new_object_id2, seq2, _) = effects.created[0].0;
 
     let effects = call_framework_code(
@@ -1036,7 +1036,7 @@ async fn test_move_call_mutable_object_not_mutated() {
     .await
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!((effects.created.len(), effects.mutated.len()), (0, 2));
+    assert_eq!((effects.created.len(), effects.mutated.len()), (0, 3));
     // Verify that both objects' version increased, even though only one object was updated.
     assert_eq!(
         authority_state
@@ -1068,14 +1068,14 @@ async fn test_move_call_delete() {
         .await
         .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
     let (new_object_id1, _seq1, _) = effects.created[0].0;
 
     let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 0));
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
     let (new_object_id2, _seq2, _) = effects.created[0].0;
 
     let effects = call_framework_code(
@@ -1092,7 +1092,9 @@ async fn test_move_call_delete() {
     .await
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!((effects.created.len(), effects.mutated.len()), (0, 2));
+    // All mutable objects will appear to be mutated, even if they are not.
+    // obj1, obj2 and gas are all mutated here.
+    assert_eq!((effects.created.len(), effects.mutated.len()), (0, 3));
 
     let effects = call_framework_code(
         &authority_state,
@@ -1108,7 +1110,7 @@ async fn test_move_call_delete() {
     .await
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!((effects.deleted.len(), effects.mutated.len()), (1, 0));
+    assert_eq!((effects.deleted.len(), effects.mutated.len()), (1, 1));
 }
 
 #[tokio::test]
@@ -1406,7 +1408,7 @@ async fn test_hero() {
     .await
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!(effects.mutated.len(), 1); // cap
+    assert_eq!(effects.mutated.len(), 2); // cap and gas
     let (coin, coin_owner) = effects.created[0];
     assert_eq!(coin_owner, player);
 
@@ -1426,11 +1428,11 @@ async fn test_hero() {
     .await
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!(effects.mutated.len(), 1); // coin
+    assert_eq!(effects.mutated.len(), 2); // coin and gas
     let (hero, hero_owner) = effects.created[0];
     assert_eq!(hero_owner, player);
     // The payment goes to the admin.
-    assert_eq!(effects.mutated[0].1, admin);
+    assert_eq!(effects.mutated_excluding_gas().next().unwrap().1, admin);
 
     // 6. Verify the hero is what we exepct with strength 5.
     let effects = call_move(
@@ -1532,7 +1534,7 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!(effects.mutated.len(), 2);
+    assert_eq!(effects.mutated.len(), 3);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
         obj2.into(),
@@ -1590,7 +1592,7 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!(effects.mutated.len(), 1);
+    assert_eq!(effects.mutated.len(), 2);
     assert_eq!(
         authority.get_object(&obj2).await.unwrap().unwrap().owner,
         sender2
@@ -1628,7 +1630,7 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!(effects.mutated.len(), 2);
+    assert_eq!(effects.mutated.len(), 3);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
         obj2.into(),

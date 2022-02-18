@@ -269,12 +269,12 @@ pub struct OrderEffects {
     pub transaction_digest: TransactionDigest,
     // ObjectRef and owner of new objects created.
     pub created: Vec<(ObjectRef, SuiAddress)>,
-    // ObjectRef and owner of mutated objects.
-    // mutated does not include gas object or created objects.
+    // ObjectRef and owner of mutated objects, including gas object.
     pub mutated: Vec<(ObjectRef, SuiAddress)>,
     // Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
-    // The updated gas object reference.
+    // The updated gas object reference. Have a dedicated field for convenient access.
+    // It's also included in mutated.
     pub gas_object: (ObjectRef, SuiAddress),
     /// The events emitted during execution. Note that only successful transactions emit events
     pub events: Vec<Event>,
@@ -283,14 +283,16 @@ pub struct OrderEffects {
 }
 
 impl OrderEffects {
-    /// Return an iterator that iterates throguh all mutated objects,
-    /// including all from mutated, created and the gas_object.
-    /// It doesn't include deleted.
-    pub fn all_mutated(&self) -> impl Iterator<Item = &(ObjectRef, SuiAddress)> {
-        self.mutated
-            .iter()
-            .chain(self.created.iter())
-            .chain(std::iter::once(&self.gas_object))
+    /// Return an iterator that iterates through both mutated and
+    /// created objects.
+    /// It doesn't include deleted objects.
+    pub fn mutated_and_created(&self) -> impl Iterator<Item = &(ObjectRef, SuiAddress)> {
+        self.mutated.iter().chain(self.created.iter())
+    }
+
+    /// Return an iterator of mutated objects, but excluding the gas object.
+    pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &(ObjectRef, SuiAddress)> {
+        self.mutated.iter().filter(|o| *o != &self.gas_object)
     }
 }
 
