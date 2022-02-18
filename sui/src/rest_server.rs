@@ -13,7 +13,7 @@ use serde_json::json;
 use sui::config::{
     AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, PortAllocator, WalletConfig,
 };
-use sui::utils::Config;
+use sui::utils::{resolve_move_function_components, Config};
 use sui::wallet_commands::WalletContext;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_client::AuthorityClient;
@@ -26,17 +26,13 @@ use sui_types::{base_types::*, object::ObjectRead};
 
 use futures::future::join_all;
 use move_core_types::account_address::AccountAddress;
-use move_core_types::identifier::Identifier;
-use move_core_types::parser::{parse_transaction_argument, parse_type_tag};
-use move_core_types::transaction_argument::convert_txn_args;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
-use std::net::{Ipv6Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::runtime::Runtime;
 use tracing::error;
@@ -49,7 +45,7 @@ const DEFAULT_WEIGHT: usize = 1;
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let config_dropshot: ConfigDropshot = ConfigDropshot {
-        bind_address: SocketAddr::from((Ipv6Addr::LOCALHOST, 5000)),
+        bind_address: SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 5000)),
         ..Default::default()
     };
 
@@ -1069,9 +1065,7 @@ struct CallRequest {
     package_object_id: String,
     module: String,
     function: String,
-    type_args: Vec<String>,
-    object_args: Vec<String>,
-    pure_args: Vec<String>,
+    args: Vec<serde_json::Value>,
     gas_object_id: String,
     gas_budget: u64,
 }
@@ -1092,18 +1086,7 @@ async fn call(
 
     let module = call_params.module.to_owned();
     let function = call_params.function.to_owned();
-
-    let mut pure_args = Vec::new();
-    let pure_args_strings = call_params.pure_args;
-    for pure_args_string in pure_args_strings {
-        pure_args.push(parse_transaction_argument(&pure_args_string).unwrap());
-    }
-
-    let mut type_args = Vec::new();
-    let type_args_strings = call_params.type_args;
-    for type_args_string in type_args_strings {
-        type_args.push(parse_type_tag(&type_args_string).unwrap());
-    }
+    let args = call_params.args;
 
     let gas_object_id = match AccountAddress::try_from(call_params.gas_object_id) {
         Ok(gas_object_id) => gas_object_id,
@@ -1126,22 +1109,6 @@ async fn call(
             ))
         }
     };
-
-    let mut object_args = Vec::new();
-    let object_args_strings = call_params.object_args;
-    for object_args_string in object_args_strings {
-        let object_arg = match AccountAddress::try_from(object_args_string) {
-            Ok(object_arg) => object_arg,
-            Err(error) => {
-                return Err(HttpError::for_client_error(
-                    None,
-                    hyper::StatusCode::FAILED_DEPENDENCY,
-                    format!("Object Args: {error}"),
-                ))
-            }
-        };
-        object_args.push(object_arg);
-    }
 
     let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
     if wallet_context.is_none() {
@@ -1179,8 +1146,8 @@ async fn call(
         }
     };
 
-    let package_obj_ref = match get_object_info(client_state, package_object_id) {
-        Ok(ObjectRead::Exists(object_ref, _, _)) => object_ref,
+    let (package_obj_ref, package_obj) = match get_object_info(client_state, package_object_id) {
+        Ok(ObjectRead::Exists(object_ref, obj, _)) => (object_ref, obj),
         Ok(ObjectRead::Deleted(_)) => {
             return Err(HttpError::for_client_error(
                 None,
@@ -1210,9 +1177,23 @@ async fn call(
         }
     };
 
+    // Need to verify the call info
+    let resolved = match resolve_move_function_components(package_obj, module, function, args) {
+        Ok(r) => r,
+        Err(err) => {
+            return Err(HttpError::for_client_error(
+                None,
+                hyper::StatusCode::FAILED_DEPENDENCY,
+                format!("Move call error {}.", err),
+            ))
+        }
+    };
+
+    println!("Resolved fn to: \n {:?}", resolved);
+
     // Fetch the objects for the object args
     let mut object_args_refs = Vec::new();
-    for obj_id in object_args {
+    for obj_id in resolved.object_args {
         let obj = match get_object_info(client_state, obj_id) {
             Ok(ObjectRead::Exists(_, obj, _)) => obj,
             Ok(ObjectRead::Deleted(_)) => {
@@ -1244,12 +1225,12 @@ async fn call(
                     client_state
                         .move_call(
                             package_obj_ref,
-                            Identifier::from_str(&module).unwrap(),
-                            Identifier::from_str(&function).unwrap(),
-                            type_args.clone(),
+                            resolved.module,
+                            resolved.function,
+                            resolved.type_args,
                             gas_obj_ref,
                             object_args_refs,
-                            convert_txn_args(&pure_args),
+                            resolved.pure_args_serialized,
                             call_params.gas_budget,
                         )
                         .await
