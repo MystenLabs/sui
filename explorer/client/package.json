@@ -17,7 +17,6 @@
         "postcss": "^8.4.6",
         "prettier": "2.5.1",
         "react-scripts": "5.0.0",
-        "sass": "^1.49.7",
         "stylelint": "^14.5.0",
         "stylelint-config-prettier": "^9.0.3",
         "stylelint-config-standard": "^25.0.0",

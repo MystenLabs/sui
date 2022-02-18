@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import styles from './Search.module.scss';
+import styles from './Search.module.css';
 
 function Search() {
     const [input, setInput] = useState('');

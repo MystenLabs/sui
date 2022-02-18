@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom';
 
-import styles from './OtherDetails.module.scss';
+import styles from './OtherDetails.module.css';
 
 const OtherDetails = () => {
     const { term } = useParams();

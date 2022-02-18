@@ -43,3 +43,9 @@ Run linting check but also try to fix any issues.
 
 Run prettier in watch mode and format any file that changes. (Also runs prettier once in the beginning for all the files)\
 It can be useful during development to format automatically all the files that change.
+
+## Deployment
+
+For guidance on deployment, plese see here: https://create-react-app.dev/docs/deployment/. 
+
+Because of the addition of `react-router` further changes will be needed that depend on the exact infrastructure used. Please consult section **Serving Apps with Client-Side Routing**.
