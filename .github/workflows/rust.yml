@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main, extensions ]
   pull_request:
-    branches: [ main, extensions ]
     types: [opened, synchronize, reopened, ready_for_review]
 
 env:
