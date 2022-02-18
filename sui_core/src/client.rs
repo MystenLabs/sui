@@ -421,7 +421,7 @@ where
 
         let mut objs_to_download = Vec::new();
 
-        for &(object_ref, owner) in effects.all_mutated() {
+        for &(object_ref, owner) in effects.mutated_and_created() {
             let (object_id, seq, _) = object_ref;
             let old_seq = self
                 .store
