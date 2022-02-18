@@ -564,17 +564,9 @@ impl ObjectID {
     pub const LENGTH: usize = AccountAddress::LENGTH;
     /// Hex address: 0x0
     pub const ZERO: Self = Self::new([0u8; Self::LENGTH]);
-    /// Hex address: 0x1
-    pub const ONE: Self = Self::get_hex_address_one();
-
     /// Creates a new ObjectID
     pub const fn new(obj_id: [u8; Self::LENGTH]) -> Self {
         Self(AccountAddress::new(obj_id))
-    }
-    const fn get_hex_address_one() -> Self {
-        let mut addr = [0u8; ObjectID::LENGTH];
-        addr[ObjectID::LENGTH - 1] = 1u8;
-        Self::new(addr)
     }
 
     /// Random ObjectID
@@ -590,11 +582,6 @@ impl ObjectID {
         } else {
             hex_str
         }
-    }
-
-    /// Converts to vector of u8
-    pub fn to_vec(&self) -> Vec<u8> {
-        self.0.to_vec()
     }
 
     /// Converts to array of bytes
@@ -623,18 +610,11 @@ impl ObjectID {
             Self::from_hex(&literal[2..])
         }
     }
-    pub fn to_hex_literal(&self) -> String {
-        format!("0x{}", self.short_str_lossless())
-    }
 
     pub fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, ObjectIDParseError> {
         <[u8; Self::LENGTH]>::from_hex(hex)
             .map_err(ObjectIDParseError::from)
             .map(ObjectID::from)
-    }
-
-    pub fn to_hex(&self) -> String {
-        format!("{:x}", self)
     }
 
     pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, ObjectIDParseError> {
@@ -689,7 +669,7 @@ impl From<[u8; ObjectID::LENGTH]> for ObjectID {
 }
 
 impl std::ops::Deref for ObjectID {
-    type Target = [u8; Self::LENGTH];
+    type Target = AccountAddress;
 
     fn deref(&self) -> &Self::Target {
         &self.0
