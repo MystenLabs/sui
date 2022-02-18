@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_types::base_types::*;
-use sui_types::crypto::KeyPair;
+use sui_types::crypto::{get_key_pair, KeyPair};
 
 use crate::utils::optional_address_as_hex;
 use crate::utils::optional_address_from_hex;
@@ -55,14 +55,9 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
     where
         D: serde::de::Deserializer<'de>,
     {
-        let (new_address, new_key_pair) = get_key_pair();
+        let (_, new_key_pair) = get_key_pair();
 
         let json = Value::deserialize(deserializer)?;
-        let address = if let Some(val) = json.get("address") {
-            address_from_hex(val).map_err(serde::de::Error::custom)?
-        } else {
-            new_address
-        };
         let key_pair = if let Some(val) = json.get("key_pair") {
             KeyPair::deserialize(val).map_err(serde::de::Error::custom)?
         } else {
@@ -87,7 +82,7 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
         } else {
             PathBuf::from(".")
                 .join(AUTHORITIES_DB_NAME)
-                .join(encode_address_hex(&address))
+                .join(encode_bytes_hex(key_pair.public_key_bytes()))
         };
         let stake = if let Some(val) = json.get("stake") {
             usize::deserialize(val).map_err(serde::de::Error::custom)?
@@ -96,7 +91,6 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
         };
 
         Ok(AuthorityPrivateInfo {
-            address,
             key_pair,
             host,
             port,
@@ -242,7 +236,7 @@ impl GenesisConfig {
             let mut authority = AuthorityPrivateInfo::deserialize(Value::String(String::new()))?;
             authority.db_path = working_dir
                 .join(AUTHORITIES_DB_NAME)
-                .join(encode_address_hex(&authority.address));
+                .join(encode_bytes_hex(&authority.key_pair.public_key_bytes()));
             authorities.push(authority)
         }
         let mut accounts = Vec::new();

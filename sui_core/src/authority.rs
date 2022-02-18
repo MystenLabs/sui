@@ -484,7 +484,7 @@ impl AuthorityState {
     pub async fn new_with_genesis_modules(
         committee: Committee,
         name: AuthorityName,
-        secret: StableSyncSigner,
+        secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
     ) -> Self {
         let (genesis_modules, native_functions) = genesis::clone_genesis_data();

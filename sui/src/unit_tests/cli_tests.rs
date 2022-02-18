@@ -6,7 +6,8 @@ use sui::config::{
     AUTHORITIES_DB_NAME,
 };
 use sui::wallet_commands::{WalletCommands, WalletContext};
-use sui_types::base_types::{encode_address_hex, get_key_pair, ObjectID};
+use sui_types::base_types::{encode_bytes_hex, ObjectID};
+use sui_types::crypto::get_key_pair;
 use tokio::task;
 use tracing_test::traced_test;
 

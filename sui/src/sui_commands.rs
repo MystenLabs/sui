@@ -11,12 +11,11 @@ use std::sync::Arc;
 use structopt::StructOpt;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
-use sui_types::base_types::{
-    get_key_pair, SequenceNumber, SuiAddress, TransactionDigest, TxContext,
-};
+use sui_types::base_types::{SequenceNumber, SuiAddress, TransactionDigest, TxContext};
 
 use sui_adapter::adapter::generate_package_id;
 use sui_types::committee::Committee;
+use sui_types::crypto::get_key_pair;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
 use tracing::{error, info};
@@ -112,9 +111,9 @@ async fn genesis(
     );
 
     for authority in genesis_conf.authorities {
-        voting_right.insert(authority.address, authority.stake);
+        voting_right.insert(*authority.key_pair.public_key_bytes(), authority.stake);
         authority_info.push(AuthorityInfo {
-            address: authority.address,
+            name: *authority.key_pair.public_key_bytes(),
             host: authority.host.clone(),
             base_port: authority.port,
         });

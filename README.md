@@ -44,11 +44,10 @@ Example `genesis.conf`
 {
   "authorities": [
     {
-      "address": "bd654f352c895d9ec14c491d3f2b4e1f98fb07323383bebe9f95ab625bff2fa0",
-      "key_pair": "DfwJMkbD877Xehkaa03aPTsP5f4CpSADNCfX3Iukku69ZU81LIldnsFMSR0/K04fmPsHMjODvr6flatiW/8voA==",
+      "key_pair": "xWhgxF5fagohi2V9jzUToxnhJbTwbtV2qX4dbMGXR7lORTBuDBe+ppFDnnHz8L/BcYHWO76EuQzUYe5pnpLsFQ==",
       "host": "127.0.0.1",
-      "port": 10004,
-      "db_path": "./authorities_db/bd654f352c895d9ec14c491d3f2b4e1f98fb07323383bebe9f95ab625bff2fa0",
+      "port": 10000,
+      "db_path": "./authorities_db/4e45306e0c17bea691439e71f3f0bfc17181d63bbe84b90cd461ee699e92ec15",
       "stake": 1
     }
   ],

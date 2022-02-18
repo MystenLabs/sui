@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
-use sui_types::base_types::{decode_address_hex, encode_address_hex, PublicKeyBytes};
+use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex, SuiAddress};
 use tracing::log::trace;
 
 pub const DEFAULT_STARTING_PORT: u16 = 10000;
@@ -75,7 +75,7 @@ impl PortAllocator {
 }
 
 pub fn optional_address_as_hex<S>(
-    key: &Option<PublicKeyBytes>,
+    key: &Option<SuiAddress>,
     serializer: S,
 ) -> Result<S::Ok, S::Error>
 where
@@ -83,18 +83,16 @@ where
 {
     serializer.serialize_str(
         &*key
-            .map(|addr| encode_address_hex(&addr))
+            .map(|addr| encode_bytes_hex(&addr))
             .unwrap_or_else(|| "".to_string()),
     )
 }
 
-pub fn optional_address_from_hex<'de, D>(
-    deserializer: D,
-) -> Result<Option<PublicKeyBytes>, D::Error>
+pub fn optional_address_from_hex<'de, D>(deserializer: D) -> Result<Option<SuiAddress>, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    let value = decode_address_hex(&s).map_err(serde::de::Error::custom)?;
+    let value = decode_bytes_hex(&s).map_err(serde::de::Error::custom)?;
     Ok(Some(value))
 }
