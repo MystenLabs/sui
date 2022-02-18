@@ -24,8 +24,20 @@ fn test_signed_values() {
     authorities.insert(/* address */ a2, /* voting right */ 0);
     let committee = Committee::new(authorities);
 
-    let order = Order::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec1);
-    let bad_order = Order::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec2);
+    let order = Order::new_transfer(
+        a2.into(),
+        random_object_ref(),
+        a1,
+        random_object_ref(),
+        &sec1,
+    );
+    let bad_order = Order::new_transfer(
+        a2.into(),
+        random_object_ref(),
+        a1,
+        random_object_ref(),
+        &sec2,
+    );
 
     let v = SignedOrder::new(order.clone(), a1, &sec1);
     assert!(v.check(&committee).is_ok());
@@ -51,8 +63,20 @@ fn test_certificates() {
     authorities.insert(/* address */ a2, /* voting right */ 1);
     let committee = Committee::new(authorities);
 
-    let order = Order::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec1);
-    let bad_order = Order::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec2);
+    let order = Order::new_transfer(
+        a2.into(),
+        random_object_ref(),
+        a1,
+        random_object_ref(),
+        &sec1,
+    );
+    let bad_order = Order::new_transfer(
+        a2.into(),
+        random_object_ref(),
+        a1,
+        random_object_ref(),
+        &sec2,
+    );
 
     let v1 = SignedOrder::new(order.clone(), a1, &sec1);
     let v2 = SignedOrder::new(order.clone(), a2, &sec2);

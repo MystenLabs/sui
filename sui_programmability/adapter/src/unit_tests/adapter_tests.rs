@@ -203,8 +203,8 @@ fn call(
 /// Exercise test functions that create, transfer, read, update, and delete objects
 #[test]
 fn test_object_basics() {
-    let addr1 = base_types::get_key_pair().0;
-    let addr2 = base_types::get_key_pair().0;
+    let addr1 = base_types::get_new_address();
+    let addr2 = base_types::get_new_address();
 
     let (genesis_objects, native_functions) = genesis::clone_genesis_data();
     let mut storage = InMemoryStorage::new(genesis_objects);
@@ -542,8 +542,8 @@ fn test_publish_module_insufficient_gas() {
 
 #[test]
 fn test_transfer_and_freeze() {
-    let addr1 = base_types::get_key_pair().0;
-    let addr2 = base_types::get_key_pair().0;
+    let addr1 = base_types::get_new_address();
+    let addr2 = base_types::get_new_address();
 
     let (genesis_objects, native_functions) = genesis::clone_genesis_data();
     let mut storage = InMemoryStorage::new(genesis_objects);
@@ -971,7 +971,7 @@ fn test_simple_call() {
     // call published module function
     let obj_val = 42u64;
 
-    let addr = base_types::get_key_pair().0;
+    let addr = base_types::get_new_address();
     let pure_args = vec![
         obj_val.to_le_bytes().to_vec(),
         bcs::to_bytes(&addr.to_vec()).unwrap(),
