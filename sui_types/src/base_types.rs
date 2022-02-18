@@ -79,6 +79,14 @@ impl TryFrom<&[u8]> for PublicKeyBytes {
     }
 }
 
+impl From<Vec<u8>> for PublicKeyBytes {
+    fn from(bytes: Vec<u8>) -> Self {
+        let mut result = [0u8; dalek::PUBLIC_KEY_LENGTH];
+        result.copy_from_slice(&bytes[..dalek::PUBLIC_KEY_LENGTH]);
+        Self(result)
+    }
+}
+
 pub type AuthorityName = PublicKeyBytes;
 
 // TODO: Have ObjectID wrap AccountAddress instead of type alias.
@@ -246,31 +254,31 @@ pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, KeyPair) {
     (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
 }
 
-pub fn address_as_hex<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
+pub fn bytes_as_hex<B, S>(bytes: &B, serializer: S) -> Result<S::Ok, S::Error>
 where
+    B: AsRef<[u8]>,
     S: serde::ser::Serializer,
 {
-    serializer.serialize_str(&encode_address_hex(key))
+    serializer.serialize_str(&encode_bytes_hex(bytes))
 }
 
-pub fn address_from_hex<'de, D>(deserializer: D) -> Result<PublicKeyBytes, D::Error>
+pub fn bytes_from_hex<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
+    T: From<Vec<u8>>,
     D: serde::de::Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    let value = decode_address_hex(&s).map_err(serde::de::Error::custom)?;
+    let value = decode_bytes_hex(&s).map_err(serde::de::Error::custom)?;
     Ok(value)
 }
 
-pub fn encode_address_hex(key: &PublicKeyBytes) -> String {
-    hex::encode(&key.0[..])
+pub fn encode_bytes_hex<B: AsRef<[u8]>>(bytes: &B) -> String {
+    hex::encode(bytes.as_ref())
 }
 
-pub fn decode_address_hex(s: &str) -> Result<PublicKeyBytes, hex::FromHexError> {
+pub fn decode_bytes_hex<T: From<Vec<u8>>>(s: &str) -> Result<T, hex::FromHexError> {
     let value = hex::decode(s)?;
-    let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
-    address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
-    Ok(PublicKeyBytes(address))
+    Ok(value.into())
 }
 
 impl std::fmt::LowerHex for PublicKeyBytes {

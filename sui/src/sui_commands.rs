@@ -10,7 +10,7 @@ use std::sync::Arc;
 use structopt::StructOpt;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
-use sui_types::base_types::{encode_address_hex, get_key_pair, ObjectID, SequenceNumber};
+use sui_types::base_types::{encode_bytes_hex, get_key_pair, ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
 use sui_types::object::Object;
 use tracing::{error, info};
@@ -97,7 +97,7 @@ async fn genesis(config: &mut NetworkConfig) -> Result<(), anyhow::Error> {
             key_pair,
             host: "127.0.0.1".to_string(),
             port: port_allocator.next_port().expect("No free ports"),
-            db_path: authorities_db_path.join(encode_address_hex(&address)),
+            db_path: authorities_db_path.join(encode_bytes_hex(&address)),
         };
         authority_info.push(AuthorityInfo {
             address,
