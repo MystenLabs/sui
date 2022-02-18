@@ -28,9 +28,60 @@ This will create `sui` and `wallet` binaries in `target/release` directory.
 ./sui genesis
 ```
 
-The genesis command creates 4 authorities, 5 user accounts each with 5 gas objects.
+The genesis command creates 4 authorities, 5 user accounts each with 5 gas objects.  
 The network configuration are stored in `network.conf` and can be used subsequently to start the network.  
-A `wallet.conf` will also be generated to be used by the `wallet` binary to manage the newly created accounts.
+A `wallet.conf` will also be generated to be used by the `wallet` binary to manage the newly created accounts.  
+
+### 2.1 Genesis customization
+
+The genesis process can be customised by providing a genesis config file.
+
+```shell
+./sui genesis --config genesis.conf
+```
+Example `genesis.conf`
+```json
+{
+  "authorities": [
+    {
+      "key_pair": "xWhgxF5fagohi2V9jzUToxnhJbTwbtV2qX4dbMGXR7lORTBuDBe+ppFDnnHz8L/BcYHWO76EuQzUYe5pnpLsFQ==",
+      "host": "127.0.0.1",
+      "port": 10000,
+      "db_path": "./authorities_db/4e45306e0c17bea691439e71f3f0bfc17181d63bbe84b90cd461ee699e92ec15",
+      "stake": 1
+    }
+  ],
+  "accounts": [
+    {
+      "address": "bd654f352c895d9ec14c491d3f2b4e1f98fb07323383bebe9f95ab625bff2fa0",
+      "gas_objects": [
+        {
+          "object_id": "5c68ac7ba66ef69fdea0651a21b531a37bf342b7",
+          "gas_value": 1000
+        }
+      ]
+    }
+  ],
+  "move_packages": ["<Paths to custom move packages>"],
+  "sui_framework_lib_path": "<Paths to sui framework lib>",
+  "move_framework_lib_path": "<Paths to move framework lib>"
+}
+```
+All attributes in genesis.conf are optional, default value will be use if the attributes are not provided.  
+For example, the config shown below will create a network of 4 authorities, and pre-populate 2 gas objects for 4 accounts.
+```json
+{
+  "authorities": [
+    {},{},{},{}
+  ],
+  "accounts": [
+    { "gas_objects":[{},{}] },
+    { "gas_objects":[{},{}] },
+    { "gas_objects":[{},{}] },
+    { "gas_objects":[{},{}] }
+  ]
+}
+```
 
 ### 3. Starting the network
 
