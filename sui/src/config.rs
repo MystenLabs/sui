@@ -12,20 +12,14 @@ use sui_network::transport;
 
 #[derive(Serialize, Deserialize)]
 pub struct AccountInfo {
-    #[serde(
-        serialize_with = "address_as_hex",
-        deserialize_with = "address_from_hex"
-    )]
+    #[serde(serialize_with = "bytes_as_hex", deserialize_with = "bytes_from_hex")]
     pub address: SuiAddress,
     pub key_pair: KeyPair,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct AuthorityInfo {
-    #[serde(
-        serialize_with = "address_as_hex",
-        deserialize_with = "address_from_hex"
-    )]
+    #[serde(serialize_with = "bytes_as_hex", deserialize_with = "bytes_from_hex")]
     pub address: SuiAddress,
     pub host: String,
     pub base_port: u16,
@@ -33,10 +27,7 @@ pub struct AuthorityInfo {
 
 #[derive(Serialize, Deserialize)]
 pub struct AuthorityPrivateInfo {
-    #[serde(
-        serialize_with = "address_as_hex",
-        deserialize_with = "address_from_hex"
-    )]
+    #[serde(serialize_with = "bytes_as_hex", deserialize_with = "bytes_from_hex")]
     pub address: SuiAddress,
     pub key_pair: KeyPair,
     pub host: String,
