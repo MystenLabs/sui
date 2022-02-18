@@ -32,7 +32,7 @@ use move_core_types::transaction_argument::convert_txn_args;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::net::{Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
@@ -653,8 +653,8 @@ async fn object_info(
         }
     };
 
-    let object = match get_object_info(client_state, object_id) {
-        Ok(ObjectRead::Exists(_, object, _)) => object,
+    let (object, layout) = match get_object_info(client_state, object_id) {
+        Ok(ObjectRead::Exists(_, object, layout)) => (object, layout),
         Ok(ObjectRead::Deleted(_)) => {
             return Err(HttpError::for_client_error(
                 None,
@@ -672,6 +672,8 @@ async fn object_info(
         Err(err) => return Err(err),
     };
 
+    let object_data = object.to_json(&layout).unwrap_or(json!(""));
+
     Ok(HttpResponseOk(ObjectInfoResponse {
         owner: format!("{:?}", object.owner),
         version: format!("{:?}", object.version().value()),
@@ -687,7 +689,7 @@ async fn object_info(
                     .as_ident_str()
                     .to_string())
         ),
-        data: json!(object),
+        data: object_data,
     }))
 }
 
@@ -771,7 +773,7 @@ struct TransferOrderRequest {
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct OrderResponse {
-    object_effects_summary: Vec<String>,
+    object_effects_summary: serde_json::Value,
     certificate: serde_json::Value,
 }
 
@@ -910,7 +912,7 @@ async fn transfer_object(
     let object_effects_summary = get_object_effects(effects);
 
     Ok(HttpResponseOk(OrderResponse {
-        object_effects_summary,
+        object_effects_summary: json!(object_effects_summary),
         certificate: json!(cert),
     }))
 }
@@ -1055,7 +1057,7 @@ async fn publish(
     let object_effects_summary = get_object_effects(effects);
 
     Ok(HttpResponseOk(OrderResponse {
-        object_effects_summary,
+        object_effects_summary: json!(object_effects_summary),
         certificate: json!(cert),
     }))
 }
@@ -1288,30 +1290,39 @@ async fn call(
     let object_effects_summary = get_object_effects(effects);
 
     Ok(HttpResponseOk(OrderResponse {
-        object_effects_summary,
+        object_effects_summary: json!(object_effects_summary),
         certificate: json!(cert),
     }))
 }
 
-fn get_object_effects(order_effects: OrderEffects) -> Vec<String> {
-    let mut object_effects_summary = Vec::new();
+fn get_object_effects(order_effects: OrderEffects) -> HashMap<String, HashMap<&'static str, String>> {
+    let mut object_effects_summary = HashMap::new();
     if !order_effects.created.is_empty() {
-        object_effects_summary.push(String::from("Created Objects:"));
+        let mut effects = HashMap::new();
         for (obj, _) in order_effects.created {
-            object_effects_summary.push(format!("{:?} {:?} {:?}", obj.0, obj.1, obj.2).to_string());
+            effects.insert("account_address", obj.0.to_string());
+            effects.insert("sequence_number", format!("{:?}", obj.1));
+            effects.insert("object_digest", format!("{:?}", obj.2));
         }
+        object_effects_summary.insert(String::from("created_objects"), effects);
     }
     if !order_effects.mutated.is_empty() {
-        object_effects_summary.push(String::from("Mutated Objects:"));
+        let mut effects = HashMap::new();
         for (obj, _) in order_effects.mutated {
-            object_effects_summary.push(format!("{:?} {:?} {:?}", obj.0, obj.1, obj.2).to_string());
+            effects.insert("account_address", obj.0.to_string());
+            effects.insert("sequence_number", format!("{:?}", obj.1));
+            effects.insert("object_digest", format!("{:?}", obj.2));
         }
+        object_effects_summary.insert(String::from("mutated_objects"), effects);
     }
     if !order_effects.deleted.is_empty() {
-        object_effects_summary.push(String::from("Deleted Objects:"));
+        let mut effects = HashMap::new();
         for obj in order_effects.deleted {
-            object_effects_summary.push(format!("{:?} {:?} {:?}", obj.0, obj.1, obj.2));
+            effects.insert("account_address", obj.0.to_string());
+            effects.insert("sequence_number", format!("{:?}", obj.1));
+            effects.insert("object_digest", format!("{:?}", obj.2));
         }
+        object_effects_summary.insert(String::from("deleted_objects"), effects);
     }
     object_effects_summary
 }
