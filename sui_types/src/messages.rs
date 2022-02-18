@@ -127,34 +127,40 @@ impl From<SuiAddress> for AccountInfoRequest {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum ObjectInfoRequestKind {
+    /// Request the latest object state, if a format option is provided,
+    /// return the layout of the object in the given format.
+    LatestObjectInfo(Option<ObjectFormatOptions>),
+    /// Request the object state at a specific version
+    PastObjectInfo(SequenceNumber),
+}
+
 /// A request for information about an object and optionally its
 /// parent certificate at a specific version.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ObjectInfoRequest {
     /// The id of the object to retrieve, at the latest version.
     pub object_id: ObjectID,
-    /// The version of the object for which the parent certificate is sought.
-    pub request_sequence_number: Option<SequenceNumber>,
-    /// If true, the request will return the layout of the object in the given format
-    pub request_layout: Option<ObjectFormatOptions>,
+    /// The type of request, either latest object info or the past.
+    pub request_kind: ObjectInfoRequestKind,
 }
 
-impl From<ObjectRef> for ObjectInfoRequest {
-    fn from(object_ref: ObjectRef) -> Self {
-        ObjectInfoRequest {
-            object_id: object_ref.0,
-            request_sequence_number: Some(object_ref.1),
-            request_layout: Some(ObjectFormatOptions::default()),
-        }
-    }
-}
-
-impl From<ObjectID> for ObjectInfoRequest {
-    fn from(object_id: ObjectID) -> Self {
+impl ObjectInfoRequest {
+    pub fn past_object_info_request(object_id: ObjectID, version: SequenceNumber) -> Self {
         ObjectInfoRequest {
             object_id,
-            request_sequence_number: None,
-            request_layout: Some(ObjectFormatOptions::default()),
+            request_kind: ObjectInfoRequestKind::PastObjectInfo(version),
+        }
+    }
+
+    pub fn latest_object_info_request(
+        object_id: ObjectID,
+        layout: Option<ObjectFormatOptions>,
+    ) -> Self {
+        ObjectInfoRequest {
+            object_id,
+            request_kind: ObjectInfoRequestKind::LatestObjectInfo(layout),
         }
     }
 }
@@ -189,8 +195,9 @@ pub struct ObjectInfoResponse {
     /// The full reference created by the above certificate
     pub requested_object_reference: Option<ObjectRef>,
 
-    /// The object and its current lock. If the object does not exist
-    /// this is None.
+    /// The object and its current lock, returned only if we are requesting
+    /// the latest state of an object.
+    /// If the object does not exist this is also None.
     pub object_and_lock: Option<ObjectResponse>,
 }
 

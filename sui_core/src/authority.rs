@@ -394,19 +394,21 @@ impl AuthorityState {
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
-        // Only add a certificate if it is requested
-        let ref_and_digest = if let Some(seq) = request.request_sequence_number {
-            // Get the Transaction Digest that created the object
-            let parent_iterator = self
-                .get_parent_iterator(request.object_id, Some(seq))
-                .await?;
+        let ref_and_digest = match request.request_kind {
+            ObjectInfoRequestKind::PastObjectInfo(seq) => {
+                // Get the Transaction Digest that created the object
+                let parent_iterator = self
+                    .get_parent_iterator(request.object_id, Some(seq))
+                    .await?;
 
-            parent_iterator
-                .first()
-                .map(|(object_ref, tx_digest)| (*object_ref, *tx_digest))
-        } else {
-            // Or get the latest object_reference and transaction entry.
-            self.get_latest_parent_entry(request.object_id).await?
+                parent_iterator
+                    .first()
+                    .map(|(object_ref, tx_digest)| (*object_ref, *tx_digest))
+            }
+            ObjectInfoRequestKind::LatestObjectInfo(_) => {
+                // Or get the latest object_reference and transaction entry.
+                self.get_latest_parent_entry(request.object_id).await?
+            }
         };
 
         let (requested_object_reference, parent_certificate) = match ref_and_digest {
@@ -426,33 +428,36 @@ impl AuthorityState {
             None => (None, None),
         };
 
-        // Always attempt to return the latest version of the object and the
-        // current lock if any.
-        let object_result = self.get_object(&request.object_id).await;
-        let object_and_lock = match object_result {
-            Ok(Some(object)) => {
-                let lock = if object.is_read_only() {
-                    // Read only objects have no locks.
-                    None
-                } else {
-                    self.get_order_lock(&object.to_object_reference()).await?
-                };
-                let layout = match request.request_layout {
-                    Some(format) => {
-                        let resolver = ModuleCache::new(&self);
-                        object.get_layout(format, &resolver)?
-                    }
-                    None => None,
-                };
+        // Return the latest version of the object and the current lock if any, if requested.
+        let object_and_lock = match request.request_kind {
+            ObjectInfoRequestKind::LatestObjectInfo(request_layout) => {
+                match self.get_object(&request.object_id).await {
+                    Ok(Some(object)) => {
+                        let lock = if object.is_read_only() {
+                            // Read only objects have no locks.
+                            None
+                        } else {
+                            self.get_order_lock(&object.to_object_reference()).await?
+                        };
+                        let layout = match request_layout {
+                            Some(format) => {
+                                let resolver = ModuleCache::new(&self);
+                                object.get_layout(format, &resolver)?
+                            }
+                            None => None,
+                        };
 
-                Some(ObjectResponse {
-                    object,
-                    lock,
-                    layout,
-                })
+                        Some(ObjectResponse {
+                            object,
+                            lock,
+                            layout,
+                        })
+                    }
+                    Err(e) => return Err(e),
+                    _ => None,
+                }
             }
-            Err(e) => return Err(e),
-            _ => None,
+            ObjectInfoRequestKind::PastObjectInfo(_) => None,
         };
 
         Ok(ObjectInfoResponse {

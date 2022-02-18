@@ -106,7 +106,8 @@ impl<C> SafeClient<C> {
                     authority: self.address
                 }
             );
-            if let Some(requested_version) = &request.request_sequence_number {
+            if let ObjectInfoRequestKind::PastObjectInfo(requested_version) = &request.request_kind
+            {
                 fp_ensure!(
                     version == requested_version,
                     SuiError::ByzantineAuthoritySuspicion {
@@ -117,29 +118,37 @@ impl<C> SafeClient<C> {
         }
 
         if let Some(object_and_lock) = &response.object_and_lock {
-            if request.request_sequence_number.is_none() {
-                // If request_sequence_number is none, we are requesting the latest version.
-                match response.requested_object_reference {
-                    Some(obj_ref) => {
-                        // Since we are requesting the latest version, we should validate that if the object's
-                        // reference actually match with the one from the responded object reference.
-                        fp_ensure!(
-                            object_and_lock.object.to_object_reference() == obj_ref,
-                            SuiError::ByzantineAuthoritySuspicion {
-                                authority: self.address
-                            }
-                        );
-                    }
-                    None => {
-                        // Since we are returning the object for the latest version,
-                        // we must also have the requested object reference in the response.
-                        // Otherwise the authority has inconsistent data.
-                        return Err(SuiError::ByzantineAuthoritySuspicion {
-                            authority: self.address,
-                        });
-                    }
+            // We should only be returning the object and lock data if requesting the latest object info.
+            fp_ensure!(
+                matches!(
+                    request.request_kind,
+                    ObjectInfoRequestKind::LatestObjectInfo(_)
+                ),
+                SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address
                 }
-            }
+            );
+
+            match response.requested_object_reference {
+                Some(obj_ref) => {
+                    // Since we are requesting the latest version, we should validate that if the object's
+                    // reference actually match with the one from the responded object reference.
+                    fp_ensure!(
+                        object_and_lock.object.to_object_reference() == obj_ref,
+                        SuiError::ByzantineAuthoritySuspicion {
+                            authority: self.address
+                        }
+                    );
+                }
+                None => {
+                    // Since we are returning the object for the latest version,
+                    // we must also have the requested object reference in the response.
+                    // Otherwise the authority has inconsistent data.
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                    });
+                }
+            };
 
             if let Some(signed_order) = &object_and_lock.lock {
                 signed_order.check(&self.committee)?;
