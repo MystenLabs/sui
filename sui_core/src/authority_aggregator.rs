@@ -30,18 +30,15 @@ mod client_tests;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
-pub struct AuthorityAggregator<AuthorityAPI> {
+pub struct AuthorityAggregator<A> {
     /// Our Sui committee.
     pub committee: Committee,
     /// How to talk to this committee.
-    authority_clients: BTreeMap<AuthorityName, SafeClient<AuthorityAPI>>,
+    authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
 }
 
-impl<AuthorityAPI> AuthorityAggregator<AuthorityAPI> {
-    pub fn new(
-        committee: Committee,
-        authority_clients: BTreeMap<AuthorityName, AuthorityAPI>,
-    ) -> Self {
+impl<A> AuthorityAggregator<A> {
+    pub fn new(committee: Committee, authority_clients: BTreeMap<AuthorityName, A>) -> Self {
         Self {
             committee: committee.clone(),
             authority_clients: authority_clients
