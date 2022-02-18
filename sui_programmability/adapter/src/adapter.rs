@@ -493,7 +493,7 @@ fn process_successful_execution<
             .expect("Safe because event_type is derived from an EventType enum")
         {
             EventType::TransferToAddress => handle_transfer(
-                SuiAddress::try_from(recipient.borrow()).unwrap(),
+                SuiAddress::try_from(recipient.as_slice()).unwrap(),
                 type_,
                 event_bytes,
                 false, /* should_freeze */
@@ -504,7 +504,7 @@ fn process_successful_execution<
                 &mut object_owner_map,
             ),
             EventType::TransferToAddressAndFreeze => handle_transfer(
-                SuiAddress::try_from(recipient.borrow()).unwrap(),
+                SuiAddress::try_from(recipient.as_slice()).unwrap(),
                 type_,
                 event_bytes,
                 true, /* should_freeze */
@@ -807,11 +807,10 @@ fn is_param_tx_context(param: &Type) -> bool {
                 address,
                 module,
                 name,
-                type_arguments,
+                ..
             } if address == &SUI_FRAMEWORK_ADDRESS
                 && module.as_ident_str() == TX_CONTEXT_MODULE_NAME
-                && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME
-                && type_arguments.is_empty() =>
+                && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME =>
             {
                 return true
             }

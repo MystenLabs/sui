@@ -59,7 +59,8 @@ pub enum OrderKind {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct OrderData {
     pub kind: OrderKind,
-    sender: SuiAddress,
+    // TODO: sender should be SuiAddress, and the public key should be embedded into signature.
+    sender: PublicKeyBytes,
     gas_payment: ObjectRef,
 }
 
@@ -386,7 +387,7 @@ impl Order {
     pub fn new(
         kind: OrderKind,
         secret: &dyn signature::Signer<ed25519_dalek::Signature>,
-        sender: SuiAddress,
+        sender: PublicKeyBytes,
         gas_payment: ObjectRef,
     ) -> Self {
         let data = OrderData {
@@ -400,7 +401,7 @@ impl Order {
 
     #[allow(clippy::too_many_arguments)]
     pub fn new_move_call(
-        sender: SuiAddress,
+        sender: PublicKeyBytes,
         package: ObjectRef,
         module: Identifier,
         function: Identifier,
@@ -424,7 +425,7 @@ impl Order {
     }
 
     pub fn new_module(
-        sender: SuiAddress,
+        sender: PublicKeyBytes,
         gas_payment: ObjectRef,
         modules: Vec<Vec<u8>>,
         gas_budget: u64,
@@ -440,7 +441,7 @@ impl Order {
     pub fn new_transfer(
         recipient: SuiAddress,
         object_ref: ObjectRef,
-        sender: SuiAddress,
+        sender: PublicKeyBytes,
         gas_payment: ObjectRef,
         secret: &dyn signature::Signer<ed25519_dalek::Signature>,
     ) -> Self {
@@ -455,8 +456,8 @@ impl Order {
         self.signature.check(&self.data, self.data.sender)
     }
 
-    pub fn sender(&self) -> &SuiAddress {
-        &self.data.sender
+    pub fn sender_address(&self) -> SuiAddress {
+        self.data.sender.into()
     }
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
@@ -631,7 +632,7 @@ impl CertifiedOrder {
             SuiError::CertificateRequiresQuorum
         );
         // All that is left is checking signatures!
-        let inner_sig = (*self.order.sender(), self.order.signature);
+        let inner_sig = (self.order.data.sender, self.order.signature);
         Signature::verify_batch(
             &self.order.data,
             std::iter::once(&inner_sig).chain(&self.signatures),

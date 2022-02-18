@@ -53,11 +53,12 @@ impl<A> ClientAddressManager<A> {
     /// Get (if exists) or create a new managed address state
     pub fn get_or_create_state_mut(
         &mut self,
-        address: SuiAddress,
+        pub_key: PublicKeyBytes,
         secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
     ) -> Result<&mut ClientState<A>, SuiError> {
+        let address = pub_key.into();
         if let std::collections::btree_map::Entry::Vacant(e) = self.address_states.entry(address) {
             // Load the records if available
             let single_store = if self.store.is_managed_address(address)? {
@@ -67,7 +68,7 @@ impl<A> ClientAddressManager<A> {
                 self.store.manage_new_address(address)
             }?;
             e.insert(ClientState::new_for_manager(
-                address,
+                pub_key,
                 secret,
                 committee,
                 authority_clients,
@@ -79,7 +80,7 @@ impl<A> ClientAddressManager<A> {
     }
 
     /// Get all the states
-    pub fn get_managed_address_states(&self) -> &BTreeMap<PublicKeyBytes, ClientState<A>> {
+    pub fn get_managed_address_states(&self) -> &BTreeMap<SuiAddress, ClientState<A>> {
         &self.address_states
     }
 }
@@ -87,6 +88,8 @@ impl<A> ClientAddressManager<A> {
 pub struct ClientState<AuthorityAPI> {
     /// Our Sui address.
     address: SuiAddress,
+    // TODO: We will need to embed pub_key into secret.
+    pub_key: PublicKeyBytes,
     /// Our signature key.
     secret: StableSyncSigner,
     /// Authority entry point.
@@ -151,13 +154,14 @@ impl<A> ClientState<A> {
     #[cfg(test)]
     pub fn new(
         path: PathBuf,
-        address: SuiAddress,
+        pub_key: PublicKeyBytes,
         secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
     ) -> Result<Self, SuiError> {
         Ok(ClientState {
-            address,
+            address: pub_key.into(),
+            pub_key,
             secret,
             authorities: AuthorityAggregator::new(committee, authority_clients),
             store: client_store::ClientSingleAddressStore::new(path),
@@ -165,14 +169,15 @@ impl<A> ClientState<A> {
     }
 
     pub fn new_for_manager(
-        address: SuiAddress,
+        pub_key: PublicKeyBytes,
         secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         store: client_store::ClientSingleAddressStore,
     ) -> Result<Self, SuiError> {
         Ok(ClientState {
-            address,
+            address: pub_key.into(),
+            pub_key,
             secret,
             authorities: AuthorityAggregator::new(committee, authority_clients),
             store,
@@ -181,6 +186,10 @@ impl<A> ClientState<A> {
 
     pub fn address(&self) -> SuiAddress {
         self.address
+    }
+
+    pub fn pub_key(&self) -> PublicKeyBytes {
+        self.pub_key
     }
 
     pub fn next_sequence_number(&self, object_id: &ObjectID) -> Result<SequenceNumber, SuiError> {
@@ -531,7 +540,7 @@ where
         let order = Order::new_transfer(
             recipient,
             object_ref,
-            self.address,
+            self.pub_key,
             gas_payment,
             &*self.secret,
         );
@@ -616,7 +625,7 @@ where
         gas_budget: u64,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         let move_call_order = Order::new_move_call(
-            self.address,
+            self.pub_key,
             package_object_ref,
             module,
             function,
@@ -639,7 +648,7 @@ where
         // Try to compile the package at the given path
         let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
         let move_publish_order = Order::new_module(
-            self.address,
+            self.pub_key,
             gas_object_ref,
             compiled_modules,
             gas_budget,

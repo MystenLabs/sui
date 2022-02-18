@@ -5,8 +5,7 @@ use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientAddressManager, ClientState};
 use sui_network::network::NetworkClient;
 use sui_types::base_types::{
-    decode_address_hex, encode_address_hex, get_key_pair, AuthorityName, ObjectID, PublicKeyBytes,
-    SuiAddress,
+    decode_bytes_hex, encode_bytes_hex, get_key_pair, AuthorityName, ObjectID, SuiAddress,
 };
 use sui_types::committee::Committee;
 use sui_types::messages::ExecutionStatus;
@@ -36,8 +35,8 @@ pub enum WalletCommands {
     #[structopt(name = "object")]
     Object {
         /// Owner address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        owner: PublicKeyBytes,
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        owner: SuiAddress,
 
         /// Object ID of the object to fetch
         #[structopt(long)]
@@ -52,8 +51,8 @@ pub enum WalletCommands {
     #[structopt(name = "publish")]
     Publish {
         /// Sender address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        sender: PublicKeyBytes,
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        sender: SuiAddress,
 
         /// Path to directory containing a Move package
         #[structopt(long)]
@@ -72,8 +71,8 @@ pub enum WalletCommands {
     #[structopt(name = "call")]
     Call {
         /// Sender address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        sender: PublicKeyBytes,
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        sender: SuiAddress,
         /// Object ID of the package, which contains the module
         #[structopt(long)]
         package: ObjectID,
@@ -107,12 +106,12 @@ pub enum WalletCommands {
     #[structopt(name = "transfer")]
     Transfer {
         /// Sender address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        from: PublicKeyBytes,
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        from: SuiAddress,
 
         /// Recipient address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        to: PublicKeyBytes,
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        to: SuiAddress,
 
         /// Object to transfer, in 20 bytes Hex string
         #[structopt(long)]
@@ -125,8 +124,8 @@ pub enum WalletCommands {
     /// Synchronize client state with authorities.
     #[structopt(name = "sync")]
     SyncClientState {
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        address: PublicKeyBytes,
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        address: SuiAddress,
     },
 
     /// Obtain the Account Addresses managed by the wallet.
@@ -141,8 +140,8 @@ pub enum WalletCommands {
     #[structopt(name = "objects")]
     Objects {
         /// Address of the account
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        address: PublicKeyBytes,
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        address: SuiAddress,
     },
 }
 
@@ -253,7 +252,7 @@ impl WalletCommands {
                     context.address_manager.get_managed_address_states().len()
                 );
                 for address in context.address_manager.get_managed_address_states().keys() {
-                    info!("{}", encode_address_hex(address));
+                    info!("{}", encode_bytes_hex(address));
                 }
             }
 
@@ -271,7 +270,8 @@ impl WalletCommands {
                 client_state.sync_client_state().await?;
             }
             WalletCommands::NewAddress => {
-                let (address, key) = get_key_pair();
+                let (pub_key, key) = get_key_pair();
+                let address = pub_key.into();
                 context.config.accounts.push(AccountInfo {
                     address,
                     key_pair: key,
@@ -281,7 +281,7 @@ impl WalletCommands {
                 context.get_or_create_client_state(&address)?;
                 info!(
                     "Created new keypair for address : {}",
-                    encode_address_hex(&address)
+                    encode_bytes_hex(&address)
                 );
             }
         }
@@ -322,12 +322,12 @@ impl WalletContext {
             .config
             .authorities
             .iter()
-            .map(|authority| (authority.address, 1))
+            .map(|authority| (authority.name, 1))
             .collect();
         let committee = Committee::new(voting_rights);
         let authority_clients = self.make_authority_clients();
         self.address_manager
-            .get_or_create_state_mut(*owner, kp, committee, authority_clients)
+            .get_or_create_state_mut(kp.public(), kp, committee, authority_clients)
     }
 
     fn make_authority_clients(&self) -> BTreeMap<AuthorityName, AuthorityClient> {
@@ -340,7 +340,7 @@ impl WalletContext {
                 self.config.send_timeout,
                 self.config.recv_timeout,
             ));
-            authority_clients.insert(authority.address, client);
+            authority_clients.insert(authority.name, client);
         }
         authority_clients
     }

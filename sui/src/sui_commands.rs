@@ -10,7 +10,7 @@ use std::sync::Arc;
 use structopt::StructOpt;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
-use sui_types::base_types::{encode_address_hex, get_key_pair, ObjectID, SequenceNumber};
+use sui_types::base_types::{encode_bytes_hex, get_key_pair, ObjectID, SequenceNumber};
 use sui_types::committee::Committee;
 use sui_types::object::Object;
 use tracing::{error, info};
@@ -52,7 +52,7 @@ async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
         config
             .authorities
             .iter()
-            .map(|info| (info.address, DEFAULT_WEIGHT))
+            .map(|info| (info.key_pair.public(), DEFAULT_WEIGHT))
             .collect(),
     );
 
@@ -91,20 +91,19 @@ async fn genesis(config: &mut NetworkConfig) -> Result<(), anyhow::Error> {
     info!("Creating new authorities...");
     let authorities_db_path = working_dir.join("authorities_db");
     for _ in 0..4 {
-        let (address, key_pair) = get_key_pair();
+        let (pub_key, key_pair) = get_key_pair();
         let info = AuthorityPrivateInfo {
-            address,
             key_pair,
             host: "127.0.0.1".to_string(),
             port: port_allocator.next_port().expect("No free ports"),
-            db_path: authorities_db_path.join(encode_address_hex(&address)),
+            db_path: authorities_db_path.join(encode_bytes_hex(&pub_key)),
         };
         authority_info.push(AuthorityInfo {
-            address,
+            name: pub_key,
             host: info.host.clone(),
             base_port: info.port,
         });
-        authorities.insert(info.address, 1);
+        authorities.insert(pub_key, 1);
         config.authorities.push(info);
     }
 
@@ -115,7 +114,8 @@ async fn genesis(config: &mut NetworkConfig) -> Result<(), anyhow::Error> {
 
     info!("Creating test objects...");
     for _ in 0..5 {
-        let (address, key_pair) = get_key_pair();
+        let (pub_key, key_pair) = get_key_pair();
+        let address = pub_key.into();
         new_addresses.push(AccountInfo { address, key_pair });
         for _ in 0..5 {
             let new_object = Object::with_id_owner_gas_coin_object_for_testing(
@@ -162,7 +162,7 @@ async fn make_server(
 
     let state = AuthorityState::new_with_genesis_modules(
         committee.clone(),
-        authority.address,
+        authority.key_pair.public(),
         Box::pin(authority.key_pair.copy()),
         store,
     )
