@@ -91,11 +91,11 @@ module FastX::Geniteam {
     }
 
     public fun create_monster_(
-        monster_name: vector<u8>, 
-        monster_img_id: u64, 
-        breed: u8, 
-        monster_affinity: u8, 
-        monster_description: vector<u8>, 
+        monster_name: vector<u8>,
+        monster_img_id: u64,
+        breed: u8,
+        monster_affinity: u8,
+        monster_description: vector<u8>,
         ctx: &mut TxContext
     ): Monster {
 
@@ -148,11 +148,11 @@ module FastX::Geniteam {
 
     /// Update the attributes of a player
     public fun update_player(
-        self: &mut Player, 
-        water_runes_count: u64, 
-        fire_runes_count: u64, 
+        self: &mut Player,
+        water_runes_count: u64,
+        fire_runes_count: u64,
         wind_runes_count: u64,
-        earth_runes_count: u64, 
+        earth_runes_count: u64,
         _ctx: &mut TxContext
     ) {
         self.water_runes_count = water_runes_count;
@@ -161,12 +161,12 @@ module FastX::Geniteam {
         self.earth_runes_count = earth_runes_count
     }
 
-    /// Create a monster and transfer it to the transaction sender 
+    /// Create a monster and transfer it to the transaction sender
     public fun create_monster(
-        monster_name: vector<u8>, 
-        monster_img_id: u64, 
-        breed: u8, 
-        monster_affinity: u8, 
+        monster_name: vector<u8>,
+        monster_img_id: u64,
+        breed: u8,
+        monster_affinity: u8,
         monster_description: vector<u8>,
         ctx: &mut TxContext
     ) {
@@ -182,15 +182,15 @@ module FastX::Geniteam {
     }
 
     /// Add a monster to a farm
-    public fun add_monster(self: &mut Farm, monster: Monster, _ctx: &mut TxContext) {
-        Vector::push_back(&mut self.pet_monsters, monster);
-        self.occupied_monster_slots = self.occupied_monster_slots + 1;
-        assert!(self.occupied_monster_slots <= self.total_monster_slots, ETOO_MANY_MONSTERS)
+    public fun add_monster(self: &mut Player, monster: Monster, _ctx: &mut TxContext) {
+        Vector::push_back(&mut self.farm.pet_monsters, monster);
+        self.farm.occupied_monster_slots = self.farm.occupied_monster_slots + 1;
+        assert!(self.farm.occupied_monster_slots <= self.farm.total_monster_slots, ETOO_MANY_MONSTERS)
     }
 
     /// Remove a monster from a farm amd transfer it to the transaction sender
-    public fun remove_monster(self: &mut Farm, monster_id: vector<u8>, ctx: &mut TxContext) {
-        let monster = remove_monster_(self, &ID::new_bytes(monster_id));
+    public fun remove_monster(self: &mut Player, monster_id: vector<u8>, ctx: &mut TxContext) {
+        let monster = remove_monster_(self.farm, &ID::new_bytes(monster_id));
         Transfer::transfer(monster, TxContext::get_signer_address(ctx))
     }
 
@@ -201,25 +201,25 @@ module FastX::Geniteam {
 
     /// Add cosmetics to a farm's first slot
     public fun update_farm_cosmetic_slot1(
-        self: &mut Farm, cosmetic_type: u8, cosmetic_id: u64, _ctx: &mut TxContext
+        self: &mut Player, cosmetic_type: u8, cosmetic_id: u64, _ctx: &mut TxContext
     ) {
-        self.farm_cosmetic_slot1 = Option::some(FarmCosmetic { cosmetic_type, cosmetic_id })
+        self.farm.farm_cosmetic_slot1 = Option::some(FarmCosmetic { cosmetic_type, cosmetic_id })
     }
 
      /// Add cosmetics to a farm's second slot
     public fun update_farm_cosmetic_slot2(
-        self: &mut Farm, cosmetic_type: u8, cosmetic_id: u64, _ctx: &mut TxContext
+        self: &mut Player, cosmetic_type: u8, cosmetic_id: u64, _ctx: &mut TxContext
     ) {
-        self.farm_cosmetic_slot2 = Option::some(FarmCosmetic { cosmetic_type, cosmetic_id })
+        self.farm.farm_cosmetic_slot2 = Option::some(FarmCosmetic { cosmetic_type, cosmetic_id })
     }
 
     /// Update the attributes of a monster
     public fun update_monster(
-        self: &mut Monster, 
-        monster_level: u64, 
-        hunger_level: u64, 
-        affection_level: u64, 
-        buddy_level: u8, 
+        self: &mut Monster,
+        monster_level: u64,
+        hunger_level: u64,
+        affection_level: u64,
+        buddy_level: u8,
         _ctx: &mut TxContext
     ) {
         self.monster_level = monster_level;
@@ -240,5 +240,5 @@ module FastX::Geniteam {
         self: &mut Monster, cosmetic_type: u8, cosmetic_id: u64, _ctx: &mut TxContext
     ) {
         self.monster_cosmetic_slot2 = Option::some(MonsterCosmetic { cosmetic_type, cosmetic_id })
-    }   
+    }
 }
