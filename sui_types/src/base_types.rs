@@ -638,21 +638,6 @@ impl ObjectID {
         Self::from(AccountAddress::random())
     }
 
-    /// Trims leading zeroes
-    pub fn short_str_lossless(&self) -> String {
-        let hex_str = hex::encode(&self.0).trim_start_matches('0').to_string();
-        if hex_str.is_empty() {
-            "0".to_string()
-        } else {
-            hex_str
-        }
-    }
-
-    /// Converts to array of bytes
-    pub fn into_bytes(self) -> [u8; Self::LENGTH] {
-        self.0.into_bytes()
-    }
-
     /// Converts from hex string to ObjectID where the string is prefixed with 0x
     /// Its okay if the strings are less than expected
     pub fn from_hex_literal(literal: &str) -> Result<Self, ObjectIDParseError> {
