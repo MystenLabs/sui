@@ -1,22 +1,24 @@
 use crate::config::{
-    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, WalletConfig,
+    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, GenesisConfig, NetworkConfig, WalletConfig,
 };
 use crate::utils::Config;
 use anyhow::anyhow;
 use futures::future::join_all;
+use move_package::BuildConfig;
 use std::collections::BTreeMap;
-use std::net::TcpListener;
+use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
-use sui_types::base_types::{encode_bytes_hex, ObjectID, SequenceNumber};
+use sui_types::base_types::{SequenceNumber, SuiAddress, TransactionDigest, TxContext};
+
+use sui_adapter::adapter::generate_package_id;
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
+use sui_types::error::SuiResult;
 use sui_types::object::Object;
 use tracing::{error, info};
-
-const DEFAULT_WEIGHT: usize = 1;
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
@@ -25,14 +27,26 @@ pub enum SuiCommand {
     #[structopt(name = "start")]
     Start,
     #[structopt(name = "genesis")]
-    Genesis,
+    Genesis {
+        #[structopt(long)]
+        config: Option<PathBuf>,
+    },
 }
 
 impl SuiCommand {
     pub async fn execute(&self, config: &mut NetworkConfig) -> Result<(), anyhow::Error> {
         match self {
             SuiCommand::Start => start_network(config).await,
-            SuiCommand::Genesis => genesis(config).await,
+            SuiCommand::Genesis { config: path } => {
+                let genesis_conf = if let Some(path) = path {
+                    GenesisConfig::read(path)?
+                } else {
+                    // Network config has been created by this point, safe to unwrap.
+                    let working_dir = config.config_path().parent().unwrap();
+                    GenesisConfig::default_genesis(&working_dir.join("genesis.conf"))?
+                };
+                genesis(config, genesis_conf).await
+            }
         }
     }
 }
@@ -53,12 +67,12 @@ async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
         config
             .authorities
             .iter()
-            .map(|info| (*info.key_pair.public_key_bytes(), DEFAULT_WEIGHT))
+            .map(|info| (*info.key_pair.public_key_bytes(), info.stake))
             .collect(),
     );
 
     for authority in &config.authorities {
-        let server = make_server(authority, &committee, &[], config.buffer_size).await;
+        let server = make_server(authority, &committee, &[], config.buffer_size).await?;
         handles.push(async move {
             let spawned_server = match server.spawn().await {
                 Ok(server) => server,
@@ -78,63 +92,122 @@ async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn genesis(config: &mut NetworkConfig) -> Result<(), anyhow::Error> {
+async fn genesis(
+    config: &mut NetworkConfig,
+    genesis_conf: GenesisConfig,
+) -> Result<(), anyhow::Error> {
     // We have created the config file, safe to unwrap the path here.
     let working_dir = &config.config_path().parent().unwrap().to_path_buf();
     if !config.authorities.is_empty() {
         return Err(anyhow!("Cannot run genesis on a existing network, please delete network config file and try again."));
     }
 
-    let mut authorities = BTreeMap::new();
+    let mut voting_right = BTreeMap::new();
     let mut authority_info = Vec::new();
-    let mut port_allocator = PortAllocator::new(10000);
 
-    info!("Creating new authorities...");
-    let authorities_db_path = working_dir.join("authorities_db");
-    for _ in 0..4 {
-        let (_, key_pair) = get_key_pair();
-        let pub_key = *key_pair.public_key_bytes();
-        let info = AuthorityPrivateInfo {
-            key_pair,
-            host: "127.0.0.1".to_string(),
-            port: port_allocator.next_port().expect("No free ports"),
-            db_path: authorities_db_path.join(encode_bytes_hex(&pub_key)),
-        };
+    info!(
+        "Creating {} new authorities...",
+        genesis_conf.authorities.len()
+    );
 
+    for authority in genesis_conf.authorities {
+        voting_right.insert(*authority.key_pair.public_key_bytes(), authority.stake);
         authority_info.push(AuthorityInfo {
-            name: pub_key,
-            host: info.host.clone(),
-            base_port: info.port,
+            name: *authority.key_pair.public_key_bytes(),
+            host: authority.host.clone(),
+            base_port: authority.port,
         });
-        authorities.insert(pub_key, 1);
-        config.authorities.push(info);
+        config.authorities.push(authority);
     }
-
-    config.save()?;
 
     let mut new_addresses = Vec::new();
     let mut preload_objects = Vec::new();
 
-    info!("Creating test objects...");
-    for _ in 0..5 {
-        let (address, key_pair) = get_key_pair();
-        new_addresses.push(AccountInfo { address, key_pair });
-        for _ in 0..5 {
+    let new_account_count = genesis_conf
+        .accounts
+        .iter()
+        .filter(|acc| acc.address.is_none())
+        .count();
+
+    info!(
+        "Creating {} account(s) and gas objects...",
+        new_account_count
+    );
+    for account in genesis_conf.accounts {
+        let address = if let Some(address) = account.address {
+            address
+        } else {
+            let (address, key_pair) = get_key_pair();
+            new_addresses.push(AccountInfo { address, key_pair });
+            address
+        };
+        for object_conf in account.gas_objects {
             let new_object = Object::with_id_owner_gas_coin_object_for_testing(
-                ObjectID::random(),
+                object_conf.object_id,
                 SequenceNumber::new(),
                 address,
-                1000,
+                object_conf.gas_value,
             );
             preload_objects.push(new_object);
         }
     }
-    let committee = Committee::new(authorities);
 
-    // Make server state to persist the objects.
-    let config_path = config.config_path();
+    // Load Sui and Move framework lib
+    info!(
+        "Loading Sui framework lib from {:?}",
+        genesis_conf.sui_framework_lib_path
+    );
+    let sui_lib = sui_framework::get_sui_framework_modules(&genesis_conf.sui_framework_lib_path)?;
+    let lib_object =
+        Object::new_package(sui_lib, SuiAddress::default(), TransactionDigest::genesis());
+    preload_objects.push(lib_object);
+
+    info!(
+        "Loading Move framework lib from {:?}",
+        genesis_conf.move_framework_lib_path
+    );
+    let move_lib = sui_framework::get_move_stdlib_modules(&genesis_conf.move_framework_lib_path)?;
+    let lib_object = Object::new_package(
+        move_lib,
+        SuiAddress::default(),
+        TransactionDigest::genesis(),
+    );
+    preload_objects.push(lib_object);
+
+    // Build custom move packages
+    if !genesis_conf.move_packages.is_empty() {
+        info!(
+            "Loading {} Move packages from {:?}",
+            &genesis_conf.move_packages.len(),
+            &genesis_conf.move_packages
+        );
+
+        for path in genesis_conf.move_packages {
+            let mut modules =
+                sui_framework::build_move_package(&path, BuildConfig::default(), false)?;
+            generate_package_id(
+                &mut modules,
+                &mut TxContext::new(&SuiAddress::default(), TransactionDigest::genesis()),
+            )?;
+
+            let object =
+                Object::new_package(modules, SuiAddress::default(), TransactionDigest::genesis());
+            info!("Loaded package [{}] from {:?}.", object.id(), path);
+            // Writing package id to network.conf for user to retrieve later.
+            config.loaded_move_packages.push((path, object.id()));
+            preload_objects.push(object)
+        }
+    }
+
+    let committee = Committee::new(voting_right);
+
+    // Make server state to persist the objects and modules.
+    info!(
+        "Preloading {} objects to authorities.",
+        preload_objects.len()
+    );
     for authority in &config.authorities {
-        make_server(authority, &committee, &preload_objects, config.buffer_size).await;
+        make_server(authority, &committee, &preload_objects, config.buffer_size).await?;
     }
 
     let wallet_path = working_dir.join("wallet.conf");
@@ -142,15 +215,18 @@ async fn genesis(config: &mut NetworkConfig) -> Result<(), anyhow::Error> {
     wallet_config.authorities = authority_info;
     wallet_config.accounts = new_addresses;
     wallet_config.db_folder_path = working_dir.join("client_db");
-    wallet_config.save()?;
 
     info!("Network genesis completed.");
-    info!("Network config file is stored in {:?}.", config_path);
+    config.save()?;
+    info!(
+        "Network config file is stored in {:?}.",
+        config.config_path()
+    );
+    wallet_config.save()?;
     info!(
         "Wallet config file is stored in {:?}.",
         wallet_config.config_path()
     );
-
     Ok(())
 }
 
@@ -159,43 +235,26 @@ async fn make_server(
     committee: &Committee,
     pre_load_objects: &[Object],
     buffer_size: usize,
-) -> AuthorityServer {
+) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
     let name = *authority.key_pair.public_key_bytes();
 
-    let state = AuthorityState::new_with_genesis_modules(
+    let state = AuthorityState::new(
         committee.clone(),
         name,
         Box::pin(authority.key_pair.copy()),
         store,
-    )
-    .await;
+    );
 
     for object in pre_load_objects {
         state.init_order_lock(object.to_object_reference()).await;
         state.insert_object(object.clone()).await;
     }
 
-    AuthorityServer::new(authority.host.clone(), authority.port, buffer_size, state)
-}
-
-struct PortAllocator {
-    next_port: u16,
-}
-
-impl PortAllocator {
-    pub fn new(starting_port: u16) -> Self {
-        Self {
-            next_port: starting_port,
-        }
-    }
-    fn next_port(&mut self) -> Option<u16> {
-        for port in self.next_port..65535 {
-            if TcpListener::bind(("127.0.0.1", port)).is_ok() {
-                self.next_port = port + 1;
-                return Some(port);
-            }
-        }
-        None
-    }
+    Ok(AuthorityServer::new(
+        authority.host.clone(),
+        authority.port,
+        buffer_size,
+        state,
+    ))
 }

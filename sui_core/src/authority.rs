@@ -22,6 +22,7 @@ use sui_types::{
     messages::*,
     object::{Data, Object},
     storage::Storage,
+    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
 #[cfg(test)]
@@ -459,6 +460,25 @@ impl AuthorityState {
             requested_object_reference,
             object_and_lock,
         })
+    }
+
+    pub fn new(
+        committee: Committee,
+        name: AuthorityName,
+        secret: StableSyncAuthoritySigner,
+        store: Arc<AuthorityStore>,
+    ) -> Self {
+        let native_functions =
+            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+        AuthorityState {
+            committee,
+            name,
+            secret,
+            _native_functions: native_functions.clone(),
+            move_vm: adapter::new_move_vm(native_functions)
+                .expect("We defined natives to not fail here"),
+            _database: store,
+        }
     }
 
     pub async fn new_with_genesis_modules(
