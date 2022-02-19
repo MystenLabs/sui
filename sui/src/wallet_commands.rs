@@ -304,7 +304,7 @@ impl WalletContext {
             .collect::<Vec<_>>();
         let mut context = Self {
             config,
-            address_manager: ClientAddressManager::new(path)?,
+            address_manager: ClientAddressManager::new(path),
         };
         // Pre-populate client state for each address in the config.
         for address in addresses {
