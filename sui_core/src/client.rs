@@ -44,11 +44,11 @@ pub struct ClientAddressManager<A> {
 }
 impl<A> ClientAddressManager<A> {
     /// Create a new manager which stores its managed addresses at `path`
-    pub fn new(path: PathBuf) -> Result<Self, SuiError> {
-        Ok(Self {
+    pub fn new(path: PathBuf) -> Self {
+        Self {
             store: client_store::ClientAddressManagerStore::open(path),
             address_states: BTreeMap::new(),
-        })
+        }
     }
 
     /// Get (if exists) or create a new managed address state
@@ -73,7 +73,7 @@ impl<A> ClientAddressManager<A> {
                 committee,
                 authority_clients,
                 single_store,
-            )?);
+            ));
         }
 
         return Ok(self.address_states.get_mut(&address).unwrap());
@@ -156,13 +156,13 @@ impl<A> ClientState<A> {
         secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-    ) -> Result<Self, SuiError> {
-        Ok(ClientState {
+    ) -> Self {
+        ClientState {
             address,
             secret,
             authorities: AuthorityAggregator::new(committee, authority_clients),
             store: client_store::ClientSingleAddressStore::new(path),
-        })
+        }
     }
 
     pub fn new_for_manager(
@@ -171,13 +171,13 @@ impl<A> ClientState<A> {
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         store: client_store::ClientSingleAddressStore,
-    ) -> Result<Self, SuiError> {
-        Ok(ClientState {
+    ) -> Self {
+        ClientState {
             address,
             secret,
             authorities: AuthorityAggregator::new(committee, authority_clients),
             store,
-        })
+        }
     }
 
     pub fn address(&self) -> SuiAddress {

@@ -348,7 +348,6 @@ fn make_client(
         committee,
         authority_clients,
     )
-    .unwrap()
 }
 
 #[cfg(test)]
@@ -372,7 +371,6 @@ fn make_admin_client(
         committee,
         authority_clients,
     )
-    .unwrap()
 }
 
 #[cfg(test)]
@@ -2278,7 +2276,7 @@ async fn test_transfer_pending_orders() {
 async fn test_address_manager() {
     let path = tempfile::tempdir().unwrap().into_path();
     let mut address_manager: crate::client::ClientAddressManager<LocalAuthorityClient> =
-        crate::client::ClientAddressManager::new(path).unwrap();
+        crate::client::ClientAddressManager::new(path);
 
     // Ensure nothing being managed
     assert!(address_manager.get_managed_address_states().is_empty());
