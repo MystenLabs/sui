@@ -1,7 +1,7 @@
 module Sui::Geniteam {
     use Sui::Bag::{Self, Bag};
     use Sui::Collection::{Self, Collection};
-    use Sui::ID::VersionedID;
+    use Sui::ID::{Self, VersionedID};
     use Sui::TxContext::{Self, TxContext};
     use Std::Option::{Self, Option};
     use Sui::Transfer::{Self, ChildRef};
@@ -135,10 +135,8 @@ module Sui::Geniteam {
         );
 
         // Check if this is the right collection
-        assert!(
-            Transfer::is_child(&farm.pet_monsters, pet_monsters),
-            EMONSTER_COLLECTION_NOT_OWNED_BY_FARM,
-        );
+        assert!(Transfer::child_id(&farm.pet_monsters) == ID::id(pet_monsters),
+                EMONSTER_COLLECTION_NOT_OWNED_BY_FARM);
 
         // TODO: Decouple adding monster to farm from creating a monster.
         // Add it to the collection
@@ -151,10 +149,8 @@ module Sui::Geniteam {
         ctx: &mut TxContext
     ) {
         // Check if this is the right collection
-        assert!(
-            Transfer::is_child(&player.inventory, inventory),
-            EINVENTORY_NOT_OWNED_BY_PLAYER,
-        );
+        assert!(Transfer::child_id(&player.inventory) == ID::id(inventory),
+                EINVENTORY_NOT_OWNED_BY_PLAYER);
 
         // Create the farm cosmetic object
         let farm_cosmetic = FarmCosmetic {
@@ -172,10 +168,8 @@ module Sui::Geniteam {
         ctx: &mut TxContext
     ) {
         // Check if this is the right collection
-        assert!(
-            Transfer::is_child(&player.inventory, inventory),
-            EINVENTORY_NOT_OWNED_BY_PLAYER,
-        );
+        assert!(Transfer::child_id(&player.inventory) == ID::id(inventory),
+                EINVENTORY_NOT_OWNED_BY_PLAYER);
 
         // Create the farm cosmetic object
         let monster_cosmetic = MonsterCosmetic {
