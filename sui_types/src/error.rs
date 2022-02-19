@@ -218,6 +218,10 @@ pub enum SuiError {
     IncorrectRecipientError,
     #[error("Too many authority errors were detected.")]
     TooManyIncorrectAuthorities,
+    #[error("Inconsistent gas coin split result.")]
+    IncorrectGasSplit,
+    #[error("Inconsistent gas coin merge result.")]
+    IncorrectGasMerge,
 
     #[error("Account not found.")]
     AccountNotFound,
