@@ -819,7 +819,7 @@ where
     /// At that point (and after) enough authorities are up to date with all objects
     /// needed to process the certificate that a submission should succeed. However,
     /// in case an authority returns an error, we do try to bring it up to speed.
-    pub async fn process_certificate(
+    async fn process_certificate(
         &self,
         certificate: CertifiedOrder,
         timeout_after_quorum: Duration,

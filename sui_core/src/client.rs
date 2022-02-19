@@ -537,14 +537,6 @@ where
             &*self.secret,
         );
         let (certificate, effects) = self.execute_transaction(order).await?;
-        self.authorities
-            .process_certificate(certificate.clone(), Duration::from_secs(60))
-            .await?;
-
-        // remove object from local storage if the recipient is not us.
-        if recipient != self.address {
-            self.remove_object_info(&object_id)?;
-        }
 
         Ok((certificate, effects))
     }
