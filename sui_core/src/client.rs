@@ -366,7 +366,6 @@ where
     /// This means either exactly all the objects are owned by this order, or by no order
     /// The caller has to explicitly find which objects are locked
     /// TODO: always return true for immutable objects https://github.com/MystenLabs/fastnft/issues/305
-    /// TODO: this function can fail. Need to handle it https://github.com/MystenLabs/fastnft/issues/383
     fn can_lock_or_unlock(&self, order: &Order) -> Result<bool, SuiError> {
         let iter_matches = self.store.pending_orders.multi_get(
             &order
@@ -375,11 +374,12 @@ where
                 .map(|q| q.object_id())
                 .collect_vec(),
         )?;
-        for o in iter_matches {
-            // If we find any order that isn't the given order, we cannot proceed
-            if o.is_some() && o.unwrap() != *order {
-                return Ok(false);
-            }
+        if iter_matches.into_iter().any(|match_for_order| {
+            matches!(match_for_order,
+                // If we find any order that isn't the given order, we cannot proceed
+                Some(o) if o != *order)
+        }) {
+            return Ok(false);
         }
         // All the objects are either owned by this order or by no order
         Ok(true)
