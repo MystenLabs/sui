@@ -157,10 +157,7 @@ impl WalletCommands {
             } => {
                 // Find owner of gas object
                 let client_state = context.get_or_create_client_state(sender)?;
-                let gas_obj_ref = *client_state
-                    .object_refs()
-                    .get(gas)
-                    .ok_or(anyhow!("Gas object not found"))?;
+                let gas_obj_ref = client_state.object_ref(*gas)?;
 
                 let (_, effects) = client_state
                     .publish(path.clone(), gas_obj_ref, *gas_budget)
@@ -201,10 +198,7 @@ impl WalletCommands {
                 let package_obj_ref = package_obj_info.object().unwrap().to_object_reference();
 
                 // Fetch the object info for the gas obj
-                let gas_obj_ref = *client_state
-                    .object_refs()
-                    .get(gas)
-                    .expect("Gas object not found");
+                let gas_obj_ref = client_state.object_ref(*gas).expect("Gas object not found");
 
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
@@ -260,7 +254,6 @@ impl WalletCommands {
             WalletCommands::Objects { address } => {
                 let client_state = context.get_or_create_client_state(address)?;
                 let object_refs = client_state.object_refs();
-                info!("Showing {} results.", object_refs.len());
                 for (obj_id, object_ref) in object_refs {
                     info!("{}: {:?}", obj_id, object_ref);
                 }

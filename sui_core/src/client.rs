@@ -204,8 +204,8 @@ impl<A> ClientState<A> {
             .ok_or(SuiError::ObjectNotFound { object_id })
     }
 
-    pub fn object_refs(&self) -> BTreeMap<ObjectID, ObjectRef> {
-        self.store.object_refs.iter().collect()
+    pub fn object_refs(&self) -> impl Iterator<Item = (ObjectID, ObjectRef)> + '_ {
+        self.store.object_refs.iter()
     }
 
     /// Need to remove unwraps. Found this tricky due to iterator requirements of downloader and not being able to exit from closure to top fn
@@ -226,8 +226,10 @@ impl<A> ClientState<A> {
             })
     }
 
-    pub fn all_certificates(&self) -> BTreeMap<TransactionDigest, CertifiedOrder> {
-        self.store.certificates.iter().collect()
+    pub fn all_certificates(
+        &self,
+    ) -> impl Iterator<Item = (TransactionDigest, CertifiedOrder)> + '_ {
+        self.store.certificates.iter()
     }
 
     pub fn insert_object_info(
