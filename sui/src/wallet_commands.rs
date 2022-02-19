@@ -198,7 +198,7 @@ impl WalletCommands {
                 let client_state = context.get_or_create_client_state(sender)?;
 
                 let package_obj_info = client_state.get_object_info(*package).await?;
-                let package_obj_ref = package_obj_info.object().unwrap().to_object_reference();
+                let package_obj_id = package_obj_info.object().unwrap().id();
 
                 // Fetch the object info for the gas obj
                 let gas_obj_ref = *client_state
@@ -215,7 +215,7 @@ impl WalletCommands {
 
                 let (cert, effects) = client_state
                     .move_call(
-                        package_obj_ref,
+                        package_obj_id,
                         module.to_owned(),
                         function.to_owned(),
                         type_args.clone(),

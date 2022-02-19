@@ -1357,7 +1357,7 @@ async fn test_hero() {
     for (obj_ref, _) in &effects.created {
         let new_obj = authority.get_object(&obj_ref.0).await.unwrap().unwrap();
         if let Data::Package(_) = &new_obj.data {
-            package_object = Some(obj_ref);
+            package_object = Some(&obj_ref.0);
             successful_checks += 1;
         } else if let Data::Move(move_obj) = &new_obj.data {
             if move_obj.type_.module == Identifier::new("Hero").unwrap()
@@ -1740,13 +1740,13 @@ fn init_certified_transfer_order(
         .unwrap()
 }
 
-fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> ObjectRef {
+fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> ObjectID {
     genesis_objects
         .iter()
         .find_map(|o| match o.data.try_as_package() {
             Some(p) => {
                 if p.keys().any(|name| name == module) {
-                    Some(o.to_object_reference())
+                    Some(o.id())
                 } else {
                     None
                 }
@@ -1761,7 +1761,7 @@ async fn call_move(
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
     sender_key: &KeyPair,
-    package: &ObjectRef,
+    package: &ObjectID,
     module: Identifier,
     function: Identifier,
     type_args: Vec<TypeTag>,
@@ -1809,14 +1809,14 @@ async fn call_framework_code(
     pure_args: Vec<Vec<u8>>,
 ) -> SuiResult<OrderEffects> {
     let (genesis_package_objects, _) = genesis::clone_genesis_data();
-    let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
+    let package_object_id = get_genesis_package_by_module(&genesis_package_objects, module);
 
     call_move(
         authority,
         gas_object_id,
         sender,
         sender_key,
-        &package_object_ref,
+        &package_object_id,
         ident_str!(module).to_owned(),
         ident_str!(function).to_owned(),
         type_args,

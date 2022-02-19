@@ -139,7 +139,7 @@ fn order_create(
     secret: &dyn signature::Signer<Signature>,
     dest: SuiAddress,
     value: u64,
-    framework_obj_ref: ObjectRef,
+    framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
 ) -> Order {
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
@@ -151,7 +151,7 @@ fn order_create(
 
     Order::new_move_call(
         src,
-        framework_obj_ref,
+        framework_obj_id,
         ident_str!("ObjectBasics").to_owned(),
         ident_str!("create").to_owned(),
         Vec::new(),
@@ -169,14 +169,14 @@ fn order_transfer(
     secret: &dyn signature::Signer<Signature>,
     dest: SuiAddress,
     object_ref: ObjectRef,
-    framework_obj_ref: ObjectRef,
+    framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
 ) -> Order {
     let pure_args = vec![bcs::to_bytes(&dest.to_vec()).unwrap()];
 
     Order::new_move_call(
         src,
-        framework_obj_ref,
+        framework_obj_id,
         ident_str!("ObjectBasics").to_owned(),
         ident_str!("transfer").to_owned(),
         Vec::new(),
@@ -194,14 +194,14 @@ fn order_set(
     secret: &dyn signature::Signer<Signature>,
     object_ref: ObjectRef,
     value: u64,
-    framework_obj_ref: ObjectRef,
+    framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
 ) -> Order {
     let pure_args = vec![bcs::to_bytes(&value).unwrap()];
 
     Order::new_move_call(
         src,
-        framework_obj_ref,
+        framework_obj_id,
         ident_str!("ObjectBasics").to_owned(),
         ident_str!("set_value").to_owned(),
         Vec::new(),
@@ -218,12 +218,12 @@ fn order_delete(
     src: SuiAddress,
     secret: &dyn signature::Signer<Signature>,
     object_ref: ObjectRef,
-    framework_obj_ref: ObjectRef,
+    framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
 ) -> Order {
     Order::new_move_call(
         src,
-        framework_obj_ref,
+        framework_obj_id,
         ident_str!("ObjectBasics").to_owned(),
         ident_str!("delete").to_owned(),
         Vec::new(),
@@ -766,7 +766,7 @@ async fn test_move_calls_object_create() {
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
-    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let framework_obj_id = client1.get_framework_object_id().await.unwrap();
 
     // Populate authorities with obj data
     let gas_object_ref = fund_account_with_same_objects(
@@ -788,7 +788,7 @@ async fn test_move_calls_object_create() {
     ];
     let call_response = client1
         .move_call(
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("ObjectBasics").to_owned(),
             ident_str!("create").to_owned(),
             Vec::new(),
@@ -824,7 +824,7 @@ async fn test_move_calls_object_transfer() {
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
-    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let framework_obj_id = client1.get_framework_object_id().await.unwrap();
 
     // Populate authorities with obj data
     let mut gas_object_ref = fund_account_with_same_objects(
@@ -846,7 +846,7 @@ async fn test_move_calls_object_transfer() {
     ];
     let call_response = client1
         .move_call(
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("ObjectBasics").to_owned(),
             ident_str!("create").to_owned(),
             Vec::new(),
@@ -868,7 +868,7 @@ async fn test_move_calls_object_transfer() {
     let pure_args = vec![bcs::to_bytes(&client2.address().to_vec()).unwrap()];
     let call_response = client1
         .move_call(
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("ObjectBasics").to_owned(),
             ident_str!("transfer").to_owned(),
             Vec::new(),
@@ -912,7 +912,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
-    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let framework_obj_id = client1.get_framework_object_id().await.unwrap();
 
     // Populate authorities with obj data
     let mut gas_object_ref = fund_account_with_same_objects(
@@ -934,7 +934,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
     ];
     let call_response = client1
         .move_call(
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("ObjectBasics").to_owned(),
             ident_str!("create").to_owned(),
             Vec::new(),
@@ -955,7 +955,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
     let pure_args = vec![bcs::to_bytes(&client2.address().to_vec()).unwrap()];
     let call_response = client1
         .move_call(
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("ObjectBasics").to_owned(),
             ident_str!("transfer_and_freeze").to_owned(),
             Vec::new(),
@@ -999,7 +999,7 @@ async fn test_move_calls_object_delete() {
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
-    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let framework_obj_id = client1.get_framework_object_id().await.unwrap();
 
     // Populate authorities with obj data
     let mut gas_object_ref = fund_account_with_same_objects(
@@ -1021,7 +1021,7 @@ async fn test_move_calls_object_delete() {
     ];
     let call_response = client1
         .move_call(
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("ObjectBasics").to_owned(),
             ident_str!("create").to_owned(),
             Vec::new(),
@@ -1040,7 +1040,7 @@ async fn test_move_calls_object_delete() {
 
     let call_response = client1
         .move_call(
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("ObjectBasics").to_owned(),
             ident_str!("delete").to_owned(),
             Vec::new(),
@@ -1178,7 +1178,7 @@ async fn test_module_publish_and_call_good() {
     //Try to call a function in TrustedCoin module
     let call_resp = client1
         .move_call(
-            new_obj.object().unwrap().to_object_reference(),
+            new_obj.object().unwrap().id(),
             ident_str!("TrustedCoin").to_owned(),
             ident_str!("mint").to_owned(),
             vec![],
@@ -1792,7 +1792,7 @@ async fn test_get_all_owned_objects() {
     let auth_vec: Vec<_> = authority_clients.values().cloned().collect();
 
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
-    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let framework_obj_id = client1.get_framework_object_id().await.unwrap();
     let mut client2 = make_client(authority_clients.clone(), committee.clone());
 
     let gas_object1 = ObjectID::random();
@@ -1810,7 +1810,7 @@ async fn test_get_all_owned_objects() {
         client1.secret(),
         client1.address(),
         100,
-        framework_obj_ref,
+        framework_obj_id,
         gas_ref_1,
     );
 
@@ -1858,7 +1858,7 @@ async fn test_get_all_owned_objects() {
         client1.address(),
         client1.secret(),
         created_ref,
-        framework_obj_ref,
+        framework_obj_id,
         gas_ref_del,
     );
 
@@ -1901,7 +1901,7 @@ async fn test_sync_all_owned_objects() {
     let auth_vec: Vec<_> = authority_clients.values().cloned().collect();
 
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
-    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let framework_obj_id = client1.get_framework_object_id().await.unwrap();
     let client2 = make_client(authority_clients.clone(), committee.clone());
 
     let gas_object1 = ObjectID::random();
@@ -1921,7 +1921,7 @@ async fn test_sync_all_owned_objects() {
         client1.secret(),
         client1.address(),
         100,
-        framework_obj_ref,
+        framework_obj_id,
         gas_ref_1,
     );
 
@@ -1931,7 +1931,7 @@ async fn test_sync_all_owned_objects() {
         client1.secret(),
         client1.address(),
         101,
-        framework_obj_ref,
+        framework_obj_id,
         gas_ref_2,
     );
 
@@ -1977,7 +1977,7 @@ async fn test_sync_all_owned_objects() {
         client1.address(),
         client1.secret(),
         new_ref_1,
-        framework_obj_ref,
+        framework_obj_id,
         gas_ref_del,
     );
 
@@ -1988,7 +1988,7 @@ async fn test_sync_all_owned_objects() {
         client1.secret(),
         client2.address(),
         new_ref_2,
-        framework_obj_ref,
+        framework_obj_id,
         gas_ref_trans,
     );
 
@@ -2036,7 +2036,7 @@ async fn test_process_order() {
     let auth_vec: Vec<_> = authority_clients.values().cloned().collect();
 
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
-    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let framework_obj_id = client1.get_framework_object_id().await.unwrap();
 
     let gas_object1 = ObjectID::random();
     let gas_object2 = ObjectID::random();
@@ -2055,7 +2055,7 @@ async fn test_process_order() {
         client1.secret(),
         client1.address(),
         100,
-        framework_obj_ref,
+        framework_obj_id,
         gas_ref_1,
     );
 
@@ -2076,7 +2076,7 @@ async fn test_process_order() {
         client1.secret(),
         new_ref_1,
         100,
-        framework_obj_ref,
+        framework_obj_id,
         gas_ref_set,
     );
 
@@ -2101,7 +2101,7 @@ async fn test_process_certificate() {
     let auth_vec: Vec<_> = authority_clients.values().cloned().collect();
 
     let mut client1 = make_client(authority_clients.clone(), committee.clone());
-    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let framework_obj_id = client1.get_framework_object_id().await.unwrap();
 
     let gas_object1 = ObjectID::random();
     let gas_object2 = ObjectID::random();
@@ -2120,7 +2120,7 @@ async fn test_process_certificate() {
         client1.secret(),
         client1.address(),
         100,
-        framework_obj_ref,
+        framework_obj_id,
         gas_ref_1,
     );
 
@@ -2147,7 +2147,7 @@ async fn test_process_certificate() {
         client1.secret(),
         new_ref_1,
         100,
-        framework_obj_ref,
+        framework_obj_id,
         gas_ref_set,
     );
 
@@ -2310,7 +2310,7 @@ async fn test_address_manager() {
 
     // Confirm expected behavior
     assert_eq!(client1.store().objects.iter().count(), 2);
-    let framework_obj_ref = client1.get_framework_object_ref().await.unwrap();
+    let framework_obj_id = client1.get_framework_object_id().await.unwrap();
     let sample_auth = &authority_clients.iter().next().unwrap().1;
 
     // Make a transaction
@@ -2321,7 +2321,7 @@ async fn test_address_manager() {
     ];
     let call_response = client1
         .move_call(
-            framework_obj_ref,
+            framework_obj_id,
             ident_str!("ObjectBasics").to_owned(),
             ident_str!("create").to_owned(),
             Vec::new(),

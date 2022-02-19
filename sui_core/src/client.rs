@@ -117,7 +117,7 @@ pub trait Client {
     /// Call move functions in the module in the given package, with args supplied
     async fn move_call(
         &mut self,
-        package_object_ref: ObjectRef,
+        package_object_id: ObjectID,
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
@@ -299,11 +299,11 @@ where
     }
 
     #[cfg(test)]
-    pub async fn get_framework_object_ref(&mut self) -> Result<ObjectRef, anyhow::Error> {
+    pub async fn get_framework_object_id(&mut self) -> Result<ObjectID, anyhow::Error> {
         let info = self
             .get_object_info(ObjectID::from(SUI_FRAMEWORK_ADDRESS))
             .await?;
-        Ok(info.reference()?)
+        Ok(info.reference()?.0)
     }
 
     async fn execute_transaction_inner(
@@ -607,7 +607,7 @@ where
 
     async fn move_call(
         &mut self,
-        package_object_ref: ObjectRef,
+        package_object_id: ObjectID,
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
@@ -618,7 +618,7 @@ where
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
         let move_call_order = Order::new_move_call(
             self.address,
-            package_object_ref,
+            package_object_id,
             module,
             function,
             type_arguments,

@@ -30,8 +30,7 @@ pub struct Transfer {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveCall {
-    // TODO: For package object, we only need object id, as it's always read-only.
-    pub package: ObjectRef,
+    pub package: ObjectID,
     pub module: Identifier,
     pub function: Identifier,
     pub type_arguments: Vec<TypeTag>,
@@ -404,7 +403,7 @@ impl Order {
     #[allow(clippy::too_many_arguments)]
     pub fn new_move_call(
         sender: SuiAddress,
-        package: ObjectRef,
+        package: ObjectID,
         module: Identifier,
         function: Identifier,
         type_arguments: Vec<TypeTag>,
@@ -484,7 +483,7 @@ impl Order {
                         .map(InputObjectKind::MoveObject)
                         .collect::<Vec<_>>(),
                 );
-                call_inputs.push(InputObjectKind::MovePackage(c.package.0));
+                call_inputs.push(InputObjectKind::MovePackage(c.package));
                 call_inputs
             }
             OrderKind::Publish(m) => {

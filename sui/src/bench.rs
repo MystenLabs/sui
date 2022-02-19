@@ -212,15 +212,11 @@ impl ClientServerBenchmark {
 
             let order = if self.use_move {
                 // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
-                let framework_obj_ref = (
-                    ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-                    SequenceNumber::new(),
-                    ObjectDigest::new([0; 32]),
-                );
+                let framework_obj_id = ObjectID::from(SUI_FRAMEWORK_ADDRESS);
 
                 Order::new_move_call(
                     *account_addr,
-                    framework_obj_ref,
+                    framework_obj_id,
                     ident_str!("GAS").to_owned(),
                     ident_str!("transfer").to_owned(),
                     Vec::new(),
