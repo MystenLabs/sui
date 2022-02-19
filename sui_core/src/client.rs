@@ -59,24 +59,27 @@ impl<A> ClientAddressManager<A> {
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
     ) -> Result<&mut ClientState<A>, SuiError> {
-        if let std::collections::btree_map::Entry::Vacant(e) = self.address_states.entry(address) {
+        #[allow(clippy::map_entry)]
+        // the fallible store creation complicates the use of the entry API
+        if !self.address_states.contains_key(&address) {
             // Load the records if available
-            let single_store = if self.store.is_managed_address(address)? {
-                // Unwrap is okay since we checked cond
-                self.store.get_managed_address(address)
-            } else {
-                self.store.manage_new_address(address)
-            }?;
-            e.insert(ClientState::new_for_manager(
+            let single_store = match self.store.get_managed_address(address)? {
+                Some(store) => store,
+                None => self.store.manage_new_address(address)?,
+            };
+            self.address_states.insert(
                 address,
-                secret,
-                committee,
-                authority_clients,
-                single_store,
-            ));
+                ClientState::new_for_manager(
+                    address,
+                    secret,
+                    committee,
+                    authority_clients,
+                    single_store,
+                ),
+            );
         }
-
-        return Ok(self.address_states.get_mut(&address).unwrap());
+        // unwrap-safe as we just populated the entry
+        Ok(self.address_states.get_mut(&address).unwrap())
     }
 
     /// Get all the states
