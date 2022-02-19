@@ -73,12 +73,11 @@ impl ClientAddressManagerStore {
     pub fn get_managed_address(
         &self,
         address: SuiAddress,
-    ) -> Result<client_store::ClientSingleAddressStore, typed_store::rocks::TypedStoreError> {
-        // Create an a path for this address
-        let path = self.make_db_path_for_address(address);
-
-        self.managed_address_paths.get(&address)?;
-        Ok(ClientSingleAddressStore::new(path))
+    ) -> Result<Option<client_store::ClientSingleAddressStore>, typed_store::rocks::TypedStoreError>
+    {
+        self.managed_address_paths
+            .get(&address)
+            .map(|opt_path| opt_path.map(ClientSingleAddressStore::new))
     }
 
     /// Check if an address is managed
