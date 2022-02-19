@@ -85,13 +85,13 @@ impl<A> ClientAddressManager<A> {
     }
 }
 
-pub struct ClientState<AuthorityAPI> {
+pub struct ClientState<A> {
     /// Our Sui address.
     address: SuiAddress,
     /// Our signature key.
     secret: StableSyncSigner,
     /// Authority entry point.
-    authorities: AuthorityAggregator<AuthorityAPI>,
+    authorities: AuthorityAggregator<A>,
     /// Persistent store for client
     store: client_store::ClientSingleAddressStore,
 }
