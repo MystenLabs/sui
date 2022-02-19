@@ -31,7 +31,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use std::net::{Ipv4Addr, SocketAddr, Ipv6Addr};
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::runtime::Runtime;
@@ -45,8 +45,7 @@ const DEFAULT_WEIGHT: usize = 1;
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let config_dropshot: ConfigDropshot = ConfigDropshot {
-        // bind_address: SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 5000)),
-        bind_address: SocketAddr::from((Ipv6Addr::LOCALHOST, 5000)),
+        bind_address: SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 5000)),
         ..Default::default()
     };
 
