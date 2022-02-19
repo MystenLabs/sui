@@ -11,12 +11,11 @@ use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::ExecutionStatus;
 
-use crate::utils::Config;
+use crate::utils::{resolve_move_function_components, Config};
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
-use move_core_types::parser::{parse_transaction_argument, parse_type_tag};
-use move_core_types::transaction_argument::{convert_txn_args, TransactionArgument};
+use move_core_types::parser::parse_type_tag;
 use std::collections::BTreeMap;
 use std::time::Instant;
 use structopt::clap::AppSettings;
@@ -86,15 +85,10 @@ pub enum WalletCommands {
         /// Function name in module
         #[structopt(long, parse(try_from_str = parse_type_tag))]
         type_args: Vec<TypeTag>,
-        /// Object args object IDs
+        /// Simplified ordered args like in the function syntax
+        /// ObjectIDs, Addresses must be hex strings
         #[structopt(long)]
-        object_args: Vec<ObjectID>,
-        /// Pure arguments to the functions, which conform to move_core_types::transaction_argument
-        /// Special case formatting rules:
-        /// Use one string with CSV token embedded, for example "54u8,0x43"
-        /// When specifying FastX addresses, specify as vector. Example x\"01FE4E6F9F57935C5150A486B5B78AC2B94E2C5CD9352C132691D99B3E8E095C\"
-        #[structopt(long, parse(try_from_str = parse_transaction_argument))]
-        pure_args: Vec<TransactionArgument>,
+        args: Vec<serde_json::Value>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         #[structopt(long)]
         gas: ObjectID,
@@ -190,15 +184,15 @@ impl WalletCommands {
                 module,
                 function,
                 type_args,
-                object_args,
-                pure_args,
                 gas,
                 gas_budget,
+                args,
             } => {
                 let client_state = context.get_or_create_client_state(sender)?;
 
                 let package_obj_info = client_state.get_object_info(*package).await?;
-                let package_obj_ref = package_obj_info.object().unwrap().to_object_reference();
+                let package_obj = package_obj_info.object().clone()?;
+                let package_obj_ref = package_obj_info.reference().unwrap();
 
                 // Fetch the object info for the gas obj
                 let gas_obj_ref = *client_state
@@ -206,10 +200,17 @@ impl WalletCommands {
                     .get(gas)
                     .expect("Gas object not found");
 
+                let resolved = resolve_move_function_components(
+                    package_obj,
+                    module.clone(),
+                    function.clone(),
+                    args.clone(),
+                )?;
+
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
-                for obj_id in object_args {
-                    let obj_info = client_state.get_object_info(*obj_id).await?;
+                for obj_id in resolved.object_args {
+                    let obj_info = client_state.get_object_info(obj_id).await?;
                     object_args_refs.push(obj_info.object()?.to_object_reference());
                 }
 
@@ -221,7 +222,7 @@ impl WalletCommands {
                         type_args.clone(),
                         gas_obj_ref,
                         object_args_refs,
-                        convert_txn_args(pure_args),
+                        resolved.pure_args_serialized,
                         *gas_budget,
                     )
                     .await?;

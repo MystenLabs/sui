@@ -1,4 +1,6 @@
 use super::*;
+use move_core_types::identifier::Identifier;
+use serde_json::json;
 use std::fs::read_dir;
 use std::time::Duration;
 use sui::config::{
@@ -6,8 +8,10 @@ use sui::config::{
     AUTHORITIES_DB_NAME,
 };
 use sui::wallet_commands::{WalletCommands, WalletContext};
-use sui_types::base_types::{encode_bytes_hex, ObjectID};
+use sui_core::client::Client;
+use sui_types::base_types::{encode_bytes_hex, ObjectID, TransactionDigest};
 use sui_types::crypto::get_key_pair;
+use sui_types::messages::OrderEffects;
 use tokio::task;
 use tracing_test::traced_test;
 
@@ -245,5 +249,155 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     for (_, id) in network_conf.loaded_move_packages {
         assert!(logs_contain(&*format!("{}", id)));
     }
+    Ok(())
+}
+
+#[traced_test]
+#[tokio::test]
+async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
+
+    SuiCommand::Genesis { config: None }
+        .execute(&mut config)
+        .await?;
+
+    // Start network
+    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+
+    // Wait for authorities to come alive.
+    let mut count = 0;
+    while count < 50 && !logs_contain("Listening to TCP traffic on 127.0.0.1") {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        count += 1;
+    }
+
+    // Create Wallet context.
+    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let address1 = wallet_conf.accounts.first().unwrap().address;
+    let address2 = wallet_conf.accounts.get(1).unwrap().address;
+
+    let mut context = WalletContext::new(wallet_conf)?;
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState { address: address1 }
+        .execute(&mut context)
+        .await?;
+    WalletCommands::SyncClientState { address: address2 }
+        .execute(&mut context)
+        .await?;
+
+    // Print objects owned by `address`
+    WalletCommands::Objects { address: address1 }
+        .execute(&mut context)
+        .await?;
+
+    let state1 = context
+        .address_manager
+        .get_managed_address_states()
+        .get(&address1)
+        .unwrap();
+
+    // Check log output contains all object ids.
+    for (object_id, _) in state1.object_refs() {
+        assert!(logs_contain(format!("{}", object_id).as_str()))
+    }
+
+    // Create an object for address1 using Move call
+
+    // Certain prep work
+    // Get a gas object
+    let gas = *state1.get_owned_objects().first().unwrap();
+    let obj = *state1.get_owned_objects().get(1).unwrap();
+
+    // Create the args
+    let addr1_str = format!("0x{:02x}", address1);
+    let args = json!([123u8, addr1_str]);
+    // Get the vector representation, albeit heterogeneous
+    let args = args.as_array().unwrap();
+
+    WalletCommands::Call {
+        sender: address1,
+        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        module: Identifier::new("ObjectBasics").unwrap(),
+        function: Identifier::new("create").unwrap(),
+        type_args: vec![],
+        args: args.to_vec(),
+        gas,
+        gas_budget: 1000,
+    }
+    .execute(&mut context)
+    .await?;
+
+    while count < 5 && !logs_contain("Mutated Objects:") {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        count += 1;
+    }
+    assert!(logs_contain("Created Objects:"));
+
+    // Try a bad argument: decimal
+    let args = json!([0.3f32, addr1_str]);
+    let args = args.as_array().unwrap();
+    let resp = WalletCommands::Call {
+        sender: address1,
+        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        module: Identifier::new("ObjectBasics").unwrap(),
+        function: Identifier::new("create").unwrap(),
+        type_args: vec![],
+        args: args.to_vec(),
+        gas,
+        gas_budget: 1000,
+    }
+    .execute(&mut context)
+    .await;
+
+    assert!(resp.is_err());
+
+    let err_string = format!("{} ", resp.err().unwrap());
+    assert!(err_string.contains("Expected arg of type u8"));
+
+    // Try a bad argument: too few args
+    let args = json!([0.3f32]);
+    let args = args.as_array().unwrap();
+    let resp = WalletCommands::Call {
+        sender: address1,
+        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        module: Identifier::new("ObjectBasics").unwrap(),
+        function: Identifier::new("create").unwrap(),
+        type_args: vec![],
+        args: args.to_vec(),
+        gas,
+        gas_budget: 1000,
+    }
+    .execute(&mut context)
+    .await;
+
+    assert!(resp.is_err());
+
+    let err_string = format!("{} ", resp.err().unwrap());
+    assert!(err_string.contains("Expected 2 args, found 1"));
+
+    // Try a transfer
+    let obj_str = format!("{:02x}", obj);
+    let addr2_str = format!("0x{:02x}", address2);
+
+    let args = json!([obj_str, addr2_str]);
+    let args = args.as_array().unwrap();
+    WalletCommands::Call {
+        sender: address1,
+        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        module: Identifier::new("ObjectBasics").unwrap(),
+        function: Identifier::new("transfer").unwrap(),
+        type_args: vec![],
+        args: args.to_vec(),
+        gas,
+        gas_budget: 1000,
+    }
+    .execute(&mut context)
+    .await?;
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    network.abort();
     Ok(())
 }
