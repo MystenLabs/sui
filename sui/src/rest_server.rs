@@ -31,7 +31,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr, Ipv6Addr};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::runtime::Runtime;
@@ -45,7 +45,8 @@ const DEFAULT_WEIGHT: usize = 1;
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let config_dropshot: ConfigDropshot = ConfigDropshot {
-        bind_address: SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 5000)),
+        // bind_address: SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 5000)),
+        bind_address: SocketAddr::from((Ipv6Addr::LOCALHOST, 5000)),
         ..Default::default()
     };
 
@@ -1281,7 +1282,7 @@ fn get_object_effects(order_effects: OrderEffects) -> HashMap<String, HashMap<&'
     if !order_effects.created.is_empty() {
         let mut effects = HashMap::new();
         for (obj, _) in order_effects.created {
-            effects.insert("account_address", obj.0.to_string());
+            effects.insert("id", obj.0.to_string());
             effects.insert("sequence_number", format!("{:?}", obj.1));
             effects.insert("object_digest", format!("{:?}", obj.2));
         }
@@ -1290,7 +1291,7 @@ fn get_object_effects(order_effects: OrderEffects) -> HashMap<String, HashMap<&'
     if !order_effects.mutated.is_empty() {
         let mut effects = HashMap::new();
         for (obj, _) in order_effects.mutated {
-            effects.insert("account_address", obj.0.to_string());
+            effects.insert("id", obj.0.to_string());
             effects.insert("sequence_number", format!("{:?}", obj.1));
             effects.insert("object_digest", format!("{:?}", obj.2));
         }
@@ -1299,7 +1300,7 @@ fn get_object_effects(order_effects: OrderEffects) -> HashMap<String, HashMap<&'
     if !order_effects.deleted.is_empty() {
         let mut effects = HashMap::new();
         for obj in order_effects.deleted {
-            effects.insert("account_address", obj.0.to_string());
+            effects.insert("id", obj.0.to_string());
             effects.insert("sequence_number", format!("{:?}", obj.1));
             effects.insert("object_digest", format!("{:?}", obj.2));
         }
