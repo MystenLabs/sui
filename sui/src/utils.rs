@@ -251,10 +251,13 @@ fn check_and_refine_pure_args_json(curr_val: &Value, expected_type: &Type) -> Re
                     expected_type
                 ));
             }
-            let a = &decode_address_hex(s)?.to_vec();
-            println!("{:?}", a);
+            let vec = if s.starts_with(HEX_PREFIX) {
+                hex::decode(s.trim_start_matches(HEX_PREFIX))?
+            } else {
+                s.trim_start_matches(HEX_PREFIX).as_bytes().to_vec()
+            };
 
-            bcs::to_bytes::<Vec<u8>>(a)
+            bcs::to_bytes::<Vec<u8>>(&vec)
         }
 
         // TODO:
