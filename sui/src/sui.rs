@@ -1,7 +1,6 @@
-extern crate core;
-
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+extern crate core;
 
 use std::path::PathBuf;
 use structopt::StructOpt;
