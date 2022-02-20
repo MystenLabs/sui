@@ -1,4 +1,4 @@
-// Copyright(C) 2022, Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::traits::{EncodeDecodeBase64, ToFromBytes};

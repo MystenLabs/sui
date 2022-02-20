@@ -1,7 +1,8 @@
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 use std::convert::TryInto;
 
-// Copyright(C) Facebook, Inc. and its affiliates.
-// SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::{
     ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature},

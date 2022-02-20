@@ -1,3 +1,5 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 use serde::{de, Deserialize, Serialize};
 use signature::{Signature, Signer, Verifier};
 
