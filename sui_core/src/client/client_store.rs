@@ -1,3 +1,5 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 use super::*;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::MoveStructLayout;
