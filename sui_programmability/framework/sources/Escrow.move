@@ -3,13 +3,13 @@
 /// safety.
 module FastX::Escrow {
     use FastX::Address::Address;
-    use FastX::ID::{Self, IDBytes, ID};
+    use FastX::ID::{Self, IDBytes, VersionedID};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
 
     /// An object held in escrow
     struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
-        id: ID,
+        id: VersionedID,
         /// owner of the escrowed object
         sender: Address,
         /// intended recipient of the escrowed object

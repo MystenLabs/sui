@@ -1,5 +1,5 @@
 module FastX::Geniteam {
-    use FastX::ID::{Self, ID, IDBytes};
+    use FastX::ID::{Self, VersionedID, IDBytes};
     use FastX::TxContext::{Self, TxContext};
     use FastX::Transfer;
     use Std::ASCII::{Self, String};
@@ -12,7 +12,7 @@ module FastX::Geniteam {
     const EMONSTER_NOT_FOUND: u64 = 1;
 
     struct Player has key {
-        id: ID,
+        id: VersionedID,
         player_name: String,
         farm: Farm,
         water_runes_count: u64,
@@ -22,7 +22,7 @@ module FastX::Geniteam {
     }
 
     struct Farm has key, store {
-        id: ID,
+        id: VersionedID,
         farm_name: String,
         farm_img_id: u64,
         level: u64,
@@ -34,7 +34,7 @@ module FastX::Geniteam {
     }
 
     struct Monster has key, store {
-        id: ID,
+        id: VersionedID,
         monster_name: String,
         monster_img_id: u64,
         breed: u8,

@@ -4,7 +4,7 @@
 #[test_only]
 module FastX::TestScenario {
     use FastX::Address::{Self, Address};
-    use FastX::ID::{Self, ID, IDBytes};
+    use FastX::ID::{Self, VersionedID, IDBytes};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
     use Std::Vector;
@@ -196,7 +196,7 @@ module FastX::TestScenario {
     }
 
     /// Generate a fresh ID for the current tx associated with this `scenario`
-    public fun new_id(scenario: &mut Scenario): ID {
+    public fun new_id(scenario: &mut Scenario): VersionedID {
         TxContext::new_id(&mut scenario.ctx)
     }
 

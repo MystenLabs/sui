@@ -4,20 +4,20 @@ module Examples::CombinableObjects {
     use Examples::TrustedCoin::EXAMPLE;
     use FastX::Address::{Self, Address};
     use FastX::Coin::{Self, Coin};
-    use FastX::ID::{Self, ID};
+    use FastX::ID::{Self, VersionedID};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
 
     struct Ham has key {
-        id: ID
+        id: VersionedID
     }
 
     struct Bread has key {
-        id: ID
+        id: VersionedID
     }
 
     struct Sandwich has key {
-        id: ID
+        id: VersionedID
     }
 
     /// Address selling ham, bread, etc

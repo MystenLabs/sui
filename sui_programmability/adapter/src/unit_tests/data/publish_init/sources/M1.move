@@ -1,10 +1,10 @@
 module Test::M1 {
-    use FastX::ID::ID;
+    use FastX::ID::VersionedID;
     use FastX::TxContext::{Self, TxContext};
     use FastX::Transfer;
 
     struct Object has key, store {
-        id: ID,
+        id: VersionedID,
         value: u64,
     }
 

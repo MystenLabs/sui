@@ -1,7 +1,7 @@
 /// An example of a custom object with comments explaining the relevant bits
 module Examples::CustomObjectTemplate {
     use FastX::Address::{Self, Address};
-    use FastX::ID::ID;
+    use FastX::ID::VersionedID;
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
 
@@ -11,7 +11,7 @@ module Examples::CustomObjectTemplate {
     /// Other object attributes present at the protocol level (authenticator,
     /// sequence number, TxDigest, ...) are intentionally not exposed here.
     struct Object has key {
-        id: ID,
+        id: VersionedID,
         /// Custom objects can have fields of arbitrary type...
         custom_field: u64,
         /// ... including other objects
@@ -30,7 +30,7 @@ module Examples::CustomObjectTemplate {
     /// An object that can live either in the global object pool or as a nested
     /// object.
     struct AnotherObject has key, store {
-        id: ID,
+        id: VersionedID,
     }
 
     /// Example of updating an object. All Move fields are private, so the

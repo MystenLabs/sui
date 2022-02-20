@@ -1,12 +1,12 @@
 module Test::M1 {
     use FastX::Address;
-    use FastX::ID::ID;
+    use FastX::ID::VersionedID;
     use FastX::TxContext::{Self, TxContext};
     use FastX::Transfer;
     use FastX::Coin::Coin;
 
     struct Object has key, store {
-        id: ID,
+        id: VersionedID,
         value: u64,
     }
 
