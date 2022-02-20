@@ -7,7 +7,7 @@ module Examples::EconMod {
     use Examples::Hero::Hero;
     use FastX::Address::Address;
     use FastX::Coin::{Self, Coin};
-    use FastX::ID::{Self, ID};
+    use FastX::ID::{Self, VersionedID};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
 
@@ -16,7 +16,7 @@ module Examples::EconMod {
     /// The two players split the reward for slaying the monster according to
     /// the `helper_reward` parameter.
     struct HelpMeSlayThisMonster has key {
-        id: ID,
+        id: VersionedID,
         /// Monster to be slay by the owner of this object
         monster: SeaMonster,
         /// Identity of the user that originally owned the monster

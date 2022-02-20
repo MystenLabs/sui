@@ -1,14 +1,14 @@
 #[test_only]
 module FastX::CollectionTests {
     use FastX::Collection;
-    use FastX::ID::{Self, ID};
+    use FastX::ID::{Self, VersionedID};
     use FastX::TxContext;
 
     const ECOLLECTION_SIZE_MISMATCH: u64 = 0;
     const EOBJECT_NOT_FOUND: u64 = 1;
 
     struct Object has key {
-        id: ID,
+        id: VersionedID,
     }
 
     #[test]

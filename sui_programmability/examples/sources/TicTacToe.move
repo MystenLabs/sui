@@ -3,7 +3,7 @@ module Examples::TicTacToe {
     use Std::Vector;
 
     use FastX::Address::Address;
-    use FastX::ID::{Self, ID, IDBytes};
+    use FastX::ID::{Self, VersionedID, IDBytes};
     use FastX::Event;
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
@@ -19,7 +19,7 @@ module Examples::TicTacToe {
     const NO_MORE_MARK: u64 = 1;
 
     struct TicTacToe has key {
-        id: ID,
+        id: VersionedID,
         gameboard: vector<vector<Option<Mark>>>,
         cur_turn: u8,
         game_status: u8,
@@ -28,20 +28,20 @@ module Examples::TicTacToe {
     }
 
     struct MarkMintCap has key {
-        id: ID,
+        id: VersionedID,
         game_id: IDBytes,
         remaining_supply: u8,
     }
 
     struct Mark has key, store {
-        id: ID,
+        id: VersionedID,
         player: Address,
         row: u64,
         col: u64,
     }
 
     struct Trophy has key {
-        id: ID,
+        id: VersionedID,
     }
 
     struct MarkSentEvent has copy, drop {

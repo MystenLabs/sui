@@ -3,7 +3,7 @@ module FastX::Collection {
     use Std::Option::{Self, Option};
     use Std::Vector::Self;
     use FastX::Address::{Self, Address};
-    use FastX::ID::{Self, ID, IDBytes};
+    use FastX::ID::{Self, VersionedID, IDBytes};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
 
@@ -17,7 +17,7 @@ module FastX::Collection {
     const DEFAULT_MAX_CAPACITY: u64 = 65536;
 
     struct Collection has key {
-        id: ID,
+        id: VersionedID,
         objects: vector<IDBytes>,
         max_capacity: u64,
     }

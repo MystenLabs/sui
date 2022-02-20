@@ -1,6 +1,6 @@
 module FastX::Coin {
     use FastX::Address::{Self, Address};
-    use FastX::ID::{Self, ID};
+    use FastX::ID::{Self, VersionedID};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
     use Std::Errors;
@@ -8,14 +8,14 @@ module FastX::Coin {
 
     /// A coin of type `T` worth `value`. Transferrable
     struct Coin<phantom T> has key, store {
-        id: ID,
+        id: VersionedID,
         value: u64
     }
 
     /// Capability allowing the bearer to mint and burn
     /// coins of type `T`. Transferrable
     struct TreasuryCap<phantom T> has key, store {
-        id: ID,
+        id: VersionedID,
         total_supply: u64
     }
 
