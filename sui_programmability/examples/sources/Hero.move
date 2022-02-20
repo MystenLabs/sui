@@ -5,7 +5,7 @@ module Examples::Hero {
     use FastX::Address::{Self, Address};
     use FastX::Coin::{Self, Coin};
     use FastX::Event;
-    use FastX::ID::{Self, ID, IDBytes};
+    use FastX::ID::{Self, VersionedID, IDBytes};
     use FastX::Math;
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
@@ -13,7 +13,7 @@ module Examples::Hero {
 
     /// Our hero!
     struct Hero has key, store {
-        id: ID,
+        id: VersionedID,
         /// Hit points. If they go to zero, the hero can't do anything
         hp: u64,
         /// Experience of the hero. Begins at zero
@@ -24,7 +24,7 @@ module Examples::Hero {
 
     /// The hero's trusty sword
     struct Sword has key, store {
-        id: ID,
+        id: VersionedID,
         /// Constant set at creation. Acts as a multiplier on sword's strength.
         /// Swords with high magic are rarer (because they cost more).
         magic: u64,
@@ -34,14 +34,14 @@ module Examples::Hero {
 
     /// For healing wounded heroes
     struct Potion has key, store {
-        id: ID,
+        id: VersionedID,
         /// Effectivenss of the potion
         potency: u64
     }
 
     /// A creature that the hero can slay to level up
     struct Boar has key {
-        id: ID,
+        id: VersionedID,
         /// Hit points before the boar is slain
         hp: u64,
         /// Strength of this particular boar
@@ -50,7 +50,7 @@ module Examples::Hero {
 
     /// Capability conveying the authority to create boars and potions
     struct GameAdmin has key {
-        id: ID,
+        id: VersionedID,
         /// Total number of boars the admin has created
         boars_created: u64,
         /// Total number of potions the admin has created

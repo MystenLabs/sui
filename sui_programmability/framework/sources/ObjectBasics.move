@@ -2,17 +2,17 @@
 module FastX::ObjectBasics {
     use FastX::Address;
     use FastX::Event;
-    use FastX::ID::{Self, ID};
+    use FastX::ID::{Self, VersionedID};
     use FastX::TxContext::{Self, TxContext};
     use FastX::Transfer;
 
     struct Object has key, store {
-        id: ID,
+        id: VersionedID,
         value: u64,
     }
 
     struct Wrapper has key {
-        id: ID,
+        id: VersionedID,
         o: Object 
     }
 

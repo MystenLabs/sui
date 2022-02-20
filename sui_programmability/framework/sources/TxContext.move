@@ -4,7 +4,7 @@ module FastX::TxContext {
     #[test_only]
     use Std::Vector;
 
-    use FastX::ID::{Self, ID};
+    use FastX::ID::{Self, VersionedID};
     use FastX::Address::{Self, Address, Signer};
 
     /// Number of bytes in an inputs_hash (which will be the transaction digest)
@@ -43,7 +43,7 @@ module FastX::TxContext {
     }
 
     /// Generate a new object ID
-    public fun new_id(ctx: &mut TxContext): ID {
+    public fun new_id(ctx: &mut TxContext): VersionedID {
         let ids_created = ctx.ids_created;
         let id = ID::new(fresh_id(*&ctx.inputs_hash, ids_created));
         ctx.ids_created = ids_created + 1;

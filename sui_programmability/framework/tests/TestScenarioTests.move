@@ -12,12 +12,12 @@ module FastX::TestScenarioTests {
     const VALUE_MISMATCH: u64 = 1;
 
     struct Object has key, store {
-        id: ID::ID,
+        id: ID::VersionedID,
         value: u64,
     }
 
     struct Wrapper has key {
-        id: ID::ID,
+        id: ID::VersionedID,
         child: Object,
     }
 

@@ -8,14 +8,14 @@
 module Examples::HeroMod {
     use Examples::Hero::{Self, Hero};
     use FastX::Address::Address;
-    use FastX::ID::{Self, ID};
+    use FastX::ID::{Self, VersionedID};
     use FastX::Coin::{Self, Coin, TreasuryCap };
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
 
     /// A new kind of monster for the hero to fight
     struct SeaMonster has key, store {
-        id: ID,
+        id: VersionedID,
         /// Tokens that the user will earn for slaying this monster
         reward: Coin<RUM>
     }
@@ -23,7 +23,7 @@ module Examples::HeroMod {
     /// Admin capability granting permission to mint RUM tokens and
     /// create monsters
     struct SeaScapeAdmin has key {
-        id: ID,
+        id: VersionedID,
         /// Permission to mint RUM
         treasury_cap: TreasuryCap<RUM>,
         /// Total number of monsters created so far
