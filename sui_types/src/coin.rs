@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     base_types::{ObjectID, SequenceNumber},
-    id::ID,
+    id::VersionedID,
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -21,12 +21,12 @@ pub const COIN_STRUCT_NAME: &IdentStr = COIN_MODULE_NAME;
 // Rust version of the Move FastX::Coin::Coin type
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Coin {
-    id: ID,
+    id: VersionedID,
     value: u64,
 }
 
 impl Coin {
-    pub fn new(id: ID, value: u64) -> Self {
+    pub fn new(id: VersionedID, value: u64) -> Self {
         Self { id, value }
     }
 
@@ -61,7 +61,7 @@ impl Coin {
             fields: vec![
                 MoveFieldLayout::new(
                     ident_str!("id").to_owned(),
-                    MoveTypeLayout::Struct(ID::layout()),
+                    MoveTypeLayout::Struct(VersionedID::layout()),
                 ),
                 MoveFieldLayout::new(ident_str!("value").to_owned(), MoveTypeLayout::U64),
             ],
