@@ -21,7 +21,11 @@ function Search() {
     , [])
 
     return (
-        <form className={styles.form} onSubmit={ handleSubmit }>
+        <form 
+          className={styles.form} 
+          onSubmit={ handleSubmit }
+          aria-label="search form"
+        >
             <input
                 className={styles.searchtext}
                 id="search"
@@ -34,7 +38,6 @@ function Search() {
                 type="submit"
                 value="Search"
                 className={styles.searchbtn}
-                aria-label="search button"
             />
         </form>
     );

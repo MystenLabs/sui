@@ -16,7 +16,7 @@ function searchText(text: string) {
         screen.getByPlaceholderText(/Search transactions by ID/i),
         { target: { value: text } }
     );
-    fireEvent.click(screen.getByRole('button', { name: /search button/i }));
+    fireEvent.submit(screen.getByRole('form', {name: /search form/i }));
 }
 
 describe('App component', () => {
