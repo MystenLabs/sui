@@ -7,7 +7,7 @@ import TransactionResult from '../transaction-result/TransactionResult';
 const AppRoutes = () => {
     return (
         <Routes>
-            <Route path="/" element={<Home/>} />
+            <Route path="/" element={<Home />} />
             <Route path="/search/:term" element={<OtherDetails />} />
             <Route path="/transactions/:id" element={<TransactionResult />} />
             <Route path="*" element={<Navigate to="/" replace={true} />} />

@@ -46,6 +46,6 @@ It can be useful during development to format automatically all the files that c
 
 ## Deployment
 
-For guidance on deployment, plese see here: https://create-react-app.dev/docs/deployment/. 
+For guidance on deployment, plese see here: https://create-react-app.dev/docs/deployment/.
 
 Because of the addition of `react-router` further changes will be needed that depend on the exact infrastructure used. Please consult section **Serving Apps with Client-Side Routing**.
