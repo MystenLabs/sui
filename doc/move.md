@@ -8,12 +8,18 @@ demonstrate how Move can be used in the context of Sui.
 
 ## Move
 
-Move is a language for writing smart contracts developed in the open
-source by the Diem Association and
-[hosted](https://github.com/diem/move) on GitHub. While the language
-has been developed in the context of the [Diem
-Blockchain](https://developers.diem.com/docs/technical-papers/the-diem-blockchain-paper/),
-it is intended to seamlessly support other platforms, such as Sui.
+Move is an [open-source](https://github.com/diem/move) language for
+writing safe smart contracts. It was originally developed at Facebook
+to power the [Diem](https://github.com/diem/diem) blockchain. However,
+Move was designed as a platform-agnostic language to enable common
+libraries, tooling, and developer communities across blockchains with
+vastly different data and execution models. Sui,
+[0L](https://github.com/OLSF/libra), and
+[StarCoin](https://github.com/starcoinorg/starcoin) are using Move,
+and there are also plans to integrate the language in several upcoming
+and existing platforms (e.g.,
+[Celo](https://www.businesswire.com/news/home/20210921006104/en/Celo-Sets-Sights-On-Becoming-Fastest-EVM-Chain-Through-Collaboration-With-Mysten-Labs)).
+
 
 The Move language documentation is available in the Move Github
 repository, and includes a
@@ -25,11 +31,10 @@ to deepen your understanding of the Move language, but they are not a
 strict prerequisite to following the Sui tutorial which we strived to
 make self-contained.
 
-More importantly, Sui imposes additional restrictions (e.g., for smart
-contract safety) on the code that can be written in Move, effectively
-using a subset of Move (aka Sui Move), which makes certain parts of
-the original Move documentation not applicable to smart contract
-development in Sui.
+More importantly, Sui imposes additional restrictions on the code that
+can be written in Move, effectively using a subset of Move (aka Sui
+Move), which makes certain parts of the original Move documentation
+not applicable to smart contract development in Sui.
 
 ## Setup
 
@@ -66,8 +71,9 @@ can be found [here](Move.toml)).
 
 The minimal package source directory structure looks as follows and
 contains the manifest file and the `sources` subdirectory where one or
-more module files are located (see [here](additional) for more
-information on package layout):
+more module files are located (see
+[here](https://github.com/diem/move/blob/main/language/documentation/book/src/packages.md#package-layout-and-manifest-syntax)
+for more information on package layout):
 
 ```
 my_move_package
@@ -104,7 +110,7 @@ more about them in the Move
 [book](https://github.com/diem/move/blob/main/language/documentation/book/src/modules-and-scripts.md#modules)
 if immediately interested):
 
-``` shell
+```rust
 module FastX::GAS {
 ...
 }
@@ -136,7 +142,7 @@ objects available to us, for our first Move call, we will call a
 function transferring a gas object from one account to another. Here
 is the transfer function definition in the GAS module:
 
-```
+```rust
 public fun transfer(c: Coin::Coin<GAS>, recipient: vector<u8>, _ctx: &mut TxContext) {
     Coin::transfer(c, Address::new(recipient))
 }
