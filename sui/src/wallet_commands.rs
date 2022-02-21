@@ -27,7 +27,7 @@ use tracing::info;
 #[derive(StructOpt)]
 #[structopt(
     name = "",
-    about = "A Byzantine fault tolerant payments chain with low-latency finality and high throughput",
+    about = "A Byzantine fault tolerant blockchain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
 #[structopt(setting(AppSettings::NoBinaryName))]
