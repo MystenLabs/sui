@@ -27,7 +27,7 @@ use tracing::info;
 #[derive(StructOpt)]
 #[structopt(
     name = "",
-    about = "A Byzantine fault tolerant payments chain with low-latency finality and high throughput",
+    about = "A Byzantine fault tolerant blockchain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
 #[structopt(setting(AppSettings::NoBinaryName))]
@@ -68,7 +68,7 @@ pub enum WalletCommands {
         gas_budget: u64,
     },
 
-    /// Call Move
+    /// Call Move function
     #[structopt(name = "call")]
     Call {
         /// Sender address
@@ -103,7 +103,7 @@ pub enum WalletCommands {
         gas_budget: u64,
     },
 
-    /// Transfer funds
+    /// Transfer an object
     #[structopt(name = "transfer")]
     Transfer {
         /// Sender address
@@ -129,7 +129,7 @@ pub enum WalletCommands {
         address: SuiAddress,
     },
 
-    /// Obtain the Account Addresses managed by the wallet.
+    /// Obtain the Addresses managed by the wallet.
     #[structopt(name = "addresses")]
     Addresses,
 
@@ -137,10 +137,10 @@ pub enum WalletCommands {
     #[structopt(name = "new-address")]
     NewAddress,
 
-    /// Obtain all objects owned by the account address.
+    /// Obtain all objects owned by the address.
     #[structopt(name = "objects")]
     Objects {
-        /// Address of the account
+        /// Address owning the objects
         #[structopt(long, parse(try_from_str = decode_bytes_hex))]
         address: SuiAddress,
     },
