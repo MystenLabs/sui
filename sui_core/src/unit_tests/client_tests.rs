@@ -1645,7 +1645,9 @@ async fn client_object(client: &mut dyn Client, object_id: ObjectID) -> (ObjectR
 #[allow(dead_code)]
 async fn auth_object(authority: &LocalAuthorityClient, object_id: ObjectID) -> (ObjectRef, Object) {
     let response = authority
-        .handle_object_info_request(ObjectInfoRequest::from(object_id))
+        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+            object_id, None,
+        ))
         .await
         .unwrap();
 
@@ -1777,7 +1779,9 @@ async fn get_latest_ref(authority: &LocalAuthorityClient, object_id: ObjectID) -
         requested_object_reference: Some(object_ref),
         ..
     }) = authority
-        .handle_object_info_request(ObjectInfoRequest::from(object_id))
+        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+            object_id, None,
+        ))
         .await
     {
         return object_ref;
