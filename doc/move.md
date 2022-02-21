@@ -55,6 +55,9 @@ users)
 repository
 - some essential Move code needed to bootstrap the Sui platform
 
+The number of accounts, authorities and gas objects available has been
+chosen somewhat arbitrarily.
+
 Before we look at the Move code included with Sui, let's talk briefly
 about Move code organization, which applies both to code included with
 Sui and the custom code written by the developers.
@@ -118,7 +121,7 @@ module FastX::GAS {
 
 As we can see, when defining a module we specify the module name
 (`GAS`), preceded by the name of the package where this module resides
-(`FastX`). The combination of the package name and of the module name
+(`FastX`). The combination of the package name and the module name
 is used to uniquely identify a module in Move source code (e.g., to be
 able to use if from other modules) - the package name is globally
 unique, but different packages can contain modules with the same name.
@@ -126,7 +129,7 @@ unique, but different packages can contain modules with the same name.
 
 In addition to having a presence at the source code level, as we
 discussed [earlier](#move-code-organization), a package in Sui is also
-and object, and must have a unique numeric ID in addition to a unique
+an object, and must have a unique numeric ID in addition to a unique
 name, so that it can be identified by the Sui platform. For user-level
 packages, this ID is assigned when the package is
 [published](#package-publishing), but for the packages pre-published
@@ -140,7 +143,8 @@ FastX = "0x2"
 Since as part of Sui genesis we have user accounts populated with gas
 objects available to us, for our first Move call, we will call a
 function transferring a gas object from one account to another. Here
-is the transfer function definition in the GAS module:
+is the transfer function definition in the GAS
+[module](../sui_programmability/framework/sources/GAS.move):
 
 ```rust
 public fun transfer(c: Coin::Coin<GAS>, recipient: vector<u8>, _ctx: &mut TxContext) {
@@ -155,7 +159,7 @@ It is a public function called `transfer` with 3 arguments:
   struct (you can read more about Move structs
   [here](https://github.com/diem/move/blob/main/language/documentation/book/src/structs-and-resources.md#structs-and-resources))
   defined in the Coin genesis
-  [module]../sui_programmability/framework/sources/Coin.move()
+  [module](../sui_programmability/framework/sources/Coin.move)
   parameterized with another struct `GAS` defined in the GAS genesis
   [module](../sui_programmability/framework/sources/GAS.move) (you can
   read more about generic types and how they can be used to
