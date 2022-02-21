@@ -212,7 +212,7 @@ fn check_and_serialize_pure_args(
 
         // Check that the args are what we expect or can be converted
         // Then return the serialized bcs value
-        match resolve_pure_arg(&curr, expected_pure_arg_type) {
+        match resolve_pure_arg(curr, expected_pure_arg_type) {
             Ok(a) => pure_args_serialized.push(a),
             Err(e) => return Err(anyhow!("Unable to parse arg at pos: {}, err: {:?}", idx, e)),
         }
