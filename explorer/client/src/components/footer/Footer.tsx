@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 
+import ExternalLink from '../external-link/ExternalLink'
 import styles from './Footer.module.css';
 
 function Footer() {
@@ -9,20 +10,14 @@ function Footer() {
                 <Link to="/" aria-label="home button">
                     Home
                 </Link>
-                <a
-                    href="https://mystenlabs.com/"
-                    target="_blank"
-                    rel="noreferrer noopener"
-                >
-                    Mysten Labs
-                </a>
-                <a
+                <ExternalLink 
+                  href="https://mystenlabs.com/"
+                  label="Mysten Labs" 
+                />
+                <ExternalLink
                     href="https://devportal-30dd0.web.app/"
-                    target="_blank"
-                    rel="noreferrer noopener"
-                >
-                    Developer Hub
-                </a>
+                    label="Developer Hub"
+                />
             </nav>
         </footer>
     );
