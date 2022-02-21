@@ -363,7 +363,11 @@ where
                 |_name, client| {
                     Box::pin(async move {
                         // Request and return an error if any
-                        let request = ObjectInfoRequest::from(object_id);
+                        // TODO: Expose layout format option.
+                        let request = ObjectInfoRequest::latest_object_info_request(
+                            object_id,
+                            Some(ObjectFormatOptions::default()),
+                        );
                         client.handle_object_info_request(request).await
                     })
                 },
@@ -1083,12 +1087,11 @@ where
     ) {
         let object_id = object_ref.0;
         // Prepare the request
-        let request = ObjectInfoRequest {
+        // TODO: We should let users decide what layout they want in the result.
+        let request = ObjectInfoRequest::latest_object_info_request(
             object_id,
-            request_sequence_number: None,
-            // TODO: allow caller to decide whether they want the layout, and which options. For now, we always ask, and get the default format
-            request_layout: Some(ObjectFormatOptions::default()),
-        };
+            Some(ObjectFormatOptions::default()),
+        );
 
         // For now assume all authorities. Assume they're all honest
         // This assumption is woeful, and should be fixed

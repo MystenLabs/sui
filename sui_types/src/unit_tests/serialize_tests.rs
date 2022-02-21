@@ -61,16 +61,9 @@ fn test_error() {
 
 #[test]
 fn test_info_request() {
-    let req1 = ObjectInfoRequest {
-        object_id: dbg_object_id(0x20),
-        request_sequence_number: None,
-        request_layout: None,
-    };
-    let req2 = ObjectInfoRequest {
-        object_id: dbg_object_id(0x20),
-        request_sequence_number: Some(SequenceNumber::from(129)),
-        request_layout: None,
-    };
+    let req1 = ObjectInfoRequest::latest_object_info_request(dbg_object_id(0x20), None);
+    let req2 =
+        ObjectInfoRequest::past_object_info_request(dbg_object_id(0x20), SequenceNumber::from(129));
 
     let buf1 = serialize_object_info_request(&req1);
     let buf2 = serialize_object_info_request(&req2);
