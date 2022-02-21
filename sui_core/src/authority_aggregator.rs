@@ -858,7 +858,14 @@ where
                             return res;
                         }
 
-                        // If we got an error, we try to update the authority.
+                        // LockErrors indicate the authority may be out-of-date.
+                        // We only attempt to update authority and retry if we are seeing LockErrors.
+                        // For any other error, we stop here and return.
+                        if !matches!(res, Err(SuiError::LockErrors { .. })) {
+                            return res;
+                        }
+
+                        // If we got LockErrors, we try to update the authority.
                         let _result = self
                             .sync_certificate_to_authority_with_timeout(
                                 ConfirmationOrder::new(cert_ref.clone()),
