@@ -42,33 +42,35 @@ function TransactionResult() {
         }
 
         return (
-            <div className={styles.data}>
-                <div className={styles.label}>Transaction ID</div>
-                <div className={styles.result}>{data.id}</div>
+            <dl className={styles.data}>
+                <dt>Transaction ID</dt>
+                <dd>{data.id}</dd>
 
-                <div className={styles.label}>Status</div>
-                <div className={styles.result} data-testid="transaction-status">
+                <dt>Status</dt>
+                <dd data-testid="transaction-status">
                     {data.status}
-                </div>
+                </dd>
 
-                <div className={styles.label}>Sender</div>
-                <div className={styles.result}>{data.sender}</div>
+                <dt>Sender</dt>
+                <dd>{data.sender}</dd>
 
-                <div className={styles.label}>Did</div>
-                <div className={styles.result}>{action}</div>
+                <dt>Did</dt>
+                <dd>{action}</dd>
 
-                <div className={styles.label}>Object</div>
-                <div className={styles.result}>{objectID}</div>
-            </div>
+                <dt>Object</dt>
+                <dd>{objectID}</dd>
+            </dl>
         );
     }
     return (
-        <div className={styles.data}>
-            <div className={styles.label}>
+        <dl className={styles.data}>
+            <dt>
                 This transaction could not be found:
-            </div>
-            <div className={styles.result}>{txID}</div>
-        </div>
+            </dt>
+            <dd>
+               {txID}
+            </dd>
+        </dl>
     );
 }
 
