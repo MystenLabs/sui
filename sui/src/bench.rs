@@ -11,6 +11,7 @@ use rand::rngs::StdRng;
 use rand::Rng;
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
+use sui_adapter::genesis;
 use sui_core::{authority::*, authority_server::AuthorityServer};
 use sui_network::{network::NetworkClient, transport};
 use sui_types::crypto::{get_key_pair, AuthoritySignature};
@@ -163,11 +164,12 @@ impl ClientServerBenchmark {
         let mut account_objects = Vec::new();
         let mut gas_objects = Vec::new();
         let state = rt.block_on(async {
-            let state = AuthorityState::new_with_genesis_modules(
+            let state = AuthorityState::new(
                 committee.clone(),
                 public_auth0,
                 Box::pin(secret_auth0),
                 store,
+                genesis::clone_genesis_modules(),
             )
             .await;
             let mut rnd = <StdRng as rand::SeedableRng>::seed_from_u64(0);

@@ -15,6 +15,7 @@ use std::{
     convert::TryInto,
     sync::Arc,
 };
+use sui_adapter::genesis;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::Signature;
 use sui_types::object::{Data, Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
@@ -277,11 +278,12 @@ async fn init_local_authorities(
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
         let authority_name = *secret.public_key_bytes();
 
-        let state = AuthorityState::new_with_genesis_modules(
+        let state = AuthorityState::new(
             committee.clone(),
             authority_name,
             Box::pin(secret),
             store,
+            genesis::clone_genesis_modules(),
         )
         .await;
         clients.insert(authority_name, LocalAuthorityClient::new(state));
@@ -323,11 +325,12 @@ async fn init_local_authorities_bad_1(
         let mut opts = rocksdb::Options::default();
         opts.set_max_open_files(max_files_client_tests());
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
-        let state = AuthorityState::new_with_genesis_modules(
+        let state = AuthorityState::new(
             committee.clone(),
             address,
             Box::pin(secret),
             store,
+            genesis::clone_genesis_modules(),
         )
         .await;
         clients.insert(address, LocalAuthorityClient::new(state));
