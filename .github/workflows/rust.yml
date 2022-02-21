@@ -112,6 +112,8 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
+      - name: license-check
+        run: scripts/license_check.sh
 
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)

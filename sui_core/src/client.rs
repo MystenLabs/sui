@@ -1,4 +1,5 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI};
@@ -44,11 +45,11 @@ pub struct ClientAddressManager<A> {
 }
 impl<A> ClientAddressManager<A> {
     /// Create a new manager which stores its managed addresses at `path`
-    pub fn new(path: PathBuf) -> Result<Self, SuiError> {
-        Ok(Self {
+    pub fn new(path: PathBuf) -> Self {
+        Self {
             store: client_store::ClientAddressManagerStore::open(path),
             address_states: BTreeMap::new(),
-        })
+        }
     }
 
     /// Get (if exists) or create a new managed address state
@@ -59,24 +60,27 @@ impl<A> ClientAddressManager<A> {
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
     ) -> Result<&mut ClientState<A>, SuiError> {
-        if let std::collections::btree_map::Entry::Vacant(e) = self.address_states.entry(address) {
+        #[allow(clippy::map_entry)]
+        // the fallible store creation complicates the use of the entry API
+        if !self.address_states.contains_key(&address) {
             // Load the records if available
-            let single_store = if self.store.is_managed_address(address)? {
-                // Unwrap is okay since we checked cond
-                self.store.get_managed_address(address)
-            } else {
-                self.store.manage_new_address(address)
-            }?;
-            e.insert(ClientState::new_for_manager(
+            let single_store = match self.store.get_managed_address(address)? {
+                Some(store) => store,
+                None => self.store.manage_new_address(address)?,
+            };
+            self.address_states.insert(
                 address,
-                secret,
-                committee,
-                authority_clients,
-                single_store,
-            )?);
+                ClientState::new_for_manager(
+                    address,
+                    secret,
+                    committee,
+                    authority_clients,
+                    single_store,
+                ),
+            );
         }
-
-        return Ok(self.address_states.get_mut(&address).unwrap());
+        // unwrap-safe as we just populated the entry
+        Ok(self.address_states.get_mut(&address).unwrap())
     }
 
     /// Get all the states
@@ -85,13 +89,13 @@ impl<A> ClientAddressManager<A> {
     }
 }
 
-pub struct ClientState<AuthorityAPI> {
+pub struct ClientState<A> {
     /// Our Sui address.
     address: SuiAddress,
     /// Our signature key.
     secret: StableSyncSigner,
     /// Authority entry point.
-    authorities: AuthorityAggregator<AuthorityAPI>,
+    authorities: AuthorityAggregator<A>,
     /// Persistent store for client
     store: client_store::ClientSingleAddressStore,
 }
@@ -156,13 +160,13 @@ impl<A> ClientState<A> {
         secret: StableSyncSigner,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
-    ) -> Result<Self, SuiError> {
-        Ok(ClientState {
+    ) -> Self {
+        ClientState {
             address,
             secret,
             authorities: AuthorityAggregator::new(committee, authority_clients),
             store: client_store::ClientSingleAddressStore::new(path),
-        })
+        }
     }
 
     pub fn new_for_manager(
@@ -171,13 +175,13 @@ impl<A> ClientState<A> {
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         store: client_store::ClientSingleAddressStore,
-    ) -> Result<Self, SuiError> {
-        Ok(ClientState {
+    ) -> Self {
+        ClientState {
             address,
             secret,
             authorities: AuthorityAggregator::new(committee, authority_clients),
             store,
-        })
+        }
     }
 
     pub fn address(&self) -> SuiAddress {
@@ -204,8 +208,8 @@ impl<A> ClientState<A> {
             .ok_or(SuiError::ObjectNotFound { object_id })
     }
 
-    pub fn object_refs(&self) -> BTreeMap<ObjectID, ObjectRef> {
-        self.store.object_refs.iter().collect()
+    pub fn object_refs(&self) -> impl Iterator<Item = (ObjectID, ObjectRef)> + '_ {
+        self.store.object_refs.iter()
     }
 
     /// Need to remove unwraps. Found this tricky due to iterator requirements of downloader and not being able to exit from closure to top fn
@@ -226,8 +230,10 @@ impl<A> ClientState<A> {
             })
     }
 
-    pub fn all_certificates(&self) -> BTreeMap<TransactionDigest, CertifiedOrder> {
-        self.store.certificates.iter().collect()
+    pub fn all_certificates(
+        &self,
+    ) -> impl Iterator<Item = (TransactionDigest, CertifiedOrder)> + '_ {
+        self.store.certificates.iter()
     }
 
     pub fn insert_object_info(
@@ -361,7 +367,6 @@ where
     /// This means either exactly all the objects are owned by this order, or by no order
     /// The caller has to explicitly find which objects are locked
     /// TODO: always return true for immutable objects https://github.com/MystenLabs/fastnft/issues/305
-    /// TODO: this function can fail. Need to handle it https://github.com/MystenLabs/fastnft/issues/383
     fn can_lock_or_unlock(&self, order: &Order) -> Result<bool, SuiError> {
         let iter_matches = self.store.pending_orders.multi_get(
             &order
@@ -370,11 +375,12 @@ where
                 .map(|q| q.object_id())
                 .collect_vec(),
         )?;
-        for o in iter_matches {
-            // If we find any order that isn't the given order, we cannot proceed
-            if o.is_some() && o.unwrap() != *order {
-                return Ok(false);
-            }
+        if iter_matches.into_iter().any(|match_for_order| {
+            matches!(match_for_order,
+                // If we find any order that isn't the given order, we cannot proceed
+                Some(o) if o != *order)
+        }) {
+            return Ok(false);
         }
         // All the objects are either owned by this order or by no order
         Ok(true)
@@ -537,14 +543,6 @@ where
             &*self.secret,
         );
         let (certificate, effects) = self.execute_transaction(order).await?;
-        self.authorities
-            .process_certificate(certificate.clone(), Duration::from_secs(60))
-            .await?;
-
-        // remove object from local storage if the recipient is not us.
-        if recipient != self.address {
-            self.remove_object_info(&object_id)?;
-        }
 
         Ok((certificate, effects))
     }

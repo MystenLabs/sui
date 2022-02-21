@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
@@ -99,10 +99,8 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
     fn split_and_unescape(line: &str) -> Result<Vec<String>, String> {
         let mut commands = Vec::new();
         for word in line.split_whitespace() {
-            let command = match unescape(word) {
-                Some(word) => word,
-                None => return Err(format!("Error: Unhandled escape sequence {}", word)),
-            };
+            let command = unescape(word)
+                .ok_or_else(|| format!("Error: Unhandled escape sequence {}", word))?;
             commands.push(command);
         }
         Ok(commands)

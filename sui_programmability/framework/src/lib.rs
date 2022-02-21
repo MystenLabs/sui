@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::CompiledModule;
@@ -198,7 +198,7 @@ pub fn run_move_unit_tests(path: &Path) -> SuiResult {
 
 #[test]
 fn run_framework_move_unit_tests() {
-    get_sui_framework_modules(&PathBuf::from(DEFAULT_FRAMEWORK_PATH));
+    get_sui_framework_modules(&PathBuf::from(DEFAULT_FRAMEWORK_PATH)).unwrap();
     run_move_unit_tests(Path::new(env!("CARGO_MANIFEST_DIR"))).unwrap();
 }
 

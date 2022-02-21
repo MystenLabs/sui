@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{adapter, genesis};
@@ -109,15 +109,11 @@ impl Storage for InMemoryStorage {
         // there should be no read after delete
         assert!(!self.temporary.deleted.contains(id));
         // try objects updated in temp memory first
-        match self.temporary.updated.get(id).cloned() {
-            Some(o) => Some(o),
-            // try objects created in temp memory
-            None => match self.temporary.created.get(id).cloned() {
-                Some(o) => Some(o),
+        self.temporary.updated.get(id).cloned().or_else(|| {
+            self.temporary.created.get(id).cloned().or_else(||
                 // try persistent memory
-                None => self.persistent.get(id).cloned(),
-            },
-        }
+                 self.persistent.get(id).cloned())
+        })
     }
 
     // buffer write to appropriate place in temporary storage

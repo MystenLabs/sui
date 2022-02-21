@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::config::{AccountInfo, WalletConfig};
 use sui_core::authority_client::AuthorityClient;
@@ -151,10 +151,7 @@ impl WalletCommands {
             } => {
                 // Find owner of gas object
                 let client_state = context.get_or_create_client_state(sender)?;
-                let gas_obj_ref = *client_state
-                    .object_refs()
-                    .get(gas)
-                    .ok_or(anyhow!("Gas object not found"))?;
+                let gas_obj_ref = client_state.object_ref(*gas)?;
 
                 let (_, effects) = client_state
                     .publish(path.clone(), gas_obj_ref, *gas_budget)
@@ -195,10 +192,7 @@ impl WalletCommands {
                 let package_obj_ref = package_obj_info.reference().unwrap();
 
                 // Fetch the object info for the gas obj
-                let gas_obj_ref = *client_state
-                    .object_refs()
-                    .get(gas)
-                    .expect("Gas object not found");
+                let gas_obj_ref = client_state.object_ref(*gas).expect("Gas object not found");
 
                 let resolved = resolve_move_function_components(
                     package_obj,
@@ -261,7 +255,6 @@ impl WalletCommands {
             WalletCommands::Objects { address } => {
                 let client_state = context.get_or_create_client_state(address)?;
                 let object_refs = client_state.object_refs();
-                info!("Showing {} results.", object_refs.len());
                 for (obj_id, object_ref) in object_refs {
                     info!("{}: {:?}", obj_id, object_ref);
                 }
@@ -305,7 +298,7 @@ impl WalletContext {
             .collect::<Vec<_>>();
         let mut context = Self {
             config,
-            address_manager: ClientAddressManager::new(path)?,
+            address_manager: ClientAddressManager::new(path),
         };
         // Pre-populate client state for each address in the config.
         for address in addresses {

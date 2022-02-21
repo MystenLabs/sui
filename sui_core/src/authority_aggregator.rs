@@ -1,4 +1,5 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
@@ -31,18 +32,15 @@ mod client_tests;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
-pub struct AuthorityAggregator<AuthorityAPI> {
+pub struct AuthorityAggregator<A> {
     /// Our Sui committee.
     pub committee: Committee,
     /// How to talk to this committee.
-    authority_clients: BTreeMap<AuthorityName, SafeClient<AuthorityAPI>>,
+    authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
 }
 
-impl<AuthorityAPI> AuthorityAggregator<AuthorityAPI> {
-    pub fn new(
-        committee: Committee,
-        authority_clients: BTreeMap<AuthorityName, AuthorityAPI>,
-    ) -> Self {
+impl<A> AuthorityAggregator<A> {
+    pub fn new(committee: Committee, authority_clients: BTreeMap<AuthorityName, A>) -> Self {
         Self {
             committee: committee.clone(),
             authority_clients: authority_clients
@@ -822,7 +820,7 @@ where
     /// At that point (and after) enough authorities are up to date with all objects
     /// needed to process the certificate that a submission should succeed. However,
     /// in case an authority returns an error, we do try to bring it up to speed.
-    pub async fn process_certificate(
+    async fn process_certificate(
         &self,
         certificate: CertifiedOrder,
         timeout_after_quorum: Duration,
