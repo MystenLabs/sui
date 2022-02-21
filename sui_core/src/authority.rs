@@ -495,24 +495,6 @@ impl AuthorityState {
         state
     }
 
-    #[cfg(test)]
-    pub fn new_without_genesis_for_testing(
-        committee: Committee,
-        name: AuthorityName,
-        secret: StableSyncAuthoritySigner,
-        store: Arc<AuthorityStore>,
-    ) -> Self {
-        let native_functions = NativeFunctionTable::new();
-        AuthorityState {
-            committee,
-            name,
-            secret,
-            _native_functions: native_functions.clone(),
-            move_vm: adapter::new_move_vm(native_functions).expect("Only fails due to natives."),
-            _database: store,
-        }
-    }
-
     async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self._database.get_object(object_id)
     }

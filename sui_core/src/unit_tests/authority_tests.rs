@@ -1257,13 +1257,15 @@ async fn test_authority_persist() {
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
-    let authority = AuthorityState::new_without_genesis_for_testing(
+    let authority = AuthorityState::new(
         committee.clone(),
         *authority_key.public_key_bytes(),
         // we assume that the node runner is in charge for its key -> it's ok to reopen a copy below.
         Box::pin(authority_key.copy()),
         store,
-    );
+        vec![],
+    )
+    .await;
 
     // Create an object
     let recipient = dbg_addr(2);
@@ -1283,12 +1285,14 @@ async fn test_authority_persist() {
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
-    let authority2 = AuthorityState::new_without_genesis_for_testing(
+    let authority2 = AuthorityState::new(
         committee,
         *authority_key.public_key_bytes(),
         Box::pin(authority_key),
         store,
-    );
+        vec![],
+    )
+    .await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
 
     // Check the object is present
