@@ -3,7 +3,7 @@
 
 mod event;
 mod id;
-mod test_helper;
+mod test_scenario;
 mod transfer;
 mod tx_context;
 
@@ -20,9 +20,30 @@ pub fn all_natives(
         ("ID", "delete", id::delete),
         ("ID", "get_id", id::get_id),
         (
-            "TestHelper",
-            "get_last_received_object_internal",
-            test_helper::get_last_received_object,
+            "TestScenario",
+            "deleted_object_ids",
+            test_scenario::deleted_object_ids,
+        ),
+        (
+            "TestScenario",
+            "delete_object_for_testing",
+            test_scenario::delete_object_for_testing,
+        ),
+        (
+            "TestScenario",
+            "emit_wrapped_object_event",
+            test_scenario::emit_wrapped_object_event,
+        ),
+        (
+            "TestScenario",
+            "get_inventory",
+            test_scenario::get_inventory,
+        ),
+        ("TestScenario", "num_events", test_scenario::num_events),
+        (
+            "TestScenario",
+            "transferred_object_ids",
+            test_scenario::transferred_object_ids,
         ),
         ("Transfer", "transfer_internal", transfer::transfer_internal),
         (
