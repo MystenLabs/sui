@@ -47,9 +47,7 @@ function TransactionResult() {
                 <dd>{data.id}</dd>
 
                 <dt>Status</dt>
-                <dd data-testid="transaction-status">
-                    {data.status}
-                </dd>
+                <dd data-testid="transaction-status">{data.status}</dd>
 
                 <dt>Sender</dt>
                 <dd>{data.sender}</dd>
@@ -64,12 +62,8 @@ function TransactionResult() {
     }
     return (
         <dl className={styles.data}>
-            <dt>
-                This transaction could not be found:
-            </dt>
-            <dd>
-               {txID}
-            </dd>
+            <dt>This transaction could not be found:</dt>
+            <dd>{txID}</dd>
         </dl>
     );
 }
