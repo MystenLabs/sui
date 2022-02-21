@@ -19,6 +19,10 @@ function searchText(text: string) {
     fireEvent.submit(screen.getByRole('form', { name: /search form/i }));
 }
 
+function expectTransactionStatus(result: 'fail' | 'success') {
+    expect(screen.getByTestId('transaction-status')).toHaveTextContent(result);
+}
+
 describe('App component', () => {
     it('renders the home page', () => {
         render(<App />, { wrapper: MemoryRouter });
@@ -48,7 +52,7 @@ describe('App component', () => {
             'A1dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
         );
         expect(screen.getByText('Transaction ID')).toBeInTheDocument();
-        expect(screen.getByText('Status')).toBeInTheDocument();
+        expectTransactionStatus('success');
     });
     it('complains when transaction cannot be found', () => {
         render(<App />, { wrapper: MemoryRouter });
@@ -59,6 +63,14 @@ describe('App component', () => {
             screen.getByText('This transaction could not be found:')
         ).toBeInTheDocument();
     });
+    it('details a transaction failure', () => {
+        render(<App />, { wrapper: MemoryRouter });
+        searchText(
+            'A2dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
+        );
+        expectTransactionStatus('fail');
+    });
+
     it('redirects to search result', () => {
         render(<App />, { wrapper: MemoryRouter });
         searchText('Mysten Labs');
