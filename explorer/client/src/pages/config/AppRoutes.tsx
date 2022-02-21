@@ -1,13 +1,13 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 
-import LatestTransactions from '../latesttransactions/LatestTransactions';
-import OtherDetails from '../otherdetails/OtherDetails';
-import TransactionResult from '../transactionresult/TransactionResult';
+import Home from '../home/Home';
+import OtherDetails from '../other-details/OtherDetails';
+import TransactionResult from '../transaction-result/TransactionResult';
 
 const AppRoutes = () => {
     return (
         <Routes>
-            <Route path="/" element={<LatestTransactions />} />
+            <Route path="/" element={<Home/>} />
             <Route path="/search/:term" element={<OtherDetails />} />
             <Route path="/transactions/:id" element={<TransactionResult />} />
             <Route path="*" element={<Navigate to="/" replace={true} />} />
