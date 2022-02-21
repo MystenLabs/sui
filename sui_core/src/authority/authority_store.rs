@@ -6,8 +6,11 @@ use rocksdb::Options;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
+
 use sui_types::base_types::SequenceNumber;
 use typed_store::rocks::{open_cf, DBBatch, DBMap};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use typed_store::traits::Map;
 
 pub struct AuthorityStore {
@@ -61,6 +64,17 @@ pub struct AuthorityStore {
 
     /// Internal vector of locks to manage concurrent writes to the database
     lock_table: Vec<parking_lot::Mutex<()>>,
+
+    // Tables used for authority block structure
+    /// A sequence on all executed certificates and effects.
+    executed_sequence: DBMap<usize, TransactionDigest>,
+
+    /// A sequence of blocks indexing into the sequence of executed transactions.
+    blocks: DBMap<usize, AuthorityBlock>,
+
+    /// The size of the executed transactions sequence, used to timestamp the next
+    /// item in the sequence.
+    next_sequence_number: AtomicUsize,
 }
 
 impl AuthorityStore {
@@ -79,9 +93,28 @@ impl AuthorityStore {
                 "signed_effects",
                 "sequenced",
                 "schedule",
+                "executed_sequence",
+                "blocks",
             ],
         )
         .expect("Cannot open DB.");
+
+        let executed_sequence =
+            DBMap::reopen(&db, Some("executed_sequence")).expect("Cannot open CF.");
+
+        // Read the index of the last entry in the sequence of commands
+        // to extract the next sequence number or it is zero.
+        let next_sequence_number = AtomicUsize::new(
+            executed_sequence
+                .iter()
+                .skip_prior_to(&usize::MAX)
+                .expect("Error reading table.")
+                .next()
+                .map(|(v, _)| v + 1usize)
+                .or(Some(0))
+                .unwrap(),
+        );
+
         AuthorityStore {
             objects: DBMap::reopen(&db, Some("objects")).expect("Cannot open CF."),
             owner_index: DBMap::reopen(&db, Some("owner_index")).expect("Cannot open CF."),
@@ -98,6 +131,9 @@ impl AuthorityStore {
                 .into_iter()
                 .map(|_| parking_lot::Mutex::new(()))
                 .collect(),
+            executed_sequence,
+            blocks: DBMap::reopen(&db, Some("blocks")).expect("Cannot open CF."),
+            next_sequence_number,
         }
     }
 
@@ -464,6 +500,14 @@ impl AuthorityStore {
             for object_lock in locks {
                 object_lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
             }
+
+            // Now we are sure we are going to execute, add to the sequence
+            // number and insert into authority sequence.
+            let next_seq = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
+            write_batch = write_batch.insert_batch(
+                &self.executed_sequence,
+                std::iter::once((next_seq, transaction_digest)),
+            )?;
 
             // Atomic write of all locks & other data
             write_batch.write()?;
