@@ -13,7 +13,9 @@ type DataType = {
 };
 
 function instanceOfDataType(object: any): object is DataType {
-    return object && 'id' in object;
+    return object && 
+    ['id', 'status', 'sender'].every( x => x in object) && 
+    ['created', 'deleted', 'mutated'].some(x => x in object);
 }
 
 function TransactionResult() {
