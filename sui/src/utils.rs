@@ -275,7 +275,7 @@ fn resolve_pure_arg(curr_val: &Value, expected_type: &Type) -> Result<Vec<u8>> {
         (Value::Bool(b), Type::Bool) => bcs::to_bytes::<bool>(b),
 
         // JSON numbers can be pos, neg, floats, etc
-        // However max is U64
+        // However we only support is Unsigned ints and max U64
         (Value::Number(n), Type::U8) => {
             // TODO: There's probably a shorthand for this
             let k = match n.as_u64() {
@@ -294,13 +294,13 @@ fn resolve_pure_arg(curr_val: &Value, expected_type: &Type) -> Result<Vec<u8>> {
         (Value::Number(n), Type::U64) => {
             let k = n
                 .as_u64()
-                .ok_or_else(|| anyhow!("Expected arg of type u8. Found {}", n))?;
+                .ok_or_else(|| anyhow!("Expected arg of type u64. Found {}", n))?;
             bcs::to_bytes(&k)
         }
         (Value::Number(n), Type::U128) => {
             let k = n
                 .as_u64()
-                .ok_or_else(|| anyhow!("Expected arg of type u8. Found {}", n))?
+                .ok_or_else(|| anyhow!("Expected arg of type u64. Found {}", n))?
                 as u128;
             bcs::to_bytes(&k)
         }
