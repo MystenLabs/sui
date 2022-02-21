@@ -356,7 +356,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     assert!(resp.is_err());
 
     let err_string = format!("{} ", resp.err().unwrap());
-    assert!(err_string.contains("Expected arg of type u8"));
+    assert!(err_string.contains("Expected arg of type u64"));
 
     // Try a bad argument: too few args
     let args = json!([0.3f32]);
