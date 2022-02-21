@@ -24,6 +24,10 @@ use sui_types::{
     object::{Data, Object},
 };
 
+#[cfg(test)]
+#[path = "unit_tests/utils_tests.rs"]
+mod utils_tests;
+
 pub const DEFAULT_STARTING_PORT: u16 = 10000;
 
 pub trait Config
@@ -194,8 +198,8 @@ fn check_and_serialize_pure_args(
     for (idx, curr) in args
         .iter()
         .enumerate()
-        .take(end_exclusive - start)
         .skip(start)
+        .take(end_exclusive - start)
     {
         // The type the function expects at this position
         let expected_pure_arg_type = &function_signature.parameters[idx];
@@ -262,7 +266,11 @@ fn check_and_refine_pure_args(curr_val: &Value, expected_type: &Type) -> Result<
         ));
     }
     match (curr_val, expected_type) {
+        // Bool to bool is simple
         (Value::Bool(b), Type::Bool) => bcs::to_bytes::<bool>(b),
+
+        // JSON numbers can be pos, neg, floats, etc
+        // However max is U64
         (Value::Number(n), Type::U8) => {
             // TODO: There's probably a shorthand for this
             let k = match n.as_u64() {
@@ -284,10 +292,30 @@ fn check_and_refine_pure_args(curr_val: &Value, expected_type: &Type) -> Result<
                 .ok_or_else(|| anyhow!("Expected arg of type u8. Found {}", n))?;
             bcs::to_bytes(&k)
         }
+        (Value::Number(n), Type::U128) => {
+            let k = n
+                .as_u64()
+                .ok_or_else(|| anyhow!("Expected arg of type u8. Found {}", n))?
+                as u128;
+            bcs::to_bytes(&k)
+        }
 
+        // Strings are overloaded in multiple ways:
+        // 1. As U128. This is because JSON max num is U64
+        // 2. As Vector of bytes encoded as hex. For example "0x1234AB" which maps to [0x12u8, 0x34u8, 0xABu8]
+        // 3. As ASCII bytes. For example "1234AB" maps to [0x31, 0x32, 0x34, 0x41, 0x42]
+
+        // To get U128 in JSON, we use String
         (Value::String(s), Type::U128) => bcs::to_bytes::<u128>(&s.parse::<u128>()?),
+
         // Address is actally vector u8
-        (Value::String(s), Type::Address) => bcs::to_bytes::<SuiAddress>(&address_from_string(s)?),
+        // (Value::String(s), Type::Address) => bcs::to_bytes::<SuiAddress>(&address_from_string(s)?),
+
+        // We can encode U8 Vector as string in 2 ways
+        // 1. If it starts with 0x, we treat it as hex strings, where each pair is a byte
+        // 2. If it does not start with 0x, we treat each character as an ASCII endoced byte
+        // We have to support both for the convenience of the user. This is because sometime we need Strings as arg
+        // Other times we need vec of hex bytes for address. Issue is both Address and Strings are represented as Vec<u8> in Move call
         (Value::String(s), Type::Vector(t)) => {
             if **t != Type::U8 {
                 return Err(anyhow!(
@@ -296,22 +324,45 @@ fn check_and_refine_pure_args(curr_val: &Value, expected_type: &Type) -> Result<
                     expected_type
                 ));
             }
-            // If starts with 0x, treat as hex vector?
             let vec = if s.starts_with(HEX_PREFIX) {
+                // If starts with 0x, treat as hex vector?
                 hex::decode(s.trim_start_matches(HEX_PREFIX))?
             } else {
-                s.trim_start_matches(HEX_PREFIX).as_bytes().to_vec()
+                check_if_ascii(s.to_string())?;
+                s.as_bytes().to_vec()
             };
 
             bcs::to_bytes::<Vec<u8>>(&vec)
         }
 
-        // TODO:
-        // Add struct support from String
-        // Add generic homogenous array support
+        // JSON Arrays can be heterogeneous, but we don't allow that
+        (Value::Array(arr), Type::Vector(t)) => {
+            let mut vec = vec![];
+            let arr_len = arr.len();
+            for a in arr {
+                vec.append(&mut check_and_refine_pure_args(a, t)?);
+            }
+
+            // TODO: can we do without this hack?
+
+            // This is a hack which allows the elements to be variable length types/VLAs
+            // BCS serializes vectors by using ULEB128 to store the length of the vectors
+            // Rather than calculate the encoded, length ourself, we can let BCS do it, then we fill in the data bytes
+
+            // First serialize the types like they u8s
+            // We use this to create the ULEB128 length prefix
+            let u8vec = vec![0u8; arr_len];
+            let mut ser_container = bcs::to_bytes::<Vec<u8>>(&u8vec)?;
+
+            // Now remove the zeroes
+            ser_container.truncate(ser_container.len() - arr_len);
+            // Append the data
+            ser_container.append(&mut vec);
+            Ok(ser_container)
+        }
         _ => {
             return Err(anyhow!(
-                "Unexpected arg {}. Type {:?} not allowed",
+                "Unexpected arg: {} for expected type {:?}",
                 curr_val,
                 expected_type
             ))
@@ -320,19 +371,17 @@ fn check_and_refine_pure_args(curr_val: &Value, expected_type: &Type) -> Result<
     .map_err(|_| anyhow!("Unable to parse {} as {:?}", curr_val, expected_type))
 }
 
-// Helper function to extract address from string
-fn address_from_string(s: &str) -> Result<SuiAddress> {
-    let s = s.trim().to_lowercase();
-    let v = decode_bytes_hex(s.trim_start_matches(HEX_PREFIX));
-    if v.is_err() {
-        return Err(anyhow!(
-            "Expected {}byte Address (0x...), found {:?} with err {:?}",
-            SUI_ADDRESS_LENGTH,
-            s,
-            v.err()
-        ));
+/// Check if a string has non ascii characters
+fn check_if_ascii(s: String) -> Result<()> {
+    for c in s.chars() {
+        if !c.is_ascii() {
+            return Err(anyhow!(
+                "Invalid characters found in {}. Only ASCII characters allowed",
+                s
+            ));
+        }
     }
-    Ok(v.unwrap())
+    Ok(())
 }
 
 /// Get the expected function signature from the package, module, and identifier
