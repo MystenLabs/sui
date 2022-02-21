@@ -5,7 +5,7 @@ use move_binary_format::{
     file_format::CompiledModule,
     normalized::{Function, Type},
 };
-use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use move_core_types::identifier::Identifier;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -13,7 +13,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
-use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex, SuiAddress, SUI_ADDRESS_LENGTH};
+use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex, SuiAddress};
 use tracing::log::trace;
 
 use serde_json::Value;
@@ -121,12 +121,15 @@ const HEX_PREFIX: &str = "0x";
 pub struct MoveFunctionComponents {
     pub module: Identifier,
     pub function: Identifier,
-    pub type_args: Vec<TypeTag>,
     pub object_args: Vec<ObjectID>,
     pub pure_args_serialized: Vec<Vec<u8>>,
+    // TODO: add type args checks
+    //pub type_args: Vec<TypeTag>,
 }
 
-pub fn resolve_move_function_components(
+/// Resolve a the JSON args of a function into the expected formats to make them usable by Move call
+/// This is because we have special types which we need to specify in other formats
+pub fn resolve_move_function_args(
     package: &Object,
     module: Identifier,
     function: Identifier,
@@ -136,10 +139,14 @@ pub fn resolve_move_function_components(
     let function_signature = get_expected_fn_signature(package, module.clone(), function.clone())?;
 
     // Now we check that the args are proper
+    // More checks are done in the adapter
 
     // Must not return anything
     if !function_signature.return_.is_empty() {
-        return Err(anyhow!("Function must return nothing"));
+        return Err(anyhow!(
+            "Function {} not callable. Functions must return nothing",
+            function
+        ));
     }
     // Lengths have to match, less one, due to TxContext
     let expected_len = function_signature.parameters.len() - 1;
@@ -163,7 +170,7 @@ pub fn resolve_move_function_components(
     // Everything to the left of pure args must be object args
 
     // Check that the object args are valid
-    let obj_args = check_and_refine_object_args(&combined_args_json, 0, pure_args_start)?;
+    let obj_args = resolve_object_args(&combined_args_json, 0, pure_args_start)?;
 
     // Check that the pure args are valid or can be made valid
 
@@ -179,9 +186,8 @@ pub fn resolve_move_function_components(
         function,
         object_args: obj_args,
         pure_args_serialized,
-
         // TODO: add checking type args
-        type_args: vec![],
+        // type_args: vec![],
     })
 }
 
@@ -206,7 +212,7 @@ fn check_and_serialize_pure_args(
 
         // Check that the args are what we expect or can be converted
         // Then return the serialized bcs value
-        match check_and_refine_pure_args(&curr.to_owned(), expected_pure_arg_type) {
+        match resolve_pure_arg(&curr.to_owned(), expected_pure_arg_type) {
             Ok(a) => pure_args_serialized.push(a),
             Err(e) => return Err(anyhow!("Unable to parse arg at pos: {}, err: {:?}", idx, e)),
         }
@@ -217,7 +223,7 @@ fn check_and_serialize_pure_args(
 // TODO: check Object types must match the type of the function signature
 // Check read/mutable references
 // Add support for ObjectID from VecU8
-fn check_and_refine_object_args(
+fn resolve_object_args(
     args: &[Value],
     start: usize,
     end_exclusive: usize,
@@ -255,10 +261,9 @@ fn check_and_refine_object_args(
     Ok(object_args_ids)
 }
 
-// TODO:
-// Add struct support from String
-// Add generic homogenous array support
-fn check_and_refine_pure_args(curr_val: &Value, expected_type: &Type) -> Result<Vec<u8>> {
+/// Checks the validity of a pure/primitive argument and converts it to the expected type if possible
+/// After conversion, the value is BCS serialized
+fn resolve_pure_arg(curr_val: &Value, expected_type: &Type) -> Result<Vec<u8>> {
     if !is_primitive(expected_type) {
         return Err(anyhow!(
             "Unexpected arg type {:?}. Only primitive types are allowed",
@@ -308,9 +313,6 @@ fn check_and_refine_pure_args(curr_val: &Value, expected_type: &Type) -> Result<
         // To get U128 in JSON, we use String
         (Value::String(s), Type::U128) => bcs::to_bytes::<u128>(&s.parse::<u128>()?),
 
-        // Address is actally vector u8
-        // (Value::String(s), Type::Address) => bcs::to_bytes::<SuiAddress>(&address_from_string(s)?),
-
         // We can encode U8 Vector as string in 2 ways
         // 1. If it starts with 0x, we treat it as hex strings, where each pair is a byte
         // 2. If it does not start with 0x, we treat each character as an ASCII endoced byte
@@ -339,8 +341,9 @@ fn check_and_refine_pure_args(curr_val: &Value, expected_type: &Type) -> Result<
         (Value::Array(arr), Type::Vector(t)) => {
             let mut vec = vec![];
             let arr_len = arr.len();
+            // Collect all the serialized results
             for a in arr {
-                vec.append(&mut check_and_refine_pure_args(a, t)?);
+                vec.append(&mut resolve_pure_arg(a, t)?);
             }
 
             // TODO: can we do without this hack?

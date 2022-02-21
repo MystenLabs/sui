@@ -11,7 +11,7 @@ use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::ExecutionStatus;
 
-use crate::utils::{resolve_move_function_components, Config};
+use crate::utils::{resolve_move_function_args, Config};
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
@@ -194,7 +194,7 @@ impl WalletCommands {
                 // Fetch the object info for the gas obj
                 let gas_obj_ref = client_state.object_ref(*gas).expect("Gas object not found");
 
-                let resolved = resolve_move_function_components(
+                let resolved = resolve_move_function_args(
                     package_obj,
                     module.clone(),
                     function.clone(),

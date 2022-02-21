@@ -5,26 +5,30 @@ use move_binary_format::normalized::Type;
 use move_core_types::identifier::Identifier;
 use serde_json::{json, Value};
 use sui_adapter::genesis::clone_genesis_data;
-use sui_framework::get_sui_framework_modules;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::utils::check_and_refine_pure_args;
+use crate::utils::resolve_pure_arg;
 
-use super::{resolve_move_function_components, HEX_PREFIX};
+use super::{resolve_move_function_args, HEX_PREFIX};
 
 #[test]
 fn test_basic_args_linter_pure_args() {
-    let u128_val = (u64::MAX as u128) + 0xFF;
+    let u128_val = (u64::MAX as u128) + 0xFFFF;
     let good_ascii_str = "123456789hdffwfof libgude ihibhdede +_))@+";
     let bad_ascii_str = "enbeuf√12∫∆∂3456789hdπ˚ffwfof libgude ˚ø˙ßƒçß +_))@+";
-
     let good_hex_val = "0x1234ABCD";
-    let bad_hex_val = "0x1234AB CD";
+    let bad_hex_val = "0x1234AB  CD";
 
     let checks = vec![
+        // Expected Bool match
+        (
+            Value::from(true),
+            Type::Bool,
+            Some(bcs::to_bytes(&true).unwrap()),
+        ),
         // Expected U8 match
         (
             Value::from(9u8),
@@ -51,15 +55,15 @@ fn test_basic_args_linter_pure_args() {
             Type::U128,
             Some(bcs::to_bytes(&u128_val).unwrap()),
         ),
-        // Try to u64 upgrade to u128
+        // Try u64 upgrade to u128
         (
             Value::from(1234u64),
             Type::U128,
             Some(bcs::to_bytes(&1234u128).unwrap()),
         ),
-        // Try to use negative string as U128
+        // Negative string cannot be U128
         (Value::from(format!("-{}", u128_val)), Type::U128, None),
-        // u8 vector from string
+        // u8 vector can be gotten from string
         (
             Value::from(good_ascii_str),
             Type::Vector(Box::new(Type::U8)),
@@ -118,7 +122,7 @@ fn test_basic_args_linter_pure_args() {
                 .unwrap(),
             ),
         ),
-        // Vector of vector of u8s encoded as hex
+        // Vector of vector of u8s with some encoded as hex
         (
             json!(["0x010203", [], [3, 4, 5, 6, 7]]),
             Type::Vector(Box::new(Type::Vector(Box::new(Type::U8)))),
@@ -131,7 +135,7 @@ fn test_basic_args_linter_pure_args() {
                 .unwrap(),
             ),
         ),
-        // Vector of vector of u8s encoded as bytes
+        // Vector of vector of u8s with some encoded as bytes
         (
             json!(["12345", [], [3, 4, 5, 6, 7]]),
             Type::Vector(Box::new(Type::Vector(Box::new(Type::U8)))),
@@ -187,7 +191,7 @@ fn test_basic_args_linter_pure_args() {
                 .unwrap(),
             ),
         ),
-        // U64 deep nest, bad because heterogenous
+        // U64 deep nest, bad because heterogenous array
         (
             json!([[[9, 53, 434], [0], [300]], [], [300, 4, 5, 6, 7]]),
             Type::Vector(Box::new(Type::Vector(Box::new(Type::U64)))),
@@ -212,7 +216,7 @@ fn test_basic_args_linter_pure_args() {
 
     // Driver
     for (arg, expected_type, expected_val) in checks {
-        let res = check_and_refine_pure_args(&arg, &expected_type);
+        let res = resolve_pure_arg(&arg, &expected_type);
         match expected_val {
             Some(q) => assert_eq!(q, res.unwrap()),
             None => assert!(res.is_err()),
@@ -269,11 +273,9 @@ fn test_basic_args_linter_top_level() {
     ];
 
     let components =
-        resolve_move_function_components(framework_pkg, module.clone(), function.clone(), args)
-            .unwrap();
+        resolve_move_function_args(framework_pkg, module.clone(), function.clone(), args).unwrap();
 
     assert!(components.object_args.is_empty());
-    assert!(components.type_args.is_empty());
 
     assert_eq!(
         components.pure_args_serialized[0],
@@ -304,7 +306,7 @@ fn test_basic_args_linter_top_level() {
         monster_affinity,
         monster_description,
     ];
-    assert!(resolve_move_function_components(framework_pkg, module, function, args).is_err());
+    assert!(resolve_move_function_args(framework_pkg, module, function, args).is_err());
 
     // Test with vecu8 as address
 
@@ -325,11 +327,9 @@ fn test_basic_args_linter_top_level() {
     // They have to be ordered
     let args = vec![value, addr];
 
-    let components =
-        resolve_move_function_components(framework_pkg, module, function, args).unwrap();
+    let components = resolve_move_function_args(framework_pkg, module, function, args).unwrap();
 
     assert!(components.object_args.is_empty());
-    assert!(components.type_args.is_empty());
     assert_eq!(
         components.pure_args_serialized[0],
         bcs::to_bytes(&(value_raw as u64)).unwrap()
@@ -358,11 +358,9 @@ fn test_basic_args_linter_top_level() {
     // They have to be ordered
     let args = vec![object_id, addr];
 
-    let components =
-        resolve_move_function_components(framework_pkg, module, function, args).unwrap();
+    let components = resolve_move_function_args(framework_pkg, module, function, args).unwrap();
 
     assert!(!components.object_args.is_empty());
-    assert!(components.type_args.is_empty());
     assert_eq!(
         components.object_args[0],
         ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw)).unwrap()
