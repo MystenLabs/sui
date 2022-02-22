@@ -136,3 +136,83 @@ async fn test_batch_manager_happypath() {
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
     assert!(matches!(rx.recv().await, Err(_)));
 }
+
+#[tokio::test]
+async fn test_batch_manager_out_of_order() {
+    // let (_, authority_key) = get_key_pair();
+
+    // Create a random directory to store the DB
+    let dir = env::temp_dir();
+    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+
+    // Create an authority
+    let mut opts = rocksdb::Options::default();
+    opts.set_max_open_files(max_files_authority_tests());
+    let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
+
+    // TEST 1: init from an empty database should return to a zero block
+    let (_send, mut manager, _pair) = BatcherManager::new(store.clone(), 100);
+
+    let _join = tokio::spawn(async move {
+        manager
+            // Set block size to 4.
+            .run_service(4, Duration::from_millis(5000))
+            .await
+            .expect("Service returns with no errors");
+        drop(manager);
+    });
+
+    // Send transactions out of order
+    let tx_zero = TransactionDigest::new([0; 32].try_into().unwrap());
+    _send
+        .send_item(1, tx_zero.clone())
+        .await
+        .expect("Send to the channel.");
+
+    _send
+        .send_item(3, tx_zero.clone())
+        .await
+        .expect("Send to the channel.");
+
+    _send
+        .send_item(2, tx_zero.clone())
+        .await
+        .expect("Send to the channel.");
+
+    _send
+        .send_item(0, tx_zero.clone())
+        .await
+        .expect("Send to the channel.");
+
+    // Get transactions in order then batch.
+    let (_tx, mut rx) = _pair;
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((0, _))
+    ));
+
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((1, _))
+    ));
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((2, _))
+    ));
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((3, _))
+    ));
+
+    // Then we (eventually) get a batch
+    assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
+
+    // When we close the sending channel we also also end the service task
+    drop(_send);
+    drop(_tx);
+
+    _join.await.expect("No errors in task");
+
+    assert!(matches!(rx.recv().await, Err(_)));
+}
