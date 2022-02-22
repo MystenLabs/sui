@@ -13,6 +13,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use typed_store::traits::Map;
 
+pub use crate::authority_batch::AuthorityBatch;
+
 pub struct AuthorityStore {
     /// This is a map between the object ID and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
@@ -67,14 +69,14 @@ pub struct AuthorityStore {
 
     // Tables used for authority block structure
     /// A sequence on all executed certificates and effects.
-    executed_sequence: DBMap<usize, TransactionDigest>,
+    pub executed_sequence: DBMap<usize, TransactionDigest>,
 
     /// A sequence of blocks indexing into the sequence of executed transactions.
-    batches: DBMap<usize, AuthorityBatch>,
+    pub batches: DBMap<usize, AuthorityBatch>,
 
     /// The size of the executed transactions sequence, used to timestamp the next
     /// item in the sequence.
-    next_sequence_number: AtomicUsize,
+    pub next_sequence_number: AtomicUsize,
 }
 
 impl AuthorityStore {

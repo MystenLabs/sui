@@ -31,7 +31,7 @@ pub fn system_maxfiles() -> usize {
     fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
 }
 
-fn max_files_authority_tests() -> i32 {
+pub fn max_files_authority_tests() -> i32 {
     (system_maxfiles() / 8).try_into().unwrap()
 }
 

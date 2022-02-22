@@ -213,6 +213,10 @@ pub enum SuiError {
     },
     #[error("Storage error")]
     StorageError(#[from] typed_store::rocks::TypedStoreError),
+    #[error("Batch error: cannot send transaction to batch.")]
+    BatchErrorSender,
+    #[error("Storage needs to be fixed")]
+    StorageCorrupt,
 
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",

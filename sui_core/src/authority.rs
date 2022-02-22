@@ -29,7 +29,7 @@ use sui_types::{
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
-mod authority_tests;
+pub mod authority_tests;
 
 mod temporary_store;
 use temporary_store::AuthorityTemporaryStore;
@@ -38,13 +38,8 @@ mod authority_store;
 pub use authority_store::AuthorityStore;
 
 
-
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
-
-mod authority_batch;
-pub use authority_batch::AuthorityBatch;
-
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
