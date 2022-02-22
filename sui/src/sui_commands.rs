@@ -74,7 +74,7 @@ async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
     );
 
     for authority in &config.authorities {
-        let server = make_server(authority, &committee, &[], config.buffer_size).await?;
+        let server = make_server(authority, &committee, vec![], &[], config.buffer_size).await?;
         handles.push(async move {
             let spawned_server = match server.spawn().await {
                 Ok(server) => server,
@@ -123,6 +123,7 @@ async fn genesis(
     }
 
     let mut new_addresses = Vec::new();
+    let mut preload_modules = Vec::new();
     let mut preload_objects = Vec::new();
 
     let new_account_count = genesis_conf
@@ -162,7 +163,7 @@ async fn genesis(
     let sui_lib = sui_framework::get_sui_framework_modules(&genesis_conf.sui_framework_lib_path)?;
     let lib_object =
         Object::new_package(sui_lib, SuiAddress::default(), TransactionDigest::genesis());
-    preload_objects.push(lib_object);
+    preload_modules.push(lib_object);
 
     info!(
         "Loading Move framework lib from {:?}",
@@ -174,7 +175,7 @@ async fn genesis(
         SuiAddress::default(),
         TransactionDigest::genesis(),
     );
-    preload_objects.push(lib_object);
+    preload_modules.push(lib_object);
 
     // Build custom move packages
     if !genesis_conf.move_packages.is_empty() {
@@ -197,7 +198,7 @@ async fn genesis(
             info!("Loaded package [{}] from {:?}.", object.id(), path);
             // Writing package id to network.conf for user to retrieve later.
             config.loaded_move_packages.push((path, object.id()));
-            preload_objects.push(object)
+            preload_modules.push(object)
         }
     }
 
@@ -209,7 +210,14 @@ async fn genesis(
         preload_objects.len()
     );
     for authority in &config.authorities {
-        make_server(authority, &committee, &preload_objects, config.buffer_size).await?;
+        make_server(
+            authority,
+            &committee,
+            preload_modules.clone(),
+            &preload_objects,
+            config.buffer_size,
+        )
+        .await?;
     }
 
     let wallet_path = working_dir.join("wallet.conf");
@@ -235,7 +243,8 @@ async fn genesis(
 async fn make_server(
     authority: &AuthorityPrivateInfo,
     committee: &Committee,
-    pre_load_objects: &[Object],
+    preload_modules: Vec<Object>,
+    preload_objects: &[Object],
     buffer_size: usize,
 ) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
@@ -246,9 +255,11 @@ async fn make_server(
         name,
         Box::pin(authority.key_pair.copy()),
         store,
-    );
+        preload_modules,
+    )
+    .await;
 
-    for object in pre_load_objects {
+    for object in preload_objects {
         state.init_order_lock(object.to_object_reference()).await;
         state.insert_object(object.clone()).await;
     }
