@@ -108,6 +108,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
         tokio::time::sleep(Duration::from_millis(100)).await;
         count += 1;
     }
+    assert!(count < 50);
 
     // Create Wallet context.
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
@@ -180,6 +181,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         tokio::time::sleep(Duration::from_millis(100)).await;
         count += 1;
     }
+    assert!(count < 50);
 
     // Wallet config
     let wallet_conf = WalletConfig::read(&working_dir.path().join("wallet.conf"))?;
@@ -197,8 +199,13 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         .execute(&mut context)
         .await?;
 
+    count = 0;
     // confirm the object with custom object id.
-    assert!(logs_contain(format!("{}", object_id).as_str()));
+    while count < 50 && !logs_contain(format!("{}", object_id).as_str()) {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        count += 1;
+    }
+    assert!(count < 50);
 
     network.abort();
     Ok(())
