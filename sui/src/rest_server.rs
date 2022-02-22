@@ -126,7 +126,7 @@ async fn get_addresses(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
     let server_context = rqctx.context();
-    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
+    let wallet_context = server_context.wallet_context.lock().unwrap().take();
     if wallet_context.is_none() {
         return Err(HttpError::for_client_error(
             None,
@@ -135,7 +135,7 @@ async fn get_addresses(
                 .to_string(),
         ));
     }
-    let wallet_context = wallet_context.as_mut().unwrap();
+    let mut wallet_context = wallet_context.unwrap();
 
     let addresses = wallet_context
         .config
@@ -157,12 +157,12 @@ async fn get_addresses(
             }
         };
 
-
-        // TODO @Francois: LINES CAUSING ISSUES
-        // if let Some(err) = sync_client_state(client_state).await {
-        //     return Err(err);
-        // };
+        if let Some(err) = sync_client_state(client_state).await {
+            return Err(err);
+        };
     }
+
+    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
     // TODO: check if we should remove 'k#' as part of address
     Ok(HttpResponseOk(GetAddressResponse {
@@ -266,7 +266,7 @@ async fn genesis(
             None,
             hyper::StatusCode::CONFLICT,
             format!("Network config was unable to be saved: {error}"),
-        ))
+        ));
     };
 
     let mut new_addresses = Vec::new();
