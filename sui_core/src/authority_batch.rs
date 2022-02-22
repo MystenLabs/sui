@@ -5,7 +5,12 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use sui_types::base_types::*;
 use sui_types::error::{SuiError, SuiResult};
+
+use std::collections::BTreeMap;
+use std::time::Duration;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::time::interval;
+
 use typed_store::Map;
 
 #[cfg(test)]
@@ -34,8 +39,19 @@ The architecture is as follows:
 
 */
 
+pub type BroadcastPair = (
+    tokio::sync::broadcast::Sender<UpdateItem>,
+    tokio::sync::broadcast::Receiver<UpdateItem>,
+);
+
 /// Either a freshly sequenced transaction hash or a batch
-pub struct UpdateItem {}
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize,
+)]
+pub enum UpdateItem {
+    Transaction((usize, TransactionDigest)),
+    Batch(AuthorityBatch)
+}
 
 pub struct BatcherSender {
     /// Channel for sending updates.
@@ -45,6 +61,8 @@ pub struct BatcherSender {
 pub struct BatcherManager {
     /// Channel for receiving updates
     tx_recv: Receiver<(usize, TransactionDigest)>,
+    /// The sender end of the broadcast channel used to send updates to listeners
+    tx_broadcast: tokio::sync::broadcast::Sender<UpdateItem>,
     /// Copy of the database to write batches and read transactions.
     db: Arc<AuthorityStore>,
 }
@@ -64,17 +82,26 @@ impl BatcherSender {
 }
 
 impl BatcherManager {
-    pub fn new(db: Arc<AuthorityStore>, capacity: usize) -> (BatcherSender, BatcherManager) {
+    pub fn new(
+        db: Arc<AuthorityStore>,
+        capacity: usize,
+    ) -> (BatcherSender, BatcherManager, BroadcastPair) {
         let (tx_send, tx_recv) = channel(capacity);
+        let (tx_broadcast, rx_broadcast) = tokio::sync::broadcast::channel(capacity);
         let sender = BatcherSender { tx_send };
-        let manager = BatcherManager { tx_recv, db };
-        (sender, manager)
+        let manager = BatcherManager {
+            tx_recv,
+            tx_broadcast: tx_broadcast.clone(),
+            db,
+        };
+        (sender, manager, (tx_broadcast, rx_broadcast))
     }
 
     /// Starts the manager service / tokio task
     pub fn start_service() {}
 
     async fn init_from_database(&self) -> Result<AuthorityBatch, SuiError> {
+        // First read the last batch in the db
         let mut last_batch = match self.db.batches.iter().skip_prior_to(&usize::MAX)?.next() {
             Some((_, last_batch)) => last_batch,
             None => {
@@ -121,13 +148,86 @@ impl BatcherManager {
         Ok(last_batch)
     }
 
-    pub async fn run_service(&self) -> SuiResult {
+    pub async fn run_service(&mut self, min_batch_size: usize, max_delay: Duration) -> SuiResult {
         // We first use the state of the database to establish what the current
         // latest batch is.
-        let _last_batch = self.init_from_database().await?;
+        let mut _last_batch = self.init_from_database().await?;
 
         // Then we operate in a loop, where for each new update we consider
         // whether to create a new batch or not.
+
+        let mut interval = interval(max_delay);
+        let mut exit = false;
+        let mut make_batch;
+
+        // The structures we use to build the next batch. The current_batch holds the sequence
+        // of transactions in order, following the last batch. The loose transactions holds
+        // transactions we may have received out of order.
+        let (mut current_batch, mut loose_transactions): (
+            Vec<(usize, TransactionDigest)>,
+            BTreeMap<usize, TransactionDigest>,
+        ) = (Vec::new(), BTreeMap::new());
+        let mut next_seq_number = _last_batch.total_size;
+
+        while !exit {
+            // Reset the flags.
+            make_batch = false;
+
+            // check if we should make a new block
+            tokio::select! {
+              _ = interval.tick() => {
+                // Every so often we check if we should make a batch
+                // smaller than the max size. But never empty.
+                  make_batch = true;
+              },
+              item_option = self.tx_recv.recv() => {
+
+                match item_option {
+                  None => {
+                    make_batch = true;
+                    exit = true;
+                  },
+                  Some((seq, tx_digest)) => {
+
+                    loose_transactions.insert(seq, tx_digest);
+                    while loose_transactions.contains_key(&next_seq_number) {
+                      let next_item = (next_seq_number, loose_transactions.remove(&next_seq_number).unwrap());
+                      // Send the update
+                      let _ = self.tx_broadcast.send(UpdateItem::Transaction(next_item));
+                      current_batch.push(next_item);
+                      next_seq_number += 1;
+                    }
+
+                    if current_batch.len() >= min_batch_size {
+                      make_batch = true;
+                    }
+                  }
+                }
+               }
+            }
+
+            // Logic to make a batch
+            if make_batch {
+                if current_batch.is_empty() {
+                    continue;
+                }
+
+                // Make and store a new batch.
+                let new_batch = AuthorityBatch {
+                    total_size: next_seq_number,
+                    previous_total_size: _last_batch.total_size,
+                };
+                self.db.batches.insert(&new_batch.total_size, &new_batch)?;
+
+                // Send the update
+                let _ = self.tx_broadcast.send(UpdateItem::Batch(new_batch.clone()));
+
+                // A new batch is actually made, so we reset the conditions.
+                _last_batch = new_batch;
+                current_batch.clear();
+                interval.reset();
+            }
+        }
 
         // When a new batch is created we send a notification to all who have
         // registered an interest.
