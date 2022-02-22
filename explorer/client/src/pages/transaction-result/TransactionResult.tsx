@@ -24,21 +24,42 @@ function TransactionResult() {
     const data = mockTransactionData.data.find(({ id }) => id === txID);
 
     if (instanceOfDataType(data)) {
-        let action;
-        let objectID;
+        let action: string;
+        let objectIDs: string[];
 
         if (data.created !== undefined) {
             action = 'Create';
-            objectID = data.created[0];
+            objectIDs = data.created;
         } else if (data.deleted !== undefined) {
             action = 'Delete';
-            objectID = data.deleted[0];
+            objectIDs = data.deleted;
         } else if (data.mutated !== undefined) {
             action = 'Mutate';
-            objectID = data.mutated[0];
+            objectIDs = data.mutated;
         } else {
             action = 'Fail';
-            objectID = '-';
+            objectIDs = ['-'];
+        }
+
+        const statusClass =
+            data.status === 'success'
+                ? styles['status-success']
+                : styles['status-fail'];
+
+        let actionClass;
+
+        switch (action) {
+            case 'Create':
+                actionClass = styles['action-create'];
+                break;
+            case 'Delete':
+                actionClass = styles['action-delete'];
+                break;
+            case 'Fail':
+                actionClass = styles['status-fail'];
+                break;
+            default:
+                actionClass = styles['action-mutate'];
         }
 
         return (
@@ -47,16 +68,20 @@ function TransactionResult() {
                 <dd>{data.id}</dd>
 
                 <dt>Status</dt>
-                <dd data-testid="transaction-status">{data.status}</dd>
+                <dd data-testid="transaction-status" className={statusClass}>
+                    {data.status}
+                </dd>
 
                 <dt>Sender</dt>
                 <dd>{data.sender}</dd>
 
                 <dt>Did</dt>
-                <dd>{action}</dd>
+                <dd className={actionClass}>{action}</dd>
 
                 <dt>Object</dt>
-                <dd>{objectID}</dd>
+                {objectIDs.map((objectID, index) => (
+                    <dd key={`object-${index}`}>{objectID}</dd>
+                ))}
             </dl>
         );
     }

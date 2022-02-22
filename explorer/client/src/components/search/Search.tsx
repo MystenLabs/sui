@@ -15,13 +15,13 @@ function Search() {
                 : navigate(`../transactions/${input}`);
             setInput('');
         },
-        [input, navigate]
+        [input, navigate, setInput]
     );
 
     const handleTextChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) =>
             setInput(e.currentTarget.value),
-        []
+        [setInput]
     );
 
     return (
