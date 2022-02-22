@@ -23,7 +23,7 @@ async fn test_open_manager() {
         opts.set_max_open_files(max_files_authority_tests());
         let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
-        // TEST 1: init from an empty database should lead to a zero block
+        // TEST 1: init from an empty database should return to a zero block
         let (_send, manager) = BatcherManager::new(store.clone(), 100);
         let last_block = manager
             .init_from_database()

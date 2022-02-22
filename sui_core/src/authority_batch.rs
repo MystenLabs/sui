@@ -14,27 +14,27 @@ mod batch_tests;
 
 /*
 
-An authority asynchronously creates blocks from its sequence of
+An authority asynchronously creates batches from its sequence of
 certificates / effects. Then both the sequence of certificates
 / effects are transmitted to listeners (as a transaction digest)
-as well as blocks.
+as well as batches.
 
 The architecture is as follows:
 - The authority store notifies through the Sender that a new
   certificate / effect has been sequenced, at a specific sequence
   number.
 - The sender sends this information through a channel to the Manager,
-  that decides whether a new block should be made. This is based on
-  time elapsed as well as current size of block. If so a new block
+  that decides whether a new batch should be made. This is based on
+  time elapsed as well as current size of batch. If so a new batch
   is created.
 - The authority manager also holds the sending ends of a number of
   channels that eventually go to clients that registered interest
   in receiving all updates from the authority. When a new item is
-  sequenced of a block created this is sent out to them.
+  sequenced of a batch created this is sent out to them.
 
 */
 
-/// Either a freshly sequenced transaction hash or a block
+/// Either a freshly sequenced transaction hash or a batch
 pub struct UpdateItem {}
 
 pub struct BatcherSender {
@@ -45,12 +45,12 @@ pub struct BatcherSender {
 pub struct BatcherManager {
     /// Channel for receiving updates
     tx_recv: Receiver<(usize, TransactionDigest)>,
-    /// Copy of the database to write blocks and read transactions.
+    /// Copy of the database to write batches and read transactions.
     db: Arc<AuthorityStore>,
 }
 
 impl BatcherSender {
-    /// Send a new event to the block manager
+    /// Send a new event to the batch manager
     pub async fn send_item(
         &self,
         transaction_sequence: usize,
@@ -75,7 +75,7 @@ impl BatcherManager {
     pub fn start_service() {}
 
     async fn init_from_database(&self) -> Result<AuthorityBatch, SuiError> {
-        let mut last_block = match self.db.batches.iter().skip_prior_to(&usize::MAX)?.next() {
+        let mut last_batch = match self.db.batches.iter().skip_prior_to(&usize::MAX)?.next() {
             Some((_, last_batch)) => last_batch,
             None => {
                 // Make a batch at zero
@@ -93,16 +93,16 @@ impl BatcherManager {
             .db
             .next_sequence_number
             .load(std::sync::atomic::Ordering::Relaxed);
-        if total_seq > last_block.total_size {
+        if total_seq > last_batch.total_size {
             // Make a new batch, to put the old transactions not in a batch in.
             let transactions: Vec<_> = self
                 .db
                 .executed_sequence
                 .iter()
-                .skip_to(&last_block.total_size)?
+                .skip_to(&last_batch.total_size)?
                 .collect();
 
-            if transactions.len() != total_seq - last_block.total_size {
+            if transactions.len() != total_seq - last_batch.total_size {
                 // TODO: The database is corrupt, namely we have a higher maximum transaction sequence
                 //       than number of items, which means there is a hole in the sequence. This can happen
                 //       in case we crash after writting command seq x but before x-1 was written. What we
@@ -111,20 +111,20 @@ impl BatcherManager {
                 return Err(SuiError::StorageCorrupt);
             }
 
-            last_block = AuthorityBatch {
+            last_batch = AuthorityBatch {
                 total_size: total_seq,
-                previous_total_size: last_block.total_size,
+                previous_total_size: last_batch.total_size,
             };
-            self.db.batches.insert(&total_seq, &last_block)?;
+            self.db.batches.insert(&total_seq, &last_batch)?;
         }
 
-        Ok(last_block)
+        Ok(last_batch)
     }
 
     pub async fn run_service(&self) -> SuiResult {
         // We first use the state of the database to establish what the current
         // latest batch is.
-        let _last_block = self.init_from_database().await?;
+        let _last_batch = self.init_from_database().await?;
 
         // Then we operate in a loop, where for each new update we consider
         // whether to create a new batch or not.
