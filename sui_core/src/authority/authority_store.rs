@@ -508,7 +508,7 @@ impl AuthorityStore {
             //
             // NOTE: it is possible that we commit to the database transactions
             //       out of order with respect to their sequence number. It is also
-            //       possible for the authority to crash without committing the 
+            //       possible for the authority to crash without committing the
             //       full sequence, and the batching logic needs to deal with this.
             let next_seq = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
             write_batch = write_batch.insert_batch(
