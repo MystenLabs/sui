@@ -5,7 +5,10 @@
 use crate::transport::*;
 use bytes::Bytes;
 use futures::future::FutureExt;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    net::TcpListener,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 use sui_types::{error::*, serialize::*};
 use tracing::*;
 
@@ -193,5 +196,26 @@ impl NetworkServer {
 
     pub fn increment_user_errors(&self) {
         self.user_errors.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+pub struct PortAllocator {
+    next_port: u16,
+}
+
+impl PortAllocator {
+    pub fn new(starting_port: u16) -> Self {
+        Self {
+            next_port: starting_port,
+        }
+    }
+    pub fn next_port(&mut self) -> Option<u16> {
+        for port in self.next_port..65535 {
+            if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+                self.next_port = port + 1;
+                return Some(port);
+            }
+        }
+        None
     }
 }

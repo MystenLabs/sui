@@ -2,31 +2,32 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_core::authority_client::AuthorityClient;
-use sui_network::network::NetworkClient;
-use sui_types::base_types::*;
-use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair, KeyPair};
-use sui_types::error::SuiError;
-
-use crate::utils::optional_address_as_hex;
-use crate::utils::optional_address_from_hex;
-use crate::utils::{Config, PortAllocator, DEFAULT_STARTING_PORT};
 use anyhow::anyhow;
 use once_cell::sync::Lazy;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
+use std::fs::{self, File};
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
+use sui_core::authority_client::AuthorityClient;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_network::network::{NetworkClient, PortAllocator};
 use sui_network::transport;
+use sui_types::base_types::*;
+use sui_types::committee::Committee;
+use sui_types::crypto::{get_key_pair, KeyPair};
+use sui_types::error::SuiError;
+use tracing::log::trace;
 
 const DEFAULT_WEIGHT: usize = 1;
 const DEFAULT_GAS_AMOUNT: u64 = 100000;
 pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
+pub const DEFAULT_STARTING_PORT: u16 = 10000;
 
 static PORT_ALLOCATOR: Lazy<Mutex<PortAllocator>> =
     Lazy::new(|| Mutex::new(PortAllocator::new(DEFAULT_STARTING_PORT)));
@@ -232,8 +233,8 @@ pub struct GenesisConfig {
 pub struct AccountConfig {
     #[serde(
         skip_serializing_if = "Option::is_none",
-        serialize_with = "optional_address_as_hex",
-        deserialize_with = "optional_address_from_hex"
+        serialize_with = "SuiAddress::optional_address_as_hex",
+        deserialize_with = "SuiAddress::optional_address_from_hex"
     )]
     pub address: Option<SuiAddress>,
     pub gas_objects: Vec<ObjectConfig>,
@@ -321,4 +322,45 @@ impl Config for GenesisConfig {
     fn config_path(&self) -> &Path {
         &self.config_path
     }
+}
+
+pub trait Config
+where
+    Self: DeserializeOwned + Serialize,
+{
+    fn read_or_create(path: &Path) -> Result<Self, anyhow::Error> {
+        let path_buf = PathBuf::from(path);
+        Ok(if path_buf.exists() {
+            Self::read(path)?
+        } else {
+            trace!("Config file not found, creating new config '{:?}'", path);
+            let new_config = Self::create(path)?;
+            new_config.write(path)?;
+            new_config
+        })
+    }
+
+    fn read(path: &Path) -> Result<Self, anyhow::Error> {
+        trace!("Reading config from '{:?}'", path);
+        let reader = BufReader::new(File::open(path)?);
+        let mut config: Self = serde_json::from_reader(reader)?;
+        config.set_config_path(path);
+        Ok(config)
+    }
+
+    fn write(&self, path: &Path) -> Result<(), anyhow::Error> {
+        trace!("Writing config to '{:?}'", path);
+        let config = serde_json::to_string_pretty(self).unwrap();
+        fs::write(path, config).expect("Unable to write to config file");
+        Ok(())
+    }
+
+    fn save(&self) -> Result<(), anyhow::Error> {
+        self.write(self.config_path())
+    }
+
+    fn create(path: &Path) -> Result<Self, anyhow::Error>;
+
+    fn set_config_path(&mut self, path: &Path);
+    fn config_path(&self) -> &Path;
 }

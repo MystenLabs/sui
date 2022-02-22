@@ -4,9 +4,8 @@ extern crate core;
 
 use std::path::PathBuf;
 use structopt::StructOpt;
-use sui::config::NetworkConfig;
+use sui::config::{Config, NetworkConfig};
 use sui::sui_commands::SuiCommand;
-use sui::utils::Config;
 
 #[cfg(test)]
 #[path = "unit_tests/cli_tests.rs"]
