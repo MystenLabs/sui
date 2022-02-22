@@ -13,7 +13,7 @@ const CERT_CF_NAME: &str = "certificates";
 const SEQ_NUMBER_CF_NAME: &str = "object_sequence_numbers";
 const OBJ_REF_CF_NAME: &str = "object_refs";
 const TX_DIGEST_TO_CERT_CF_NAME: &str = "object_certs";
-const PENDING_ORDERS_CF_NAME: &str = "pending_orders";
+const PENDING_TRANSACTIONS_CF_NAME: &str = "pending_transactions";
 const OBJECT_CF_NAME: &str = "objects";
 const OBJECT_LAYOUTS_CF_NAME: &str = "object_layouts";
 
@@ -93,11 +93,11 @@ impl ClientAddressManagerStore {
 
 /// This is the store of one address
 pub struct ClientSingleAddressStore {
-    /// Table of objects to orders pending on the objects
-    pub pending_orders: DBMap<ObjectID, Order>,
+    /// Table of objects to transactions pending on the objects
+    pub pending_transactions: DBMap<ObjectID, Transaction>,
     // The remaining fields are used to minimize networking, and may not always be persisted locally.
     /// Known certificates, indexed by TX digest.
-    pub certificates: DBMap<TransactionDigest, CertifiedOrder>,
+    pub certificates: DBMap<TransactionDigest, CertifiedTransaction>,
     /// The known objects with it's sequence number owned by the client.
     pub object_sequence_numbers: DBMap<ObjectID, SequenceNumber>,
     /// Confirmed objects with it's ref owned by the client.
@@ -119,7 +119,7 @@ impl ClientSingleAddressStore {
         let db = client_store::init_store(
             path,
             vec![
-                PENDING_ORDERS_CF_NAME,
+                PENDING_TRANSACTIONS_CF_NAME,
                 CERT_CF_NAME,
                 SEQ_NUMBER_CF_NAME,
                 OBJ_REF_CF_NAME,
@@ -130,7 +130,7 @@ impl ClientSingleAddressStore {
         );
 
         ClientSingleAddressStore {
-            pending_orders: client_store::reopen_db(&db, PENDING_ORDERS_CF_NAME),
+            pending_transactions: client_store::reopen_db(&db, PENDING_TRANSACTIONS_CF_NAME),
             certificates: client_store::reopen_db(&db, CERT_CF_NAME),
             object_sequence_numbers: client_store::reopen_db(&db, SEQ_NUMBER_CF_NAME),
             object_refs: client_store::reopen_db(&db, OBJ_REF_CF_NAME),

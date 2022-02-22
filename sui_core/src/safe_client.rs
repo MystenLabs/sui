@@ -28,37 +28,37 @@ impl<C> SafeClient<C> {
         }
     }
 
-    // Here we centralize all checks for order info responses
-    fn check_order_response(
+    // Here we centralize all checks for transaction info responses
+    fn check_transaction_response(
         &self,
         digest: TransactionDigest,
-        response: &OrderInfoResponse,
+        response: &TransactionInfoResponse,
     ) -> SuiResult {
-        if let Some(signed_order) = &response.signed_order {
-            // Check the order signature
-            signed_order.check(&self.committee)?;
+        if let Some(signed_transaction) = &response.signed_transaction {
+            // Check the transaction signature
+            signed_transaction.check(&self.committee)?;
             // Check it has the right signer
             fp_ensure!(
-                signed_order.authority == self.address,
+                signed_transaction.authority == self.address,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
             );
-            // Check it's the right order
+            // Check it's the right transaction
             fp_ensure!(
-                signed_order.order.digest() == digest,
+                signed_transaction.transaction.digest() == digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
             );
         }
 
-        if let Some(certificate) = &response.certified_order {
+        if let Some(certificate) = &response.certified_transaction {
             // Check signatures and quorum
             certificate.check(&self.committee)?;
-            // Check it's the right order
+            // Check it's the right transaction
             fp_ensure!(
-                certificate.order.digest() == digest,
+                certificate.transaction.digest() == digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address
                 }
@@ -151,11 +151,11 @@ impl<C> SafeClient<C> {
                 }
             };
 
-            if let Some(signed_order) = &object_and_lock.lock {
-                signed_order.check(&self.committee)?;
+            if let Some(signed_transaction) = &object_and_lock.lock {
+                signed_transaction.check(&self.committee)?;
                 // Check it has the right signer
                 fp_ensure!(
-                    signed_order.authority == self.address,
+                    signed_transaction.authority == self.address,
                     SuiError::ByzantineAuthoritySuspicion {
                         authority: self.address
                     }
@@ -173,25 +173,31 @@ where
     C: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     /// Initiate a new transfer to a Sui or Primary account.
-    async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, SuiError> {
-        let digest = order.digest();
-        let order_info = self.authority_client.handle_order(order).await?;
-        self.check_order_response(digest, &order_info)?;
-        Ok(order_info)
+    async fn handle_transaction(
+        &self,
+        transaction: Transaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let digest = transaction.digest();
+        let transaction_info = self
+            .authority_client
+            .handle_transaction(transaction)
+            .await?;
+        self.check_transaction_response(digest, &transaction_info)?;
+        Ok(transaction_info)
     }
 
     /// Confirm a transfer to a Sui or Primary account.
-    async fn handle_confirmation_order(
+    async fn handle_confirmation_transaction(
         &self,
-        order: ConfirmationOrder,
-    ) -> Result<OrderInfoResponse, SuiError> {
-        let digest = order.certificate.order.digest();
-        let order_info = self
+        transaction: ConfirmationTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let digest = transaction.certificate.transaction.digest();
+        let transaction_info = self
             .authority_client
-            .handle_confirmation_order(order)
+            .handle_confirmation_transaction(transaction)
             .await?;
-        self.check_order_response(digest, &order_info)?;
-        Ok(order_info)
+        self.check_transaction_response(digest, &transaction_info)?;
+        Ok(transaction_info)
     }
 
     async fn handle_account_info_request(
@@ -216,16 +222,16 @@ where
     }
 
     /// Handle Object information requests for this account.
-    async fn handle_order_info_request(
+    async fn handle_transaction_info_request(
         &self,
-        request: OrderInfoRequest,
-    ) -> Result<OrderInfoResponse, SuiError> {
+        request: TransactionInfoRequest,
+    ) -> Result<TransactionInfoResponse, SuiError> {
         let digest = request.transaction_digest;
-        let order_info = self
+        let transaction_info = self
             .authority_client
-            .handle_order_info_request(request)
+            .handle_transaction_info_request(request)
             .await?;
-        self.check_order_response(digest, &order_info)?;
-        Ok(order_info)
+        self.check_transaction_response(digest, &transaction_info)?;
+        Ok(transaction_info)
     }
 }

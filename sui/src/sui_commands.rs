@@ -260,7 +260,9 @@ async fn make_server(
     .await;
 
     for object in preload_objects {
-        state.init_order_lock(object.to_object_reference()).await;
+        state
+            .init_transaction_lock(object.to_object_reference())
+            .await;
         state.insert_object(object.clone()).await;
     }
 
