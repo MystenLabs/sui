@@ -11,8 +11,8 @@ use move_core_types::language_storage::TypeTag;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
 use sui_types::{
-    base_types::*, committee::Committee, error::SuiError, fp_ensure, messages::*,
-    object::ObjectRead,
+    base_types::*, coin, committee::Committee, error::SuiError, fp_ensure, gas_coin, messages::*,
+    object::ObjectRead, SUI_FRAMEWORK_ADDRESS,
 };
 use typed_store::rocks::open_cf;
 use typed_store::Map;
@@ -24,6 +24,8 @@ use std::{
     pin::Pin,
 };
 
+use self::client_responses::{MergeCoinResponse, SplitCoinResponse};
+
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
 /// - Sync, i.e. can be safely shared between threads.
@@ -32,10 +34,8 @@ use std::{
 ///
 pub type StableSyncSigner = Pin<Box<dyn signature::Signer<Signature> + Send + Sync>>;
 
+pub mod client_responses;
 pub mod client_store;
-
-#[cfg(test)]
-use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
@@ -160,6 +160,36 @@ pub trait Client {
         gas_object_ref: ObjectRef,
         gas_budget: u64,
     ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
+
+    /// Split the coin object (identified by `coin_object_ref`) into
+    /// multiple new coins. The amount of each new coin is specified in
+    /// `split_amounts`. Remaining balance is kept in the original
+    /// coin object.
+    /// Note that the order of the new coins in SplitCoinResponse will
+    /// not be the same as the order of `split_amounts`.
+    async fn split_coin(
+        &mut self,
+        coin_object_ref: ObjectRef,
+        split_amounts: Vec<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Result<SplitCoinResponse, anyhow::Error>;
+
+    /// Merge the `coin_to_merge` coin object into `primary_coin`.
+    /// After this merge, the balance of `primary_coin` will become the
+    /// sum of the two, while `coin_to_merge` will be deleted.
+    ///
+    /// Returns a pair:
+    ///  (update primary coin object reference, updated gas payment object reference)
+    ///
+    /// TODO: Support merging a vector of coins.
+    async fn merge_coins(
+        &mut self,
+        primary_coin: ObjectRef,
+        coin_to_merge: ObjectRef,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Result<MergeCoinResponse, anyhow::Error>;
 
     /// Get the object information
     /// TODO: move this out to AddressManager
@@ -327,7 +357,6 @@ where
         &self.authorities
     }
 
-    #[cfg(test)]
     pub async fn get_framework_object_ref(&mut self) -> Result<ObjectRef, anyhow::Error> {
         let info = self
             .get_object_info(ObjectID::from(SUI_FRAMEWORK_ADDRESS))
@@ -668,6 +697,97 @@ where
             &*self.secret,
         );
         self.execute_transaction(move_publish_order).await
+    }
+
+    async fn split_coin(
+        &mut self,
+        coin_object_ref: ObjectRef,
+        split_amounts: Vec<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Result<SplitCoinResponse, anyhow::Error> {
+        // TODO: Hardcode the coin type to be GAS coin for now.
+        // We should support splitting arbitrary coin type.
+        let coin_type = gas_coin::GAS::type_tag();
+
+        let move_call_order = Order::new_move_call(
+            self.address,
+            self.get_framework_object_ref().await?,
+            coin::COIN_MODULE_NAME.to_owned(),
+            coin::COIN_SPLIT_VEC_FUNC_NAME.to_owned(),
+            vec![coin_type],
+            gas_payment,
+            vec![coin_object_ref],
+            vec![bcs::to_bytes(&split_amounts)?],
+            gas_budget,
+            &*self.secret,
+        );
+        let (certificate, effects) = self.execute_transaction(move_call_order).await?;
+        if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
+            return Err(error.into());
+        }
+        let created = &effects.created;
+        fp_ensure!(
+            effects.mutated.len() == 2     // coin and gas
+               && created.len() == split_amounts.len()
+               && created.iter().all(|(_, owner)| owner == &self.address),
+            SuiError::IncorrectGasSplit.into()
+        );
+        let updated_coin = self
+            .get_object_info(coin_object_ref.0)
+            .await?
+            .into_object()?;
+        let mut new_coins = Vec::with_capacity(created.len());
+        for ((id, _, _), _) in created {
+            new_coins.push(self.get_object_info(*id).await?.into_object()?);
+        }
+        let updated_gas = self.get_object_info(gas_payment.0).await?.into_object()?;
+        Ok(SplitCoinResponse {
+            certificate,
+            updated_coin,
+            new_coins,
+            updated_gas,
+        })
+    }
+
+    async fn merge_coins(
+        &mut self,
+        primary_coin: ObjectRef,
+        coin_to_merge: ObjectRef,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+    ) -> Result<MergeCoinResponse, anyhow::Error> {
+        // TODO: Hardcode the coin type to be GAS coin for now.
+        // We should support merging arbitrary coin type.
+        let coin_type = gas_coin::GAS::type_tag();
+
+        let move_call_order = Order::new_move_call(
+            self.address,
+            self.get_framework_object_ref().await?,
+            coin::COIN_MODULE_NAME.to_owned(),
+            coin::COIN_JOIN_FUNC_NAME.to_owned(),
+            vec![coin_type],
+            gas_payment,
+            vec![primary_coin, coin_to_merge],
+            vec![],
+            gas_budget,
+            &*self.secret,
+        );
+        let (certificate, effects) = self.execute_transaction(move_call_order).await?;
+        if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
+            return Err(error.into());
+        }
+        fp_ensure!(
+            effects.mutated.len() == 2, // coin and gas
+            SuiError::IncorrectGasMerge.into()
+        );
+        let updated_coin = self.get_object_info(primary_coin.0).await?.into_object()?;
+        let updated_gas = self.get_object_info(gas_payment.0).await?.into_object()?;
+        Ok(MergeCoinResponse {
+            certificate,
+            updated_coin,
+            updated_gas,
+        })
     }
 
     async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
