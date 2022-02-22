@@ -11,7 +11,7 @@ use move_core_types::language_storage::TypeTag;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
 use sui_types::{
-    base_types::*, coin, committee::Committee, error::SuiError, fp_ensure, gas_coin, messages::*,
+    base_types::*, coin, committee::Committee, error::SuiError, fp_ensure, messages::*,
     object::ObjectRead, SUI_FRAMEWORK_ADDRESS,
 };
 use typed_store::rocks::open_cf;
@@ -717,9 +717,11 @@ where
         gas_payment: ObjectRef,
         gas_budget: u64,
     ) -> Result<SplitCoinResponse, anyhow::Error> {
-        // TODO: Hardcode the coin type to be GAS coin for now.
-        // We should support splitting arbitrary coin type.
-        let coin_type = gas_coin::GAS::type_tag();
+        let coin_type = self
+            .get_object_info(coin_object_ref.0)
+            .await?
+            .object()?
+            .get_move_template_type()?;
 
         let move_call_transaction = Transaction::new_move_call(
             self.address,
@@ -768,9 +770,11 @@ where
         gas_payment: ObjectRef,
         gas_budget: u64,
     ) -> Result<MergeCoinResponse, anyhow::Error> {
-        // TODO: Hardcode the coin type to be GAS coin for now.
-        // We should support merging arbitrary coin type.
-        let coin_type = gas_coin::GAS::type_tag();
+        let coin_type = self
+            .get_object_info(primary_coin.0)
+            .await?
+            .object()?
+            .get_move_template_type()?;
 
         let move_call_transaction = Transaction::new_move_call(
             self.address,
