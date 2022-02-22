@@ -99,7 +99,6 @@ where
         &self.address_states
     }
 
-    // We can expose features that do not require addresses/mutations
     /// Get the object info
     pub async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
         self.authorities.get_object_info_execute(object_id).await
