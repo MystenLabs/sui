@@ -93,7 +93,10 @@ async fn test_batch_manager_happypath() {
     let (_send, mut manager, _pair) = BatcherManager::new(store.clone(), 100);
 
     let _join = tokio::spawn(async move {
-        manager.run_service(1000, Duration::from_millis(500)).await.expect("Service returns with no errors");
+        manager
+            .run_service(1000, Duration::from_millis(500))
+            .await
+            .expect("Service returns with no errors");
         drop(manager);
     });
 
@@ -103,18 +106,21 @@ async fn test_batch_manager_happypath() {
         .send_item(0, tx_zero.clone())
         .await
         .expect("Send to the channel.");
-    
-    // First we get a transaction update 
+
+    // First we get a transaction update
     let (_tx, mut rx) = _pair;
-    assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Transaction((0,_))));
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((0, _))
+    ));
 
     // Then we (eventually) get a batch
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
     _send
-    .send_item(1, tx_zero.clone())
-    .await
-    .expect("Send to the channel.");
+        .send_item(1, tx_zero.clone())
+        .await
+        .expect("Send to the channel.");
 
     // When we close the sending channel we also also end the service task
     drop(_send);
@@ -123,8 +129,10 @@ async fn test_batch_manager_happypath() {
     _join.await.expect("No errors in task");
 
     // But the block is made, and sent as a notification.
-    assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Transaction((1,_))));
+    assert!(matches!(
+        rx.recv().await.unwrap(),
+        UpdateItem::Transaction((1, _))
+    ));
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
     assert!(matches!(rx.recv().await, Err(_)));
-
 }

@@ -45,12 +45,10 @@ pub type BroadcastPair = (
 );
 
 /// Either a freshly sequenced transaction hash or a batch
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize,
-)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub enum UpdateItem {
     Transaction((usize, TransactionDigest)),
-    Batch(AuthorityBatch)
+    Batch(AuthorityBatch),
 }
 
 pub struct BatcherSender {
@@ -122,14 +120,14 @@ impl BatcherManager {
             .load(std::sync::atomic::Ordering::Relaxed);
         if total_seq > last_batch.total_size {
             // Make a new batch, to put the old transactions not in a batch in.
-            let transactions: Vec<_> = self
+            let transactions: usize = self
                 .db
                 .executed_sequence
                 .iter()
                 .skip_to(&last_batch.total_size)?
-                .collect();
+                .count();
 
-            if transactions.len() != total_seq - last_batch.total_size {
+            if transactions != total_seq - last_batch.total_size {
                 // TODO: The database is corrupt, namely we have a higher maximum transaction sequence
                 //       than number of items, which means there is a hole in the sequence. This can happen
                 //       in case we crash after writting command seq x but before x-1 was written. What we
@@ -220,7 +218,7 @@ impl BatcherManager {
                 self.db.batches.insert(&new_batch.total_size, &new_batch)?;
 
                 // Send the update
-                let _ = self.tx_broadcast.send(UpdateItem::Batch(new_batch.clone()));
+                let _ = self.tx_broadcast.send(UpdateItem::Batch(new_batch));
 
                 // A new batch is actually made, so we reset the conditions.
                 _last_batch = new_batch;
