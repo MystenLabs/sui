@@ -14,7 +14,7 @@ fn get_registry() -> Result<Registry> {
     // tracer.trace_value(&mut samples, ...)?;
 
     // 2. Trace the main entry point(s) + every enum separately.
-    tracer.trace_type::<messages::CertifiedOrder>(&samples)?;
+    tracer.trace_type::<messages::CertifiedTransaction>(&samples)?;
     tracer.trace_type::<error::SuiError>(&samples)?;
     tracer.trace_type::<serialize::SerializedMessage>(&samples)?;
     tracer.registry()

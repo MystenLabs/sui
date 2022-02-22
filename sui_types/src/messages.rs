@@ -48,45 +48,45 @@ pub struct MoveModulePublish {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub enum OrderKind {
+pub enum TransactionKind {
     /// Initiate an object transfer between addresses
     Transfer(Transfer),
     /// Publish a new Move module
     Publish(MoveModulePublish),
     /// Call a function in a published Move module
     Call(MoveCall),
-    // .. more order types go here
+    // .. more transaction types go here
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct OrderData {
-    pub kind: OrderKind,
+pub struct TransactionData {
+    pub kind: TransactionKind,
     sender: SuiAddress,
     gas_payment: ObjectRef,
 }
 
-/// An order signed by a client. signature is applied on data.
-/// Any extension to Order should add fields to OrderData, not Order.
-// TODO: this should maybe be called ClientSignedOrder + SignedOrder -> AuthoritySignedOrder
+/// An transaction signed by a client. signature is applied on data.
+/// Any extension to Transaction should add fields to TransactionData, not Transaction.
+// TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
-pub struct Order {
-    pub data: OrderData,
+pub struct Transaction {
+    pub data: TransactionData,
     pub signature: Signature,
 }
 const_assert_eq!(
-    size_of::<OrderData>() + size_of::<Signature>(),
-    size_of::<Order>()
+    size_of::<TransactionData>() + size_of::<Signature>(),
+    size_of::<Transaction>()
 );
 
-/// An order signed by a single authority
+/// An transaction signed by a single authority
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
-pub struct SignedOrder {
-    pub order: Order,
+pub struct SignedTransaction {
+    pub transaction: Transaction,
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
 }
 
-/// An order signed by a quorum of authorities
+/// An transaction signed by a quorum of authorities
 ///
 /// Note: the signature set of this data structure is not necessarily unique in the system,
 /// i.e. there can be several valid certificates per transaction.
@@ -94,13 +94,13 @@ pub struct SignedOrder {
 /// As a consequence, we check this struct does not implement Hash or Eq, see the note below.
 ///
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CertifiedOrder {
-    pub order: Order,
+pub struct CertifiedTransaction {
+    pub transaction: Transaction,
     pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
 }
 
-// Note: if you meet an error due to this line it may be because you need an Eq implementation for `CertifiedOrder`,
-// or one of the structs that include it, i.e. `ConfirmationOrder`, `OrderInforResponse` or `ObjectInforResponse`.
+// Note: if you meet an error due to this line it may be because you need an Eq implementation for `CertifiedTransaction`,
+// or one of the structs that include it, i.e. `ConfirmationTransaction`, `TransactionInforResponse` or `ObjectInforResponse`.
 //
 // Please note that any such implementation must be agnostic to the exact set of signatures in the certificate, as
 // clients are allowed to equivocate on the exact nature of valid certificates they send to the system. This assertion
@@ -110,11 +110,11 @@ pub struct CertifiedOrder {
 //
 // see also https://github.com/MystenLabs/fastnft/issues/266
 //
-static_assertions::assert_not_impl_any!(CertifiedOrder: Hash, Eq, PartialEq);
+static_assertions::assert_not_impl_any!(CertifiedTransaction: Hash, Eq, PartialEq);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ConfirmationOrder {
-    pub certificate: CertifiedOrder,
+pub struct ConfirmationTransaction {
+    pub certificate: CertifiedTransaction,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -176,9 +176,9 @@ pub struct AccountInfoResponse {
 pub struct ObjectResponse {
     /// Value of the requested object in this authority
     pub object: Object,
-    /// Order the object is locked on in this authority.
+    /// Transaction the object is locked on in this authority.
     /// None if the object is not currently locked by this authority.
-    pub lock: Option<SignedOrder>,
+    pub lock: Option<SignedTransaction>,
     /// Schema of the Move value inside this object.
     /// None if the object is a Move package, or the request did not ask for the layout
     pub layout: Option<MoveStructLayout>,
@@ -192,7 +192,7 @@ pub struct ObjectInfoResponse {
     /// If no parent certificate was requested the latest certificate concerning
     /// this object is sent. If the parent was requested and not found a error
     /// (ParentNotfound or CertificateNotfound) will be returned.
-    pub parent_certificate: Option<CertifiedOrder>,
+    pub parent_certificate: Option<CertifiedTransaction>,
     /// The full reference created by the above certificate
     pub requested_object_reference: Option<ObjectRef>,
 
@@ -212,25 +212,25 @@ impl ObjectInfoResponse {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct OrderInfoRequest {
+pub struct TransactionInfoRequest {
     pub transaction_digest: TransactionDigest,
 }
 
-impl From<TransactionDigest> for OrderInfoRequest {
+impl From<TransactionDigest> for TransactionInfoRequest {
     fn from(transaction_digest: TransactionDigest) -> Self {
-        OrderInfoRequest { transaction_digest }
+        TransactionInfoRequest { transaction_digest }
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct OrderInfoResponse {
-    // The signed order response to handle_order
-    pub signed_order: Option<SignedOrder>,
+pub struct TransactionInfoResponse {
+    // The signed transaction response to handle_transaction
+    pub signed_transaction: Option<SignedTransaction>,
     // The certificate in case one is available
-    pub certified_order: Option<CertifiedOrder>,
+    pub certified_transaction: Option<CertifiedTransaction>,
     // The effects resulting from a successful execution should
     // contain ObjectRef created, mutated, deleted and events.
-    pub signed_effects: Option<SignedOrderEffects>,
+    pub signed_effects: Option<SignedTransactionEffects>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -268,9 +268,9 @@ impl ExecutionStatus {
     }
 }
 
-/// The response from processing an order or a certified order
+/// The response from processing a transaction or a certified transaction
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct OrderEffects {
+pub struct TransactionEffects {
     // The status of the execution
     pub status: ExecutionStatus,
     // The transaction digest
@@ -286,11 +286,11 @@ pub struct OrderEffects {
     pub gas_object: (ObjectRef, SuiAddress),
     /// The events emitted during execution. Note that only successful transactions emit events
     pub events: Vec<Event>,
-    /// The set of transaction digests this order depends on.
+    /// The set of transaction digests this transaction depends on.
     pub dependencies: Vec<TransactionDigest>,
 }
 
-impl OrderEffects {
+impl TransactionEffects {
     /// Return an iterator that iterates through both mutated and
     /// created objects.
     /// It doesn't include deleted objects.
@@ -304,9 +304,9 @@ impl OrderEffects {
     }
 }
 
-impl BcsSignable for OrderEffects {}
+impl BcsSignable for TransactionEffects {}
 
-impl Display for OrderEffects {
+impl Display for TransactionEffects {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         if !self.created.is_empty() {
@@ -331,36 +331,36 @@ impl Display for OrderEffects {
     }
 }
 
-/// An order signed by a single authority
+/// An transaction signed by a single authority
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct SignedOrderEffects {
-    pub effects: OrderEffects,
+pub struct SignedTransactionEffects {
+    pub effects: TransactionEffects,
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
 }
 
-impl Hash for Order {
+impl Hash for Transaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.data.hash(state);
     }
 }
 
-impl PartialEq for Order {
+impl PartialEq for Transaction {
     fn eq(&self, other: &Self) -> bool {
         self.data == other.data
     }
 }
 
-impl Hash for SignedOrder {
+impl Hash for SignedTransaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.order.hash(state);
+        self.transaction.hash(state);
         self.authority.hash(state);
     }
 }
 
-impl PartialEq for SignedOrder {
+impl PartialEq for SignedTransaction {
     fn eq(&self, other: &Self) -> bool {
-        self.order == other.order && self.authority == other.authority
+        self.transaction == other.transaction && self.authority == other.authority
     }
 }
 
@@ -393,20 +393,20 @@ impl InputObjectKind {
     }
 }
 
-impl Order {
+impl Transaction {
     pub fn new(
-        kind: OrderKind,
+        kind: TransactionKind,
         secret: &dyn signature::Signer<Signature>,
         sender: SuiAddress,
         gas_payment: ObjectRef,
     ) -> Self {
-        let data = OrderData {
+        let data = TransactionData {
             kind,
             sender,
             gas_payment,
         };
         let signature = Signature::new(&data, secret);
-        Order { data, signature }
+        Transaction { data, signature }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -422,7 +422,7 @@ impl Order {
         gas_budget: u64,
         secret: &dyn signature::Signer<Signature>,
     ) -> Self {
-        let kind = OrderKind::Call(MoveCall {
+        let kind = TransactionKind::Call(MoveCall {
             package,
             module,
             function,
@@ -441,7 +441,7 @@ impl Order {
         gas_budget: u64,
         secret: &dyn signature::Signer<Signature>,
     ) -> Self {
-        let kind = OrderKind::Publish(MoveModulePublish {
+        let kind = TransactionKind::Publish(MoveModulePublish {
             modules,
             gas_budget,
         });
@@ -455,7 +455,7 @@ impl Order {
         gas_payment: ObjectRef,
         secret: &dyn signature::Signer<Signature>,
     ) -> Self {
-        let kind = OrderKind::Transfer(Transfer {
+        let kind = TransactionKind::Transfer(Transfer {
             recipient,
             object_ref,
         });
@@ -474,16 +474,16 @@ impl Order {
         &self.data.gas_payment
     }
 
-    /// Return the metadata of each of the input objects for the order.
+    /// Return the metadata of each of the input objects for the transaction.
     /// For a Move object, we attach the object reference;
     /// for a Move package, we provide the object id only since they never change on chain.
     /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
     pub fn input_objects(&self) -> Vec<InputObjectKind> {
         let mut inputs = match &self.data.kind {
-            OrderKind::Transfer(t) => {
+            TransactionKind::Transfer(t) => {
                 vec![InputObjectKind::MoveObject(t.object_ref)]
             }
-            OrderKind::Call(c) => {
+            TransactionKind::Call(c) => {
                 let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
                 call_inputs.extend(
                     c.object_arguments
@@ -495,7 +495,7 @@ impl Order {
                 call_inputs.push(InputObjectKind::MovePackage(c.package.0));
                 call_inputs
             }
-            OrderKind::Publish(m) => {
+            TransactionKind::Publish(m) => {
                 // For module publishing, all the dependent packages are implicit input objects
                 // because they must all be on-chain in order for the package to publish.
                 // All authorities must have the same view of those dependencies in order
@@ -537,16 +537,16 @@ impl Order {
     }
 }
 
-impl SignedOrder {
+impl SignedTransaction {
     /// Use signing key to create a signed object.
     pub fn new(
-        order: Order,
+        transaction: Transaction,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
-        let signature = AuthoritySignature::new(&order.data, secret);
+        let signature = AuthoritySignature::new(&transaction.data, secret);
         Self {
-            order,
+            transaction,
             authority,
             signature,
         }
@@ -554,10 +554,11 @@ impl SignedOrder {
 
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn check(&self, committee: &Committee) -> Result<usize, SuiError> {
-        self.order.check_signature()?;
+        self.transaction.check_signature()?;
         let weight = committee.weight(&self.authority);
         fp_ensure!(weight > 0, SuiError::UnknownSigner);
-        self.signature.check(&self.order.data, self.authority)?;
+        self.signature
+            .check(&self.transaction.data, self.authority)?;
         Ok(weight)
     }
 }
@@ -566,24 +567,24 @@ pub struct SignatureAggregator<'a> {
     committee: &'a Committee,
     weight: usize,
     used_authorities: HashSet<AuthorityName>,
-    partial: CertifiedOrder,
+    partial: CertifiedTransaction,
 }
 
 impl<'a> SignatureAggregator<'a> {
     /// Start aggregating signatures for the given value into a certificate.
-    pub fn try_new(order: Order, committee: &'a Committee) -> Result<Self, SuiError> {
-        order.check_signature()?;
-        Ok(Self::new_unsafe(order, committee))
+    pub fn try_new(transaction: Transaction, committee: &'a Committee) -> Result<Self, SuiError> {
+        transaction.check_signature()?;
+        Ok(Self::new_unsafe(transaction, committee))
     }
 
-    /// Same as try_new but we don't check the order.
-    pub fn new_unsafe(order: Order, committee: &'a Committee) -> Self {
+    /// Same as try_new but we don't check the transaction.
+    pub fn new_unsafe(transaction: Transaction, committee: &'a Committee) -> Self {
         Self {
             committee,
             weight: 0,
             used_authorities: HashSet::new(),
-            partial: CertifiedOrder {
-                order,
+            partial: CertifiedTransaction {
+                transaction,
                 signatures: Vec::new(),
             },
         }
@@ -596,8 +597,8 @@ impl<'a> SignatureAggregator<'a> {
         &mut self,
         authority: AuthorityName,
         signature: AuthoritySignature,
-    ) -> Result<Option<CertifiedOrder>, SuiError> {
-        signature.check(&self.partial.order.data, authority)?;
+    ) -> Result<Option<CertifiedTransaction>, SuiError> {
+        signature.check(&self.partial.transaction.data, authority)?;
         // Check that each authority only appears once.
         fp_ensure!(
             !self.used_authorities.contains(&authority),
@@ -619,7 +620,7 @@ impl<'a> SignatureAggregator<'a> {
     }
 }
 
-impl CertifiedOrder {
+impl CertifiedTransaction {
     /// Verify the certificate.
     pub fn check(&self, committee: &Committee) -> Result<(), SuiError> {
         // Check the quorum.
@@ -643,22 +644,22 @@ impl CertifiedOrder {
         );
         // All that is left is checking signatures!
         // one user signature
-        self.order
+        self.transaction
             .signature
-            .check(&self.order.data, self.order.data.sender)?;
+            .check(&self.transaction.data, self.transaction.data.sender)?;
         // a batch of authority signatures
         AuthoritySignature::verify_batch(
-            &self.order.data,
+            &self.transaction.data,
             &self.signatures,
             &committee.expanded_keys,
         )
     }
 }
 
-impl ConfirmationOrder {
-    pub fn new(certificate: CertifiedOrder) -> Self {
+impl ConfirmationTransaction {
+    pub fn new(certificate: CertifiedTransaction) -> Self {
         Self { certificate }
     }
 }
 
-impl BcsSignable for OrderData {}
+impl BcsSignable for TransactionData {}

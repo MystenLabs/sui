@@ -64,8 +64,8 @@ struct ClientServerBenchmark {
     /// Maximum size of datagrams received and sent (bytes)
     #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
     buffer_size: usize,
-    /// Which execution path to track. OrdersAndCerts or OrdersOnly or CertsOnly
-    #[structopt(long, default_value = "OrdersAndCerts")]
+    /// Which execution path to track. TransactionsAndCerts or TransactionsOnly or CertsOnly
+    #[structopt(long, default_value = "TransactionsAndCerts")]
     benchmark_type: BenchmarkType,
     /// Number of connections to the server
     #[structopt(long, default_value = "0")]
@@ -79,8 +79,8 @@ struct ClientServerBenchmark {
 }
 #[derive(Debug, Clone, PartialEq, EnumString)]
 enum BenchmarkType {
-    OrdersAndCerts,
-    OrdersOnly,
+    TransactionsAndCerts,
+    TransactionsOnly,
     CertsOnly,
 }
 impl std::fmt::Display for BenchmarkType {
@@ -95,7 +95,7 @@ fn main() {
     let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
     set_global_default(subscriber).expect("Failed to set subscriber");
     let benchmark = ClientServerBenchmark::from_args();
-    let (state, orders) = benchmark.make_structures();
+    let (state, transactions) = benchmark.make_structures();
 
     // Make multi-threaded runtime for the authority
     let b = benchmark.clone();
@@ -126,7 +126,7 @@ fn main() {
         .thread_stack_size(15 * 1024 * 1024)
         .build()
         .unwrap();
-    runtime.block_on(benchmark.launch_client(connections, orders));
+    runtime.block_on(benchmark.launch_client(connections, transactions));
 }
 
 impl ClientServerBenchmark {
@@ -190,7 +190,7 @@ impl ClientServerBenchmark {
 
                 assert!(object.version() == SequenceNumber::from(0));
                 let object_ref = object.to_object_reference();
-                state.init_order_lock(object_ref).await;
+                state.init_transaction_lock(object_ref).await;
                 account_objects.push((address, object.clone(), keypair));
                 state.insert_object(object).await;
 
@@ -198,7 +198,7 @@ impl ClientServerBenchmark {
                 let gas_object = Object::with_id_owner_for_testing(gas_object_id, address);
                 assert!(gas_object.version() == SequenceNumber::from(0));
                 let gas_object_ref = gas_object.to_object_reference();
-                state.init_order_lock(gas_object_ref).await;
+                state.init_transaction_lock(gas_object_ref).await;
                 gas_objects.push(gas_object.clone());
                 state.insert_object(gas_object).await;
             }
@@ -206,14 +206,14 @@ impl ClientServerBenchmark {
         });
 
         info!("Preparing transactions.");
-        // Make one transaction per account (transfer order + confirmation).
-        let mut orders: Vec<Bytes> = Vec::new();
+        // Make one transaction per account (transfer transaction + confirmation).
+        let mut transactions: Vec<Bytes> = Vec::new();
         let mut next_recipient: SuiAddress = get_key_pair().0;
         for ((account_addr, object, secret), gas_obj) in account_objects.iter().zip(gas_objects) {
             let object_ref = object.to_object_reference();
             let gas_object_ref = gas_obj.to_object_reference();
 
-            let order = if self.use_move {
+            let transaction = if self.use_move {
                 // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
                 let framework_obj_ref = (
                     ObjectID::from(SUI_FRAMEWORK_ADDRESS),
@@ -221,7 +221,7 @@ impl ClientServerBenchmark {
                     ObjectDigest::new([0; 32]),
                 );
 
-                Order::new_move_call(
+                Transaction::new_move_call(
                     *account_addr,
                     framework_obj_ref,
                     ident_str!("GAS").to_owned(),
@@ -234,7 +234,7 @@ impl ClientServerBenchmark {
                     secret,
                 )
             } else {
-                Order::new_transfer(
+                Transaction::new_transfer(
                     next_recipient,
                     object_ref,
                     *account_addr,
@@ -246,18 +246,18 @@ impl ClientServerBenchmark {
             // Set the next recipient to current
             next_recipient = *account_addr;
 
-            // Serialize order
-            let serialized_order = serialize_order(&order);
-            assert!(!serialized_order.is_empty());
+            // Serialize transaction
+            let serialized_transaction = serialize_transaction(&transaction);
+            assert!(!serialized_transaction.is_empty());
 
             // Make certificate
-            let mut certificate = CertifiedOrder {
-                order,
+            let mut certificate = CertifiedTransaction {
+                transaction,
                 signatures: Vec::new(),
             };
             for i in 0..committee.quorum_threshold() {
                 let (pubx, secx) = keys.get(i).unwrap();
-                let sig = AuthoritySignature::new(&certificate.order.data, secx);
+                let sig = AuthoritySignature::new(&certificate.transaction.data, secx);
                 certificate.signatures.push((*pubx, sig));
             }
 
@@ -265,14 +265,14 @@ impl ClientServerBenchmark {
             assert!(!serialized_certificate.is_empty());
 
             if self.benchmark_type != BenchmarkType::CertsOnly {
-                orders.push(serialized_order.into());
+                transactions.push(serialized_transaction.into());
             }
-            if self.benchmark_type != BenchmarkType::OrdersOnly {
-                orders.push(serialized_certificate.into());
+            if self.benchmark_type != BenchmarkType::TransactionsOnly {
+                transactions.push(serialized_certificate.into());
             }
         }
 
-        (state, orders)
+        (state, transactions)
     }
 
     async fn spawn_server(&self, state: AuthorityState) -> transport::SpawnedServer {
@@ -280,16 +280,16 @@ impl ClientServerBenchmark {
         server.spawn().await.unwrap()
     }
 
-    async fn launch_client(&self, connections: usize, mut orders: Vec<Bytes>) {
+    async fn launch_client(&self, connections: usize, mut transactions: Vec<Bytes>) {
         // Give the server time to be ready
         time::sleep(Duration::from_millis(1000)).await;
 
-        let order_len_factor = if self.benchmark_type == BenchmarkType::OrdersAndCerts {
+        let transaction_len_factor = if self.benchmark_type == BenchmarkType::TransactionsAndCerts {
             2
         } else {
             1
         };
-        let items_number = orders.len() / order_len_factor;
+        let items_number = transactions.len() / transaction_len_factor;
         let mut elapsed_time: u128 = 0;
 
         let max_in_flight = self.max_in_flight / connections as usize;
@@ -308,7 +308,7 @@ impl ClientServerBenchmark {
 
             let time_start = Instant::now();
             let responses = mass_client
-                .batch_send(orders, connections, max_in_flight as u64)
+                .batch_send(transactions, connections, max_in_flight as u64)
                 .concat()
                 .await;
             elapsed_time = time_start.elapsed().as_micros();
@@ -318,7 +318,7 @@ impl ClientServerBenchmark {
             for resp in &responses {
                 let reply_message = deserialize_message(&resp[..]);
                 match reply_message {
-                    Ok(SerializedMessage::OrderResp(res)) => {
+                    Ok(SerializedMessage::TransactionResp(res)) => {
                         if let Some(e) = res.signed_effects {
                             if matches!(e.effects.status, ExecutionStatus::Failure { .. }) {
                                 info!("Execution Error {:?}", e.effects.status);
@@ -341,14 +341,14 @@ impl ClientServerBenchmark {
                 Duration::from_micros(self.recv_timeout_us),
             );
 
-            while !orders.is_empty() {
-                if orders.len() % 1000 == 0 {
-                    info!("Process message {}...", orders.len());
+            while !transactions.is_empty() {
+                if transactions.len() % 1000 == 0 {
+                    info!("Process message {}...", transactions.len());
                 }
-                let order = orders.pop().unwrap();
+                let transaction = transactions.pop().unwrap();
 
                 let time_start = Instant::now();
-                let resp = client.send_recv_bytes(order.to_vec()).await;
+                let resp = client.send_recv_bytes(transaction.to_vec()).await;
                 elapsed_time += time_start.elapsed().as_micros();
                 let status = deserialize_object_info(resp.unwrap());
 
@@ -357,7 +357,7 @@ impl ClientServerBenchmark {
                         debug!("Query response: {:?}", info);
                     }
                     Err(error) => {
-                        error!("Failed to execute order: {}", error);
+                        error!("Failed to execute transaction: {}", error);
                     }
                 }
             }
