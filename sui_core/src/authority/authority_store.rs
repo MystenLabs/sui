@@ -70,7 +70,7 @@ pub struct AuthorityStore {
     executed_sequence: DBMap<usize, TransactionDigest>,
 
     /// A sequence of blocks indexing into the sequence of executed transactions.
-    blocks: DBMap<usize, AuthorityBatch>,
+    batches: DBMap<usize, AuthorityBatch>,
 
     /// The size of the executed transactions sequence, used to timestamp the next
     /// item in the sequence.
@@ -94,7 +94,7 @@ impl AuthorityStore {
                 "sequenced",
                 "schedule",
                 "executed_sequence",
-                "blocks",
+                "batches",
             ],
         )
         .expect("Cannot open DB.");
@@ -132,7 +132,7 @@ impl AuthorityStore {
                 .map(|_| parking_lot::Mutex::new(()))
                 .collect(),
             executed_sequence,
-            blocks: DBMap::reopen(&db, Some("blocks")).expect("Cannot open CF."),
+            batches: DBMap::reopen(&db, Some("batches")).expect("Cannot open CF."),
             next_sequence_number,
         }
     }
