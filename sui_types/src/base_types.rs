@@ -54,6 +54,31 @@ impl SuiAddress {
         let random_bytes = rand::thread_rng().gen::<[u8; SUI_ADDRESS_LENGTH]>();
         Self(random_bytes)
     }
+
+    pub fn optional_address_as_hex<S>(
+        key: &Option<SuiAddress>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        serializer.serialize_str(
+            &*key
+                .map(|addr| encode_bytes_hex(&addr))
+                .unwrap_or_else(|| "".to_string()),
+        )
+    }
+
+    pub fn optional_address_from_hex<'de, D>(
+        deserializer: D,
+    ) -> Result<Option<SuiAddress>, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let value = decode_bytes_hex(&s).map_err(serde::de::Error::custom)?;
+        Ok(Some(value))
+    }
 }
 
 impl From<ObjectID> for SuiAddress {

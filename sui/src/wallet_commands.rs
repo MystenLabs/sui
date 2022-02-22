@@ -1,13 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::{AccountInfo, WalletConfig};
+use crate::config::{AccountInfo, Config, WalletConfig};
 use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientAddressManager, ClientState};
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex, ObjectID, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::ExecutionStatus;
 
-use crate::utils::Config;
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
