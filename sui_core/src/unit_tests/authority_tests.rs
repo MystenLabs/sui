@@ -360,7 +360,7 @@ async fn test_publish_dependent_module_ok() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let (genesis_module_objects, _) = genesis::clone_genesis_data();
+    let genesis_module_objects = genesis::clone_genesis_modules();
     let genesis_module = match &genesis_module_objects[0].data {
         Data::Package(m) => CompiledModule::deserialize(m.values().next().unwrap()).unwrap(),
         _ => unreachable!(),
@@ -447,7 +447,7 @@ async fn test_publish_non_existing_dependent_module() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let (genesis_module_objects, _) = genesis::clone_genesis_data();
+    let genesis_module_objects = genesis::clone_genesis_modules();
     let genesis_module = match &genesis_module_objects[0].data {
         Data::Package(m) => CompiledModule::deserialize(m.values().next().unwrap()).unwrap(),
         _ => unreachable!(),
@@ -585,7 +585,7 @@ async fn test_handle_move_order_insufficient_budget() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // find the function Object::create and call it to create a new object
-    let (genesis_package_objects, _) = genesis::clone_genesis_data();
+    let genesis_package_objects = genesis::clone_genesis_modules();
     let package_object_ref =
         get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
 
@@ -1257,13 +1257,15 @@ async fn test_authority_persist() {
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
-    let authority = AuthorityState::new_without_genesis_for_testing(
+    let authority = AuthorityState::new(
         committee.clone(),
         *authority_key.public_key_bytes(),
         // we assume that the node runner is in charge for its key -> it's ok to reopen a copy below.
         Box::pin(authority_key.copy()),
         store,
-    );
+        vec![],
+    )
+    .await;
 
     // Create an object
     let recipient = dbg_addr(2);
@@ -1283,12 +1285,14 @@ async fn test_authority_persist() {
     let mut opts = rocksdb::Options::default();
     opts.set_max_open_files(max_files_authority_tests());
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
-    let authority2 = AuthorityState::new_without_genesis_for_testing(
+    let authority2 = AuthorityState::new(
         committee,
         *authority_key.public_key_bytes(),
         Box::pin(authority_key),
         store,
-    );
+        vec![],
+    )
+    .await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
 
     // Check the object is present
@@ -1667,11 +1671,12 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
 #[cfg(test)]
 async fn init_state() -> AuthorityState {
     let (committee, _, authority_key, store) = init_state_parameters();
-    AuthorityState::new_with_genesis_modules(
+    AuthorityState::new(
         committee,
         *authority_key.public_key_bytes(),
         Box::pin(authority_key),
         store,
+        genesis::clone_genesis_modules(),
     )
     .await
 }
@@ -1809,7 +1814,7 @@ async fn call_framework_code(
     object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
 ) -> SuiResult<OrderEffects> {
-    let (genesis_package_objects, _) = genesis::clone_genesis_data();
+    let genesis_package_objects = genesis::clone_genesis_modules();
     let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
 
     call_move(

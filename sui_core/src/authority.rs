@@ -13,7 +13,7 @@ use std::{
     pin::Pin,
     sync::Arc,
 };
-use sui_adapter::{adapter, genesis};
+use sui_adapter::adapter;
 use sui_types::{
     base_types::*,
     committee::Committee,
@@ -468,32 +468,16 @@ impl AuthorityState {
         })
     }
 
-    pub fn new(
+    pub async fn new(
         committee: Committee,
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
+        genesis_modules: Vec<Object>,
     ) -> Self {
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-        AuthorityState {
-            committee,
-            name,
-            secret,
-            _native_functions: native_functions.clone(),
-            move_vm: adapter::new_move_vm(native_functions)
-                .expect("We defined natives to not fail here"),
-            _database: store,
-        }
-    }
-
-    pub async fn new_with_genesis_modules(
-        committee: Committee,
-        name: AuthorityName,
-        secret: StableSyncAuthoritySigner,
-        store: Arc<AuthorityStore>,
-    ) -> Self {
-        let (genesis_modules, native_functions) = genesis::clone_genesis_data();
+        //        let (genesis_modules, native_functions) = genesis::clone_genesis_data();
         let state = AuthorityState {
             committee,
             name,
@@ -514,24 +498,6 @@ impl AuthorityState {
             state.insert_object(genesis_module).await;
         }
         state
-    }
-
-    #[cfg(test)]
-    pub fn new_without_genesis_for_testing(
-        committee: Committee,
-        name: AuthorityName,
-        secret: StableSyncAuthoritySigner,
-        store: Arc<AuthorityStore>,
-    ) -> Self {
-        let native_functions = NativeFunctionTable::new();
-        AuthorityState {
-            committee,
-            name,
-            secret,
-            _native_functions: native_functions.clone(),
-            move_vm: adapter::new_move_vm(native_functions).expect("Only fails due to natives."),
-            _database: store,
-        }
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
