@@ -82,7 +82,7 @@ async fn test_open_manager() {
 }
 
 #[tokio::test]
-async fn test_batch_manager_happypath() {
+async fn test_batch_manager_happy_path() {
     // let (_, authority_key) = get_key_pair();
 
     // Create a random directory to store the DB
