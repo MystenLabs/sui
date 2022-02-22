@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use std::fs::read_dir;
+use std::ops::Add;
 use std::time::Duration;
 use sui::config::{
     AccountConfig, AccountInfo, GenesisConfig, NetworkConfig, ObjectConfig, WalletConfig,
@@ -12,6 +13,19 @@ use sui_types::base_types::{encode_bytes_hex, ObjectID};
 use sui_types::crypto::get_key_pair;
 use tokio::task;
 use tracing_test::traced_test;
+
+macro_rules! retry_assert {
+    ($test:expr, $timeout:expr) => {{
+        let mut duration = Duration::from_secs(0);
+        let max_duration: Duration = $timeout;
+        let sleep_duration = Duration::from_millis(100);
+        while duration.lt(&max_duration) && !$test {
+            tokio::time::sleep(sleep_duration).await;
+            duration = duration.add(sleep_duration);
+        }
+        assert!(duration.lt(&max_duration));
+    }};
+}
 
 #[traced_test]
 #[tokio::test]
@@ -103,12 +117,10 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
 
     // Wait for authorities to come alive.
-    let mut count = 0;
-    while count < 50 && !logs_contain("Listening to TCP traffic on 127.0.0.1") {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        count += 1;
-    }
-    assert!(count < 50);
+    retry_assert!(
+        logs_contain("Listening to TCP traffic on 127.0.0.1"),
+        Duration::from_millis(5000)
+    );
 
     // Create Wallet context.
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
@@ -176,12 +188,10 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
 
     // Wait for authorities to come alive.
-    let mut count = 0;
-    while count < 50 && !logs_contain("Listening to TCP traffic on 127.0.0.1") {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        count += 1;
-    }
-    assert!(count < 50);
+    retry_assert!(
+        logs_contain("Listening to TCP traffic on 127.0.0.1"),
+        Duration::from_millis(5000)
+    );
 
     // Wallet config
     let wallet_conf = WalletConfig::read(&working_dir.path().join("wallet.conf"))?;
@@ -199,13 +209,11 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         .execute(&mut context)
         .await?;
 
-    count = 0;
     // confirm the object with custom object id.
-    while count < 50 && !logs_contain(format!("{}", object_id).as_str()) {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        count += 1;
-    }
-    assert!(count < 50);
+    retry_assert!(
+        logs_contain(format!("{}", object_id).as_str()),
+        Duration::from_millis(5000)
+    );
 
     network.abort();
     Ok(())
