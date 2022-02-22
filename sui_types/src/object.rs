@@ -266,7 +266,7 @@ pub struct Object {
     pub data: Data,
     /// The owner address that unlocks this object (eg. hashes of public key, or object id)
     pub owner: SuiAddress,
-    /// The digest of the order that created or last mutated this object
+    /// The digest of the transaction that created or last mutated this object
     pub previous_transaction: TransactionDigest,
 }
 

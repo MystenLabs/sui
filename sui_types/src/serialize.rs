@@ -14,16 +14,16 @@ mod serialize_tests;
 
 #[derive(Serialize, Deserialize)]
 pub enum SerializedMessage {
-    Order(Box<Order>),
-    Vote(Box<SignedOrder>),
-    Cert(Box<CertifiedOrder>),
+    Transaction(Box<Transaction>),
+    Vote(Box<SignedTransaction>),
+    Cert(Box<CertifiedTransaction>),
     Error(Box<SuiError>),
     AccountInfoReq(Box<AccountInfoRequest>),
     AccountInfoResp(Box<AccountInfoResponse>),
     ObjectInfoReq(Box<ObjectInfoRequest>),
     ObjectInfoResp(Box<ObjectInfoResponse>),
-    OrderResp(Box<OrderInfoResponse>),
-    OrderInfoReq(Box<OrderInfoRequest>),
+    TransactionResp(Box<TransactionInfoResponse>),
+    TransactionInfoReq(Box<TransactionInfoRequest>),
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.
@@ -32,16 +32,16 @@ pub enum SerializedMessage {
 #[allow(dead_code)]
 #[derive(Serialize)]
 enum ShallowSerializedMessage<'a> {
-    Order(&'a Order),
-    Vote(&'a SignedOrder),
-    Cert(&'a CertifiedOrder),
+    Transaction(&'a Transaction),
+    Vote(&'a SignedTransaction),
+    Cert(&'a CertifiedTransaction),
     Error(&'a SuiError),
     AccountInfoReq(&'a AccountInfoRequest),
     AccountInfoResp(&'a AccountInfoResponse),
     ObjectInfoReq(&'a ObjectInfoRequest),
     ObjectInfoResp(&'a ObjectInfoResponse),
-    OrderResp(&'a OrderInfoResponse),
-    OrderInfoReq(&'a OrderInfoRequest),
+    TransactionResp(&'a TransactionInfoResponse),
+    TransactionInfoReq(&'a TransactionInfoRequest),
 }
 
 fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), anyhow::Error>
@@ -66,26 +66,29 @@ pub fn serialize_message(msg: &SerializedMessage) -> Vec<u8> {
     serialize(msg)
 }
 
-pub fn serialize_order(value: &Order) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::Order(value))
+pub fn serialize_transaction(value: &Transaction) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::Transaction(value))
 }
 
-pub fn serialize_transfer_order_into<W>(writer: W, value: &Order) -> Result<(), anyhow::Error>
+pub fn serialize_transfer_transaction_into<W>(
+    writer: W,
+    value: &Transaction,
+) -> Result<(), anyhow::Error>
 where
     W: std::io::Write,
 {
-    serialize_into(writer, &ShallowSerializedMessage::Order(value))
+    serialize_into(writer, &ShallowSerializedMessage::Transaction(value))
 }
 
 pub fn serialize_error(value: &SuiError) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Error(value))
 }
 
-pub fn serialize_cert(value: &CertifiedOrder) -> Vec<u8> {
+pub fn serialize_cert(value: &CertifiedTransaction) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Cert(value))
 }
 
-pub fn serialize_cert_into<W>(writer: W, value: &CertifiedOrder) -> Result<(), anyhow::Error>
+pub fn serialize_cert_into<W>(writer: W, value: &CertifiedTransaction) -> Result<(), anyhow::Error>
 where
     W: std::io::Write,
 {
@@ -108,33 +111,33 @@ pub fn serialize_object_info_response(value: &ObjectInfoResponse) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::ObjectInfoResp(value))
 }
 
-pub fn serialize_order_info_request(value: &OrderInfoRequest) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::OrderInfoReq(value))
+pub fn serialize_transaction_info_request(value: &TransactionInfoRequest) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::TransactionInfoReq(value))
 }
 
-pub fn serialize_vote(value: &SignedOrder) -> Vec<u8> {
+pub fn serialize_vote(value: &SignedTransaction) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Vote(value))
 }
 
-pub fn serialize_vote_into<W>(writer: W, value: &SignedOrder) -> Result<(), anyhow::Error>
+pub fn serialize_vote_into<W>(writer: W, value: &SignedTransaction) -> Result<(), anyhow::Error>
 where
     W: std::io::Write,
 {
     serialize_into(writer, &ShallowSerializedMessage::Vote(value))
 }
 
-pub fn serialize_order_info(value: &OrderInfoResponse) -> Vec<u8> {
-    serialize(&ShallowSerializedMessage::OrderResp(value))
+pub fn serialize_transaction_info(value: &TransactionInfoResponse) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::TransactionResp(value))
 }
 
-pub fn serialize_order_info_into<W>(
+pub fn serialize_transaction_info_into<W>(
     writer: W,
-    value: &OrderInfoResponse,
+    value: &TransactionInfoResponse,
 ) -> Result<(), anyhow::Error>
 where
     W: std::io::Write,
 {
-    serialize_into(writer, &ShallowSerializedMessage::OrderResp(value))
+    serialize_into(writer, &ShallowSerializedMessage::TransactionResp(value))
 }
 
 pub fn deserialize_message<R>(reader: R) -> Result<SerializedMessage, anyhow::Error>
@@ -162,9 +165,11 @@ pub fn deserialize_account_info(
     }
 }
 
-pub fn deserialize_order_info(message: SerializedMessage) -> Result<OrderInfoResponse, SuiError> {
+pub fn deserialize_transaction_info(
+    message: SerializedMessage,
+) -> Result<TransactionInfoResponse, SuiError> {
     match message {
-        SerializedMessage::OrderResp(resp) => Ok(*resp),
+        SerializedMessage::TransactionResp(resp) => Ok(*resp),
         SerializedMessage::Error(error) => Err(*error),
         _ => Err(SuiError::UnexpectedMessage),
     }

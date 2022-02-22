@@ -72,7 +72,7 @@ impl AuthorityState {
     /// or an error if not.
     fn check_one_lock(
         &self,
-        order: &Order,
+        transaction: &Transaction,
         object_kind: InputObjectKind,
         object: &Object,
         mutable_object_addresses: &HashSet<SuiAddress>,
@@ -113,7 +113,7 @@ impl AuthorityState {
                 if object.is_read_only() {
                     // Gas object must not be immutable.
                     fp_ensure!(
-                        object_id != order.gas_payment_object_ref().0,
+                        object_id != transaction.gas_payment_object_ref().0,
                         SuiError::InsufficientGas {
                             error: "Gas object should not be immutable".to_string()
                         }
@@ -126,23 +126,26 @@ impl AuthorityState {
                 // Check the object owner is either the transaction sender, or
                 // another mutable object in the input.
                 fp_ensure!(
-                    order.sender_address() == object.owner
+                    transaction.sender_address() == object.owner
                         || mutable_object_addresses.contains(&object.owner),
                     SuiError::IncorrectSigner
                 );
 
-                if object_id == order.gas_payment_object_ref().0 {
-                    gas::check_gas_requirement(order, object)?;
+                if object_id == transaction.gas_payment_object_ref().0 {
+                    gas::check_gas_requirement(transaction, object)?;
                 }
             }
         };
         Ok(())
     }
 
-    /// Check all the objects used in the order against the database, and ensure
+    /// Check all the objects used in the transaction against the database, and ensure
     /// that they are all the correct version and number.
-    async fn check_locks(&self, order: &Order) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
-        let input_objects = order.input_objects();
+    async fn check_locks(
+        &self,
+        transaction: &Transaction,
+    ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
+        let input_objects = transaction.input_objects();
         let mut all_objects = Vec::with_capacity(input_objects.len());
 
         // There is at least one input
@@ -176,7 +179,8 @@ impl AuthorityState {
                 }
             };
 
-            match self.check_one_lock(order, object_kind, &object, &mutable_object_addresses) {
+            match self.check_one_lock(transaction, object_kind, &object, &mutable_object_addresses)
+            {
                 Ok(()) => all_objects.push((object_kind, object)),
                 Err(e) => {
                     errors.push(e);
@@ -195,14 +199,17 @@ impl AuthorityState {
         Ok(all_objects)
     }
 
-    /// Initiate a new order.
-    pub async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, SuiError> {
+    /// Initiate a new transaction.
+    pub async fn handle_transaction(
+        &self,
+        transaction: Transaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
         // Check the sender's signature.
-        order.check_signature()?;
-        let transaction_digest = order.digest();
+        transaction.check_signature()?;
+        let transaction_digest = transaction.digest();
 
         let mutable_objects: Vec<_> = self
-            .check_locks(&order)
+            .check_locks(&transaction)
             .await?
             .into_iter()
             .filter_map(|(object_kind, object)| match object_kind {
@@ -217,38 +224,39 @@ impl AuthorityState {
             })
             .collect();
 
-        let signed_order = SignedOrder::new(order, self.name, &*self.secret);
+        let signed_transaction = SignedTransaction::new(transaction, self.name, &*self.secret);
 
-        // Check and write locks, to signed order, into the database
-        // The call to self.set_order_lock checks the lock is not conflicting,
-        // and returns ConflictingOrder error in case there is a lock on a different
-        // existing order.
-        self.set_order_lock(&mutable_objects, signed_order).await?;
+        // Check and write locks, to signed transaction, into the database
+        // The call to self.set_transaction_lock checks the lock is not conflicting,
+        // and returns ConflictingTransaction error in case there is a lock on a different
+        // existing transaction.
+        self.set_transaction_lock(&mutable_objects, signed_transaction)
+            .await?;
 
-        // Return the signed Order or maybe a cert.
-        self.make_order_info(&transaction_digest).await
+        // Return the signed Transaction or maybe a cert.
+        self.make_transaction_info(&transaction_digest).await
     }
 
     /// Confirm a transfer.
-    pub async fn handle_confirmation_order(
+    pub async fn handle_confirmation_transaction(
         &self,
-        confirmation_order: ConfirmationOrder,
-    ) -> Result<OrderInfoResponse, SuiError> {
-        let certificate = confirmation_order.certificate;
-        let order = certificate.order.clone();
-        let transaction_digest = order.digest();
+        confirmation_transaction: ConfirmationTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let certificate = confirmation_transaction.certificate;
+        let transaction = certificate.transaction.clone();
+        let transaction_digest = transaction.digest();
 
         // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
         // Ensure an idempotent answer
-        let order_info = self.make_order_info(&transaction_digest).await?;
-        if order_info.certified_order.is_some() {
-            return Ok(order_info);
+        let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+        if transaction_info.certified_transaction.is_some() {
+            return Ok(transaction_info);
         }
 
         let inputs: Vec<_> = self
-            .check_locks(&order)
+            .check_locks(&transaction)
             .await?
             .into_iter()
             .map(|(_, object)| object)
@@ -260,10 +268,11 @@ impl AuthorityState {
             .collect();
 
         // Insert into the certificates map
-        let mut tx_ctx = TxContext::new(&order.sender_address(), transaction_digest);
+        let mut tx_ctx = TxContext::new(&transaction.sender_address(), transaction_digest);
 
-        let gas_object_id = order.gas_payment_object_ref().0;
-        let (mut temporary_store, status) = self.execute_order(order, inputs, &mut tx_ctx)?;
+        let gas_object_id = transaction.gas_payment_object_ref().0;
+        let (mut temporary_store, status) =
+            self.execute_transaction(transaction, inputs, &mut tx_ctx)?;
 
         // Remove from dependencies the generic hash
         transaction_dependencies.remove(&TransactionDigest::genesis());
@@ -280,12 +289,12 @@ impl AuthorityState {
         );
         // Update the database in an atomic manner
         self.update_state(temporary_store, certificate, to_signed_effects)
-            .await // Returns the OrderInfoResponse
+            .await // Returns the TransactionInfoResponse
     }
 
-    fn execute_order(
+    fn execute_transaction(
         &self,
-        order: Order,
+        transaction: Transaction,
         mut inputs: Vec<Object>,
         tx_ctx: &mut TxContext,
     ) -> SuiResult<(AuthorityTemporaryStore, ExecutionStatus)> {
@@ -293,15 +302,15 @@ impl AuthorityState {
         // unwraps here are safe because we built `inputs`
         let mut gas_object = inputs.pop().unwrap();
 
-        let sender = order.sender_address();
-        let status = match order.data.kind {
-            OrderKind::Transfer(t) => AuthorityState::transfer(
+        let sender = transaction.sender_address();
+        let status = match transaction.data.kind {
+            TransactionKind::Transfer(t) => AuthorityState::transfer(
                 &mut temporary_store,
                 inputs,
                 t.recipient,
                 gas_object.clone(),
             ),
-            OrderKind::Call(c) => {
+            TransactionKind::Call(c) => {
                 // unwraps here are safe because we built `inputs`
                 let package = inputs.pop().unwrap();
                 adapter::execute(
@@ -319,7 +328,7 @@ impl AuthorityState {
                     tx_ctx,
                 )
             }
-            OrderKind::Publish(m) => adapter::publish(
+            TransactionKind::Publish(m) => adapter::publish(
                 &mut temporary_store,
                 self._native_functions.clone(),
                 m.modules,
@@ -377,11 +386,12 @@ impl AuthorityState {
         Ok(ExecutionStatus::Success { gas_used })
     }
 
-    pub async fn handle_order_info_request(
+    pub async fn handle_transaction_info_request(
         &self,
-        request: OrderInfoRequest,
-    ) -> Result<OrderInfoResponse, SuiError> {
-        self.make_order_info(&request.transaction_digest).await
+        request: TransactionInfoRequest,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        self.make_transaction_info(&request.transaction_digest)
+            .await
     }
 
     pub async fn handle_account_info_request(
@@ -438,7 +448,8 @@ impl AuthorityState {
                             // Read only objects have no locks.
                             None
                         } else {
-                            self.get_order_lock(&object.to_object_reference()).await?
+                            self.get_transaction_lock(&object.to_object_reference())
+                                .await?
                         };
                         let layout = match request_layout {
                             Some(format) => {
@@ -493,7 +504,7 @@ impl AuthorityState {
             genesis_module.data.try_as_package().unwrap();
 
             state
-                .init_order_lock(genesis_module.to_object_reference())
+                .init_transaction_lock(genesis_module.to_object_reference())
                 .await;
             state.insert_object(genesis_module).await;
         }
@@ -510,12 +521,12 @@ impl AuthorityState {
             .expect("TODO: propagate the error")
     }
 
-    /// Make an information response for an order
-    async fn make_order_info(
+    /// Make an information response for a transaction
+    async fn make_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> Result<OrderInfoResponse, SuiError> {
-        self._database.get_order_info(transaction_digest)
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        self._database.get_transaction_info(transaction_digest)
     }
 
     fn make_account_info(&self, account: SuiAddress) -> Result<AccountInfoResponse, SuiError> {
@@ -527,41 +538,41 @@ impl AuthorityState {
             })
     }
 
-    // Helper function to manage order_locks
+    // Helper function to manage transaction_locks
 
-    /// Initialize an order lock for an object/sequence to None
-    pub async fn init_order_lock(&self, object_ref: ObjectRef) {
+    /// Initialize a transaction lock for an object/sequence to None
+    pub async fn init_transaction_lock(&self, object_ref: ObjectRef) {
         self._database
-            .init_order_lock(object_ref)
+            .init_transaction_lock(object_ref)
             .expect("TODO: propagate the error")
     }
 
-    /// Set the order lock to a specific transaction
-    pub async fn set_order_lock(
+    /// Set the transaction lock to a specific transaction
+    pub async fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
-        signed_order: SignedOrder,
+        signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
         self._database
-            .set_order_lock(mutable_input_objects, signed_order)
+            .set_transaction_lock(mutable_input_objects, signed_transaction)
     }
 
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
-        certificate: CertifiedOrder,
-        signed_effects: SignedOrderEffects,
-    ) -> Result<OrderInfoResponse, SuiError> {
+        certificate: CertifiedTransaction,
+        signed_effects: SignedTransactionEffects,
+    ) -> Result<TransactionInfoResponse, SuiError> {
         self._database
             .update_state(temporary_store, certificate, signed_effects)
     }
 
     /// Get a read reference to an object/seq lock
-    pub async fn get_order_lock(
+    pub async fn get_transaction_lock(
         &self,
         object_ref: &ObjectRef,
-    ) -> Result<Option<SignedOrder>, SuiError> {
-        self._database.get_order_lock(object_ref)
+    ) -> Result<Option<SignedTransaction>, SuiError> {
+        self._database.get_transaction_lock(object_ref)
     }
 
     // Helper functions to manage certificates
@@ -570,7 +581,7 @@ impl AuthorityState {
     pub async fn read_certificate(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<CertifiedOrder>, SuiError> {
+    ) -> Result<Option<CertifiedTransaction>, SuiError> {
         self._database.read_certificate(digest)
     }
 
