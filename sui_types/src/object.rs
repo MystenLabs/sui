@@ -20,7 +20,7 @@ use move_binary_format::CompiledModule;
 use move_core_types::language_storage::StructTag;
 
 use crate::crypto::{sha3_hash, BcsSignable};
-use crate::error::SuiError;
+use crate::error::{SuiError, SuiResult};
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -443,6 +443,24 @@ impl Object {
         let previous_transaction = serde_json::to_value(&self.previous_transaction)
             .map_err(|_e| SuiError::ObjectSerializationError)?;
         Ok(json!({ "contents": contents, "owner": owner, "tx_digest": previous_transaction }))
+    }
+
+    /// Treat the object type as a Move struct with one type parameter,
+    /// like this: `S<T>`.
+    /// Returns the inner parameter type `T`.
+    pub fn get_move_template_type(&self) -> SuiResult<TypeTag> {
+        let move_struct = self.data.type_().ok_or(SuiError::TypeError {
+            error: "Object must be a Move object".to_owned(),
+        })?;
+        fp_ensure!(
+            move_struct.type_params.len() == 1,
+            SuiError::TypeError {
+                error: "Move object struct must have one type parameter".to_owned()
+            }
+        );
+        // Index access safe due to checks above.
+        let type_tag = move_struct.type_params[0].clone();
+        Ok(type_tag)
     }
 }
 
