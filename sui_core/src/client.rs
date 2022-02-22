@@ -105,7 +105,7 @@ where
         self.authorities.get_object_info_execute(object_id).await
     }
 
-    // Get the current owner of the given object
+    /// Get the current owner of the given object
     pub async fn get_object_owner(&self, object_id: ObjectID) -> Result<SuiAddress, anyhow::Error> {
         let obj_read = self.authorities.get_object_info_execute(object_id).await?;
         Ok(obj_read.object()?.owner)
