@@ -40,15 +40,28 @@ pub mod client_store;
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
 pub struct ClientAddressManager<A> {
+    committee: Committee,
+    authority_clients: BTreeMap<AuthorityName, A>,
+    authorities: AuthorityAggregator<A>,
     store: client_store::ClientAddressManagerStore,
     address_states: BTreeMap<SuiAddress, ClientState<A>>,
 }
-impl<A> ClientAddressManager<A> {
+impl<A> ClientAddressManager<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
     /// Create a new manager which stores its managed addresses at `path`
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(
+        path: PathBuf,
+        committee: Committee,
+        authority_clients: BTreeMap<AuthorityName, A>,
+    ) -> Self {
         Self {
             store: client_store::ClientAddressManagerStore::open(path),
+            authority_clients: authority_clients.clone(),
+            authorities: AuthorityAggregator::new(committee.clone(), authority_clients),
             address_states: BTreeMap::new(),
+            committee,
         }
     }
 
@@ -57,8 +70,6 @@ impl<A> ClientAddressManager<A> {
         &mut self,
         address: SuiAddress,
         secret: StableSyncSigner,
-        committee: Committee,
-        authority_clients: BTreeMap<AuthorityName, A>,
     ) -> Result<&mut ClientState<A>, SuiError> {
         #[allow(clippy::map_entry)]
         // the fallible store creation complicates the use of the entry API
@@ -73,8 +84,8 @@ impl<A> ClientAddressManager<A> {
                 ClientState::new_for_manager(
                     address,
                     secret,
-                    committee,
-                    authority_clients,
+                    self.committee.clone(),
+                    self.authority_clients.clone(),
                     single_store,
                 ),
             );
@@ -86,6 +97,17 @@ impl<A> ClientAddressManager<A> {
     /// Get all the states
     pub fn get_managed_address_states(&self) -> &BTreeMap<SuiAddress, ClientState<A>> {
         &self.address_states
+    }
+
+    /// Get the object info
+    pub async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
+        self.authorities.get_object_info_execute(object_id).await
+    }
+
+    /// Get the current owner of the given object
+    pub async fn get_object_owner(&self, object_id: ObjectID) -> Result<SuiAddress, anyhow::Error> {
+        let obj_read = self.authorities.get_object_info_execute(object_id).await?;
+        Ok(obj_read.object()?.owner)
     }
 }
 
@@ -170,7 +192,8 @@ pub trait Client {
     ) -> Result<MergeCoinResponse, anyhow::Error>;
 
     /// Get the object information
-    async fn get_object_info(&mut self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
+    /// TODO: move this out to AddressManager
+    async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
 
     /// Get all object we own.
     fn get_owned_objects(&self) -> Vec<ObjectID>;
@@ -767,7 +790,7 @@ where
         })
     }
 
-    async fn get_object_info(&mut self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
+    async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
         self.authorities.get_object_info_execute(object_id).await
     }
 

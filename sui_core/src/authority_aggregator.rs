@@ -990,7 +990,7 @@ where
     }
 
     pub async fn get_object_info_execute(
-        &mut self,
+        &self,
         object_id: ObjectID,
     ) -> Result<ObjectRead, anyhow::Error> {
         let (object_map, cert_map) = self
