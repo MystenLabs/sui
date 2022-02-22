@@ -209,13 +209,11 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         .execute(&mut context)
         .await?;
 
-    count = 0;
     // confirm the object with custom object id.
-    while count < 50 && !logs_contain(format!("{}", object_id).as_str()) {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        count += 1;
-    }
-    assert!(count < 50);
+    retry_assert!(
+        logs_contain(format!("{}", object_id).as_str()),
+        Duration::from_millis(5000)
+    );
 
     network.abort();
     Ok(())
