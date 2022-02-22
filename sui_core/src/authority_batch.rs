@@ -114,26 +114,48 @@ impl BatcherManager {
         };
 
         // See if there are any transactions in the database not in a batch
-        let total_seq = self
+        let mut total_seq = self
             .db
             .next_sequence_number
             .load(std::sync::atomic::Ordering::Relaxed);
         if total_seq > last_batch.total_size {
             // Make a new batch, to put the old transactions not in a batch in.
-            let transactions: usize = self
+            let transactions: Vec<_> = self
                 .db
                 .executed_sequence
                 .iter()
                 .skip_to(&last_batch.total_size)?
-                .count();
+                .collect();
 
-            if transactions != total_seq - last_batch.total_size {
-                // TODO: The database is corrupt, namely we have a higher maximum transaction sequence
+            if transactions.len() != total_seq - last_batch.total_size {
+                // NOTE: The database is corrupt, namely we have a higher maximum transaction sequence
                 //       than number of items, which means there is a hole in the sequence. This can happen
                 //       in case we crash after writting command seq x but before x-1 was written. What we
                 //       need to do is run the database recovery logic.
 
-                return Err(SuiError::StorageCorrupt);
+                let db_batch = self.db.executed_sequence.batch();
+
+                // Delete all old transactions
+                let db_batch = db_batch.delete_batch(
+                    &self.db.executed_sequence,
+                    transactions.iter().map(|(k, _)| *k),
+                )?;
+
+                // Reorder the transactions
+                total_seq = last_batch.total_size + transactions.len();
+                self.db
+                    .next_sequence_number
+                    .store(total_seq, std::sync::atomic::Ordering::Relaxed);
+
+                let range = last_batch.total_size..total_seq;
+                let db_batch = db_batch.insert_batch(
+                    &self.db.executed_sequence,
+                    range
+                        .into_iter()
+                        .zip(transactions.into_iter().map(|(_, v)| v)),
+                )?;
+
+                db_batch.write()?;
             }
 
             last_batch = AuthorityBatch {

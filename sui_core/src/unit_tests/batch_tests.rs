@@ -55,7 +55,7 @@ async fn test_open_manager() {
 
         assert_eq!(1, last_block.total_size);
 
-        // TEST 3: If the database contains out of order transactions return an error
+        // TEST 3: If the database contains out of order transactions we fix it
         store
             .executed_sequence
             .insert(&2, &TransactionDigest::new([0; 32].try_into().unwrap()))
@@ -71,7 +71,13 @@ async fn test_open_manager() {
         let (_send, manager, _pair) = BatcherManager::new(store.clone(), 100);
         let last_block = manager.init_from_database().await;
 
-        assert_eq!(last_block, Err(SuiError::StorageCorrupt));
+        assert_eq!(
+            last_block.unwrap(),
+            AuthorityBatch {
+                total_size: 2,
+                previous_total_size: 1
+            }
+        );
     }
 }
 
