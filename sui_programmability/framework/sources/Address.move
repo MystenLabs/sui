@@ -72,4 +72,18 @@ module FastX::Address {
     public fun dummy_signer(): Signer {
         new_signer(x"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
     }
+
+    #[test_only]
+    /// Create a dummy `Signer` for testing
+    /// All bytes will be 0 except the last byte, which will be `hint`.
+    public fun dummy_signer_with_hint(hint: u8): Signer {
+        let bytes = Vector::empty<u8>();
+        let i = 0;
+        while (i < ADDRESS_LENGTH - 1) {
+            Vector::push_back(&mut bytes, 0u8);
+            i = i + 1;
+        };
+        Vector::push_back(&mut bytes, hint);
+        new_signer(bytes)
+    }
 }

@@ -9,9 +9,12 @@ use dropshot::{
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext, TypedBody,
 };
 
+use futures::{
+    stream::{futures_unordered::FuturesUnordered, StreamExt as _},
+};
 use serde_json::json;
 use sui::config::{AccountInfo, AuthorityInfo, AuthorityPrivateInfo, NetworkConfig, WalletConfig};
-use sui::utils::{Config, PortAllocator};
+use sui::utils::Config;
 use sui::wallet_commands::WalletContext;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_client::AuthorityClient;
@@ -20,18 +23,22 @@ use sui_core::client::{Client, ClientState};
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
 use sui_types::object::Object as SuiObject;
+use sui_network::port_allocator::PortAllocator;
 
 use futures::future::join_all;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use tokio::task::JoinHandle;
+use tokio::{task, join};
 use std::collections::BTreeMap;
 use std::fs;
 use std::net::{Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use tokio::runtime::Runtime;
-use tracing::error;
+use tracing::{error, info};
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -52,10 +59,13 @@ async fn main() -> Result<(), String> {
         .to_logger("rest_server")
         .map_err(|error| format!("failed to create logger: {}", error))?;
 
+    tracing_subscriber::fmt().init();
+
     let mut api = ApiDescription::new();
     api.register(start).unwrap();
     api.register(genesis).unwrap();
     api.register(stop).unwrap();
+    api.register(get_addresses).unwrap();
 
     let api_context = ServerContext::new();
 
@@ -76,6 +86,7 @@ struct ServerContext {
     client_db_path: String,
     server_lock: Arc<AtomicBool>,
     wallet_context: Arc<Mutex<Option<WalletContext>>>,
+    // join_handle: Arc<Mutex<JoinHandle<()>>>,
 }
 
 impl ServerContext {
@@ -88,8 +99,78 @@ impl ServerContext {
             client_db_path: String::from("./client_db"),
             server_lock: Arc::new(AtomicBool::new(false)),
             wallet_context: Arc::new(Mutex::new(None)),
+            // join_handle: Default::default(),
         }
     }
+}
+
+/**
+ * `GetAddressResponse` represents the list of managed accounts for this client
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct GetAddressResponse {
+    addresses: Vec<String>,
+}
+
+unsafe impl Send for GetAddressResponse {}
+unsafe impl Sync for GetAddressResponse {}
+
+/**
+ * [WALLET] Retrieve all managed accounts.
+ */
+#[endpoint {
+    method = GET,
+    path = "/wallet/addresses",
+}]
+async fn get_addresses(
+    rqctx: Arc<RequestContext<ServerContext>>,
+) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
+    let server_context = rqctx.context();
+    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
+    if wallet_context.is_none() {
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."
+                .to_string(),
+        ));
+    }
+    let wallet_context = wallet_context.as_mut().unwrap();
+
+    let addresses = wallet_context
+        .config
+        .accounts
+        .iter()
+        .map(|info| info.address)
+        .collect::<Vec<_>>();
+
+    // Sync all accounts.
+    for address in addresses.iter() {
+        let client_state = match wallet_context.get_or_create_client_state(address) {
+            Ok(client_state) => client_state,
+            Err(error) => {
+                return Err(HttpError::for_client_error(
+                    None,
+                    hyper::StatusCode::FAILED_DEPENDENCY,
+                    format!("Can't create client state: {error}"),
+                ))
+            }
+        };
+
+
+        // TODO @Francois: LINES CAUSING ISSUES
+        // if let Some(err) = sync_client_state(client_state).await {
+        //     return Err(err);
+        // };
+    }
+
+    // TODO: check if we should remove 'k#' as part of address
+    Ok(HttpResponseOk(GetAddressResponse {
+        addresses: addresses
+            .into_iter()
+            .map(|address| format!("{:?}", address))
+            .collect(),
+    }))
 }
 
 /**
@@ -129,17 +210,14 @@ async fn genesis(
     let num_authorities = genesis_params.num_authorities.unwrap_or(4);
     let num_objects = genesis_params.num_objects.unwrap_or(5);
 
-    let mut network_config =
-        match NetworkConfig::read_or_create(&PathBuf::from(network_config_path)) {
-            Ok(network_config) => network_config,
-            Err(error) => {
-                return Err(HttpError::for_client_error(
-                    None,
-                    hyper::StatusCode::CONFLICT,
-                    format!("Unable to read network config: {error}"),
-                ))
-            }
-        };
+    let mut network_config = NetworkConfig::read_or_create(&PathBuf::from(network_config_path))
+        .map_err(|error| {
+            HttpError::for_client_error(
+                None,
+                hyper::StatusCode::CONFLICT,
+                format!("Unable to read network config: {error}"),
+            )
+        })?;
 
     if !network_config.authorities.is_empty() {
         return Err(HttpError::for_client_error(
@@ -153,6 +231,7 @@ async fn genesis(
     let mut authority_info = Vec::new();
     let mut port_allocator = PortAllocator::new(10000);
 
+    info!("Creating new authorities...");
     for _ in 0..num_authorities {
         let (address, key_pair) = get_key_pair();
         let info = AuthorityPrivateInfo {
@@ -182,20 +261,18 @@ async fn genesis(
         network_config.authorities.push(info);
     }
 
-    match network_config.save() {
-        Ok(_) => (),
-        Err(error) => {
-            return Err(HttpError::for_client_error(
-                None,
-                hyper::StatusCode::CONFLICT,
-                format!("Network config was unable to be saved: {error}"),
-            ))
-        }
+    if let Err(error) = network_config.save() {
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::CONFLICT,
+            format!("Network config was unable to be saved: {error}"),
+        ))
     };
 
     let mut new_addresses = Vec::new();
     let mut preload_objects: Vec<SuiObject> = Vec::new();
 
+    info!("Creating test objects...");
     for _ in 0..num_objects {
         let (address, key_pair) = get_key_pair();
         new_addresses.push(AccountInfo { address, key_pair });
@@ -212,6 +289,7 @@ async fn genesis(
     let committee = Committee::new(authorities);
 
     // Make server state to persist the objects.
+    let network_config_path = network_config.config_path();
     for authority in network_config.authorities.iter() {
         make_server(
             authority,
@@ -234,16 +312,20 @@ async fn genesis(
     };
     wallet_config.authorities = authority_info;
     wallet_config.accounts = new_addresses;
-    match wallet_config.save() {
-        Ok(_) => (),
-        Err(error) => {
-            return Err(HttpError::for_client_error(
-                None,
-                hyper::StatusCode::CONFLICT,
-                format!("Wallet config was unable to be saved: {error}"),
-            ))
-        }
+    if let Err(error) = wallet_config.save() {
+        return Err(HttpError::for_client_error(
+            None,
+            hyper::StatusCode::CONFLICT,
+            format!("Wallet config was unable to be saved: {error}"),
+        ))
     };
+
+    info!("Network genesis completed.");
+    info!("Network config file is stored in {:?}.", network_config_path);
+    info!(
+        "Wallet config file is stored in {:?}.",
+        wallet_config.config_path()
+    );
 
     Ok(HttpResponseOk(GenesisResponse {
         wallet_config: json!(wallet_config),
@@ -264,16 +346,14 @@ async fn start(
     let server_context = rqctx.context();
     let network_config_path = &server_context.network_config_path;
 
-    let network_config = match NetworkConfig::read_or_create(&PathBuf::from(network_config_path)) {
-        Ok(network_config) => network_config,
-        Err(error) => {
-            return Err(HttpError::for_client_error(
+    let network_config = NetworkConfig::read_or_create(&PathBuf::from(network_config_path))
+        .map_err(|error| {
+            HttpError::for_client_error(
                 None,
                 hyper::StatusCode::CONFLICT,
                 format!("Unable to read network config: {error}"),
-            ))
-        }
-    };
+            )
+        })?;
 
     if network_config.authorities.is_empty() {
         return Err(HttpError::for_client_error(
@@ -298,22 +378,18 @@ async fn start(
             .map(|info| (info.address, DEFAULT_WEIGHT))
             .collect(),
     );
-    let mut handles = Vec::new();
-    let rt = Runtime::new().unwrap();
+    let mut handles = FuturesUnordered::new();
 
     for authority in network_config.authorities {
         let server = make_server(&authority, &committee, &[], network_config.buffer_size).await;
 
         handles.push(async move {
-            let spawned_server = match server.spawn().await {
-                Ok(server) => server,
+            match server.spawn().await {
+                Ok(server) => Some(server),
                 Err(err) => {
                     error!("Failed to start server: {}", err);
-                    return;
+                    return None;
                 }
-            };
-            if let Err(err) = spawned_server.join().await {
-                error!("Server ended with an error: {}", err);
             }
         })
     }
@@ -321,11 +397,13 @@ async fn start(
     let num_authorities = handles.len();
 
     server_context.server_lock.store(true, Ordering::SeqCst);
-    thread::spawn({
-        move || {
-            rt.block_on(join_all(handles));
-        }
-    });
+    while let Some(spawned_server) = handles.next().await {
+        task::spawn(async {
+            if let Err(err) = spawned_server.unwrap().join().await {
+                error!("Server ended with an error: {}", err);
+            }
+        });
+    }
 
     let wallet_config_path = &server_context.wallet_config_path;
 
@@ -367,7 +445,7 @@ async fn start(
                 ))
             }
         };
-        if let Some(err) = sync_client_state(client_state) {
+        if let Some(err) = sync_client_state(client_state).await {
             return Err(err);
         }
     }
@@ -403,37 +481,14 @@ async fn stop(
     Ok(HttpResponseUpdatedNoContent())
 }
 
-fn sync_client_state(client_state: &mut ClientState<AuthorityClient>) -> Option<HttpError> {
-    match cb_thread::scope(|scope| {
-        scope
-            .spawn(|_| {
-                // synchronize with authorities
-                let rt = Runtime::new().unwrap();
-                rt.block_on(async move { client_state.sync_client_state().await })
-            })
-            .join()
-    }) {
-        Ok(result) => match result {
-            Ok(result) => match result {
-                Ok(_) => None,
-                Err(err) => Some(HttpError::for_client_error(
-                    None,
-                    hyper::StatusCode::FAILED_DEPENDENCY,
-                    format!("Sync error: {err}"),
-                )),
-            },
-            Err(err) => Some(HttpError::for_client_error(
-                None,
-                hyper::StatusCode::FAILED_DEPENDENCY,
-                format!("Sync error: {:?}", err),
-            )),
-        },
-        Err(err) => Some(HttpError::for_client_error(
-            None,
-            hyper::StatusCode::FAILED_DEPENDENCY,
-            format!("Sync error: {:?}", err),
-        )),
-    }
+async fn sync_client_state(client_state: &mut ClientState<AuthorityClient>) -> Option<HttpError> {
+    // synchronize with authorities
+    let res = async move { client_state.sync_client_state().await };
+    res.await.err().map(|err| HttpError::for_client_error(
+        None,
+        hyper::StatusCode::FAILED_DEPENDENCY,
+        format!("Sync error: {:?}", err),
+    ))
 }
 
 async fn make_server(
@@ -442,8 +497,7 @@ async fn make_server(
     pre_load_objects: &[SuiObject],
     buffer_size: usize,
 ) -> AuthorityServer {
-    let path = authority.db_path.clone();
-    let store = Arc::new(AuthorityStore::open(path, None));
+    let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
 
     let state = AuthorityState::new_with_genesis_modules(
         committee.clone(),

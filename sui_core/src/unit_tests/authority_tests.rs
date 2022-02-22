@@ -553,7 +553,7 @@ async fn test_handle_move_order() {
         .await
         .unwrap()
         .unwrap();
-    assert!(created_obj.owner.is_address(&sender));
+    assert_eq!(created_obj.owner, sender);
     assert_eq!(created_obj.id(), created_object_id);
     assert_eq!(created_obj.version(), OBJECT_START_VERSION);
 
@@ -903,7 +903,7 @@ async fn test_handle_confirmation_order_ok() {
         .await
         .unwrap()
         .unwrap();
-    assert!(new_account.owner.is_address(&recipient));
+    assert_eq!(new_account.owner, recipient);
     assert_eq!(next_sequence_number, new_account.version());
     assert_eq!(None, info.signed_order);
     let opt_cert = {
@@ -1288,7 +1288,7 @@ async fn test_authority_persist() {
 
     // Check the object is present
     assert_eq!(obj2.id(), object_id);
-    assert!(obj2.owner.is_address(&recipient));
+    assert_eq!(obj2.owner, recipient);
 }
 
 #[tokio::test]
@@ -1404,7 +1404,7 @@ async fn test_hero() {
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!(effects.mutated.len(), 1); // cap
     let (coin, coin_owner) = effects.created[0];
-    assert!(coin_owner.is_address(&player));
+    assert_eq!(coin_owner, player);
 
     // 5. Purchase a sword using 500 coin. This sword will have magic = 4, sword_strength = 5.
     let effects = call_move(
@@ -1424,9 +1424,9 @@ async fn test_hero() {
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     assert_eq!(effects.mutated.len(), 1); // coin
     let (hero, hero_owner) = effects.created[0];
-    assert!(hero_owner.is_address(&player));
+    assert_eq!(hero_owner, player);
     // The payment goes to the admin.
-    assert!(effects.mutated[0].1.is_address(&admin));
+    assert_eq!(effects.mutated[0].1, admin);
 
     // 6. Verify the hero is what we exepct with strength 5.
     let effects = call_move(
@@ -1467,7 +1467,7 @@ async fn test_hero() {
     .unwrap();
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
     let (boar, boar_owner) = effects.created[0];
-    assert!(boar_owner.is_address(&player));
+    assert_eq!(boar_owner, player);
 
     // 8. Slay the boar!
     let effects = call_move(
@@ -1531,7 +1531,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.mutated.len(), 2);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
-        Authenticator::Object(obj2)
+        obj2.into(),
     );
 
     // Try to transfer obj1 to obj3, this time it will fail since obj1 is now owned by obj2,
@@ -1589,7 +1589,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.mutated.len(), 1);
     assert_eq!(
         authority.get_object(&obj2).await.unwrap().unwrap().owner,
-        Authenticator::Address(sender2)
+        sender2
     );
 
     // Sender 1 try to transfer obj1 to obj2 again.
@@ -1627,7 +1627,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.mutated.len(), 2);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
-        Authenticator::Object(obj2)
+        obj2.into(),
     );
 }
 

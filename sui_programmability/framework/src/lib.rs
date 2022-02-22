@@ -179,10 +179,7 @@ pub fn run_move_unit_tests(path: &Path) -> SuiResult {
 
     let result = cli::run_move_unit_tests(
         path,
-        BuildConfig {
-            dev_mode: false,
-            ..Default::default()
-        },
+        BuildConfig::default(),
         UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)),
         natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
         /* compute_coverage */ false,
@@ -199,26 +196,15 @@ pub fn run_move_unit_tests(path: &Path) -> SuiResult {
     }
 }
 
-#[cfg(test)]
-fn get_examples() -> Vec<CompiledModule> {
-    let mut framework_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    framework_dir.push("../examples/");
-    let build_config = BuildConfig {
-        dev_mode: false,
-        ..Default::default()
-    };
-    let modules = build_move_package(&framework_dir, build_config, true).unwrap();
-    verify_modules(&modules).unwrap();
-    modules
-}
-
-#[test]
-fn check_that_move_code_can_be_built_verified_tested() {
-    get_sui_framework_modules();
-    get_examples();
-}
-
 #[test]
 fn run_framework_move_unit_tests() {
+    get_sui_framework_modules();
     run_move_unit_tests(Path::new(env!("CARGO_MANIFEST_DIR"))).unwrap();
+}
+
+#[test]
+fn run_examples_move_unit_tests() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples");
+    build_and_verify_user_package(&path, true).unwrap();
+    run_move_unit_tests(&path).unwrap();
 }

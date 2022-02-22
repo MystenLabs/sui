@@ -508,23 +508,27 @@ where
 
                         // For each non error result we get we add the objects to the map
                         // as keys and append the authority that holds them in the values.
-                        if let Ok(AccountInfoResponse { object_ids, .. }) = _result {
+                        // if let Ok(AccountInfoResponse { object_ids, .. }) = _result {
+                        match _result {
+                            Ok(AccountInfoResponse { object_ids, .. }) => {
                             // Also keep a record of all authorities that responded.
                             state.2.push(name);
                             // Update the map.
                             for obj_ref in object_ids {
                                 state.1.entry(obj_ref).or_insert_with(Vec::new).push(name);
                             }
-                        } else {
+                        } 
+                        Err(error) => {
                             // We also keep an error weight counter, and if it exceeds 1/3
                             // we return an error as it is likely we do not have enough
                             // evidence to return a correct result.
-
+                            println!("{}", error);
                             state.0 .1 += weight;
                             if state.0 .1 > validity {
                                 return Err(SuiError::TooManyIncorrectAuthorities);
                             }
                         }
+                    }
 
                         if state.0 .0 < threshold {
                             // While we are under the threshold we wait for a longer time
@@ -951,7 +955,7 @@ where
     /// Return owner address and sequence number of an object backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
     #[cfg(test)]
-    async fn get_latest_owner(&self, object_id: ObjectID) -> (Authenticator, SequenceNumber) {
+    async fn get_latest_owner(&self, object_id: ObjectID) -> (SuiAddress, SequenceNumber) {
         let (object_infos, _certificates) = self
             .get_object_by_id(object_id, Duration::from_secs(60))
             .await

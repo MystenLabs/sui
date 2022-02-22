@@ -22,8 +22,8 @@ use move_core_types::{account_address::AccountAddress, language_storage::StructT
 use crate::error::SuiError;
 use crate::{
     base_types::{
-        sha3_hash, Authenticator, BcsSignable, ObjectDigest, ObjectID, ObjectRef, SequenceNumber,
-        SuiAddress, TransactionDigest,
+        sha3_hash, BcsSignable, ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress,
+        TransactionDigest,
     },
     gas_coin::GasCoin,
 };
@@ -264,8 +264,8 @@ impl Data {
 pub struct Object {
     /// The meat of the object
     pub data: Data,
-    /// The authenticator that unlocks this object (eg. public key, or object id)
-    pub owner: Authenticator,
+    /// The owner address that unlocks this object (eg. hashes of public key, or object id)
+    pub owner: SuiAddress,
     /// The digest of the order that created or last mutated this object
     pub previous_transaction: TransactionDigest,
 }
@@ -276,7 +276,7 @@ impl Object {
     /// Create a new Move object
     pub fn new_move(
         o: MoveObject,
-        owner: Authenticator,
+        owner: SuiAddress,
         previous_transaction: TransactionDigest,
     ) -> Self {
         Object {
@@ -288,7 +288,7 @@ impl Object {
 
     pub fn new_package(
         modules: Vec<CompiledModule>,
-        owner: Authenticator,
+        owner: SuiAddress,
         previous_transaction: TransactionDigest,
     ) -> Self {
         let serialized: MovePackage = modules
@@ -356,7 +356,7 @@ impl Object {
     }
 
     /// Change the owner of `self` to `new_owner`
-    pub fn transfer(&mut self, new_owner: Authenticator) {
+    pub fn transfer(&mut self, new_owner: SuiAddress) {
         // TODO: these should be raised SuiError's instead of panic's
         assert!(!self.is_read_only(), "Cannot transfer an immutable object");
         match &mut self.data {
@@ -385,7 +385,7 @@ impl Object {
             read_only: false,
         });
         Self {
-            owner: Authenticator::Address(owner),
+            owner,
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
@@ -411,7 +411,7 @@ impl Object {
             read_only: false,
         });
         Self {
-            owner: Authenticator::Address(owner),
+            owner,
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
