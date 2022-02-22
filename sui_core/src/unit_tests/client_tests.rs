@@ -17,6 +17,7 @@ use std::{
 };
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::Signature;
+use sui_types::gas_coin::GasCoin;
 use sui_types::object::{Data, Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use tokio::runtime::Runtime;
 use typed_store::Map;
@@ -2345,4 +2346,100 @@ async fn test_address_manager() {
 
     assert_eq!(order_effects.created.len(), 1);
     assert_eq!(client1.store().objects.iter().count(), 4);
+}
+
+#[tokio::test]
+async fn test_coin_split() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee);
+
+    let coin_object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+
+    // Populate authorities with obj data
+    let objects = fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client1,
+        vec![coin_object_id, gas_object_id],
+    )
+    .await;
+    let coin_object = objects.get(&coin_object_id).unwrap();
+    let gas_object = objects.get(&gas_object_id).unwrap();
+
+    let split_amounts = vec![100, 200, 300, 400, 500];
+    let total_amount: u64 = split_amounts.iter().sum();
+
+    let response = client1
+        .split_coin(
+            coin_object.to_object_reference(),
+            split_amounts.clone(),
+            gas_object.to_object_reference(),
+            GAS_VALUE_FOR_TESTING,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        (coin_object_id, coin_object.version().increment()),
+        (response.updated_coin.id(), response.updated_coin.version())
+    );
+    assert_eq!(
+        (gas_object_id, gas_object.version().increment()),
+        (response.updated_gas.id(), response.updated_gas.version())
+    );
+    let update_coin = GasCoin::try_from(response.updated_coin.data.try_as_move().unwrap()).unwrap();
+    assert_eq!(update_coin.value(), GAS_VALUE_FOR_TESTING - total_amount);
+    let split_coin_values = response
+        .new_coins
+        .iter()
+        .map(|o| {
+            GasCoin::try_from(o.data.try_as_move().unwrap())
+                .unwrap()
+                .value()
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        split_amounts,
+        split_coin_values.into_iter().collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
+async fn test_coin_merge() {
+    let (authority_clients, committee) = init_local_authorities(4).await;
+    let mut client1 = make_client(authority_clients.clone(), committee);
+
+    let coin_object_id1 = ObjectID::random();
+    let coin_object_id2 = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+
+    // Populate authorities with obj data
+    let objects = fund_account_with_same_objects(
+        authority_clients.values().collect(),
+        &mut client1,
+        vec![coin_object_id1, coin_object_id2, gas_object_id],
+    )
+    .await;
+    let coin_object1 = objects.get(&coin_object_id1).unwrap();
+    let coin_object2 = objects.get(&coin_object_id2).unwrap();
+    let gas_object = objects.get(&gas_object_id).unwrap();
+
+    let response = client1
+        .merge_coins(
+            coin_object1.to_object_reference(),
+            coin_object2.to_object_reference(),
+            gas_object.to_object_reference(),
+            GAS_VALUE_FOR_TESTING,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        (coin_object_id1, coin_object1.version().increment()),
+        (response.updated_coin.id(), response.updated_coin.version())
+    );
+    assert_eq!(
+        (gas_object_id, gas_object.version().increment()),
+        (response.updated_gas.id(), response.updated_gas.version())
+    );
+    let update_coin = GasCoin::try_from(response.updated_coin.data.try_as_move().unwrap()).unwrap();
+    assert_eq!(update_coin.value(), GAS_VALUE_FOR_TESTING * 2);
 }
