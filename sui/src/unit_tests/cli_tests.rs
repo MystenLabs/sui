@@ -249,3 +249,61 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     }
     Ok(())
 }
+
+#[traced_test]
+#[tokio::test]
+async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
+
+    SuiCommand::Genesis { config: None }
+        .execute(&mut config)
+        .await?;
+
+    // Start network
+    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+
+    // Wait for authorities to come alive.
+    let mut count = 0;
+    while count < 50 && !logs_contain("Listening to TCP traffic on 127.0.0.1") {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        count += 1;
+    }
+
+    // Create Wallet context.
+    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let address = wallet_conf.accounts.first().unwrap().address;
+    let mut context = WalletContext::new(wallet_conf)?;
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState { address }
+        .execute(&mut context)
+        .await?;
+
+    let state = context
+        .address_manager
+        .get_managed_address_states()
+        .get(&address)
+        .unwrap();
+
+    // Check log output contains all object ids.
+    let object_id = state.object_refs().next().unwrap().0;
+
+    WalletCommands::Object {
+        id: object_id,
+        deep: false,
+    }
+    .execute(&mut context)
+    .await?;
+    let obj_owner = format!("{:?}", address);
+
+    count = 0;
+    while count < 50 && !logs_contain(obj_owner.as_str()) {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        count += 1;
+    }
+    assert!(count < 50);
+
+    network.abort();
+    Ok(())
+}

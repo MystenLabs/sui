@@ -3,11 +3,7 @@
 use crate::config::{AccountInfo, WalletConfig};
 use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientAddressManager, ClientState};
-use sui_network::network::NetworkClient;
-use sui_types::base_types::{
-    decode_bytes_hex, encode_bytes_hex, AuthorityName, ObjectID, SuiAddress,
-};
-use sui_types::committee::Committee;
+use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex, ObjectID, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::ExecutionStatus;
 
@@ -17,7 +13,6 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::{parse_transaction_argument, parse_type_tag};
 use move_core_types::transaction_argument::{convert_txn_args, TransactionArgument};
-use std::collections::BTreeMap;
 use std::time::Instant;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
@@ -35,10 +30,6 @@ pub enum WalletCommands {
     /// Get obj info
     #[structopt(name = "object")]
     Object {
-        /// Owner address
-        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
-        owner: SuiAddress,
-
         /// Object ID of the object to fetch
         #[structopt(long)]
         id: ObjectID,
@@ -51,10 +42,6 @@ pub enum WalletCommands {
     /// Publish Move modules
     #[structopt(name = "publish")]
     Publish {
-        /// Sender address
-        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
-        sender: SuiAddress,
-
         /// Path to directory containing a Move package
         #[structopt(long)]
         path: String,
@@ -71,9 +58,6 @@ pub enum WalletCommands {
     /// Call Move function
     #[structopt(name = "call")]
     Call {
-        /// Sender address
-        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
-        sender: SuiAddress,
         /// Object ID of the package, which contains the module
         #[structopt(long)]
         package: ObjectID,
@@ -106,10 +90,6 @@ pub enum WalletCommands {
     /// Transfer an object
     #[structopt(name = "transfer")]
     Transfer {
-        /// Sender address
-        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
-        from: SuiAddress,
-
         /// Recipient address
         #[structopt(long, parse(try_from_str = decode_bytes_hex))]
         to: SuiAddress,
@@ -150,12 +130,12 @@ impl WalletCommands {
     pub async fn execute(&mut self, context: &mut WalletContext) -> Result<(), anyhow::Error> {
         match self {
             WalletCommands::Publish {
-                sender,
                 path,
                 gas,
                 gas_budget,
             } => {
                 // Find owner of gas object
+                let sender = &context.address_manager.get_object_owner(*gas).await?;
                 let client_state = context.get_or_create_client_state(sender)?;
                 let gas_obj_ref = client_state.object_ref(*gas)?;
 
@@ -169,10 +149,9 @@ impl WalletCommands {
                 info!("{}", effects);
             }
 
-            WalletCommands::Object { id, deep, owner } => {
+            WalletCommands::Object { id, deep } => {
                 // Fetch the object ref
-                let client_state = context.get_or_create_client_state(owner)?;
-                let object_read = client_state.get_object_info(*id).await?;
+                let object_read = context.address_manager.get_object_info(*id).await?;
                 let object = object_read.object()?;
                 if *deep {
                     let layout = object_read.layout()?;
@@ -182,7 +161,6 @@ impl WalletCommands {
                 }
             }
             WalletCommands::Call {
-                sender,
                 package,
                 module,
                 function,
@@ -192,6 +170,7 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
+                let sender = &context.address_manager.get_object_owner(*gas).await?;
                 let client_state = context.get_or_create_client_state(sender)?;
 
                 let package_obj_info = client_state.get_object_info(*package).await?;
@@ -223,12 +202,8 @@ impl WalletCommands {
                 info!("{}", effects);
             }
 
-            WalletCommands::Transfer {
-                to,
-                object_id,
-                gas,
-                from,
-            } => {
+            WalletCommands::Transfer { to, object_id, gas } => {
+                let from = &context.address_manager.get_object_owner(*gas).await?;
                 let client_state = context.get_or_create_client_state(from)?;
                 info!("Starting transfer");
                 let time_start = Instant::now();
@@ -295,9 +270,12 @@ impl WalletContext {
             .iter()
             .map(|info| info.address)
             .collect::<Vec<_>>();
+
+        let committee = config.make_committee();
+        let authority_clients = config.make_authority_clients();
         let mut context = Self {
             config,
-            address_manager: ClientAddressManager::new(path),
+            address_manager: ClientAddressManager::new(path, committee, authority_clients),
         };
         // Pre-populate client state for each address in the config.
         for address in addresses {
@@ -310,39 +288,7 @@ impl WalletContext {
         &mut self,
         owner: &SuiAddress,
     ) -> Result<&mut ClientState<AuthorityClient>, SuiError> {
-        let kp = Box::pin(self.get_account_cfg_info(owner)?.key_pair.copy());
-        let voting_rights = self
-            .config
-            .authorities
-            .iter()
-            .map(|authority| (authority.name, 1))
-            .collect();
-        let committee = Committee::new(voting_rights);
-        let authority_clients = self.make_authority_clients();
-        self.address_manager
-            .get_or_create_state_mut(*owner, kp, committee, authority_clients)
-    }
-
-    fn make_authority_clients(&self) -> BTreeMap<AuthorityName, AuthorityClient> {
-        let mut authority_clients = BTreeMap::new();
-        for authority in &self.config.authorities {
-            let client = AuthorityClient::new(NetworkClient::new(
-                authority.host.clone(),
-                authority.base_port,
-                self.config.buffer_size,
-                self.config.send_timeout,
-                self.config.recv_timeout,
-            ));
-            authority_clients.insert(authority.name, client);
-        }
-        authority_clients
-    }
-
-    pub fn get_account_cfg_info(&self, address: &SuiAddress) -> Result<&AccountInfo, SuiError> {
-        self.config
-            .accounts
-            .iter()
-            .find(|info| &info.address == address)
-            .ok_or(SuiError::AccountNotFound)
+        let kp = Box::pin(self.config.get_account_cfg_info(owner)?.key_pair.copy());
+        self.address_manager.get_or_create_state_mut(*owner, kp)
     }
 }

@@ -2280,8 +2280,10 @@ async fn test_transfer_pending_orders() {
 #[tokio::test]
 async fn test_address_manager() {
     let path = tempfile::tempdir().unwrap().into_path();
+    let (authority_clients, committee) = init_local_authorities(4).await;
+
     let mut address_manager: crate::client::ClientAddressManager<LocalAuthorityClient> =
-        crate::client::ClientAddressManager::new(path);
+        crate::client::ClientAddressManager::new(path, committee, authority_clients.clone());
 
     // Ensure nothing being managed
     assert!(address_manager.get_managed_address_states().is_empty());
@@ -2290,16 +2292,10 @@ async fn test_address_manager() {
     let (address, secret) = get_key_pair();
     let _secret2 = secret.copy();
     let secret = Box::pin(secret);
-    let (authority_clients, committee) = init_local_authorities(4).await;
     let gas_object1 = ObjectID::random();
     let gas_object2 = ObjectID::random();
     let client1 = address_manager
-        .get_or_create_state_mut(
-            address,
-            secret,
-            committee.clone(),
-            authority_clients.clone(),
-        )
+        .get_or_create_state_mut(address, secret)
         .unwrap();
     fund_account_with_same_objects(
         authority_clients.values().collect(),

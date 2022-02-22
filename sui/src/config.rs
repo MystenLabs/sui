@@ -2,8 +2,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_core::authority_client::AuthorityClient;
+use sui_network::network::NetworkClient;
 use sui_types::base_types::*;
+use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, KeyPair};
+use sui_types::error::SuiError;
 
 use crate::utils::optional_address_as_hex;
 use crate::utils::optional_address_from_hex;
@@ -12,6 +16,7 @@ use anyhow::anyhow;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -133,6 +138,38 @@ impl Config for WalletConfig {
 
     fn config_path(&self) -> &Path {
         &self.config_path
+    }
+}
+
+impl WalletConfig {
+    pub fn make_committee(&self) -> Committee {
+        let voting_rights = self
+            .authorities
+            .iter()
+            .map(|authority| (authority.name, 1))
+            .collect();
+        Committee::new(voting_rights)
+    }
+
+    pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, AuthorityClient> {
+        let mut authority_clients = BTreeMap::new();
+        for authority in &self.authorities {
+            let client = AuthorityClient::new(NetworkClient::new(
+                authority.host.clone(),
+                authority.base_port,
+                self.buffer_size,
+                self.send_timeout,
+                self.recv_timeout,
+            ));
+            authority_clients.insert(authority.name, client);
+        }
+        authority_clients
+    }
+    pub fn get_account_cfg_info(&self, address: &SuiAddress) -> Result<&AccountInfo, SuiError> {
+        self.accounts
+            .iter()
+            .find(|info| &info.address == address)
+            .ok_or(SuiError::AccountNotFound)
     }
 }
 
