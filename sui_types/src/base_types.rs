@@ -116,14 +116,6 @@ impl AsRef<[u8]> for SuiAddress {
     }
 }
 
-impl From<Vec<u8>> for SuiAddress {
-    fn from(bytes: Vec<u8>) -> Self {
-        let mut result = [0u8; SUI_ADDRESS_LENGTH];
-        result.copy_from_slice(&bytes[..SUI_ADDRESS_LENGTH]);
-        Self(result)
-    }
-}
-
 // We use SHA3-256 hence 32 bytes here
 const TRANSACTION_DIGEST_LENGTH: usize = 32;
 
