@@ -214,8 +214,22 @@ fn execute_internal<
                 // Cap total_gas by gas_budget in the fail case.
                 return ExecutionStatus::new_failure(cmp::min(total_gas, gas_budget), err);
             }
-            ExecutionStatus::Success {
-                gas_used: total_gas,
+            // gas_budget should be enough to pay not only the VM excution cost,
+            // but also the cost to process all events, such as transfers.
+            if total_gas > gas_budget {
+                ExecutionStatus::new_failure(
+                    gas_budget,
+                    SuiError::InsufficientGas {
+                        error: format!(
+                            "Total gas used ({}) exceeds gas budget ({})",
+                            total_gas, gas_budget
+                        ),
+                    },
+                )
+            } else {
+                ExecutionStatus::Success {
+                    gas_used: total_gas,
+                }
             }
         }
         // charge for all computations so far
