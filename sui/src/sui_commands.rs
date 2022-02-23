@@ -240,7 +240,7 @@ async fn genesis(
     Ok(())
 }
 
-async fn make_server(
+pub async fn make_server(
     authority: &AuthorityPrivateInfo,
     committee: &Committee,
     preload_modules: Vec<Object>,

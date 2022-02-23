@@ -4,41 +4,38 @@
 use dropshot::endpoint;
 use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
-    HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext, TypedBody,
+    HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
 };
-
 use move_package::BuildConfig;
 use serde_json::json;
 use sui::config::{
-    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig,
+    AccountInfo, AuthorityInfo, Config, GenesisConfig, NetworkConfig,
     WalletConfig,
 };
 use sui::wallet_commands::WalletContext;
+use sui::sui_commands;
 use sui_adapter::adapter::generate_package_id;
-use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_client::AuthorityClient;
-use sui_core::authority_server::AuthorityServer;
 use sui_core::client::{Client, ClientState};
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
-use sui_types::error::SuiResult;
 use sui_types::object::Object;
 
-use futures::future::join_all;
+use futures::{
+    stream::{futures_unordered::FuturesUnordered, StreamExt as _},
+};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use tokio::task::{self, JoinHandle};
 use std::collections::BTreeMap;
 use std::fs;
 use std::net::{Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::runtime::Runtime;
 use tracing::{error, info};
 
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -53,6 +50,8 @@ async fn main() -> Result<(), String> {
     let log = config_logging
         .to_logger("rest_server")
         .map_err(|error| format!("failed to create logger: {}", error))?;
+
+    tracing_subscriber::fmt().init();
 
     let mut api = ApiDescription::new();
     api.register(start).unwrap();
@@ -76,8 +75,8 @@ struct ServerContext {
     wallet_config_path: String,
     network_config_path: String,
     authority_db_path: String,
-    client_db_path: String,
-    server_lock: Arc<AtomicBool>,
+    client_db_path: Arc<Mutex<String>>,
+    authority_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
     wallet_context: Arc<Mutex<Option<WalletContext>>>,
 }
 
@@ -88,20 +87,11 @@ impl ServerContext {
             wallet_config_path: String::from("wallet.conf"),
             network_config_path: String::from("./network.conf"),
             authority_db_path: String::from("./authorities_db"),
-            client_db_path: String::from("client_db"),
-            server_lock: Arc::new(AtomicBool::new(false)),
+            client_db_path: Arc::new(Mutex::new(String::new())),
+            authority_handles: Arc::new(Mutex::new(Vec::new())),
             wallet_context: Arc::new(Mutex::new(None)),
         }
     }
-}
-
-/**
-* 'GenesisRequest' represents the server configuration.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-struct GenesisRequest {
-    num_authorities: Option<u16>,
-    num_objects: Option<u16>,
 }
 
 /**
@@ -122,18 +112,11 @@ struct GenesisResponse {
 }]
 async fn genesis(
     rqctx: Arc<RequestContext<ServerContext>>,
-    _request: TypedBody<GenesisRequest>,
 ) -> Result<HttpResponseOk<GenesisResponse>, HttpError> {
     let server_context = rqctx.context();
     let genesis_config_path = &server_context.genesis_config_path;
     let network_config_path = &server_context.network_config_path;
     let wallet_config_path = &server_context.wallet_config_path;
-    let client_db_path = &server_context.client_db_path;
-
-    // TODO: Pass in params as part of custom genesis
-    // let genesis_params = request.into_inner();
-    // let num_authorities = genesis_params.num_authorities.unwrap_or(4);
-    // let num_objects = genesis_params.num_objects.unwrap_or(5);
 
     let mut network_config = NetworkConfig::read_or_create(&PathBuf::from(network_config_path))
         .map_err(|error| {
@@ -292,7 +275,7 @@ async fn genesis(
         preload_objects.len()
     );
     for authority in &network_config.authorities {
-        make_server(
+        sui_commands::make_server(
             authority,
             &committee,
             preload_modules.clone(),
@@ -329,7 +312,11 @@ async fn genesis(
         })?;
     wallet_config.authorities = authority_info;
     wallet_config.accounts = new_addresses;
-    wallet_config.db_folder_path = working_dir.join(client_db_path);
+    // Need to use a random id because rocksdb locks on current process which means even if directory is deleted
+    // the lock will remain causing an IO Error
+    let client_db_path = format!("client_db_{:?}",ObjectID::random());
+    wallet_config.db_folder_path = working_dir.join(&client_db_path);
+    *server_context.client_db_path.lock().unwrap() = client_db_path;
     if let Err(error) = wallet_config.save() {
         return Err(custom_http_error(
             hyper::StatusCode::CONFLICT,
@@ -375,11 +362,13 @@ async fn start(
         ));
     }
 
-    if server_context.server_lock.load(Ordering::SeqCst) {
-        return Err(custom_http_error(
-            hyper::StatusCode::FORBIDDEN,
-            String::from("Sui network is already running."),
-        ));
+    {
+        if (*server_context.authority_handles.lock().unwrap()).len() > 0 {
+            return Err(custom_http_error(
+                hyper::StatusCode::FORBIDDEN,
+                String::from("Sui network is already running."),
+            ));
+        }
     }
 
     let committee = Committee::new(
@@ -389,11 +378,10 @@ async fn start(
             .map(|info| (*info.key_pair.public_key_bytes(), info.stake))
             .collect(),
     );
-    let mut handles = Vec::new();
-    let rt = Runtime::new().unwrap();
+    let mut handles = FuturesUnordered::new();
 
     for authority in &network_config.authorities {
-        let server = make_server(
+        let server = sui_commands::make_server(
             authority,
             &committee,
             vec![],
@@ -408,28 +396,26 @@ async fn start(
             )
         })?;
         handles.push(async move {
-            let spawned_server = match server.spawn().await {
-                Ok(server) => server,
+            match server.spawn().await {
+                Ok(server) => Ok(server),
                 Err(err) => {
-                    error!("Failed to start server: {}", err);
-                    return;
+                    return Err(custom_http_error(hyper::StatusCode::FAILED_DEPENDENCY, format!("Failed to start server: {}", err)));
                 }
-            };
-            if let Err(err) = spawned_server.join().await {
-                error!("Server ended with an error: {}", err);
             }
         })
     }
 
     let num_authorities = handles.len();
-    info!("Started {} authorities", handles.len());
-    server_context.server_lock.store(true, Ordering::SeqCst);
-    thread::spawn({
-        move || {
-            rt.block_on(join_all(handles));
-            info!("All server stopped.");
-        }
-    });
+    info!("Started {} authorities", num_authorities);
+
+    while let Some(spawned_server) = handles.next().await {
+        server_context.authority_handles.lock().unwrap().push(
+            task::spawn(async {
+                if let Err(err) = spawned_server.unwrap().join().await {
+                    error!("Server ended with an error: {}", err);
+                }
+            }));
+    }
 
     let wallet_config_path = &server_context.wallet_config_path;
 
@@ -488,10 +474,13 @@ async fn stop(
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     let server_context = rqctx.context();
 
-    // TODO: Figure out how kill thread that is hosting the authorities.
-    // server_context.server_lock.store(false, Ordering::SeqCst);
+    for authority_handle in &*server_context.authority_handles.lock().unwrap() {
+        authority_handle.abort();
+        drop(authority_handle);
+    }
+    (*server_context.authority_handles.lock().unwrap()).clear();
 
-    fs::remove_dir_all(&server_context.client_db_path).ok();
+    fs::remove_dir_all(server_context.client_db_path.lock().unwrap().clone()).ok();
     fs::remove_dir_all(&server_context.authority_db_path).ok();
     fs::remove_file(&server_context.network_config_path).ok();
     fs::remove_file(&server_context.wallet_config_path).ok();
@@ -508,40 +497,6 @@ async fn sync_client_state(client_state: &mut ClientState<AuthorityClient>) -> O
             format!("Sync error: {:?}", err),
         )
     })
-}
-
-async fn make_server(
-    authority: &AuthorityPrivateInfo,
-    committee: &Committee,
-    preload_modules: Vec<Object>,
-    preload_objects: &[Object],
-    buffer_size: usize,
-) -> SuiResult<AuthorityServer> {
-    let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
-    let name = *authority.key_pair.public_key_bytes();
-
-    let state = AuthorityState::new(
-        committee.clone(),
-        name,
-        Box::pin(authority.key_pair.copy()),
-        store,
-        preload_modules,
-    )
-    .await;
-
-    for object in preload_objects {
-        state
-            .init_transaction_lock(object.to_object_reference())
-            .await;
-        state.insert_object(object.clone()).await;
-    }
-
-    Ok(AuthorityServer::new(
-        authority.host.clone(),
-        authority.port,
-        buffer_size,
-        state,
-    ))
 }
 
 fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpError {
