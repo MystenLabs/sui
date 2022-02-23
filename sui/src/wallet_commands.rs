@@ -11,6 +11,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{CertifiedTransaction, ExecutionStatus, TransactionEffects};
 use sui_types::object::ObjectRead::Exists;
 
+use anyhow::anyhow;
 use colored::Colorize;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
@@ -18,6 +19,7 @@ use move_core_types::parser::{parse_transaction_argument, parse_type_tag};
 use move_core_types::transaction_argument::{convert_txn_args, TransactionArgument};
 use serde::ser::Error;
 use serde::Serialize;
+use std::fmt::Write;
 use std::time::Instant;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
@@ -162,6 +164,10 @@ impl WalletCommands {
                 let (cert, effects) = client_state
                     .publish(path.clone(), gas_obj_ref, *gas_budget)
                     .await?;
+
+                if matches!(effects.status, ExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!("Error publishing module: {:#?}", effects.status));
+                };
                 WalletCommandResult::Publish(cert, effects)
             }
 
@@ -208,6 +214,9 @@ impl WalletCommands {
                         *gas_budget,
                     )
                     .await?;
+                if matches!(effects.status, ExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!("Error calling module: {:#?}", effects.status));
+                }
                 WalletCommandResult::Call(cert, effects)
             }
 
@@ -218,6 +227,9 @@ impl WalletCommands {
                 let (cert, effects) = client_state.transfer_object(*object_id, *gas, *to).await?;
                 let time_total = time_start.elapsed().as_micros();
 
+                if matches!(effects.status, ExecutionStatus::Failure { .. }) {
+                    return Err(anyhow!("Error transferring object: {:#?}", effects.status));
+                }
                 WalletCommandResult::Transfer(time_total, cert, effects)
             }
 
@@ -332,87 +344,53 @@ impl WalletContext {
 
 impl Display for WalletCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
+        let mut writer = String::new();
+        match self {
             WalletCommandResult::Publish(cert, effects) => {
-                if matches!(effects.status, ExecutionStatus::Failure { .. }) {
-                    return Err(fmt::Error::custom(format!(
-                        "Error publishing module: {:#?}",
-                        effects.status
-                    )));
-                }
-                vec![
-                    "----- Certificate ----".bold().to_string(),
-                    format!("{}", cert),
-                    "----- Transaction Effects ----".bold().to_string(),
-                    format!("{}", effects),
-                ]
+                writeln!(writer, "{}", "----- Certificate ----".bold())?;
+                writeln!(writer, "{}", cert)?;
+                writeln!(writer, "{}", "----- Transaction Effects ----".bold())?;
+                writeln!(writer, "{}", effects)?;
             }
             WalletCommandResult::Object(object_read) => {
                 let object = object_read.object().map_err(fmt::Error::custom)?;
-                vec![format!("{}", object)]
+                writeln!(writer, "{}", object)?;
             }
             WalletCommandResult::Call(cert, effects) => {
-                if matches!(effects.status, ExecutionStatus::Failure { .. }) {
-                    return Err(fmt::Error::custom(format!(
-                        "Error calling module: {:#?}",
-                        effects.status
-                    )));
-                }
-                vec![
-                    "----- Certificate ----".bold().to_string(),
-                    format!("{}", cert),
-                    "----- Transaction Effects ----".bold().to_string(),
-                    format!("{}", effects),
-                ]
+                writeln!(writer, "{}", "----- Certificate ----".bold())?;
+                writeln!(writer, "{}", cert)?;
+                writeln!(writer, "{}", "----- Transaction Effects ----".bold())?;
+                writeln!(writer, "{}", effects)?;
             }
             WalletCommandResult::Transfer(time_elapsed, cert, effects) => {
-                if matches!(effects.status, ExecutionStatus::Failure { .. }) {
-                    return Err(fmt::Error::custom(format!(
-                        "Error transferring object: {:#?}",
-                        effects.status
-                    )));
-                }
-                vec![
-                    format!("Transfer confirmed after {} us", time_elapsed),
-                    "----- Certificate ----".bold().to_string(),
-                    format!("{}", cert),
-                    "----- Transaction Effects ----".bold().to_string(),
-                    format!("{}", effects),
-                ]
+                writeln!(writer, "Transfer confirmed after {} us", time_elapsed)?;
+                writeln!(writer, "{}", "----- Certificate ----".bold())?;
+                writeln!(writer, "{}", cert)?;
+                writeln!(writer, "{}", "----- Transaction Effects ----".bold())?;
+                writeln!(writer, "{}", effects)?;
             }
 
             WalletCommandResult::Addresses(addresses) => {
-                let mut results = Vec::new();
-                results.push(format!("Showing {} results.", addresses.len()));
-                results.extend(
-                    addresses
-                        .iter()
-                        .map(|address| format!("{}", address))
-                        .collect::<Vec<_>>(),
-                );
-                results
+                writeln!(writer, "Showing {} results.", addresses.len())?;
+                for address in addresses {
+                    writeln!(writer, "{}", address)?;
+                }
             }
 
             WalletCommandResult::Objects(object_refs) => {
-                let mut results = Vec::new();
-                results.push(format!("Showing {} results.", object_refs.len()));
-                results.extend(
-                    object_refs
-                        .iter()
-                        .map(|object_ref| format!("{:?}", object_ref))
-                        .collect::<Vec<_>>(),
-                );
-                results
+                writeln!(writer, "Showing {} results.", object_refs.len())?;
+                for object_ref in object_refs {
+                    writeln!(writer, "{:?}", object_ref)?;
+                }
             }
             WalletCommandResult::SyncClientState => {
-                vec!["Client state sync complete.".to_string()]
+                writeln!(writer, "Client state sync complete.")?;
             }
             WalletCommandResult::NewAddress(address) => {
-                vec![format!("Created new keypair for address : {}", &address)]
+                writeln!(writer, "Created new keypair for address : {}", &address)?;
             }
         }
-        .join("\n");
-        write!(f, "{}", s)
+        write!(f, "{}", writer)
     }
 }
 

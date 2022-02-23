@@ -663,40 +663,41 @@ impl CertifiedTransaction {
 
 impl Display for CertifiedTransaction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut result = vec![];
-        result.push(format!(
+        let mut writer = String::new();
+        writeln!(
+            writer,
             "Signed Authorities : {:?}",
             self.signatures
                 .iter()
                 .map(|(name, _)| name)
                 .collect::<Vec<_>>()
-        ));
+        )?;
         match &self.transaction.data.kind {
             TransactionKind::Transfer(t) => {
-                result.push("Transaction Kind : Transfer".to_string());
-                result.push(format!("Recipient : {}", t.recipient));
+                writeln!(writer, "Transaction Kind : Transfer")?;
+                writeln!(writer, "Recipient : {}", t.recipient)?;
                 let (object_id, seq, digest) = t.object_ref;
-                result.push(format!("Object ID : {}", &object_id));
-                result.push(format!("Sequence Number : {:?}", seq));
-                result.push(format!("Object Digest : {}", encode_bytes_hex(&digest.0)));
+                writeln!(writer, "Object ID : {}", &object_id)?;
+                writeln!(writer, "Sequence Number : {:?}", seq)?;
+                writeln!(writer, "Object Digest : {}", encode_bytes_hex(&digest.0))?;
             }
             TransactionKind::Publish(p) => {
-                result.push("Transaction Kind : Publish".to_string());
-                result.push(format!("Gas Budget : {}", p.gas_budget));
+                writeln!(writer, "Transaction Kind : Publish")?;
+                writeln!(writer, "Gas Budget : {}", p.gas_budget)?;
             }
             TransactionKind::Call(c) => {
-                result.push("Transaction Kind : Call".to_string());
-                result.push(format!("Gas Budget : {}", c.gas_budget));
-                result.push(format!("Package ID : {}", c.package.0.to_hex()));
-                result.push(format!("Module : {}", c.module));
-                result.push(format!("Function : {}", c.function));
-                result.push(format!("Object Arguments : {:?}", c.object_arguments));
-                result.push(format!("Pure Arguments : {:?}", c.pure_arguments));
-                result.push(format!("Type Arguments : {:?}", c.type_arguments));
-                result.push(format!("Gas Budget : {:?}", c.object_arguments));
+                writeln!(writer, "Transaction Kind : Call")?;
+                writeln!(writer, "Gas Budget : {}", c.gas_budget)?;
+                writeln!(writer, "Package ID : {}", c.package.0.to_hex())?;
+                writeln!(writer, "Module : {}", c.module)?;
+                writeln!(writer, "Function : {}", c.function)?;
+                writeln!(writer, "Object Arguments : {:?}", c.object_arguments)?;
+                writeln!(writer, "Pure Arguments : {:?}", c.pure_arguments)?;
+                writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
+                writeln!(writer, "Gas Budget : {:?}", c.object_arguments)?;
             }
         }
-        write!(f, "{}", result.join("\n"))
+        write!(f, "{}", writer)
     }
 }
 
