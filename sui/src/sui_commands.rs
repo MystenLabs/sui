@@ -40,15 +40,13 @@ impl SuiCommand {
         match self {
             SuiCommand::Start => start_network(config).await,
             SuiCommand::Genesis { config: path } => {
+                // Network config has been created by this point, safe to unwrap.
+                let working_dir = config.config_path().parent().unwrap();
                 let genesis_conf = if let Some(path) = path {
                     GenesisConfig::read(path)?
                 } else {
-                    // Network config has been created by this point, safe to unwrap.
-                    let working_dir = config.config_path().parent().unwrap();
                     GenesisConfig::default_genesis(&working_dir.join("genesis.conf"))?
                 };
-                // We have created the config file, safe to unwrap the path here.
-                let working_dir = &config.config_path().parent().unwrap().to_path_buf();
                 let wallet_path = working_dir.join("wallet.conf");
                 let mut wallet_config = WalletConfig::create(&wallet_path)?;
                 wallet_config.db_folder_path = working_dir.join("client_db");

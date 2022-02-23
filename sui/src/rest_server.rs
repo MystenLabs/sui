@@ -149,13 +149,12 @@ async fn genesis(
 
     sui_commands::genesis(&mut network_config, genesis_conf, &mut wallet_config)
         .await
-        .err()
-        .map(|err| {
+        .map_err(|err| {
             custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("Genesis error: {:?}", err),
             )
-        });
+        })?;
 
     Ok(HttpResponseOk(GenesisResponse {
         wallet_config: json!(wallet_config),
@@ -284,7 +283,7 @@ async fn start(
                     format!("Can't create client state: {error}"),
                 )
             })?;
-        if let Some(err) = sync_client_state(client_state).await {
+        if let Err(err) = sync_client_state(client_state).await {
             return Err(err);
         }
     }
@@ -322,10 +321,12 @@ async fn stop(
     Ok(HttpResponseUpdatedNoContent())
 }
 
-async fn sync_client_state(client_state: &mut ClientState<AuthorityClient>) -> Option<HttpError> {
+async fn sync_client_state(
+    client_state: &mut ClientState<AuthorityClient>,
+) -> Result<(), HttpError> {
     // synchronize with authorities
     let res = async move { client_state.sync_client_state().await };
-    res.await.err().map(|err| {
+    res.await.map_err(|err| {
         custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
             format!("Sync error: {:?}", err),
