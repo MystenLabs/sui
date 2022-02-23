@@ -95,15 +95,11 @@ async fn test_batch_manager_happy_path() {
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
     // TEST 1: init from an empty database should return to a zero block
-    let (_send, mut manager, _pair) = BatcherManager::new(store.clone(), 100);
-
-    let _join = tokio::spawn(async move {
-        manager
-            .run_service(1000, Duration::from_millis(500))
-            .await
-            .expect("Service returns with no errors");
-        drop(manager);
-    });
+    let (_send, manager, _pair) = BatcherManager::new(store.clone(), 100);
+    let _join = manager
+        .start_service(1000, Duration::from_millis(500))
+        .await
+        .expect("No errors starting manager.");
 
     // Send a transaction.
     let tx_zero = TransactionDigest::new([0; 32].try_into().unwrap());
@@ -155,16 +151,11 @@ async fn test_batch_manager_out_of_order() {
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
     // TEST 1: init from an empty database should return to a zero block
-    let (_send, mut manager, _pair) = BatcherManager::new(store.clone(), 100);
-
-    let _join = tokio::spawn(async move {
-        manager
-            // Set block size to 4.
-            .run_service(4, Duration::from_millis(5000))
-            .await
-            .expect("Service returns with no errors");
-        drop(manager);
-    });
+    let (_send, manager, _pair) = BatcherManager::new(store.clone(), 100);
+    let _join = manager
+        .start_service(4, Duration::from_millis(5000))
+        .await
+        .expect("Start service with no issues.");
 
     // Send transactions out of order
     let tx_zero = TransactionDigest::new([0; 32].try_into().unwrap());
@@ -218,4 +209,52 @@ async fn test_batch_manager_out_of_order() {
     _join.await.expect("No errors in task");
 
     assert!(matches!(rx.recv().await, Err(_)));
+}
+
+use sui_types::{crypto::get_key_pair, object::Object};
+
+#[tokio::test]
+async fn test_handle_move_order_with_batch() {
+    let (sender, sender_key) = get_key_pair();
+    let gas_payment_object_id = ObjectID::random();
+    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
+    let mut authority_state = init_state_with_objects(vec![gas_payment_object]).await;
+
+    // Create a listening infrastrucure.
+    let (_send, manager, _pair) = BatcherManager::new(authority_state.db(), 100);
+    let _join = manager
+        .start_service(4, Duration::from_millis(500))
+        .await
+        .expect("No issues starting service.");
+
+    authority_state
+        .set_batcher_sender(_send)
+        .expect("No problem registering");
+    tokio::task::yield_now().await;
+
+    let effects = create_move_object(
+        &authority_state,
+        &gas_payment_object_id,
+        &sender,
+        &sender_key,
+    )
+    .await
+    .unwrap();
+
+    let (_tx, mut rx) = _pair;
+
+    // Second and after is the one
+    let y = rx.recv().await.unwrap();
+    println!("{:?}", y);
+    assert!(matches!(
+        y,
+        UpdateItem::Transaction((2, x)) if x == effects.transaction_digest
+    ));
+
+    assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
+
+    drop(_tx);
+    drop(authority_state);
+
+    _join.await.expect("No issues ending task.");
 }

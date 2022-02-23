@@ -383,7 +383,7 @@ fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
 }
 
 #[cfg(test)]
-fn check_gas_object(
+pub fn check_gas_object(
     gas_object: &Object,
     expected_balance: u64,
     expected_sequence_number: SequenceNumber,
@@ -1576,7 +1576,7 @@ async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
     state
 }
 
-async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
+pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
     let state = init_state().await;
 
     for o in objects {
@@ -1717,7 +1717,7 @@ async fn call_framework_code(
     .await
 }
 
-async fn create_move_object(
+pub async fn create_move_object(
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &SuiAddress,

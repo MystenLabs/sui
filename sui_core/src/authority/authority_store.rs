@@ -368,7 +368,8 @@ impl AuthorityStore {
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<(usize, TransactionInfoResponse), SuiError> {
+
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let mut write_batch = self.transaction_lock.batch();
@@ -386,13 +387,13 @@ impl AuthorityStore {
             std::iter::once((transaction_digest, &signed_effects)),
         )?;
 
-        self.batch_update_objects(write_batch, temporary_store, transaction_digest)?;
+        let seq : usize = self.batch_update_objects(write_batch, temporary_store, transaction_digest)?;
 
-        Ok(TransactionInfoResponse {
+        Ok((seq, TransactionInfoResponse {
             signed_transaction: self.signed_transactions.get(&transaction_digest)?,
             certified_transaction: Some(certificate),
             signed_effects: Some(signed_effects),
-        })
+        }))
     }
 
     /// Persist temporary storage to DB for genesis modules
@@ -403,7 +404,7 @@ impl AuthorityStore {
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
         let write_batch = self.transaction_lock.batch();
-        self.batch_update_objects(write_batch, temporary_store, transaction_digest)
+        self.batch_update_objects(write_batch, temporary_store, transaction_digest).map(|_| ())
     }
 
     /// Helper function for updating the objects in the state
@@ -412,7 +413,7 @@ impl AuthorityStore {
         mut write_batch: DBBatch,
         temporary_store: AuthorityTemporaryStore,
         transaction_digest: TransactionDigest,
-    ) -> Result<(), SuiError> {
+    ) -> Result<usize, SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
 
         // Archive the old lock.
@@ -492,6 +493,7 @@ impl AuthorityStore {
 
         // This is the critical region: testing the locks and writing the
         // new locks must be atomic, and no writes should happen in between.
+        let next_seq;
         {
             // Acquire the lock to ensure no one else writes when we are in here.
             let _mutexes = self.acquire_locks(&active_inputs[..]);
@@ -510,7 +512,7 @@ impl AuthorityStore {
             //       out of order with respect to their sequence number. It is also
             //       possible for the authority to crash without committing the
             //       full sequence, and the batching logic needs to deal with this.
-            let next_seq = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
+            next_seq = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
             write_batch = write_batch.insert_batch(
                 &self.executed_sequence,
                 std::iter::once((next_seq, transaction_digest)),
@@ -522,8 +524,9 @@ impl AuthorityStore {
             // implicit: drop(_mutexes);
         } // End of critical region
 
-        Ok(())
+        Ok(next_seq)
     }
+
 
     /// Returns the last entry we have for this object in the parents_sync index used
     /// to facilitate client and authority sync. In turn the latest entry provides the

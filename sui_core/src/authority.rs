@@ -27,6 +27,8 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
+use crate::authority_batch::BatcherSender;
+
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
 pub mod authority_tests;
@@ -64,6 +66,11 @@ pub struct AuthorityState {
 
     /// The database
     _database: Arc<AuthorityStore>,
+
+    /// The sender to notify of new transactions
+    /// and create batches for this authority.
+    /// Keep as None if there is no need for this.
+    batch_sender: Option<BatcherSender>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -73,6 +80,16 @@ pub struct AuthorityState {
 ///
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
+    /// Set a listener for transaction certificate updates. Returns an
+    /// error if a listener is already registered.
+    pub fn set_batcher_sender(&mut self, batch_sender: BatcherSender) -> SuiResult {
+        if self.batch_sender.is_some() {
+            return Err(SuiError::AuthorityUpdateFailure);
+        }
+        self.batch_sender = Some(batch_sender);
+        Ok(())
+    }
+
     /// The logic to check one object against a reference, and return the object if all is well
     /// or an error if not.
     fn check_one_lock(
@@ -382,8 +399,17 @@ impl AuthorityState {
             &gas_object_id,
         );
         // Update the database in an atomic manner
-        self.update_state(temporary_store, certificate, to_signed_effects)
-            .await // Returns the TransactionInfoResponse
+
+        let (seq, resp) = self
+            .update_state(temporary_store, certificate, to_signed_effects)
+            .await?; // Returns the OrderInfoResponse
+
+        // If there is a notifier registered, notify:
+        if let Some(sender) = &self.batch_sender {
+            sender.send_item(seq, transaction_digest).await?;
+        }
+
+        Ok(resp)
     }
 
     fn execute_transaction(
@@ -617,6 +643,7 @@ impl AuthorityState {
             move_vm: adapter::new_move_vm(native_functions)
                 .expect("We defined natives to not fail here"),
             _database: store,
+            batch_sender: None,
         };
 
         for genesis_modules in genesis_packages {
@@ -628,7 +655,12 @@ impl AuthorityState {
         state
     }
 
-    async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    #[cfg(test)]
+    pub fn db(&self) -> Arc<AuthorityStore> {
+        self._database.clone()
+    }
+
+    pub async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self._database.get_object(object_id)
     }
 
@@ -709,9 +741,11 @@ impl AuthorityState {
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
+
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<(usize,TransactionInfoResponse), SuiError> {
+
         self._database
             .update_state(temporary_store, certificate, signed_effects)
     }

@@ -93,11 +93,27 @@ impl BatcherManager {
             tx_broadcast: tx_broadcast.clone(),
             db,
         };
+
         (sender, manager, (tx_broadcast, rx_broadcast))
     }
 
     /// Starts the manager service / tokio task
-    pub fn start_service() {}
+    pub async fn start_service(
+        mut self,
+        min_batch_size: usize,
+        max_delay: Duration,
+    ) -> Result<tokio::task::JoinHandle<()>, SuiError> {
+        let last_batch = self.init_from_database().await?;
+
+        let join_handle = tokio::spawn(async move {
+            self.run_service(last_batch, min_batch_size, max_delay)
+                .await
+                .expect("Service returns with no errors");
+            drop(self);
+        });
+
+        Ok(join_handle)
+    }
 
     async fn init_from_database(&self) -> Result<AuthorityBatch, SuiError> {
         // First read the last batch in the db
@@ -166,17 +182,20 @@ impl BatcherManager {
         Ok(last_batch)
     }
 
-    pub async fn run_service(&mut self, min_batch_size: usize, max_delay: Duration) -> SuiResult {
-        // We first use the state of the database to establish what the current
-        // latest batch is.
-        let mut _last_batch = self.init_from_database().await?;
-
+    pub async fn run_service(
+        &mut self,
+        prev_batch: AuthorityBatch,
+        min_batch_size: usize,
+        max_delay: Duration,
+    ) -> SuiResult {
         // Then we operate in a loop, where for each new update we consider
         // whether to create a new batch or not.
 
         let mut interval = interval(max_delay);
         let mut exit = false;
         let mut make_batch;
+
+        let mut prev_batch = prev_batch;
 
         // The structures we use to build the next batch. The current_batch holds the sequence
         // of transactions in order, following the last batch. The loose transactions holds
@@ -185,7 +204,7 @@ impl BatcherManager {
             Vec<(usize, TransactionDigest)>,
             BTreeMap<usize, TransactionDigest>,
         ) = (Vec::new(), BTreeMap::new());
-        let mut next_sequence_number = _last_batch.total_size;
+        let mut next_sequence_number = prev_batch.total_size;
 
         while !exit {
             // Reset the flags.
@@ -206,7 +225,6 @@ impl BatcherManager {
                     exit = true;
                   },
                   Some((seq, tx_digest)) => {
-
                     loose_transactions.insert(seq, tx_digest);
                     while loose_transactions.contains_key(&next_sequence_number) {
                       let next_item = (next_sequence_number, loose_transactions.remove(&next_sequence_number).unwrap());
@@ -231,14 +249,14 @@ impl BatcherManager {
                 }
 
                 // Make and store a new batch.
-                let new_batch = AuthorityBatch::make_next(&_last_batch, &current_batch);
+                let new_batch = AuthorityBatch::make_next(&prev_batch, &current_batch);
                 self.db.batches.insert(&new_batch.total_size, &new_batch)?;
 
                 // Send the update
                 let _ = self.tx_broadcast.send(UpdateItem::Batch(new_batch));
 
                 // A new batch is actually made, so we reset the conditions.
-                _last_batch = new_batch;
+                prev_batch = new_batch;
                 current_batch.clear();
                 interval.reset();
             }
