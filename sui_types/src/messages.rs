@@ -313,6 +313,7 @@ impl BcsSignable for TransactionEffects {}
 impl Display for TransactionEffects {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
+        writeln!(writer, "Status : {:?}", self.status)?;
         if !self.created.is_empty() {
             writeln!(writer, "Created Objects:")?;
             for (obj, _) in &self.created {
@@ -657,6 +658,45 @@ impl CertifiedTransaction {
             &self.signatures,
             &committee.expanded_keys,
         )
+    }
+}
+
+impl Display for CertifiedTransaction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        writeln!(
+            writer,
+            "Signed Authorities : {:?}",
+            self.signatures
+                .iter()
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>()
+        )?;
+        match &self.transaction.data.kind {
+            TransactionKind::Transfer(t) => {
+                writeln!(writer, "Transaction Kind : Transfer")?;
+                writeln!(writer, "Recipient : {}", t.recipient)?;
+                let (object_id, seq, digest) = t.object_ref;
+                writeln!(writer, "Object ID : {}", &object_id)?;
+                writeln!(writer, "Sequence Number : {:?}", seq)?;
+                writeln!(writer, "Object Digest : {}", encode_bytes_hex(&digest.0))?;
+            }
+            TransactionKind::Publish(p) => {
+                writeln!(writer, "Transaction Kind : Publish")?;
+                writeln!(writer, "Gas Budget : {}", p.gas_budget)?;
+            }
+            TransactionKind::Call(c) => {
+                writeln!(writer, "Transaction Kind : Call")?;
+                writeln!(writer, "Gas Budget : {}", c.gas_budget)?;
+                writeln!(writer, "Package ID : {}", c.package.0.to_hex())?;
+                writeln!(writer, "Module : {}", c.module)?;
+                writeln!(writer, "Function : {}", c.function)?;
+                writeln!(writer, "Object Arguments : {:?}", c.object_arguments)?;
+                writeln!(writer, "Pure Arguments : {:?}", c.pure_arguments)?;
+                writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
+            }
+        }
+        write!(f, "{}", writer)
     }
 }
 
