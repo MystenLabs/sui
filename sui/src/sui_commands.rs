@@ -185,7 +185,7 @@ pub async fn genesis(
         for path in genesis_conf.move_packages {
             let mut modules =
                 sui_framework::build_move_package(&path, BuildConfig::default(), false)?;
-            generate_package_id(
+            let package_id = generate_package_id(
                 &mut modules,
                 &mut TxContext::new(&SuiAddress::default(), TransactionDigest::genesis()),
             )?;
@@ -193,7 +193,7 @@ pub async fn genesis(
             let object = Object::new_package(modules, TransactionDigest::genesis());
             info!("Loaded package [{}] from {:?}.", object.id(), path);
             // Writing package id to network.conf for user to retrieve later.
-            config.loaded_move_packages.push((path, object.id()));
+            config.loaded_move_packages.push((path, package_id));
             preload_modules.push(object)
         }
     }
