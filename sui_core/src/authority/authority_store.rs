@@ -369,7 +369,6 @@ impl AuthorityStore {
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
     ) -> Result<(usize, TransactionInfoResponse), SuiError> {
-
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let mut write_batch = self.transaction_lock.batch();
@@ -526,7 +525,6 @@ impl AuthorityStore {
 
         Ok(next_seq)
     }
-
 
     /// Returns the last entry we have for this object in the parents_sync index used
     /// to facilitate client and authority sync. In turn the latest entry provides the
