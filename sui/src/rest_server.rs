@@ -11,7 +11,10 @@ use dropshot::{
 
 use move_package::BuildConfig;
 use serde_json::json;
-use sui::config::{AccountInfo, AuthorityInfo, AuthorityPrivateInfo, Config, NetworkConfig, WalletConfig, GenesisConfig};
+use sui::config::{
+    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig,
+    WalletConfig,
+};
 use sui::wallet_commands::WalletContext;
 use sui_adapter::adapter::generate_package_id;
 use sui_core::authority::{AuthorityState, AuthorityStore};
@@ -71,7 +74,7 @@ async fn main() -> Result<(), String> {
  * Server context (state shared by handler functions)
  */
 struct ServerContext {
-    genesis_config_path: String, 
+    genesis_config_path: String,
     wallet_config_path: String,
     network_config_path: String,
     authority_db_path: String,
@@ -159,7 +162,8 @@ async fn genesis(
 
     let working_dir = network_config.config_path().parent().unwrap().to_owned();
     // TODO: Add error handling here
-    let genesis_conf = GenesisConfig::default_genesis(&working_dir.join(genesis_config_path)).unwrap();
+    let genesis_conf =
+        GenesisConfig::default_genesis(&working_dir.join(genesis_config_path)).unwrap();
 
     info!(
         "Creating {} new authorities...",
@@ -215,7 +219,8 @@ async fn genesis(
         genesis_conf.sui_framework_lib_path
     );
     // TODO: Add error handling
-    let sui_lib = sui_framework::get_sui_framework_modules(&genesis_conf.sui_framework_lib_path).unwrap();
+    let sui_lib =
+        sui_framework::get_sui_framework_modules(&genesis_conf.sui_framework_lib_path).unwrap();
     let lib_object =
         Object::new_package(sui_lib, SuiAddress::default(), TransactionDigest::genesis());
     preload_modules.push(lib_object);
@@ -225,7 +230,8 @@ async fn genesis(
         genesis_conf.move_framework_lib_path
     );
     // TODO: Add error handling
-    let move_lib = sui_framework::get_move_stdlib_modules(&genesis_conf.move_framework_lib_path).unwrap();
+    let move_lib =
+        sui_framework::get_move_stdlib_modules(&genesis_conf.move_framework_lib_path).unwrap();
     let lib_object = Object::new_package(
         move_lib,
         SuiAddress::default(),
@@ -249,13 +255,16 @@ async fn genesis(
             generate_package_id(
                 &mut modules,
                 &mut TxContext::new(&SuiAddress::default(), TransactionDigest::genesis()),
-            ).unwrap();
+            )
+            .unwrap();
 
             let object =
                 Object::new_package(modules, SuiAddress::default(), TransactionDigest::genesis());
             info!("Loaded package [{}] from {:?}.", object.id(), path);
             // Writing package id to network.conf for user to retrieve later.
-            network_config.loaded_move_packages.push((path, object.id()));
+            network_config
+                .loaded_move_packages
+                .push((path, object.id()));
             preload_modules.push(object)
         }
     }
@@ -276,7 +285,8 @@ async fn genesis(
             &preload_objects,
             network_config.buffer_size,
         )
-        .await.unwrap();
+        .await
+        .unwrap();
     }
 
     info!("Network genesis completed.");
@@ -381,7 +391,15 @@ async fn start(
 
     for authority in &network_config.authorities {
         // TODO: Add error handling.
-        let server = make_server(authority, &committee, vec![], &[], network_config.buffer_size).await.unwrap();
+        let server = make_server(
+            authority,
+            &committee,
+            vec![],
+            &[],
+            network_config.buffer_size,
+        )
+        .await
+        .unwrap();
         handles.push(async move {
             let spawned_server = match server.spawn().await {
                 Ok(server) => server,
