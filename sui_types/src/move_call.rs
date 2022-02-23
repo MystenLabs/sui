@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    base_types::{ObjectID, TxContext, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
+    base_types::{ObjectID, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     error::SuiError,
     object::{Data, Object},
     SUI_FRAMEWORK_ADDRESS,
@@ -32,7 +32,6 @@ pub struct TypeCheckSuccess {
 /// - Check that the the signature of `function` is well-typed w.r.t `type_args`, `object_args`, and `pure_args`
 /// - Return the ID of the resolved module, a vector of BCS encoded arguments to pass to the VM, and a partitioning
 /// of the input objects into objects passed by value vs by mutable reference
-/// Specifying TxContext is optional because it is not a user-specified arg
 pub fn resolve_and_type_check(
     package_object: Object,
     module: &Identifier,
@@ -40,7 +39,6 @@ pub fn resolve_and_type_check(
     type_args: &[TypeTag],
     object_args: Vec<Object>,
     mut pure_args: Vec<Vec<u8>>,
-    ctx: Option<&TxContext>,
 ) -> Result<TypeCheckSuccess, SuiError> {
     // resolve the function we are calling
     let (function_signature, module_id) = match package_object.data {
@@ -185,11 +183,6 @@ pub fn resolve_and_type_check(
         }
     }
     args.append(&mut pure_args);
-
-    // If TxContext is is specified, add it
-    if let Some(v) = ctx {
-        args.push(v.to_vec());
-    }
 
     Ok(TypeCheckSuccess {
         module_id,

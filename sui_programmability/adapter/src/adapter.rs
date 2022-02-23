@@ -12,7 +12,7 @@ use sui_types::{
     event::Event,
     gas,
     messages::ExecutionStatus,
-    move_call_type_check::*,
+    move_call::*,
     object::{MoveObject, Object},
     storage::Storage,
 };
@@ -91,7 +91,6 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         &type_args,
         object_args,
         pure_args,
-        Some(ctx),
     ) {
         Ok(ok) => ok,
         Err(err) => {
@@ -99,6 +98,8 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         }
     };
 
+    let mut args = args;
+    args.push(ctx.to_vec());
     match execute_internal(
         vm,
         state_view,

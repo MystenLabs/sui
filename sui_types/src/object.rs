@@ -182,6 +182,7 @@ impl MovePackage {
     pub fn serialized_module_map(&self) -> &BTreeMap<String, ByteBuf> {
         &self.module_map
     }
+
     pub fn from_map(module_map: &BTreeMap<String, ByteBuf>) -> Self {
         // All modules in the same package must have the same address. Pick any
         let id = ObjectID::from(
@@ -196,6 +197,7 @@ impl MovePackage {
             module_map: module_map.clone(),
         }
     }
+
     pub fn id(&self) -> ObjectID {
         self.id
     }
@@ -209,6 +211,7 @@ impl MovePackage {
                 })?;
         Ok(CompiledModule::deserialize(ser)?.self_id())
     }
+
     pub fn get_function_signature(
         &self,
         module: &Identifier,
