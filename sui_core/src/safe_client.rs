@@ -165,6 +165,15 @@ impl<C> SafeClient<C> {
 
         Ok(())
     }
+
+    /// This function is used by the higher level authority logic to report an
+    /// error that could be due to this authority.
+    pub fn report_client_error(&self, _error: SuiError) {
+        // TODO: At a minumum we log this error along the authority name, and potentially
+        // in case of strong evidence of byzantine behaviour we could share this error
+        // with the rest of the network, or de-prioritize requests to this authority given
+        // weaker evidence.
+    }
 }
 
 #[async_trait]
@@ -182,7 +191,10 @@ where
             .authority_client
             .handle_transaction(transaction)
             .await?;
-        self.check_transaction_response(digest, &transaction_info)?;
+        if let Err(err) = self.check_transaction_response(digest, &transaction_info) {
+            self.report_client_error(err.clone());
+            return Err(err);
+        }
         Ok(transaction_info)
     }
 
@@ -196,7 +208,11 @@ where
             .authority_client
             .handle_confirmation_transaction(transaction)
             .await?;
-        self.check_transaction_response(digest, &transaction_info)?;
+
+        if let Err(err) = self.check_transaction_response(digest, &transaction_info) {
+            self.report_client_error(err.clone());
+            return Err(err);
+        }
         Ok(transaction_info)
     }
 
@@ -217,7 +233,10 @@ where
             .authority_client
             .handle_object_info_request(request.clone())
             .await?;
-        self.check_object_response(&request, &response)?;
+        if let Err(err) = self.check_object_response(&request, &response) {
+            self.report_client_error(err.clone());
+            return Err(err);
+        }
         Ok(response)
     }
 
@@ -231,7 +250,11 @@ where
             .authority_client
             .handle_transaction_info_request(request)
             .await?;
-        self.check_transaction_response(digest, &transaction_info)?;
+
+        if let Err(err) = self.check_transaction_response(digest, &transaction_info) {
+            self.report_client_error(err.clone());
+            return Err(err);
+        }
         Ok(transaction_info)
     }
 }
