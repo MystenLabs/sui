@@ -86,7 +86,7 @@ The following commands are supported by the interactive wallet:
 
 Use `help <command>` to see more information on each command.
 
-The wallet can also be use without the interactive shell
+The wallet can also be used without the interactive shell
 
 ```shell
 USAGE:
