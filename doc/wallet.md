@@ -26,10 +26,13 @@ directory.
 ```
 
 The genesis command creates 4 authorities, 5 user accounts each with 5
-gas objects. These numbers represent a sample configuration and have
-been chosen somewhat arbitrarily, but the process of generating the
-genesis state can be customized with additional accounts, objects,
-code, etc. as described [here](#genesis-customization).
+gas objects, which are Sui objects used to pay for Sui
+[transactions](https://github.com/MystenLabs/fastnft/blob/main/doc/transactions.md#transaction-metadata),
+such other object transfers or smart contract (Move) calls. These
+numbers represent a sample configuration and have been chosen somewhat
+arbitrarily, but the process of generating the genesis state can be
+customized with additional accounts, objects, code, etc. as described
+[here](#genesis-customization).
 
 
 The network configuration is stored in `network.conf` and
@@ -166,7 +169,7 @@ the GAS module using the following Sui Wallet command:
 ./wallet --no-shell call \
 --function transfer \
 --module GAS \
---package 0000000000000000000000000000000000000002 \
+--package 0x2 \
 --object-args B80052DE4A17C0A61B27857A31A5CAC0EF01EF2F \
 --pure-args x\"5986f0651a5329b90d1d76acd992021377684509909b23a9bbf79c4416afd9cf\" \
 --gas 1FD8DA0C56694229761E9A3DCE50C49AF2EA5DB1 \
@@ -183,8 +186,7 @@ one-by-one:
   the function is located (please
   [remember](#a-quick-look-at-the-gas-module) that the ID of the
   genesis FastX package containing the GAS module is defined in its
-  manifest file, and is equal to 0x2, which is here extended to 20
-  bytes expected by the system)
+  manifest file, and is equal to 0x2)
 - `object-args` - a list of arguments of Sui object type (in this case
   there is only one representing the `c` parameter of the `transfer`
   function)

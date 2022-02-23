@@ -73,7 +73,7 @@ bootstrap Sui operations, for example to create and manipulate gas
 objects. In particular the gas object is defined in the GAS module
 located in the
 [sui_programmability/framework/sources/GAS.move](../sui_programmability/framework/sources/GAS.move)
-file. As you can seem the manifest file for the package containing the
+file. As you can see the manifest file for the package containing the
 GAS module is located, as expected, in the
 [sui_programmability/framework/Move.toml](../sui_programmability/framework/Move.toml)
 file.
@@ -102,7 +102,7 @@ In addition to having a presence at the source code level, as we
 discussed [earlier](#move-code-organization), a package in Sui is also
 an object, and must have a unique numeric ID in addition to a unique
 name, so that it can be identified by the Sui platform. For the
-framework packages this address is is assigned in the manifest file:
+framework packages this address is assigned in the manifest file:
 
 ``` 
 [addresses]
