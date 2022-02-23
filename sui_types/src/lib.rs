@@ -22,6 +22,7 @@ pub mod gas;
 pub mod gas_coin;
 pub mod id;
 pub mod messages;
+pub mod move_call;
 pub mod object;
 pub mod serialize;
 pub mod storage;
