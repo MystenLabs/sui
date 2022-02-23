@@ -11,7 +11,7 @@ use move_core_types::language_storage::TypeTag;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
 use sui_types::{
-    base_types::*, coin, committee::Committee, error::SuiError, fp_ensure, gas_coin, messages::*,
+    base_types::*, coin, committee::Committee, error::SuiError, fp_ensure, messages::*,
     object::ObjectRead, SUI_FRAMEWORK_ADDRESS,
 };
 use typed_store::rocks::open_cf;
@@ -131,10 +131,10 @@ pub trait Client {
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: SuiAddress,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
-    /// Try to complete all pending orders once. Return if any fails
-    async fn try_complete_pending_orders(&mut self) -> Result<(), SuiError>;
+    /// Try to complete all pending transactions once. Return if any fails
+    async fn try_complete_pending_transactions(&mut self) -> Result<(), SuiError>;
 
     /// Synchronise client state with a random authorities, updates all object_ids and certificates, request only goes out to one authority.
     /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
@@ -151,7 +151,7 @@ pub trait Client {
         object_arguments: Vec<ObjectRef>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
     /// Publish Move modules
     async fn publish(
@@ -159,7 +159,7 @@ pub trait Client {
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error>;
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
     /// Split the coin object (identified by `coin_object_ref`) into
     /// multiple new coins. The amount of each new coin is specified in
@@ -267,7 +267,10 @@ impl<A> ClientState<A> {
 
     /// Need to remove unwraps. Found this tricky due to iterator requirements of downloader and not being able to exit from closure to top fn
     /// https://github.com/MystenLabs/fastnft/issues/307
-    pub fn certificates(&self, object_id: &ObjectID) -> impl Iterator<Item = CertifiedOrder> + '_ {
+    pub fn certificates(
+        &self,
+        object_id: &ObjectID,
+    ) -> impl Iterator<Item = CertifiedTransaction> + '_ {
         self.store
             .object_certs
             .get(object_id)
@@ -285,7 +288,7 @@ impl<A> ClientState<A> {
 
     pub fn all_certificates(
         &self,
-    ) -> impl Iterator<Item = (TransactionDigest, CertifiedOrder)> + '_ {
+    ) -> impl Iterator<Item = (TransactionDigest, CertifiedTransaction)> + '_ {
         self.store.certificates.iter()
     }
 
@@ -366,27 +369,27 @@ where
 
     async fn execute_transaction_inner(
         &mut self,
-        order: &Order,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
-        let (new_certificate, effects) = self.authorities.execute_transaction(order).await?;
+        transaction: &Transaction,
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+        let (new_certificate, effects) = self.authorities.execute_transaction(transaction).await?;
 
-        // Update local data using new order response.
-        self.update_objects_from_order_info(new_certificate.clone(), effects.clone())
+        // Update local data using new transaction response.
+        self.update_objects_from_transaction_info(new_certificate.clone(), effects.clone())
             .await?;
 
         Ok((new_certificate, effects))
     }
 
-    /// Execute (or retry) an order and execute the Confirmation Order.
+    /// Execute (or retry) a transaction and execute the Confirmation Transaction.
     /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
     /// This functions locks all the input objects if possible, and unlocks at the end of confirmation or if an error occurs
     /// TODO: define other situations where we can unlock objects after authority error
     /// https://github.com/MystenLabs/fastnft/issues/346
     async fn execute_transaction(
         &mut self,
-        order: Order,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
-        for object_kind in &order.input_objects() {
+        transaction: Transaction,
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+        for object_kind in &transaction.input_objects() {
             let object_id = object_kind.object_id();
             let next_sequence_number = self.next_sequence_number(&object_id).unwrap_or_default();
             fp_ensure!(
@@ -398,11 +401,11 @@ where
                 .into()
             );
         }
-        // Lock the objects in this order
-        self.lock_pending_order_objects(&order)?;
+        // Lock the objects in this transaction
+        self.lock_pending_transaction_objects(&transaction)?;
 
         // We can escape this function without unlocking. This could be dangerous
-        let result = self.execute_transaction_inner(&order).await;
+        let result = self.execute_transaction_inner(&transaction).await;
 
         // How do we handle errors on authority which lock objects?
         // Currently VM crash can keep objects locked, but we would like to avoid this.
@@ -410,73 +413,79 @@ where
         // https://github.com/MystenLabs/fastnft/issues/211
         // https://github.com/MystenLabs/fastnft/issues/346
 
-        self.unlock_pending_order_objects(&order)?;
+        self.unlock_pending_transaction_objects(&transaction)?;
         result
     }
 
-    /// This function verifies that the objects in the specfied order are locked by the given order
-    /// We use this to ensure that an order can indeed unclock or lock certain objects in order
-    /// This means either exactly all the objects are owned by this order, or by no order
+    /// This function verifies that the objects in the specfied transaction are locked by the given transaction
+    /// We use this to ensure that a transaction can indeed unlock or lock certain objects in the transaction
+    /// This means either exactly all the objects are owned by this transaction, or by no transaction
     /// The caller has to explicitly find which objects are locked
     /// TODO: always return true for immutable objects https://github.com/MystenLabs/fastnft/issues/305
-    fn can_lock_or_unlock(&self, order: &Order) -> Result<bool, SuiError> {
-        let iter_matches = self.store.pending_orders.multi_get(
-            &order
+    fn can_lock_or_unlock(&self, transaction: &Transaction) -> Result<bool, SuiError> {
+        let iter_matches = self.store.pending_transactions.multi_get(
+            &transaction
                 .input_objects()
                 .iter()
                 .map(|q| q.object_id())
                 .collect_vec(),
         )?;
-        if iter_matches.into_iter().any(|match_for_order| {
-            matches!(match_for_order,
-                // If we find any order that isn't the given order, we cannot proceed
-                Some(o) if o != *order)
+        if iter_matches.into_iter().any(|match_for_transaction| {
+            matches!(match_for_transaction,
+                // If we find any transaction that isn't the given transaction, we cannot proceed
+                Some(o) if o != *transaction)
         }) {
             return Ok(false);
         }
-        // All the objects are either owned by this order or by no order
+        // All the objects are either owned by this transaction or by no transaction
         Ok(true)
     }
 
-    /// Locks the objects for the given order
+    /// Locks the objects for the given transaction
     /// It is important to check that the object is not locked before locking again
     /// One should call can_lock_or_unlock before locking as this overwites the previous lock
-    /// If the object is already locked, ensure it is unlocked by calling unlock_pending_order_objects
+    /// If the object is already locked, ensure it is unlocked by calling unlock_pending_transaction_objects
     /// Client runs sequentially right now so access to this is safe
     /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/fastnft/issues/335
-    pub fn lock_pending_order_objects(&self, order: &Order) -> Result<(), SuiError> {
-        if !self.can_lock_or_unlock(order)? {
+    pub fn lock_pending_transaction_objects(
+        &self,
+        transaction: &Transaction,
+    ) -> Result<(), SuiError> {
+        if !self.can_lock_or_unlock(transaction)? {
             return Err(SuiError::ConcurrentTransactionError);
         }
         self.store
-            .pending_orders
+            .pending_transactions
             .multi_insert(
-                order
+                transaction
                     .input_objects()
                     .iter()
-                    .map(|e| (e.object_id(), order.clone())),
+                    .map(|e| (e.object_id(), transaction.clone())),
             )
             .map_err(|e| e.into())
     }
-    /// Unlocks the objects for the given order
+    /// Unlocks the objects for the given transaction
     /// Unlocking an already unlocked object, is a no-op and does not Err
-    fn unlock_pending_order_objects(&self, order: &Order) -> Result<(), SuiError> {
-        if !self.can_lock_or_unlock(order)? {
+    fn unlock_pending_transaction_objects(
+        &self,
+        transaction: &Transaction,
+    ) -> Result<(), SuiError> {
+        if !self.can_lock_or_unlock(transaction)? {
             return Err(SuiError::ConcurrentTransactionError);
         }
         self.store
-            .pending_orders
-            .multi_remove(order.input_objects().iter().map(|e| e.object_id()))
+            .pending_transactions
+            .multi_remove(transaction.input_objects().iter().map(|e| e.object_id()))
             .map_err(|e| e.into())
     }
 
-    async fn update_objects_from_order_info(
+    async fn update_objects_from_transaction_info(
         &mut self,
-        cert: CertifiedOrder,
-        effects: OrderEffects,
-    ) -> Result<(CertifiedOrder, OrderEffects), SuiError> {
+        cert: CertifiedTransaction,
+        effects: TransactionEffects,
+    ) -> Result<(CertifiedTransaction, TransactionEffects), SuiError> {
         // The cert should be included in the response
-        let parent_tx_digest = cert.order.digest();
+        let parent_tx_digest = cert.transaction.digest();
         self.store.certificates.insert(&parent_tx_digest, &cert)?;
 
         let mut objs_to_download = Vec::new();
@@ -572,7 +581,7 @@ where
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: SuiAddress,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         let object_ref = self
             .store
             .object_refs
@@ -587,40 +596,42 @@ where
                     object_id: gas_payment,
                 })?;
 
-        let order = Order::new_transfer(
+        let transaction = Transaction::new_transfer(
             recipient,
             object_ref,
             self.address,
             gas_payment,
             &*self.secret,
         );
-        let (certificate, effects) = self.execute_transaction(order).await?;
+        let (certificate, effects) = self.execute_transaction(transaction).await?;
 
         Ok((certificate, effects))
     }
 
-    async fn try_complete_pending_orders(&mut self) -> Result<(), SuiError> {
-        // Orders are idempotent so no need to prevent multiple executions
-        let unique_pending_orders: HashSet<_> = self
+    async fn try_complete_pending_transactions(&mut self) -> Result<(), SuiError> {
+        // Transactions are idempotent so no need to prevent multiple executions
+        let unique_pending_transactions: HashSet<_> = self
             .store
-            .pending_orders
+            .pending_transactions
             .iter()
             .map(|(_, ord)| ord)
             .collect();
         // Need some kind of timeout or max_trials here?
         // TODO: https://github.com/MystenLabs/fastnft/issues/330
-        for order in unique_pending_orders {
-            self.execute_transaction(order.clone()).await.map_err(|e| {
-                SuiError::ErrorWhileProcessingTransactionOrder { err: e.to_string() }
-            })?;
+        for transaction in unique_pending_transactions {
+            self.execute_transaction(transaction.clone())
+                .await
+                .map_err(|e| SuiError::ErrorWhileProcessingTransactionTransaction {
+                    err: e.to_string(),
+                })?;
         }
         Ok(())
     }
 
     async fn sync_client_state(&mut self) -> Result<(), anyhow::Error> {
-        if !self.store.pending_orders.is_empty() {
-            // Finish executing the previous orders
-            self.try_complete_pending_orders().await?;
+        if !self.store.pending_transactions.is_empty() {
+            // Finish executing the previous transactions
+            self.try_complete_pending_transactions().await?;
         }
         // update object_ids.
         self.store.object_sequence_numbers.clear()?;
@@ -641,7 +652,7 @@ where
             if let Some(cert) = option_cert {
                 self.store
                     .certificates
-                    .insert(&cert.order.digest(), &cert)?;
+                    .insert(&cert.transaction.digest(), &cert)?;
             }
             // Save the object layout, if any
             if let Some(layout) = option_layout {
@@ -665,8 +676,8 @@ where
         object_arguments: Vec<ObjectRef>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
-        let move_call_order = Order::new_move_call(
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+        let move_call_transaction = Transaction::new_move_call(
             self.address,
             package_object_ref,
             module,
@@ -678,7 +689,7 @@ where
             gas_budget,
             &*self.secret,
         );
-        self.execute_transaction(move_call_order).await
+        self.execute_transaction(move_call_transaction).await
     }
 
     async fn publish(
@@ -686,17 +697,17 @@ where
         package_source_files_path: String,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         // Try to compile the package at the given path
         let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
-        let move_publish_order = Order::new_module(
+        let move_publish_transaction = Transaction::new_module(
             self.address,
             gas_object_ref,
             compiled_modules,
             gas_budget,
             &*self.secret,
         );
-        self.execute_transaction(move_publish_order).await
+        self.execute_transaction(move_publish_transaction).await
     }
 
     async fn split_coin(
@@ -706,11 +717,13 @@ where
         gas_payment: ObjectRef,
         gas_budget: u64,
     ) -> Result<SplitCoinResponse, anyhow::Error> {
-        // TODO: Hardcode the coin type to be GAS coin for now.
-        // We should support splitting arbitrary coin type.
-        let coin_type = gas_coin::GAS::type_tag();
+        let coin_type = self
+            .get_object_info(coin_object_ref.0)
+            .await?
+            .object()?
+            .get_move_template_type()?;
 
-        let move_call_order = Order::new_move_call(
+        let move_call_transaction = Transaction::new_move_call(
             self.address,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
@@ -722,7 +735,7 @@ where
             gas_budget,
             &*self.secret,
         );
-        let (certificate, effects) = self.execute_transaction(move_call_order).await?;
+        let (certificate, effects) = self.execute_transaction(move_call_transaction).await?;
         if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
             return Err(error.into());
         }
@@ -757,11 +770,13 @@ where
         gas_payment: ObjectRef,
         gas_budget: u64,
     ) -> Result<MergeCoinResponse, anyhow::Error> {
-        // TODO: Hardcode the coin type to be GAS coin for now.
-        // We should support merging arbitrary coin type.
-        let coin_type = gas_coin::GAS::type_tag();
+        let coin_type = self
+            .get_object_info(primary_coin.0)
+            .await?
+            .object()?
+            .get_move_template_type()?;
 
-        let move_call_order = Order::new_move_call(
+        let move_call_transaction = Transaction::new_move_call(
             self.address,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
@@ -773,7 +788,7 @@ where
             gas_budget,
             &*self.secret,
         );
-        let (certificate, effects) = self.execute_transaction(move_call_order).await?;
+        let (certificate, effects) = self.execute_transaction(move_call_transaction).await?;
         if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
             return Err(error.into());
         }

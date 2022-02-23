@@ -80,7 +80,7 @@ impl AuthorityTemporaryStore {
     }
 
     /// For every object from active_inputs (i.e. all mutable objects), if they are not
-    /// mutated during the order execution, force mutating them by incrementing the
+    /// mutated during the transaction execution, force mutating them by incrementing the
     /// sequence number. This is required to achieve safety.
     pub fn ensure_active_inputs_mutated(&mut self) {
         for (id, _seq, _) in self.active_inputs.iter() {
@@ -118,9 +118,9 @@ impl AuthorityTemporaryStore {
         transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
         gas_object_id: &ObjectID,
-    ) -> SignedOrderEffects {
+    ) -> SignedTransactionEffects {
         let gas_object = &self.written[gas_object_id];
-        let effects = OrderEffects {
+        let effects = TransactionEffects {
             status,
             transaction_digest: *transaction_digest,
             created: self
@@ -146,7 +146,7 @@ impl AuthorityTemporaryStore {
         };
         let signature = AuthoritySignature::new(&effects, secret);
 
-        SignedOrderEffects {
+        SignedTransactionEffects {
             effects,
             authority: *authority_name,
             signature,

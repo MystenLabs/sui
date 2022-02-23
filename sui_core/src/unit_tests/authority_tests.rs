@@ -37,20 +37,23 @@ fn max_files_authority_tests() -> i32 {
 
 const MAX_GAS: u64 = 10000;
 
-// Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
-fn compare_certified_orders(o1: &CertifiedOrder, o2: &CertifiedOrder) {
-    assert_eq!(o1.order.digest(), o2.order.digest());
+// Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
+fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTransaction) {
+    assert_eq!(o1.transaction.digest(), o2.transaction.digest());
     // in this ser/de context it's relevant to compare signatures
     assert_eq!(o1.signatures, o2.signatures);
 }
 
-// Only relevant in a ser/de context : the `CertifiedOrder` for a transaction is not unique
-fn compare_order_info_responses(o1: &OrderInfoResponse, o2: &OrderInfoResponse) {
-    assert_eq!(o1.signed_order, o2.signed_order);
+// Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
+fn compare_transaction_info_responses(o1: &TransactionInfoResponse, o2: &TransactionInfoResponse) {
+    assert_eq!(o1.signed_transaction, o2.signed_transaction);
     assert_eq!(o1.signed_effects, o2.signed_effects);
-    match (o1.certified_order.as_ref(), o2.certified_order.as_ref()) {
+    match (
+        o1.certified_transaction.as_ref(),
+        o2.certified_transaction.as_ref(),
+    ) {
         (Some(cert1), Some(cert2)) => {
-            assert_eq!(cert1.order.digest(), cert2.order.digest());
+            assert_eq!(cert1.transaction.digest(), cert2.transaction.digest());
             assert_eq!(cert1.signatures, cert2.signatures);
         }
         (None, None) => (),
@@ -59,7 +62,7 @@ fn compare_order_info_responses(o1: &OrderInfoResponse, o2: &OrderInfoResponse) 
 }
 
 #[tokio::test]
-async fn test_handle_transfer_order_bad_signature() {
+async fn test_handle_transfer_transaction_bad_signature() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -76,7 +79,7 @@ async fn test_handle_transfer_order_bad_signature() {
         .await
         .unwrap()
         .unwrap();
-    let transfer_order = init_transfer_order(
+    let transfer_transaction = init_transfer_transaction(
         sender,
         &sender_key,
         recipient,
@@ -84,10 +87,11 @@ async fn test_handle_transfer_order_bad_signature() {
         gas_object.to_object_reference(),
     );
     let (_unknown_address, unknown_key) = get_key_pair();
-    let mut bad_signature_transfer_order = transfer_order.clone();
-    bad_signature_transfer_order.signature = Signature::new(&transfer_order.data, &unknown_key);
+    let mut bad_signature_transfer_transaction = transfer_transaction.clone();
+    bad_signature_transfer_transaction.signature =
+        Signature::new(&transfer_transaction.data, &unknown_key);
     assert!(authority_state
-        .handle_order(bad_signature_transfer_order)
+        .handle_transaction(bad_signature_transfer_transaction)
         .await
         .is_err());
 
@@ -97,20 +101,20 @@ async fn test_handle_transfer_order_bad_signature() {
         .unwrap()
         .unwrap();
     assert!(authority_state
-        .get_order_lock(&object.to_object_reference())
+        .get_transaction_lock(&object.to_object_reference())
         .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_order_lock(&object.to_object_reference())
+        .get_transaction_lock(&object.to_object_reference())
         .await
         .unwrap()
         .is_none());
 }
 
 #[tokio::test]
-async fn test_handle_transfer_order_unknown_sender() {
+async fn test_handle_transfer_transaction_unknown_sender() {
     let sender = get_new_address();
     let (unknown_address, unknown_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
@@ -129,7 +133,7 @@ async fn test_handle_transfer_order_unknown_sender() {
         .unwrap()
         .unwrap();
 
-    let unknown_sender_transfer_order = init_transfer_order(
+    let unknown_sender_transfer_transaction = init_transfer_transaction(
         unknown_address,
         &unknown_key,
         recipient,
@@ -138,7 +142,7 @@ async fn test_handle_transfer_order_unknown_sender() {
     );
 
     assert!(authority_state
-        .handle_order(unknown_sender_transfer_order)
+        .handle_transaction(unknown_sender_transfer_transaction)
         .await
         .is_err());
 
@@ -148,28 +152,28 @@ async fn test_handle_transfer_order_unknown_sender() {
         .unwrap()
         .unwrap();
     assert!(authority_state
-        .get_order_lock(&object.to_object_reference())
+        .get_transaction_lock(&object.to_object_reference())
         .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_order_lock(&object.to_object_reference())
+        .get_transaction_lock(&object.to_object_reference())
         .await
         .unwrap()
         .is_none());
 }
 
-/* FIXME: This tests the submission of out of order certs, but modifies object sequence numbers manually
+/* FIXME: This tests the submission of out of transaction certs, but modifies object sequence numbers manually
    and leaves the authority in an inconsistent state. We should re-code it in a proper way.
 
 #[test]
-fn test_handle_transfer_order_bad_sequence_number() {
+fn test_handle_transfer_transaction_bad_sequence_number() {
     let (sender, sender_key) = get_key_pair();
     let object_id: ObjectID = random_object_id();
     let recipient = Address::Sui(dbg_addr(2));
     let authority_state = init_state_with_object(sender, object_id);
-    let transfer_order = init_transfer_order(sender, &sender_key, recipient, object_id);
+    let transfer_transaction = init_transfer_transaction(sender, &sender_key, recipient, object_id);
 
     let mut sequence_number_state = authority_state;
     let sequence_number_state_sender_account =
@@ -180,16 +184,16 @@ fn test_handle_transfer_order_bad_sequence_number() {
             .increment()
             .unwrap();
     assert!(sequence_number_state
-        .handle_transfer_order(transfer_order)
+        .handle_transfer_transaction(transfer_transaction)
         .is_err());
 
         let object = sequence_number_state.objects.get(&object_id).unwrap();
-        assert!(sequence_number_state.get_order_lock(object.id, object.version()).unwrap().is_none());
+        assert!(sequence_number_state.get_transaction_lock(object.id, object.version()).unwrap().is_none());
 }
 */
 
 #[tokio::test]
-async fn test_handle_transfer_order_ok() {
+async fn test_handle_transfer_transaction_ok() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -206,7 +210,7 @@ async fn test_handle_transfer_order_ok() {
         .await
         .unwrap()
         .unwrap();
-    let transfer_order = init_transfer_order(
+    let transfer_transaction = init_transfer_transaction(
         sender,
         &sender_key,
         recipient,
@@ -222,17 +226,17 @@ async fn test_handle_transfer_order_ok() {
 
     // Check the initial state of the locks
     assert!(authority_state
-        .get_order_lock(&(object_id, 0.into(), test_object.digest()))
+        .get_transaction_lock(&(object_id, 0.into(), test_object.digest()))
         .await
         .unwrap()
         .is_none());
     assert!(authority_state
-        .get_order_lock(&(object_id, 1.into(), test_object.digest()))
+        .get_transaction_lock(&(object_id, 1.into(), test_object.digest()))
         .await
         .is_err());
 
     let account_info = authority_state
-        .handle_order(transfer_order.clone())
+        .handle_transaction(transfer_transaction.clone())
         .await
         .unwrap();
 
@@ -242,28 +246,31 @@ async fn test_handle_transfer_order_ok() {
         .unwrap()
         .unwrap();
     let pending_confirmation = authority_state
-        .get_order_lock(&object.to_object_reference())
+        .get_transaction_lock(&object.to_object_reference())
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(account_info.signed_order.unwrap(), pending_confirmation);
+    assert_eq!(
+        account_info.signed_transaction.unwrap(),
+        pending_confirmation
+    );
 
     // Check the final state of the locks
     assert!(authority_state
-        .get_order_lock(&(object_id, 0.into(), object.digest()))
+        .get_transaction_lock(&(object_id, 0.into(), object.digest()))
         .await
         .unwrap()
         .is_some());
     assert_eq!(
         authority_state
-            .get_order_lock(&(object_id, 0.into(), object.digest()))
+            .get_transaction_lock(&(object_id, 0.into(), object.digest()))
             .await
             .unwrap()
             .as_ref()
             .unwrap()
-            .order
+            .transaction
             .data,
-        transfer_order.data
+        transfer_transaction.data
     );
 }
 
@@ -284,12 +291,12 @@ async fn test_handle_transfer_zero_balance() {
     let gas_object =
         Object::with_id_owner_gas_for_testing(gas_object_id, SequenceNumber::new(), sender, 0);
     authority_state
-        .init_order_lock((gas_object_id, 0.into(), gas_object.digest()))
+        .init_transaction_lock((gas_object_id, 0.into(), gas_object.digest()))
         .await;
     let gas_object_ref = gas_object.to_object_reference();
     authority_state.insert_object(gas_object).await;
 
-    let transfer_order = init_transfer_order(
+    let transfer_transaction = init_transfer_transaction(
         sender,
         &sender_key,
         recipient,
@@ -297,23 +304,25 @@ async fn test_handle_transfer_zero_balance() {
         gas_object_ref,
     );
 
-    let result = authority_state.handle_order(transfer_order.clone()).await;
+    let result = authority_state
+        .handle_transaction(transfer_transaction.clone())
+        .await;
     assert!(result
         .unwrap_err()
         .to_string()
         .contains("Gas balance is 0, smaller than minimum requirement of 8 for object transfer."));
 }
 
-async fn send_and_confirm_order(
+async fn send_and_confirm_transaction(
     authority: &AuthorityState,
-    order: Order,
-) -> Result<OrderInfoResponse, SuiError> {
+    transaction: Transaction,
+) -> Result<TransactionInfoResponse, SuiError> {
     // Make the initial request
-    let response = authority.handle_order(order.clone()).await?;
-    let vote = response.signed_order.unwrap();
+    let response = authority.handle_transaction(transaction.clone()).await?;
+    let vote = response.signed_transaction.unwrap();
 
     // Collect signatures from a quorum of authorities
-    let mut builder = SignatureAggregator::try_new(order, &authority.committee).unwrap();
+    let mut builder = SignatureAggregator::try_new(transaction, &authority.committee).unwrap();
     let certificate = builder
         .append(vote.authority, vote.signature)
         .unwrap()
@@ -321,7 +330,7 @@ async fn send_and_confirm_order(
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
     authority
-        .handle_confirmation_order(ConfirmationOrder::new(certificate))
+        .handle_confirmation_transaction(ConfirmationTransaction::new(certificate))
         .await
 }
 
@@ -376,14 +385,14 @@ async fn test_publish_dependent_module_ok() {
     };
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
-    let order = Order::new_module(
+    let transaction = Transaction::new_module(
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
         MAX_GAS,
         &sender_key,
     );
-    let dependent_module_id = TxContext::new(&sender, order.digest()).fresh_id();
+    let dependent_module_id = TxContext::new(&sender, transaction.digest()).fresh_id();
 
     // Object does not exist
     assert!(authority
@@ -391,7 +400,9 @@ async fn test_publish_dependent_module_ok() {
         .await
         .unwrap()
         .is_none());
-    let response = send_and_confirm_order(&authority, order).await.unwrap();
+    let response = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
 
     // check that the dependent module got published
@@ -415,19 +426,21 @@ async fn test_publish_module_no_dependencies_ok() {
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
     let gas_cost = calculate_module_publish_cost(&module_bytes);
-    let order = Order::new_module(
+    let transaction = Transaction::new_module(
         sender,
         gas_payment_object_ref,
         module_bytes,
         MAX_GAS,
         &sender_key,
     );
-    let _module_object_id = TxContext::new(&sender, order.digest()).fresh_id();
-    let response = send_and_confirm_order(&authority, order).await.unwrap();
+    let _module_object_id = TxContext::new(&sender, transaction.digest()).fresh_id();
+    let response = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
 
     // check that the module actually got published
-    assert!(response.certified_order.is_some());
+    assert!(response.certified_transaction.is_some());
 
     // Check that gas is properly deducted.
     let gas_payment_object = authority
@@ -473,7 +486,7 @@ async fn test_publish_non_existing_dependent_module() {
     };
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
-    let order = Order::new_module(
+    let transaction = Transaction::new_module(
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
@@ -481,7 +494,7 @@ async fn test_publish_non_existing_dependent_module() {
         &sender_key,
     );
 
-    let response = authority.handle_order(order).await;
+    let response = authority.handle_transaction(transaction).await;
     assert!(response
         .unwrap_err()
         .to_string()
@@ -519,21 +532,24 @@ async fn test_publish_module_insufficient_gas() {
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
-    let order = Order::new_module(
+    let transaction = Transaction::new_module(
         sender,
         gas_payment_object_ref,
         module_bytes,
         10,
         &sender_key,
     );
-    let response = authority.handle_order(order.clone()).await.unwrap_err();
+    let response = authority
+        .handle_transaction(transaction.clone())
+        .await
+        .unwrap_err();
     assert!(response
         .to_string()
         .contains("Gas balance is 9, smaller than the budget 10 for move operation"));
 }
 
 #[tokio::test]
-async fn test_handle_move_order() {
+async fn test_handle_move_transaction() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
@@ -554,7 +570,7 @@ async fn test_handle_move_order() {
     assert_eq!(effects.mutated.len(), 1);
 
     let created_object_id = effects.created[0].0 .0;
-    // check that order actually created an object with the expected ID, owner, sequence number
+    // check that transaction actually created an object with the expected ID, owner, sequence number
     let created_obj = authority_state
         .get_object(&created_object_id)
         .await
@@ -583,7 +599,7 @@ async fn test_handle_move_order() {
 // Note that the case where gas is insufficient to execute move bytecode is tested
 // separately in the adapter tests.
 #[tokio::test]
-async fn test_handle_move_order_insufficient_budget() {
+async fn test_handle_move_transaction_insufficient_budget() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
@@ -596,7 +612,7 @@ async fn test_handle_move_order_insufficient_budget() {
     let authority_state = init_state_with_objects(vec![gas_payment_object]).await;
 
     let function = ident_str!("create").to_owned();
-    let order = Order::new_move_call(
+    let transaction = Transaction::new_move_call(
         sender,
         package_object_ref,
         ident_str!("ObjectBasics").to_owned(),
@@ -612,7 +628,7 @@ async fn test_handle_move_order_insufficient_budget() {
         &sender_key,
     );
     let response = authority_state
-        .handle_order(order.clone())
+        .handle_transaction(transaction.clone())
         .await
         .unwrap_err();
     assert!(response
@@ -621,7 +637,7 @@ async fn test_handle_move_order_insufficient_budget() {
 }
 
 #[tokio::test]
-async fn test_handle_transfer_order_double_spend() {
+async fn test_handle_transfer_transaction_double_spend() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -638,7 +654,7 @@ async fn test_handle_transfer_order_double_spend() {
         .await
         .unwrap()
         .unwrap();
-    let transfer_order = init_transfer_order(
+    let transfer_transaction = init_transfer_transaction(
         sender,
         &sender_key,
         recipient,
@@ -646,18 +662,21 @@ async fn test_handle_transfer_order_double_spend() {
         gas_object.to_object_reference(),
     );
 
-    let signed_order = authority_state
-        .handle_order(transfer_order.clone())
+    let signed_transaction = authority_state
+        .handle_transaction(transfer_transaction.clone())
         .await
         .unwrap();
     // calls to handlers are idempotent -- returns the same.
-    let double_spend_signed_order = authority_state.handle_order(transfer_order).await.unwrap();
-    // this is valid because our test authority should not change its certified order
-    compare_order_info_responses(&signed_order, &double_spend_signed_order);
+    let double_spend_signed_transaction = authority_state
+        .handle_transaction(transfer_transaction)
+        .await
+        .unwrap();
+    // this is valid because our test authority should not change its certified transaction
+    compare_transaction_info_responses(&signed_transaction, &double_spend_signed_transaction);
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_unknown_sender() {
+async fn test_handle_confirmation_transaction_unknown_sender() {
     let recipient = dbg_addr(2);
     let (sender, sender_key) = get_key_pair();
     let authority_state = init_state().await;
@@ -671,7 +690,7 @@ async fn test_handle_confirmation_order_unknown_sender() {
         SuiAddress::random_for_testing_only(),
     );
 
-    let certified_transfer_order = init_certified_transfer_order(
+    let certified_transfer_transaction = init_certified_transfer_transaction(
         sender,
         &sender_key,
         recipient,
@@ -681,14 +700,16 @@ async fn test_handle_confirmation_order_unknown_sender() {
     );
 
     assert!(authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .handle_confirmation_transaction(ConfirmationTransaction::new(
+            certified_transfer_transaction
+        ))
         .await
         .is_err());
 }
 
 #[ignore]
 #[tokio::test]
-async fn test_handle_confirmation_order_bad_sequence_number() {
+async fn test_handle_confirmation_transaction_bad_sequence_number() {
     // TODO: refactor this test to be less magic:
     // * Create an explicit state within an authority, by passing objects.
     // * Create an explicit transfer, and execute it.
@@ -722,7 +743,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
         old_seq_num = old_account.version();
     }
 
-    let certified_transfer_order = init_certified_transfer_order(
+    let certified_transfer_transaction = init_certified_transfer_transaction(
         sender,
         &sender_key,
         recipient,
@@ -748,7 +769,9 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
     // Explanation: providing an old cert that has already need applied
     //              returns a Ok(_) with info about the new object states.
     let response = authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .handle_confirmation_transaction(ConfirmationTransaction::new(
+            certified_transfer_transaction,
+        ))
         .await
         .unwrap();
     assert!(response.signed_effects.is_none());
@@ -766,7 +789,7 @@ async fn test_handle_confirmation_order_bad_sequence_number() {
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_receiver_equal_sender() {
+async fn test_handle_confirmation_transaction_receiver_equal_sender() {
     let (address, key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -783,7 +806,7 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
         .unwrap()
         .unwrap();
 
-    let certified_transfer_order = init_certified_transfer_order(
+    let certified_transfer_transaction = init_certified_transfer_transaction(
         address,
         &key,
         address,
@@ -792,7 +815,9 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
         &authority_state,
     );
     let response = authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order))
+        .handle_confirmation_transaction(ConfirmationTransaction::new(
+            certified_transfer_transaction,
+        ))
         .await
         .unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
@@ -810,7 +835,7 @@ async fn test_handle_confirmation_order_receiver_equal_sender() {
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_gas() {
+async fn test_handle_confirmation_transaction_gas() {
     let run_test_with_gas = |gas: u64| async move {
         let (sender, sender_key) = get_key_pair();
         let recipient = dbg_addr(2);
@@ -831,12 +856,12 @@ async fn test_handle_confirmation_order_gas() {
             gas,
         );
         authority_state
-            .init_order_lock((gas_object_id, 0.into(), gas_object.digest()))
+            .init_transaction_lock((gas_object_id, 0.into(), gas_object.digest()))
             .await;
         let gas_object_ref = gas_object.to_object_reference();
         authority_state.insert_object(gas_object).await;
 
-        let certified_transfer_order = init_certified_transfer_order(
+        let certified_transfer_transaction = init_certified_transfer_transaction(
             sender,
             &sender_key,
             recipient,
@@ -846,7 +871,9 @@ async fn test_handle_confirmation_order_gas() {
         );
 
         authority_state
-            .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+            .handle_confirmation_transaction(ConfirmationTransaction::new(
+                certified_transfer_transaction.clone(),
+            ))
             .await
             .unwrap()
             .signed_effects
@@ -863,7 +890,7 @@ async fn test_handle_confirmation_order_gas() {
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_ok() {
+async fn test_handle_confirmation_transaction_ok() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -881,7 +908,7 @@ async fn test_handle_confirmation_order_ok() {
         .unwrap()
         .unwrap();
 
-    let certified_transfer_order = init_certified_transfer_order(
+    let certified_transfer_transaction = init_certified_transfer_transaction(
         sender,
         &sender_key,
         recipient,
@@ -899,7 +926,9 @@ async fn test_handle_confirmation_order_ok() {
     next_sequence_number = next_sequence_number.increment();
 
     let info = authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .handle_confirmation_transaction(ConfirmationTransaction::new(
+            certified_transfer_transaction.clone(),
+        ))
         .await
         .unwrap();
     info.signed_effects.unwrap().effects.status.unwrap();
@@ -912,7 +941,7 @@ async fn test_handle_confirmation_order_ok() {
         .unwrap();
     assert_eq!(new_account.owner, recipient);
     assert_eq!(next_sequence_number, new_account.version());
-    assert_eq!(None, info.signed_order);
+    assert_eq!(None, info.signed_transaction);
     let opt_cert = {
         let refx = authority_state
             .parent(&(object_id, new_account.version(), new_account.digest()))
@@ -920,20 +949,20 @@ async fn test_handle_confirmation_order_ok() {
             .unwrap();
         authority_state.read_certificate(&refx).await.unwrap()
     };
-    if let Some(certified_order) = opt_cert {
+    if let Some(certified_transaction) = opt_cert {
         // valid since our test authority should not update its certificate set
-        compare_certified_orders(&certified_order, &certified_transfer_order);
+        compare_certified_transactions(&certified_transaction, &certified_transfer_transaction);
     } else {
         panic!("parent certificate not avaailable from the authority!");
     }
 
     // Check locks are set and archived correctly
     assert!(authority_state
-        .get_order_lock(&(object_id, 0.into(), old_account.digest()))
+        .get_transaction_lock(&(object_id, 0.into(), old_account.digest()))
         .await
         .is_err());
     assert!(authority_state
-        .get_order_lock(&(object_id, 1.into(), new_account.digest()))
+        .get_transaction_lock(&(object_id, 1.into(), new_account.digest()))
         .await
         .expect("Exists")
         .is_none());
@@ -950,7 +979,7 @@ async fn test_handle_confirmation_order_ok() {
 }
 
 #[tokio::test]
-async fn test_handle_confirmation_order_idempotent() {
+async fn test_handle_confirmation_transaction_idempotent() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -968,7 +997,7 @@ async fn test_handle_confirmation_order_idempotent() {
         .unwrap()
         .unwrap();
 
-    let certified_transfer_order = init_certified_transfer_order(
+    let certified_transfer_transaction = init_certified_transfer_transaction(
         sender,
         &sender_key,
         recipient,
@@ -978,7 +1007,9 @@ async fn test_handle_confirmation_order_idempotent() {
     );
 
     let info = authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .handle_confirmation_transaction(ConfirmationTransaction::new(
+            certified_transfer_transaction.clone(),
+        ))
         .await
         .unwrap();
     assert!(matches!(
@@ -987,7 +1018,9 @@ async fn test_handle_confirmation_order_idempotent() {
     ));
 
     let info2 = authority_state
-        .handle_confirmation_order(ConfirmationOrder::new(certified_transfer_order.clone()))
+        .handle_confirmation_transaction(ConfirmationTransaction::new(
+            certified_transfer_transaction.clone(),
+        ))
         .await
         .unwrap();
     assert!(matches!(
@@ -996,17 +1029,17 @@ async fn test_handle_confirmation_order_idempotent() {
     ));
 
     // this is valid because we're checking the authority state does not change the certificate
-    compare_order_info_responses(&info, &info2);
+    compare_transaction_info_responses(&info, &info2);
 
-    // Now check the order info request is also the same
+    // Now check the transaction info request is also the same
     let info3 = authority_state
-        .handle_order_info_request(OrderInfoRequest {
-            transaction_digest: certified_transfer_order.order.digest(),
+        .handle_transaction_info_request(TransactionInfoRequest {
+            transaction_digest: certified_transfer_transaction.transaction.digest(),
         })
         .await
         .unwrap();
 
-    compare_order_info_responses(&info, &info3);
+    compare_transaction_info_responses(&info, &info3);
 }
 
 #[tokio::test]
@@ -1278,7 +1311,7 @@ async fn test_authority_persist() {
 
     // Store an object
     authority
-        .init_order_lock((object_id, 0.into(), obj.digest()))
+        .init_transaction_lock((object_id, 0.into(), obj.digest()))
         .await;
     authority.insert_object(obj).await;
 
@@ -1339,14 +1372,14 @@ async fn test_hero() {
             module_bytes
         })
         .collect();
-    let order = Order::new_module(
+    let transaction = Transaction::new_module(
         admin,
         admin_gas_object_ref,
         all_module_bytes,
         MAX_GAS,
         &admin_key,
     );
-    let effects = send_and_confirm_order(&authority, order)
+    let effects = send_and_confirm_transaction(&authority, transaction)
         .await
         .unwrap()
         .signed_effects
@@ -1694,7 +1727,7 @@ async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
         state
-            .init_order_lock((object_id, 0.into(), obj.digest()))
+            .init_transaction_lock((object_id, 0.into(), obj.digest()))
             .await;
         state.insert_object(obj).await;
     }
@@ -1707,7 +1740,7 @@ async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> 
     for o in objects {
         let obj_ref = o.to_object_reference();
         state.insert_object(o).await;
-        state.init_order_lock(obj_ref).await;
+        state.init_transaction_lock(obj_ref).await;
     }
     state
 }
@@ -1718,33 +1751,34 @@ async fn init_state_with_object_id(address: SuiAddress, object: ObjectID) -> Aut
 }
 
 #[cfg(test)]
-fn init_transfer_order(
+fn init_transfer_transaction(
     sender: SuiAddress,
     secret: &KeyPair,
     recipient: SuiAddress,
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
-) -> Order {
-    Order::new_transfer(recipient, object_ref, sender, gas_object_ref, secret)
+) -> Transaction {
+    Transaction::new_transfer(recipient, object_ref, sender, gas_object_ref, secret)
 }
 
 #[cfg(test)]
-fn init_certified_transfer_order(
+fn init_certified_transfer_transaction(
     sender: SuiAddress,
     secret: &KeyPair,
     recipient: SuiAddress,
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
     authority_state: &AuthorityState,
-) -> CertifiedOrder {
-    let transfer_order = init_transfer_order(sender, secret, recipient, object_ref, gas_object_ref);
-    let vote = SignedOrder::new(
-        transfer_order.clone(),
+) -> CertifiedTransaction {
+    let transfer_transaction =
+        init_transfer_transaction(sender, secret, recipient, object_ref, gas_object_ref);
+    let vote = SignedTransaction::new(
+        transfer_transaction.clone(),
         authority_state.name,
         &*authority_state.secret,
     );
     let mut builder =
-        SignatureAggregator::try_new(transfer_order, &authority_state.committee).unwrap();
+        SignatureAggregator::try_new(transfer_transaction, &authority_state.committee).unwrap();
     builder
         .append(vote.authority, vote.signature)
         .unwrap()
@@ -1778,7 +1812,7 @@ async fn call_move(
     type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
-) -> SuiResult<OrderEffects> {
+) -> SuiResult<TransactionEffects> {
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().to_object_reference();
     let mut object_args = vec![];
@@ -1792,7 +1826,7 @@ async fn call_move(
                 .to_object_reference(),
         );
     }
-    let order = Order::new_move_call(
+    let transaction = Transaction::new_move_call(
         *sender,
         *package,
         module,
@@ -1804,7 +1838,7 @@ async fn call_move(
         MAX_GAS,
         sender_key,
     );
-    let response = send_and_confirm_order(authority, order).await?;
+    let response = send_and_confirm_transaction(authority, transaction).await?;
     Ok(response.signed_effects.unwrap().effects)
 }
 
@@ -1818,7 +1852,7 @@ async fn call_framework_code(
     type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
-) -> SuiResult<OrderEffects> {
+) -> SuiResult<TransactionEffects> {
     let genesis_package_objects = genesis::clone_genesis_modules();
     let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
 
@@ -1842,7 +1876,7 @@ async fn create_move_object(
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
     sender_key: &KeyPair,
-) -> SuiResult<OrderEffects> {
+) -> SuiResult<TransactionEffects> {
     call_framework_code(
         authority,
         gas_object_id,

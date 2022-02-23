@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::config::{
-    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, GenesisConfig, NetworkConfig, WalletConfig,
+    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig,
+    WalletConfig,
 };
-use crate::utils::Config;
 use anyhow::anyhow;
 use futures::future::join_all;
 use move_package::BuildConfig;
@@ -260,7 +260,9 @@ async fn make_server(
     .await;
 
     for object in preload_objects {
-        state.init_order_lock(object.to_object_reference()).await;
+        state
+            .init_transaction_lock(object.to_object_reference())
+            .await;
         state.insert_object(object.clone()).await;
     }
 
