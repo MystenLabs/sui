@@ -291,7 +291,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     }
 
     // wrap the modules in an object, write it to the store
-    let package_object = Object::new_package(modules, sender, ctx.digest())?;
+    let package_object = Object::new_package(modules, sender, ctx.digest());
     state_view.write_object(package_object);
 
     let mut total_gas_used = gas_cost;

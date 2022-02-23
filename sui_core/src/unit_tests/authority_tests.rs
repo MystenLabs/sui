@@ -1493,7 +1493,6 @@ async fn test_hero() {
     )
     .await
     .unwrap();
-    println!("ERRRR   {:?}", effects.status);
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // 7. Give them a boar!
