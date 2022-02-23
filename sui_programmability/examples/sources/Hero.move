@@ -67,7 +67,7 @@ module Examples::Hero {
     }
 
     /// Address of the admin account that receives payment for swords
-    const ADMIN: address = @0xee0437cf625b77af4d12bff98af1a88332b00638;
+    const ADMIN: address = @0xa5e6dbcf33730ace6ec8b400ff4788c1f150ff7e;
     /// Upper bound on player's HP
     const MAX_HP: u64 = 1000;
     /// Upper bound on how magical a sword can be
