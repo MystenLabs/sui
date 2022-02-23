@@ -10,6 +10,25 @@ Welcome to Sui, a next generation smart contract platform with high throughput, 
 * To experience Sui's speed and scalability for yourself, try [Benchmarking](TODO)
 * To see the current status of the Sui software/network and preview what's coming next, read through [Roadmap](TODO)
 
+## Architectural Overview
+
+```mermaid
+flowchart LR
+    CC(CLI Client) --> ClientService
+    RC(Rest Client) --> ClientService
+    RPCC(RPC Client) --> ClientService
+    ClientService --> AuthorityAggregator
+    AuthorityAggregator --> AC1[AuthorityClient] & AC2[AuthorityClient]
+    subgraph Authority1
+      AS[AuthorityState]
+    end
+    subgraph Authority2
+      AS2[AuthorityState]
+    end
+    AC1 <==>|Network TCP| Authority1
+    AC2 <==>|Network TCP| Authority2
+```
+
 ## Dev Quick Start
 TODO: installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, invoking your published code. Then deeper: Sui standard library, design patterns, examples.
 
@@ -31,10 +50,9 @@ TODO: installation, querying the chain, client setup, getting test coins, sendin
 
 ## What Makes Sui Different?
 
-EDITORIAL COMMENT: I think this section should lead with high-level selling points, then go into some more nuanced technical comparisons with existing systems, then conclude with honest descriptions limitations + pointers into the roadmap items that show we're already thinking about addressing them
+Sui allows a set of distributed authorities, some of which are Byzantine, to maintain a high-integrity and availability settlement system for pre-funded payments. It can be used to settle payments in a native unit of value (crypto-currency), or as a financial side-infrastructure to support retail payments in fiat currencies. Sui is based on Byzantine Consistent Broadcast as its core primitive, foregoing the expenses of full atomic commit channels (consensus). The resulting system has low-latency for both confirmation and payment finality. Remarkably, each authority can be sharded across many machines to allow unbounded horizontal scalability. Our experiments demonstrate intra-continental confirmation latency of less than 100ms, making Sui applicable to point of sale payments. In laboratory environments, we achieve over 80,000 transactions per second with 20 authorities---surpassing the requirements of current retail card payment networks, while significantly increasing their robustness.
 
 - High throughput and low latency (enables low cost w/ fixed hardware)
-- Horizontal scalability
 - Causal order vs total order (enables massively parallel execution)
 - Move and object-centric data model (enables composable objects/NFT's)
 TODO: more
