@@ -31,7 +31,11 @@ pub struct Transfer {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveCall {
-    // TODO: For package object, we only need object id, as it's always read-only.
+    // Although `package` represents a read-only Move package,
+    // we still want to use a reference instead of just object ID.
+    // This allows a client to be able to validate the package object
+    // used in an order (through the object digest) without having to
+    // re-execute the order on a quorum of authorities.
     pub package: ObjectRef,
     pub module: Identifier,
     pub function: Identifier,
