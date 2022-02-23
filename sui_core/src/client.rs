@@ -195,9 +195,10 @@ pub trait Client {
     /// TODO: move this out to AddressManager
     async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
 
-    /// Get all object we own.
+    /// Get all IDs of objects we own from local cache.
     fn get_owned_objects(&self) -> Vec<ObjectID>;
 
+    /// Fetch objects from authorities
     async fn download_owned_objects_not_in_db(&self) -> Result<BTreeSet<ObjectRef>, SuiError>;
 }
 
