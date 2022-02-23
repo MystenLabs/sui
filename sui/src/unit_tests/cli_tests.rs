@@ -9,7 +9,7 @@ use sui::config::{
     AUTHORITIES_DB_NAME,
 };
 use sui::wallet_commands::{WalletCommands, WalletContext};
-use sui_types::base_types::ObjectID;
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::crypto::get_key_pair;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use tokio::task;
@@ -369,7 +369,8 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
 
     WalletCommands::Gas { address }
         .execute(&mut context)
-        .await?;
+        .await?
+        .print(true);
     let object_id_str = format!("{}", object_id);
 
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -410,7 +411,8 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     // Fetch gas again
     WalletCommands::Gas { address }
         .execute(&mut context)
-        .await?;
+        .await?
+        .print(true);
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Check that the value got printed and updated
