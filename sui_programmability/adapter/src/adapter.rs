@@ -365,7 +365,7 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
         let args = vec![ctx.to_vec()];
 
         let gas_used = match execute_internal(
-            &vm,
+            vm,
             state_view,
             &module_id,
             &Identifier::new(INIT_FN_NAME.as_str()).unwrap(),
