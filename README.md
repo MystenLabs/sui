@@ -117,15 +117,16 @@ The wallet config file path is defaulted to `./wallet.conf` if not specified.
 
 The following commands are supported by the interactive wallet:
 
-    addresses      Obtain the Account Addresses managed by the wallet
-    call           Call Move
+    addresses      Obtain the Addresses managed by the wallet
+    call           Call Move function
+    gas            Obtain all gas objects owned by the address
     help           Prints this message or the help of the given subcommand(s)
     new-address    Generate new address and keypair
     object         Get obj info
-    objects        Obtain all objects owned by the account address
+    objects        Obtain all objects owned by the address
     publish        Publish Move modules
     sync           Synchronize client state with authorities
-    transfer       Transfer funds
+    transfer       Transfer an object
 
 Use `help <command>` to see more information on each command.
 
