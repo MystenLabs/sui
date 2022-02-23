@@ -8,12 +8,9 @@ use dropshot::{
 };
 use move_package::BuildConfig;
 use serde_json::json;
-use sui::config::{
-    AccountInfo, AuthorityInfo, Config, GenesisConfig, NetworkConfig,
-    WalletConfig,
-};
-use sui::wallet_commands::WalletContext;
+use sui::config::{AccountInfo, AuthorityInfo, Config, GenesisConfig, NetworkConfig, WalletConfig};
 use sui::sui_commands;
+use sui::wallet_commands::WalletContext;
 use sui_adapter::adapter::generate_package_id;
 use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientState};
@@ -22,17 +19,15 @@ use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::object::Object;
 
-use futures::{
-    stream::{futures_unordered::FuturesUnordered, StreamExt as _},
-};
+use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use tokio::task::{self, JoinHandle};
 use std::collections::BTreeMap;
 use std::fs;
 use std::net::{Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
+use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
 
 use std::sync::{Arc, Mutex};
@@ -314,7 +309,7 @@ async fn genesis(
     wallet_config.accounts = new_addresses;
     // Need to use a random id because rocksdb locks on current process which means even if directory is deleted
     // the lock will remain causing an IO Error
-    let client_db_path = format!("client_db_{:?}",ObjectID::random());
+    let client_db_path = format!("client_db_{:?}", ObjectID::random());
     wallet_config.db_folder_path = working_dir.join(&client_db_path);
     *server_context.client_db_path.lock().unwrap() = client_db_path;
     if let Err(error) = wallet_config.save() {
@@ -363,7 +358,7 @@ async fn start(
     }
 
     {
-        if (*server_context.authority_handles.lock().unwrap()).len() > 0 {
+        if !(*server_context.authority_handles.lock().unwrap()).is_empty() {
             return Err(custom_http_error(
                 hyper::StatusCode::FORBIDDEN,
                 String::from("Sui network is already running."),
@@ -399,7 +394,10 @@ async fn start(
             match server.spawn().await {
                 Ok(server) => Ok(server),
                 Err(err) => {
-                    return Err(custom_http_error(hyper::StatusCode::FAILED_DEPENDENCY, format!("Failed to start server: {}", err)));
+                    return Err(custom_http_error(
+                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        format!("Failed to start server: {}", err),
+                    ));
                 }
             }
         })
@@ -409,8 +407,11 @@ async fn start(
     info!("Started {} authorities", num_authorities);
 
     while let Some(spawned_server) = handles.next().await {
-        server_context.authority_handles.lock().unwrap().push(
-            task::spawn(async {
+        server_context
+            .authority_handles
+            .lock()
+            .unwrap()
+            .push(task::spawn(async {
                 if let Err(err) = spawned_server.unwrap().join().await {
                     error!("Server ended with an error: {}", err);
                 }
@@ -476,7 +477,6 @@ async fn stop(
 
     for authority_handle in &*server_context.authority_handles.lock().unwrap() {
         authority_handle.abort();
-        drop(authority_handle);
     }
     (*server_context.authority_handles.lock().unwrap()).clear();
 
