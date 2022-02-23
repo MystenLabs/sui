@@ -5,7 +5,9 @@ use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientAddressManager, ClientState};
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex, ObjectID, SuiAddress};
 use sui_types::crypto::get_key_pair;
+use sui_types::gas_coin::GasCoin;
 use sui_types::messages::ExecutionStatus;
+use sui_types::object::ObjectRead::Exists;
 
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
@@ -119,6 +121,14 @@ pub enum WalletCommands {
     /// Obtain all objects owned by the address.
     #[structopt(name = "objects")]
     Objects {
+        /// Address owning the objects
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        address: SuiAddress,
+    },
+
+    /// Obtain all gas objects owned by the address.
+    #[structopt(name = "gas")]
+    Gas {
         /// Address owning the objects
         #[structopt(long, parse(try_from_str = decode_bytes_hex))]
         address: SuiAddress,
@@ -250,6 +260,40 @@ impl WalletCommands {
                     "Created new keypair for address : {}",
                     encode_bytes_hex(&address)
                 );
+            }
+            WalletCommands::Gas { address } => {
+                let client_state = context.get_or_create_client_state(address)?;
+
+                client_state.sync_client_state().await?;
+                let object_ids = client_state.get_owned_objects();
+
+                // TODO: generalize formatting of CLI
+                info!(
+                    " {0: ^40} | {1: ^10} | {2: ^11}",
+                    "Object ID", "Version", "Gas Value"
+                );
+                info!("----------------------------------------------------------------------",);
+                // TODO: We should ideally fetch the objects from local cache
+                for obj in object_ids {
+                    match context.address_manager.get_object_info(obj).await? {
+                        Exists(_, o, _) => {
+                            if let Some(v) = o.type_() {
+                                if *v == GasCoin::type_() {
+                                    // Okay to unwrap() since we already checked type
+                                    let gas_coin =
+                                        GasCoin::try_from(o.data.try_as_move().unwrap())?;
+                                    info!(
+                                        " {0: ^40} | {1: ^10} | {2: ^11}",
+                                        gas_coin.id(),
+                                        u64::from(gas_coin.version()),
+                                        gas_coin.value()
+                                    );
+                                }
+                            }
+                        }
+                        _ => continue,
+                    }
+                }
             }
         }
         Ok(())
