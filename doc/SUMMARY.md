@@ -2,8 +2,8 @@
 
 Welcome to Sui, a next generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move! Here are some suggested starting points:
 
-* To jump right into building smart contract applications on top of Sui, go to [Dev Quick Start](move.md)
-* To experiment with a toy Sui wallet, check out [Wallet Quick Start](TODO)
+* To jump right into building smart contract applications on top of Sui, go to [Dev Quick Start](wallet.md)
+* To experiment with a toy Sui wallet, check out [Wallet Quick Start](move.md)
 * To understand what's possible by browsing examples of full-fledged applications and games built on top of Sui, have a look at [Demos](TODO)
 * To go deep on how Sui works, start at [Key Concepts](TODO)
 * To learn what distinguishes Sui from other blockchain systems, see [What Makes Sui Different?](TODO)
