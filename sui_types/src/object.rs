@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::binary_views::BinaryIndexedView;
@@ -17,13 +17,13 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Formatter};
 
 use move_binary_format::CompiledModule;
-use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
+use move_core_types::language_storage::StructTag;
 
+use crate::crypto::{sha3_hash, BcsSignable};
 use crate::error::SuiError;
 use crate::{
     base_types::{
-        sha3_hash, Authenticator, BcsSignable, ObjectDigest, ObjectID, ObjectRef, SequenceNumber,
-        SuiAddress, TransactionDigest,
+        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
     },
     gas_coin::GasCoin,
 };
@@ -43,7 +43,7 @@ pub struct MoveObject {
 /// Byte encoding of a 64 byte unsigned integer in BCS
 type BcsU64 = [u8; 8];
 /// Index marking the end of the object's ID + the beginning of its version
-const ID_END_INDEX: usize = AccountAddress::LENGTH;
+const ID_END_INDEX: usize = ObjectID::LENGTH;
 /// Index marking the end of the object's version + the beginning of type-specific data
 const VERSION_END_INDEX: usize = ID_END_INDEX + 8;
 
@@ -67,7 +67,7 @@ impl MoveObject {
     }
 
     pub fn id(&self) -> ObjectID {
-        AccountAddress::try_from(&self.contents[0..ID_END_INDEX]).unwrap()
+        ObjectID::try_from(&self.contents[0..ID_END_INDEX]).unwrap()
     }
 
     pub fn version(&self) -> SequenceNumber {
@@ -264,9 +264,9 @@ impl Data {
 pub struct Object {
     /// The meat of the object
     pub data: Data,
-    /// The authenticator that unlocks this object (eg. public key, or object id)
-    pub owner: Authenticator,
-    /// The digest of the order that created or last mutated this object
+    /// The owner address that unlocks this object (eg. hashes of public key, or object id)
+    pub owner: SuiAddress,
+    /// The digest of the transaction that created or last mutated this object
     pub previous_transaction: TransactionDigest,
 }
 
@@ -276,7 +276,7 @@ impl Object {
     /// Create a new Move object
     pub fn new_move(
         o: MoveObject,
-        owner: Authenticator,
+        owner: SuiAddress,
         previous_transaction: TransactionDigest,
     ) -> Self {
         Object {
@@ -288,7 +288,7 @@ impl Object {
 
     pub fn new_package(
         modules: Vec<CompiledModule>,
-        owner: Authenticator,
+        owner: SuiAddress,
         previous_transaction: TransactionDigest,
     ) -> Self {
         let serialized: MovePackage = modules
@@ -330,10 +330,12 @@ impl Object {
             Package(m) => {
                 // All modules in the same package must have the same address.
                 // TODO: Use byte trick to get ID directly without deserialization.
-                *CompiledModule::deserialize(m.values().next().unwrap())
-                    .unwrap()
-                    .self_id()
-                    .address()
+                ObjectID::from(
+                    *CompiledModule::deserialize(m.values().next().unwrap())
+                        .unwrap()
+                        .self_id()
+                        .address(),
+                )
             }
         }
     }
@@ -356,7 +358,7 @@ impl Object {
     }
 
     /// Change the owner of `self` to `new_owner`
-    pub fn transfer(&mut self, new_owner: Authenticator) {
+    pub fn transfer(&mut self, new_owner: SuiAddress) {
         // TODO: these should be raised SuiError's instead of panic's
         assert!(!self.is_read_only(), "Cannot transfer an immutable object");
         match &mut self.data {
@@ -385,7 +387,7 @@ impl Object {
             read_only: false,
         });
         Self {
-            owner: Authenticator::Address(owner),
+            owner,
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
@@ -411,7 +413,7 @@ impl Object {
             read_only: false,
         });
         Self {
-            owner: Authenticator::Address(owner),
+            owner,
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
@@ -458,6 +460,16 @@ impl ObjectRead {
         match &self {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: *oref }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
+            Self::Exists(_, o, _) => Ok(o),
+        }
+    }
+
+    /// Returns the object value if there is any, otherwise an Err if
+    /// the object does not exist or is deleted.
+    pub fn into_object(self) -> Result<Object, SuiError> {
+        match self {
+            Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: oref }),
+            Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
             Self::Exists(_, o, _) => Ok(o),
         }
     }

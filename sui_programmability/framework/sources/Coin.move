@@ -1,6 +1,6 @@
 module FastX::Coin {
     use FastX::Address::{Self, Address};
-    use FastX::ID::{Self, ID};
+    use FastX::ID::{Self, VersionedID};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
     use Std::Errors;
@@ -8,14 +8,14 @@ module FastX::Coin {
 
     /// A coin of type `T` worth `value`. Transferrable
     struct Coin<phantom T> has key, store {
-        id: ID,
+        id: VersionedID,
         value: u64
     }
 
     /// Capability allowing the bearer to mint and burn
     /// coins of type `T`. Transferrable
     struct TreasuryCap<phantom T> has key, store {
-        id: ID,
+        id: VersionedID,
         total_supply: u64
     }
 
@@ -33,23 +33,41 @@ module FastX::Coin {
 
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
-    public fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
+    public fun join<T>(self: &mut Coin<T>, c: Coin<T>, _ctx: &mut TxContext) {
         let Coin { id, value } = c;
         ID::delete(id);
         self.value = self.value + value
     }
 
     /// Join everything in `coins` with `self`
-    public fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
+    public fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>, ctx: &mut TxContext) {
         let i = 0;
         let len = Vector::length(&coins);
         while (i < len) {
             let coin = Vector::remove(&mut coins, i);
-            join(self, coin);
+            join(self, coin, ctx);
             i = i + 1
         };
         // safe because we've drained the vector
         Vector::destroy_empty(coins)
+    }
+
+    /// Split coin `self` to two coins, one with balance `split_amount`,
+    /// and the remaining balance is left is `self`.
+    public fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
+        let new_coin = withdraw(self, split_amount, ctx);
+        Transfer::transfer(new_coin, TxContext::get_signer_address(ctx));
+    }
+
+    /// Split coin `self` into multiple coins, each with balance specified
+    /// in `split_amounts`. Remaining balance is left in `self`.
+    public fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
+        let i = 0;
+        let len = Vector::length(&split_amounts);
+        while (i < len) {
+            split(self, *Vector::borrow(&split_amounts, i), ctx);
+            i = i + 1;
+        };
     }
 
     /// Subtract `value` from `self` and create a new coin

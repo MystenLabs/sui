@@ -1,16 +1,20 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::crypto::PublicKeyBytes;
 use crate::error::SuiError;
-use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use ed25519_dalek::Digest;
 
-use ed25519_dalek as dalek;
-use ed25519_dalek::{Digest, PublicKey, Verifier};
+use hex::FromHex;
+use rand::Rng;
+use serde::{de::Error as _, Deserialize, Serialize};
+use std::convert::{TryFrom, TryInto};
+use std::fmt;
+
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
-use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
+
 use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
 
@@ -28,86 +32,94 @@ pub type VersionNumber = SequenceNumber;
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
-// TODO: Make sure secrets are not copyable and movable to control where they are in memory
-#[derive(Debug)]
-pub struct KeyPair(dalek::Keypair);
+pub type AuthorityName = PublicKeyBytes;
 
-impl signature::Signer<ed25519::Signature> for KeyPair {
-    fn try_sign(&self, msg: &[u8]) -> Result<ed25519::Signature, ed25519::Error> {
-        self.0.try_sign(msg)
-    }
-}
+#[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash)]
+pub struct ObjectID(AccountAddress);
 
+pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
+
+pub const SUI_ADDRESS_LENGTH: usize = 32;
 #[serde_as]
 #[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
-pub struct PublicKeyBytes(#[serde_as(as = "Bytes")] [u8; dalek::PUBLIC_KEY_LENGTH]);
+pub struct SuiAddress(#[serde_as(as = "Bytes")] [u8; SUI_ADDRESS_LENGTH]);
 
-impl PublicKeyBytes {
+impl SuiAddress {
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }
 
-    pub fn to_public_key(&self) -> Result<PublicKey, SuiError> {
-        // TODO(https://github.com/MystenLabs/fastnft/issues/101): Do better key validation
-        // to ensure the bytes represent a point on the curve.
-        PublicKey::from_bytes(self.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
-    }
-
     // for testing
     pub fn random_for_testing_only() -> Self {
-        use rand::Rng;
-        let random_bytes = rand::thread_rng().gen::<[u8; dalek::PUBLIC_KEY_LENGTH]>();
+        let random_bytes = rand::thread_rng().gen::<[u8; SUI_ADDRESS_LENGTH]>();
         Self(random_bytes)
+    }
+
+    pub fn optional_address_as_hex<S>(
+        key: &Option<SuiAddress>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        serializer.serialize_str(
+            &*key
+                .map(|addr| encode_bytes_hex(&addr))
+                .unwrap_or_else(|| "".to_string()),
+        )
+    }
+
+    pub fn optional_address_from_hex<'de, D>(
+        deserializer: D,
+    ) -> Result<Option<SuiAddress>, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let value = decode_bytes_hex(&s).map_err(serde::de::Error::custom)?;
+        Ok(Some(value))
     }
 }
 
-impl AsRef<[u8]> for PublicKeyBytes {
+impl From<ObjectID> for SuiAddress {
+    fn from(object_id: ObjectID) -> SuiAddress {
+        // TODO: Use proper hashing to convert ObjectID to SuiAddress
+        let mut address = [0u8; SUI_ADDRESS_LENGTH];
+        address[..AccountAddress::LENGTH].clone_from_slice(&object_id.into_bytes());
+        Self(address)
+    }
+}
+
+impl From<&PublicKeyBytes> for SuiAddress {
+    fn from(key: &PublicKeyBytes) -> SuiAddress {
+        let mut sha3 = Sha3_256::new();
+        sha3.update(key.as_ref());
+        let g_arr = sha3.finalize();
+        Self(*(g_arr.as_ref()))
+    }
+}
+
+impl TryFrom<&[u8]> for SuiAddress {
+    type Error = SuiError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
+        let arr: [u8; SUI_ADDRESS_LENGTH] =
+            bytes.try_into().map_err(|_| SuiError::InvalidAddress)?;
+        Ok(Self(arr))
+    }
+}
+
+impl AsRef<[u8]> for SuiAddress {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]
     }
 }
 
-// TODO(https://github.com/MystenLabs/fastnft/issues/101): more robust key validation
-impl TryFrom<&[u8]> for PublicKeyBytes {
-    type Error = SuiError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, SuiError> {
-        let arr: [u8; dalek::PUBLIC_KEY_LENGTH] = bytes
-            .try_into()
-            .map_err(|_| SuiError::InvalidAuthenticator)?;
-        Ok(Self(arr))
-    }
-}
-
-pub type SuiAddress = PublicKeyBytes;
-pub type AuthorityName = PublicKeyBytes;
-
-// Define digests and object IDs. For now, ID's are the same as Move account addresses
-// (16 bytes) for easy compatibility with Move. However, we'll probably want 20+ byte
-// addresses, either by changing Move to allow different address lengths or by decoupling
-// addresses and ID's
-pub type ObjectID = AccountAddress;
-pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
-
-/// An object can be either owned by an account address, or another object.
-// TODO: A few things to improve:
-// 1. We may want to support multiple signing schemas, rename Authenticator to Address,
-//    and rename the Address enum to Ed25519PublicKey, so that we could add more.
-// 2. We may want to make Authenticator a fix-sized array instead of having different size
-//    for different variants, through hashing.
-// Refer details to https://github.com/MystenLabs/fastnft/pull/292.
-#[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, PartialOrd, Ord, Serialize, Hash)]
-pub enum Authenticator {
-    Address(SuiAddress),
-    Object(ObjectID),
-}
-
-impl Authenticator {
-    pub fn is_address(&self, address: &SuiAddress) -> bool {
-        match self {
-            Self::Address(addr) => addr == address,
-            Self::Object(_) => false,
-        }
+impl From<Vec<u8>> for SuiAddress {
+    fn from(bytes: Vec<u8>) -> Self {
+        let mut result = [0u8; SUI_ADDRESS_LENGTH];
+        result.copy_from_slice(&bytes[..SUI_ADDRESS_LENGTH]);
+        Self(result)
     }
 }
 
@@ -196,7 +208,7 @@ impl TransactionDigest {
     /// A digest we use to signify the parent transaction was the genesis,
     /// ie. for an object there is no parent digest.
     ///
-    /// TODO(https://github.com/MystenLabs/fastnft/issues/65): we can pick anything here    
+    /// TODO(https://github.com/MystenLabs/fastnft/issues/65): we can pick anything here
     pub fn genesis() -> Self {
         Self::new([0; 32])
     }
@@ -212,12 +224,11 @@ impl TransactionDigest {
         let hash = hasher.finalize();
 
         // truncate into an ObjectID.
-        AccountAddress::try_from(&hash[0..AccountAddress::LENGTH]).unwrap()
+        ObjectID::try_from(&hash[0..ObjectID::LENGTH]).unwrap()
     }
 
     // for testing
     pub fn random() -> Self {
-        use rand::Rng;
         let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
         Self::new(random_bytes)
     }
@@ -234,46 +245,38 @@ impl ObjectDigest {
     }
 }
 
-// TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
-pub fn get_key_pair() -> (SuiAddress, KeyPair) {
-    let mut csprng = OsRng;
-    let keypair = dalek::Keypair::generate(&mut csprng);
-    (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
+pub fn get_new_address() -> SuiAddress {
+    crate::crypto::get_key_pair().0
 }
 
-pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, KeyPair) {
-    let keypair = dalek::Keypair::from_bytes(bytes).unwrap();
-    (PublicKeyBytes(keypair.public.to_bytes()), KeyPair(keypair))
-}
-
-pub fn address_as_hex<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
+pub fn bytes_as_hex<B, S>(bytes: &B, serializer: S) -> Result<S::Ok, S::Error>
 where
+    B: AsRef<[u8]>,
     S: serde::ser::Serializer,
 {
-    serializer.serialize_str(&encode_address_hex(key))
+    serializer.serialize_str(&encode_bytes_hex(bytes))
 }
 
-pub fn address_from_hex<'de, D>(deserializer: D) -> Result<PublicKeyBytes, D::Error>
+pub fn bytes_from_hex<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
+    T: for<'a> TryFrom<&'a [u8]>,
     D: serde::de::Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    let value = decode_address_hex(&s).map_err(serde::de::Error::custom)?;
+    let value = decode_bytes_hex(&s).map_err(serde::de::Error::custom)?;
     Ok(value)
 }
 
-pub fn encode_address_hex(key: &PublicKeyBytes) -> String {
-    hex::encode(&key.0[..])
+pub fn encode_bytes_hex<B: AsRef<[u8]>>(bytes: &B) -> String {
+    hex::encode(bytes.as_ref())
 }
 
-pub fn decode_address_hex(s: &str) -> Result<PublicKeyBytes, hex::FromHexError> {
+pub fn decode_bytes_hex<T: for<'a> TryFrom<&'a [u8]>>(s: &str) -> Result<T, anyhow::Error> {
     let value = hex::decode(s)?;
-    let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
-    address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
-    Ok(PublicKeyBytes(address))
+    T::try_from(&value[..]).map_err(|_| anyhow::anyhow!("byte deserialization failed"))
 }
 
-impl std::fmt::LowerHex for PublicKeyBytes {
+impl std::fmt::LowerHex for SuiAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
             write!(f, "0x")?;
@@ -287,7 +290,7 @@ impl std::fmt::LowerHex for PublicKeyBytes {
     }
 }
 
-impl std::fmt::UpperHex for PublicKeyBytes {
+impl std::fmt::UpperHex for SuiAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
             write!(f, "0x")?;
@@ -301,14 +304,20 @@ impl std::fmt::UpperHex for PublicKeyBytes {
     }
 }
 
-pub fn address_as_base64<S>(key: &PublicKeyBytes, serializer: S) -> Result<S::Ok, S::Error>
+impl fmt::Display for SuiAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:X}", self)
+    }
+}
+
+pub fn address_as_base64<S>(address: &SuiAddress, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::ser::Serializer,
 {
-    serializer.serialize_str(&encode_address(key))
+    serializer.serialize_str(&encode_address(address))
 }
 
-pub fn address_from_base64<'de, D>(deserializer: D) -> Result<PublicKeyBytes, D::Error>
+pub fn address_from_base64<'de, D>(deserializer: D) -> Result<SuiAddress, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
@@ -317,71 +326,27 @@ where
     Ok(value)
 }
 
-pub fn encode_address(key: &PublicKeyBytes) -> String {
-    base64::encode(&key.0[..])
+pub fn encode_address(address: &SuiAddress) -> String {
+    base64::encode(&address.0[..])
 }
 
-pub fn decode_address(s: &str) -> Result<PublicKeyBytes, anyhow::Error> {
+pub fn decode_address(s: &str) -> Result<SuiAddress, anyhow::Error> {
     let value = base64::decode(s)?;
-    let mut address = [0u8; dalek::PUBLIC_KEY_LENGTH];
-    address.copy_from_slice(&value[..dalek::PUBLIC_KEY_LENGTH]);
-    Ok(PublicKeyBytes(address))
+    let mut address = [0u8; ed25519_dalek::PUBLIC_KEY_LENGTH];
+    address.copy_from_slice(&value[..ed25519_dalek::PUBLIC_KEY_LENGTH]);
+    Ok(SuiAddress(address))
 }
 
 pub fn dbg_addr(name: u8) -> SuiAddress {
-    let addr = [name; dalek::PUBLIC_KEY_LENGTH];
-    PublicKeyBytes(addr)
+    let addr = [name; SUI_ADDRESS_LENGTH];
+    SuiAddress(addr)
 }
 
 pub fn dbg_object_id(name: u8) -> ObjectID {
     ObjectID::from_bytes([name; ObjectID::LENGTH]).unwrap()
 }
 
-#[derive(Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
-pub struct Signature(dalek::Signature);
-
-impl KeyPair {
-    /// Avoid implementing `clone` on secret keys to prevent mistakes.
-    #[must_use]
-    pub fn copy(&self) -> KeyPair {
-        KeyPair(dalek::Keypair {
-            secret: dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),
-            public: dalek::PublicKey::from_bytes(self.0.public.as_bytes()).unwrap(),
-        })
-    }
-}
-
-impl Serialize for KeyPair {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        serializer.serialize_str(&base64::encode(&self.0.to_bytes()))
-    }
-}
-
-impl<'de> Deserialize<'de> for KeyPair {
-    fn deserialize<D>(deserializer: D) -> Result<KeyPair, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let value = base64::decode(&s).map_err(|err| serde::de::Error::custom(err.to_string()))?;
-        let key = dalek::Keypair::from_bytes(&value)
-            .map_err(|err| serde::de::Error::custom(err.to_string()))?;
-        Ok(KeyPair(key))
-    }
-}
-
-impl std::fmt::Debug for Signature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let s = base64::encode(&self.0);
-        write!(f, "{}", s)?;
-        Ok(())
-    }
-}
-
-impl std::fmt::Debug for PublicKeyBytes {
+impl std::fmt::Debug for SuiAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let s = hex::encode(&self.0);
         write!(f, "k#{}", s)?;
@@ -460,91 +425,6 @@ impl From<SequenceNumber> for usize {
     }
 }
 
-/// Something that we know how to hash and sign.
-pub trait Signable<W> {
-    fn write(&self, writer: &mut W);
-}
-
-/// Activate the blanket implementation of `Signable` based on serde and BCS.
-/// * We use `serde_name` to extract a seed from the name of structs and enums.
-/// * We use `BCS` to generate canonical bytes suitable for hashing and signing.
-pub trait BcsSignable: Serialize + serde::de::DeserializeOwned {}
-
-impl<T, W> Signable<W> for T
-where
-    T: BcsSignable,
-    W: std::io::Write,
-{
-    fn write(&self, writer: &mut W) {
-        let name = serde_name::trace_name::<Self>().expect("Self must be a struct or an enum");
-        // Note: This assumes that names never contain the separator `::`.
-        write!(writer, "{}::", name).expect("Hasher should not fail");
-        bcs::serialize_into(writer, &self).expect("Message serialization should not fail");
-    }
-}
-
-impl Signature {
-    pub fn new<T>(value: &T, secret: &dyn signature::Signer<ed25519_dalek::Signature>) -> Self
-    where
-        T: Signable<Vec<u8>>,
-    {
-        let mut message = Vec::new();
-        value.write(&mut message);
-        let signature = secret.sign(&message);
-        Signature(signature)
-    }
-
-    pub fn check<T>(&self, value: &T, author: SuiAddress) -> Result<(), SuiError>
-    where
-        T: Signable<Vec<u8>>,
-    {
-        let mut message = Vec::new();
-        value.write(&mut message);
-        let public_key = author.to_public_key()?;
-        public_key
-            .verify(&message, &self.0)
-            .map_err(|error| SuiError::InvalidSignature {
-                error: format!("{}", error),
-            })
-    }
-
-    pub fn verify_batch<'a, T, I>(
-        value: &'a T,
-        votes: I,
-        key_cache: &HashMap<PublicKeyBytes, PublicKey>,
-    ) -> Result<(), SuiError>
-    where
-        T: Signable<Vec<u8>>,
-        I: IntoIterator<Item = &'a (SuiAddress, Signature)>,
-    {
-        let mut msg = Vec::new();
-        value.write(&mut msg);
-        let mut messages: Vec<&[u8]> = Vec::new();
-        let mut signatures: Vec<dalek::Signature> = Vec::new();
-        let mut public_keys: Vec<dalek::PublicKey> = Vec::new();
-        for (addr, sig) in votes.into_iter() {
-            messages.push(&msg);
-            signatures.push(sig.0);
-            match key_cache.get(addr) {
-                Some(v) => public_keys.push(*v),
-                None => public_keys.push(addr.to_public_key()?),
-            }
-        }
-        dalek::verify_batch(&messages[..], &signatures[..], &public_keys[..]).map_err(|error| {
-            SuiError::InvalidSignature {
-                error: format!("{}", error),
-            }
-        })
-    }
-}
-
-pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
-    let mut digest = Sha3_256::default();
-    signable.write(&mut digest);
-    let hash = digest.finalize();
-    hash.into()
-}
-
 impl TryFrom<&[u8]> for TransactionDigest {
     type Error = SuiError;
 
@@ -553,5 +433,216 @@ impl TryFrom<&[u8]> for TransactionDigest {
             .try_into()
             .map_err(|_| SuiError::InvalidTransactionDigest)?;
         Ok(Self(arr))
+    }
+}
+
+impl ObjectID {
+    /// The number of bytes in an address.
+    pub const LENGTH: usize = AccountAddress::LENGTH;
+    /// Hex address: 0x0
+    pub const ZERO: Self = Self::new([0u8; Self::LENGTH]);
+    /// Creates a new ObjectID
+    pub const fn new(obj_id: [u8; Self::LENGTH]) -> Self {
+        Self(AccountAddress::new(obj_id))
+    }
+
+    /// Random ObjectID
+    pub fn random() -> Self {
+        Self::from(AccountAddress::random())
+    }
+
+    /// Converts from hex string to ObjectID where the string is prefixed with 0x
+    /// Its okay if the strings are less than expected
+    pub fn from_hex_literal(literal: &str) -> Result<Self, ObjectIDParseError> {
+        if !literal.starts_with("0x") {
+            return Err(ObjectIDParseError::HexLiteralPrefixMissing);
+        }
+
+        let hex_len = literal.len() - 2;
+
+        // If the string is too short, pad it
+        if hex_len < Self::LENGTH * 2 {
+            let mut hex_str = String::with_capacity(Self::LENGTH * 2);
+            for _ in 0..Self::LENGTH * 2 - hex_len {
+                hex_str.push('0');
+            }
+            hex_str.push_str(&literal[2..]);
+            Self::from_hex(hex_str)
+        } else {
+            Self::from_hex(&literal[2..])
+        }
+    }
+
+    pub fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, ObjectIDParseError> {
+        <[u8; Self::LENGTH]>::from_hex(hex)
+            .map_err(ObjectIDParseError::from)
+            .map(ObjectID::from)
+    }
+
+    pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, ObjectIDParseError> {
+        <[u8; Self::LENGTH]>::try_from(bytes.as_ref())
+            .map_err(|_| ObjectIDParseError::TryFromSliceError)
+            .map(ObjectID::from)
+    }
+}
+
+#[derive(PartialEq, Clone, Debug, thiserror::Error)]
+pub enum ObjectIDParseError {
+    #[error("ObjectID hex literal must start with 0x")]
+    HexLiteralPrefixMissing,
+
+    #[error("{err} (ObjectID hex string should only contain 0-9, A-F, a-f)")]
+    InvalidHexCharacter { err: hex::FromHexError },
+
+    #[error("{err} (hex string must be even-numbered. Two chars maps to one byte).")]
+    OddLength { err: hex::FromHexError },
+
+    #[error("{err} (ObjectID must be {} bytes long).", ObjectID::LENGTH)]
+    InvalidLength { err: hex::FromHexError },
+
+    #[error("Could not convert from bytes slice")]
+    TryFromSliceError,
+    // #[error("Internal hex parser error: {err}")]
+    // HexParserError { err: hex::FromHexError },
+}
+/// Wraps the underlying parsing errors
+impl From<hex::FromHexError> for ObjectIDParseError {
+    fn from(err: hex::FromHexError) -> Self {
+        match err {
+            hex::FromHexError::InvalidHexCharacter { c, index } => {
+                ObjectIDParseError::InvalidHexCharacter {
+                    err: hex::FromHexError::InvalidHexCharacter { c, index },
+                }
+            }
+            hex::FromHexError::OddLength => ObjectIDParseError::OddLength {
+                err: hex::FromHexError::OddLength,
+            },
+            hex::FromHexError::InvalidStringLength => ObjectIDParseError::InvalidLength {
+                err: hex::FromHexError::InvalidStringLength,
+            },
+        }
+    }
+}
+
+impl From<[u8; ObjectID::LENGTH]> for ObjectID {
+    fn from(bytes: [u8; ObjectID::LENGTH]) -> Self {
+        Self::new(bytes)
+    }
+}
+
+impl std::ops::Deref for ObjectID {
+    type Target = AccountAddress;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<AccountAddress> for ObjectID {
+    fn from(address: AccountAddress) -> Self {
+        Self(address)
+    }
+}
+
+impl From<ObjectID> for AccountAddress {
+    fn from(obj_id: ObjectID) -> Self {
+        obj_id.0
+    }
+}
+
+impl fmt::Display for ObjectID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl fmt::Debug for ObjectID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl fmt::LowerHex for ObjectID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl fmt::UpperHex for ObjectID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl TryFrom<&[u8]> for ObjectID {
+    type Error = ObjectIDParseError;
+
+    /// Tries to convert the provided byte array into ObjectID.
+    fn try_from(bytes: &[u8]) -> Result<ObjectID, ObjectIDParseError> {
+        Self::from_bytes(bytes)
+    }
+}
+
+impl TryFrom<Vec<u8>> for ObjectID {
+    type Error = ObjectIDParseError;
+
+    /// Tries to convert the provided byte buffer into ObjectID.
+    fn try_from(bytes: Vec<u8>) -> Result<ObjectID, ObjectIDParseError> {
+        Self::from_bytes(bytes)
+    }
+}
+
+impl TryFrom<String> for ObjectID {
+    type Error = ObjectIDParseError;
+
+    fn try_from(s: String) -> Result<ObjectID, ObjectIDParseError> {
+        match Self::from_hex(s.clone()) {
+            Ok(q) => Ok(q),
+            Err(_) => Self::from_hex_literal(&s),
+        }
+    }
+}
+
+impl std::str::FromStr for ObjectID {
+    type Err = ObjectIDParseError;
+    // Try to match both the literal (0xABC..) and the normal (ABC)
+    fn from_str(s: &str) -> Result<Self, ObjectIDParseError> {
+        match Self::from_hex(s) {
+            Ok(q) => Ok(q),
+            Err(_) => Self::from_hex_literal(s),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ObjectID {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = <String>::deserialize(deserializer)?;
+            ObjectID::from_hex(s).map_err(D::Error::custom)
+        } else {
+            // In order to preserve the Serde data model and help analysis tools,
+            // make sure to wrap our value in a container with the same name
+            // as the original type.
+            #[derive(::serde::Deserialize)]
+            #[serde(rename = "ObjectID")]
+            struct Value([u8; ObjectID::LENGTH]);
+
+            let value = Value::deserialize(deserializer)?;
+            Ok(ObjectID::new(value.0))
+        }
+    }
+}
+
+impl Serialize for ObjectID {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            self.to_hex().serialize(serializer)
+        } else {
+            // See comment in deserialize.
+            serializer.serialize_newtype_struct("ObjectID", &self.0)
+        }
     }
 }

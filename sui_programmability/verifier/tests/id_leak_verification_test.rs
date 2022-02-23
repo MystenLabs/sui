@@ -1,4 +1,5 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 mod common;
@@ -12,7 +13,7 @@ fn make_module_with_default_struct() -> (ModuleBuilder, StructInfo, StructInfo) 
     Creating a module with a default struct Foo:
 
     struct Foo has key {
-        id: SUI_FRAMEWORK_ADDRESS::ID::ID
+        id: SUI_FRAMEWORK_ADDRESS::ID::VersionedID
     }
     */
     let (mut module, id_struct) = ModuleBuilder::default();
@@ -28,7 +29,7 @@ fn make_module_with_default_struct() -> (ModuleBuilder, StructInfo, StructInfo) 
 #[test]
 fn id_leak_through_direct_return() {
     /*
-    fun foo(f: Foo): 0x1::ID::ID {
+    fun foo(f: Foo): 0x1::ID::VersionedID {
         let Foo { id: id } = f;
         return id;
     }
@@ -90,7 +91,7 @@ fn id_leak_through_indirect_return() {
 #[test]
 fn id_leak_through_reference() {
     /*
-    fun foo(f: Foo, ref: &mut 0x1::ID::ID) {
+    fun foo(f: Foo, ref: &mut 0x1::ID::VersionedID) {
         let Foo { id: id } = f;
         *ref = id;
     }
@@ -125,7 +126,7 @@ fn id_leak_through_reference() {
 #[test]
 fn id_direct_leak_through_call() {
     /*
-    fun transfer(id: 0x1::ID::ID);
+    fun transfer(id: 0x1::ID::VersionedID);
 
     fun foo(f: Foo) {
         let Foo { id: id } = f;

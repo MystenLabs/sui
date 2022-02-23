@@ -68,8 +68,41 @@ module FastX::Address {
     }
 
     #[test_only]
+    /// Create a `Signer` from `a` for testing
+    public fun new_signer_from_address(a: Address): Signer {
+        Signer { inner: a }
+    }
+
+    #[test_only]
     /// Create a dummy `Signer` for testing
     public fun dummy_signer(): Signer {
         new_signer(x"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
+
+    #[test_only]
+    /// All bytes will be 0 except the last byte, which will be `hint`.
+    fun bytes_with_hint(hint: u8): vector<u8> {
+        let bytes = Vector::empty<u8>();
+        let i = 0;
+        while (i < ADDRESS_LENGTH - 1) {
+            Vector::push_back(&mut bytes, 0u8);
+            i = i + 1;
+        };
+        Vector::push_back(&mut bytes, hint);
+        bytes
+    }
+
+    #[test_only]
+    /// Create a dummy `Signer` for testing
+    /// All bytes will be 0 except the last byte, which will be `hint`.
+    public fun dummy_signer_with_hint(hint: u8): Signer {
+        new_signer(bytes_with_hint(hint))
+    }
+
+    #[test_only]
+    /// Create a dummy `Address` for testing
+    /// All bytes will be 0 except the last byte, which will be `hint`.
+    public fun dummy_with_hint(hint: u8): Address {
+        new(bytes_with_hint(hint))
     }
 }

@@ -1,10 +1,11 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_types::{error, messages, serialize};
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
+use sui_types::{error, messages, serialize};
 
 fn get_registry() -> Result<Registry> {
     let mut tracer = Tracer::new(TracerConfig::default());
@@ -13,7 +14,7 @@ fn get_registry() -> Result<Registry> {
     // tracer.trace_value(&mut samples, ...)?;
 
     // 2. Trace the main entry point(s) + every enum separately.
-    tracer.trace_type::<messages::Address>(&samples)?;
+    tracer.trace_type::<messages::CertifiedTransaction>(&samples)?;
     tracer.trace_type::<error::SuiError>(&samples)?;
     tracer.trace_type::<serialize::SerializedMessage>(&samples)?;
     tracer.registry()

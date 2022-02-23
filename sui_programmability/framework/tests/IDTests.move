@@ -6,7 +6,7 @@ module FastX::IDTests {
     const ID_BYTES_MISMATCH: u64 = 0;
 
     struct Object has key {
-        id: ID::ID,
+        id: ID::VersionedID,
     }
 
     #[test]

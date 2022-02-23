@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{
@@ -14,7 +14,7 @@ use crate::{
     base_types::{ObjectID, SequenceNumber},
     coin::Coin,
     error::{SuiError, SuiResult},
-    id::ID,
+    id::VersionedID,
     object::{Data, MoveObject, Object},
     SUI_FRAMEWORK_ADDRESS,
 };
@@ -44,7 +44,7 @@ pub struct GasCoin(Coin);
 
 impl GasCoin {
     pub fn new(id: ObjectID, version: SequenceNumber, value: u64) -> Self {
-        Self(Coin::new(ID::new(id, version), value))
+        Self(Coin::new(VersionedID::new(id, version), value))
     }
 
     pub fn value(&self) -> u64 {

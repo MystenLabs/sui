@@ -1,3 +1,5 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 use super::*;
 
 use rocksdb::Options;
@@ -9,35 +11,35 @@ use typed_store::traits::Map;
 
 pub struct AuthorityStore {
     /// This is a map between the object ID and the latest state of the object, namely the
-    /// state that is needed to process new orders. If an object is deleted its entry is
+    /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
     objects: DBMap<ObjectID, Object>,
 
     /// This is a map between object references of currently active objects that can be mutated,
-    /// and the order that they are lock on for use by this specific authority. Where an object
-    /// lock exists for an object version, but no order has been seen using it the lock is set
+    /// and the transaction that they are lock on for use by this specific authority. Where an object
+    /// lock exists for an object version, but no transaction has been seen using it the lock is set
     /// to None. The safety of consistent broadcast depend on each honest authority never changing
     /// the lock once it is set. After a certificate for this object is processed it can be
     /// forgotten.
-    order_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
+    transaction_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
     /// This composite index allows an efficient iterator to list all objected currently owned
     /// by a specific user, and their object reference.
-    owner_index: DBMap<(Authenticator, ObjectID), ObjectRef>,
+    owner_index: DBMap<(SuiAddress, ObjectID), ObjectRef>,
 
-    /// This is map between the transaction digest and signed orders found in the `order_lock`.
+    /// This is map between the transaction digest and signed transactions found in the `transaction_lock`.
     /// NOTE: after a lock is deleted the corresponding entry here could be deleted, but right
     /// now this is not done. If a certificate is processed (see `certificates`) the signed
-    /// order can also be deleted from this structure.
-    signed_orders: DBMap<TransactionDigest, SignedOrder>,
+    /// transaction can also be deleted from this structure.
+    signed_transactions: DBMap<TransactionDigest, SignedTransaction>,
 
     /// This is a map between the tranbsaction digest and the corresponding certificate for all
     /// certificates that have been successfully processed by this authority. This set of certificates
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
-    certificates: DBMap<TransactionDigest, CertifiedOrder>,
+    certificates: DBMap<TransactionDigest, CertifiedTransaction>,
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
@@ -50,7 +52,7 @@ pub struct AuthorityStore {
     /// (ie in `certificates`) and the effects its execution has on the authority state. This
     /// structure is used to ensure we do not double process a certificate, and that we can return
     /// the same response for any call after the first (ie. make certificate processing idempotent).
-    signed_effects: DBMap<TransactionDigest, SignedOrderEffects>,
+    signed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
 
     /// Internal vector of locks to manage concurrent writes to the database
     lock_table: Vec<parking_lot::Mutex<()>>,
@@ -65,8 +67,8 @@ impl AuthorityStore {
             &[
                 "objects",
                 "owner_index",
-                "order_lock",
-                "signed_orders",
+                "transaction_lock",
+                "signed_transactions",
                 "certificates",
                 "parent_sync",
                 "signed_effects",
@@ -76,8 +78,10 @@ impl AuthorityStore {
         AuthorityStore {
             objects: DBMap::reopen(&db, Some("objects")).expect("Cannot open CF."),
             owner_index: DBMap::reopen(&db, Some("owner_index")).expect("Cannot open CF."),
-            order_lock: DBMap::reopen(&db, Some("order_lock")).expect("Cannot open CF."),
-            signed_orders: DBMap::reopen(&db, Some("signed_orders")).expect("Cannot open CF."),
+            transaction_lock: DBMap::reopen(&db, Some("transaction_lock"))
+                .expect("Cannot open CF."),
+            signed_transactions: DBMap::reopen(&db, Some("signed_transactions"))
+                .expect("Cannot open CF."),
             certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
             parent_sync: DBMap::reopen(&db, Some("parent_sync")).expect("Cannot open CF."),
             signed_effects: DBMap::reopen(&db, Some("signed_effects")).expect("Cannot open CF."),
@@ -109,24 +113,23 @@ impl AuthorityStore {
     // Methods to read the store
 
     pub fn get_account_objects(&self, account: SuiAddress) -> Result<Vec<ObjectRef>, SuiError> {
-        let auth = Authenticator::Address(account);
         Ok(self
             .owner_index
             .iter()
             // The object id 0 is the smallest possible
-            .skip_to(&(auth, ObjectID::ZERO))?
-            .take_while(|((owner, _id), _object_ref)| (owner == &auth))
+            .skip_to(&(account, ObjectID::ZERO))?
+            .take_while(|((owner, _id), _object_ref)| (owner == &account))
             .map(|((_owner, _id), object_ref)| object_ref)
             .collect())
     }
 
-    pub fn get_order_info(
+    pub fn get_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
-    ) -> Result<OrderInfoResponse, SuiError> {
-        Ok(OrderInfoResponse {
-            signed_order: self.signed_orders.get(transaction_digest)?,
-            certified_order: self.certificates.get(transaction_digest)?,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        Ok(TransactionInfoResponse {
+            signed_transaction: self.signed_transactions.get(transaction_digest)?,
+            certified_transaction: self.certificates.get(transaction_digest)?,
             signed_effects: self.signed_effects.get(transaction_digest)?,
         })
     }
@@ -141,18 +144,21 @@ impl AuthorityStore {
         self.objects.multi_get(_objects).map_err(|e| e.into())
     }
 
-    /// Read a lock or returns Err(OrderLockDoesNotExist) if the lock does not exist.
-    pub fn get_order_lock(&self, object_ref: &ObjectRef) -> Result<Option<SignedOrder>, SuiError> {
-        let order_option = self
-            .order_lock
+    /// Read a lock or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
+    pub fn get_transaction_lock(
+        &self,
+        object_ref: &ObjectRef,
+    ) -> Result<Option<SignedTransaction>, SuiError> {
+        let transaction_option = self
+            .transaction_lock
             .get(object_ref)?
-            .ok_or(SuiError::OrderLockDoesNotExist)?;
+            .ok_or(SuiError::TransactionLockDoesNotExist)?;
 
-        match order_option {
+        match transaction_option {
             Some(tx_digest) => Ok(Some(
-                self.signed_orders
+                self.signed_transactions
                     .get(&tx_digest)?
-                    .expect("Stored a lock without storing order?"),
+                    .expect("Stored a lock without storing transaction?"),
             )),
             None => Ok(None),
         }
@@ -162,7 +168,7 @@ impl AuthorityStore {
     pub fn read_certificate(
         &self,
         digest: &TransactionDigest,
-    ) -> Result<Option<CertifiedOrder>, SuiError> {
+    ) -> Result<Option<CertifiedTransaction>, SuiError> {
         self.certificates.get(digest).map_err(|e| e.into())
     }
 
@@ -229,35 +235,35 @@ impl AuthorityStore {
 
     /// Initialize a lock to an object reference to None, but keep it
     /// as it is if a value is already present.
-    pub fn init_order_lock(&self, object_ref: ObjectRef) -> Result<(), SuiError> {
-        self.order_lock.get_or_insert(&object_ref, || None)?;
+    pub fn init_transaction_lock(&self, object_ref: ObjectRef) -> Result<(), SuiError> {
+        self.transaction_lock.get_or_insert(&object_ref, || None)?;
         Ok(())
     }
 
-    /// Set the order lock to a specific transaction
+    /// Set the transaction lock to a specific transaction
     ///
-    /// This function checks all locks exist, are either None or equal to the passed order
-    /// and then sets them to the order. Otherwise an Err is returned. Locks are set
+    /// This function checks all locks exist, are either None or equal to the passed transaction
+    /// and then sets them to the transaction. Otherwise an Err is returned. Locks are set
     /// atomically in this implementation.
     ///
-    pub fn set_order_lock(
+    pub fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
-        signed_order: SignedOrder,
+        signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
-        let tx_digest = signed_order.order.digest();
+        let tx_digest = signed_transaction.transaction.digest();
         let lock_batch = self
-            .order_lock
+            .transaction_lock
             .batch()
             .insert_batch(
-                &self.order_lock,
+                &self.transaction_lock,
                 mutable_input_objects
                     .iter()
                     .map(|obj_ref| (obj_ref, Some(tx_digest))),
             )?
             .insert_batch(
-                &self.signed_orders,
-                std::iter::once((tx_digest, signed_order)),
+                &self.signed_transactions,
+                std::iter::once((tx_digest, signed_transaction)),
             )?;
 
         // This is the critical region: testing the locks and writing the
@@ -266,21 +272,21 @@ impl AuthorityStore {
             // Aquire the lock to ensure no one else writes when we are in here.
             let _mutexes = self.aqcuire_locks(mutable_input_objects);
 
-            let locks = self.order_lock.multi_get(mutable_input_objects)?;
+            let locks = self.transaction_lock.multi_get(mutable_input_objects)?;
 
             for (obj_ref, lock) in mutable_input_objects.iter().zip(locks) {
                 // The object / version must exist, and therefore lock initialized.
-                let lock = lock.ok_or(SuiError::OrderLockDoesNotExist)?;
+                let lock = lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
 
                 if let Some(previous_tx_digest) = lock {
                     if previous_tx_digest != tx_digest {
-                        let prev_order = self
-                            .get_order_lock(obj_ref)?
-                            .expect("If we have a lock we should have an order.");
+                        let prev_transaction = self
+                            .get_transaction_lock(obj_ref)?
+                            .expect("If we have a lock we should have a transaction.");
 
-                        // TODO: modify ConflictingOrder to only return the order digest here.
-                        return Err(SuiError::ConflictingOrder {
-                            pending_order: prev_order.order,
+                        // TODO: modify ConflictingTransaction to only return the transaction digest here.
+                        return Err(SuiError::ConflictingTransaction {
+                            pending_transaction: prev_transaction.transaction,
                         });
                     }
                 }
@@ -300,25 +306,25 @@ impl AuthorityStore {
     pub fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
-        certificate: CertifiedOrder,
-        signed_effects: SignedOrderEffects,
-    ) -> Result<OrderInfoResponse, SuiError> {
+        certificate: CertifiedTransaction,
+        signed_effects: SignedTransactionEffects,
+    ) -> Result<TransactionInfoResponse, SuiError> {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
-        let mut write_batch = self.order_lock.batch();
+        let mut write_batch = self.transaction_lock.batch();
 
         // Archive the old lock.
-        write_batch = write_batch.delete_batch(&self.order_lock, active_inputs.iter())?;
+        write_batch = write_batch.delete_batch(&self.transaction_lock, active_inputs.iter())?;
 
         // Store the certificate indexed by transaction digest
-        let transaction_digest: TransactionDigest = certificate.order.digest();
+        let transaction_digest: TransactionDigest = certificate.transaction.digest();
         write_batch = write_batch.insert_batch(
             &self.certificates,
             std::iter::once((transaction_digest, &certificate)),
         )?;
 
-        // Store the signed effects of the order
+        // Store the signed effects of the transaction
         write_batch = write_batch.insert_batch(
             &self.signed_effects,
             std::iter::once((transaction_digest, &signed_effects)),
@@ -372,7 +378,7 @@ impl AuthorityStore {
 
         // Create locks for new objects, if they are not immutable
         write_batch = write_batch.insert_batch(
-            &self.order_lock,
+            &self.transaction_lock,
             written.iter().filter_map(|(_, new_object)| {
                 if !new_object.is_read_only() {
                     Some((new_object.to_object_reference(), None))
@@ -403,9 +409,9 @@ impl AuthorityStore {
 
             // Check the locks are still active
             // TODO: maybe we could just check if the certificate is there instead?
-            let locks = self.order_lock.multi_get(&active_inputs[..])?;
+            let locks = self.transaction_lock.multi_get(&active_inputs[..])?;
             for object_lock in locks {
-                object_lock.ok_or(SuiError::OrderLockDoesNotExist)?;
+                object_lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
             }
 
             // Atomic write of all locks & other data
@@ -414,9 +420,9 @@ impl AuthorityStore {
             // implict: drop(_mutexes);
         } // End of critical region
 
-        Ok(OrderInfoResponse {
-            signed_order: self.signed_orders.get(&transaction_digest)?,
-            certified_order: Some(certificate),
+        Ok(TransactionInfoResponse {
+            signed_transaction: self.signed_transactions.get(&transaction_digest)?,
+            certified_transaction: Some(certificate),
             signed_effects: Some(signed_effects),
         })
     }
@@ -456,7 +462,7 @@ impl ModuleResolver for AuthorityStore {
     type Error = SuiError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.get_object(module_id.address())? {
+        match self.get_object(&ObjectID::from(*module_id.address()))? {
             Some(o) => match &o.data {
                 Data::Package(c) => Ok(c
                     .get(module_id.name().as_str())

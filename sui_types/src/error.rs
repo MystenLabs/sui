@@ -1,11 +1,12 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Debug;
 use thiserror::Error;
 
 use crate::base_types::*;
-use crate::messages::Order;
+use crate::messages::Transaction;
 use move_binary_format::errors::PartialVMError;
 use serde::{Deserialize, Serialize};
 
@@ -56,14 +57,14 @@ pub enum SuiError {
         object_id: ObjectID,
         expected_sequence: SequenceNumber,
     },
-    #[error("Conflicting order already received: {pending_order:?}")]
-    ConflictingOrder { pending_order: Order },
-    #[error("Order was processed but no signature was produced by authority")]
-    ErrorWhileProcessingOrder,
-    #[error("Transaction order processing failed: {err}")]
-    ErrorWhileProcessingTransactionOrder { err: String },
-    #[error("Confirmation order processing failed: {err}")]
-    ErrorWhileProcessingConfirmationOrder { err: String },
+    #[error("Conflicting transaction already received: {pending_transaction:?}")]
+    ConflictingTransaction { pending_transaction: Transaction },
+    #[error("Transaction was processed but no signature was produced by authority")]
+    ErrorWhileProcessingTransaction,
+    #[error("Transaction transaction processing failed: {err}")]
+    ErrorWhileProcessingTransactionTransaction { err: String },
+    #[error("Confirmation transaction processing failed: {err}")]
+    ErrorWhileProcessingConfirmationTransaction { err: String },
     #[error("An invalid answer was returned by the authority while requesting a certificate")]
     ErrorWhileRequestingCertificate,
     #[error("Module publish failed: {err}")]
@@ -108,6 +109,8 @@ pub enum SuiError {
     InvalidCrossShardUpdate,
     #[error("Invalid authenticator")]
     InvalidAuthenticator,
+    #[error("Invalid address")]
+    InvalidAddress,
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
     #[error(
@@ -169,12 +172,12 @@ pub enum SuiError {
     // Internal state errors
     #[error("Attempt to update state of TxContext from a different instance than original.")]
     InvalidTxUpdate,
-    #[error("Attempt to re-initialize an order lock.")]
-    OrderLockExists,
-    #[error("Attempt to set an non-existing order lock.")]
-    OrderLockDoesNotExist,
-    #[error("Attempt to reset a set order lock to a different value.")]
-    OrderLockReset,
+    #[error("Attempt to re-initialize a transaction lock.")]
+    TransactionLockExists,
+    #[error("Attempt to set an non-existing transaction lock.")]
+    TransactionLockDoesNotExist,
+    #[error("Attempt to reset a set transaction lock to a different value.")]
+    TransactionLockReset,
     #[error("Could not find the referenced object {:?}.", object_id)]
     ObjectNotFound { object_id: ObjectID },
     #[error("Object deleted at reference {:?}.", object_ref)]
@@ -183,7 +186,7 @@ pub enum SuiError {
     BadObjectType { error: String },
     #[error("Move Execution failed")]
     MoveExecutionFailure,
-    #[error("Wrong number of parameters for the order.")]
+    #[error("Wrong number of parameters for the transaction.")]
     ObjectInputArityViolation,
     #[error("Execution invariant violated")]
     ExecutionInvariantViolation,
@@ -215,6 +218,10 @@ pub enum SuiError {
     IncorrectRecipientError,
     #[error("Too many authority errors were detected.")]
     TooManyIncorrectAuthorities,
+    #[error("Inconsistent gas coin split result.")]
+    IncorrectGasSplit,
+    #[error("Inconsistent gas coin merge result.")]
+    IncorrectGasMerge,
 
     #[error("Account not found.")]
     AccountNotFound,

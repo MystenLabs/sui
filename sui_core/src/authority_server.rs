@@ -1,4 +1,5 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
@@ -53,23 +54,23 @@ impl MessageHandler for AuthorityServer {
                 Err(_) => Err(SuiError::InvalidDecoding),
                 Ok(result) => {
                     match result {
-                        SerializedMessage::Order(message) => self
+                        SerializedMessage::Transaction(message) => self
                             .state
-                            .handle_order(*message)
+                            .handle_transaction(*message)
                             .await
-                            .map(|info| Some(serialize_order_info(&info))),
+                            .map(|info| Some(serialize_transaction_info(&info))),
                         SerializedMessage::Cert(message) => {
-                            let confirmation_order = ConfirmationOrder {
+                            let confirmation_transaction = ConfirmationTransaction {
                                 certificate: message.as_ref().clone(),
                             };
                             match self
                                 .state
-                                .handle_confirmation_order(confirmation_order)
+                                .handle_confirmation_transaction(confirmation_transaction)
                                 .await
                             {
                                 Ok(info) => {
                                     // Response
-                                    Ok(Some(serialize_order_info(&info)))
+                                    Ok(Some(serialize_transaction_info(&info)))
                                 }
                                 Err(error) => Err(error),
                             }
@@ -84,11 +85,11 @@ impl MessageHandler for AuthorityServer {
                             .handle_object_info_request(*message)
                             .await
                             .map(|info| Some(serialize_object_info_response(&info))),
-                        SerializedMessage::OrderInfoReq(message) => self
+                        SerializedMessage::TransactionInfoReq(message) => self
                             .state
-                            .handle_order_info_request(*message)
+                            .handle_transaction_info_request(*message)
                             .await
-                            .map(|info| Some(serialize_order_info(&info))),
+                            .map(|info| Some(serialize_transaction_info(&info))),
                         _ => Err(SuiError::UnexpectedMessage),
                     }
                 }

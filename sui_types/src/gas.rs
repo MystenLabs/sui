@@ -1,11 +1,12 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
 use crate::{
     error::{SuiError, SuiResult},
     gas_coin::GasCoin,
-    messages::{Order, OrderKind},
+    messages::{Transaction, TransactionKind},
     object::Object,
 };
 use std::convert::TryFrom;
@@ -23,10 +24,10 @@ macro_rules! ok_or_gas_error {
 pub const MIN_MOVE: u64 = 10;
 pub const MIN_OBJ_TRANSFER_GAS: u64 = 8;
 
-pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> SuiResult {
-    match &order.kind {
-        OrderKind::Transfer(t) => {
-            debug_assert_eq!(t.gas_payment.0, gas_object.id());
+pub fn check_gas_requirement(transaction: &Transaction, gas_object: &Object) -> SuiResult {
+    debug_assert_eq!(transaction.gas_payment_object_ref().0, gas_object.id());
+    match &transaction.data.kind {
+        TransactionKind::Transfer(_) => {
             let balance = get_gas_balance(gas_object)?;
             ok_or_gas_error!(
                 balance >= MIN_OBJ_TRANSFER_GAS,
@@ -36,18 +37,22 @@ pub fn check_gas_requirement(order: &Order, gas_object: &Object) -> SuiResult {
                 )
             )
         }
-        OrderKind::Call(op) => {
-            check_move_gas_requirement(gas_object, op.gas_payment, op.gas_budget)
-        }
-        OrderKind::Publish(op) => {
-            check_move_gas_requirement(gas_object, op.gas_payment, op.gas_budget)
-        }
+        TransactionKind::Call(op) => check_move_gas_requirement(
+            gas_object,
+            transaction.gas_payment_object_ref(),
+            op.gas_budget,
+        ),
+        TransactionKind::Publish(op) => check_move_gas_requirement(
+            gas_object,
+            transaction.gas_payment_object_ref(),
+            op.gas_budget,
+        ),
     }
 }
 
 pub fn check_move_gas_requirement(
     gas_object: &Object,
-    gas_payment: ObjectRef,
+    gas_payment: &ObjectRef,
     gas_budget: u64,
 ) -> SuiResult {
     debug_assert_eq!(gas_payment.0, gas_object.id());
@@ -70,7 +75,7 @@ pub fn check_move_gas_requirement(
 
 /// Try subtract the gas balance of \p gas_object by \p amount.
 pub fn try_deduct_gas(gas_object: &mut Object, amount: u64) -> SuiResult {
-    // The object must be a gas coin as we have checked in order handle phase.
+    // The object must be a gas coin as we have checked in transaction handle phase.
     let gas_coin = GasCoin::try_from(&*gas_object).unwrap();
     let balance = gas_coin.value();
     ok_or_gas_error!(

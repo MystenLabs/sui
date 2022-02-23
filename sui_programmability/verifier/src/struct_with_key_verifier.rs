@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::verification_failure;
@@ -70,11 +70,11 @@ fn verify_key_structs(module: &CompiledModule) -> SuiResult {
         let id_type_module_address = module.address_identifier_at(id_type_module.address);
         let id_type_module_name = module.identifier_at(id_type_module.name).to_string();
         fp_ensure!(
-            id_type_struct_name == "ID"
+            id_type_struct_name == "VersionedID"
                 && id_type_module_address == &SUI_FRAMEWORK_ADDRESS
                 && id_type_module_name == "ID",
             verification_failure(format!(
-                "First field of struct {} must be of type {}::ID::ID, {}::{}::{} type found",
+                "First field of struct {} must be of type {}::ID::VersionedID, {}::{}::{} type found",
                 name,
                 SUI_FRAMEWORK_ADDRESS,
                 id_type_module_address,

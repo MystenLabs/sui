@@ -1,24 +1,42 @@
 module FastX::Collection {
+    use Std::Errors;
     use Std::Option::{Self, Option};
     use Std::Vector::Self;
     use FastX::Address::{Self, Address};
-    use FastX::ID::{Self, ID, IDBytes};
+    use FastX::ID::{Self, VersionedID, IDBytes};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
 
-    const OBJECT_NOT_FOUND: u64 = 0;
-    const OBJECT_DOUBLE_ADD: u64 = 1;
+    // Error codes
+    const EOBJECT_NOT_FOUND: u64 = 0;
+    const EOBJECT_DOUBLE_ADD: u64 = 1;
+    const EINVALID_MAX_CAPACITY: u64 = 2;
+    const EMAX_CAPACITY_EXCEEDED: u64 = 3;
+
+    // TODO: this is a placeholder number
+    const DEFAULT_MAX_CAPACITY: u64 = 65536;
 
     struct Collection has key {
-        id: ID,
+        id: VersionedID,
         objects: vector<IDBytes>,
+        max_capacity: u64,
     }
 
     /// Create a new Collection and return it.
     public fun new(ctx: &mut TxContext): Collection {
+        new_with_max_capacity(ctx, DEFAULT_MAX_CAPACITY)
+    }
+
+    /// Create a new Collection with custom size limit and return it.
+    public fun new_with_max_capacity(ctx: &mut TxContext, max_capacity: u64): Collection {
+        assert!(
+            max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0 ,
+            Errors::limit_exceeded(EINVALID_MAX_CAPACITY)
+        );
         Collection {
             id: TxContext::new_id(ctx),
             objects: Vector::empty<IDBytes>(),
+            max_capacity,
         }
     }
 
@@ -35,9 +53,13 @@ module FastX::Collection {
     /// Add a new object to the collection.
     /// Abort if the object is already in the collection.
     public fun add<T: key>(c: &mut Collection, object: T) {
+        assert!(
+            size(c) + 1 <= c.max_capacity,
+            Errors::limit_exceeded(EMAX_CAPACITY_EXCEEDED)
+        );
         let id_bytes = ID::get_id_bytes(&object);
         if (contains(c, id_bytes)) {
-            abort OBJECT_DOUBLE_ADD
+            abort EOBJECT_DOUBLE_ADD
         };
         Vector::push_back(&mut c.objects, *id_bytes);
         Transfer::transfer_to_object(object, c);
@@ -54,7 +76,7 @@ module FastX::Collection {
     public fun remove<T: key>(c: &mut Collection, object: T): T {
         let idx = find(c, ID::get_id_bytes(&object));
         if (Option::is_none(&idx)) {
-            abort OBJECT_NOT_FOUND
+            abort EOBJECT_DOUBLE_ADD
         };
         Vector::remove(&mut c.objects, *Option::borrow(&idx));
         object

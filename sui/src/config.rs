@@ -1,366 +1,110 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_core::client::ClientState;
-use sui_types::{
-    base_types::*,
-    messages::{CertifiedOrder, OrderKind},
-};
-
-use crate::utils::Config;
-use move_core_types::language_storage::TypeTag;
-use move_core_types::{identifier::Identifier, transaction_argument::TransactionArgument};
+use anyhow::anyhow;
+use once_cell::sync::Lazy;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use std::fmt::{Debug, Display, Formatter};
+use serde_json::Value;
+use std::collections::BTreeMap;
+use std::fmt::{Display, Formatter};
+use std::fs::{self, File};
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Duration;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fs::{self, read_to_string, File, OpenOptions},
-    io::{BufReader, BufWriter, Write},
-    iter::FromIterator,
-};
+use sui_core::authority_client::AuthorityClient;
+use sui_framework::DEFAULT_FRAMEWORK_PATH;
+use sui_network::network::{NetworkClient, PortAllocator};
 use sui_network::transport;
-use sui_types::object::Object;
+use sui_types::base_types::*;
+use sui_types::committee::Committee;
+use sui_types::crypto::{get_key_pair, KeyPair};
+use sui_types::error::SuiError;
+use tracing::log::trace;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AuthorityConfig {
-    #[serde(
-        serialize_with = "address_as_hex",
-        deserialize_with = "address_from_hex"
-    )]
-    pub address: SuiAddress,
-    pub host: String,
-    pub base_port: u16,
-    pub database_path: String,
-}
+const DEFAULT_WEIGHT: usize = 1;
+const DEFAULT_GAS_AMOUNT: u64 = 100000;
+pub const AUTHORITIES_DB_NAME: &str = "authorities_db";
+pub const DEFAULT_STARTING_PORT: u16 = 10000;
 
-impl AuthorityConfig {
-    pub fn print(&self) {
-        let data = serde_json::to_string(self).unwrap();
-        println!("{}", data);
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct AuthorityServerConfig {
-    pub authority: AuthorityConfig,
-    pub key: KeyPair,
-}
-
-impl AuthorityServerConfig {
-    pub fn read(path: &str) -> Result<Self, std::io::Error> {
-        let data = fs::read(path)?;
-        Ok(serde_json::from_slice(data.as_slice())?)
-    }
-
-    pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new().create(true).write(true).open(path)?;
-        let mut writer = BufWriter::new(file);
-        let data = serde_json::to_string_pretty(self).unwrap();
-        writer.write_all(data.as_ref())?;
-        writer.write_all(b"\n")?;
-        Ok(())
-    }
-}
-
-pub struct CommitteeConfig {
-    pub authorities: Vec<AuthorityConfig>,
-}
-
-impl CommitteeConfig {
-    pub fn read(path: &str) -> Result<Self, std::io::Error> {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let stream = serde_json::Deserializer::from_reader(reader).into_iter();
-        Ok(Self {
-            authorities: stream.filter_map(Result::ok).collect(),
-        })
-    }
-
-    pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new().create(true).write(true).open(path)?;
-        let mut writer = BufWriter::new(file);
-        for config in &self.authorities {
-            serde_json::to_writer(&mut writer, config)?;
-            writer.write_all(b"\n")?;
-        }
-        Ok(())
-    }
-
-    pub fn voting_rights(&self) -> BTreeMap<AuthorityName, usize> {
-        let mut map = BTreeMap::new();
-        for authority in &self.authorities {
-            map.insert(authority.address, 1);
-        }
-        map
-    }
-}
-
-#[serde_as]
-#[derive(Serialize, Deserialize)]
-pub struct UserAccount {
-    #[serde(
-        serialize_with = "address_as_hex",
-        deserialize_with = "address_from_hex"
-    )]
-    pub address: SuiAddress,
-    pub key: KeyPair,
-    pub object_refs: BTreeMap<ObjectID, ObjectRef>,
-    pub gas_object_ids: BTreeSet<ObjectID>, // Every id in gas_object_ids should also be in object_ids.
-    #[serde_as(as = "Vec<(_, _)>")]
-    pub certificates: BTreeMap<TransactionDigest, CertifiedOrder>,
-}
-
-impl UserAccount {
-    pub fn new(
-        address: SuiAddress,
-        key: KeyPair,
-        object_refs: Vec<ObjectRef>,
-        gas_object_ids: Vec<ObjectID>,
-    ) -> Self {
-        let object_refs = object_refs
-            .into_iter()
-            .map(|object_ref| (object_ref.0, object_ref))
-            .collect();
-        let gas_object_ids = BTreeSet::from_iter(gas_object_ids);
-        Self {
-            address,
-            key,
-            object_refs,
-            gas_object_ids,
-            certificates: BTreeMap::new(),
-        }
-    }
-}
-
-pub fn transaction_args_from_str<'de, D>(
-    deserializer: D,
-) -> Result<Vec<TransactionArgument>, D::Error>
-where
-    D: serde::de::Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-
-    let tokens = s.split(',');
-
-    let result: Result<Vec<_>, _> = tokens
-        .map(|tok| move_core_types::parser::parse_transaction_argument(tok.trim()))
-        .collect();
-    result.map_err(serde::de::Error::custom)
-}
-#[derive(Serialize, Deserialize)]
-pub struct MoveCallConfig {
-    /// Object ID of the package, which contains the module
-    pub package_obj_id: ObjectID,
-    /// The name of the module in the package
-    pub module: Identifier,
-    /// Function name in module
-    pub function: Identifier,
-    /// Function name in module
-    pub type_args: Vec<TypeTag>,
-    /// Object args object IDs
-    pub object_args_ids: Vec<ObjectID>,
-
-    /// Pure arguments to the functions, which conform to move_core_types::transaction_argument
-    /// Special case formatting rules:
-    /// Use one string with CSV token embedded, for example "54u8,0x43"
-    /// When specifying FastX addresses, specify as vector. Example x\"01FE4E6F9F57935C5150A486B5B78AC2B94E2C5CD9352C132691D99B3E8E095C\"
-    #[serde(deserialize_with = "transaction_args_from_str")]
-    pub pure_args: Vec<TransactionArgument>,
-    /// ID of the gas object for gas payment, in 20 bytes Hex string
-    pub gas_object_id: ObjectID,
-    /// Gas budget for this call
-    pub gas_budget: u64,
-}
-
-impl MoveCallConfig {
-    pub fn read(path: &str) -> Result<Self, std::io::Error> {
-        let file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .read(true)
-            .open(path)?;
-        let reader = BufReader::new(file);
-        Ok(serde_json::from_reader(reader)?)
-    }
-
-    pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new().write(true).open(path)?;
-        let mut writer = BufWriter::new(file);
-        serde_json::to_writer(&mut writer, self)?;
-        writer.write_all(b"\n")?;
-        Ok(())
-    }
-}
-
-pub struct AccountsConfig {
-    accounts: BTreeMap<SuiAddress, UserAccount>,
-}
-
-impl AccountsConfig {
-    /// Beware: this removes the account from the `AccountConfig` map!
-    /// better make sure we only use this once per account!
-    pub fn remove(&mut self, address: &SuiAddress) -> Option<UserAccount> {
-        self.accounts.remove(address)
-    }
-
-    pub fn insert(&mut self, account: UserAccount) {
-        self.accounts.insert(account.address, account);
-    }
-
-    pub fn num_accounts(&self) -> usize {
-        self.accounts.len()
-    }
-
-    pub fn nth_account(&self, n: usize) -> Option<&UserAccount> {
-        self.accounts.values().nth(n)
-    }
-
-    pub fn find_account(&self, object_id: &ObjectID) -> Option<&UserAccount> {
-        self.accounts
-            .values()
-            .find(|acc| acc.object_refs.contains_key(object_id))
-    }
-    pub fn accounts_mut(&mut self) -> impl Iterator<Item = &mut UserAccount> {
-        self.accounts.values_mut()
-    }
-
-    pub fn addresses(&mut self) -> impl Iterator<Item = &SuiAddress> {
-        self.accounts.keys()
-    }
-
-    pub fn update_from_state<A>(&mut self, state: &ClientState<A>) {
-        let account = self
-            .accounts
-            .get_mut(&state.address())
-            .expect("Updated account should already exist");
-        account.object_refs = state.object_refs();
-        account.certificates = state.all_certificates();
-    }
-
-    pub fn update_for_received_transfer(&mut self, certificate: CertifiedOrder) {
-        match &certificate.order.kind {
-            OrderKind::Transfer(transfer) => {
-                if let Some(config) = self.accounts.get_mut(&transfer.recipient) {
-                    config
-                        .certificates
-                        .entry(certificate.order.digest())
-                        .or_insert(certificate);
-                }
-            }
-            OrderKind::Publish(_) | OrderKind::Call(_) => {
-                unimplemented!("update_for_received_transfer of Call or Publish")
-            }
-        }
-    }
-
-    pub fn read_or_create(path: &str) -> Result<Self, std::io::Error> {
-        let file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .read(true)
-            .open(path)?;
-        let reader = BufReader::new(file);
-        let stream = serde_json::Deserializer::from_reader(reader).into_iter();
-        Ok(Self {
-            accounts: stream
-                .filter_map(Result::ok)
-                .map(|account: UserAccount| (account.address, account))
-                .collect(),
-        })
-    }
-
-    pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let file = OpenOptions::new().write(true).open(path)?;
-        let mut writer = BufWriter::new(file);
-        for account in self.accounts.values() {
-            serde_json::to_writer(&mut writer, account)?;
-            writer.write_all(b"\n")?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct InitialStateConfigEntry {
-    pub address: SuiAddress,
-    pub objects: Vec<Object>,
-}
-#[derive(Serialize, Deserialize)]
-pub struct InitialStateConfig {
-    pub config: Vec<InitialStateConfigEntry>,
-}
-
-impl InitialStateConfig {
-    pub fn new() -> Self {
-        Self { config: Vec::new() }
-    }
-
-    pub fn read(path: &str) -> Result<Self, anyhow::Error> {
-        let raw_data: String = read_to_string(path)?.parse()?;
-
-        Ok(serde_json::from_str(&raw_data)?)
-    }
-
-    pub fn write(&self, path: &str) -> Result<(), std::io::Error> {
-        let config = serde_json::to_string(self).unwrap();
-
-        fs::write(path, config).expect("Unable to write to initial config file");
-        Ok(())
-    }
-}
-
-impl Default for InitialStateConfig {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-pub struct ClientConfig {
-    pub send_timeout: Duration,
-    pub recv_timeout: Duration,
-    pub buffer_size: usize,
-    pub db_path: String,
-    pub accounts_config_path: String,
-    pub committee_config_path: String,
-    pub accounts_config: AccountsConfig,
-    pub committee_config: CommitteeConfig,
-}
+static PORT_ALLOCATOR: Lazy<Mutex<PortAllocator>> =
+    Lazy::new(|| Mutex::new(PortAllocator::new(DEFAULT_STARTING_PORT)));
 
 #[derive(Serialize, Deserialize)]
 pub struct AccountInfo {
-    #[serde(
-        serialize_with = "address_as_hex",
-        deserialize_with = "address_from_hex"
-    )]
+    #[serde(serialize_with = "bytes_as_hex", deserialize_with = "bytes_from_hex")]
     pub address: SuiAddress,
     pub key_pair: KeyPair,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct AuthorityInfo {
-    #[serde(
-        serialize_with = "address_as_hex",
-        deserialize_with = "address_from_hex"
-    )]
-    pub address: SuiAddress,
+    #[serde(serialize_with = "bytes_as_hex", deserialize_with = "bytes_from_hex")]
+    pub name: AuthorityName,
     pub host: String,
     pub base_port: u16,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct AuthorityPrivateInfo {
-    #[serde(
-        serialize_with = "address_as_hex",
-        deserialize_with = "address_from_hex"
-    )]
-    pub address: SuiAddress,
     pub key_pair: KeyPair,
     pub host: String,
     pub port: u16,
     pub db_path: PathBuf,
+    pub stake: usize,
+}
+
+// Custom deserializer with optional default fields
+impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let (_, new_key_pair) = get_key_pair();
+
+        let json = Value::deserialize(deserializer)?;
+        let key_pair = if let Some(val) = json.get("key_pair") {
+            KeyPair::deserialize(val).map_err(serde::de::Error::custom)?
+        } else {
+            new_key_pair
+        };
+        let host = if let Some(val) = json.get("host") {
+            String::deserialize(val).map_err(serde::de::Error::custom)?
+        } else {
+            "127.0.0.1".to_string()
+        };
+        let port = if let Some(val) = json.get("port") {
+            u16::deserialize(val).map_err(serde::de::Error::custom)?
+        } else {
+            PORT_ALLOCATOR
+                .lock()
+                .map_err(serde::de::Error::custom)?
+                .next_port()
+                .ok_or_else(|| serde::de::Error::custom("No available port."))?
+        };
+        let db_path = if let Some(val) = json.get("db_path") {
+            PathBuf::deserialize(val).map_err(serde::de::Error::custom)?
+        } else {
+            PathBuf::from(".")
+                .join(AUTHORITIES_DB_NAME)
+                .join(encode_bytes_hex(key_pair.public_key_bytes()))
+        };
+        let stake = if let Some(val) = json.get("stake") {
+            usize::deserialize(val).map_err(serde::de::Error::custom)?
+        } else {
+            DEFAULT_WEIGHT
+        };
+
+        Ok(AuthorityPrivateInfo {
+            key_pair,
+            host,
+            port,
+            db_path,
+            stake,
+        })
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -398,6 +142,38 @@ impl Config for WalletConfig {
     }
 }
 
+impl WalletConfig {
+    pub fn make_committee(&self) -> Committee {
+        let voting_rights = self
+            .authorities
+            .iter()
+            .map(|authority| (authority.name, 1))
+            .collect();
+        Committee::new(voting_rights)
+    }
+
+    pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, AuthorityClient> {
+        let mut authority_clients = BTreeMap::new();
+        for authority in &self.authorities {
+            let client = AuthorityClient::new(NetworkClient::new(
+                authority.host.clone(),
+                authority.base_port,
+                self.buffer_size,
+                self.send_timeout,
+                self.recv_timeout,
+            ));
+            authority_clients.insert(authority.name, client);
+        }
+        authority_clients
+    }
+    pub fn get_account_cfg_info(&self, address: &SuiAddress) -> Result<&AccountInfo, SuiError> {
+        self.accounts
+            .iter()
+            .find(|info| &info.address == address)
+            .ok_or(SuiError::AccountNotFound)
+    }
+}
+
 impl Display for WalletConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -414,6 +190,7 @@ impl Display for WalletConfig {
 pub struct NetworkConfig {
     pub authorities: Vec<AuthorityPrivateInfo>,
     pub buffer_size: usize,
+    pub loaded_move_packages: Vec<(PathBuf, ObjectID)>,
     #[serde(skip)]
     config_path: PathBuf,
 }
@@ -421,8 +198,9 @@ pub struct NetworkConfig {
 impl Config for NetworkConfig {
     fn create(path: &Path) -> Result<Self, anyhow::Error> {
         Ok(Self {
-            authorities: Vec::new(),
+            authorities: vec![],
             buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE.to_string().parse()?,
+            loaded_move_packages: vec![],
             config_path: path.to_path_buf(),
         })
     }
@@ -434,4 +212,155 @@ impl Config for NetworkConfig {
     fn config_path(&self) -> &Path {
         &self.config_path
     }
+}
+
+#[derive(Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct GenesisConfig {
+    pub authorities: Vec<AuthorityPrivateInfo>,
+    pub accounts: Vec<AccountConfig>,
+    pub move_packages: Vec<PathBuf>,
+    #[serde(default = "default_sui_framework_lib")]
+    pub sui_framework_lib_path: PathBuf,
+    #[serde(default = "default_move_framework_lib")]
+    pub move_framework_lib_path: PathBuf,
+    #[serde(skip)]
+    config_path: PathBuf,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct AccountConfig {
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "SuiAddress::optional_address_as_hex",
+        deserialize_with = "SuiAddress::optional_address_from_hex"
+    )]
+    pub address: Option<SuiAddress>,
+    pub gas_objects: Vec<ObjectConfig>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ObjectConfig {
+    #[serde(default = "ObjectID::random")]
+    pub object_id: ObjectID,
+    #[serde(default = "default_gas_value")]
+    pub gas_value: u64,
+}
+
+fn default_gas_value() -> u64 {
+    DEFAULT_GAS_AMOUNT
+}
+
+fn default_sui_framework_lib() -> PathBuf {
+    PathBuf::from(DEFAULT_FRAMEWORK_PATH)
+}
+
+fn default_move_framework_lib() -> PathBuf {
+    PathBuf::from(DEFAULT_FRAMEWORK_PATH)
+        .join("deps")
+        .join("move-stdlib")
+}
+
+const DEFAULT_NUMBER_OF_AUTHORITIES: usize = 4;
+const DEFAULT_NUMBER_OF_ACCOUNT: usize = 5;
+const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
+
+impl GenesisConfig {
+    pub fn default_genesis(path: &Path) -> Result<Self, anyhow::Error> {
+        let working_dir = path.parent().ok_or(anyhow!("Cannot resolve file path."))?;
+        let mut authorities = Vec::new();
+        for _ in 0..DEFAULT_NUMBER_OF_AUTHORITIES {
+            // Get default authority config from deserialization logic.
+            let mut authority = AuthorityPrivateInfo::deserialize(Value::String(String::new()))?;
+            authority.db_path = working_dir
+                .join(AUTHORITIES_DB_NAME)
+                .join(encode_bytes_hex(&authority.key_pair.public_key_bytes()));
+            authorities.push(authority)
+        }
+        let mut accounts = Vec::new();
+        for _ in 0..DEFAULT_NUMBER_OF_ACCOUNT {
+            let mut objects = Vec::new();
+            for _ in 0..DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT {
+                objects.push(ObjectConfig {
+                    object_id: ObjectID::random(),
+                    gas_value: DEFAULT_GAS_AMOUNT,
+                })
+            }
+            accounts.push(AccountConfig {
+                address: None,
+                gas_objects: objects,
+            })
+        }
+        Ok(Self {
+            authorities,
+            accounts,
+            move_packages: vec![],
+            sui_framework_lib_path: default_sui_framework_lib(),
+            move_framework_lib_path: default_move_framework_lib(),
+            config_path: path.to_path_buf(),
+        })
+    }
+}
+
+impl Config for GenesisConfig {
+    fn create(path: &Path) -> Result<Self, anyhow::Error> {
+        Ok(Self {
+            authorities: vec![],
+            accounts: vec![],
+            config_path: path.to_path_buf(),
+            move_packages: vec![],
+            sui_framework_lib_path: default_sui_framework_lib(),
+            move_framework_lib_path: default_move_framework_lib(),
+        })
+    }
+
+    fn set_config_path(&mut self, path: &Path) {
+        self.config_path = path.to_path_buf()
+    }
+
+    fn config_path(&self) -> &Path {
+        &self.config_path
+    }
+}
+
+pub trait Config
+where
+    Self: DeserializeOwned + Serialize,
+{
+    fn read_or_create(path: &Path) -> Result<Self, anyhow::Error> {
+        let path_buf = PathBuf::from(path);
+        Ok(if path_buf.exists() {
+            Self::read(path)?
+        } else {
+            trace!("Config file not found, creating new config '{:?}'", path);
+            let new_config = Self::create(path)?;
+            new_config.write(path)?;
+            new_config
+        })
+    }
+
+    fn read(path: &Path) -> Result<Self, anyhow::Error> {
+        trace!("Reading config from '{:?}'", path);
+        let reader = BufReader::new(File::open(path)?);
+        let mut config: Self = serde_json::from_reader(reader)?;
+        config.set_config_path(path);
+        Ok(config)
+    }
+
+    fn write(&self, path: &Path) -> Result<(), anyhow::Error> {
+        trace!("Writing config to '{:?}'", path);
+        let config = serde_json::to_string_pretty(self).unwrap();
+        fs::write(path, config).expect("Unable to write to config file");
+        Ok(())
+    }
+
+    fn save(&self) -> Result<(), anyhow::Error> {
+        self.write(self.config_path())
+    }
+
+    fn create(path: &Path) -> Result<Self, anyhow::Error>;
+
+    fn set_config_path(&mut self, path: &Path);
+    fn config_path(&self) -> &Path;
 }

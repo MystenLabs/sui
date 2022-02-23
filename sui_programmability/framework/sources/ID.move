@@ -1,5 +1,6 @@
 /// FastX object identifiers
 module FastX::ID {
+    use Std::BCS;
     // TODO(): bring this back
     //friend FastX::TxContext;
 
@@ -8,14 +9,14 @@ module FastX::ID {
 
     /// Globally unique identifier of an object. This is a privileged type
     /// that can only be derived from a `TxContext`
-    /// ID doesn't have drop capability, which means to delete an ID (when
+    /// VersionedID doesn't have drop capability, which means to delete an VersionedID (when
     /// deleting an object), one must explicitly call the delete function.
-    struct ID has store {
+    struct VersionedID has store {
         id: IDBytes,
-        /// Version number for the ID. The version number is incremented each
-        /// time the object with this ID is passed to a non-failing transaction
+        /// Version number for the VersionedID. The version number is incremented each
+        /// time the object with this VersionedID is passed to a non-failing transaction
         /// either by value or by mutable reference.
-        /// Note: if the object with this ID gets wrapped in another object, the
+        /// Note: if the object with this VersionedID gets wrapped in another object, the
         /// child object may be mutated with no version number change.
         version: u64
     }
@@ -26,11 +27,11 @@ module FastX::ID {
         bytes: address
     }
 
-    /// Create a new ID. Only callable by TxContext
+    /// Create a new VersionedID. Only callable by TxContext
     // TODO (): bring this back once we can support `friend`
-    //public(friend) fun new(bytes: vector<u8>): ID {
-    public fun new(bytes: address): ID {
-        ID { id: IDBytes { bytes }, version: INITIAL_VERSION }
+    //public(friend) fun new(bytes: vector<u8>): VersionedID {
+    public fun new(bytes: address): VersionedID {
+        VersionedID { id: IDBytes { bytes }, version: INITIAL_VERSION }
     }
 
     /// Create a new ID bytes for comparison with existing ID's.
@@ -39,7 +40,7 @@ module FastX::ID {
     }
 
     /// Get the underyling `IDBytes` of `id`
-    public fun get_inner(id: &ID): &IDBytes {
+    public fun get_inner(id: &VersionedID): &IDBytes {
         &id.id
     }
 
@@ -59,20 +60,26 @@ module FastX::ID {
         get_version(obj) == INITIAL_VERSION
     }
 
-    /// Get the raw bytes of `i`
+    /// Get the raw bytes of `i` in its underlying representation
+    // TODO: we should probably not expose that this is an `address`
     public fun get_bytes(i: &IDBytes): &address {
         &i.bytes
     }
 
-    /// Get the ID for `obj`. Safe because fastX has an extra
+    /// Get the raw bytes of `i` as a vector
+    public fun get_bytes_as_vec(i: &IDBytes): vector<u8> {
+        BCS::to_bytes(get_bytes(i))
+    }
+
+    /// Get the VersionedID for `obj`. Safe because fastX has an extra
     /// bytecode verifier pass that forces every struct with
-    /// the `key` ability to have a distinguished `ID` field.
-    public native fun get_id<T: key>(obj: &T): &ID;
+    /// the `key` ability to have a distinguished `VersionedID` field.
+    public native fun get_id<T: key>(obj: &T): &VersionedID;
 
     public native fun bytes_to_address(bytes: vector<u8>): address;
 
     /// When an object is being deleted through unpacking, the 
     /// delete function must be called on the id to inform Sui
     /// regarding the deletion of the object.
-    public native fun delete(id: ID);
+    public native fun delete(id: VersionedID);
 }

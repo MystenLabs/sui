@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{
@@ -18,9 +18,9 @@ pub const ID_MODULE_NAME: &IdentStr = ident_str!("ID");
 pub const ID_STRUCT_NAME: &IdentStr = ID_MODULE_NAME;
 pub const ID_BYTES_STRUCT_NAME: &IdentStr = ident_str!("IDBytes");
 
-/// Rust version of the Move FastX::ID::ID type
+/// Rust version of the Move FastX::ID::VersionedID type
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ID {
+pub struct VersionedID {
     id: IDBytes,
     version: u64,
 }
@@ -31,7 +31,7 @@ struct IDBytes {
     bytes: ObjectID,
 }
 
-impl ID {
+impl VersionedID {
     pub fn new(bytes: ObjectID, version: SequenceNumber) -> Self {
         Self {
             id: IDBytes::new(bytes),

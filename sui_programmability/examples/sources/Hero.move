@@ -5,7 +5,7 @@ module Examples::Hero {
     use FastX::Address::{Self, Address};
     use FastX::Coin::{Self, Coin};
     use FastX::Event;
-    use FastX::ID::{Self, ID, IDBytes};
+    use FastX::ID::{Self, VersionedID, IDBytes};
     use FastX::Math;
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
@@ -13,7 +13,7 @@ module Examples::Hero {
 
     /// Our hero!
     struct Hero has key, store {
-        id: ID,
+        id: VersionedID,
         /// Hit points. If they go to zero, the hero can't do anything
         hp: u64,
         /// Experience of the hero. Begins at zero
@@ -24,7 +24,7 @@ module Examples::Hero {
 
     /// The hero's trusty sword
     struct Sword has key, store {
-        id: ID,
+        id: VersionedID,
         /// Constant set at creation. Acts as a multiplier on sword's strength.
         /// Swords with high magic are rarer (because they cost more).
         magic: u64,
@@ -34,14 +34,14 @@ module Examples::Hero {
 
     /// For healing wounded heroes
     struct Potion has key, store {
-        id: ID,
+        id: VersionedID,
         /// Effectivenss of the potion
         potency: u64
     }
 
     /// A creature that the hero can slay to level up
     struct Boar has key {
-        id: ID,
+        id: VersionedID,
         /// Hit points before the boar is slain
         hp: u64,
         /// Strength of this particular boar
@@ -50,7 +50,7 @@ module Examples::Hero {
 
     /// Capability conveying the authority to create boars and potions
     struct GameAdmin has key {
-        id: ID,
+        id: VersionedID,
         /// Total number of boars the admin has created
         boars_created: u64,
         /// Total number of potions the admin has created
@@ -68,7 +68,7 @@ module Examples::Hero {
     }
 
     /// Address of the admin account that receives payment for swords
-    const ADMIN: vector<u8> = vector[189, 215, 127, 86, 129, 189, 1, 4, 90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181, 105, 254, 59, 163];
+    const ADMIN: vector<u8> = vector[238, 4, 55, 207, 98, 91, 119, 175, 77, 18, 191, 249, 138, 241, 168, 131, 50, 176, 6, 56, 183, 70, 48, 207, 116, 119, 225, 167, 57, 74, 80, 180];
     /// Upper bound on player's HP
     const MAX_HP: u64 = 1000;
     /// Upper bound on how magical a sword can be
@@ -277,4 +277,66 @@ module Examples::Hero {
         assert!(hero_strength(hero) == strength, ASSERT_ERR);
     }
 
+    #[test_only]
+    public fun delete_hero_for_testing(hero: Hero) {
+        let Hero { id, hp: _, experience: _, sword } = hero;
+        ID::delete(id);
+        let sword = Option::destroy_some(sword);
+        let Sword { id, magic: _, strength: _ } = sword;
+        ID::delete(id)
+    }
+
+    #[test_only]
+    public fun delete_game_admin_for_testing(admin: GameAdmin) {
+        let GameAdmin { id, boars_created: _, potions_created: _ } = admin;
+        ID::delete(id);
+    }
+
+    #[test]
+    public fun slay_boar_test() {
+        use Examples::TrustedCoin::{Self, EXAMPLE};
+        use FastX::Coin::{Self, TreasuryCap};
+        use FastX::TestScenario;
+
+        let admin = Address::new(ADMIN);
+        let player = Address::dummy_with_hint(0);
+
+        let scenario = &mut TestScenario::begin(&admin);
+        // Run the module initializers
+        {
+            let ctx = TestScenario::ctx(scenario);
+            TrustedCoin::test_init(ctx);
+            init(ctx);
+        };
+        // Admin mints 500 coins and sends them to the Player so they can buy game items
+        TestScenario::next_tx(scenario, &admin);
+        {
+            let treasury_cap = TestScenario::remove_object<TreasuryCap<EXAMPLE>>(scenario);
+            let ctx = TestScenario::ctx(scenario);
+            let coins = Coin::mint(500, &mut treasury_cap, ctx);
+            Coin::transfer(coins, copy player);
+            TestScenario::return_object(scenario, treasury_cap);
+        };
+        // Player purchases a hero with the coins
+        TestScenario::next_tx(scenario, &player);
+        {
+            let coin = TestScenario::remove_object<Coin<EXAMPLE>>(scenario);
+            acquire_hero(coin, TestScenario::ctx(scenario));
+        };
+        // Admin sends a boar to the Player
+        TestScenario::next_tx(scenario, &admin);
+        {
+            let admin_cap = TestScenario::remove_object<GameAdmin>(scenario);
+            send_boar(&mut admin_cap, 10, 10, *Address::bytes(&player), TestScenario::ctx(scenario));
+            TestScenario::return_object(scenario, admin_cap)
+        };
+        // Player slays the boar!
+        TestScenario::next_tx(scenario, &player);
+        {
+            let hero = TestScenario::remove_object<Hero>(scenario);
+            let boar = TestScenario::remove_object<Boar>(scenario);
+            slay(&mut hero, boar, TestScenario::ctx(scenario));
+            TestScenario::return_object(scenario, hero)
+        };
+    }
 }

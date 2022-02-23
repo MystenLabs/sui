@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
@@ -11,10 +11,7 @@ use move_binary_format::{
 };
 use sui_framework::EventType;
 use sui_types::{
-    base_types::{
-        Authenticator, ObjectID, SuiAddress, TransactionDigest, TxContext, TX_CONTEXT_MODULE_NAME,
-        TX_CONTEXT_STRUCT_NAME,
-    },
+    base_types::*,
     error::{SuiError, SuiResult},
     event::Event,
     gas,
@@ -85,9 +82,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 ) -> SuiResult<ExecutionStatus> {
     let mut object_owner_map = HashMap::new();
     for object in object_args.iter().filter(|obj| !obj.is_read_only()) {
-        if let Authenticator::Object(owner_object_id) = object.owner {
-            object_owner_map.insert(object.id(), owner_object_id);
-        }
+        object_owner_map.insert(object.id().into(), object.owner);
     }
     let TypeCheckSuccess {
         module_id,
@@ -153,8 +148,8 @@ fn execute_internal<
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
     mutable_ref_objects: Vec<Object>,
-    by_value_objects: BTreeMap<AccountAddress, Object>,
-    object_owner_map: HashMap<AccountAddress, AccountAddress>,
+    by_value_objects: BTreeMap<ObjectID, Object>,
+    object_owner_map: HashMap<SuiAddress, SuiAddress>,
     gas_budget: u64, // gas budget for the current call operation
     ctx: &mut TxContext,
     for_publish: bool,
@@ -300,7 +295,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     }
 
     // wrap the modules in an object, write it to the store
-    let package_object = Object::new_package(modules, Authenticator::Address(sender), ctx.digest());
+    let package_object = Object::new_package(modules, sender, ctx.digest());
     state_view.write_object(package_object);
 
     let mut total_gas_used = gas_cost;
@@ -405,7 +400,11 @@ pub fn verify_and_link<
         })
         .collect();
     session
-        .publish_module_bundle(new_module_bytes, package_id, &mut gas_status)
+        .publish_module_bundle(
+            new_module_bytes,
+            AccountAddress::from(package_id),
+            &mut gas_status,
+        )
         .map_err(|e| SuiError::ModulePublishFailure {
             error: e.to_string(),
         })?;
@@ -438,7 +437,10 @@ pub fn generate_package_id(
                 error: "Publishing modules with non-zero address is not allowed".to_string(),
             });
         }
-        let new_module_id = ModuleId::new(package_id, old_module_id.name().to_owned());
+        let new_module_id = ModuleId::new(
+            AccountAddress::from(package_id),
+            old_module_id.name().to_owned(),
+        );
         if sub_map.insert(old_module_id, new_module_id).is_some() {
             return Err(SuiError::ModulePublishFailure {
                 error: "Publishing two modules with the same ID".to_string(),
@@ -472,7 +474,7 @@ fn process_successful_execution<
     mutable_refs: impl Iterator<Item = (Object, Vec<u8>)>,
     events: Vec<MoveEvent>,
     ctx: &TxContext,
-    mut object_owner_map: HashMap<ObjectID, ObjectID>,
+    mut object_owner_map: HashMap<SuiAddress, SuiAddress>,
 ) -> (u64, u64, SuiResult) {
     for (mut obj, new_contents) in mutable_refs {
         // update contents and increment sequence number
@@ -491,7 +493,7 @@ fn process_successful_execution<
             .expect("Safe because event_type is derived from an EventType enum")
         {
             EventType::TransferToAddress => handle_transfer(
-                Authenticator::Address(SuiAddress::try_from(recipient.borrow()).unwrap()),
+                SuiAddress::try_from(recipient.as_slice()).unwrap(),
                 type_,
                 event_bytes,
                 false, /* should_freeze */
@@ -502,7 +504,7 @@ fn process_successful_execution<
                 &mut object_owner_map,
             ),
             EventType::TransferToAddressAndFreeze => handle_transfer(
-                Authenticator::Address(SuiAddress::try_from(recipient.borrow()).unwrap()),
+                SuiAddress::try_from(recipient.as_slice()).unwrap(),
                 type_,
                 event_bytes,
                 true, /* should_freeze */
@@ -513,7 +515,7 @@ fn process_successful_execution<
                 &mut object_owner_map,
             ),
             EventType::TransferToObject => handle_transfer(
-                Authenticator::Object(ObjectID::try_from(recipient.borrow()).unwrap()),
+                ObjectID::try_from(recipient.borrow()).unwrap().into(),
                 type_,
                 event_bytes,
                 false, /* should_freeze */
@@ -560,7 +562,7 @@ fn handle_transfer<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
-    recipient: Authenticator,
+    recipient: SuiAddress,
     type_: TypeTag,
     contents: Vec<u8>,
     should_freeze: bool,
@@ -568,7 +570,7 @@ fn handle_transfer<
     by_value_objects: &mut BTreeMap<ObjectID, Object>,
     gas_used: &mut u64,
     state_view: &mut S,
-    object_owner_map: &mut HashMap<ObjectID, ObjectID>,
+    object_owner_map: &mut HashMap<SuiAddress, SuiAddress>,
 ) -> SuiResult {
     match type_ {
         TypeTag::Struct(s_type) => {
@@ -592,24 +594,22 @@ fn handle_transfer<
                 // Charge extra gas based on object size if we are creating a new object.
                 *gas_used += gas::calculate_object_creation_cost(&obj);
             }
-            let obj_id = obj.id();
+            let obj_address: SuiAddress = obj.id().into();
             // Below we check whether the transfer introduced any circular ownership.
             // We know that for any mutable object, all its ancenstors (if it was owned by another object)
             // must be in the input as well. Prior to this we have recored the original ownership mapping
             // in object_owner_map. For any new transfer, we trace the new owner through the ownership
             // chain to see if a cycle is detected.
             // TODO: Set a constant upper bound to the depth of the new ownership chain.
-            object_owner_map.remove(&obj_id);
-            if let Authenticator::Object(owner_object_id) = recipient {
-                let mut parent = owner_object_id;
-                while parent != obj_id && object_owner_map.contains_key(&parent) {
-                    parent = *object_owner_map.get(&parent).unwrap();
-                }
-                if parent == obj_id {
-                    return Err(SuiError::CircularObjectOwnership);
-                }
-                object_owner_map.insert(obj_id, owner_object_id);
+            object_owner_map.remove(&obj_address);
+            let mut parent = recipient;
+            while parent != obj_address && object_owner_map.contains_key(&parent) {
+                parent = *object_owner_map.get(&parent).unwrap();
             }
+            if parent == obj_address {
+                return Err(SuiError::CircularObjectOwnership);
+            }
+            object_owner_map.insert(obj_address, recipient);
 
             state_view.write_object(obj);
         }
@@ -807,11 +807,10 @@ fn is_param_tx_context(param: &Type) -> bool {
                 address,
                 module,
                 name,
-                type_arguments,
+                ..
             } if address == &SUI_FRAMEWORK_ADDRESS
                 && module.as_ident_str() == TX_CONTEXT_MODULE_NAME
-                && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME
-                && type_arguments.is_empty() =>
+                && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME =>
             {
                 return true
             }

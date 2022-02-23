@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main, extensions ]
   pull_request:
-    branches: [ main, extensions ]
     types: [opened, synchronize, reopened, ready_for_review]
 
 env:
@@ -113,6 +112,8 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
+      - name: license-check
+        run: scripts/license_check.sh
 
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)

@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{adapter, genesis};
@@ -11,11 +11,12 @@ use move_package::BuildConfig;
 use std::{collections::BTreeSet, mem, path::PathBuf};
 use sui_types::{
     base_types::{self, SequenceNumber},
+    crypto::get_key_pair,
     error::SuiResult,
     gas_coin::GAS,
     object::Data,
     storage::Storage,
-    SUI_FRAMEWORK_ADDRESS,
+    MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
 use super::*;
@@ -108,15 +109,11 @@ impl Storage for InMemoryStorage {
         // there should be no read after delete
         assert!(!self.temporary.deleted.contains(id));
         // try objects updated in temp memory first
-        match self.temporary.updated.get(id).cloned() {
-            Some(o) => Some(o),
-            // try objects created in temp memory
-            None => match self.temporary.created.get(id).cloned() {
-                Some(o) => Some(o),
+        self.temporary.updated.get(id).cloned().or_else(|| {
+            self.temporary.created.get(id).cloned().or_else(||
                 // try persistent memory
-                None => self.persistent.get(id).cloned(),
-            },
-        }
+                 self.persistent.get(id).cloned())
+        })
     }
 
     // buffer write to appropriate place in temporary storage
@@ -149,7 +146,7 @@ impl ModuleResolver for InMemoryStorage {
     type Error = ();
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self
-            .read_object(module_id.address())
+            .read_object(&ObjectID::from(*module_id.address()))
             .map(|o| match &o.data {
                 Data::Package(m) => m[module_id.name().as_str()].clone().into_vec(),
                 Data::Move(_) => panic!("Type error"),
@@ -203,10 +200,12 @@ fn call(
 /// Exercise test functions that create, transfer, read, update, and delete objects
 #[test]
 fn test_object_basics() {
-    let addr1 = base_types::get_key_pair().0;
-    let addr2 = base_types::get_key_pair().0;
+    let addr1 = base_types::get_new_address();
+    let addr2 = base_types::get_new_address();
 
-    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -242,7 +241,7 @@ fn test_object_basics() {
     storage.flush();
     let mut obj1 = storage.read_object(&id1).unwrap();
     let mut obj1_seq = SequenceNumber::from(1);
-    assert!(obj1.owner.is_address(&addr1));
+    assert!(obj1.owner == addr1);
     assert_eq!(obj1.version(), obj1_seq);
 
     // 2. Transfer obj1 to addr2
@@ -266,7 +265,7 @@ fn test_object_basics() {
     assert!(storage.deleted().is_empty());
     storage.flush();
     let transferred_obj = storage.read_object(&id1).unwrap();
-    assert!(transferred_obj.owner.is_address(&addr2));
+    assert!(transferred_obj.owner == addr2);
     obj1_seq = obj1_seq.increment();
     assert_eq!(obj1.id(), transferred_obj.id());
     assert_eq!(transferred_obj.version(), obj1_seq);
@@ -331,7 +330,7 @@ fn test_object_basics() {
     );
     storage.flush();
     let updated_obj = storage.read_object(&id1).unwrap();
-    assert!(updated_obj.owner.is_address(&addr2));
+    assert!(updated_obj.owner == addr2);
     obj1_seq = obj1_seq.increment();
     assert_eq!(updated_obj.version(), obj1_seq);
     assert_ne!(
@@ -371,7 +370,9 @@ fn test_object_basics() {
 fn test_wrap_unwrap() {
     let addr = base_types::SuiAddress::default();
 
-    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment. Note that we won't really use it because we won't be providing a gas budget.
@@ -469,7 +470,9 @@ fn test_wrap_unwrap() {
 
 #[test]
 fn test_move_call_insufficient_gas() {
-    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -480,7 +483,7 @@ fn test_move_call_insufficient_gas() {
 
     // 1. Create obj1 owned by addr1
     // ObjectBasics::create expects integer value and recipient address
-    let addr1 = base_types::get_key_pair().0;
+    let addr1 = get_key_pair().0;
     let pure_args = vec![
         10u64.to_le_bytes().to_vec(),
         bcs::to_bytes(&addr1.to_vec()).unwrap(),
@@ -504,7 +507,9 @@ fn test_move_call_insufficient_gas() {
 
 #[test]
 fn test_publish_module_insufficient_gas() {
-    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -526,7 +531,7 @@ fn test_publish_module_insufficient_gas() {
     let mut tx_context = TxContext::random_for_testing_only();
     let response = adapter::publish(
         &mut storage,
-        natives,
+        native_functions,
         module_bytes,
         base_types::SuiAddress::default(),
         &mut tx_context,
@@ -542,10 +547,12 @@ fn test_publish_module_insufficient_gas() {
 
 #[test]
 fn test_transfer_and_freeze() {
-    let addr1 = base_types::get_key_pair().0;
-    let addr2 = base_types::get_key_pair().0;
+    let addr1 = base_types::get_new_address();
+    let addr2 = base_types::get_new_address();
 
-    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -598,7 +605,7 @@ fn test_transfer_and_freeze() {
     storage.flush();
     let obj1 = storage.read_object(&id1).unwrap();
     assert!(obj1.is_read_only());
-    assert!(obj1.owner.is_address(&addr2));
+    assert!(obj1.owner == addr2);
 
     // 3. Call transfer again and it should fail.
     let pure_args = vec![bcs::to_bytes(&addr1.to_vec()).unwrap()];
@@ -648,7 +655,9 @@ fn test_transfer_and_freeze() {
 
 #[test]
 fn test_move_call_args_type_mismatch() {
-    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -705,7 +714,9 @@ fn test_move_call_args_type_mismatch() {
 
 #[test]
 fn test_move_call_incorrect_function() {
-    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -761,7 +772,9 @@ fn test_move_call_incorrect_function() {
 
 #[test]
 fn test_publish_module_linker_error() {
-    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let id_module = CompiledModule::deserialize(
         genesis_objects[0]
             .data
@@ -811,7 +824,7 @@ fn test_publish_module_linker_error() {
     let mut tx_context = TxContext::random_for_testing_only();
     let response = adapter::publish(
         &mut storage,
-        natives,
+        native_functions,
         module_bytes,
         base_types::SuiAddress::default(),
         &mut tx_context,
@@ -829,7 +842,9 @@ fn test_publish_module_linker_error() {
 
 #[test]
 fn test_publish_module_non_zero_address() {
-    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
 
     let mut storage = InMemoryStorage::new(genesis_objects);
 
@@ -852,7 +867,7 @@ fn test_publish_module_non_zero_address() {
     let mut tx_context = TxContext::random_for_testing_only();
     let response = adapter::publish(
         &mut storage,
-        natives,
+        native_functions,
         module_bytes,
         base_types::SuiAddress::default(),
         &mut tx_context,
@@ -870,7 +885,9 @@ fn test_publish_module_non_zero_address() {
 fn test_coin_transfer() {
     let addr = base_types::SuiAddress::default();
 
-    let (genesis_objects, native_functions) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
 
     let mut storage = InMemoryStorage::new(genesis_objects);
 
@@ -882,7 +899,7 @@ fn test_coin_transfer() {
     storage.write_object(to_transfer.clone());
     storage.flush();
 
-    let addr1 = base_types::get_key_pair().0;
+    let addr1 = sui_types::crypto::get_key_pair().0;
 
     call(
         &mut storage,
@@ -948,7 +965,9 @@ fn publish_from_src(
 
 #[test]
 fn test_simple_call() {
-    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
@@ -958,7 +977,7 @@ fn test_simple_call() {
     // publish modules at a given path
     publish_from_src(
         &mut storage,
-        &natives,
+        &native_functions,
         "src/unit_tests/data/simple_call",
         gas_object.clone(),
         GAS_BUDGET,
@@ -971,7 +990,7 @@ fn test_simple_call() {
     // call published module function
     let obj_val = 42u64;
 
-    let addr = base_types::get_key_pair().0;
+    let addr = base_types::get_new_address();
     let pure_args = vec![
         obj_val.to_le_bytes().to_vec(),
         bcs::to_bytes(&addr.to_vec()).unwrap(),
@@ -979,7 +998,7 @@ fn test_simple_call() {
 
     let response = call(
         &mut storage,
-        &natives,
+        &native_functions,
         "M1",
         "create",
         gas_object,
@@ -994,7 +1013,7 @@ fn test_simple_call() {
     let id = storage.get_created_keys().pop().unwrap();
     storage.flush();
     let obj = storage.read_object(&id).unwrap();
-    assert!(obj.owner.is_address(&addr));
+    assert!(obj.owner == addr);
     assert_eq!(obj.version(), SequenceNumber::from(1));
     let move_obj = obj.data.try_as_move().unwrap();
     assert_eq!(
@@ -1007,7 +1026,9 @@ fn test_simple_call() {
 /// Tests publishing of a module with a constructor that creates a
 /// single object with a single u64 value 42.
 fn test_publish_init() {
-    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
@@ -1017,7 +1038,7 @@ fn test_publish_init() {
     // publish modules at a given path
     publish_from_src(
         &mut storage,
-        &natives,
+        &native_functions,
         "src/unit_tests/data/publish_init",
         gas_object,
         GAS_BUDGET,
@@ -1044,7 +1065,9 @@ fn test_publish_init() {
 /// Tests public initializer that should not be executed upon
 /// publishing the module.
 fn test_publish_init_public() {
-    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
@@ -1054,7 +1077,7 @@ fn test_publish_init_public() {
     // publish modules at a given path
     publish_from_src(
         &mut storage,
-        &natives,
+        &native_functions,
         "src/unit_tests/data/publish_init_public",
         gas_object,
         GAS_BUDGET,
@@ -1068,7 +1091,9 @@ fn test_publish_init_public() {
 /// Tests initializer returning a value that should not be executed
 /// upon publishing the module.
 fn test_publish_init_ret() {
-    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
@@ -1078,7 +1103,7 @@ fn test_publish_init_ret() {
     // publish modules at a given path
     publish_from_src(
         &mut storage,
-        &natives,
+        &native_functions,
         "src/unit_tests/data/publish_init_ret",
         gas_object,
         GAS_BUDGET,
@@ -1092,7 +1117,9 @@ fn test_publish_init_ret() {
 /// Tests initializer with parameters other than &mut TxContext that
 /// should not be executed upon publishing the module.
 fn test_publish_init_param() {
-    let (genesis_objects, natives) = genesis::clone_genesis_data();
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_modules();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
@@ -1102,7 +1129,7 @@ fn test_publish_init_param() {
     // publish modules at a given path
     publish_from_src(
         &mut storage,
-        &natives,
+        &native_functions,
         "src/unit_tests/data/publish_init_param",
         gas_object,
         GAS_BUDGET,

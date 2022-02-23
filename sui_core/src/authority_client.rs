@@ -1,4 +1,5 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
@@ -7,14 +8,17 @@ use sui_types::{error::SuiError, messages::*, serialize::*};
 
 #[async_trait]
 pub trait AuthorityAPI {
-    /// Initiate a new order to a Sui or Primary account.
-    async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, SuiError>;
-
-    /// Confirm an order to a Sui or Primary account.
-    async fn handle_confirmation_order(
+    /// Initiate a new transaction to a Sui or Primary account.
+    async fn handle_transaction(
         &self,
-        order: ConfirmationOrder,
-    ) -> Result<OrderInfoResponse, SuiError>;
+        transaction: Transaction,
+    ) -> Result<TransactionInfoResponse, SuiError>;
+
+    /// Confirm a transaction to a Sui or Primary account.
+    async fn handle_confirmation_transaction(
+        &self,
+        transaction: ConfirmationTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError>;
 
     /// Handle Account information requests for this account.
     async fn handle_account_info_request(
@@ -29,10 +33,10 @@ pub trait AuthorityAPI {
     ) -> Result<ObjectInfoResponse, SuiError>;
 
     /// Handle Object information requests for this account.
-    async fn handle_order_info_request(
+    async fn handle_transaction_info_request(
         &self,
-        request: OrderInfoRequest,
-    ) -> Result<OrderInfoResponse, SuiError>;
+        request: TransactionInfoRequest,
+    ) -> Result<TransactionInfoResponse, SuiError>;
 }
 
 #[derive(Clone)]
@@ -47,21 +51,27 @@ impl AuthorityClient {
 #[async_trait]
 impl AuthorityAPI for AuthorityClient {
     /// Initiate a new transfer to a Sui or Primary account.
-    async fn handle_order(&self, order: Order) -> Result<OrderInfoResponse, SuiError> {
-        let response = self.0.send_recv_bytes(serialize_order(&order)).await?;
-        deserialize_order_info(response)
+    async fn handle_transaction(
+        &self,
+        transaction: Transaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let response = self
+            .0
+            .send_recv_bytes(serialize_transaction(&transaction))
+            .await?;
+        deserialize_transaction_info(response)
     }
 
     /// Confirm a transfer to a Sui or Primary account.
-    async fn handle_confirmation_order(
+    async fn handle_confirmation_transaction(
         &self,
-        order: ConfirmationOrder,
-    ) -> Result<OrderInfoResponse, SuiError> {
+        transaction: ConfirmationTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
         let response = self
             .0
-            .send_recv_bytes(serialize_cert(&order.certificate))
+            .send_recv_bytes(serialize_cert(&transaction.certificate))
             .await?;
-        deserialize_order_info(response)
+        deserialize_transaction_info(response)
     }
 
     async fn handle_account_info_request(
@@ -87,14 +97,14 @@ impl AuthorityAPI for AuthorityClient {
     }
 
     /// Handle Object information requests for this account.
-    async fn handle_order_info_request(
+    async fn handle_transaction_info_request(
         &self,
-        request: OrderInfoRequest,
-    ) -> Result<OrderInfoResponse, SuiError> {
+        request: TransactionInfoRequest,
+    ) -> Result<TransactionInfoResponse, SuiError> {
         let response = self
             .0
-            .send_recv_bytes(serialize_order_info_request(&request))
+            .send_recv_bytes(serialize_transaction_info_request(&request))
             .await?;
-        deserialize_order_info(response)
+        deserialize_transaction_info(response)
     }
 }

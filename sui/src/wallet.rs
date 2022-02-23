@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use async_trait::async_trait;
 use colored::Colorize;
@@ -6,9 +6,8 @@ use std::io;
 use std::path::PathBuf;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
-use sui::config::WalletConfig;
+use sui::config::{Config, WalletConfig};
 use sui::shell::{AsyncHandler, CommandStructure, Shell};
-use sui::utils::Config;
 use sui::wallet_commands::*;
 
 const FAST_X: &str = "   _____       _    _       __      ____     __

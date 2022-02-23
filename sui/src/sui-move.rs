@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::Path;
@@ -15,6 +15,7 @@ pub enum MoveCommands {
     /// Run all Move unit tests
     #[structopt(name = "test")]
     Test,
+    // TODO: Add dev_mode as configurable option
 }
 
 impl MoveCommands {
@@ -24,6 +25,7 @@ impl MoveCommands {
                 sui_framework::build_and_verify_user_package(path, false)?;
             }
             Self::Test => {
+                sui_framework::build_and_verify_user_package(path, true).unwrap();
                 sui_framework::run_move_unit_tests(path)?;
             }
         }

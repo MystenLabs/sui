@@ -1,23 +1,17 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::{AccountInfo, WalletConfig};
+use crate::config::{AccountInfo, Config, WalletConfig};
 use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientAddressManager, ClientState};
-use sui_network::network::NetworkClient;
-use sui_types::base_types::{
-    decode_address_hex, encode_address_hex, get_key_pair, AuthorityName, ObjectID, PublicKeyBytes,
-    SuiAddress,
-};
-use sui_types::committee::Committee;
+use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex, ObjectID, SuiAddress};
+use sui_types::crypto::get_key_pair;
 use sui_types::messages::ExecutionStatus;
 
-use crate::utils::Config;
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::{parse_transaction_argument, parse_type_tag};
 use move_core_types::transaction_argument::{convert_txn_args, TransactionArgument};
-use std::collections::BTreeMap;
 use std::time::Instant;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
@@ -27,7 +21,7 @@ use tracing::info;
 #[derive(StructOpt)]
 #[structopt(
     name = "",
-    about = "A Byzantine fault tolerant payments chain with low-latency finality and high throughput",
+    about = "A Byzantine fault tolerant blockchain with low-latency finality and high throughput",
     rename_all = "kebab-case"
 )]
 #[structopt(setting(AppSettings::NoBinaryName))]
@@ -35,10 +29,6 @@ pub enum WalletCommands {
     /// Get obj info
     #[structopt(name = "object")]
     Object {
-        /// Owner address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        owner: PublicKeyBytes,
-
         /// Object ID of the object to fetch
         #[structopt(long)]
         id: ObjectID,
@@ -51,10 +41,6 @@ pub enum WalletCommands {
     /// Publish Move modules
     #[structopt(name = "publish")]
     Publish {
-        /// Sender address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        sender: PublicKeyBytes,
-
         /// Path to directory containing a Move package
         #[structopt(long)]
         path: String,
@@ -68,12 +54,9 @@ pub enum WalletCommands {
         gas_budget: u64,
     },
 
-    /// Call Move
+    /// Call Move function
     #[structopt(name = "call")]
     Call {
-        /// Sender address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        sender: PublicKeyBytes,
         /// Object ID of the package, which contains the module
         #[structopt(long)]
         package: ObjectID,
@@ -103,16 +86,12 @@ pub enum WalletCommands {
         gas_budget: u64,
     },
 
-    /// Transfer funds
+    /// Transfer an object
     #[structopt(name = "transfer")]
     Transfer {
-        /// Sender address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        from: PublicKeyBytes,
-
         /// Recipient address
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        to: PublicKeyBytes,
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        to: SuiAddress,
 
         /// Object to transfer, in 20 bytes Hex string
         #[structopt(long)]
@@ -125,11 +104,11 @@ pub enum WalletCommands {
     /// Synchronize client state with authorities.
     #[structopt(name = "sync")]
     SyncClientState {
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        address: PublicKeyBytes,
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        address: SuiAddress,
     },
 
-    /// Obtain the Account Addresses managed by the wallet.
+    /// Obtain the Addresses managed by the wallet.
     #[structopt(name = "addresses")]
     Addresses,
 
@@ -137,12 +116,12 @@ pub enum WalletCommands {
     #[structopt(name = "new-address")]
     NewAddress,
 
-    /// Obtain all objects owned by the account address.
+    /// Obtain all objects owned by the address.
     #[structopt(name = "objects")]
     Objects {
-        /// Address of the account
-        #[structopt(long, parse(try_from_str = decode_address_hex))]
-        address: PublicKeyBytes,
+        /// Address owning the objects
+        #[structopt(long, parse(try_from_str = decode_bytes_hex))]
+        address: SuiAddress,
     },
 }
 
@@ -150,17 +129,14 @@ impl WalletCommands {
     pub async fn execute(&mut self, context: &mut WalletContext) -> Result<(), anyhow::Error> {
         match self {
             WalletCommands::Publish {
-                sender,
                 path,
                 gas,
                 gas_budget,
             } => {
                 // Find owner of gas object
+                let sender = &context.address_manager.get_object_owner(*gas).await?;
                 let client_state = context.get_or_create_client_state(sender)?;
-                let gas_obj_ref = *client_state
-                    .object_refs()
-                    .get(gas)
-                    .ok_or(anyhow!("Gas object not found"))?;
+                let gas_obj_ref = client_state.object_ref(*gas)?;
 
                 let (_, effects) = client_state
                     .publish(path.clone(), gas_obj_ref, *gas_budget)
@@ -172,10 +148,9 @@ impl WalletCommands {
                 info!("{}", effects);
             }
 
-            WalletCommands::Object { id, deep, owner } => {
+            WalletCommands::Object { id, deep } => {
                 // Fetch the object ref
-                let client_state = context.get_or_create_client_state(owner)?;
-                let object_read = client_state.get_object_info(*id).await?;
+                let object_read = context.address_manager.get_object_info(*id).await?;
                 let object = object_read.object()?;
                 if *deep {
                     let layout = object_read.layout()?;
@@ -185,7 +160,6 @@ impl WalletCommands {
                 }
             }
             WalletCommands::Call {
-                sender,
                 package,
                 module,
                 function,
@@ -195,16 +169,14 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
+                let sender = &context.address_manager.get_object_owner(*gas).await?;
                 let client_state = context.get_or_create_client_state(sender)?;
 
                 let package_obj_info = client_state.get_object_info(*package).await?;
                 let package_obj_ref = package_obj_info.object().unwrap().to_object_reference();
 
                 // Fetch the object info for the gas obj
-                let gas_obj_ref = *client_state
-                    .object_refs()
-                    .get(gas)
-                    .expect("Gas object not found");
+                let gas_obj_ref = client_state.object_ref(*gas).expect("Gas object not found");
 
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
@@ -229,12 +201,8 @@ impl WalletCommands {
                 info!("{}", effects);
             }
 
-            WalletCommands::Transfer {
-                to,
-                object_id,
-                gas,
-                from,
-            } => {
+            WalletCommands::Transfer { to, object_id, gas } => {
+                let from = &context.address_manager.get_object_owner(*gas).await?;
                 let client_state = context.get_or_create_client_state(from)?;
                 info!("Starting transfer");
                 let time_start = Instant::now();
@@ -248,22 +216,18 @@ impl WalletCommands {
             }
 
             WalletCommands::Addresses => {
-                let addr_strings = context
-                    .address_manager
-                    .get_managed_address_states()
-                    .iter()
-                    .map(|(a, _)| encode_address_hex(a))
-                    .collect::<Vec<_>>();
-
-                let addr_text = addr_strings.join("\n");
-                info!("Showing {} results.", addr_strings.len());
-                info!("{}", addr_text);
+                info!(
+                    "Showing {} results.",
+                    context.address_manager.get_managed_address_states().len()
+                );
+                for address in context.address_manager.get_managed_address_states().keys() {
+                    info!("{}", encode_bytes_hex(address));
+                }
             }
 
             WalletCommands::Objects { address } => {
                 let client_state = context.get_or_create_client_state(address)?;
                 let object_refs = client_state.object_refs();
-                info!("Showing {} results.", object_refs.len());
                 for (obj_id, object_ref) in object_refs {
                     info!("{}: {:?}", obj_id, object_ref);
                 }
@@ -281,10 +245,10 @@ impl WalletCommands {
                 });
                 context.config.save()?;
                 // Create an address to be managed
-                let _ = context.get_or_create_client_state(&address)?;
+                context.get_or_create_client_state(&address)?;
                 info!(
                     "Created new keypair for address : {}",
-                    encode_address_hex(&address)
+                    encode_bytes_hex(&address)
                 );
             }
         }
@@ -300,49 +264,30 @@ pub struct WalletContext {
 impl WalletContext {
     pub fn new(config: WalletConfig) -> Result<Self, anyhow::Error> {
         let path = config.db_folder_path.clone();
-        Ok(Self {
+        let addresses = config
+            .accounts
+            .iter()
+            .map(|info| info.address)
+            .collect::<Vec<_>>();
+
+        let committee = config.make_committee();
+        let authority_clients = config.make_authority_clients();
+        let mut context = Self {
             config,
-            address_manager: ClientAddressManager::new(path)?,
-        })
+            address_manager: ClientAddressManager::new(path, committee, authority_clients),
+        };
+        // Pre-populate client state for each address in the config.
+        for address in addresses {
+            context.get_or_create_client_state(&address)?;
+        }
+        Ok(context)
     }
 
     pub fn get_or_create_client_state(
         &mut self,
         owner: &SuiAddress,
     ) -> Result<&mut ClientState<AuthorityClient>, SuiError> {
-        let kp = Box::pin(self.get_account_cfg_info(owner)?.key_pair.copy());
-        let voting_rights = self
-            .config
-            .authorities
-            .iter()
-            .map(|authority| (authority.address, 1))
-            .collect();
-        let committee = Committee::new(voting_rights);
-        let authority_clients = self.make_authority_clients();
-        self.address_manager
-            .get_or_create_state_mut(*owner, kp, committee, authority_clients)
-    }
-
-    fn make_authority_clients(&self) -> BTreeMap<AuthorityName, AuthorityClient> {
-        let mut authority_clients = BTreeMap::new();
-        for authority in &self.config.authorities {
-            let client = AuthorityClient::new(NetworkClient::new(
-                authority.host.clone(),
-                authority.base_port,
-                self.config.buffer_size,
-                self.config.send_timeout,
-                self.config.recv_timeout,
-            ));
-            authority_clients.insert(authority.address, client);
-        }
-        authority_clients
-    }
-
-    pub fn get_account_cfg_info(&self, address: &SuiAddress) -> Result<&AccountInfo, SuiError> {
-        self.config
-            .accounts
-            .iter()
-            .find(|info| &info.address == address)
-            .ok_or(SuiError::AccountNotFound)
+        let kp = Box::pin(self.config.get_account_cfg_info(owner)?.key_pair.copy());
+        self.address_manager.get_or_create_state_mut(*owner, kp)
     }
 }

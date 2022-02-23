@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+use move_core_types::account_address::AccountAddress;
 use sui_types::event::Event;
 
 use super::*;
@@ -77,7 +80,7 @@ impl AuthorityTemporaryStore {
     }
 
     /// For every object from active_inputs (i.e. all mutable objects), if they are not
-    /// mutated during the order execution, force mutating them by incrementing the
+    /// mutated during the transaction execution, force mutating them by incrementing the
     /// sequence number. This is required to achieve safety.
     pub fn ensure_active_inputs_mutated(&mut self) {
         for (id, _seq, _) in self.active_inputs.iter() {
@@ -110,14 +113,14 @@ impl AuthorityTemporaryStore {
     pub fn to_signed_effects(
         &self,
         authority_name: &AuthorityName,
-        secret: &dyn signature::Signer<ed25519_dalek::Signature>,
+        secret: &dyn signature::Signer<AuthoritySignature>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
         gas_object_id: &ObjectID,
-    ) -> SignedOrderEffects {
+    ) -> SignedTransactionEffects {
         let gas_object = &self.written[gas_object_id];
-        let effects = OrderEffects {
+        let effects = TransactionEffects {
             status,
             transaction_digest: *transaction_digest,
             created: self
@@ -129,8 +132,7 @@ impl AuthorityTemporaryStore {
             mutated: self
                 .written
                 .iter()
-                // Exclude gas_object from the mutated list.
-                .filter(|(id, _)| *id != gas_object_id && self.objects.contains_key(*id))
+                .filter(|(id, _)| self.objects.contains_key(*id))
                 .map(|(_, object)| (object.to_object_reference(), object.owner))
                 .collect(),
             deleted: self
@@ -142,9 +144,9 @@ impl AuthorityTemporaryStore {
             events: self.events.clone(),
             dependencies: transaction_dependencies,
         };
-        let signature = Signature::new(&effects, secret);
+        let signature = AuthoritySignature::new(&effects, secret);
 
-        SignedOrderEffects {
+        SignedTransactionEffects {
             effects,
             authority: *authority_name,
             signature,
@@ -263,7 +265,7 @@ impl Storage for AuthorityTemporaryStore {
 impl ModuleResolver for AuthorityTemporaryStore {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.read_object(module_id.address()) {
+        match self.read_object(&ObjectID::from(*module_id.address())) {
             Some(o) => match &o.data {
                 Data::Package(c) => Ok(c
                     .get(module_id.name().as_str())
@@ -286,9 +288,9 @@ impl ResourceResolver for AuthorityTemporaryStore {
         address: &AccountAddress,
         struct_tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let object = match self.read_object(address) {
+        let object = match self.read_object(&ObjectID::from(*address)) {
             Some(x) => x,
-            None => match self.read_object(address) {
+            None => match self.read_object(&ObjectID::from(*address)) {
                 None => return Ok(None),
                 Some(x) => {
                     if !x.is_read_only() {

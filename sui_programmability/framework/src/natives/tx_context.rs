@@ -1,7 +1,8 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::errors::PartialVMResult;
+use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     gas_schedule::NativeCostIndex,
@@ -28,7 +29,7 @@ pub fn fresh_id(
     // TODO(https://github.com/MystenLabs/fastnft/issues/58): finalize digest format
     // unwrap safe because all digests in Move are serialized from the Rust `TransactionDigest`
     let digest = TransactionDigest::try_from(inputs_hash.as_slice()).unwrap();
-    let id = Value::address(digest.derive_id(ids_created));
+    let id = Value::address(AccountAddress::from(digest.derive_id(ids_created)));
 
     // TODO: choose cost
     let cost = native_gas(context.cost_table(), NativeCostIndex::CREATE_SIGNER, 0);
