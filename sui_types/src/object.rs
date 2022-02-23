@@ -174,7 +174,6 @@ impl MoveObject {
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MovePackage {
-    id: ObjectID,
     module_map: BTreeMap<String, ByteBuf>,
 }
 
@@ -184,22 +183,21 @@ impl MovePackage {
     }
 
     pub fn from_map(module_map: &BTreeMap<String, ByteBuf>) -> Self {
-        // All modules in the same package must have the same address. Pick any
-        let id = ObjectID::from(
-            *CompiledModule::deserialize(module_map.values().next().unwrap())
-                .unwrap()
-                .self_id()
-                .address(),
-        );
-
         Self {
-            id,
             module_map: module_map.clone(),
         }
     }
 
     pub fn id(&self) -> ObjectID {
-        self.id
+        // TODO: simplify this
+        // https://github.com/MystenLabs/fastnft/issues/249
+        // All modules in the same package must have the same address. Pick any
+        ObjectID::from(
+            *CompiledModule::deserialize(self.module_map.values().next().unwrap())
+                .unwrap()
+                .self_id()
+                .address(),
+        )
     }
 
     pub fn module_id(&self, module: &Identifier) -> Result<ModuleId, SuiError> {
@@ -236,10 +234,9 @@ impl MovePackage {
         })
     }
 }
-impl TryFrom<&Vec<CompiledModule>> for MovePackage {
-    type Error = SuiError;
-    fn try_from(compiled_modules: &Vec<CompiledModule>) -> Result<Self, SuiError> {
-        let package = MovePackage::from_map(
+impl From<&Vec<CompiledModule>> for MovePackage {
+    fn from(compiled_modules: &Vec<CompiledModule>) -> Self {
+        MovePackage::from_map(
             &compiled_modules
                 .iter()
                 .map(|module| {
@@ -248,8 +245,7 @@ impl TryFrom<&Vec<CompiledModule>> for MovePackage {
                     (module.self_id().name().to_string(), ByteBuf::from(bytes))
                 })
                 .collect(),
-        );
-        Ok(package)
+        )
     }
 }
 
@@ -372,7 +368,7 @@ impl Object {
         previous_transaction: TransactionDigest,
     ) -> Result<Self, SuiError> {
         Ok(Object {
-            data: Data::Package(MovePackage::try_from(&modules)?),
+            data: Data::Package(MovePackage::from(&modules)),
             owner,
             previous_transaction,
         })
