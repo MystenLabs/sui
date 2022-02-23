@@ -371,7 +371,9 @@ async fn test_publish_dependent_module_ok() {
     // create a genesis state that contains the gas object and genesis modules
     let genesis_module_objects = genesis::clone_genesis_modules();
     let genesis_module = match &genesis_module_objects[0].data {
-        Data::Package(m) => CompiledModule::deserialize(m.values().next().unwrap()).unwrap(),
+        Data::Package(m) => {
+            CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
+        }
         _ => unreachable!(),
     };
     // create a module that depends on a genesis module
@@ -462,7 +464,9 @@ async fn test_publish_non_existing_dependent_module() {
     // create a genesis state that contains the gas object and genesis modules
     let genesis_module_objects = genesis::clone_genesis_modules();
     let genesis_module = match &genesis_module_objects[0].data {
-        Data::Package(m) => CompiledModule::deserialize(m.values().next().unwrap()).unwrap(),
+        Data::Package(m) => {
+            CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
+        }
         _ => unreachable!(),
     };
     // create a module that depends on a genesis module
@@ -1489,6 +1493,7 @@ async fn test_hero() {
     )
     .await
     .unwrap();
+    println!("ERRRR   {:?}", effects.status);
     assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
 
     // 7. Give them a boar!
@@ -1785,7 +1790,7 @@ fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> Ob
         .iter()
         .find_map(|o| match o.data.try_as_package() {
             Some(p) => {
-                if p.keys().any(|name| name == module) {
+                if p.serialized_module_map().keys().any(|name| name == module) {
                     Some(o.to_object_reference())
                 } else {
                     None

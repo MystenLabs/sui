@@ -273,7 +273,7 @@ module Examples::Hero {
     }
 
     // --- Testing functions ---
-    fun assert_hero_strength(hero: &Hero, strength: u64, _: &mut TxContext) {
+    public fun assert_hero_strength(hero: &Hero, strength: u64, _: &mut TxContext) {
         assert!(hero_strength(hero) == strength, ASSERT_ERR);
     }
 
