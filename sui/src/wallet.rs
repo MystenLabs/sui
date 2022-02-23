@@ -9,6 +9,7 @@ use structopt::StructOpt;
 use sui::config::{Config, WalletConfig};
 use sui::shell::{AsyncHandler, CommandStructure, Shell};
 use sui::wallet_commands::*;
+use tracing::error;
 
 const FAST_X: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
@@ -23,7 +24,7 @@ const FAST_X: &str = "   _____       _    _       __      ____     __
     rename_all = "kebab-case"
 )]
 struct ClientOpt {
-    #[structopt(long)]
+    #[structopt(long, global = true)]
     no_shell: bool,
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
     #[structopt(long, default_value = "./wallet.conf")]
@@ -31,6 +32,9 @@ struct ClientOpt {
     /// Subcommands. Acceptable values are transfer, query_objects, benchmark, and create_accounts.
     #[structopt(subcommand)]
     cmd: Option<WalletCommands>,
+    /// Return command outputs in json format.
+    #[structopt(long, global = true)]
+    json: bool,
 }
 
 #[tokio::main]
@@ -84,7 +88,7 @@ async fn main() -> Result<(), anyhow::Error> {
         };
         shell.run_async().await?;
     } else if let Some(mut cmd) = options.cmd {
-        cmd.execute(&mut context).await?;
+        cmd.execute(&mut context).await?.print(!options.json);
     }
     Ok(())
 }
@@ -94,17 +98,23 @@ struct ClientCommandHandler;
 #[async_trait]
 impl AsyncHandler<WalletContext> for ClientCommandHandler {
     async fn handle_async(&self, args: Vec<String>, context: &mut WalletContext, _: &str) -> bool {
-        let command: Result<WalletCommands, _> = WalletCommands::from_iter_safe(args);
-        match command {
-            Ok(mut cmd) => {
-                if let Err(e) = cmd.execute(context).await {
-                    eprintln!("{}", format!("{}", e).red());
-                }
-            }
-            Err(e) => {
-                eprintln!("{}", e.message.red());
-            }
+        let command: Result<WalletOpts, _> = WalletOpts::from_iter_safe(args);
+        if let Err(e) = handle_command(command, context).await {
+            error!("{}", e.to_string().red());
         }
         false
     }
+}
+
+async fn handle_command(
+    wallet_opts: Result<WalletOpts, structopt::clap::Error>,
+    context: &mut WalletContext,
+) -> Result<(), anyhow::Error> {
+    let mut wallet_opts = wallet_opts?;
+    wallet_opts
+        .command
+        .execute(context)
+        .await?
+        .print(!wallet_opts.json);
+    Ok(())
 }

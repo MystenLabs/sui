@@ -313,6 +313,7 @@ impl BcsSignable for TransactionEffects {}
 impl Display for TransactionEffects {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
+        writeln!(writer, "Status : {:?}", self.status)?;
         if !self.created.is_empty() {
             writeln!(writer, "Created Objects:")?;
             for (obj, _) in &self.created {
@@ -657,6 +658,45 @@ impl CertifiedTransaction {
             &self.signatures,
             &committee.expanded_keys,
         )
+    }
+}
+
+impl Display for CertifiedTransaction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut result = vec![];
+        result.push(format!(
+            "Signed Authorities : {:?}",
+            self.signatures
+                .iter()
+                .map(|(name, _)| name)
+                .collect::<Vec<_>>()
+        ));
+        match &self.transaction.data.kind {
+            TransactionKind::Transfer(t) => {
+                result.push("Transaction Kind : Transfer".to_string());
+                result.push(format!("Recipient : {}", t.recipient));
+                let (object_id, seq, digest) = t.object_ref;
+                result.push(format!("Object ID : {}", &object_id));
+                result.push(format!("Sequence Number : {:?}", seq));
+                result.push(format!("Object Digest : {}", encode_bytes_hex(&digest.0)));
+            }
+            TransactionKind::Publish(p) => {
+                result.push("Transaction Kind : Publish".to_string());
+                result.push(format!("Gas Budget : {}", p.gas_budget));
+            }
+            TransactionKind::Call(c) => {
+                result.push("Transaction Kind : Call".to_string());
+                result.push(format!("Gas Budget : {}", c.gas_budget));
+                result.push(format!("Package ID : {}", c.package.0.to_hex()));
+                result.push(format!("Module : {}", c.module));
+                result.push(format!("Function : {}", c.function));
+                result.push(format!("Object Arguments : {:?}", c.object_arguments));
+                result.push(format!("Pure Arguments : {:?}", c.pure_arguments));
+                result.push(format!("Type Arguments : {:?}", c.type_arguments));
+                result.push(format!("Gas Budget : {:?}", c.object_arguments));
+            }
+        }
+        write!(f, "{}", result.join("\n"))
     }
 }
 
