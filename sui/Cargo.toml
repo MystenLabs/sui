@@ -42,7 +42,6 @@ colored = "2.0.0"
 unescape = "0.1.0"
 
 # Deps for rest server
-crossbeam = "0.8.1"
 dropshot = "0.6.0"
 http = "0.2.6"
 hyper = "0.14.16"
