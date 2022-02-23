@@ -366,12 +366,12 @@ impl Object {
         modules: Vec<CompiledModule>,
         owner: SuiAddress,
         previous_transaction: TransactionDigest,
-    ) -> Result<Self, SuiError> {
-        Ok(Object {
+    ) -> Self {
+        Object {
             data: Data::Package(MovePackage::from(&modules)),
             owner,
             previous_transaction,
-        })
+        }
     }
 
     pub fn is_read_only(&self) -> bool {

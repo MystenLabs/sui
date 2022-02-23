@@ -162,7 +162,7 @@ async fn genesis(
     );
     let sui_lib = sui_framework::get_sui_framework_modules(&genesis_conf.sui_framework_lib_path)?;
     let lib_object =
-        Object::new_package(sui_lib, SuiAddress::default(), TransactionDigest::genesis())?;
+        Object::new_package(sui_lib, SuiAddress::default(), TransactionDigest::genesis());
     preload_modules.push(lib_object);
 
     info!(
@@ -174,7 +174,7 @@ async fn genesis(
         move_lib,
         SuiAddress::default(),
         TransactionDigest::genesis(),
-    )?;
+    );
     preload_modules.push(lib_object);
 
     // Build custom move packages
@@ -194,7 +194,7 @@ async fn genesis(
             )?;
 
             let object =
-                Object::new_package(modules, SuiAddress::default(), TransactionDigest::genesis())?;
+                Object::new_package(modules, SuiAddress::default(), TransactionDigest::genesis());
             info!("Loaded package [{}] from {:?}.", object.id(), path);
             // Writing package id to network.conf for user to retrieve later.
             config.loaded_move_packages.push((path, object.id()));
