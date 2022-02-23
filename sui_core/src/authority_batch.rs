@@ -187,7 +187,7 @@ impl BatcherManager {
             Vec<(usize, TransactionDigest)>,
             BTreeMap<usize, TransactionDigest>,
         ) = (Vec::new(), BTreeMap::new());
-        let mut next_seq_number = _last_batch.total_size;
+        let mut next_sequence_number = _last_batch.total_size;
 
         while !exit {
             // Reset the flags.
@@ -210,12 +210,12 @@ impl BatcherManager {
                   Some((seq, tx_digest)) => {
 
                     loose_transactions.insert(seq, tx_digest);
-                    while loose_transactions.contains_key(&next_seq_number) {
-                      let next_item = (next_seq_number, loose_transactions.remove(&next_seq_number).unwrap());
+                    while loose_transactions.contains_key(&next_sequence_number) {
+                      let next_item = (next_sequence_number, loose_transactions.remove(&next_sequence_number).unwrap());
                       // Send the update
                       let _ = self.tx_broadcast.send(UpdateItem::Transaction(next_item));
                       current_batch.push(next_item);
-                      next_seq_number += 1;
+                      next_sequence_number += 1;
                     }
 
                     if current_batch.len() >= min_batch_size {
@@ -234,7 +234,7 @@ impl BatcherManager {
 
                 // Make and store a new batch.
                 let new_batch = AuthorityBatch {
-                    total_size: next_seq_number,
+                    total_size: next_sequence_number,
                     previous_total_size: _last_batch.total_size,
                 };
                 self.db.batches.insert(&new_batch.total_size, &new_batch)?;
