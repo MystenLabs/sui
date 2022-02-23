@@ -6,24 +6,20 @@ use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
 };
-use move_package::BuildConfig;
+use hyper::StatusCode;
 use serde_json::json;
-use sui::config::{AccountInfo, AuthorityInfo, Config, GenesisConfig, NetworkConfig, WalletConfig};
+use sui::config::{Config, GenesisConfig, NetworkConfig, WalletConfig};
 use sui::sui_commands;
 use sui::wallet_commands::WalletContext;
-use sui_adapter::adapter::generate_package_id;
 use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientState};
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
-use sui_types::crypto::get_key_pair;
-use sui_types::object::Object;
 
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::fs;
 use std::net::{Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
@@ -116,212 +112,50 @@ async fn genesis(
     let mut network_config = NetworkConfig::read_or_create(&PathBuf::from(network_config_path))
         .map_err(|error| {
             custom_http_error(
-                hyper::StatusCode::CONFLICT,
+                StatusCode::CONFLICT,
                 format!("Unable to read network config: {error}"),
             )
         })?;
 
     if !network_config.authorities.is_empty() {
         return Err(custom_http_error(
-            hyper::StatusCode::CONFLICT,
+            StatusCode::CONFLICT,
             String::from("Cannot run genesis on a existing network, stop network to try again."),
         ));
     }
-
-    let mut voting_right = BTreeMap::new();
-    let mut authority_info = Vec::new();
 
     let working_dir = network_config.config_path().parent().unwrap().to_owned();
     let genesis_conf = GenesisConfig::default_genesis(&working_dir.join(genesis_config_path))
         .map_err(|error| {
             custom_http_error(
-                hyper::StatusCode::CONFLICT,
+                StatusCode::CONFLICT,
                 format!("Unable to create default genesis configuration: {error}"),
             )
         })?;
 
-    info!(
-        "Creating {} new authorities...",
-        genesis_conf.authorities.len()
-    );
-
-    for authority in genesis_conf.authorities {
-        voting_right.insert(*authority.key_pair.public_key_bytes(), authority.stake);
-        authority_info.push(AuthorityInfo {
-            name: *authority.key_pair.public_key_bytes(),
-            host: authority.host.clone(),
-            base_port: authority.port,
-        });
-        network_config.authorities.push(authority);
-    }
-
-    let mut new_addresses = Vec::new();
-    let mut preload_modules = Vec::new();
-    let mut preload_objects = Vec::new();
-
-    let new_account_count = genesis_conf
-        .accounts
-        .iter()
-        .filter(|acc| acc.address.is_none())
-        .count();
-
-    info!(
-        "Creating {} account(s) and gas objects...",
-        new_account_count
-    );
-    for account in genesis_conf.accounts {
-        let address = if let Some(address) = account.address {
-            address
-        } else {
-            let (address, key_pair) = get_key_pair();
-            new_addresses.push(AccountInfo { address, key_pair });
-            address
-        };
-        for object_conf in account.gas_objects {
-            let new_object = Object::with_id_owner_gas_coin_object_for_testing(
-                object_conf.object_id,
-                SequenceNumber::new(),
-                address,
-                object_conf.gas_value,
-            );
-            preload_objects.push(new_object);
-        }
-    }
-
-    // Load Sui and Move framework lib
-    info!(
-        "Loading Sui framework lib from {:?}",
-        genesis_conf.sui_framework_lib_path
-    );
-    let sui_lib = sui_framework::get_sui_framework_modules(&genesis_conf.sui_framework_lib_path)
-        .map_err(|error| {
-            custom_http_error(
-                hyper::StatusCode::CONFLICT,
-                format!("Unable to get sui framework modules: {error}"),
-            )
-        })?;
-    let lib_object =
-        Object::new_package(sui_lib, SuiAddress::default(), TransactionDigest::genesis());
-    preload_modules.push(lib_object);
-
-    info!(
-        "Loading Move framework lib from {:?}",
-        genesis_conf.move_framework_lib_path
-    );
-    let move_lib = sui_framework::get_move_stdlib_modules(&genesis_conf.move_framework_lib_path)
-        .map_err(|error| {
-            custom_http_error(
-                hyper::StatusCode::CONFLICT,
-                format!("Unable to get move stdlib modules: {error}"),
-            )
-        })?;
-    let lib_object = Object::new_package(
-        move_lib,
-        SuiAddress::default(),
-        TransactionDigest::genesis(),
-    );
-    preload_modules.push(lib_object);
-
-    // Build custom move packages
-    if !genesis_conf.move_packages.is_empty() {
-        info!(
-            "Loading {} Move packages from {:?}",
-            &genesis_conf.move_packages.len(),
-            &genesis_conf.move_packages
-        );
-
-        for path in genesis_conf.move_packages {
-            let mut modules =
-                sui_framework::build_move_package(&path, BuildConfig::default(), false).map_err(
-                    |error| {
-                        custom_http_error(
-                            hyper::StatusCode::CONFLICT,
-                            format!("Unable to build move package: {error}"),
-                        )
-                    },
-                )?;
-            generate_package_id(
-                &mut modules,
-                &mut TxContext::new(&SuiAddress::default(), TransactionDigest::genesis()),
-            )
-            .map_err(|error| {
-                custom_http_error(
-                    hyper::StatusCode::CONFLICT,
-                    format!("Unable to generate package id: {error}"),
-                )
-            })?;
-
-            let object =
-                Object::new_package(modules, SuiAddress::default(), TransactionDigest::genesis());
-            info!("Loaded package [{}] from {:?}.", object.id(), path);
-            // Writing package id to network.conf for user to retrieve later.
-            network_config
-                .loaded_move_packages
-                .push((path, object.id()));
-            preload_modules.push(object)
-        }
-    }
-
-    let committee = Committee::new(voting_right);
-
-    // Make server state to persist the objects and modules.
-    info!(
-        "Preloading {} objects to authorities.",
-        preload_objects.len()
-    );
-    for authority in &network_config.authorities {
-        sui_commands::make_server(
-            authority,
-            &committee,
-            preload_modules.clone(),
-            &preload_objects,
-            network_config.buffer_size,
-        )
-        .await
-        .map_err(|error| {
-            custom_http_error(
-                hyper::StatusCode::CONFLICT,
-                format!("Unable to make server: {error}"),
-            )
-        })?;
-    }
-
-    info!("Network genesis completed.");
-    if let Err(error) = network_config.save() {
-        return Err(custom_http_error(
-            hyper::StatusCode::CONFLICT,
-            format!("Network config was unable to be saved: {error}"),
-        ));
-    };
-    info!(
-        "Network config file is stored in {:?}.",
-        network_config.config_path()
-    );
-
+    let wallet_path = working_dir.join(wallet_config_path);
     let mut wallet_config =
-        WalletConfig::create(&working_dir.join(wallet_config_path)).map_err(|error| {
+        WalletConfig::create(&working_dir.join(wallet_path)).map_err(|error| {
             custom_http_error(
-                hyper::StatusCode::CONFLICT,
+                StatusCode::CONFLICT,
                 format!("Wallet config was unable to be created: {error}"),
             )
         })?;
-    wallet_config.authorities = authority_info;
-    wallet_config.accounts = new_addresses;
-    // Need to use a random id because rocksdb locks on current process which means even if directory is deleted
-    // the lock will remain causing an IO Error
+    // Need to use a random id because rocksdb locks on current process which means even if the directory is deleted
+    // the lock will remain causing an IO Error when a restart is attempted.
     let client_db_path = format!("client_db_{:?}", ObjectID::random());
     wallet_config.db_folder_path = working_dir.join(&client_db_path);
     *server_context.client_db_path.lock().unwrap() = client_db_path;
-    if let Err(error) = wallet_config.save() {
-        return Err(custom_http_error(
-            hyper::StatusCode::CONFLICT,
-            format!("Wallet config was unable to be saved: {error}"),
-        ));
-    };
-    info!(
-        "Wallet config file is stored in {:?}.",
-        wallet_config.config_path()
-    );
+
+    sui_commands::genesis(&mut network_config, genesis_conf, &mut wallet_config)
+        .await
+        .err()
+        .map(|err| {
+            custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Genesis error: {:?}", err),
+            )
+        });
 
     Ok(HttpResponseOk(GenesisResponse {
         wallet_config: json!(wallet_config),
@@ -345,14 +179,14 @@ async fn start(
     let network_config = NetworkConfig::read_or_create(&PathBuf::from(network_config_path))
         .map_err(|error| {
             custom_http_error(
-                hyper::StatusCode::CONFLICT,
+                StatusCode::CONFLICT,
                 format!("Unable to read network config: {error}"),
             )
         })?;
 
     if network_config.authorities.is_empty() {
         return Err(custom_http_error(
-            hyper::StatusCode::CONFLICT,
+            StatusCode::CONFLICT,
             String::from("No authority configured for the network, please run genesis."),
         ));
     }
@@ -360,7 +194,7 @@ async fn start(
     {
         if !(*server_context.authority_handles.lock().unwrap()).is_empty() {
             return Err(custom_http_error(
-                hyper::StatusCode::FORBIDDEN,
+                StatusCode::FORBIDDEN,
                 String::from("Sui network is already running."),
             ));
         }
@@ -386,7 +220,7 @@ async fn start(
         .await
         .map_err(|error| {
             custom_http_error(
-                hyper::StatusCode::CONFLICT,
+                StatusCode::CONFLICT,
                 format!("Unable to make server: {error}"),
             )
         })?;
@@ -395,7 +229,7 @@ async fn start(
                 Ok(server) => Ok(server),
                 Err(err) => {
                     return Err(custom_http_error(
-                        hyper::StatusCode::FAILED_DEPENDENCY,
+                        StatusCode::FAILED_DEPENDENCY,
                         format!("Failed to start server: {}", err),
                     ));
                 }
@@ -423,7 +257,7 @@ async fn start(
     let wallet_config =
         WalletConfig::read_or_create(&PathBuf::from(wallet_config_path)).map_err(|error| {
             custom_http_error(
-                hyper::StatusCode::CONFLICT,
+                StatusCode::CONFLICT,
                 format!("Unable to read wallet config: {error}"),
             )
         })?;
@@ -435,7 +269,7 @@ async fn start(
         .collect::<Vec<_>>();
     let mut wallet_context = WalletContext::new(wallet_config).map_err(|error| {
         custom_http_error(
-            hyper::StatusCode::CONFLICT,
+            StatusCode::CONFLICT,
             format!("Can't create new wallet context: {error}"),
         )
     })?;
@@ -446,7 +280,7 @@ async fn start(
             .get_or_create_client_state(address)
             .map_err(|error| {
                 custom_http_error(
-                    hyper::StatusCode::CONFLICT,
+                    StatusCode::CONFLICT,
                     format!("Can't create client state: {error}"),
                 )
             })?;
@@ -493,7 +327,7 @@ async fn sync_client_state(client_state: &mut ClientState<AuthorityClient>) -> O
     let res = async move { client_state.sync_client_state().await };
     res.await.err().map(|err| {
         custom_http_error(
-            hyper::StatusCode::FAILED_DEPENDENCY,
+            StatusCode::FAILED_DEPENDENCY,
             format!("Sync error: {:?}", err),
         )
     })
