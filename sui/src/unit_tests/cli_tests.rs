@@ -9,8 +9,9 @@ use sui::config::{
     AUTHORITIES_DB_NAME,
 };
 use sui::wallet_commands::{WalletCommands, WalletContext};
-use sui_types::base_types::{encode_bytes_hex, ObjectID};
+use sui_types::base_types::{encode_bytes_hex, ObjectID, SequenceNumber};
 use sui_types::crypto::get_key_pair;
+use sui_types::object::GAS_VALUE_FOR_TESTING;
 use tokio::task;
 use tracing_test::traced_test;
 
@@ -318,4 +319,139 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 
     network.abort();
     Ok(())
+}
+
+#[traced_test]
+#[tokio::test]
+async fn test_gas_command() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
+
+    SuiCommand::Genesis { config: None }
+        .execute(&mut config)
+        .await?;
+
+    // Start network
+    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+
+    // Wait for authorities to come alive.
+    retry_assert!(
+        logs_contain("Listening to TCP traffic on 127.0.0.1"),
+        Duration::from_millis(5000)
+    );
+
+    // Create Wallet context.
+    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let address = wallet_conf.accounts.first().unwrap().address;
+    let recipient = wallet_conf.accounts.get(1).unwrap().address;
+
+    let mut context = WalletContext::new(wallet_conf)?;
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState { address }
+        .execute(&mut context)
+        .await?;
+
+    let state = context
+        .address_manager
+        .get_managed_address_states()
+        .get(&address)
+        .unwrap();
+
+    let object_id = state.object_refs().next().unwrap().0;
+    let object_to_send = state.object_refs().nth(1).unwrap().0;
+
+    WalletCommands::Gas { address }
+        .execute(&mut context)
+        .await?;
+    let object_id_str = format!("{}", object_id);
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Check that the value got printed
+    logs_assert(|lines: &[&str]| {
+        let matches = lines
+            .iter()
+            .filter_map(|line| {
+                if line.contains(&object_id_str) {
+                    return extract_gas_info(line);
+                }
+                None
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(matches.len(), 1);
+
+        // Extract the values
+        let (obj_id, version, val) = *matches.get(0).unwrap();
+
+        assert_eq!(obj_id, object_id);
+        assert_eq!(version, SequenceNumber::new());
+        assert_eq!(val, GAS_VALUE_FOR_TESTING);
+
+        Ok(())
+    });
+
+    // Send an object
+    WalletCommands::Transfer {
+        to: recipient,
+        object_id: object_to_send,
+        gas: object_id,
+    }
+    .execute(&mut context)
+    .await?;
+
+    // Fetch gas again
+    WalletCommands::Gas { address }
+        .execute(&mut context)
+        .await?;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Check that the value got printed and updated
+    logs_assert(|lines: &[&str]| {
+        let matches = lines
+            .iter()
+            .filter_map(|line| {
+                if line.contains(&object_id_str) {
+                    return extract_gas_info(line);
+                }
+                None
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(matches.len(), 2);
+
+        // Extract the values
+        let (obj_id, version, val) = *matches.get(1).unwrap();
+
+        assert_eq!(obj_id, object_id);
+        assert_eq!(version, SequenceNumber::from_u64(1));
+        assert!(val < GAS_VALUE_FOR_TESTING);
+
+        Ok(())
+    });
+
+    network.abort();
+    Ok(())
+}
+
+fn extract_gas_info(s: &str) -> Option<(ObjectID, SequenceNumber, u64)> {
+    let tokens = s.split('|').map(|q| q.trim()).collect::<Vec<_>>();
+    if tokens.len() != 3 {
+        return None;
+    }
+
+    let id_str = tokens[0]
+        .split(':')
+        .map(|q| q.trim())
+        .collect::<Vec<_>>()
+        .iter()
+        .last()
+        .unwrap()
+        .to_owned();
+    Some((
+        ObjectID::from_hex(id_str).unwrap(),
+        SequenceNumber::from_u64(tokens[1].parse::<u64>().unwrap()),
+        tokens[2].parse::<u64>().unwrap(),
+    ))
 }
