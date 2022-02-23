@@ -104,10 +104,7 @@ impl BatcherManager {
             Some((_, last_batch)) => last_batch,
             None => {
                 // Make a batch at zero
-                let zero_batch = AuthorityBatch {
-                    total_size: 0,
-                    previous_total_size: 0,
-                };
+                let zero_batch = AuthorityBatch::initial();
                 self.db.batches.insert(&0, &zero_batch)?;
                 zero_batch
             }
@@ -120,7 +117,7 @@ impl BatcherManager {
             .load(std::sync::atomic::Ordering::Relaxed);
         if total_seq > last_batch.total_size {
             // Make a new batch, to put the old transactions not in a batch in.
-            let transactions: Vec<_> = self
+            let mut transactions: Vec<_> = self
                 .db
                 .executed_sequence
                 .iter()
@@ -148,20 +145,20 @@ impl BatcherManager {
                     .store(total_seq, std::sync::atomic::Ordering::Relaxed);
 
                 let range = last_batch.total_size..total_seq;
-                let db_batch = db_batch.insert_batch(
-                    &self.db.executed_sequence,
-                    range
-                        .into_iter()
-                        .zip(transactions.into_iter().map(|(_, v)| v)),
-                )?;
+
+                // Update transactions
+                transactions = range
+                    .into_iter()
+                    .zip(transactions.into_iter().map(|(_, v)| v))
+                    .collect();
+
+                let db_batch = db_batch
+                    .insert_batch(&self.db.executed_sequence, transactions.iter().cloned())?;
 
                 db_batch.write()?;
             }
 
-            last_batch = AuthorityBatch {
-                total_size: total_seq,
-                previous_total_size: last_batch.total_size,
-            };
+            last_batch = AuthorityBatch::make_next(&last_batch, &transactions[..]);
             self.db.batches.insert(&total_seq, &last_batch)?;
         }
 
@@ -233,10 +230,7 @@ impl BatcherManager {
                 }
 
                 // Make and store a new batch.
-                let new_batch = AuthorityBatch {
-                    total_size: next_sequence_number,
-                    previous_total_size: _last_batch.total_size,
-                };
+                let new_batch = AuthorityBatch::make_next(&_last_batch, &current_batch);
                 self.db.batches.insert(&new_batch.total_size, &new_batch)?;
 
                 // Send the update
@@ -269,10 +263,35 @@ pub struct AuthorityBatch {
 
     /// The number of items in the previous block.
     previous_total_size: usize,
-    // TODO: Add the following information:
-    // - Authenticator of previous block (digest)
-    // - Authenticator of this block header + contents (digest)
-    // - Signature on block + authenticators
-    // - Structures to facilitate sync, eg. IBLT or Merkle Tree.
-    // - Maybe: a timestamp (wall clock time)?
+    /*
+    TODO: Add the following information:
+    - Authenticator of previous block (digest)
+    - Authenticator of this block header + contents (digest)
+    - Signature on block + authenticators
+    - Structures to facilitate sync, eg. IBLT or Merkle Tree.
+    - Maybe: a timestamp (wall clock time)?
+    */
+}
+
+impl AuthorityBatch {
+    /// The first batch for any authority indexes at zero
+    /// and has zero length.
+    pub fn initial() -> AuthorityBatch {
+        AuthorityBatch {
+            total_size: 0,
+            previous_total_size: 0,
+        }
+    }
+
+    /// Make a batch, containing some transactions, and following the previous
+    /// batch.
+    pub fn make_next(
+        previous_batch: &AuthorityBatch,
+        transactions: &[(usize, TransactionDigest)],
+    ) -> AuthorityBatch {
+        AuthorityBatch {
+            total_size: previous_batch.total_size + transactions.len(),
+            previous_total_size: previous_batch.total_size,
+        }
+    }
 }

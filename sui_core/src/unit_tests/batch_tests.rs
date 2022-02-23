@@ -145,7 +145,6 @@ async fn test_batch_manager_happy_path() {
 
 #[tokio::test]
 async fn test_batch_manager_out_of_order() {
-
     // Create a random directory to store the DB
     let dir = env::temp_dir();
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
