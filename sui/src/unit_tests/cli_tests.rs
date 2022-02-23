@@ -9,7 +9,7 @@ use sui::config::{
     AUTHORITIES_DB_NAME,
 };
 use sui::wallet_commands::{WalletCommands, WalletContext};
-use sui_types::base_types::{encode_bytes_hex, ObjectID, SequenceNumber};
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::crypto::get_key_pair;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use tokio::task;
@@ -94,11 +94,14 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let mut context = WalletContext::new(wallet_config)?;
 
     // Print all addresses
-    WalletCommands::Addresses.execute(&mut context).await?;
+    WalletCommands::Addresses
+        .execute(&mut context)
+        .await?
+        .print(true);
 
     // Check log output contains all addresses
     for address in context.config.accounts.iter().map(|info| info.address) {
-        assert!(logs_contain(&*encode_bytes_hex(&address)));
+        assert!(logs_contain(&*format!("{}", address)));
     }
 
     Ok(())
@@ -131,12 +134,14 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
         .execute(&mut context)
-        .await?;
+        .await?
+        .print(true);
 
     // Print objects owned by `address`
     WalletCommands::Objects { address }
         .execute(&mut context)
-        .await?;
+        .await?
+        .print(true);
 
     let state = context
         .address_manager
@@ -203,12 +208,14 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
         .execute(&mut context)
-        .await?;
+        .await?
+        .print(true);
 
     // Print objects owned by `address`
     WalletCommands::Objects { address }
         .execute(&mut context)
-        .await?;
+        .await?
+        .print(true);
 
     // confirm the object with custom object id.
     retry_assert!(
@@ -293,7 +300,8 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
         .execute(&mut context)
-        .await?;
+        .await?
+        .print(true);
 
     let state = context
         .address_manager
@@ -304,12 +312,10 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     // Check log output contains all object ids.
     let object_id = state.object_refs().next().unwrap().0;
 
-    WalletCommands::Object {
-        id: object_id,
-        deep: false,
-    }
-    .execute(&mut context)
-    .await?;
+    WalletCommands::Object { id: object_id }
+        .execute(&mut context)
+        .await?
+        .print(true);
     let obj_owner = format!("{:?}", address);
 
     retry_assert!(
@@ -363,7 +369,8 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
 
     WalletCommands::Gas { address }
         .execute(&mut context)
-        .await?;
+        .await?
+        .print(true);
     let object_id_str = format!("{}", object_id);
 
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -404,7 +411,8 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     // Fetch gas again
     WalletCommands::Gas { address }
         .execute(&mut context)
-        .await?;
+        .await?
+        .print(true);
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Check that the value got printed and updated
