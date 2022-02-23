@@ -74,7 +74,9 @@ module FastX::Geniteam {
             water_runes_count: 0,
             fire_runes_count: 0,
             wind_runes_count: 0,
-            earth_runes_count: 0
+            earth_runes_count: 0,
+            owned_farm_cosmetics: Vector::empty(),
+            owned_monster_cosmetics: Vector::empty()
         }
     }
 
@@ -86,6 +88,7 @@ module FastX::Geniteam {
             farm_name: ASCII::string(farm_name),
             farm_img_id,
             level: 0,
+            current_xp: 0,
             total_monster_slots,
             occupied_monster_slots: 0,
             farm_cosmetic_slot1: Option::none(),
@@ -111,6 +114,7 @@ module FastX::Geniteam {
             monster_affinity,
             monster_description: ASCII::string(monster_description),
             monster_level: 0,
+            monster_xp: 0,
             hunger_level: 0,
             affection_level: 0,
             buddy_level: 0,
