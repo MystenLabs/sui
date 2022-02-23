@@ -18,7 +18,9 @@ module FastX::Geniteam {
         water_runes_count: u64,
         fire_runes_count: u64,
         wind_runes_count: u64,
-        earth_runes_count: u64
+        earth_runes_count: u64,
+        owned_farm_cosmetics: vector<FarmCosmetic>,
+        owned_monster_cosmetics: vector<MonsterCosmetic>
     }
 
     struct Farm has key, store {
@@ -26,6 +28,7 @@ module FastX::Geniteam {
         farm_name: String,
         farm_img_id: u64,
         level: u64,
+        current_xp: u64,
         total_monster_slots: u64,
         occupied_monster_slots: u64,
         farm_cosmetic_slot1: Option<FarmCosmetic>,
@@ -41,6 +44,7 @@ module FastX::Geniteam {
         monster_affinity: u8,
         monster_description: String,
         monster_level: u64,
+        monster_xp: u64,
         hunger_level: u64,
         affection_level: u64,
         buddy_level: u8,
