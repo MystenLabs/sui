@@ -6,7 +6,7 @@ use move_binary_format::file_format::{
     self, AbilitySet, AddressIdentifierIndex, IdentifierIndex, ModuleHandle, ModuleHandleIndex,
     StructHandle,
 };
-use move_core_types::{account_address::AccountAddress, ident_str};
+use move_core_types::{account_address::AccountAddress, ident_str, language_storage::StructTag};
 use move_package::BuildConfig;
 use std::{collections::BTreeSet, mem, path::PathBuf};
 use sui_types::{
@@ -56,7 +56,7 @@ impl InMemoryStorage {
             .values()
             .find(|o| {
                 if let Some(package) = o.data.try_as_package() {
-                    if package.get(name).is_some() {
+                    if package.serialized_module_map().get(name).is_some() {
                         return true;
                     }
                 }
@@ -148,7 +148,9 @@ impl ModuleResolver for InMemoryStorage {
         Ok(self
             .read_object(&ObjectID::from(*module_id.address()))
             .map(|o| match &o.data {
-                Data::Package(m) => m[module_id.name().as_str()].clone().into_vec(),
+                Data::Package(m) => m.serialized_module_map()[module_id.name().as_str()]
+                    .clone()
+                    .into_vec(),
                 Data::Move(_) => panic!("Type error"),
             }))
     }
@@ -780,6 +782,7 @@ fn test_publish_module_linker_error() {
             .data
             .try_as_package()
             .unwrap()
+            .serialized_module_map()
             .get("ID")
             .unwrap(),
     )

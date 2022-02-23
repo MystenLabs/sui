@@ -31,8 +31,8 @@ fn create_genesis_module_objects(lib_dir: &Path) -> SuiResult<Genesis> {
         sui_framework::get_move_stdlib_modules(&lib_dir.join("deps").join("move-stdlib"))?;
     let owner = SuiAddress::default();
     let objects = vec![
-        Object::new_package(sui_modules, owner, TransactionDigest::genesis()),
-        Object::new_package(std_modules, owner, TransactionDigest::genesis()),
+        Object::new_package(sui_modules, owner, TransactionDigest::genesis())?,
+        Object::new_package(std_modules, owner, TransactionDigest::genesis())?,
     ];
     Ok(Genesis { objects })
 }
