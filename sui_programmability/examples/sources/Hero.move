@@ -2,7 +2,6 @@
 /// associated logic.
 module Examples::Hero {
     use Examples::TrustedCoin::EXAMPLE;
-    use FastX::Address::{Self, Address};
     use FastX::Coin::{Self, Coin};
     use FastX::Event;
     use FastX::ID::{Self, VersionedID, IDBytes};
@@ -60,7 +59,7 @@ module Examples::Hero {
     /// Event emitted each time a Hero slays a Boar
     struct BoarSlainEvent has copy, drop {
         /// Address of the user that slayed the boar
-        slayer_address: Address,
+        slayer_address: address,
         /// ID of the Hero that slayed the boar
         hero: IDBytes,
         /// ID of the now-deceased boar
@@ -68,7 +67,7 @@ module Examples::Hero {
     }
 
     /// Address of the admin account that receives payment for swords
-    const ADMIN: vector<u8> = vector[238, 4, 55, 207, 98, 91, 119, 175, 77, 18, 191, 249, 138, 241, 168, 131, 50, 176, 6, 56, 183, 70, 48, 207, 116, 119, 225, 167, 57, 74, 80, 180];
+    const ADMIN: address = @0xee0437cf625b77af4d12bff98af1a88332b00638;
     /// Upper bound on player's HP
     const MAX_HP: u64 = 1000;
     /// Upper bound on how magical a sword can be
@@ -240,7 +239,7 @@ module Examples::Hero {
     /// Admin can create a potion with the given `potency` for `recipient`
     public fun send_potion(
         potency: u64,
-        player: Address,
+        player: address,
         admin: &mut GameAdmin,
         ctx: &mut TxContext
     ) {
@@ -257,19 +256,19 @@ module Examples::Hero {
         admin: &mut GameAdmin,
         hp: u64,
         strength: u64,
-        player: vector<u8>,
+        player: address,
         ctx: &mut TxContext
     ) {
         admin.boars_created = admin.boars_created + 1;
         // send boars to the designated player
         Transfer::transfer(
             Boar { id: TxContext::new_id(ctx), hp, strength },
-            Address::new(player)
+            player
         )
     }
 
-    fun admin(): Address {
-        Address::new(ADMIN)
+    fun admin(): address {
+        ADMIN
     }
 
     // --- Testing functions ---
@@ -298,8 +297,8 @@ module Examples::Hero {
         use FastX::Coin::{Self, TreasuryCap};
         use FastX::TestScenario;
 
-        let admin = Address::new(ADMIN);
-        let player = Address::dummy_with_hint(0);
+        let admin = ADMIN;
+        let player = @0x0;
 
         let scenario = &mut TestScenario::begin(&admin);
         // Run the module initializers
@@ -327,7 +326,7 @@ module Examples::Hero {
         TestScenario::next_tx(scenario, &admin);
         {
             let admin_cap = TestScenario::remove_object<GameAdmin>(scenario);
-            send_boar(&mut admin_cap, 10, 10, *Address::bytes(&player), TestScenario::ctx(scenario));
+            send_boar(&mut admin_cap, 10, 10, player, TestScenario::ctx(scenario));
             TestScenario::return_object(scenario, admin_cap)
         };
         // Player slays the boar!

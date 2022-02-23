@@ -1,6 +1,5 @@
 /// An example of a custom object with comments explaining the relevant bits
 module Examples::CustomObjectTemplate {
-    use FastX::Address::{Self, Address};
     use FastX::ID::VersionedID;
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
@@ -44,7 +43,7 @@ module Examples::CustomObjectTemplate {
 
     /// Example of transferring an object to a a new owner. A struct can only
     /// be transferred by the module that declares it.
-    public fun transfer(o: Object, recipient: Address) {
+    public fun transfer(o: Object, recipient: address) {
         assert!(some_conditional_logic(), 0);
         Transfer::transfer(o, recipient)
     }
@@ -89,13 +88,13 @@ module Examples::CustomObjectTemplate {
         to_consume: Object,
         // ... end objects, begin primitive type inputs
         int_input: u64,
-        bytes_input: vector<u8>,
+        recipient: address,
         // end primitive types. last arg must be TxContext
         ctx: &mut TxContext,
     ) {
         let v = read_field(to_read);
         write_field(to_write, v + int_input);
-        transfer(to_consume, Address::new(bytes_input));
+        transfer(to_consume, recipient);
         // demonstrate creating a new object for the sender
         let sender = TxContext::get_signer_address(ctx);
         Transfer::transfer(create(ctx), sender)

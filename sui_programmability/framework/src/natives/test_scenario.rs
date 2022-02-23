@@ -3,7 +3,7 @@
 
 use crate::EventType;
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::value::MoveTypeLayout;
+use move_core_types::{account_address::AccountAddress, value::MoveTypeLayout};
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     gas_schedule::NativeCostIndex,
@@ -87,7 +87,7 @@ fn get_global_inventory(events: &[Event]) -> Inventory {
 
 /// Get the objects of type `type_` that can be spent by `addr`
 fn get_inventory_for(
-    addr: &SuiAddressBytes,
+    addr: &AccountAddress,
     type_: &Type,
     tx_end_index: usize,
     events: &[Event],
@@ -96,7 +96,7 @@ fn get_inventory_for(
     inventory
         .into_iter()
         .filter_map(|(_, obj)| {
-            if (&obj.owner == addr || obj.is_read_only) && &obj.type_ == type_ {
+            if (obj.owner == addr.to_vec() || obj.is_read_only) && &obj.type_ == type_ {
                 Some(obj.value)
             } else {
                 None
@@ -213,7 +213,7 @@ pub fn get_inventory(
     debug_assert_eq!(args.len(), 2);
 
     let tx_end_index = pop_arg!(args, u64) as usize;
-    let owner_address = pop_arg!(args, Vec<u8>);
+    let owner_address = pop_arg!(args, AccountAddress);
 
     let inventory = get_inventory_for(&owner_address, &ty_args[0], tx_end_index, context.events());
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
