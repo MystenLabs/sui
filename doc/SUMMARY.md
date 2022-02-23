@@ -12,6 +12,14 @@ Welcome to Sui, a next generation smart contract platform with high throughput, 
 
 ## Architectural Overview
 
+Sui is a distributed ledger that stores a collection of programmable *objects*, each with a globally unique ID. Every object is owned by a single *address*, and each address can own an arbitrary number of objects.
+
+The ledger is updated via a *transaction* sent by a particular address. A transaction can create, destroy, and write objects, as well as transfer them to other addresses.
+
+Structurally, a transaction contains a set of input object references and a pointer to a Move code object that already exists in the ledger. Executing a transaction produces updates to the input objects and (if applicable) a set of freshly created objects along with their owners.
+
+A transaction whose sender is address *A* can accept objects owned only by *A* with one exception: a transaction can read from immutable objects regardless of their owner.
+
 ```mermaid
 flowchart LR
     CC(CLI Client) --> ClientService
@@ -29,6 +37,8 @@ flowchart LR
     AC2 <==>|Network TCP| Authority2
 ```
 
+Sui authorities process transactions in parallel with high throughput using Byzantine Consistent Broadcast.
+
 ## Dev Quick Start
 TODO: installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, invoking your published code. Then deeper: Sui standard library, design patterns, examples.
 
@@ -38,7 +48,6 @@ TODO: installation, querying the chain, client setup, getting test coins, sendin
 ## Demos
 
 ## Key Concepts
-- [Overview](overview.md)
 - [Authorities](authorities.md)
 - [Objects](objects.md)
 - [Programmability](programmability.md)
