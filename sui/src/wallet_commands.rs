@@ -277,15 +277,18 @@ impl WalletCommands {
                 for obj in object_ids {
                     match context.address_manager.get_object_info(obj).await? {
                         Exists(_, o, _) => {
-                            if o.type_().is_some() && *o.type_().unwrap() == GasCoin::type_() {
-                                // Okay to unwrap() since we already checked type
-                                let gas_coin = GasCoin::try_from(o.data.try_as_move().unwrap())?;
-                                info!(
-                                    " {0: ^40} | {1: ^10} | {2: ^11}",
-                                    gas_coin.id(),
-                                    u64::from(gas_coin.version()),
-                                    gas_coin.value()
-                                );
+                            if let Some(v) = o.type_() {
+                                if *v == GasCoin::type_() {
+                                    // Okay to unwrap() since we already checked type
+                                    let gas_coin =
+                                        GasCoin::try_from(o.data.try_as_move().unwrap())?;
+                                    info!(
+                                        " {0: ^40} | {1: ^10} | {2: ^11}",
+                                        gas_coin.id(),
+                                        u64::from(gas_coin.version()),
+                                        gas_coin.value()
+                                    );
+                                }
                             }
                         }
                         _ => continue,
