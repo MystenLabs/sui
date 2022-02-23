@@ -18,12 +18,12 @@ module Examples::TrustedCoin {
         Transfer::transfer(treasury_cap, TxContext::get_signer_address(ctx))
     }
 
-    fun mint(treasury_cap: &mut TreasuryCap<EXAMPLE>, amount: u64, ctx: &mut TxContext) {
+    public fun mint(treasury_cap: &mut TreasuryCap<EXAMPLE>, amount: u64, ctx: &mut TxContext) {
         let coin = Coin::mint<EXAMPLE>(amount, treasury_cap, ctx);
         Coin::transfer(coin, TxContext::get_signer_address(ctx));
     }
 
-    fun transfer(treasury_cap: TreasuryCap<EXAMPLE>, recipient: vector<u8>, _ctx: &mut TxContext) {
+    public fun transfer(treasury_cap: TreasuryCap<EXAMPLE>, recipient: vector<u8>, _ctx: &mut TxContext) {
         Coin::transfer_cap<EXAMPLE>(treasury_cap, Address::new(recipient));
     }
 

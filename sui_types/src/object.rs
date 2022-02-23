@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::normalized::Function;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::language_storage::TypeTag;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::{ModuleId, TypeTag};
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
@@ -169,9 +171,83 @@ impl MoveObject {
     }
 }
 
-// TODO: Make MovePackage a NewType so that we can implement functions on it.
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
-pub type MovePackage = BTreeMap<String, ByteBuf>;
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+pub struct MovePackage {
+    module_map: BTreeMap<String, ByteBuf>,
+}
+
+impl MovePackage {
+    pub fn serialized_module_map(&self) -> &BTreeMap<String, ByteBuf> {
+        &self.module_map
+    }
+
+    pub fn from_map(module_map: &BTreeMap<String, ByteBuf>) -> Self {
+        Self {
+            module_map: module_map.clone(),
+        }
+    }
+
+    pub fn id(&self) -> ObjectID {
+        // TODO: simplify this
+        // https://github.com/MystenLabs/fastnft/issues/249
+        // All modules in the same package must have the same address. Pick any
+        ObjectID::from(
+            *CompiledModule::deserialize(self.module_map.values().next().unwrap())
+                .unwrap()
+                .self_id()
+                .address(),
+        )
+    }
+
+    pub fn module_id(&self, module: &Identifier) -> Result<ModuleId, SuiError> {
+        let ser =
+            self.serialized_module_map()
+                .get(module.as_str())
+                .ok_or(SuiError::ModuleNotFound {
+                    module_name: module.to_string(),
+                })?;
+        Ok(CompiledModule::deserialize(ser)?.self_id())
+    }
+
+    pub fn get_function_signature(
+        &self,
+        module: &Identifier,
+        function: &Identifier,
+    ) -> Result<Function, SuiError> {
+        let bytes =
+            self.serialized_module_map()
+                .get(module.as_str())
+                .ok_or(SuiError::ModuleNotFound {
+                    module_name: module.to_string(),
+                })?;
+        let m = CompiledModule::deserialize(bytes)
+            .expect("Unwrap safe because FastX serializes/verifies modules before publishing them");
+
+        Function::new_from_name(&m, function).ok_or(SuiError::FunctionNotFound {
+            error: format!(
+                "Could not resolve function '{}' in module {}::{}",
+                function,
+                self.id(),
+                module
+            ),
+        })
+    }
+}
+impl From<&Vec<CompiledModule>> for MovePackage {
+    fn from(compiled_modules: &Vec<CompiledModule>) -> Self {
+        MovePackage::from_map(
+            &compiled_modules
+                .iter()
+                .map(|module| {
+                    let mut bytes = Vec::new();
+                    module.serialize(&mut bytes).unwrap();
+                    (module.self_id().name().to_string(), ByteBuf::from(bytes))
+                })
+                .collect(),
+        )
+    }
+}
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 #[allow(clippy::large_enum_variant)]
@@ -243,7 +319,7 @@ impl Data {
             },
             Package(p) => {
                 let mut disassembled = serde_json::Map::new();
-                for (name, bytecode) in p {
+                for (name, bytecode) in p.serialized_module_map() {
                     let module = CompiledModule::deserialize(bytecode)
                         .expect("Adapter publish flow ensures that this bytecode deserializes");
                     let view = BinaryIndexedView::Module(&module);
@@ -291,16 +367,8 @@ impl Object {
         owner: SuiAddress,
         previous_transaction: TransactionDigest,
     ) -> Self {
-        let serialized: MovePackage = modules
-            .into_iter()
-            .map(|module| {
-                let mut bytes = Vec::new();
-                module.serialize(&mut bytes).unwrap();
-                (module.self_id().name().to_string(), ByteBuf::from(bytes))
-            })
-            .collect();
         Object {
-            data: Data::Package(serialized),
+            data: Data::Package(MovePackage::from(&modules)),
             owner,
             previous_transaction,
         }
@@ -327,16 +395,7 @@ impl Object {
 
         match &self.data {
             Move(v) => v.id(),
-            Package(m) => {
-                // All modules in the same package must have the same address.
-                // TODO: Use byte trick to get ID directly without deserialization.
-                ObjectID::from(
-                    *CompiledModule::deserialize(m.values().next().unwrap())
-                        .unwrap()
-                        .self_id()
-                        .address(),
-                )
-            }
+            Package(m) => m.id(),
         }
     }
 

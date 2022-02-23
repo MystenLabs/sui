@@ -167,12 +167,7 @@ where
                         .certified_transaction
                         .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-                    // Check & Add it to the list of certificates to sync
-                    returned_certificate.check(&self.committee).map_err(|_| {
-                        SuiError::ByzantineAuthoritySuspicion {
-                            authority: source_authority,
-                        }
-                    })?;
+                    // Add it to the list of certificates to sync
                     missing_certificates.push(ConfirmationTransaction::new(returned_certificate));
                 }
             }
@@ -224,17 +219,40 @@ where
             // Note: here we could improve this function by passing into the
             //       `sync_authority_source_to_destination` call a cache of
             //       certificates and parents to avoid re-downloading them.
-            if timeout(
-                timeout_period,
-                self.sync_authority_source_to_destination(
-                    cert.clone(),
-                    source_authority,
-                    destination_authority,
-                ),
-            )
-            .await
-            .is_ok()
-            {
+
+            let logic = async {
+                let res = self
+                    .sync_authority_source_to_destination(
+                        cert.clone(),
+                        source_authority,
+                        destination_authority,
+                    )
+                    .await;
+
+                if let Err(err) = &res {
+                    // We checked that the source authority has all the information
+                    // since the source has signed the certificate. Either the
+                    // source or the destination authority may be faulty.
+
+                    let inner_err = SuiError::PairwiseSyncFailed {
+                        xsource: source_authority,
+                        destination: destination_authority,
+                        tx_digest: cert.certificate.transaction.digest(),
+                        error: Box::new(err.clone()),
+                    };
+
+                    // Report the error to both authority clients.
+                    let source_client = &self.authority_clients[&source_authority];
+                    let destination_client = &self.authority_clients[&destination_authority];
+
+                    source_client.report_client_error(inner_err.clone());
+                    destination_client.report_client_error(inner_err);
+                }
+
+                res
+            };
+
+            if timeout(timeout_period, logic).await.is_ok() {
                 // If the updates suceeds we return, since there is no need
                 // to try other sources.
                 return Ok(());

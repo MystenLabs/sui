@@ -465,6 +465,7 @@ impl ModuleResolver for AuthorityStore {
         match self.get_object(&ObjectID::from(*module_id.address()))? {
             Some(o) => match &o.data {
                 Data::Package(c) => Ok(c
+                    .serialized_module_map()
                     .get(module_id.name().as_str())
                     .cloned()
                     .map(|m| m.into_vec())),

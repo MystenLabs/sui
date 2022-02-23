@@ -6,7 +6,7 @@ use move_binary_format::file_format::{
     self, AbilitySet, AddressIdentifierIndex, IdentifierIndex, ModuleHandle, ModuleHandleIndex,
     StructHandle,
 };
-use move_core_types::{account_address::AccountAddress, ident_str};
+use move_core_types::{account_address::AccountAddress, ident_str, language_storage::StructTag};
 use move_package::BuildConfig;
 use std::{collections::BTreeSet, mem, path::PathBuf};
 use sui_types::{
@@ -56,7 +56,7 @@ impl InMemoryStorage {
             .values()
             .find(|o| {
                 if let Some(package) = o.data.try_as_package() {
-                    if package.get(name).is_some() {
+                    if package.serialized_module_map().get(name).is_some() {
                         return true;
                     }
                 }
@@ -148,7 +148,9 @@ impl ModuleResolver for InMemoryStorage {
         Ok(self
             .read_object(&ObjectID::from(*module_id.address()))
             .map(|o| match &o.data {
-                Data::Package(m) => m[module_id.name().as_str()].clone().into_vec(),
+                Data::Package(m) => m.serialized_module_map()[module_id.name().as_str()]
+                    .clone()
+                    .into_vec(),
                 Data::Move(_) => panic!("Type error"),
             }))
     }
@@ -476,8 +478,9 @@ fn test_move_call_insufficient_gas() {
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
+    let gas_object_id = ObjectID::random();
     let gas_object =
-        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
+        Object::with_id_owner_for_testing(gas_object_id, base_types::SuiAddress::default());
     storage.write_object(gas_object.clone());
     storage.flush();
 
@@ -497,12 +500,30 @@ fn test_move_call_insufficient_gas() {
         20, // This budget is not enough to execute all bytecode.
         Vec::new(),
         Vec::new(),
-        pure_args,
+        pure_args.clone(),
     );
     let err = response.unwrap().unwrap_err();
     assert!(err.1.to_string().contains("VMError with status OUT_OF_GAS"));
     // Provided gas_budget will be deducted as gas.
     assert_eq!(err.0, 20);
+
+    // Trying again with a different gas budget.
+    let gas_object = storage.read_object(&gas_object_id).unwrap();
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "ObjectBasics",
+        "create",
+        gas_object,
+        50, // This budget is enough to execute bytecode, but not enough for processing transfer events.
+        Vec::new(),
+        Vec::new(),
+        pure_args,
+    );
+    let err = response.unwrap().unwrap_err();
+    assert!(matches!(err.1, SuiError::InsufficientGas { .. }));
+    // Provided gas_budget will be deducted as gas.
+    assert_eq!(err.0, 50);
 }
 
 #[test]
@@ -780,6 +801,7 @@ fn test_publish_module_linker_error() {
             .data
             .try_as_package()
             .unwrap()
+            .serialized_module_map()
             .get("ID")
             .unwrap(),
     )
