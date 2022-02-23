@@ -198,6 +198,15 @@ pub enum SuiError {
         "We have received cryptographic level of evidence that authority {authority:?} is faulty in a Byzantine manner."
     )]
     ByzantineAuthoritySuspicion { authority: AuthorityName },
+    #[error(
+        "Sync from authority failed. From {xsource:?} to {destination:?}, digest {tx_digest:?}: {error:?}",
+    )]
+    PairwiseSyncFailed {
+        xsource: AuthorityName,
+        destination: AuthorityName,
+        tx_digest: TransactionDigest,
+        error: Box<SuiError>,
+    },
     #[error("Storage error")]
     StorageError(#[from] typed_store::rocks::TypedStoreError),
 
