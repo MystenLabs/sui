@@ -1,5 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::authority::AuthorityStore;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
