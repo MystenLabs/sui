@@ -231,7 +231,7 @@ where
 
                 if let Err(err) = &res {
                     // We checked that the source authority has all the information
-                    // so there is something strange that happened here. Either the
+                    // since the source has signed the certificate. Either the
                     // source or the destination authority may be faulty.
 
                     let inner_err = SuiError::PairwiseSyncFailed {
