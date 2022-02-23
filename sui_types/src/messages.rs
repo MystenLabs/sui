@@ -694,7 +694,6 @@ impl Display for CertifiedTransaction {
                 writeln!(writer, "Object Arguments : {:?}", c.object_arguments)?;
                 writeln!(writer, "Pure Arguments : {:?}", c.pure_arguments)?;
                 writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
-                writeln!(writer, "Gas Budget : {:?}", c.object_arguments)?;
             }
         }
         write!(f, "{}", writer)
