@@ -41,15 +41,17 @@ flowchart LR
 
 Sui authorities process transactions in parallel with high throughput using [Byzantine Consistent Broadcast](https://en.wikipedia.org/wiki/Byzantine_fault).
 
-## Move Quick Start
+## Move quick start
 See the [Move Quick Start](move.md) for installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, invoking your published code. Then deeper: Sui standard library, design patterns, examples.
 
-## Wallet Quick Start
+## Wallet quick start
 See the [Wallet Quick Start](wallet.md) for installation, querying the chain, client setup, getting test coins, sending transfer transactions, viewing the effects in a block explorer. Then deeper: wallet CLI vs client service vs forwarder architecture, how to integrate your code (wallet, indexer, ...) with the client service or forwarder components.
 
 ## Demos
 
-## Key Concepts
+TODO: Develop or remove.
+
+## Concepts
 - [Authorities](authorities.md)
 - [Objects](objects.md)
 - [Programmability](programmability.md)
@@ -59,7 +61,7 @@ See the [Wallet Quick Start](wallet.md) for installation, querying the chain, cl
 - TODO: reconfiguration
 - TODO governance, incentives, and rewards
 
-## What Makes Sui Different?
+## What makes Sui different?
 
 Sui allows a set of distributed authorities, some of which are Byzantine, to maintain a high-integrity and high-availability settlement system for pre-funded payments. It can be used to settle payments in a native unit of value (crypto-currency) or as a financial side-infrastructure to support retail payments in fiat currencies. Sui is based on Byzantine Consistent Broadcast as its core primitive, foregoing the expenses of full atomic commit channels (consensus). The resulting system has low latency for both confirmation and payment finality. Remarkably, each authority can be sharded across many machines to allow unbounded horizontal scalability. Our experiments demonstrate intra-continental confirmation latency of less than 100ms, making Sui applicable to point-of-sale payments. In laboratory environments, we achieve more than 80,000 transactions per second with 20 authorities---surpassing the requirements of current retail card payment networks while significantly increasing their robustness.
 
@@ -74,7 +76,7 @@ An authority plays a role similar to "validators" or "miners" in other blockchai
 * Miners/validators continuously participate in a global consensus protocol that requires multiple rounds of all-to-all communication between the participants. The goal is typically to agree on a *totally ordered* block of transactions and the result of their execution.
 * Authorities do nothing until they receive a transaction or certificate from a user. Upon receiving a transaction or certificate, an authority need not communicate with other authorities in order to take action and advance its internal state machine. It may wish to communicate with other authorities to share certificates but need not do so.
 
-## Causal Order vs Total Order
+## Causal order vs Total order
 Unlike most existing blockchain systems (and as the reader may have guessed from the description of write requests above), Sui does not impose a total order on the transactions submitted by clients. Instead, transactions are *causally* ordered--if a transaction `T1` produces output objects `O1` that are used as input objects in a transaction `T2`, an authority must execute `T1` before it executes `T2`. Note that `T2` need not use these objects directly for a causal relationship to exist--e.g., `T1` might produce output objects which are then used by `T3`, and `T2` might use `T3`'s output objects. However, transactions with no causal relationship can be processed by Sui authorities in any order.
 
 ## Benchmarking
