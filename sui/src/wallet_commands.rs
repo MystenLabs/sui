@@ -320,7 +320,7 @@ impl WalletContext {
         Ok(context)
     }
 
-    fn get_or_create_client_state(
+    pub fn get_or_create_client_state(
         &mut self,
         owner: &SuiAddress,
     ) -> Result<&mut ClientState<AuthorityClient>, SuiError> {
