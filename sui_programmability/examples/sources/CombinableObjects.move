@@ -2,7 +2,6 @@
 /// new objects
 module Examples::CombinableObjects {
     use Examples::TrustedCoin::EXAMPLE;
-    use FastX::Address::{Self, Address};
     use FastX::Coin::{Self, Coin};
     use FastX::ID::{Self, VersionedID};
     use FastX::Transfer;
@@ -21,7 +20,7 @@ module Examples::CombinableObjects {
     }
 
     /// Address selling ham, bread, etc
-    const GROCERY: vector<u8> = b"";
+    const GROCERY: address = @0x0;
     /// Price for ham
     const HAM_PRICE: u64 = 10;
     /// Price for bread
@@ -55,7 +54,7 @@ module Examples::CombinableObjects {
         Sandwich { id: TxContext::new_id(ctx) }
     }
 
-    fun admin(): Address {
-        Address::new(GROCERY)
+    fun admin(): address {
+        GROCERY
     }
 }

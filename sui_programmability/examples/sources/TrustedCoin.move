@@ -1,6 +1,5 @@
 /// Example coin with a trusted owner responsible for minting/burning (e.g., a stablecoin)
 module Examples::TrustedCoin {
-    use FastX::Address;
     use FastX::Coin::{Self, TreasuryCap};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
@@ -23,8 +22,8 @@ module Examples::TrustedCoin {
         Coin::transfer(coin, TxContext::get_signer_address(ctx));
     }
 
-    public fun transfer(treasury_cap: TreasuryCap<EXAMPLE>, recipient: vector<u8>, _ctx: &mut TxContext) {
-        Coin::transfer_cap<EXAMPLE>(treasury_cap, Address::new(recipient));
+    public fun transfer(treasury_cap: TreasuryCap<EXAMPLE>, recipient: address, _ctx: &mut TxContext) {
+        Coin::transfer_cap<EXAMPLE>(treasury_cap, recipient);
     }
 
     #[test_only]

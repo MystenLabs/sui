@@ -9,7 +9,7 @@ use crate::client::client_store::ClientSingleAddressStore;
 use crate::client::{Client, ClientState};
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use move_core_types::{ident_str, identifier::Identifier};
+use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
@@ -160,7 +160,7 @@ fn transaction_create(
 
     let pure_arguments = vec![
         value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&dest.to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(dest)).unwrap(),
     ];
 
     Transaction::new_move_call(
@@ -186,7 +186,7 @@ fn transaction_transfer(
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Transaction {
-    let pure_args = vec![bcs::to_bytes(&dest.to_vec()).unwrap()];
+    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(dest)).unwrap()];
 
     Transaction::new_move_call(
         src,
@@ -804,7 +804,7 @@ async fn test_move_calls_object_create() {
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
         object_value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(client1.address())).unwrap(),
     ];
     let call_response = client1
         .move_call(
@@ -865,7 +865,7 @@ async fn test_move_calls_object_transfer() {
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
         object_value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(client1.address())).unwrap(),
     ];
     let call_response = client1
         .move_call(
@@ -888,7 +888,7 @@ async fn test_move_calls_object_transfer() {
     let (new_obj_ref, _) = transaction_effects.created[0];
     gas_object_ref = client_object(&mut client1, gas_object_ref.0).await.0;
 
-    let pure_args = vec![bcs::to_bytes(&client2.address().to_vec()).unwrap()];
+    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(client2.address())).unwrap()];
     let call_response = client1
         .move_call(
             framework_obj_ref,
@@ -953,7 +953,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
         object_value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(client1.address())).unwrap(),
     ];
     let call_response = client1
         .move_call(
@@ -975,7 +975,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
     let new_obj_ref = client_object(&mut client1, new_obj_ref.0).await.0;
     gas_object_ref = client_object(&mut client1, gas_object_ref.0).await.0;
 
-    let pure_args = vec![bcs::to_bytes(&client2.address().to_vec()).unwrap()];
+    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(client2.address())).unwrap()];
     let call_response = client1
         .move_call(
             framework_obj_ref,
@@ -1040,7 +1040,7 @@ async fn test_move_calls_object_delete() {
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
         object_value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(client1.address())).unwrap(),
     ];
     let call_response = client1
         .move_call(
@@ -2340,7 +2340,7 @@ async fn test_address_manager() {
     let gas_ref_1 = get_latest_ref(sample_auth, gas_object1).await;
     let pure_args = vec![
         bcs::to_bytes(&100u64).unwrap(),
-        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(client1.address())).unwrap(),
     ];
     let call_response = client1
         .move_call(

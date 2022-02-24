@@ -1,5 +1,4 @@
 module FastX::Coin {
-    use FastX::Address::{Self, Address};
     use FastX::ID::{Self, VersionedID};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
@@ -27,7 +26,7 @@ module FastX::Coin {
     // === Functionality for Coin<T> holders ===
 
     /// Send `c` to `recipient`
-    public fun transfer<T>(c: Coin<T>, recipient: Address) {
+    public fun transfer<T>(c: Coin<T>, recipient: address) {
         Transfer::transfer(c, recipient)
     }
 
@@ -135,7 +134,7 @@ module FastX::Coin {
     }
 
     /// Give away the treasury cap to `recipient`
-    public fun transfer_cap<T>(c: TreasuryCap<T>, recipient: Address) {
+    public fun transfer_cap<T>(c: TreasuryCap<T>, recipient: address) {
         Transfer::transfer(c, recipient)
     }
 
@@ -143,7 +142,7 @@ module FastX::Coin {
 
     /// Send `amount` units of `c` to `recipient
     /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
-    public fun transfer_<T>(c: &mut Coin<T>, amount: u64, recipient: vector<u8>, ctx: &mut TxContext) {        
-        Transfer::transfer(withdraw(c, amount, ctx), Address::new(recipient))
+    public fun transfer_<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {        
+        Transfer::transfer(withdraw(c, amount, ctx), recipient)
     }
 }
