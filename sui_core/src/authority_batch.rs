@@ -214,7 +214,7 @@ impl BatcherManager {
             tokio::select! {
               _ = interval.tick() => {
                 // Every so often we check if we should make a batch
-                // smaller than the max size. But never empty.
+                // but it should never be empty. But never empty.
                   make_batch = true;
               },
               item_option = self.tx_recv.recv() => {
@@ -258,6 +258,9 @@ impl BatcherManager {
                 // A new batch is actually made, so we reset the conditions.
                 prev_batch = new_batch;
                 current_batch.clear();
+
+                // We rest the interval here to ensure that blocks
+                // are made either when they are full or old enough.
                 interval.reset();
             }
         }

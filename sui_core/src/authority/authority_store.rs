@@ -114,8 +114,7 @@ impl AuthorityStore {
                 .expect("Error reading table.")
                 .next()
                 .map(|(v, _)| v + 1u64)
-                .or(Some(0))
-                .unwrap(),
+                .unwrap_or(0),
         );
 
         AuthorityStore {
