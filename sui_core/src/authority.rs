@@ -242,12 +242,22 @@ impl AuthorityState {
         &self,
         confirmation_transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        // Check the certificate and retrieve the transfer data.
+        let certificate = &confirmation_transaction.certificate;
+        certificate.check(&self.committee)?;
+
+        // TODO: Support for shared objects goes here.
+
+        self.process_certificate(confirmation_transaction).await
+    }
+
+    async fn process_certificate(
+        &self,
+        confirmation_transaction: ConfirmationTransaction,
+    ) -> Result<TransactionInfoResponse, SuiError> {
         let certificate = confirmation_transaction.certificate;
         let transaction = certificate.transaction.clone();
         let transaction_digest = transaction.digest();
-
-        // Check the certificate and retrieve the transfer data.
-        certificate.check(&self.committee)?;
 
         // Ensure an idempotent answer
         let transaction_info = self.make_transaction_info(&transaction_digest).await?;
