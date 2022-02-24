@@ -526,7 +526,8 @@ impl AuthorityState {
         for genesis_modules in genesis_packages {
             state
                 .store_package_and_init_modules(genesis_ctx, genesis_modules)
-                .await;
+                .await
+                .expect("We expect Geneis packages to not fail");
         }
         state
     }
@@ -545,12 +546,11 @@ impl AuthorityState {
         &self,
         ctx: &mut TxContext,
         modules: Vec<CompiledModule>,
-    ) {
+    ) -> SuiResult {
         let inputs = Transaction::input_objects_in_compiled_modules(&modules);
         let input_objects = self
             .fetch_objects(&inputs)
-            .await
-            .unwrap()
+            .await?
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
@@ -558,24 +558,19 @@ impl AuthorityState {
         let mut temporary_store = AuthorityTemporaryStore::new(self, &input_objects, ctx.digest());
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
-        let vm = adapter::verify_and_link(&temporary_store, &modules, package_id, natives).unwrap();
-
+        let vm = adapter::verify_and_link(&temporary_store, &modules, package_id, natives)?;
         adapter::store_package_and_init_modules(
             &mut temporary_store,
             &vm,
             modules,
             ctx,
             MAX_GAS_BUDGET,
-        )
-        .unwrap();
+        )?;
         temporary_store.ensure_active_inputs_mutated();
-        let unwrapped_object_ids = self
-            .get_unwrapped_object_ids(temporary_store.written())
-            .unwrap();
+        let unwrapped_object_ids = self.get_unwrapped_object_ids(temporary_store.written())?;
         temporary_store.patch_unwrapped_object_version(unwrapped_object_ids);
         self.update_objects_state(temporary_store, ctx.digest())
             .await
-            .unwrap();
     }
 
     /// Make an information response for a transaction
