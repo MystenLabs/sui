@@ -7,9 +7,7 @@ TODO: Populate and link to or remove the placeholder TODOs and references above 
 Sui uses proof of stake (PoS) to determine which authorities operate the network and their voting power. Authorities are incentivized to participate in good faith via a share of transaction fees, staking rewards, and slashing to punish misbehavior. See [Governance, Incentives, and Rewards](TODO) for more detail.
 
 ## Epochs
-Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of authorities participating in the network is fixed. At an epoch boundary, [reconfiguration](TODO) occurs and can change the set of authorities participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as genesis and the new set of authorities as the operators.
-
-TODO: Link to genesis definition from above first reference.
+Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of authorities participating in the network is fixed. At an epoch boundary, [reconfiguration](TODO) occurs and can change the set of authorities participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as [genesis](objects.md#the-transaction-object-dag-relating-objects-and-transactions) and the new set of authorities as the operators.
 
 EDITORIAL NOTE: not sure if the fixed duration part matches our plans--let me know
 
