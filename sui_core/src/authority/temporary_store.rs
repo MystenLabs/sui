@@ -51,6 +51,9 @@ impl AuthorityTemporaryStore {
     }
 
     // Helpers to access private fields
+    pub fn active_inputs(&self) -> &Vec<ObjectRef> {
+        &self.active_inputs
+    }
 
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
         &self.objects
