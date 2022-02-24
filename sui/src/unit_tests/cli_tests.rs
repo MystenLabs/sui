@@ -6,18 +6,21 @@ use serde_json::json;
 use std::collections::BTreeSet;
 use std::fs::read_dir;
 use std::ops::Add;
+use std::path::Path;
 use std::time::Duration;
 use sui::config::{
-    AccountConfig, AccountInfo, GenesisConfig, NetworkConfig, ObjectConfig, WalletConfig,
-    AUTHORITIES_DB_NAME,
+    AccountConfig, AccountInfo, AuthorityPrivateInfo, GenesisConfig, NetworkConfig, ObjectConfig,
+    WalletConfig, AUTHORITIES_DB_NAME,
 };
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_core::client::Client;
+use sui_network::network::PortAllocator;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::get_key_pair;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use tokio::task;
+use tokio::task::JoinHandle;
 use tracing_test::traced_test;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
@@ -118,15 +121,8 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_objects_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
 
-    SuiCommand::Genesis { config: None }
-        .execute(&mut config)
-        .await?;
-
-    // Start network
-    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
-
+    let network = start_network(working_dir.path(), 10100, None).await?;
     // Wait for authorities to come alive.
     retry_assert!(
         logs_contain("Listening to TCP traffic on 127.0.0.1"),
@@ -182,23 +178,8 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
             gas_value: 500,
         }],
     });
-    config.save()?;
 
-    // Create empty network config for genesis
-    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
-
-    // Genesis
-    SuiCommand::Genesis {
-        config: Some(genesis_path),
-    }
-    .execute(&mut config)
-    .await?;
-
-    let mut config = NetworkConfig::read(&working_dir.path().join("network.conf"))?;
-    assert_eq!(4, config.authorities.len());
-
-    // Start network
-    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+    let network = start_network(working_dir.path(), 10200, Some(config)).await?;
 
     // Wait for authorities to come alive.
     retry_assert!(
@@ -285,15 +266,8 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 #[tokio::test]
 async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
 
-    SuiCommand::Genesis { config: None }
-        .execute(&mut config)
-        .await?;
-
-    // Start network
-    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
-
+    let network = start_network(working_dir.path(), 10300, None).await?;
     // Wait for authorities to come alive.
     retry_assert!(
         logs_contain("Listening to TCP traffic on 127.0.0.1"),
@@ -339,14 +313,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_gas_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
-
-    SuiCommand::Genesis { config: None }
-        .execute(&mut config)
-        .await?;
-
-    // Start network
-    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+    let network = start_network(working_dir.path(), 10400, None).await?;
 
     // Wait for authorities to come alive.
     retry_assert!(
@@ -470,6 +437,44 @@ fn extract_gas_info(s: &str) -> Option<(ObjectID, SequenceNumber, u64)> {
         SequenceNumber::from_u64(tokens[1].parse::<u64>().unwrap()),
         tokens[2].parse::<u64>().unwrap(),
     ))
+}
+
+async fn start_network(
+    working_dir: &Path,
+    starting_port: u16,
+    genesis: Option<GenesisConfig>,
+) -> Result<JoinHandle<Result<(), anyhow::Error>>, anyhow::Error> {
+    let network_conf_path = &working_dir.join("network.conf");
+    let genesis_conf_path = &working_dir.join("genesis.conf");
+
+    let mut config = NetworkConfig::read_or_create(&network_conf_path)?;
+    let mut port_allocator = PortAllocator::new(starting_port);
+    let mut genesis_config = genesis.unwrap_or(GenesisConfig::default_genesis(&genesis_conf_path)?);
+    let authorities = genesis_config
+        .authorities
+        .iter()
+        .map(|info| AuthorityPrivateInfo {
+            key_pair: info.key_pair.copy(),
+            host: info.host.clone(),
+            port: port_allocator.next_port().unwrap(),
+            db_path: info.db_path.clone(),
+            stake: info.stake,
+        })
+        .collect();
+    genesis_config.authorities = authorities;
+    genesis_config.save()?;
+
+    SuiCommand::Genesis {
+        config: Some(genesis_conf_path.to_path_buf()),
+    }
+    .execute(&mut config)
+    .await?;
+
+    let mut config = NetworkConfig::read(&network_conf_path)?;
+
+    // Start network
+    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+    Ok(network)
 }
 
 #[traced_test]
