@@ -2,7 +2,6 @@ module FastX::Collection {
     use Std::Errors;
     use Std::Option::{Self, Option};
     use Std::Vector::Self;
-    use FastX::Address::{Self, Address};
     use FastX::ID::{Self, VersionedID, IDBytes};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
@@ -90,12 +89,12 @@ module FastX::Collection {
 
     /// Transfer the entire collection to `recipient`.
     /// This function can be called as an entry function, as it has TxContext as input.
-    public fun transfer_entry(c: Collection, recipient: vector<u8>, _ctx: &mut TxContext) {
-        transfer(c, Address::new(recipient))
+    public fun transfer_entry(c: Collection, recipient: address, _ctx: &mut TxContext) {
+        transfer(c, recipient)
     }
 
     /// Transfer the entire collection to `recipient`.
-    public fun transfer(c: Collection, recipient: Address) {
+    public fun transfer(c: Collection, recipient: address) {
         Transfer::transfer(c, recipient)
     }
 

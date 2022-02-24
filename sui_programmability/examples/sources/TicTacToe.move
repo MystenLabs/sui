@@ -2,7 +2,6 @@ module Examples::TicTacToe {
     use Std::Option::{Self, Option};
     use Std::Vector;
 
-    use FastX::Address::Address;
     use FastX::ID::{Self, VersionedID, IDBytes};
     use FastX::Event;
     use FastX::Transfer;
@@ -23,8 +22,8 @@ module Examples::TicTacToe {
         gameboard: vector<vector<Option<Mark>>>,
         cur_turn: u8,
         game_status: u8,
-        x_address: Address,
-        o_address: Address,
+        x_address: address,
+        o_address: address,
     }
 
     struct MarkMintCap has key {
@@ -35,7 +34,7 @@ module Examples::TicTacToe {
 
     struct Mark has key, store {
         id: VersionedID,
-        player: Address,
+        player: address,
         row: u64,
         col: u64,
     }
@@ -57,7 +56,7 @@ module Examples::TicTacToe {
     }
 
     /// `x_address` and `o_address` are the account address of the two players.
-    public fun create_game(x_address: Address, o_address: Address, ctx: &mut TxContext) {
+    public fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
         // TODO: Validate sender address, only GameAdmin can create games.
 
         let id = TxContext::new_id(ctx);
@@ -72,8 +71,8 @@ module Examples::TicTacToe {
             gameboard,
             cur_turn: 0,
             game_status: IN_PROGRESS,
-            x_address: copy x_address,
-            o_address: copy o_address,
+            x_address: x_address,
+            o_address: o_address,
         };
         Transfer::transfer(game, TxContext::get_signer_address(ctx));
         let cap = MarkMintCap {
@@ -92,7 +91,7 @@ module Examples::TicTacToe {
 
     /// Generate a new mark intended for location (row, col).
     /// This new mark is not yet placed, just transferred to the game.
-    public fun send_mark_to_game(cap: &mut MarkMintCap, game_address: Address, row: u64, col: u64, ctx: &mut TxContext) {
+    public fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address, row: u64, col: u64, ctx: &mut TxContext) {
         if (row > 2 || col > 2) {
             abort INVALID_LOCATION
         };
@@ -181,7 +180,7 @@ module Examples::TicTacToe {
         }
     }
 
-    fun get_cur_turn_address(game: &TicTacToe): Address {
+    fun get_cur_turn_address(game: &TicTacToe): address {
         if (game.cur_turn % 2 == 0) {
             *&game.x_address
         } else {
@@ -233,7 +232,7 @@ module Examples::TicTacToe {
         };
     }
 
-    fun check_all_equal(game: &TicTacToe, row1: u64, col1: u64, row2: u64, col2: u64, row3: u64, col3: u64): Option<Address> {
+    fun check_all_equal(game: &TicTacToe, row1: u64, col1: u64, row2: u64, col2: u64, row3: u64, col3: u64): Option<address> {
         let cell1 = get_cell_ref(game, row1, col1);
         let cell2 = get_cell_ref(game, row2, col2);
         let cell3 = get_cell_ref(game, row3, col3);
@@ -253,7 +252,7 @@ module Examples::TicTacToe {
         ID::delete(id);
     }
 
-    public fun mark_player(mark: &Mark): &Address {
+    public fun mark_player(mark: &Mark): &address {
         &mark.player
     }
 

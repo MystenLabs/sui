@@ -32,7 +32,7 @@ pub fn transfer_internal(
 
     let ty = ty_args.pop().unwrap();
     let should_freeze = pop_arg!(args, bool);
-    let recipient = pop_arg!(args, Vec<u8>);
+    let recipient = pop_arg!(args, AccountAddress);
     let transferred_obj = args.pop_back().unwrap();
     let event_type = if should_freeze {
         EventType::TransferToAddressAndFreeze
@@ -53,7 +53,7 @@ pub fn transfer_to_object_id(
     debug_assert!(args.len() == 2);
 
     let ty = ty_args.pop().unwrap();
-    let recipient = pop_arg!(args, AccountAddress).to_vec();
+    let recipient = pop_arg!(args, AccountAddress);
     let transferred_obj = args.pop_back().unwrap();
     let event_type = EventType::TransferToObject;
     transfer_common(context, ty, transferred_obj, recipient, event_type)
@@ -63,7 +63,7 @@ fn transfer_common(
     context: &mut NativeContext,
     ty: Type,
     transferred_obj: Value,
-    recipient: Vec<u8>,
+    recipient: AccountAddress,
     event_type: EventType,
 ) -> PartialVMResult<NativeResult> {
     // Charge a constant native gas cost here, since
@@ -71,7 +71,7 @@ fn transfer_common(
     // all the events in adapter.
     // TODO: adjust native_gas cost size base.
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
-    if !context.save_event(recipient, event_type as u64, ty, transferred_obj)? {
+    if !context.save_event(recipient.to_vec(), event_type as u64, ty, transferred_obj)? {
         return Ok(NativeResult::err(cost, 0));
     }
 

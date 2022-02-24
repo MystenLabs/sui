@@ -4,8 +4,9 @@ module FastX::TxContext {
     #[test_only]
     use Std::Vector;
 
+    use Std::Signer;
+
     use FastX::ID::{Self, VersionedID};
-    use FastX::Address::{Self, Address, Signer};
 
     /// Number of bytes in an inputs_hash (which will be the transaction digest)
     const INPUTS_HASH_LENGTH: u64 = 32;
@@ -17,8 +18,8 @@ module FastX::TxContext {
     /// This is a privileged object created by the VM and passed into `main`
     struct TxContext has drop {
         /// The signer of the current transaction
-        // TODO: use vector<Signer> if we want to support multi-agent
-        signer: Signer,
+        // TODO: use vector<signer> if we want to support multi-agent
+        signer: signer,
         /// Hash of all the input objects to this transaction
         inputs_hash: vector<u8>,
         /// Counter recording the number of fresh id's created while executing
@@ -27,14 +28,14 @@ module FastX::TxContext {
     }
 
     /// Return the signer of the current transaction
-    public fun get_signer(self: &TxContext): &Signer {
+    public fun get_signer(self: &TxContext): &signer {
         &self.signer
     }
 
     /// Return the address of the user that signed the current
     /// transaction
-    public fun get_signer_address(self: &TxContext): Address {
-        *Address::get(&self.signer)
+    public fun get_signer_address(self: &TxContext): address {
+        Signer::address_of(&self.signer)
     }
 
     /// Return the number of id's created by the current transaction
@@ -56,7 +57,7 @@ module FastX::TxContext {
 
     #[test_only]
     /// Create a `TxContext` for testing
-    public fun new(signer: Signer, inputs_hash: vector<u8>, ids_created: u64): TxContext {
+    public fun new(signer: signer, inputs_hash: vector<u8>, ids_created: u64): TxContext {
         assert!(
             Vector::length(&inputs_hash) == INPUTS_HASH_LENGTH,
             Errors::invalid_argument(EBAD_INPUTS_HASH_LENGTH)
@@ -66,15 +67,15 @@ module FastX::TxContext {
 
     #[test_only]
     /// Create a `TxContext` with sender `a` for testing, and an inputs hash derived from `hint`
-    public fun new_from_address(a: Address, hint: u8): TxContext {
-        new(Address::new_signer_from_address(a), dummy_inputs_hash_with_hint(hint), 0)
+    public fun new_from_address(a: address, hint: u8): TxContext {
+        new(new_signer_from_address(a), dummy_inputs_hash_with_hint(hint), 0)
     }
 
     #[test_only]
     /// Create a dummy `TxContext` for testing
     public fun dummy(): TxContext {
         let inputs_hash = x"3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532";
-        new(Address::dummy_signer(), inputs_hash, 0)
+        new(new_signer_from_address(@0x0), inputs_hash, 0)
     }
 
     #[test_only]
@@ -90,10 +91,6 @@ module FastX::TxContext {
         inputs_hash
     }
 
-    #[test_only]
-    /// Create a dummy `TxContext` for testing
-    /// Use the `hint` to set the address and input hash.
-    public fun dummy_with_hint(hint: u8): TxContext {     
-        new(Address::dummy_signer_with_hint(hint), dummy_inputs_hash_with_hint(hint), 0)
-    }
+    /// Test-only function for creating a new signer from `signer_address`.
+    native fun new_signer_from_address(signer_address: address): signer;
 }

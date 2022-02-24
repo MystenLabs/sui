@@ -582,7 +582,7 @@ async fn test_handle_move_transaction() {
 
     // Check that gas is properly deducted.
     // If the number changes, we want to verify that the change is intended.
-    let gas_cost = 62;
+    let gas_cost = 53;
     let gas_payment_object = authority_state
         .get_object(&gas_payment_object_id)
         .await
@@ -622,7 +622,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
         Vec::new(),
         vec![
             16u64.to_le_bytes().to_vec(),
-            bcs::to_bytes(&sender.to_vec()).unwrap(),
+            bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
         ],
         9,
         &sender_key,
@@ -1346,7 +1346,7 @@ async fn test_hero() {
     let modules = sui_framework::build_move_package(&hero_path, build_config, false).unwrap();
 
     // 2. Create an admin account, and a player account.
-    // Using a hard-coded key to match the address in the Move code.
+    // Using a hard-coded key to match the Admin address in the Move code.
     // This needs to be hard-coded because the module needs to know the admin's address
     // in advance.
     let (admin, admin_key) = get_key_pair_from_bytes(&[
@@ -1430,7 +1430,7 @@ async fn test_hero() {
         ident_str!("transfer").to_owned(),
         vec![],
         vec![cap.unwrap().0],
-        vec![bcs::to_bytes(&player).unwrap()],
+        vec![bcs::to_bytes(&AccountAddress::from(player)).unwrap()],
     )
     .await
     .unwrap();
@@ -1497,9 +1497,9 @@ async fn test_hero() {
 
     // 7. Give them a boar!
     let pure_args = vec![
-        bcs::to_bytes(&10_u64).unwrap(),          // hp
-        bcs::to_bytes(&10_u64).unwrap(),          // strength
-        bcs::to_bytes(&player.to_vec()).unwrap(), // recipient
+        bcs::to_bytes(&10_u64).unwrap(),                       // hp
+        bcs::to_bytes(&10_u64).unwrap(),                       // strength
+        bcs::to_bytes(&AccountAddress::from(player)).unwrap(), // recipient
     ];
     let effects = call_move(
         &authority,
@@ -1631,7 +1631,7 @@ async fn test_object_owning_another_object() {
         "transfer",
         vec![],
         vec![obj2],
-        vec![bcs::to_bytes(&sender2.to_vec()).unwrap()],
+        vec![bcs::to_bytes(&AccountAddress::from(sender2)).unwrap()],
     )
     .await
     .unwrap();
@@ -1887,7 +1887,7 @@ async fn create_move_object(
         vec![],
         vec![
             16u64.to_le_bytes().to_vec(),
-            bcs::to_bytes(&sender.to_vec()).unwrap(),
+            bcs::to_bytes(&AccountAddress::from(*sender)).unwrap(),
         ],
     )
     .await

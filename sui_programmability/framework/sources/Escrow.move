@@ -2,7 +2,6 @@
 /// trusts a third party for liveness, but not
 /// safety.
 module FastX::Escrow {
-    use FastX::Address::Address;
     use FastX::ID::{Self, IDBytes, VersionedID};
     use FastX::Transfer;
     use FastX::TxContext::{Self, TxContext};
@@ -11,9 +10,9 @@ module FastX::Escrow {
     struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
         id: VersionedID,
         /// owner of the escrowed object
-        sender: Address,
+        sender: address,
         /// intended recipient of the escrowed object
-        recipient: Address,
+        recipient: address,
         /// ID of the object `sender` wants in exchange
         // TODO: this is probably a bad idea if the object is mutable.
         // that can be fixed by asking for an additional approval
@@ -30,8 +29,8 @@ module FastX::Escrow {
     /// `counterparty`, mediated by a `third_party`
     /// that is trusted for liveness
     public fun create<T: key + store, ExchangeForT: key + store>(
-        recipient: Address,
-        third_party: Address,
+        recipient: address,
+        third_party: address,
         exchange_for: IDBytes,
         escrowed: T,
         ctx: &mut TxContext
