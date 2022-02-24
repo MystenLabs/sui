@@ -285,7 +285,7 @@ async fn test_transfer_immutable() {
         .await
         .unwrap()
         .unwrap();
-    let genesis_package_objects = genesis::clone_genesis_modules();
+    let genesis_package_objects = genesis::clone_genesis_objects();
     let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, "ID");
     // We are trying to transfer the genesis package object, which is immutable.
     let transfer_transaction = init_transfer_transaction(
@@ -401,7 +401,7 @@ async fn test_publish_dependent_module_ok() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module_objects = genesis::clone_genesis_modules();
+    let genesis_module_objects = genesis::clone_genesis_objects();
     let genesis_module = match &genesis_module_objects[0].data {
         Data::Package(m) => {
             CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
@@ -494,7 +494,7 @@ async fn test_publish_non_existing_dependent_module() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module_objects = genesis::clone_genesis_modules();
+    let genesis_module_objects = genesis::clone_genesis_objects();
     let genesis_module = match &genesis_module_objects[0].data {
         Data::Package(m) => {
             CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
@@ -637,7 +637,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // find the function Object::create and call it to create a new object
-    let genesis_package_objects = genesis::clone_genesis_modules();
+    let genesis_package_objects = genesis::clone_genesis_objects();
     let package_object_ref =
         get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
 
@@ -1333,6 +1333,7 @@ async fn test_authority_persist() {
         Box::pin(authority_key.copy()),
         store,
         vec![],
+        &mut genesis::create_genesis_context(),
     )
     .await;
 
@@ -1360,6 +1361,7 @@ async fn test_authority_persist() {
         Box::pin(authority_key),
         store,
         vec![],
+        &mut genesis::create_genesis_context(),
     )
     .await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
@@ -1542,6 +1544,7 @@ async fn init_state() -> AuthorityState {
         Box::pin(authority_key),
         store,
         genesis::clone_genesis_modules(),
+        &mut genesis::create_genesis_context(),
     )
     .await
 }
@@ -1680,7 +1683,7 @@ async fn call_framework_code(
     object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
 ) -> SuiResult<TransactionEffects> {
-    let genesis_package_objects = genesis::clone_genesis_modules();
+    let genesis_package_objects = genesis::clone_genesis_objects();
     let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
 
     call_move(

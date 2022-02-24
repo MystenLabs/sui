@@ -4,7 +4,7 @@
 use move_binary_format::normalized::Type;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde_json::{json, Value};
-use sui_adapter::{self, genesis::clone_genesis_modules};
+use sui_adapter::{self, genesis::clone_genesis_objects};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     SUI_FRAMEWORK_ADDRESS,
@@ -223,7 +223,7 @@ fn test_basic_args_linter_pure_args() {
 
 #[test]
 fn test_basic_args_linter_top_level() {
-    let genesis_objs = clone_genesis_modules();
+    let genesis_objs = clone_genesis_objects();
     let framework_pkg = genesis_objs
         .iter()
         .find(|q| q.id() == ObjectID::from(SUI_FRAMEWORK_ADDRESS))
