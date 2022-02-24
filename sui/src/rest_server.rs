@@ -349,8 +349,7 @@ async fn get_addresses(
         return Err(HttpError::for_client_error(
             None,
             StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist. Resync wallet via endpoint /wallet/addresses."
-                .to_string(),
+            "Wallet Context does not exist.".to_string(),
         ));
     }
     let mut wallet_context = wallet_context.unwrap();
