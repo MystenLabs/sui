@@ -35,7 +35,7 @@ pub struct AuthorityStore {
     /// transaction can also be deleted from this structure.
     signed_transactions: DBMap<TransactionDigest, SignedTransaction>,
 
-    /// This is a map between the tranbsaction digest and the corresponding certificate for all
+    /// This is a map between the transaction digest and the corresponding certificate for all
     /// certificates that have been successfully processed by this authority. This set of certificates
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
@@ -92,10 +92,10 @@ impl AuthorityStore {
         }
     }
 
-    /// A function that aquires all locks associated with the objects (in order to avoid deadlocks.)
-    fn aqcuire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
+    /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
+    fn acquire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
         let num_locks = self.lock_table.len();
-        // TODO: randomize the lock mapping based on a secet to avoid DoS attacks.
+        // TODO: randomize the lock mapping based on a secret to avoid DoS attacks.
         let lock_number: BTreeSet<usize> = _input_objects
             .iter()
             .map(|(_, _, digest)| {
@@ -103,7 +103,7 @@ impl AuthorityStore {
             })
             .collect();
         // Note: we need to iterate over the sorted unique elements, hence the use of a Set
-        //       in order to prevent deadlocks when trying to aquire many locks.
+        //       in order to prevent deadlocks when trying to acquire many locks.
         lock_number
             .into_iter()
             .map(|lock_seq| self.lock_table[lock_seq].lock())
@@ -270,7 +270,7 @@ impl AuthorityStore {
         // new locks must be atomic, and not writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
-            let _mutexes = self.aqcuire_locks(mutable_input_objects);
+            let _mutexes = self.acquire_locks(mutable_input_objects);
 
             let locks = self.transaction_lock.multi_get(mutable_input_objects)?;
 
@@ -404,8 +404,8 @@ impl AuthorityStore {
         // This is the critical region: testing the locks and writing the
         // new locks must be atomic, and no writes should happen in between.
         {
-            // Aquire the lock to ensure no one else writes when we are in here.
-            let _mutexes = self.aqcuire_locks(&active_inputs[..]);
+            // Acquire the lock to ensure no one else writes when we are in here.
+            let _mutexes = self.acquire_locks(&active_inputs[..]);
 
             // Check the locks are still active
             // TODO: maybe we could just check if the certificate is there instead?
@@ -417,7 +417,7 @@ impl AuthorityStore {
             // Atomic write of all locks & other data
             write_batch.write()?;
 
-            // implict: drop(_mutexes);
+            // implicit: drop(_mutexes);
         } // End of critical region
 
         Ok(TransactionInfoResponse {
@@ -429,7 +429,7 @@ impl AuthorityStore {
 
     /// Returns the last entry we have for this object in the parents_sync index used
     /// to facilitate client and authority sync. In turn the latest entry provides the
-    /// latest object_reference, and also the latest tranaction that has interacted with
+    /// latest object_reference, and also the latest transaction that has interacted with
     /// this object.
     ///
     /// This parent_sync index also contains entries for deleted objects (with a digest of
