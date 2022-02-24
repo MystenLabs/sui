@@ -6,10 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use sui_framework::{self, DEFAULT_FRAMEWORK_PATH};
 use sui_types::error::SuiResult;
-use sui_types::{
-    base_types::{SuiAddress, TransactionDigest},
-    object::Object,
-};
+use sui_types::{base_types::TransactionDigest, object::Object};
 
 static GENESIS: Lazy<Mutex<Genesis>> = Lazy::new(|| {
     Mutex::new(create_genesis_module_objects(&PathBuf::from(DEFAULT_FRAMEWORK_PATH)).unwrap())
@@ -29,10 +26,9 @@ fn create_genesis_module_objects(lib_dir: &Path) -> SuiResult<Genesis> {
     let sui_modules = sui_framework::get_sui_framework_modules(lib_dir)?;
     let std_modules =
         sui_framework::get_move_stdlib_modules(&lib_dir.join("deps").join("move-stdlib"))?;
-    let owner = SuiAddress::default();
     let objects = vec![
-        Object::new_package(sui_modules, owner, TransactionDigest::genesis()),
-        Object::new_package(std_modules, owner, TransactionDigest::genesis()),
+        Object::new_package(sui_modules, TransactionDigest::genesis()),
+        Object::new_package(std_modules, TransactionDigest::genesis()),
     ];
     Ok(Genesis { objects })
 }
