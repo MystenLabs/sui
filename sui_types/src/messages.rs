@@ -513,7 +513,7 @@ impl Transaction {
                         Err(_) => None,
                     })
                     .collect::<Vec<_>>();
-                Transaction::input_objects_in_compiled_modules(compiled_modules)
+                Transaction::input_objects_in_compiled_modules(&compiled_modules)
             }
         };
         inputs.push(InputObjectKind::MoveObject(*self.gas_payment_object_ref()));
@@ -526,7 +526,7 @@ impl Transaction {
     }
 
     pub fn input_objects_in_compiled_modules(
-        compiled_modules: Vec<CompiledModule>,
+        compiled_modules: &[CompiledModule],
     ) -> Vec<InputObjectKind> {
         let mut dependent_packages = BTreeSet::new();
         for module in compiled_modules.iter() {

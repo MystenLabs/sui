@@ -6,14 +6,16 @@ use crate::config::{
 };
 use anyhow::anyhow;
 use futures::future::join_all;
+use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
+use sui_adapter::genesis;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
-use sui_types::base_types::{SequenceNumber, SuiAddress, TransactionDigest, TxContext};
+use sui_types::base_types::{SequenceNumber, TxContext};
 
 use sui_adapter::adapter::generate_package_id;
 use sui_types::committee::Committee;
@@ -125,7 +127,7 @@ pub async fn genesis(
     }
 
     let mut new_addresses = Vec::new();
-    let mut preload_modules = Vec::new();
+    let mut preload_modules: Vec<Vec<CompiledModule>> = Vec::new();
     let mut preload_objects = Vec::new();
 
     let new_account_count = genesis_conf
@@ -157,23 +159,22 @@ pub async fn genesis(
         }
     }
 
+    info!(
+        "Loading Move framework lib from {:?}",
+        genesis_conf.move_framework_lib_path
+    );
+    let move_lib = sui_framework::get_move_stdlib_modules(&genesis_conf.move_framework_lib_path)?;
+    preload_modules.push(move_lib);
+
     // Load Sui and Move framework lib
     info!(
         "Loading Sui framework lib from {:?}",
         genesis_conf.sui_framework_lib_path
     );
     let sui_lib = sui_framework::get_sui_framework_modules(&genesis_conf.sui_framework_lib_path)?;
-    let lib_object = Object::new_package(sui_lib, TransactionDigest::genesis());
-    preload_modules.push(lib_object);
+    preload_modules.push(sui_lib);
 
-    info!(
-        "Loading Move framework lib from {:?}",
-        genesis_conf.move_framework_lib_path
-    );
-    let move_lib = sui_framework::get_move_stdlib_modules(&genesis_conf.move_framework_lib_path)?;
-    let lib_object = Object::new_package(move_lib, TransactionDigest::genesis());
-    preload_modules.push(lib_object);
-
+    let mut genesis_ctx = genesis::create_genesis_context();
     // Build custom move packages
     if !genesis_conf.move_packages.is_empty() {
         info!(
@@ -185,33 +186,24 @@ pub async fn genesis(
         for path in genesis_conf.move_packages {
             let mut modules =
                 sui_framework::build_move_package(&path, BuildConfig::default(), false)?;
-            let package_id = generate_package_id(
-                &mut modules,
-                &mut TxContext::new(&SuiAddress::default(), TransactionDigest::genesis()),
-            )?;
+            let package_id = generate_package_id(&mut modules, &mut genesis_ctx)?;
 
-            let object = Object::new_package(modules, TransactionDigest::genesis());
-            info!("Loaded package [{}] from {:?}.", object.id(), path);
+            info!("Loaded package [{}] from {:?}.", package_id, path);
             // Writing package id to network.conf for user to retrieve later.
             config.loaded_move_packages.push((path, package_id));
-            preload_modules.push(object)
+            preload_modules.push(modules)
         }
     }
 
     let committee = Committee::new(voting_right);
-
-    // Make server state to persist the objects and modules.
-    info!(
-        "Preloading {} objects to authorities.",
-        preload_objects.len()
-    );
     for authority in &config.authorities {
-        make_server(
+        make_server_with_genesis_ctx(
             authority,
             &committee,
             preload_modules.clone(),
             &preload_objects,
             config.buffer_size,
+            &mut genesis_ctx,
         )
         .await?;
     }
@@ -235,9 +227,29 @@ pub async fn genesis(
 pub async fn make_server(
     authority: &AuthorityPrivateInfo,
     committee: &Committee,
-    preload_modules: Vec<Object>,
+    preload_modules: Vec<Vec<CompiledModule>>,
     preload_objects: &[Object],
     buffer_size: usize,
+) -> SuiResult<AuthorityServer> {
+    let mut genesis_ctx = genesis::create_genesis_context();
+    make_server_with_genesis_ctx(
+        authority,
+        committee,
+        preload_modules,
+        preload_objects,
+        buffer_size,
+        &mut genesis_ctx,
+    )
+    .await
+}
+
+async fn make_server_with_genesis_ctx(
+    authority: &AuthorityPrivateInfo,
+    committee: &Committee,
+    preload_modules: Vec<Vec<CompiledModule>>,
+    preload_objects: &[Object],
+    buffer_size: usize,
+    genesis_ctx: &mut TxContext,
 ) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
     let name = *authority.key_pair.public_key_bytes();
@@ -248,6 +260,7 @@ pub async fn make_server(
         Box::pin(authority.key_pair.copy()),
         store,
         preload_modules,
+        genesis_ctx,
     )
     .await;
 

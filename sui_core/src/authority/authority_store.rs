@@ -343,8 +343,18 @@ impl AuthorityStore {
         })
     }
 
-    /// Updates the objects in the state
-    pub fn batch_update_objects(
+    /// Only update the objects state
+    pub fn update_objects_state(
+        &self,
+        temporary_store: AuthorityTemporaryStore,
+        transaction_digest: TransactionDigest,
+    ) -> Result<(), SuiError> {
+        let write_batch = self.transaction_lock.batch();
+        self.batch_update_objects(write_batch, temporary_store, transaction_digest)
+    }
+
+    /// Helper function for updating the objects in the state
+    fn batch_update_objects(
         &self,
         mut write_batch: DBBatch,
         temporary_store: AuthorityTemporaryStore,
