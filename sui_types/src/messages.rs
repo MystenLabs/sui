@@ -505,31 +505,15 @@ impl Transaction {
                 // because they must all be on-chain in order for the package to publish.
                 // All authorities must have the same view of those dependencies in order
                 // to achieve consistent publish results.
-                let mut dependent_packages = BTreeSet::new();
-                for bytes in m.modules.iter() {
-                    let module = match CompiledModule::deserialize(bytes) {
-                        Ok(m) => m,
-                        Err(_) => {
-                            // We will ignore this error here and simply let latter execution
-                            // to discover this error again and fail the transaction.
-                            // It's preferrable to let transaction fail and charge gas when
-                            // malformed package is provided.
-                            continue;
-                        }
-                    };
-                    for handle in module.module_handles.iter() {
-                        let address = ObjectID::from(*module.address_identifier_at(handle.address));
-                        if address != ObjectID::ZERO {
-                            dependent_packages.insert(address);
-                        }
-                    }
-                }
-                // We don't care about the digest of the dependent packages.
-                // They are all read-only on-chain and their digest never changes.
-                dependent_packages
-                    .into_iter()
-                    .map(InputObjectKind::MovePackage)
-                    .collect::<Vec<_>>()
+                let compiled_modules = m
+                    .modules
+                    .iter()
+                    .filter_map(|bytes| match CompiledModule::deserialize(bytes) {
+                        Ok(m) => Some(m),
+                        Err(_) => None,
+                    })
+                    .collect::<Vec<_>>();
+                Transaction::input_objects_in_compiled_modules(compiled_modules)
             }
         };
         inputs.push(InputObjectKind::MoveObject(*self.gas_payment_object_ref()));
@@ -539,6 +523,27 @@ impl Transaction {
     // Derive a cryptographic hash of the transaction.
     pub fn digest(&self) -> TransactionDigest {
         TransactionDigest::new(sha3_hash(&self.data))
+    }
+
+    pub fn input_objects_in_compiled_modules(
+        compiled_modules: Vec<CompiledModule>,
+    ) -> Vec<InputObjectKind> {
+        let mut dependent_packages = BTreeSet::new();
+        for module in compiled_modules.iter() {
+            for handle in module.module_handles.iter() {
+                let address = ObjectID::from(*module.address_identifier_at(handle.address));
+                if address != ObjectID::ZERO {
+                    dependent_packages.insert(address);
+                }
+            }
+        }
+
+        // We don't care about the digest of the dependent packages.
+        // They are all read-only on-chain and their digest never changes.
+        dependent_packages
+            .into_iter()
+            .map(InputObjectKind::MovePackage)
+            .collect::<Vec<_>>()
     }
 }
 
