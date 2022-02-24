@@ -12,9 +12,10 @@ use crypto::{
     traits::{KeyPair, Signer, VerifyingKey},
     Digest, Hash as _,
 };
+use ed25519_dalek::{Digest as _, Sha512};
 use futures::{sink::SinkExt as _, stream::StreamExt as _};
 use rand::{rngs::StdRng, SeedableRng as _};
-use std::net::SocketAddr;
+use std::{collections::BTreeMap, net::SocketAddr};
 use store::{reopen, rocks, rocks::DBMap, Store};
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
@@ -150,6 +151,37 @@ pub fn headers() -> Vec<Header<Ed25519PublicKey>> {
             }
         })
         .collect()
+}
+
+pub fn fixture_header_with_payload(number_of_batches: u8) -> Header<Ed25519PublicKey> {
+    let kp = keys().pop().unwrap();
+    let mut payload: BTreeMap<Digest, WorkerId> = BTreeMap::new();
+
+    for i in 0..number_of_batches {
+        let batch_digest = Digest::new(
+            Sha512::digest(vec![10u8, 5u8, 8u8, 20u8, i].as_slice()).as_slice()[..32]
+                .try_into()
+                .unwrap(),
+        );
+        payload.insert(batch_digest, 0);
+    }
+
+    let header = Header {
+        author: kp.public().clone(),
+        round: 1,
+        parents: Certificate::genesis(&committee())
+            .iter()
+            .map(|x| x.digest())
+            .collect(),
+        payload,
+        ..Header::default()
+    };
+
+    Header {
+        id: header.digest(),
+        signature: kp.sign(header.digest().as_ref()),
+        ..header
+    }
 }
 
 // Fixture

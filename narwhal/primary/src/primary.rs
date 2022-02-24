@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    block_waiter::{BatchMessage, BlockWaiter, Transaction},
     certificate_waiter::CertificateWaiter,
     core::Core,
     error::DagError,
@@ -54,6 +55,8 @@ pub enum PrimaryWorkerMessage<PublicKey> {
     Synchronize(Vec<Digest>, /* target */ PublicKey),
     /// The primary indicates a round update.
     Cleanup(Round),
+    /// The primary requests a batch from the worker
+    RequestBatch(Digest),
 }
 
 /// The messages sent by the workers to their primary.
@@ -63,6 +66,8 @@ pub enum WorkerPrimaryMessage {
     OurBatch(Digest, WorkerId),
     /// The worker indicates it received a batch's digest from another authority.
     OthersBatch(Digest, WorkerId),
+    /// The worker sends a requested batch
+    RequestedBatch(Digest, Vec<Transaction>),
 }
 
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
@@ -94,6 +99,8 @@ impl Primary {
         let (tx_certificates_loopback, rx_certificates_loopback) = channel(CHANNEL_CAPACITY);
         let (tx_primary_messages, rx_primary_messages) = channel(CHANNEL_CAPACITY);
         let (tx_cert_requests, rx_cert_requests) = channel(CHANNEL_CAPACITY);
+        let (_tx_batch_commands, rx_batch_commands) = channel(CHANNEL_CAPACITY);
+        let (tx_batches, rx_batches) = channel(CHANNEL_CAPACITY);
 
         // Write the parameters to the logs.
         parameters.tracing();
@@ -134,6 +141,7 @@ impl Primary {
             WorkerReceiverHandler {
                 tx_our_digests,
                 tx_others_digests,
+                tx_batches,
             },
         );
         info!(
@@ -180,6 +188,16 @@ impl Primary {
         PayloadReceiver::spawn(
             payload_store.clone(),
             /* rx_workers */ rx_others_digests,
+        );
+
+        // Retrieves a block's data by contacting the worker nodes that contain the
+        // underlying batches and their transactions.
+        BlockWaiter::spawn(
+            name.clone(),
+            committee.clone(),
+            certificate_store.clone(),
+            rx_batch_commands,
+            rx_batches,
         );
 
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
@@ -272,6 +290,7 @@ impl<PublicKey: VerifyingKey> MessageHandler for PrimaryReceiverHandler<PublicKe
 struct WorkerReceiverHandler {
     tx_our_digests: Sender<(Digest, WorkerId)>,
     tx_others_digests: Sender<(Digest, WorkerId)>,
+    tx_batches: Sender<BatchMessage>,
 }
 
 #[async_trait]
@@ -293,6 +312,14 @@ impl MessageHandler for WorkerReceiverHandler {
                 .send((digest, worker_id))
                 .await
                 .expect("Failed to send workers' digests"),
+            WorkerPrimaryMessage::RequestedBatch(digest, transactions) => self
+                .tx_batches
+                .send(BatchMessage {
+                    id: digest,
+                    transactions,
+                })
+                .await
+                .expect("Failed to send batches"),
         }
         Ok(())
     }

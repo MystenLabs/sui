@@ -2,15 +2,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::{
-    common::{
-        certificate, committee, committee_with_base_port, create_db_stores, header, headers, keys,
-        listener, temp_dir, votes,
-    },
-    primary::PayloadToken,
+use crate::common::{
+    certificate, committee, committee_with_base_port, create_db_stores, header, headers, keys,
+    listener, votes,
 };
-use config::WorkerId;
-use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
+use crypto::traits::KeyPair;
 use futures::future::try_join_all;
 
 use tokio::sync::mpsc::channel;

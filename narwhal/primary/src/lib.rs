@@ -11,6 +11,7 @@
 #[macro_use]
 mod error;
 mod aggregators;
+mod block_waiter;
 mod certificate_waiter;
 mod core;
 mod garbage_collector;
@@ -27,6 +28,7 @@ mod synchronizer;
 mod common;
 
 pub use crate::{
+    block_waiter::{BatchMessage, BlockCommand, BlockWaiter},
     messages::{Certificate, Header},
     primary::{PayloadToken, Primary, PrimaryWorkerMessage, Round, WorkerPrimaryMessage},
 };
