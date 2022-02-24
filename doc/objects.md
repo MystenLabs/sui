@@ -41,6 +41,6 @@ When this DAG contains all committed transactions in the system, it forms a comp
 
 EDITORIAL NOTE: Should we describe how to audit this here? In a separate section?
 
-## Further Reading
+## Further reading
 * Objects are modified and created by [transactions](transactions.md).
 * Objects are stored by [authorities](authorities.md).
