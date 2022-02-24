@@ -744,7 +744,7 @@ impl AuthorityState {
 
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
-    ) -> Result<(usize, TransactionInfoResponse), SuiError> {
+    ) -> Result<(u64, TransactionInfoResponse), SuiError> {
         self._database
             .update_state(temporary_store, certificate, signed_effects)
     }

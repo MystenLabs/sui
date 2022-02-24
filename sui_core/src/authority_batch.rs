@@ -48,18 +48,18 @@ pub type BroadcastPair = (
 /// Either a freshly sequenced transaction hash or a batch
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub enum UpdateItem {
-    Transaction((usize, TransactionDigest)),
+    Transaction((u64, TransactionDigest)),
     Batch(AuthorityBatch),
 }
 
 pub struct BatcherSender {
     /// Channel for sending updates.
-    tx_send: Sender<(usize, TransactionDigest)>,
+    tx_send: Sender<(u64, TransactionDigest)>,
 }
 
 pub struct BatcherManager {
     /// Channel for receiving updates
-    tx_recv: Receiver<(usize, TransactionDigest)>,
+    tx_recv: Receiver<(u64, TransactionDigest)>,
     /// The sender end of the broadcast channel used to send updates to listeners
     tx_broadcast: tokio::sync::broadcast::Sender<UpdateItem>,
     /// Copy of the database to write batches and read transactions.
@@ -70,7 +70,7 @@ impl BatcherSender {
     /// Send a new event to the batch manager
     pub async fn send_item(
         &self,
-        transaction_sequence: usize,
+        transaction_sequence: u64,
         transaction_digest: TransactionDigest,
     ) -> Result<(), SuiError> {
         self.tx_send
@@ -100,7 +100,7 @@ impl BatcherManager {
     /// Starts the manager service / tokio task
     pub async fn start_service(
         mut self,
-        min_batch_size: usize,
+        min_batch_size: u64,
         max_delay: Duration,
     ) -> Result<tokio::task::JoinHandle<()>, SuiError> {
         let last_batch = self.init_from_database().await?;
@@ -117,7 +117,7 @@ impl BatcherManager {
 
     async fn init_from_database(&self) -> Result<AuthorityBatch, SuiError> {
         // First read the last batch in the db
-        let mut last_batch = match self.db.batches.iter().skip_prior_to(&usize::MAX)?.next() {
+        let mut last_batch = match self.db.batches.iter().skip_prior_to(&u64::MAX)?.next() {
             Some((_, last_batch)) => last_batch,
             None => {
                 // Make a batch at zero
@@ -141,7 +141,7 @@ impl BatcherManager {
                 .skip_to(&last_batch.total_size)?
                 .collect();
 
-            if transactions.len() != total_seq - last_batch.total_size {
+            if transactions.len() as u64 != total_seq - last_batch.total_size {
                 // NOTE: The database is corrupt, namely we have a higher maximum transaction sequence
                 //       than number of items, which means there is a hole in the sequence. This can happen
                 //       in case we crash after writting command seq x but before x-1 was written. What we
@@ -156,7 +156,7 @@ impl BatcherManager {
                 )?;
 
                 // Reorder the transactions
-                total_seq = last_batch.total_size + transactions.len();
+                total_seq = last_batch.total_size + transactions.len() as u64;
                 self.db
                     .next_sequence_number
                     .store(total_seq, std::sync::atomic::Ordering::Relaxed);
@@ -185,7 +185,7 @@ impl BatcherManager {
     pub async fn run_service(
         &mut self,
         prev_batch: AuthorityBatch,
-        min_batch_size: usize,
+        min_batch_size: u64,
         max_delay: Duration,
     ) -> SuiResult {
         // Then we operate in a loop, where for each new update we consider
@@ -201,8 +201,8 @@ impl BatcherManager {
         // of transactions in order, following the last batch. The loose transactions holds
         // transactions we may have received out of order.
         let (mut current_batch, mut loose_transactions): (
-            Vec<(usize, TransactionDigest)>,
-            BTreeMap<usize, TransactionDigest>,
+            Vec<(u64, TransactionDigest)>,
+            BTreeMap<u64, TransactionDigest>,
         ) = (Vec::new(), BTreeMap::new());
         let mut next_sequence_number = prev_batch.total_size;
 
@@ -234,7 +234,7 @@ impl BatcherManager {
                       next_sequence_number += 1;
                     }
 
-                    if current_batch.len() >= min_batch_size {
+                    if current_batch.len() as u64 >= min_batch_size {
                       make_batch = true;
                     }
                   }
@@ -278,10 +278,10 @@ impl BatcherManager {
 )]
 pub struct AuthorityBatch {
     /// The total number of items executed by this authority.
-    total_size: usize,
+    total_size: u64,
 
     /// The number of items in the previous block.
-    previous_total_size: usize,
+    previous_total_size: u64,
     /*
     TODO: Add the following information:
     - Authenticator of previous block (digest)
@@ -306,10 +306,10 @@ impl AuthorityBatch {
     /// batch.
     pub fn make_next(
         previous_batch: &AuthorityBatch,
-        transactions: &[(usize, TransactionDigest)],
+        transactions: &[(u64, TransactionDigest)],
     ) -> AuthorityBatch {
         AuthorityBatch {
-            total_size: previous_batch.total_size + transactions.len(),
+            total_size: previous_batch.total_size + transactions.len() as u64,
             previous_total_size: previous_batch.total_size,
         }
     }

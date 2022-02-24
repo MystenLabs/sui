@@ -9,7 +9,8 @@ use std::path::Path;
 
 use sui_types::base_types::SequenceNumber;
 use typed_store::rocks::{open_cf, DBBatch, DBMap};
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::AtomicU64;
+
 use std::sync::atomic::Ordering;
 use typed_store::traits::Map;
 
@@ -69,14 +70,14 @@ pub struct AuthorityStore {
 
     // Tables used for authority block structure
     /// A sequence on all executed certificates and effects.
-    pub executed_sequence: DBMap<usize, TransactionDigest>,
+    pub executed_sequence: DBMap<u64, TransactionDigest>,
 
     /// A sequence of blocks indexing into the sequence of executed transactions.
-    pub batches: DBMap<usize, AuthorityBatch>,
+    pub batches: DBMap<u64, AuthorityBatch>,
 
     /// The size of the executed transactions sequence, used to timestamp the next
     /// item in the sequence.
-    pub next_sequence_number: AtomicUsize,
+    pub next_sequence_number: AtomicU64,
 }
 
 impl AuthorityStore {
@@ -106,13 +107,13 @@ impl AuthorityStore {
 
         // Read the index of the last entry in the sequence of commands
         // to extract the next sequence number or it is zero.
-        let next_sequence_number = AtomicUsize::new(
+        let next_sequence_number = AtomicU64::new(
             executed_sequence
                 .iter()
-                .skip_prior_to(&usize::MAX)
+                .skip_prior_to(&u64::MAX)
                 .expect("Error reading table.")
                 .next()
-                .map(|(v, _)| v + 1usize)
+                .map(|(v, _)| v + 1u64)
                 .or(Some(0))
                 .unwrap(),
         );
@@ -368,7 +369,7 @@ impl AuthorityStore {
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
-    ) -> Result<(usize, TransactionInfoResponse), SuiError> {
+    ) -> Result<(u64, TransactionInfoResponse), SuiError> {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let mut write_batch = self.transaction_lock.batch();
@@ -386,7 +387,7 @@ impl AuthorityStore {
             std::iter::once((transaction_digest, &signed_effects)),
         )?;
 
-        let seq : usize = self.batch_update_objects(write_batch, temporary_store, transaction_digest)?;
+        let seq : u64 = self.batch_update_objects(write_batch, temporary_store, transaction_digest)?;
 
         Ok((seq, TransactionInfoResponse {
             signed_transaction: self.signed_transactions.get(&transaction_digest)?,
@@ -412,7 +413,7 @@ impl AuthorityStore {
         mut write_batch: DBBatch,
         temporary_store: AuthorityTemporaryStore,
         transaction_digest: TransactionDigest,
-    ) -> Result<usize, SuiError> {
+    ) -> Result<u64, SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
 
         // Archive the old lock.
