@@ -32,11 +32,14 @@ strict prerequisite to following the Sui tutorial which we strived to
 make self-contained.
 
 In Sui, Move is used to define, create and manage programmable Sui
-[objects](https://github.com/MystenLabs/fastnft/blob/main/doc/objects.md#objects)
-representing user-level assets.  Sui imposes additional restrictions
-on the code that can be written in Move, effectively using a subset of
-Move (a.k.a. Sui Move), which makes certain parts of the original Move
-documentation not applicable to smart contract development in Sui.
+[objects](objects.md#objects) representing user-level assets.  Sui
+imposes additional restrictions on the code that can be written in
+Move, effectively using a subset of Move (a.k.a. Sui Move), which
+makes certain parts of the original Move documentation not applicable
+to smart contract development in Sui (e.g., there is no concept of a
+[script](https://github.com/diem/move/blob/main/language/documentation/book/src/modules-and-scripts.md#scripts)
+in Sui Move). Consequently, it's best to simply follow this tutorial
+and relevant Move documentation links provided in the tutorial.
 
 Before we look at the Move code included with Sui, let's talk briefly
 about Move code organization, which applies both to code included with
@@ -71,15 +74,14 @@ We are now ready to look at some Move code!
 ## First look at Move source code
 
 The Sui platform includes _framework_ Move code that is needed to
-bootstrap Sui operations. In particular, unlike traditional blockchain
-systems (e.g., Bitcoin or Ethereum), Sui supports multiple
+bootstrap Sui operations. In particular, Sui supports multiple
 user-defined coin types, which are custom assets define in the Move
 language. Sui framework code contains the Coin module supporting
-creation and management of custom coins. The Coin module is located in
+creation and management of custom coins. The Coin module is
 the located in the
 [sui_programmability/framework/sources/Coin.move](../sui_programmability/framework/sources/Coin.move)
-file. As you can see the manifest file for the FastX package
-containing the Coin module is located, as expected, in the
+file. As you can see the manifest file describing how to build the
+package containing the Coin module is located, as expected, in the
 [sui_programmability/framework/Move.toml](../sui_programmability/framework/Move.toml)
 file.
 
@@ -139,16 +141,15 @@ and about Move structs
 
 
 In order for a Move struct type to define a Sui object type such
-`Coin`, its definition must include the `id` field of `VersionedID`
-type (which struct type defined in the ID
+`Coin`, its first field must be `id: VersionedID` (`VersionedID` is a
+struct type defined in the ID
 [module](../sui_programmability/framework/sources/ID.move)), and must
-also have the `key` ability used to enforce existence of the `id`
-field. Abilities of a Move struct are listed after the `has` keyword
-in the struct definition, and their existence (or lack thereof) helps
-enforcing various properties on a definition or on instances of a
-given struct - for example the `store` ability allows instances of a
-given struct to be persisted in Sui's distributed ledger (you can read
-more about struct abilities in Move
+also have the `key` (which allows the object to be persisted in Sui's
+global storage). Abilities of a Move struct are listed after the `has`
+keyword in the struct definition, and their existence (or lack
+thereof) helps enforcing various properties on a definition or on
+instances of a given struct (you can read more about struct abilities
+in Move
 [here](https://github.com/diem/move/blob/main/language/documentation/book/src/abilities.md))
 
 The reason that the `Coin` struct can represent different types of
@@ -174,12 +175,12 @@ struct GAS has drop {}
 ```
 
 We will show how to define and instantiate custom structs in the
-[section](#writing-simple-package) describing how to write a simple
+[section](#writing-a-package) describing how to write a simple
 Move package.
 
 ### Move functions
 
-Similarly to other popular programming languages, the main unit
+Similarly to other popular programming languages, the main unit of
 computation in Move is a function. Let us look at one of the simplest
 functions defined in the Coin
 [module](../sui_programmability/framework/sources/Coin.move), that is
@@ -194,13 +195,13 @@ public fun value<T>(self: &Coin<T>): u64 {
 This _public_ function can be called by functions in other modules to
 return the unsigned integer value currently stored in a given
 instance of the `Coin` struct, (direct access to fields of a struct is
-only allowed within the module defining a given struct as described
+allowed only within the module defining a given struct as described
 [here](https://github.com/diem/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations)). The
 body of the function simply retrieves the `value` field from the
 `Coin` struct instance parameter and returns it. Please note that the
 coin parameter is a read-only reference to the `Coin` struct instance,
 indicated by the `&` preceding the parameter type. Move's type system
-enforces an invariant that struct instances arguments passes by
+enforces an invariant that struct instance arguments passed by
 read-only references (as opposed to mutable references) cannot be
 modified in the body of a function (you can read more about Move
 references
@@ -208,14 +209,14 @@ references
 
 
 We will show how to call Move functions from other functions and how
-and define the new ones in the [section](#writing-simple-package)
+to define the new ones in the [section](#writing-a-package)
 describing how to write a simple Move package.
 
 
 In addition to functions callable from other functions, however, the
 Sui flavor of the Move language also defines so called _entry
 functions_ that can be called directly from Sui (e.g., from a Sui
-wallet application that can be written in a different language), and
+wallet application that can be written in a different language) and
 must satisfy a certain set of properties.
 
 #### Entry functions
@@ -246,14 +247,14 @@ In general, an entry function, must satisfy the following properties:
   [module](../sui_programmability/framework/sources/TxContext.move)
 
 More, concretely, the `transfer` function is public, has no return
-value, and has 3 parameters:
+value, and has three parameters:
 
 - `c` - it represents a gas object whose ownership is to be
   transferred
 - `recipient` - it is the address of the intended recipient,
   represented as a vector (built-in `vector` type) of 8-bit integers
   (built-in `u8` type) - you can read more about built-in primitive
-  types lie these
+  types like these
   [here](https://github.com/diem/move/blob/main/language/documentation/book/src/SUMMARY.md#primitive-types)
 - `_ctx` - it is a mutable reference to an instance of the `TxContext`
   struct (in this particular case, this parameter is not actually used
@@ -327,7 +328,7 @@ module MyMovePackage::M1 {
 
 Since we are developing a fantasy game, in addition to the mandatory
 `id` field as well as `key` and `store` abilities (same as in the
-`Coin` struct), our asset has both `magic` and `strenght` fields
+`Coin` struct), our asset has both `magic` and `strength` fields
 describing its respective attribute values. Please note that we need
 to import the ID
 [package](../sui_programmability/framework/sources/ID.move) from Sui
