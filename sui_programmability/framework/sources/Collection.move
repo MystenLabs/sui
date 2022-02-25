@@ -1,10 +1,10 @@
-module FastX::Collection {
+module Sui::Collection {
     use Std::Errors;
     use Std::Option::{Self, Option};
     use Std::Vector::Self;
-    use FastX::ID::{Self, VersionedID, IDBytes};
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+    use Sui::ID::{Self, VersionedID, IDBytes};
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
 
     // Error codes
     const EOBJECT_NOT_FOUND: u64 = 0;

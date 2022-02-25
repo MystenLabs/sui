@@ -2,7 +2,7 @@
 name = "sui-adapter"
 version = "0.1.0"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
-description = "Adapter and accompanying CLI for local fastX development"
+description = "Adapter and accompanying CLI for local sui development"
 license = "Apache-2.0"
 publish = false
 edition = "2021"

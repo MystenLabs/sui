@@ -1,7 +1,7 @@
 module Test::M1 {
-    use FastX::ID::VersionedID;
-    use FastX::TxContext::{Self, TxContext};
-    use FastX::Transfer;
+    use Sui::ID::VersionedID;
+    use Sui::TxContext::{Self, TxContext};
+    use Sui::Transfer;
 
     struct Object has key, store {
         id: VersionedID,

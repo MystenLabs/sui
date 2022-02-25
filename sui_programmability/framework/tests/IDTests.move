@@ -1,7 +1,7 @@
 #[test_only]
-module FastX::IDTests {
-    use FastX::ID;
-    use FastX::TxContext;
+module Sui::IDTests {
+    use Sui::ID;
+    use Sui::TxContext;
 
     const ID_BYTES_MISMATCH: u64 = 0;
 
