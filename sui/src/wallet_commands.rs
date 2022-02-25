@@ -153,7 +153,11 @@ impl WalletCommands {
                 gas_budget,
             } => {
                 // Find owner of gas object
-                let sender = &context.address_manager.get_object_owner(*gas).await?;
+                let sender = &context
+                    .address_manager
+                    .get_object_owner(*gas)
+                    .await?
+                    .get_single_owner_address()?;
                 let client_state = context.get_or_create_client_state(sender)?;
                 let gas_obj_ref = client_state.object_ref(*gas)?;
 
@@ -181,7 +185,11 @@ impl WalletCommands {
                 gas_budget,
                 args,
             } => {
-                let sender = &context.address_manager.get_object_owner(*gas).await?;
+                let sender = &context
+                    .address_manager
+                    .get_object_owner(*gas)
+                    .await?
+                    .get_single_owner_address()?;
                 let client_state = context.get_or_create_client_state(sender)?;
 
                 let package_obj_info = client_state.get_object_info(*package).await?;
@@ -243,7 +251,11 @@ impl WalletCommands {
             }
 
             WalletCommands::Transfer { to, object_id, gas } => {
-                let from = &context.address_manager.get_object_owner(*gas).await?;
+                let from = &context
+                    .address_manager
+                    .get_object_owner(*gas)
+                    .await?
+                    .get_single_owner_address()?;
                 let client_state = context.get_or_create_client_state(from)?;
                 let time_start = Instant::now();
                 let (cert, effects) = client_state.transfer_object(*object_id, *gas, *to).await?;
@@ -342,7 +354,7 @@ impl WalletContext {
         Ok(context)
     }
 
-    fn get_or_create_client_state(
+    pub fn get_or_create_client_state(
         &mut self,
         owner: &SuiAddress,
     ) -> Result<&mut ClientState<AuthorityClient>, SuiError> {

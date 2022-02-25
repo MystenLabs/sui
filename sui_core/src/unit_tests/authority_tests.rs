@@ -275,6 +275,38 @@ async fn test_handle_transfer_transaction_ok() {
 }
 
 #[tokio::test]
+async fn test_transfer_immutable() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+    let gas_object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let genesis_package_objects = genesis::clone_genesis_modules();
+    let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, "ID");
+    // We are trying to transfer the genesis package object, which is immutable.
+    let transfer_transaction = init_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient,
+        package_object_ref,
+        gas_object.to_object_reference(),
+    );
+    let result = authority_state
+        .handle_transaction(transfer_transaction.clone())
+        .await;
+    assert_eq!(
+        result.unwrap_err(),
+        SuiError::LockErrors {
+            errors: vec![SuiError::TransferImmutableError]
+        }
+    );
+}
+
+#[tokio::test]
 async fn test_handle_transfer_zero_balance() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -582,7 +614,7 @@ async fn test_handle_move_transaction() {
 
     // Check that gas is properly deducted.
     // If the number changes, we want to verify that the change is intended.
-    let gas_cost = 62;
+    let gas_cost = 53;
     let gas_payment_object = authority_state
         .get_object(&gas_payment_object_id)
         .await
@@ -622,7 +654,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
         Vec::new(),
         vec![
             16u64.to_le_bytes().to_vec(),
-            bcs::to_bytes(&sender.to_vec()).unwrap(),
+            bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
         ],
         9,
         &sender_key,
@@ -1346,7 +1378,7 @@ async fn test_hero() {
     let modules = sui_framework::build_move_package(&hero_path, build_config, false).unwrap();
 
     // 2. Create an admin account, and a player account.
-    // Using a hard-coded key to match the address in the Move code.
+    // Using a hard-coded key to match the Admin address in the Move code.
     // This needs to be hard-coded because the module needs to know the admin's address
     // in advance.
     let (admin, admin_key) = get_key_pair_from_bytes(&[
@@ -1430,7 +1462,7 @@ async fn test_hero() {
         ident_str!("transfer").to_owned(),
         vec![],
         vec![cap.unwrap().0],
-        vec![bcs::to_bytes(&player).unwrap()],
+        vec![bcs::to_bytes(&AccountAddress::from(player)).unwrap()],
     )
     .await
     .unwrap();
@@ -1497,9 +1529,9 @@ async fn test_hero() {
 
     // 7. Give them a boar!
     let pure_args = vec![
-        bcs::to_bytes(&10_u64).unwrap(),          // hp
-        bcs::to_bytes(&10_u64).unwrap(),          // strength
-        bcs::to_bytes(&player.to_vec()).unwrap(), // recipient
+        bcs::to_bytes(&10_u64).unwrap(),                       // hp
+        bcs::to_bytes(&10_u64).unwrap(),                       // strength
+        bcs::to_bytes(&AccountAddress::from(player)).unwrap(), // recipient
     ];
     let effects = call_move(
         &authority,
@@ -1581,7 +1613,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.mutated.len(), 3);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
-        obj2.into(),
+        SuiAddress::from(obj2),
     );
 
     // Try to transfer obj1 to obj3, this time it will fail since obj1 is now owned by obj2,
@@ -1631,7 +1663,7 @@ async fn test_object_owning_another_object() {
         "transfer",
         vec![],
         vec![obj2],
-        vec![bcs::to_bytes(&sender2.to_vec()).unwrap()],
+        vec![bcs::to_bytes(&AccountAddress::from(sender2)).unwrap()],
     )
     .await
     .unwrap();
@@ -1677,7 +1709,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.mutated.len(), 3);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
-        obj2.into(),
+        SuiAddress::from(obj2),
     );
 }
 
@@ -1887,7 +1919,7 @@ async fn create_move_object(
         vec![],
         vec![
             16u64.to_le_bytes().to_vec(),
-            bcs::to_bytes(&sender.to_vec()).unwrap(),
+            bcs::to_bytes(&AccountAddress::from(*sender)).unwrap(),
         ],
     )
     .await

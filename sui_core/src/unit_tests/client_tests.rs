@@ -9,7 +9,7 @@ use crate::client::client_store::ClientSingleAddressStore;
 use crate::client::{Client, ClientState};
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use move_core_types::{ident_str, identifier::Identifier};
+use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
@@ -19,7 +19,7 @@ use sui_adapter::genesis;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::Signature;
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::{Data, Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
+use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use tokio::runtime::Runtime;
 use typed_store::Map;
 
@@ -160,7 +160,7 @@ fn transaction_create(
 
     let pure_arguments = vec![
         value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&dest.to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(dest)).unwrap(),
     ];
 
     Transaction::new_move_call(
@@ -186,7 +186,7 @@ fn transaction_transfer(
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Transaction {
-    let pure_args = vec![bcs::to_bytes(&dest.to_vec()).unwrap()];
+    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(dest)).unwrap()];
 
     Transaction::new_move_call(
         src,
@@ -804,7 +804,7 @@ async fn test_move_calls_object_create() {
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
         object_value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(client1.address())).unwrap(),
     ];
     let call_response = client1
         .move_call(
@@ -865,7 +865,7 @@ async fn test_move_calls_object_transfer() {
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
         object_value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(client1.address())).unwrap(),
     ];
     let call_response = client1
         .move_call(
@@ -888,7 +888,7 @@ async fn test_move_calls_object_transfer() {
     let (new_obj_ref, _) = transaction_effects.created[0];
     gas_object_ref = client_object(&mut client1, gas_object_ref.0).await.0;
 
-    let pure_args = vec![bcs::to_bytes(&client2.address().to_vec()).unwrap()];
+    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(client2.address())).unwrap()];
     let call_response = client1
         .move_call(
             framework_obj_ref,
@@ -953,7 +953,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
         object_value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(client1.address())).unwrap(),
     ];
     let call_response = client1
         .move_call(
@@ -975,7 +975,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
     let new_obj_ref = client_object(&mut client1, new_obj_ref.0).await.0;
     gas_object_ref = client_object(&mut client1, gas_object_ref.0).await.0;
 
-    let pure_args = vec![bcs::to_bytes(&client2.address().to_vec()).unwrap()];
+    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(client2.address())).unwrap()];
     let call_response = client1
         .move_call(
             framework_obj_ref,
@@ -1009,7 +1009,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
     let transferred_obj = client_object(&mut client1, new_obj_ref.0).await.1;
 
     // Confirm new owner
-    assert!(transferred_obj.owner == client2.address());
+    assert!(transferred_obj.owner == Owner::SharedImmutable);
 
     // Confirm read only
     assert!(transferred_obj.is_read_only());
@@ -1040,7 +1040,7 @@ async fn test_move_calls_object_delete() {
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
         object_value.to_le_bytes().to_vec(),
-        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(client1.address())).unwrap(),
     ];
     let call_response = client1
         .move_call(
@@ -1099,7 +1099,7 @@ async fn test_move_calls_object_delete() {
 
 async fn get_package_obj(
     client: &mut ClientState<LocalAuthorityClient>,
-    objects: &[(ObjectRef, SuiAddress)],
+    objects: &[(ObjectRef, Owner)],
     gas_object_ref: &ObjectRef,
 ) -> Option<ObjectRead> {
     let mut pkg_obj_opt = None;
@@ -1567,22 +1567,15 @@ async fn test_object_store() {
 
     // find the package object and inspect it
 
-    let new_obj = get_package_obj(&mut client1, &published_effects.created, &gas_object_ref)
+    let _new_obj = get_package_obj(&mut client1, &published_effects.created, &gas_object_ref)
         .await
         .unwrap();
 
-    // Published object should be in storage now
-    // But also the new gas object should be in storage, so 2 new items, plus 3 from before
-    assert_eq!(client1.store().objects.iter().count(), 5);
+    // New gas object should be in storage, so 1 new items, plus 3 from before
+    // The published package is not in the store because it's not owned by anyone.
+    assert_eq!(client1.store().objects.iter().count(), 4);
 
-    // Verify that we indeed have the new module object
-    let mod_obj_from_store = client1
-        .store()
-        .objects
-        .get(&new_obj.reference().unwrap())
-        .unwrap()
-        .unwrap();
-    assert_eq!(mod_obj_from_store, *new_obj.object().unwrap());
+    // TODO: Verify that we have new_obj in the local store once we can store shared immutable objects.
 }
 
 #[tokio::test]
@@ -2340,7 +2333,7 @@ async fn test_address_manager() {
     let gas_ref_1 = get_latest_ref(sample_auth, gas_object1).await;
     let pure_args = vec![
         bcs::to_bytes(&100u64).unwrap(),
-        bcs::to_bytes(&client1.address().to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(client1.address())).unwrap(),
     ];
     let call_response = client1
         .move_call(

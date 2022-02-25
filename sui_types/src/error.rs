@@ -39,6 +39,10 @@ pub enum SuiError {
     CannotTransferReadOnlyObject,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
     MoveObjectAsPackage { object_id: ObjectID },
+    #[error("Expecting a singler owner, shared ownership found")]
+    UnexpectedOwnerType,
+    #[error("Shared mutable object not yet supported")]
+    UnsupportedSharedObjectError,
 
     // Signature verification
     #[error("Signature is not valid: {}", error)]

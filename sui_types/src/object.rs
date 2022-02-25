@@ -34,7 +34,6 @@ pub struct MoveObject {
     pub type_: StructTag,
     #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
-    read_only: bool,
 }
 
 /// Byte encoding of a 64 byte unsigned integer in BCS
@@ -56,11 +55,7 @@ pub struct ObjectFormatOptions {
 
 impl MoveObject {
     pub fn new(type_: StructTag, contents: Vec<u8>) -> Self {
-        Self {
-            type_,
-            contents,
-            read_only: false,
-        }
+        Self { type_, contents }
     }
 
     pub fn id(&self) -> ObjectID {
@@ -125,14 +120,6 @@ impl MoveObject {
 
     pub fn into_contents(self) -> Vec<u8> {
         self.contents
-    }
-
-    pub fn is_read_only(&self) -> bool {
-        self.read_only
-    }
-
-    pub fn freeze(&mut self) {
-        self.read_only = true;
     }
 
     /// Get a `MoveStructLayout` for `self`.
@@ -253,12 +240,43 @@ impl Data {
     }
 }
 
+// TODO: We don't distinguish between an account owner and an object owner.
+// They are both represented as SingleOwner. We should cosnider adding a variant
+// since it can be useful to tell whether an object is owned by object or address.
+#[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash)]
+pub enum Owner {
+    /// Object is excluslive owned by a single address, and is mutable.
+    SingleOwner(SuiAddress),
+    /// Object is shared, can be used by any address, and is mutable.
+    SharedMutable,
+    /// Object is immutable, and hence ownership doesn't matter.
+    SharedImmutable,
+}
+
+impl Owner {
+    pub fn get_single_owner_address(&self) -> SuiResult<SuiAddress> {
+        match self {
+            Self::SingleOwner(address) => Ok(*address),
+            Self::SharedMutable | Self::SharedImmutable => Err(SuiError::UnexpectedOwnerType),
+        }
+    }
+}
+
+impl std::cmp::PartialEq<SuiAddress> for Owner {
+    fn eq(&self, other: &SuiAddress) -> bool {
+        match self {
+            Self::SingleOwner(address) => address == other,
+            Self::SharedMutable | Self::SharedImmutable => false,
+        }
+    }
+}
+
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct Object {
     /// The meat of the object
     pub data: Data,
-    /// The owner address that unlocks this object (eg. hashes of public key, or object id)
-    pub owner: SuiAddress,
+    /// The owner that unlocks this object
+    pub owner: Owner,
     /// The digest of the transaction that created or last mutated this object
     pub previous_transaction: TransactionDigest,
 }
@@ -267,11 +285,7 @@ impl BcsSignable for Object {}
 
 impl Object {
     /// Create a new Move object
-    pub fn new_move(
-        o: MoveObject,
-        owner: SuiAddress,
-        previous_transaction: TransactionDigest,
-    ) -> Self {
+    pub fn new_move(o: MoveObject, owner: Owner, previous_transaction: TransactionDigest) -> Self {
         Object {
             data: Data::Move(o),
             owner,
@@ -281,20 +295,35 @@ impl Object {
 
     pub fn new_package(
         modules: Vec<CompiledModule>,
-        owner: SuiAddress,
         previous_transaction: TransactionDigest,
     ) -> Self {
         Object {
             data: Data::Package(MovePackage::from(&modules)),
-            owner,
+            owner: Owner::SharedImmutable,
             previous_transaction,
         }
     }
 
     pub fn is_read_only(&self) -> bool {
-        match &self.data {
-            Data::Move(m) => m.is_read_only(),
-            Data::Package(_) => true,
+        match &self.owner {
+            Owner::SingleOwner(_) | Owner::SharedMutable => false,
+            Owner::SharedImmutable => true,
+        }
+    }
+
+    pub fn get_signle_owner(&self) -> Option<SuiAddress> {
+        match &self.owner {
+            Owner::SingleOwner(owner) => Some(*owner),
+            Owner::SharedMutable | Owner::SharedImmutable => None,
+        }
+    }
+
+    // It's a common pattern to retrieve both the owner and object ID
+    // together, if it's owned by a singler owner.
+    pub fn get_single_owner_and_id(&self) -> Option<(SuiAddress, ObjectID)> {
+        match &self.owner {
+            Owner::SingleOwner(owner) => Some((*owner, self.id())),
+            Owner::SharedMutable | Owner::SharedImmutable => None,
         }
     }
 
@@ -344,7 +373,7 @@ impl Object {
                     "Invalid transfer: only transfer of GasCoin is supported"
                 );
 
-                self.owner = new_owner;
+                self.owner = Owner::SingleOwner(new_owner);
                 m.increment_version();
             }
             Data::Package(_) => panic!("Cannot transfer a module object"),
@@ -360,10 +389,9 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             contents: GasCoin::new(id, version, gas).to_bcs_bytes(),
-            read_only: false,
         });
         Self {
-            owner,
+            owner: Owner::SingleOwner(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
@@ -386,10 +414,9 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             contents: bcs::to_bytes(&obj).unwrap(),
-            read_only: false,
         });
         Self {
-            owner,
+            owner: Owner::SingleOwner(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
         }

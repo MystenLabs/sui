@@ -52,6 +52,11 @@ pub fn all_natives(
             transfer::transfer_to_object_id,
         ),
         ("TxContext", "fresh_id", tx_context::fresh_id),
+        (
+            "TxContext",
+            "new_signer_from_address",
+            tx_context::new_signer_from_address,
+        ),
     ];
     SUI_NATIVES
         .iter()

@@ -1,6 +1,5 @@
 /// Test CTURD object basics (create, transfer, update, read, delete)
 module FastX::ObjectBasics {
-    use FastX::Address;
     use FastX::Event;
     use FastX::ID::{Self, VersionedID};
     use FastX::TxContext::{Self, TxContext};
@@ -20,19 +19,19 @@ module FastX::ObjectBasics {
         new_value: u64
     }
 
-    public fun create(value: u64, recipient: vector<u8>, ctx: &mut TxContext) {
+    public fun create(value: u64, recipient: address, ctx: &mut TxContext) {
         Transfer::transfer(
             Object { id: TxContext::new_id(ctx), value },
-            Address::new(recipient)
+            recipient
         )
     }
 
-    public fun transfer(o: Object, recipient: vector<u8>, _ctx: &mut TxContext) {
-        Transfer::transfer(o, Address::new(recipient))
+    public fun transfer(o: Object, recipient: address, _ctx: &mut TxContext) {
+        Transfer::transfer(o, recipient)
     }
 
-    public fun transfer_and_freeze(o: Object, recipient: vector<u8>, _ctx: &mut TxContext) {
-        Transfer::transfer_and_freeze(o, Address::new(recipient))
+    public fun transfer_and_freeze(o: Object, recipient: address, _ctx: &mut TxContext) {
+        Transfer::transfer_and_freeze(o, recipient)
     }
 
     public fun transfer_to_object(o: Object, owner: &mut Object, _ctx: &mut TxContext) {
@@ -40,7 +39,7 @@ module FastX::ObjectBasics {
     }
 
     public fun set_value(o: &mut Object, value: u64, _ctx: &mut TxContext) {
-        o.value = value;   
+        o.value = value;
     }
 
     // test that reading o2 and updating o1 works

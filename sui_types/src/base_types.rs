@@ -39,7 +39,7 @@ pub struct ObjectID(AccountAddress);
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
-pub const SUI_ADDRESS_LENGTH: usize = 32;
+pub const SUI_ADDRESS_LENGTH: usize = ObjectID::LENGTH;
 #[serde_as]
 #[derive(Eq, Default, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 pub struct SuiAddress(#[serde_as(as = "Bytes")] [u8; SUI_ADDRESS_LENGTH]);
@@ -83,19 +83,20 @@ impl SuiAddress {
 
 impl From<ObjectID> for SuiAddress {
     fn from(object_id: ObjectID) -> SuiAddress {
-        // TODO: Use proper hashing to convert ObjectID to SuiAddress
-        let mut address = [0u8; SUI_ADDRESS_LENGTH];
-        address[..AccountAddress::LENGTH].clone_from_slice(&object_id.into_bytes());
-        Self(address)
+        Self(object_id.into_bytes())
     }
 }
 
 impl From<&PublicKeyBytes> for SuiAddress {
     fn from(key: &PublicKeyBytes) -> SuiAddress {
-        let mut sha3 = Sha3_256::new();
-        sha3.update(key.as_ref());
-        let g_arr = sha3.finalize();
-        Self(*(g_arr.as_ref()))
+        use sha2::Digest;
+        let mut sha2 = sha2::Sha256::new();
+        sha2.update(key.as_ref());
+        let g_arr = sha2.finalize();
+
+        let mut res = [0u8; SUI_ADDRESS_LENGTH];
+        res.copy_from_slice(&AsRef::<[u8]>::as_ref(&g_arr)[..SUI_ADDRESS_LENGTH]);
+        Self(res)
     }
 }
 
@@ -112,14 +113,6 @@ impl TryFrom<&[u8]> for SuiAddress {
 impl AsRef<[u8]> for SuiAddress {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]
-    }
-}
-
-impl From<Vec<u8>> for SuiAddress {
-    fn from(bytes: Vec<u8>) -> Self {
-        let mut result = [0u8; SUI_ADDRESS_LENGTH];
-        result.copy_from_slice(&bytes[..SUI_ADDRESS_LENGTH]);
-        Self(result)
     }
 }
 
@@ -146,7 +139,7 @@ pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = TX_CONTEXT_MODULE_NAME;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TxContext {
     /// Signer/sender of the transaction
-    sender: Vec<u8>,
+    sender: AccountAddress,
     /// Digest of the current transaction
     digest: Vec<u8>,
     /// Number of `ObjectID`'s generated during execution of the current transaction
@@ -156,7 +149,7 @@ pub struct TxContext {
 impl TxContext {
     pub fn new(sender: &SuiAddress, digest: TransactionDigest) -> Self {
         Self {
-            sender: sender.to_vec(),
+            sender: AccountAddress::new(sender.0),
             digest: digest.0.to_vec(),
             ids_created: 0,
         }
@@ -332,8 +325,8 @@ pub fn encode_address(address: &SuiAddress) -> String {
 
 pub fn decode_address(s: &str) -> Result<SuiAddress, anyhow::Error> {
     let value = base64::decode(s)?;
-    let mut address = [0u8; ed25519_dalek::PUBLIC_KEY_LENGTH];
-    address.copy_from_slice(&value[..ed25519_dalek::PUBLIC_KEY_LENGTH]);
+    let mut address = [0u8; SUI_ADDRESS_LENGTH];
+    address.copy_from_slice(&value[..SUI_ADDRESS_LENGTH]);
     Ok(SuiAddress(address))
 }
 
@@ -547,6 +540,12 @@ impl From<AccountAddress> for ObjectID {
 impl From<ObjectID> for AccountAddress {
     fn from(obj_id: ObjectID) -> Self {
         obj_id.0
+    }
+}
+
+impl From<SuiAddress> for AccountAddress {
+    fn from(address: SuiAddress) -> Self {
+        Self::new(address.0)
     }
 }
 
