@@ -209,7 +209,7 @@ impl MovePackage {
                     module_name: module.to_string(),
                 })?;
         let m = CompiledModule::deserialize(bytes)
-            .expect("Unwrap safe because FastX serializes/verifies modules before publishing them");
+            .expect("Unwrap safe because Sui serializes/verifies modules before publishing them");
 
         Function::new_from_name(&m, function).ok_or(SuiError::FunctionNotFound {
             error: format!(
@@ -243,7 +243,7 @@ pub enum Data {
     Move(MoveObject),
     /// Map from each module name to raw serialized Move module bytes
     Package(MovePackage),
-    // ... FastX "native" types go here
+    // ... Sui "native" types go here
 }
 
 impl Data {

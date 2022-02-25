@@ -163,7 +163,7 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
 
 impl<'a> AbstractInterpreter for IDLeakAnalysis<'a> {}
 
-/// FastX::ID::delete function is allowed to take an ID by value.
+/// Sui::ID::delete function is allowed to take an ID by value.
 fn is_call_safe_to_leak(verifier: &IDLeakAnalysis, function_handle: &FunctionHandle) -> bool {
     let m = verifier
         .binary_view

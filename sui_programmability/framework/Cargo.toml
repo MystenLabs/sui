@@ -3,7 +3,7 @@ name = "sui-framework"
 version = "0.1.0"
 edition = "2021"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
-description = "Move framework for fastX platform"
+description = "Move framework for sui platform"
 license = "Apache-2.0"
 publish = false
 

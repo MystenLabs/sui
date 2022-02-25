@@ -5,10 +5,10 @@
 module Examples::EconMod {
     use Examples::HeroMod::{Self, SeaMonster, RUM};
     use Examples::Hero::Hero;
-    use FastX::Coin::{Self, Coin};
-    use FastX::ID::{Self, VersionedID};
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+    use Sui::Coin::{Self, Coin};
+    use Sui::ID::{Self, VersionedID};
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
 
     /// Created by `monster_owner`, a player with a monster that's too strong
     /// for them to slay + transferred to a player who can slay the monster.
