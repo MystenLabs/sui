@@ -14,6 +14,7 @@ use sui_types::{
 use move_binary_format::normalized::{Function as MoveFunction, Type as NormalizedMoveType};
 use serde_json::Value as JsonValue;
 use serde_value::Value as SerdeValue;
+//use serde_reflection::Value as SerdeValue;
 
 const HEX_PREFIX: &str = "0x";
 
@@ -31,10 +32,7 @@ impl SuiJsonValue {
             JsonValue::Number(n) => {
                 // Must be castable to u64
                 if !n.is_u64() {
-                    return Err(anyhow!(
-                        "{} not allowed. Number must be unsigned integer",
-                        n
-                    ));
+                    return Err(anyhow!("{n} not allowed. Number must be unsigned integer"));
                 }
             }
             // Must be homogeneous
@@ -44,7 +42,7 @@ impl SuiJsonValue {
                     return Err(anyhow!("Arrays must be homogeneous",));
                 }
             }
-            _ => return Err(anyhow!("{} not allowed.", json_value)),
+            _ => return Err(anyhow!("{json_value} not allowed.")),
         };
         Ok(Self(json_value))
     }
@@ -145,11 +143,11 @@ impl SuiJsonValue {
             // We have already checked that the array is homogeneous in the constructor
             (JsonValue::Array(a), NormalizedMoveType::Vector(t)) => {
                 // Recursively build a SerdeValue array
-                let mut serde_val = vec![];
-                for i in a {
-                    serde_val.push(Self::to_serde_value(i, &t)?);
-                }
-                SerdeValue::Seq(serde_val)
+                SerdeValue::Seq(
+                    a.iter()
+                        .map(|i| Self::to_serde_value(i, &t))
+                        .collect::<Result<Vec<SerdeValue>, _>>()?,
+                )
             }
 
             (JsonValue::String(s), NormalizedMoveType::Address) => {
@@ -160,7 +158,7 @@ impl SuiJsonValue {
                 let r: SuiAddress = decode_bytes_hex(s.trim_start_matches(HEX_PREFIX))?;
                 SerdeValue::Bytes(r.to_vec())
             }
-            _ => return Err(anyhow!("Unexpected arg: {} for expected type {}", val, typ)),
+            _ => return Err(anyhow!("Unexpected arg {} for expected type {}", val, typ)),
         };
 
         Ok(new_serde_value)
@@ -188,43 +186,48 @@ enum ValidJsonType {
 /// The invariant is that all types at a given level must be the same or be empty
 pub fn is_homogenous(val: &JsonValue) -> bool {
     let mut deq: VecDeque<&JsonValue> = VecDeque::new();
-
     deq.push_back(val);
+    is_homogenous_rec(&mut deq)
+}
 
-    while !deq.is_empty() {
-        let mut level_count = deq.len();
-        let mut level_type = ValidJsonType::Any;
+/// Check via BFS
+/// The invariant is that all types at a given level must be the same or be empty
+fn is_homogenous_rec(curr_q: &mut VecDeque<&JsonValue>) -> bool {
+    if curr_q.is_empty() {
+        // Nothing to do
+        return true;
+    }
+    // Queue for the next level
+    let mut next_q = VecDeque::new();
+    // The types at this level must be the same
+    let mut level_type = ValidJsonType::Any;
 
-        // Process this level
-        while level_count > 0 {
-            // Okay to unwrap since we know values exist
-            let curr = match deq.pop_front().unwrap() {
-                JsonValue::Bool(_) => ValidJsonType::Bool,
-                JsonValue::Number(_) => ValidJsonType::Number,
-                JsonValue::String(_) => ValidJsonType::String,
-                JsonValue::Array(w) => {
-                    // Add to the next level
-                    for q in w {
-                        deq.push_back(q);
-                    }
-                    ValidJsonType::Array
-                }
-                // Not valid
-                _ => return false,
-            };
-
-            if level_type == ValidJsonType::Any {
-                // Update the level with the first found type
-                level_type = curr;
-            } else if level_type != curr {
-                // Mismatch in the level
-                return false;
+    // Process all in this queue/level
+    while !curr_q.is_empty() {
+        // Okay to unwrap since we know values exist
+        let curr = match curr_q.pop_front().unwrap() {
+            JsonValue::Bool(_) => ValidJsonType::Bool,
+            JsonValue::Number(_) => ValidJsonType::Number,
+            JsonValue::String(_) => ValidJsonType::String,
+            JsonValue::Array(w) => {
+                // Add to the next level
+                w.iter().for_each(|t| next_q.push_back(t));
+                ValidJsonType::Array
             }
+            // Not valid
+            _ => return false,
+        };
 
-            level_count -= 1;
+        if level_type == ValidJsonType::Any {
+            // Update the level with the first found type
+            level_type = curr;
+        } else if level_type != curr {
+            // Mismatch in the level
+            return false;
         }
     }
-    true
+    // Process the next level
+    is_homogenous_rec(&mut next_q)
 }
 
 fn check_and_serialize_pure_args(

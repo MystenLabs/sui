@@ -29,6 +29,7 @@ serde_with = "1.11.0"
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 serde-value = "0.7.0"
+serde-reflection = "0.3.5"
 
 bcs = "0.1.3"
 sui_core = { path = "../sui_core" }

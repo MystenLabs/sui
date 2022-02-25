@@ -325,7 +325,7 @@ fn test_basic_args_linter_top_level() {
     let addr = json!(format!("0x{:02x}", address));
 
     // They have to be ordered
-    let args = vec![value.clone(), addr.clone()]
+    let args = vec![value, addr]
         .iter()
         .map(|q| SuiJsonValue::new(q.clone()).unwrap())
         .collect();
