@@ -304,11 +304,16 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         Err(err) => exec_failure!(gas::MIN_MOVE, err),
     };
 
-    let gas_used_for_init =
-        match store_package_and_init_modules(state_view, &vm, modules, ctx, gas_budget) {
-            Ok(ok) => ok,
-            Err(err) => exec_failure!(gas::MIN_MOVE, err),
-        };
+    let gas_used_for_init = match store_package_and_init_modules(
+        state_view,
+        &vm,
+        modules,
+        ctx,
+        gas_budget - gas_used_for_publish,
+    ) {
+        Ok(ok) => ok,
+        Err(err) => exec_failure!(gas::MIN_MOVE, err),
+    };
 
     let total_gas_used = gas_used_for_publish + gas_used_for_init;
     // successful execution of both publishing operation and or all
