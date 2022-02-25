@@ -12,9 +12,7 @@ All Sui objects have the following metadata:
 * A 32 byte *transaction digest* indicating the last transaction that included this object as an output.
 * An `is_mutable` flag indicating whether the object can be mutated, destroyed, or transferred in a transaction sent by its owner. Both immutable and mutable objects can be read. Once an object becomes immutable, it remains immutable forever.
 
-In addition to common metadata, objects have a category-specific, variable-sized *contents* field. For a data value, this contains the Move type of the object and its BCS-encoded payload. For a package value, this contains the bytecode modules in the package.
-
-TODO: Spell out and link to BCS reference for clarity. First confim we mean Binary Canonical Serialization: https://docs.rs/bcs/latest/bcs/
+In addition to common metadata, objects have a category-specific, variable-sized *contents* field. For a data value, this contains the Move type of the object and its [Binary Canonical Serialization (BCS)](https://docs.rs/bcs/latest/bcs/)-encoded payload. For a package value, this contains the bytecode modules in the package.
 
 ## Referring to objects
 
