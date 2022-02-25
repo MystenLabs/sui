@@ -3,6 +3,7 @@
 use crate::config::{AccountInfo, Config, WalletConfig};
 use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
 use core::fmt;
+use std::collections::HashSet;
 use std::fmt::{Debug, Display, Formatter};
 use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientAddressManager, ClientState};
@@ -26,6 +27,7 @@ use structopt::clap::AppSettings;
 use structopt::StructOpt;
 use sui_types::error::SuiError;
 use sui_types::object::ObjectRead;
+use sui_types::object::Owner::SingleOwner;
 use tracing::info;
 
 #[derive(StructOpt)]
@@ -247,6 +249,29 @@ impl WalletCommands {
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
                     return Err(anyhow!("Error calling module: {:#?}", effects.status));
                 }
+
+                let mut affected_owners = Vec::new();
+                affected_owners.extend(effects.created.clone());
+                affected_owners.extend(effects.mutated.clone());
+
+                let addresses = affected_owners
+                    .iter()
+                    .flat_map(|(_, owner)| {
+                        if let SingleOwner(address) = owner {
+                            Some(address)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<HashSet<_>>();
+
+                for address in addresses {
+                    context
+                        .get_or_create_client_state(address)?
+                        .sync_client_state()
+                        .await?;
+                }
+
                 WalletCommandResult::Call(cert, effects)
             }
 
