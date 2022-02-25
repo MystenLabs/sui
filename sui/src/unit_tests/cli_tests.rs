@@ -20,6 +20,8 @@ use sui_types::object::GAS_VALUE_FOR_TESTING;
 use tokio::task;
 use tracing_test::traced_test;
 
+const TEST_DATA_DIR: &str = "src/unit_tests/data/";
+
 macro_rules! retry_assert {
     ($test:expr, $timeout:expr) => {{
         let mut duration = Duration::from_secs(0);
@@ -249,11 +251,12 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
             gas_value: 500,
         }],
     });
-    config.move_packages.push(
-        PathBuf::from("..")
-            .join("sui_programmability")
-            .join("examples"),
-    );
+    config
+        .move_packages
+        .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_1"));
+    config
+        .move_packages
+        .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_2"));
     config.save()?;
 
     // Create empty network config for genesis
@@ -266,10 +269,10 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     .execute(&mut config)
     .await?;
 
-    assert!(logs_contain("Loading 1 Move packages"));
+    assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids
     let network_conf = NetworkConfig::read(&working_dir.path().join("network.conf"))?;
-    assert_eq!(1, network_conf.loaded_move_packages.len());
+    assert_eq!(2, network_conf.loaded_move_packages.len());
 
     // Make sure we log out package id
     for (_, id) in network_conf.loaded_move_packages {
