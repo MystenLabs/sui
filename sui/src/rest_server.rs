@@ -344,6 +344,7 @@ async fn get_addresses(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
     let server_context = rqctx.context();
+    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
     let wallet_context = server_context.wallet_context.lock().unwrap().take();
     if wallet_context.is_none() {
         return Err(HttpError::for_client_error(
@@ -361,34 +362,35 @@ async fn get_addresses(
         .copied()
         .collect();
 
-    // Sync all accounts.
+    // TODO: Speed up sync operations by kicking them off concurrently.
+    // Also need to investigate if this should be an automatic sync or manually triggered.
     for address in addresses.iter() {
         let client_state = match wallet_context.get_or_create_client_state(address) {
             Ok(client_state) => client_state,
-            Err(error) => {
-                return Err(HttpError::for_client_error(
-                    None,
+            Err(err) => {
+                *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+                return Err(custom_http_error(
                     StatusCode::FAILED_DEPENDENCY,
-                    format!("Can't create client state: {error}"),
-                ))
+                    format!("Can't create client state: {err}"),
+                ));
             }
         };
 
-        client_state.sync_client_state().await.map_err(|err| {
-            custom_http_error(
+        if let Err(err) = client_state.sync_client_state().await {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
-                format!("Sync error: {:?}", err),
-            )
-        })?;
+                format!("Can't create client state: {err}"),
+            ));
+        }
     }
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
-    // TODO: check if we should strip 'k#' as part of address output
     Ok(HttpResponseOk(GetAddressResponse {
         addresses: addresses
             .into_iter()
-            .map(|address| format!("{:?}", address))
+            .map(|address| format!("{}", address))
             .collect(),
     }))
 }
