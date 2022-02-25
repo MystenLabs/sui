@@ -264,6 +264,15 @@ impl WalletCommands {
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
                     return Err(anyhow!("Error transferring object: {:#?}", effects.status));
                 }
+
+                // Automatically sync client state if the receiver is not the owner
+                if from != to {
+                    context
+                        .get_or_create_client_state(to)?
+                        .sync_client_state()
+                        .await?;
+                }
+
                 WalletCommandResult::Transfer(time_total, cert, effects)
             }
 
