@@ -568,9 +568,6 @@ impl AuthorityState {
             ctx,
             MAX_GAS_BUDGET,
         )?;
-        temporary_store.ensure_active_inputs_mutated();
-        let unwrapped_object_ids = self.get_unwrapped_object_ids(temporary_store.written())?;
-        temporary_store.patch_unwrapped_object_version(unwrapped_object_ids);
         self._database
             .update_objects_state_for_genesis(temporary_store, ctx.digest())
     }
