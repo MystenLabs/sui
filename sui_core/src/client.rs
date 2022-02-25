@@ -11,8 +11,14 @@ use move_core_types::language_storage::TypeTag;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
 use sui_types::{
-    base_types::*, coin, committee::Committee, error::SuiError, fp_ensure, messages::*,
-    object::ObjectRead, SUI_FRAMEWORK_ADDRESS,
+    base_types::*,
+    coin,
+    committee::Committee,
+    error::SuiError,
+    fp_ensure,
+    messages::*,
+    object::{ObjectRead, Owner},
+    SUI_FRAMEWORK_ADDRESS,
 };
 use typed_store::rocks::open_cf;
 use typed_store::Map;
@@ -105,7 +111,7 @@ where
     }
 
     /// Get the current owner of the given object
-    pub async fn get_object_owner(&self, object_id: ObjectID) -> Result<SuiAddress, anyhow::Error> {
+    pub async fn get_object_owner(&self, object_id: ObjectID) -> Result<Owner, anyhow::Error> {
         let obj_read = self.authorities.get_object_info_execute(object_id).await?;
         Ok(obj_read.object()?.owner)
     }
@@ -506,7 +512,7 @@ where
                 } else {
                     self.remove_object_info(&object_id)?;
                 }
-            } else if old_seq == seq && owner == self.address {
+            } else if old_seq == seq && owner == Owner::SingleOwner(self.address) {
                 // ObjectRef can be 1 version behind because it's only updated after confirmation.
                 self.store.object_refs.insert(&object_id, &object_ref)?;
             }
@@ -744,7 +750,7 @@ where
         fp_ensure!(
             effects.mutated.len() == 2     // coin and gas
                && created.len() == split_amounts.len()
-               && created.iter().all(|(_, owner)| owner == &self.address),
+               && created.iter().all(|(_, owner)| owner == &Owner::SingleOwner(self.address)),
             SuiError::IncorrectGasSplit.into()
         );
         let updated_coin = self

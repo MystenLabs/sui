@@ -13,7 +13,7 @@ use sui_types::{
     gas,
     messages::ExecutionStatus,
     move_call::*,
-    object::{MoveObject, Object},
+    object::{MoveObject, Object, Owner},
     storage::Storage,
 };
 use sui_verifier::verifier;
@@ -75,9 +75,17 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     mut gas_object: Object,
     ctx: &mut TxContext,
 ) -> SuiResult<ExecutionStatus> {
+    // object_owner_map maps from object ID to its exclusive owner.
+    // objects that are not exclusively owned won't be in this map.
+    // This map will be used for detecting circular ownership among
+    // objects, which can only happen to objects exclusively owned
+    // by objects.
     let mut object_owner_map = HashMap::new();
-    for object in object_args.iter().filter(|obj| !obj.is_read_only()) {
-        object_owner_map.insert(object.id().into(), object.owner);
+    for (owner, id) in object_args
+        .iter()
+        .filter_map(|obj| obj.get_single_owner_and_id())
+    {
+        object_owner_map.insert(id.into(), owner);
     }
     let TypeCheckSuccess {
         module_id,
@@ -248,7 +256,6 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     state_view: &mut S,
     natives: NativeFunctionTable,
     module_bytes: Vec<Vec<u8>>,
-    sender: SuiAddress,
     ctx: &mut TxContext,
     gas_budget: u64,
     mut gas_object: Object,
@@ -305,7 +312,8 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     }
 
     // wrap the modules in an object, write it to the store
-    let package_object = Object::new_package(modules, sender, ctx.digest());
+    // The call to unwrap() will go away once we remove address owner from Immutable objects.
+    let package_object = Object::new_package(modules, ctx.digest());
     state_view.write_object(package_object);
 
     let mut total_gas_used = gas_cost;
@@ -574,10 +582,12 @@ fn handle_transfer<
             // freshly created, this means that its version will now be 1.
             // thus, all objects in the global object pool have version > 0
             move_obj.increment_version();
-            if should_freeze {
-                move_obj.freeze();
-            }
-            let obj = Object::new_move(move_obj, recipient, tx_digest);
+            let new_owner = if should_freeze {
+                Owner::SharedImmutable
+            } else {
+                Owner::SingleOwner(recipient)
+            };
+            let obj = Object::new_move(move_obj, new_owner, tx_digest);
             if old_object.is_none() {
                 // Charge extra gas based on object size if we are creating a new object.
                 *gas_used += gas::calculate_object_creation_cost(&obj);

@@ -19,7 +19,7 @@ use sui_adapter::genesis;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::Signature;
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::{Data, Object, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
+use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use tokio::runtime::Runtime;
 use typed_store::Map;
 
@@ -1009,7 +1009,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
     let transferred_obj = client_object(&mut client1, new_obj_ref.0).await.1;
 
     // Confirm new owner
-    assert!(transferred_obj.owner == client2.address());
+    assert!(transferred_obj.owner == Owner::SharedImmutable);
 
     // Confirm read only
     assert!(transferred_obj.is_read_only());
@@ -1099,7 +1099,7 @@ async fn test_move_calls_object_delete() {
 
 async fn get_package_obj(
     client: &mut ClientState<LocalAuthorityClient>,
-    objects: &[(ObjectRef, SuiAddress)],
+    objects: &[(ObjectRef, Owner)],
     gas_object_ref: &ObjectRef,
 ) -> Option<ObjectRead> {
     let mut pkg_obj_opt = None;
@@ -1567,22 +1567,15 @@ async fn test_object_store() {
 
     // find the package object and inspect it
 
-    let new_obj = get_package_obj(&mut client1, &published_effects.created, &gas_object_ref)
+    let _new_obj = get_package_obj(&mut client1, &published_effects.created, &gas_object_ref)
         .await
         .unwrap();
 
-    // Published object should be in storage now
-    // But also the new gas object should be in storage, so 2 new items, plus 3 from before
-    assert_eq!(client1.store().objects.iter().count(), 5);
+    // New gas object should be in storage, so 1 new items, plus 3 from before
+    // The published package is not in the store because it's not owned by anyone.
+    assert_eq!(client1.store().objects.iter().count(), 4);
 
-    // Verify that we indeed have the new module object
-    let mod_obj_from_store = client1
-        .store()
-        .objects
-        .get(&new_obj.reference().unwrap())
-        .unwrap()
-        .unwrap();
-    assert_eq!(mod_obj_from_store, *new_obj.object().unwrap());
+    // TODO: Verify that we have new_obj in the local store once we can store shared immutable objects.
 }
 
 #[tokio::test]
