@@ -43,7 +43,7 @@ As with transactions, we note that the process of sharing a certificate with aut
 
 EDITORIAL NOTE: please check that my advice about how many authorities a client should broadcast certs to looks good.
 
-## Further feading
+## Further reading
 
 * Transactions take objects as input and produced objects as output--check out the [objects](objects.md) section to learn more about the structure and attributes of objects.
 * Sui supports several different transaction types--see the [transactions](transactions.md) section for full details.
