@@ -346,14 +346,13 @@ async fn get_addresses(
     let server_context = rqctx.context();
     // TODO: Find a better way to utilize wallet context here that does not require 'take()'
     let wallet_context = server_context.wallet_context.lock().unwrap().take();
-    if wallet_context.is_none() {
-        return Err(HttpError::for_client_error(
+    let mut wallet_context = wallet_context.ok_or_else(|| {
+        HttpError::for_client_error(
             None,
             StatusCode::FAILED_DEPENDENCY,
             "Wallet Context does not exist.".to_string(),
-        ));
-    }
-    let mut wallet_context = wallet_context.unwrap();
+        )
+    })?;
 
     let addresses: Vec<SuiAddress> = wallet_context
         .address_manager
