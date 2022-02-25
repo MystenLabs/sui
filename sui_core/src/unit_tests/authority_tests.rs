@@ -12,19 +12,19 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
-use move_package::BuildConfig;
+
 use sui_adapter::genesis;
 use sui_types::{
     base_types::dbg_addr,
     crypto::KeyPair,
-    crypto::{get_key_pair, get_key_pair_from_bytes, Signature},
+    crypto::{get_key_pair, Signature},
     gas::{calculate_module_publish_cost, get_gas_balance},
     messages::ExecutionStatus,
     object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
 };
 
 use std::fs;
-use std::path::PathBuf;
+
 use std::{convert::TryInto, env};
 
 pub fn system_maxfiles() -> usize {
@@ -1367,210 +1367,6 @@ async fn test_authority_persist() {
     // Check the object is present
     assert_eq!(obj2.id(), object_id);
     assert_eq!(obj2.owner, recipient);
-}
-
-#[tokio::test]
-async fn test_hero() {
-    // 1. Compile the Hero Move code.
-    let build_config = BuildConfig::default();
-    let mut hero_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    hero_path.push("src/unit_tests/data/hero/");
-    let modules = sui_framework::build_move_package(&hero_path, build_config, false).unwrap();
-
-    // 2. Create an admin account, and a player account.
-    // Using a hard-coded key to match the Admin address in the Move code.
-    // This needs to be hard-coded because the module needs to know the admin's address
-    // in advance.
-    let (admin, admin_key) = get_key_pair_from_bytes(&[
-        10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
-        92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
-        90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
-        105, 254, 59, 163,
-    ]);
-    let admin_gas_object = Object::with_id_owner_for_testing(ObjectID::random(), admin);
-    let admin_gas_object_ref = admin_gas_object.to_object_reference();
-
-    let (player, player_key) = get_key_pair();
-    let player_gas_object = Object::with_id_owner_for_testing(ObjectID::random(), player);
-    let player_gas_object_ref = player_gas_object.to_object_reference();
-    let authority = init_state_with_objects(vec![admin_gas_object, player_gas_object]).await;
-
-    // 3. Publish the Hero modules to Sui.
-    let all_module_bytes = modules
-        .iter()
-        .map(|m| {
-            let mut module_bytes = Vec::new();
-            m.serialize(&mut module_bytes).unwrap();
-            module_bytes
-        })
-        .collect();
-    let transaction = Transaction::new_module(
-        admin,
-        admin_gas_object_ref,
-        all_module_bytes,
-        MAX_GAS,
-        &admin_key,
-    );
-    let effects = send_and_confirm_transaction(&authority, transaction)
-        .await
-        .unwrap()
-        .signed_effects
-        .unwrap()
-        .effects;
-
-    assert!(
-        matches!(effects.status, ExecutionStatus::Success { .. }),
-        "{:?}",
-        effects.status
-    );
-
-    let mut successful_checks = 0;
-    let mut admin_object = None;
-    let mut cap = None;
-    let mut package_object = None;
-    for (obj_ref, _) in &effects.created {
-        let new_obj = authority.get_object(&obj_ref.0).await.unwrap().unwrap();
-        if let Data::Package(_) = &new_obj.data {
-            package_object = Some(obj_ref);
-            successful_checks += 1;
-        } else if let Data::Move(move_obj) = &new_obj.data {
-            if move_obj.type_.module == Identifier::new("Hero").unwrap()
-                && move_obj.type_.name == Identifier::new("GameAdmin").unwrap()
-            {
-                successful_checks += 1;
-                admin_object = Some(obj_ref);
-            } else if move_obj.type_.module == Identifier::new("Coin").unwrap()
-                && move_obj.type_.name == Identifier::new("TreasuryCap").unwrap()
-            {
-                successful_checks += 1;
-                cap = Some(obj_ref);
-            }
-        }
-    }
-    // there should be exactly 3 created objects
-    assert!(successful_checks == 3);
-
-    // client needs to own treasury cap so transfer it from admin to
-    // client
-    let effects = call_move(
-        &authority,
-        &admin_gas_object_ref.0,
-        &admin,
-        &admin_key,
-        package_object.unwrap(),
-        ident_str!("TrustedCoin").to_owned(),
-        ident_str!("transfer").to_owned(),
-        vec![],
-        vec![cap.unwrap().0],
-        vec![bcs::to_bytes(&AccountAddress::from(player)).unwrap()],
-    )
-    .await
-    .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-
-    // 4. Mint 500 EXAMPLE TrustedCoin.
-    let effects = call_move(
-        &authority,
-        &player_gas_object_ref.0,
-        &player,
-        &player_key,
-        package_object.unwrap(),
-        ident_str!("TrustedCoin").to_owned(),
-        ident_str!("mint").to_owned(),
-        vec![],
-        vec![cap.unwrap().0],
-        vec![bcs::to_bytes(&500_u64).unwrap()],
-    )
-    .await
-    .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!(effects.mutated.len(), 2); // cap and gas
-    let (coin, coin_owner) = effects.created[0];
-    assert_eq!(coin_owner, player);
-
-    // 5. Purchase a sword using 500 coin. This sword will have magic = 4, sword_strength = 5.
-    let effects = call_move(
-        &authority,
-        &player_gas_object_ref.0,
-        &player,
-        &player_key,
-        package_object.unwrap(),
-        ident_str!("Hero").to_owned(),
-        ident_str!("acquire_hero").to_owned(),
-        vec![],
-        vec![coin.0],
-        vec![],
-    )
-    .await
-    .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!(effects.mutated.len(), 2); // coin and gas
-    let (hero, hero_owner) = effects.created[0];
-    assert_eq!(hero_owner, player);
-    // The payment goes to the admin.
-    assert_eq!(effects.mutated_excluding_gas().next().unwrap().1, admin);
-
-    // 6. Verify the hero is what we exepct with strength 5.
-    let effects = call_move(
-        &authority,
-        &player_gas_object_ref.0,
-        &player,
-        &player_key,
-        package_object.unwrap(),
-        ident_str!("Hero").to_owned(),
-        ident_str!("assert_hero_strength").to_owned(),
-        vec![],
-        vec![hero.0],
-        vec![bcs::to_bytes(&5_u64).unwrap()],
-    )
-    .await
-    .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-
-    // 7. Give them a boar!
-    let pure_args = vec![
-        bcs::to_bytes(&10_u64).unwrap(),                       // hp
-        bcs::to_bytes(&10_u64).unwrap(),                       // strength
-        bcs::to_bytes(&AccountAddress::from(player)).unwrap(), // recipient
-    ];
-    let effects = call_move(
-        &authority,
-        &admin_gas_object_ref.0,
-        &admin,
-        &admin_key,
-        package_object.unwrap(),
-        ident_str!("Hero").to_owned(),
-        ident_str!("send_boar").to_owned(),
-        vec![],
-        vec![admin_object.unwrap().0],
-        pure_args,
-    )
-    .await
-    .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let (boar, boar_owner) = effects.created[0];
-    assert_eq!(boar_owner, player);
-
-    // 8. Slay the boar!
-    let effects = call_move(
-        &authority,
-        &player_gas_object_ref.0,
-        &player,
-        &player_key,
-        package_object.unwrap(),
-        ident_str!("Hero").to_owned(),
-        ident_str!("slay").to_owned(),
-        vec![],
-        vec![hero.0, boar.0],
-        vec![],
-    )
-    .await
-    .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    let events = effects.events;
-    // should emit one BoarSlainEvent
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].type_.name.to_string(), "BoarSlainEvent")
 }
 
 #[tokio::test]
