@@ -29,7 +29,7 @@ pub fn clone_genesis_objects() -> Vec<Object> {
     genesis.objects.clone()
 }
 
-pub fn create_genesis_context() -> TxContext {
+pub fn get_genesis_context() -> TxContext {
     TxContext::new(&SuiAddress::default(), TransactionDigest::genesis())
 }
 

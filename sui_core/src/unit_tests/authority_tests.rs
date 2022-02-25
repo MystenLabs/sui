@@ -1333,7 +1333,7 @@ async fn test_authority_persist() {
         Box::pin(authority_key.copy()),
         store,
         vec![],
-        &mut genesis::create_genesis_context(),
+        &mut genesis::get_genesis_context(),
     )
     .await;
 
@@ -1361,7 +1361,7 @@ async fn test_authority_persist() {
         Box::pin(authority_key),
         store,
         vec![],
-        &mut genesis::create_genesis_context(),
+        &mut genesis::get_genesis_context(),
     )
     .await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
@@ -1544,7 +1544,7 @@ async fn init_state() -> AuthorityState {
         Box::pin(authority_key),
         store,
         genesis::clone_genesis_modules(),
-        &mut genesis::create_genesis_context(),
+        &mut genesis::get_genesis_context(),
     )
     .await
 }
