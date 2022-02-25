@@ -13,9 +13,7 @@ All Sui transactions have the following common metadata:
 * Maximum Gas Budget: The maximum number of gas units that can be expended by executing this transaction. If this budget is exceeded, transaction execution will [abort](TODO) and have no effects other than debiting the gas input. The gas input object must have a value higher than the gas price multipled by the max gas, and this product is the maximum amount that the gas input object will be debited for the transaction.
 * Epoch: The Sui epoch this transaction is intended for--see [Epochs](TODO).
 * Type: A call, publish, or native transaction and its type-specific-data (see below).
-* Authenticator: A cryptographic signature on the BCS-encoded bytes of the data above, and a public key that both verifies against the signature and is cryptographically committed to by the sender address--(see [Addresses and Authenticators](TODO) for more details).
-
-TODO: Spell out and link to BCS reference for clarity. First confim we mean Binary Canonical Serialization: https://docs.rs/bcs/latest/bcs/
+* Authenticator: A cryptographic signature on the [Binary Canonical Serialization (BCS)](https://docs.rs/bcs/latest/bcs/)-encoded bytes of the data above, and a public key that both verifies against the signature and is cryptographically committed to by the sender address--(see [Addresses and Authenticators](TODO) for more details).
 
 EDITORIAL NOTE: things are organized slightly differently today. Gas input and max gas live in types, but I think they should be moved up here since all transactions need them. Gas price does not exist yet, but eventually should. Epoch does not exist yet, but eventually should. Authenticator does not yet exist in the current form, but will eventually.
 
