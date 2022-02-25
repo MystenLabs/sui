@@ -1374,7 +1374,7 @@ async fn test_hero() {
     // 1. Compile the Hero Move code.
     let build_config = BuildConfig::default();
     let mut hero_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    hero_path.push("../sui_programmability/examples/");
+    hero_path.push("src/unit_tests/data/hero/");
     let modules = sui_framework::build_move_package(&hero_path, build_config, false).unwrap();
 
     // 2. Create an admin account, and a player account.
