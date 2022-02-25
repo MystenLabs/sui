@@ -1,10 +1,10 @@
 /// An escrow for atomic swap of objects that
 /// trusts a third party for liveness, but not
 /// safety.
-module FastX::Escrow {
-    use FastX::ID::{Self, IDBytes, VersionedID};
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+module Sui::Escrow {
+    use Sui::ID::{Self, IDBytes, VersionedID};
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
 
     /// An object held in escrow
     struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {

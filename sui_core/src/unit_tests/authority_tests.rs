@@ -1395,7 +1395,7 @@ async fn test_hero() {
     let player_gas_object_ref = player_gas_object.to_object_reference();
     let authority = init_state_with_objects(vec![admin_gas_object, player_gas_object]).await;
 
-    // 3. Publish the Hero modules to FastX.
+    // 3. Publish the Hero modules to Sui.
     let all_module_bytes = modules
         .iter()
         .map(|m| {

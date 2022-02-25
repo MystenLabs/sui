@@ -77,16 +77,14 @@ impl SuiJsonValue {
                         }
                         _ => return Err(anyhow!("Unable to serialize {:?} as vector", ser_val)),
                     };
-                    // This is a hack which allows the elements to be variable length types/VLAs
-                    // BCS serializes vectors by using ULEB128 to store the length of the vectors
-                    // Rather than calculate the encoded, length ourself, we can let BCS do it, then we fill in the data bytes
-
+                    // The data is already serialized, so ideally we just append
                     // First serialize the types like they u8s
                     // We use this to create the ULEB128 length prefix
                     let u8vec = vec![0u8; arr_len];
                     let mut ser_container = bcs::to_bytes::<Vec<u8>>(&u8vec)?;
+                    // Delete the zeroes
                     ser_container.truncate(ser_container.len() - arr_len);
-                    // Append the data
+                    // Append the actual data data
                     ser_container.append(&mut inner_ser);
                     ser_container
                 }

@@ -1,5 +1,5 @@
 [package]
-name = "FastX"
+name = "Sui"
 version = "0.0.1"
 
 [dependencies]
@@ -9,7 +9,7 @@ MoveStdlib = { local = "deps/move-stdlib" }
 #MoveStdlib = { git = "https://github.com/diem/diem.git", subdir="language/move-stdlib", rev = "346301f33b3489bb4e486ae6c0aa5e030223b492" }
 
 [addresses]
-FastX = "0x2"
+Sui = "0x2"
 
 [dev-addresses]
-FastX = "0x2"
+Sui = "0x2"

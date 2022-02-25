@@ -2,10 +2,10 @@
 /// new objects
 module Examples::CombinableObjects {
     use Examples::TrustedCoin::EXAMPLE;
-    use FastX::Coin::{Self, Coin};
-    use FastX::ID::{Self, VersionedID};
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+    use Sui::Coin::{Self, Coin};
+    use Sui::ID::{Self, VersionedID};
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
 
     struct Ham has key {
         id: VersionedID

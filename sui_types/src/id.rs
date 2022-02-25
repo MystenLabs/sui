@@ -18,14 +18,14 @@ pub const ID_MODULE_NAME: &IdentStr = ident_str!("ID");
 pub const ID_STRUCT_NAME: &IdentStr = ID_MODULE_NAME;
 pub const ID_BYTES_STRUCT_NAME: &IdentStr = ident_str!("IDBytes");
 
-/// Rust version of the Move FastX::ID::VersionedID type
+/// Rust version of the Move Sui::ID::VersionedID type
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VersionedID {
     id: IDBytes,
     version: u64,
 }
 
-/// Rust version of the Move FastX::ID::IDBytes type
+/// Rust version of the Move Sui::ID::IDBytes type
 #[derive(Debug, Serialize, Deserialize)]
 struct IDBytes {
     bytes: ObjectID,

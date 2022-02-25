@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module FastX::TestScenario {
-    use FastX::ID::{Self, VersionedID, IDBytes};
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+module Sui::TestScenario {
+    use Sui::ID::{Self, VersionedID, IDBytes};
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
     use Std::Vector;
 
     /// Attempted an operation that required a concluded transaction, but there are none
