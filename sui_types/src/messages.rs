@@ -510,6 +510,10 @@ impl Transaction {
                     .iter()
                     .filter_map(|bytes| match CompiledModule::deserialize(bytes) {
                         Ok(m) => Some(m),
+                        // We will ignore this error here and simply let latter execution
+                        // to discover this error again and fail the transaction.
+                        // It's preferrable to let transaction fail and charge gas when
+                        // malformed package is provided.
                         Err(_) => None,
                     })
                     .collect::<Vec<_>>();
