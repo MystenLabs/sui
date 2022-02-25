@@ -6,6 +6,7 @@ use rocksdb::Options;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
+use sui_types::base_types::SequenceNumber;
 use typed_store::rocks::{open_cf, DBMap};
 use typed_store::traits::Map;
 
@@ -54,6 +55,10 @@ pub struct AuthorityStore {
     /// the same response for any call after the first (ie. make certificate processing idempotent).
     signed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
 
+    sequenced: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
+
+    schedule: DBMap<ObjectID, SequenceNumber>,
+
     /// Internal vector of locks to manage concurrent writes to the database
     lock_table: Vec<parking_lot::Mutex<()>>,
 }
@@ -72,6 +77,8 @@ impl AuthorityStore {
                 "certificates",
                 "parent_sync",
                 "signed_effects",
+                "sequenced",
+                "schedule",
             ],
         )
         .expect("Cannot open DB.");
@@ -85,6 +92,8 @@ impl AuthorityStore {
             certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
             parent_sync: DBMap::reopen(&db, Some("parent_sync")).expect("Cannot open CF."),
             signed_effects: DBMap::reopen(&db, Some("signed_effects")).expect("Cannot open CF."),
+            sequenced: DBMap::reopen(&db, Some("sequenced")).expect("Cannot open CF."),
+            schedule: DBMap::reopen(&db, Some("schedule")).expect("Cannot open CF."),
             lock_table: (0..1024)
                 .into_iter()
                 .map(|_| parking_lot::Mutex::new(()))
@@ -213,6 +222,17 @@ impl AuthorityStore {
             .collect())
     }
 
+    /// Read a lock for a specific (transaction, shared object) pair.
+    pub fn sequenced(
+        &self,
+        transaction_digest: TransactionDigest,
+        object_id: ObjectID,
+    ) -> Result<Option<SequenceNumber>, SuiError> {
+        self.sequenced
+            .get(&(transaction_digest, object_id))
+            .map_err(SuiError::from)
+    }
+
     // Methods to mutate the store
 
     /// Insert an object
@@ -302,7 +322,7 @@ impl AuthorityStore {
     /// Updates the state resulting from the execution of a certificate.
     ///
     /// Internally it checks that all locks for active inputs are at the correct
-    /// version, and then writes locks, objects, certificates, parents atomicaly.
+    /// version, and then writes locks, objects, certificates, parents atomically.
     pub fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
@@ -455,6 +475,56 @@ impl AuthorityStore {
                 None
             }
         }))
+    }
+
+    /// Delete a lock of a shared object.
+    pub fn delete_sequence_lock(
+        &self,
+        transaction_digest: TransactionDigest,
+        object_id: ObjectID,
+    ) -> Result<(), SuiError> {
+        self.sequenced
+            .remove(&(transaction_digest, object_id))
+            .map_err(SuiError::from)
+    }
+
+    /// Free the schedule data structure.
+    pub fn delete_schedule(&self, object_id: &ObjectID) -> Result<(), SuiError> {
+        self.schedule.remove(object_id).map_err(SuiError::from)
+    }
+
+    /// Persist a certificate.
+    pub fn persist_certificate(
+        &self,
+        transaction_digest: &TransactionDigest,
+        certificate: &CertifiedTransaction,
+    ) -> Result<(), SuiError> {
+        self.certificates
+            .insert(transaction_digest, certificate)
+            .map_err(SuiError::from)
+    }
+
+    /// Lock a sequence number for the shared objects of the input transaction.
+    pub fn lock_shared_objects(
+        &self,
+        transaction_digest: TransactionDigest,
+        transaction: &Transaction,
+    ) -> Result<(), SuiError> {
+        let mut sequenced_to_write = Vec::new();
+        let mut schedule_to_write = Vec::new();
+        for id in transaction.shared_input_objects() {
+            let version = self.schedule.get(&id)?.unwrap_or_default();
+            sequenced_to_write.push(((transaction_digest, id), version));
+            let next_version = version.increment();
+            schedule_to_write.push((id, next_version));
+        }
+
+        // TODO: Writing into `sequenced` and `schedule` should be atomic. Should we merge
+        // them into a single DB?
+        let mut write_batch = self.sequenced.batch();
+        write_batch = write_batch.insert_batch(&self.sequenced, sequenced_to_write)?;
+        write_batch = write_batch.insert_batch(&self.schedule, schedule_to_write)?;
+        write_batch.write().map_err(SuiError::from)
     }
 }
 

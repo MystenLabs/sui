@@ -229,6 +229,7 @@ impl ClientServerBenchmark {
                     Vec::new(),
                     gas_object_ref,
                     vec![object_ref],
+                    vec![],
                     vec![bcs::to_bytes(&next_recipient.to_vec()).unwrap()],
                     1000,
                     secret,

@@ -620,6 +620,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
         Vec::new(),
         gas_payment_object_ref,
         Vec::new(),
+        vec![],
         vec![
             16u64.to_le_bytes().to_vec(),
             bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
@@ -1072,6 +1073,7 @@ async fn test_move_call_mutable_object_not_mutated() {
         vec![],
         vec![new_object_id1, new_object_id2],
         vec![],
+        vec![],
     )
     .await
     .unwrap();
@@ -1128,6 +1130,7 @@ async fn test_move_call_delete() {
         vec![],
         vec![new_object_id1, new_object_id2],
         vec![],
+        vec![],
     )
     .await
     .unwrap();
@@ -1145,6 +1148,7 @@ async fn test_move_call_delete() {
         "delete",
         vec![],
         vec![new_object_id1],
+        vec![],
         vec![],
     )
     .await
@@ -1179,6 +1183,7 @@ async fn test_get_latest_parent_entry() {
         vec![],
         vec![new_object_id1, new_object_id2],
         vec![],
+        vec![],
     )
     .await
     .unwrap();
@@ -1202,6 +1207,7 @@ async fn test_get_latest_parent_entry() {
         "delete",
         vec![],
         vec![new_object_id1],
+        vec![],
         vec![],
     )
     .await
@@ -1430,6 +1436,7 @@ async fn test_hero() {
         ident_str!("transfer").to_owned(),
         vec![],
         vec![cap.unwrap().0],
+        vec![],
         vec![bcs::to_bytes(&AccountAddress::from(player)).unwrap()],
     )
     .await
@@ -1447,6 +1454,7 @@ async fn test_hero() {
         ident_str!("mint").to_owned(),
         vec![],
         vec![cap.unwrap().0],
+        vec![],
         vec![bcs::to_bytes(&500_u64).unwrap()],
     )
     .await
@@ -1467,6 +1475,7 @@ async fn test_hero() {
         ident_str!("acquire_hero").to_owned(),
         vec![],
         vec![coin.0],
+        vec![],
         vec![],
     )
     .await
@@ -1489,6 +1498,7 @@ async fn test_hero() {
         ident_str!("assert_hero_strength").to_owned(),
         vec![],
         vec![hero.0],
+        vec![],
         vec![bcs::to_bytes(&5_u64).unwrap()],
     )
     .await
@@ -1511,6 +1521,7 @@ async fn test_hero() {
         ident_str!("send_boar").to_owned(),
         vec![],
         vec![admin_object.unwrap().0],
+        vec![],
         pure_args,
     )
     .await
@@ -1530,6 +1541,7 @@ async fn test_hero() {
         ident_str!("slay").to_owned(),
         vec![],
         vec![hero.0, boar.0],
+        vec![],
         vec![],
     )
     .await
@@ -1574,6 +1586,7 @@ async fn test_object_owning_another_object() {
         vec![],
         vec![obj1, obj2],
         vec![],
+        vec![],
     )
     .await
     .unwrap();
@@ -1596,6 +1609,7 @@ async fn test_object_owning_another_object() {
         vec![],
         vec![obj1, obj3],
         vec![],
+        vec![],
     )
     .await;
     assert!(effects.unwrap_err().to_string().contains("IncorrectSigner"));
@@ -1610,6 +1624,7 @@ async fn test_object_owning_another_object() {
         "transfer_to_object",
         vec![],
         vec![obj2, obj1],
+        vec![],
         vec![],
     )
     .await
@@ -1631,6 +1646,7 @@ async fn test_object_owning_another_object() {
         "transfer",
         vec![],
         vec![obj2],
+        vec![],
         vec![bcs::to_bytes(&AccountAddress::from(sender2)).unwrap()],
     )
     .await
@@ -1654,6 +1670,7 @@ async fn test_object_owning_another_object() {
         vec![],
         vec![obj1, obj2],
         vec![],
+        vec![],
     )
     .await;
     assert!(effects.unwrap_err().to_string().contains("IncorrectSigner"));
@@ -1669,6 +1686,7 @@ async fn test_object_owning_another_object() {
         "transfer_to_object",
         vec![],
         vec![obj1, obj2],
+        vec![],
         vec![],
     )
     .await
@@ -1810,6 +1828,7 @@ async fn call_move(
     function: Identifier,
     type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
+    shared_object_args_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
 ) -> SuiResult<TransactionEffects> {
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
@@ -1833,6 +1852,7 @@ async fn call_move(
         type_args,
         gas_object_ref,
         object_args,
+        shared_object_args_ids,
         pure_args,
         MAX_GAS,
         sender_key,
@@ -1850,6 +1870,7 @@ async fn call_framework_code(
     function: &'static str,
     type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
+    shared_object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
 ) -> SuiResult<TransactionEffects> {
     let genesis_package_objects = genesis::clone_genesis_modules();
@@ -1865,6 +1886,7 @@ async fn call_framework_code(
         ident_str!(function).to_owned(),
         type_args,
         object_arg_ids,
+        shared_object_arg_ids,
         pure_args,
     )
     .await
@@ -1883,6 +1905,7 @@ async fn create_move_object(
         sender_key,
         "ObjectBasics",
         "create",
+        vec![],
         vec![],
         vec![],
         vec![

@@ -210,6 +210,7 @@ impl WalletCommands {
                         type_args.clone(),
                         gas_obj_ref,
                         object_args_refs,
+                        vec![],
                         convert_txn_args(pure_args),
                         *gas_budget,
                     )
