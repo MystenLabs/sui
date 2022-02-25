@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::normalized::Type;
-use move_core_types::identifier::Identifier;
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde_json::{json, Value};
 use sui_adapter::{self, genesis::clone_genesis_modules};
 use sui_types::{
@@ -325,7 +325,7 @@ fn test_basic_args_linter_top_level() {
     let addr = json!(format!("0x{:02x}", address));
 
     // They have to be ordered
-    let args = vec![value, addr]
+    let args = vec![value.clone(), addr.clone()]
         .iter()
         .map(|q| SuiJsonValue::new(q.clone()).unwrap())
         .collect();
@@ -335,7 +335,13 @@ fn test_basic_args_linter_top_level() {
 
     assert!(object_args.is_empty());
     assert_eq!(pure_args[0], bcs::to_bytes(&(value_raw as u64)).unwrap());
-    assert_eq!(pure_args[1], bcs::to_bytes(&address).unwrap());
+
+    // Need to verify this specially
+    // BCS serialzes addresses like vectors so there's a length prefix, which makes the vec longer by 1
+    assert_eq!(
+        pure_args[1],
+        bcs::to_bytes(&AccountAddress::from(address)).unwrap()
+    );
 
     // Test with object args
 
@@ -367,5 +373,11 @@ fn test_basic_args_linter_top_level() {
         object_args[0],
         ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw)).unwrap()
     );
-    assert_eq!(pure_args[0], bcs::to_bytes(&address).unwrap());
+
+    // Need to verify this specially
+    // BCS serialzes addresses like vectors so there's a length prefix, which makes the vec longer by 1
+    assert_eq!(
+        pure_args[0],
+        bcs::to_bytes(&AccountAddress::from(address)).unwrap()
+    );
 }

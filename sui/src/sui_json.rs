@@ -25,8 +25,9 @@ mod base_types_tests;
 pub struct SuiJsonValue(JsonValue);
 impl SuiJsonValue {
     pub fn new(json_value: JsonValue) -> Result<SuiJsonValue, anyhow::Error> {
-        let v = match json_value {
-            JsonValue::Bool(b) => JsonValue::Bool(b),
+        match json_value.clone() {
+            // No checks needed for Bool and String
+            JsonValue::Bool(_) | JsonValue::String(_) => (),
             JsonValue::Number(n) => {
                 // Must be castable to u64
                 if !n.is_u64() {
@@ -35,28 +36,69 @@ impl SuiJsonValue {
                         n
                     ));
                 }
-                JsonValue::Number(n)
             }
-            // Strings can be anything
-            JsonValue::String(s) => JsonValue::String(s),
-
             // Must be homogeneous
             JsonValue::Array(a) => {
-                let r = JsonValue::Array(a);
                 // Fail if not homogeneous
-                if !is_homogenous(&r) {
+                if !is_homogenous(&JsonValue::Array(a)) {
                     return Err(anyhow!("Arrays must be homogeneous",));
                 }
-                r
             }
-            _ => todo!(),
+            _ => return Err(anyhow!("{} not allowed.", json_value)),
         };
-        Ok(Self(v))
+        Ok(Self(json_value))
     }
 
     pub fn to_bcs_bytes(&self, typ: &NormalizedMoveType) -> Result<Vec<u8>, anyhow::Error> {
-        let v = Self::to_serde_value(&self.0, typ)?;
-        Ok(bcs::to_bytes(&v)?)
+        let serde_val = Self::to_serde_value(&self.0, typ)?;
+
+        fn inner_serialize(
+            ser_val: SerdeValue,
+            ty: &NormalizedMoveType,
+        ) -> Result<Vec<u8>, anyhow::Error> {
+            let ret = match ty {
+                NormalizedMoveType::Address => bcs::to_bytes(&ser_val)?[1..].to_vec(),
+                NormalizedMoveType::Vector(t) => {
+                    let mut inner_ser = vec![];
+                    // This must be an array. Checked in previous step
+
+                    let arr_len = match ser_val {
+                        SerdeValue::Seq(s) => {
+                            let l = s.len();
+                            for i in s {
+                                // Serialize each
+                                inner_ser.append(&mut inner_serialize(i, t)?);
+                            }
+                            l
+                        }
+                        SerdeValue::Bytes(b) => {
+                            let l = b.len();
+
+                            inner_ser.extend(b);
+                            l
+                        }
+                        _ => return Err(anyhow!("Unable to serialize {:?} as vector", ser_val)),
+                    };
+                    // This is a hack which allows the elements to be variable length types/VLAs
+                    // BCS serializes vectors by using ULEB128 to store the length of the vectors
+                    // Rather than calculate the encoded, length ourself, we can let BCS do it, then we fill in the data bytes
+
+                    // First serialize the types like they u8s
+                    // We use this to create the ULEB128 length prefix
+                    let u8vec = vec![0u8; arr_len];
+                    let mut ser_container = bcs::to_bytes::<Vec<u8>>(&u8vec)?;
+                    ser_container.truncate(ser_container.len() - arr_len);
+                    // Append the data
+                    ser_container.append(&mut inner_ser);
+                    ser_container
+                }
+
+                _ => bcs::to_bytes(&ser_val)?,
+            };
+            Ok(ret)
+        }
+
+        inner_serialize(serde_val, typ)
     }
 
     pub fn to_json_value(&self) -> JsonValue {
@@ -72,6 +114,7 @@ impl SuiJsonValue {
             (JsonValue::Bool(b), NormalizedMoveType::Bool) => SerdeValue::Bool(*b),
 
             // In constructor, we have already checked that the number is unsigned int of at most U64
+            // Hence it is okay to unwrap() numbers
             (JsonValue::Number(n), NormalizedMoveType::U8) => {
                 SerdeValue::U8(u8::try_from(n.as_u64().unwrap())?)
             }
@@ -82,7 +125,7 @@ impl SuiJsonValue {
 
             // We can encode U8 Vector as string in 2 ways
             // 1. If it starts with 0x, we treat it as hex strings, where each pair is a byte
-            // 2. If it does not start with 0x, we treat each character as an ASCII endoced byte
+            // 2. If it does not start with 0x, we treat each character as an ASCII encoded byte
             // We have to support both for the convenience of the user. This is because sometime we need Strings as arg
             // Other times we need vec of hex bytes for address. Issue is both Address and Strings are represented as Vec<u8> in Move call
             (JsonValue::String(s), NormalizedMoveType::Vector(t)) => {
@@ -90,7 +133,6 @@ impl SuiJsonValue {
                     return Err(anyhow!("Cannot convert string arg {} to {}", s, typ));
                 }
                 let vec = if s.starts_with(HEX_PREFIX) {
-                    // TODO: do we need this now that Type::Address is valid?
                     // If starts with 0x, treat as hex vector
                     hex::decode(s.trim_start_matches(HEX_PREFIX))?
                 } else {
@@ -100,7 +142,7 @@ impl SuiJsonValue {
                 SerdeValue::Bytes(vec)
             }
 
-            // We have already checked that the arrat is homogeneous in the constructor
+            // We have already checked that the array is homogeneous in the constructor
             (JsonValue::Array(a), NormalizedMoveType::Vector(t)) => {
                 // Recursively build a SerdeValue array
                 let mut serde_val = vec![];
@@ -111,16 +153,14 @@ impl SuiJsonValue {
             }
 
             (JsonValue::String(s), NormalizedMoveType::Address) => {
-                let r: SuiAddress = decode_bytes_hex(s)?;
+                let s = s.trim().to_lowercase();
+                if !s.starts_with(HEX_PREFIX) {
+                    return Err(anyhow!("Address hex string must start with 0x.",));
+                }
+                let r: SuiAddress = decode_bytes_hex(s.trim_start_matches(HEX_PREFIX))?;
                 SerdeValue::Bytes(r.to_vec())
             }
-            _ => {
-                return Err(anyhow!(
-                    "Unexpected arg: {} for expected type: {}",
-                    val,
-                    typ
-                ))
-            }
+            _ => return Err(anyhow!("Unexpected arg: {} for expected type {}", val, typ)),
         };
 
         Ok(new_serde_value)
@@ -145,6 +185,7 @@ enum ValidJsonType {
 }
 
 /// Check via BFS
+/// The invariant is that all types at a given level must be the same or be empty
 pub fn is_homogenous(val: &JsonValue) -> bool {
     let mut deq: VecDeque<&JsonValue> = VecDeque::new();
 
