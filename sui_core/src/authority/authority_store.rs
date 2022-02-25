@@ -315,12 +315,6 @@ impl AuthorityStore {
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let mut write_batch = self.transaction_lock.batch();
 
-        // Archive the old lock.
-        write_batch = write_batch.delete_batch(
-            &self.transaction_lock,
-            temporary_store.active_inputs().iter(),
-        )?;
-
         // Store the certificate indexed by transaction digest
         let transaction_digest: TransactionDigest = certificate.transaction.digest();
         write_batch = write_batch.insert_batch(
@@ -362,6 +356,10 @@ impl AuthorityStore {
         transaction_digest: TransactionDigest,
     ) -> Result<(), SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
+
+        // Archive the old lock.
+        write_batch = write_batch.delete_batch(&self.transaction_lock, active_inputs.iter())?;
+
         // Delete objects
         write_batch = write_batch.delete_batch(&self.objects, deleted.iter())?;
 
