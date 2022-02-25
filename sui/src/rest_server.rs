@@ -11,8 +11,7 @@ use serde_json::json;
 use sui::config::{Config, GenesisConfig, NetworkConfig, WalletConfig};
 use sui::sui_commands;
 use sui::wallet_commands::WalletContext;
-use sui_core::authority_client::AuthorityClient;
-use sui_core::client::{Client, ClientState};
+use sui_core::client::Client;
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
 
@@ -48,6 +47,7 @@ async fn main() -> Result<(), String> {
     api.register(start).unwrap();
     api.register(genesis).unwrap();
     api.register(stop).unwrap();
+    api.register(get_addresses).unwrap();
 
     let api_context = ServerContext::new();
 
@@ -283,9 +283,13 @@ async fn start(
                     format!("Can't create client state: {error}"),
                 )
             })?;
-        if let Err(err) = sync_client_state(client_state).await {
-            return Err(err);
-        }
+
+        client_state.sync_client_state().await.map_err(|err| {
+            custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Sync error: {:?}", err),
+            )
+        })?;
     }
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
@@ -321,17 +325,73 @@ async fn stop(
     Ok(HttpResponseUpdatedNoContent())
 }
 
-async fn sync_client_state(
-    client_state: &mut ClientState<AuthorityClient>,
-) -> Result<(), HttpError> {
-    // synchronize with authorities
-    let res = async move { client_state.sync_client_state().await };
-    res.await.map_err(|err| {
-        custom_http_error(
+/**
+ * `GetAddressResponse` represents the list of managed accounts for this client.
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct GetAddressResponse {
+    addresses: Vec<String>,
+}
+
+/**
+ * [WALLET] Retrieve all managed accounts.
+ */
+#[endpoint {
+    method = GET,
+    path = "/wallet/addresses",
+}]
+async fn get_addresses(
+    rqctx: Arc<RequestContext<ServerContext>>,
+) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
+    let server_context = rqctx.context();
+    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
+    let wallet_context = server_context.wallet_context.lock().unwrap().take();
+    let mut wallet_context = wallet_context.ok_or_else(|| {
+        HttpError::for_client_error(
+            None,
             StatusCode::FAILED_DEPENDENCY,
-            format!("Sync error: {:?}", err),
+            "Wallet Context does not exist.".to_string(),
         )
-    })
+    })?;
+
+    let addresses: Vec<SuiAddress> = wallet_context
+        .address_manager
+        .get_managed_address_states()
+        .keys()
+        .copied()
+        .collect();
+
+    // TODO: Speed up sync operations by kicking them off concurrently.
+    // Also need to investigate if this should be an automatic sync or manually triggered.
+    for address in addresses.iter() {
+        let client_state = match wallet_context.get_or_create_client_state(address) {
+            Ok(client_state) => client_state,
+            Err(err) => {
+                *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+                return Err(custom_http_error(
+                    StatusCode::FAILED_DEPENDENCY,
+                    format!("Can't create client state: {err}"),
+                ));
+            }
+        };
+
+        if let Err(err) = client_state.sync_client_state().await {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Can't create client state: {err}"),
+            ));
+        }
+    }
+
+    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+
+    Ok(HttpResponseOk(GetAddressResponse {
+        addresses: addresses
+            .into_iter()
+            .map(|address| format!("{}", address))
+            .collect(),
+    }))
 }
 
 fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpError {
