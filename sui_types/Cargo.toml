@@ -24,7 +24,6 @@ serde_json = "1.0.78"
 serde_with = "1.11.0"
 signature = "1.5.0"
 static_assertions = "1.1.0"
-serde-value = "0.7.0"
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="d04c29e686aba380e6f9fc0c60a2dfdb974c5f8a"}
 
