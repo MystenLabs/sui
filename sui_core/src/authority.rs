@@ -14,7 +14,7 @@ use std::{
     pin::Pin,
     sync::Arc,
 };
-use sui_adapter::adapter::{self};
+use sui_adapter::adapter;
 use sui_types::{
     base_types::*,
     committee::Committee,
@@ -525,9 +525,9 @@ impl AuthorityState {
 
         for genesis_modules in genesis_packages {
             state
-                .store_package_and_init_modules(genesis_ctx, genesis_modules)
+                .store_package_and_init_modules_for_genesis(genesis_ctx, genesis_modules)
                 .await
-                .expect("We expect Geneis packages to not fail");
+                .expect("We expect publishing the Genesis packages to not fail");
         }
         state
     }
@@ -542,11 +542,13 @@ impl AuthorityState {
             .expect("TODO: propagate the error")
     }
 
-    async fn store_package_and_init_modules(
+    /// Persist the Genesis package to DB along with the side effects for module initialization
+    async fn store_package_and_init_modules_for_genesis(
         &self,
         ctx: &mut TxContext,
         modules: Vec<CompiledModule>,
     ) -> SuiResult {
+        debug_assert!(ctx.digest() == TransactionDigest::genesis());
         let inputs = Transaction::input_objects_in_compiled_modules(&modules);
         let input_objects = self
             .fetch_objects(&inputs)
@@ -570,7 +572,7 @@ impl AuthorityState {
         let unwrapped_object_ids = self.get_unwrapped_object_ids(temporary_store.written())?;
         temporary_store.patch_unwrapped_object_version(unwrapped_object_ids);
         self._database
-            .update_objects_state(temporary_store, ctx.digest())
+            .update_objects_state_for_genesis(temporary_store, ctx.digest())
     }
 
     /// Make an information response for a transaction

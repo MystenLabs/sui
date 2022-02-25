@@ -343,12 +343,13 @@ impl AuthorityStore {
         })
     }
 
-    /// Only update the objects state
-    pub fn update_objects_state(
+    /// Persist temporary storage to DB for genesis modules
+    pub fn update_objects_state_for_genesis(
         &self,
         temporary_store: AuthorityTemporaryStore,
         transaction_digest: TransactionDigest,
     ) -> Result<(), SuiError> {
+        debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
         let write_batch = self.transaction_lock.batch();
         self.batch_update_objects(write_batch, temporary_store, transaction_digest)
     }
