@@ -236,6 +236,12 @@ impl ObjectDigest {
     pub fn deleted() -> Self {
         OBJECT_DIGEST_DELETED
     }
+
+    // for testing
+    pub fn random() -> Self {
+        let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
+        Self::new(random_bytes)
+    }
 }
 
 pub fn get_new_address() -> SuiAddress {
