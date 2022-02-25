@@ -17,7 +17,7 @@ use std::collections::VecDeque;
 
 /// Implementation of Move native function
 /// `transfer_internal<T: key>(obj: T, recipient: vector<u8>, should_freeze: bool)`
-/// Here, we simply emit this event. The fastX adapter
+/// Here, we simply emit this event. The sui adapter
 /// treats this as a special event that is handled
 /// differently from user events:
 /// the adapter will change the owner of the object

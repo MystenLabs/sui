@@ -3,7 +3,7 @@ name = "Examples"
 version = "0.0.1"
 
 [dependencies]
-FastX = { local = "../framework" }
+Sui = { local = "../framework" }
 
 [addresses]
 Examples = "0x0"

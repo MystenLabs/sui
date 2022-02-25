@@ -131,7 +131,7 @@ pub struct ClientState<A> {
 // Operations are considered successful when they successfully reach a quorum of authorities.
 #[async_trait]
 pub trait Client {
-    /// Send object to a FastX account.
+    /// Send object to a Sui account.
     async fn transfer_object(
         &mut self,
         object_id: ObjectID,

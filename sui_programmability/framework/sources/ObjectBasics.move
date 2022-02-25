@@ -1,9 +1,9 @@
 /// Test CTURD object basics (create, transfer, update, read, delete)
-module FastX::ObjectBasics {
-    use FastX::Event;
-    use FastX::ID::{Self, VersionedID};
-    use FastX::TxContext::{Self, TxContext};
-    use FastX::Transfer;
+module Sui::ObjectBasics {
+    use Sui::Event;
+    use Sui::ID::{Self, VersionedID};
+    use Sui::TxContext::{Self, TxContext};
+    use Sui::Transfer;
 
     struct Object has key, store {
         id: VersionedID,

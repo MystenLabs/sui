@@ -185,7 +185,7 @@ one-by-one:
 - `--package` - ID of the package object where the module containing
   the function is located (please
   [remember](#a-quick-look-at-the-gas-module) that the ID of the
-  genesis FastX package containing the GAS module is defined in its
+  genesis Sui package containing the GAS module is defined in its
   manifest file, and is equal to 0x2)
 - `object-args` - a list of arguments of Sui object type (in this case
   there is only one representing the `c` parameter of the `transfer`
