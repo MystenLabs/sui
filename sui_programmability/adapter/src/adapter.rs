@@ -364,7 +364,7 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
     gas_budget: u64,
 ) -> Result<u64, SuiError> {
     let mut total_gas_used = 0;
-    let mut current_gas_budget = gas_budget - total_gas_used;
+    let mut current_gas_budget = gas_budget;
     for module_id in module_ids_to_init {
         let args = vec![ctx.to_vec()];
 
