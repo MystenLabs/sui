@@ -1,34 +1,29 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::binary_views::BinaryIndexedView;
-use move_binary_format::normalized::Function;
-use move_bytecode_utils::layout::TypeLayoutBuilder;
-use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::{ModuleId, TypeTag};
-use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
-use move_disassembler::disassembler::Disassembler;
-use move_ir_types::location::Spanned;
-use serde::{Deserialize, Serialize};
-use serde_bytes::ByteBuf;
-use serde_json::{json, Value};
-use serde_with::{serde_as, Bytes};
-use std::collections::BTreeMap;
-use std::convert::{TryFrom, TryInto};
-use std::fmt::{Debug, Display, Formatter};
-
-use move_binary_format::CompiledModule;
-use move_core_types::language_storage::StructTag;
-
 use crate::crypto::{sha3_hash, BcsSignable};
 use crate::error::{SuiError, SuiResult};
+use crate::move_package::MovePackage;
 use crate::{
     base_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
     },
     gas_coin::GasCoin,
 };
+use move_binary_format::binary_views::BinaryIndexedView;
+use move_binary_format::CompiledModule;
+use move_bytecode_utils::layout::TypeLayoutBuilder;
+use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
+use move_core_types::value::{MoveStruct, MoveStructLayout, MoveTypeLayout};
+use move_disassembler::disassembler::Disassembler;
+use move_ir_types::location::Spanned;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use serde_with::{serde_as, Bytes};
+use std::convert::{TryFrom, TryInto};
+use std::fmt::{Debug, Display, Formatter};
 
 pub const GAS_VALUE_FOR_TESTING: u64 = 100000_u64;
 pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
@@ -155,84 +150,6 @@ impl MoveObject {
         let move_value = MoveStruct::simple_deserialize(&self.contents, layout)
             .map_err(|_e| SuiError::ObjectSerializationError)?;
         serde_json::to_value(&move_value).map_err(|_e| SuiError::ObjectSerializationError)
-    }
-}
-
-// serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
-#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
-pub struct MovePackage {
-    module_map: BTreeMap<String, ByteBuf>,
-}
-
-impl MovePackage {
-    pub fn serialized_module_map(&self) -> &BTreeMap<String, ByteBuf> {
-        &self.module_map
-    }
-
-    pub fn from_map(module_map: &BTreeMap<String, ByteBuf>) -> Self {
-        Self {
-            module_map: module_map.clone(),
-        }
-    }
-
-    pub fn id(&self) -> ObjectID {
-        // TODO: simplify this
-        // https://github.com/MystenLabs/fastnft/issues/249
-        // All modules in the same package must have the same address. Pick any
-        ObjectID::from(
-            *CompiledModule::deserialize(self.module_map.values().next().unwrap())
-                .unwrap()
-                .self_id()
-                .address(),
-        )
-    }
-
-    pub fn module_id(&self, module: &Identifier) -> Result<ModuleId, SuiError> {
-        let ser =
-            self.serialized_module_map()
-                .get(module.as_str())
-                .ok_or(SuiError::ModuleNotFound {
-                    module_name: module.to_string(),
-                })?;
-        Ok(CompiledModule::deserialize(ser)?.self_id())
-    }
-
-    pub fn get_function_signature(
-        &self,
-        module: &Identifier,
-        function: &Identifier,
-    ) -> Result<Function, SuiError> {
-        let bytes =
-            self.serialized_module_map()
-                .get(module.as_str())
-                .ok_or(SuiError::ModuleNotFound {
-                    module_name: module.to_string(),
-                })?;
-        let m = CompiledModule::deserialize(bytes)
-            .expect("Unwrap safe because Sui serializes/verifies modules before publishing them");
-
-        Function::new_from_name(&m, function).ok_or(SuiError::FunctionNotFound {
-            error: format!(
-                "Could not resolve function '{}' in module {}::{}",
-                function,
-                self.id(),
-                module
-            ),
-        })
-    }
-}
-impl From<&Vec<CompiledModule>> for MovePackage {
-    fn from(compiled_modules: &Vec<CompiledModule>) -> Self {
-        MovePackage::from_map(
-            &compiled_modules
-                .iter()
-                .map(|module| {
-                    let mut bytes = Vec::new();
-                    module.serialize(&mut bytes).unwrap();
-                    (module.self_id().name().to_string(), ByteBuf::from(bytes))
-                })
-                .collect(),
-        )
     }
 }
 
