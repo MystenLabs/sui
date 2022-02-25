@@ -1136,7 +1136,7 @@ async fn test_module_publish_and_call_good() {
 
     // Provide path to well formed package sources
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
-    hero_path.push_str("/../sui_programmability/examples/");
+    hero_path.push_str("/src/unit_tests/data/hero/");
 
     let pub_res = client1
         .publish(hero_path, gas_object_ref, GAS_VALUE_FOR_TESTING / 2)
@@ -1257,7 +1257,7 @@ async fn test_module_publish_file_path() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
 
     // Use a path pointing to a different file
-    hero_path.push_str("/../sui_programmability/examples/Hero.move");
+    hero_path.push_str("/src/unit_tests/data/hero/Hero.move");
 
     let pub_resp = client1
         .publish(hero_path, gas_object_ref, GAS_VALUE_FOR_TESTING / 2)
@@ -1327,7 +1327,7 @@ async fn test_module_publish_bad_path() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
 
     // Use a bad path
-    hero_path.push_str("/../sui_____programmability/examples/");
+    hero_path.push_str("/src/unit____________tests/data/hero/");
 
     let pub_resp = client1.publish(hero_path, gas_object_ref, 1000).await;
     // Has to fail
@@ -1541,7 +1541,7 @@ async fn test_object_store() {
 
     // Provide path to well formed package sources
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
-    hero_path.push_str("/../sui_programmability/examples/");
+    hero_path.push_str("/src/unit_tests/data/hero/");
 
     let pub_res = client1
         .publish(hero_path, gas_object_ref, GAS_VALUE_FOR_TESTING / 2)
