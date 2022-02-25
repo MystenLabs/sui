@@ -14,7 +14,6 @@ use sui_types::{
 use move_binary_format::normalized::{Function as MoveFunction, Type as NormalizedMoveType};
 use serde_json::Value as JsonValue;
 use serde_value::Value as SerdeValue;
-//use serde_reflection::Value as SerdeValue;
 
 const HEX_PREFIX: &str = "0x";
 
