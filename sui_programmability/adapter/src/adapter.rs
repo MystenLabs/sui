@@ -12,7 +12,7 @@ use sui_types::{
     event::Event,
     gas,
     messages::ExecutionStatus,
-    move_call::*,
+    move_package::*,
     object::{MoveObject, Object},
     storage::Storage,
 };
