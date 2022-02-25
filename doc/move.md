@@ -112,10 +112,10 @@ unique name, which is assigned in the manifest file:
 
 ``` 
 [addresses]
-FastX = "0x2"
+Sui = "0x2"
 
 [dev-addresses]
-FastX = "0x2"
+Sui = "0x2"
 ```
 
 ### Move structs
@@ -316,7 +316,7 @@ the M1.move file:
 
 ``` rust
 module MyMovePackage::M1 {
-    use FastX::ID::VersionedID;
+    use Sui::ID::VersionedID;
 
     struct Sword has key, store {
         id: VersionedID,
@@ -362,7 +362,7 @@ name = "MyMovePackage"
 version = "0.0.1"
 
 [dependencies]
-FastX = { local = "../fastnft/sui_programmability/framework/" }
+Sui = { local = "../fastnft/sui_programmability/framework/" }
 
 [addresses]
 MyMovePackage = "0x0"
