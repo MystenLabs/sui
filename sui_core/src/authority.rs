@@ -569,8 +569,8 @@ impl AuthorityState {
         temporary_store.ensure_active_inputs_mutated();
         let unwrapped_object_ids = self.get_unwrapped_object_ids(temporary_store.written())?;
         temporary_store.patch_unwrapped_object_version(unwrapped_object_ids);
-        self.update_objects_state(temporary_store, ctx.digest())
-            .await
+        self._database
+            .update_objects_state(temporary_store, ctx.digest())
     }
 
     /// Make an information response for a transaction
@@ -617,15 +617,6 @@ impl AuthorityState {
     ) -> Result<TransactionInfoResponse, SuiError> {
         self._database
             .update_state(temporary_store, certificate, signed_effects)
-    }
-
-    async fn update_objects_state(
-        &self,
-        temporary_store: AuthorityTemporaryStore,
-        transaction_digest: TransactionDigest,
-    ) -> Result<(), SuiError> {
-        self._database
-            .update_objects_state(temporary_store, transaction_digest)
     }
 
     /// Get a read reference to an object/seq lock
