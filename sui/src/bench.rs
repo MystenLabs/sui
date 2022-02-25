@@ -170,7 +170,7 @@ impl ClientServerBenchmark {
                 Box::pin(secret_auth0),
                 store,
                 genesis::clone_genesis_modules(),
-                &mut genesis::create_genesis_context(),
+                &mut genesis::get_genesis_context(),
             )
             .await;
             let mut rnd = <StdRng as rand::SeedableRng>::seed_from_u64(0);
