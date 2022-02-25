@@ -119,7 +119,7 @@ pub fn resolve_and_type_check(
                 // check that m.type_ matches the parameter types of the function
                 match &param_type {
                     Type::MutableReference(inner_t) => {
-                        if m.is_read_only() {
+                        if object.is_read_only() {
                             return Err(SuiError::TypeError {
                                 error: format!(
                                     "Argument {} is expected to be mutable, immutable object found",
@@ -138,7 +138,7 @@ pub fn resolve_and_type_check(
                         }
                     }
                     Type::Struct { .. } => {
-                        if m.is_read_only() {
+                        if object.is_read_only() {
                             return Err(SuiError::TypeError {
                                 error: format!(
                                     "Argument {} is expected to be mutable, immutable object found",

@@ -1,4 +1,4 @@
-module FastX::Event {
+module Sui::Event {
 
     /// Add `t` to the event log of this transaction
     // TODO(https://github.com/MystenLabs/fastnft/issues/19): 

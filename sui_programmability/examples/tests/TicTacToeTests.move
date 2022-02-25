@@ -1,6 +1,6 @@
 #[test_only]
 module Examples::TicTacToeTests {
-    use FastX::TestScenario::{Self, Scenario};
+    use Sui::TestScenario::{Self, Scenario};
     use Examples::TicTacToe::{Self, Mark, MarkMintCap, TicTacToe, Trophy};
 
     const SEND_MARK_FAILED: u64 = 0;

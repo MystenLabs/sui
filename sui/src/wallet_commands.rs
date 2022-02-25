@@ -87,7 +87,7 @@ pub enum WalletCommands {
         /// Pure arguments to the functions, which conform to move_core_types::transaction_argument
         /// Special case formatting rules:
         /// Use one string with CSV token embedded, for example "54u8,0x43"
-        /// When specifying FastX addresses, specify as vector. Example x\"01FE4E6F9F57935C5150A486B5B78AC2B94E2C5CD9352C132691D99B3E8E095C\"
+        /// When specifying Sui addresses, specify as vector. Example x\"01FE4E6F9F57935C5150A486B5B78AC2B94E2C5CD9352C132691D99B3E8E095C\"
         #[structopt(long, parse(try_from_str = parse_transaction_argument))]
         pure_args: Vec<TransactionArgument>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
@@ -157,7 +157,11 @@ impl WalletCommands {
                 gas_budget,
             } => {
                 // Find owner of gas object
-                let sender = &context.address_manager.get_object_owner(*gas).await?;
+                let sender = &context
+                    .address_manager
+                    .get_object_owner(*gas)
+                    .await?
+                    .get_single_owner_address()?;
                 let client_state = context.get_or_create_client_state(sender)?;
                 let gas_obj_ref = client_state.object_ref(*gas)?;
 
@@ -186,7 +190,11 @@ impl WalletCommands {
                 gas,
                 gas_budget,
             } => {
-                let sender = &context.address_manager.get_object_owner(*gas).await?;
+                let sender = &context
+                    .address_manager
+                    .get_object_owner(*gas)
+                    .await?
+                    .get_single_owner_address()?;
                 let client_state = context.get_or_create_client_state(sender)?;
 
                 let package_obj_info = client_state.get_object_info(*package).await?;
@@ -221,7 +229,11 @@ impl WalletCommands {
             }
 
             WalletCommands::Transfer { to, object_id, gas } => {
-                let from = &context.address_manager.get_object_owner(*gas).await?;
+                let from = &context
+                    .address_manager
+                    .get_object_owner(*gas)
+                    .await?
+                    .get_single_owner_address()?;
                 let client_state = context.get_or_create_client_state(from)?;
                 let time_start = Instant::now();
                 let (cert, effects) = client_state.transfer_object(*object_id, *gas, *to).await?;

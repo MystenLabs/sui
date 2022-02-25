@@ -275,6 +275,38 @@ async fn test_handle_transfer_transaction_ok() {
 }
 
 #[tokio::test]
+async fn test_transfer_immutable() {
+    let (sender, sender_key) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+    let gas_object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let genesis_package_objects = genesis::clone_genesis_modules();
+    let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, "ID");
+    // We are trying to transfer the genesis package object, which is immutable.
+    let transfer_transaction = init_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient,
+        package_object_ref,
+        gas_object.to_object_reference(),
+    );
+    let result = authority_state
+        .handle_transaction(transfer_transaction.clone())
+        .await;
+    assert_eq!(
+        result.unwrap_err(),
+        SuiError::LockErrors {
+            errors: vec![SuiError::TransferImmutableError]
+        }
+    );
+}
+
+#[tokio::test]
 async fn test_handle_transfer_zero_balance() {
     let (sender, sender_key) = get_key_pair();
     let recipient = dbg_addr(2);
@@ -1363,7 +1395,7 @@ async fn test_hero() {
     let player_gas_object_ref = player_gas_object.to_object_reference();
     let authority = init_state_with_objects(vec![admin_gas_object, player_gas_object]).await;
 
-    // 3. Publish the Hero modules to FastX.
+    // 3. Publish the Hero modules to Sui.
     let all_module_bytes = modules
         .iter()
         .map(|m| {
@@ -1581,7 +1613,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.mutated.len(), 3);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
-        obj2.into(),
+        SuiAddress::from(obj2),
     );
 
     // Try to transfer obj1 to obj3, this time it will fail since obj1 is now owned by obj2,
@@ -1677,7 +1709,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.mutated.len(), 3);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
-        obj2.into(),
+        SuiAddress::from(obj2),
     );
 }
 

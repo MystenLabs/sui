@@ -20,7 +20,7 @@ use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::net::{Ipv6Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex};
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let config_dropshot: ConfigDropshot = ConfigDropshot {
-        bind_address: SocketAddr::from((Ipv6Addr::LOCALHOST, 5000)),
+        bind_address: SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 5000)),
         ..Default::default()
     };
 
@@ -344,15 +344,15 @@ async fn get_addresses(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
     let server_context = rqctx.context();
+    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
     let wallet_context = server_context.wallet_context.lock().unwrap().take();
-    if wallet_context.is_none() {
-        return Err(HttpError::for_client_error(
+    let mut wallet_context = wallet_context.ok_or_else(|| {
+        HttpError::for_client_error(
             None,
             StatusCode::FAILED_DEPENDENCY,
             "Wallet Context does not exist.".to_string(),
-        ));
-    }
-    let mut wallet_context = wallet_context.unwrap();
+        )
+    })?;
 
     let addresses: Vec<SuiAddress> = wallet_context
         .address_manager
@@ -361,34 +361,35 @@ async fn get_addresses(
         .copied()
         .collect();
 
-    // Sync all accounts.
+    // TODO: Speed up sync operations by kicking them off concurrently.
+    // Also need to investigate if this should be an automatic sync or manually triggered.
     for address in addresses.iter() {
         let client_state = match wallet_context.get_or_create_client_state(address) {
             Ok(client_state) => client_state,
-            Err(error) => {
-                return Err(HttpError::for_client_error(
-                    None,
+            Err(err) => {
+                *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+                return Err(custom_http_error(
                     StatusCode::FAILED_DEPENDENCY,
-                    format!("Can't create client state: {error}"),
-                ))
+                    format!("Can't create client state: {err}"),
+                ));
             }
         };
 
-        client_state.sync_client_state().await.map_err(|err| {
-            custom_http_error(
+        if let Err(err) = client_state.sync_client_state().await {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
-                format!("Sync error: {:?}", err),
-            )
-        })?;
+                format!("Can't create client state: {err}"),
+            ));
+        }
     }
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
-    // TODO: check if we should strip 'k#' as part of address output
     Ok(HttpResponseOk(GetAddressResponse {
         addresses: addresses
             .into_iter()
-            .map(|address| format!("{:?}", address))
+            .map(|address| format!("{}", address))
             .collect(),
     }))
 }

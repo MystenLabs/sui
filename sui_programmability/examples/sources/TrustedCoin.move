@@ -1,8 +1,8 @@
 /// Example coin with a trusted owner responsible for minting/burning (e.g., a stablecoin)
 module Examples::TrustedCoin {
-    use FastX::Coin::{Self, TreasuryCap};
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+    use Sui::Coin::{Self, TreasuryCap};
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
 
     /// Name of the coin
     struct EXAMPLE has drop {}
