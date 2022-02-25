@@ -16,6 +16,7 @@ use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_core::client::Client;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::get_key_pair;
+use sui_types::messages::TransactionEffects;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use tokio::task;
 use tracing_test::traced_test;
@@ -565,19 +566,25 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     assert!(count < 5);
 
     // Get the created object
-    let created_obj: ObjectID;
-    if let WalletCommandResult::Call(_, e) = resp {
-        created_obj = e.created.get(0).unwrap().0 .0;
+    let created_obj: ObjectID = if let WalletCommandResult::Call(
+        _,
+        TransactionEffects {
+            created: new_objs, ..
+        },
+    ) = resp
+    {
+        let ((obj_id, _seq_num, _obj_digest), _owner) = new_objs.first().unwrap();
+        *obj_id
     } else {
-        panic!();
-    }
+        panic!()
+    };
 
     // Try a bad argument: decimal
     let args_json = json!([0.3f32, addr1_str]);
     assert!(SuiJsonValue::new(args_json.as_array().unwrap().get(0).unwrap().clone()).is_err());
 
     // Try a bad argument: too few args
-    let args_json = json!([300]);
+    let args_json = json!([300usize]);
     let mut args = vec![];
     for a in args_json.as_array().unwrap() {
         args.push(SuiJsonValue::new(a.clone()).unwrap());
