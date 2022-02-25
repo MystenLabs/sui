@@ -185,7 +185,7 @@ fn execute_internal<
             // we already checked that the function had no return types in resolve_and_type_check--it should
             // also not return any values at runtime
             debug_assert!(return_values.is_empty());
-            // FastX Move programs should never touch global state, so ChangeSet should be empty
+            // Sui Move programs should never touch global state, so ChangeSet should be empty
             debug_assert!(change_set.accounts().is_empty());
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
             debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
@@ -366,7 +366,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
 /// Given a list of `modules`, links each module against its
 /// dependencies and runs each module with both the Move VM verifier
-/// and the FastX verifier.
+/// and the Sui verifier.
 pub fn verify_and_link<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
@@ -377,7 +377,7 @@ pub fn verify_and_link<
     natives: NativeFunctionTable,
 ) -> Result<MoveVM, SuiError> {
     // Run the Move bytecode verifier and linker.
-    // It is important to do this before running the FastX verifier, since the fastX
+    // It is important to do this before running the Sui verifier, since the sui
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
     let vm = MoveVM::new(natives)
         .expect("VM creation only fails if natives are invalid, and we created the natives");
@@ -405,9 +405,9 @@ pub fn verify_and_link<
             error: e.to_string(),
         })?;
 
-    // run the FastX verifier
+    // run the Sui verifier
     for module in modules.iter() {
-        // Run FastX bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
+        // Run Sui bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
         verifier::verify_module(module)?;
     }
     Ok(vm)
@@ -541,8 +541,8 @@ fn process_successful_execution<
     }
 
     // any object left in `by_value_objects` is an input passed by value that was not transferred or frozen.
-    // this means that either the object was (1) deleted from the FastX system altogether, or
-    // (2) wrapped inside another object that is in the FastX object pool
+    // this means that either the object was (1) deleted from the Sui system altogether, or
+    // (2) wrapped inside another object that is in the Sui object pool
     // in either case, we want to delete it
     let mut gas_refund: u64 = 0;
     for (id, object) in by_value_objects.iter() {

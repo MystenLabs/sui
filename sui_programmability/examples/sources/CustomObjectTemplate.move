@@ -1,12 +1,12 @@
 /// An example of a custom object with comments explaining the relevant bits
 module Examples::CustomObjectTemplate {
-    use FastX::ID::VersionedID;
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+    use Sui::ID::VersionedID;
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
 
-    /// A custom fastX object. Every object must have the `key` attribute
-    /// (indicating that it is allowed to be a key in the fastX global object
-    /// pool), and must have a field `id: ID` corresponding to its fastX ObjId.
+    /// A custom sui object. Every object must have the `key` attribute
+    /// (indicating that it is allowed to be a key in the sui global object
+    /// pool), and must have a field `id: ID` corresponding to its sui ObjId.
     /// Other object attributes present at the protocol level (authenticator,
     /// sequence number, TxDigest, ...) are intentionally not exposed here.
     struct Object has key {
@@ -65,14 +65,14 @@ module Examples::CustomObjectTemplate {
         }
     }
 
-    /// Example of an entrypoint function to be embedded in a FastX
+    /// Example of an entrypoint function to be embedded in a Sui
     /// transaction. The first argument of an entrypoint is always a
     /// special `TxContext` created by the runtime that is useful for deriving
     /// new id's or determining the sender of the transaction.
     /// After the `TxContext`, entrypoints can take struct types with the `key`
     /// attribute as input, as well as primitive types like ints, bools, ...
     ///
-    /// A FastX transaction must declare the ID's of each object it will
+    /// A Sui transaction must declare the ID's of each object it will
     /// access + any primitive inputs. The runtime that processes the
     /// transaction fetches the values associated with the ID's, type-checks
     /// the values + primitive inputs against the function signature of the

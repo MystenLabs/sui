@@ -38,7 +38,7 @@ impl GAS {
     }
 }
 
-/// Rust version of the Move FastX::Coin::Coin<FastX::GAS::GAS> type
+/// Rust version of the Move Sui::Coin::Coin<Sui::GAS::GAS> type
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GasCoin(Coin);
 

@@ -1,7 +1,7 @@
-module FastX::Geniteam {
-    use FastX::ID::{Self, VersionedID, IDBytes};
-    use FastX::TxContext::{Self, TxContext};
-    use FastX::Transfer;
+module Sui::Geniteam {
+    use Sui::ID::{Self, VersionedID, IDBytes};
+    use Sui::TxContext::{Self, TxContext};
+    use Sui::Transfer;
     use Std::ASCII::{Self, String};
     use Std::Option::{Self, Option};
     use Std::Vector::Self;

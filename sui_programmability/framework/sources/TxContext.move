@@ -1,4 +1,4 @@
-module FastX::TxContext {
+module Sui::TxContext {
     #[test_only]
     use Std::Errors;
     #[test_only]
@@ -6,7 +6,7 @@ module FastX::TxContext {
 
     use Std::Signer;
 
-    use FastX::ID::{Self, VersionedID};
+    use Sui::ID::{Self, VersionedID};
 
     /// Number of bytes in an inputs_hash (which will be the transaction digest)
     const INPUTS_HASH_LENGTH: u64 = 32;

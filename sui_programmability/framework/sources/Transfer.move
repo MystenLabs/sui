@@ -1,8 +1,8 @@
-module FastX::Transfer {
-    use FastX::ID;
+module Sui::Transfer {
+    use Sui::ID;
 
     /// Transfers are implemented by emitting a
-    /// special `TransferEvent` that the fastX adapter
+    /// special `TransferEvent` that the sui adapter
     /// interprets differently than user events.
     struct TransferEvent<T: key> {
         /// The object to be transferred

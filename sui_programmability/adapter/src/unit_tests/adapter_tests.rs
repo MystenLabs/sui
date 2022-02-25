@@ -164,7 +164,7 @@ impl ResourceResolver for InMemoryStorage {
         _address: &AccountAddress,
         _struct_tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        unreachable!("Should never be called in FastX")
+        unreachable!("Should never be called in Sui")
     }
 }
 

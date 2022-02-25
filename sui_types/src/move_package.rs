@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use std::collections::BTreeMap;
 
-
 // TODO: robust MovePackage tests
 // #[cfg(test)]
 // #[path = "unit_tests/move_package.rs"]

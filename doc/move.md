@@ -85,14 +85,14 @@ more about them in the Move
 if immediately interested):
 
 ```rust
-module FastX::GAS {
+module Sui::GAS {
 ...
 }
 ```
 
 As we can see, when defining a module we specify the module name
 (`GAS`), preceded by the name of the package where this module resides
-(`FastX`). The combination of the package name and the module name
+(`Sui`). The combination of the package name and the module name
 is used to uniquely identify a module in Move source code (e.g., to be
 able to use if from other modules) - the package name is globally
 unique, but different packages can contain modules with the same name.
@@ -106,7 +106,7 @@ framework packages this address is assigned in the manifest file:
 
 ``` 
 [addresses]
-FastX = "0x2"
+Sui = "0x2"
 ```
 
 ### First look at Move function definition

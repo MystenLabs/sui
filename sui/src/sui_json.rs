@@ -56,6 +56,7 @@ impl SuiJsonValue {
 
     pub fn to_bcs_bytes(&self, typ: &NormalizedMoveType) -> Result<Vec<u8>, anyhow::Error> {
         let v = Self::to_serde_value(&self.0, typ)?;
+        println!("{:?}  {:?}", v, typ);
         Ok(bcs::to_bytes(&v)?)
     }
 
@@ -111,7 +112,7 @@ impl SuiJsonValue {
             }
 
             (JsonValue::String(s), NormalizedMoveType::Address) => {
-                let r: SuiAddress = decode_bytes_hex(s)?;
+                let r: SuiAddress = decode_bytes_hex(s.trim_start_matches(HEX_PREFIX))?;
                 SerdeValue::Bytes(r.to_vec())
             }
             _ => {

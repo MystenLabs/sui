@@ -543,6 +543,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         args.push(SuiJsonValue::new(a.clone()).unwrap());
     }
 
+    println!("{:?}",args_json);
     let resp = WalletCommands::Call {
         package: ObjectID::from_hex_literal("0x2").unwrap(),
         module: Identifier::new("ObjectBasics").unwrap(),

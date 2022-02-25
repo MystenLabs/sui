@@ -160,7 +160,7 @@ pub enum Data {
     Move(MoveObject),
     /// Map from each module name to raw serialized Move module bytes
     Package(MovePackage),
-    // ... FastX "native" types go here
+    // ... Sui "native" types go here
 }
 
 impl Data {
