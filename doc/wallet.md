@@ -37,16 +37,16 @@ customized with additional accounts, objects, code, etc. as described
 
 The network configuration is stored in `network.conf` and
 can be used subsequently to start the network. A `wallet.conf` is
-also created to be used by the sui wallet to manage the
+also created to be used by the Sui wallet to manage the
 newly created accounts.
 
 ### View created accounts
-The genesis process creates a configuration file `wallet.conf` for the sui wallet, 
-the config file contains information of the accounts and the sui network, 
-sui wallet uses the network information to communicate with the siu network authorities 
-and create transactions using the key pairs reside in the config file.
+The genesis process creates a configuration file `wallet.conf` for the Sui wallet, 
+the config file contains information of the accounts and the Sui network, 
+Sui wallet uses the network information to communicate with the Sui network authorities 
+and create transactions using the key pairs residing in the config file.
 
-Below is an example of `wallet.conf` showing the accounts and key pairs in the wallet configuration.
+Below is an example of `wallet.conf` showing the accounts and key pairs in the wallet configuration. (some values are omitted)
 ```json
 {
   "accounts": [
@@ -81,10 +81,10 @@ The `accounts` variable contains all the account's address and key pairs, this w
 
 `send_timeout`, `recv_timeout` and `buffer_size` are the network parameters.
 `db_folder_path` is the path to the account's client state database, which will be storing 
-all the transaction data, certificates and object data belongs to the account.
+all the transaction data, certificates and object data belonging to the account.
 
 #### Key management
-As you might have noticed, the key pairs are stored as plain text in `wellet.conf`, 
+As you might have noticed, the key pairs are stored as plain text in `wallet.conf`, 
 which is not secure and shouldn't be used in production environment, we have plans to 
 implement more secure key management and support hardware signing in future release.
 
@@ -170,7 +170,7 @@ A4C0A493CE9879EA06BAC93461810CF947823BB3
 ```
 
 ## Adding accounts to the wallet
-Sui's genesis process will create 5 accounts by default, if that's not enough, there are 2 ways to add accounts to the Sui wallet if needed.
+Sui's genesis process will create five accounts by default, if that's not enough, there are two ways to add accounts to the Sui wallet if needed.
 #### 1. use `new-address` command to generate new account
 To create a new account, execute the `new-address` command in Sui interactive console:
 ``` shell
@@ -250,7 +250,7 @@ the GAS module using the following Sui Wallet command:
 --gas-budget 1000 \
 ```
 
-This a pretty complicated command so let's explain all its parameters
+This is a pretty complicated command so let's explain all its parameters
 one-by-one:
 
 - `--function` - name of the function to be called
@@ -366,7 +366,7 @@ Example `genesis.conf`
     }
   ],
   "move_packages": ["<Paths to custom move packages>"],
-  "sui_framework_lib_path": "<Paths to sui framework lib>",
+  "sui_framework_lib_path": "<Paths to Sui framework lib>",
   "move_framework_lib_path": "<Paths to move framework lib>"
 }
 ```
