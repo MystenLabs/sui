@@ -43,7 +43,7 @@ pub fn transfer_internal(
 }
 
 /// Implementation of Move native function
-/// `transfer_to_object_id<T: key>(obj: T, id: IDBytes)`
+/// `transfer_to_object_id<T: key>(obj: T, id: address)`
 pub fn transfer_to_object_id(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,

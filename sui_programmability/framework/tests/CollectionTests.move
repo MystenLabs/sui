@@ -18,16 +18,16 @@ module Sui::CollectionTests {
         assert!(Collection::size(&collection) == 0, ECOLLECTION_SIZE_MISMATCH);
 
         let obj1 = Object { id: TxContext::new_id(&mut ctx) };
-        let id_bytes1 = *ID::get_id_bytes(&obj1);
+        let id1 = *ID::id(&obj1);
         let obj2 = Object { id: TxContext::new_id(&mut ctx) };
-        let id_bytes2 = *ID::get_id_bytes(&obj2);
+        let id2 = *ID::id(&obj2);
 
         Collection::add(&mut collection, obj1);
         Collection::add(&mut collection, obj2);
         assert!(Collection::size(&collection) == 2, ECOLLECTION_SIZE_MISMATCH);
 
-        assert!(Collection::contains(&collection, &id_bytes1), EOBJECT_NOT_FOUND);
-        assert!(Collection::contains(&collection, &id_bytes2), EOBJECT_NOT_FOUND);
+        assert!(Collection::contains(&collection, &id1), EOBJECT_NOT_FOUND);
+        assert!(Collection::contains(&collection, &id2), EOBJECT_NOT_FOUND);
 
         Collection::transfer(collection, TxContext::get_signer_address(&ctx));
     }

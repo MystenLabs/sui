@@ -34,7 +34,8 @@ module Sui::Transfer {
     /// Transfer ownership of `obj` to another object `owner`.
     // TODO: Add option to freeze after transfer.
     public fun transfer_to_object<T: key, R: key>(obj: T, owner: &mut R) {
-        transfer_to_object_id(obj, *ID::get_bytes(ID::get_id_bytes(owner)));
+        let owner_id = ID::id_address(owner);
+        transfer_to_object_id(obj, owner_id);
     }
 
     /// Transfer ownership of `obj` to another object with `id`.
