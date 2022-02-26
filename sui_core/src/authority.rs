@@ -88,7 +88,7 @@ impl AuthorityState {
             }
             InputObjectKind::MoveObject((object_id, sequence_number, object_digest)) => {
                 fp_ensure!(
-                    sequence_number <= SequenceNumber::max(),
+                    sequence_number <= SequenceNumber::MAX,
                     SuiError::InvalidSequenceNumber
                 );
 
