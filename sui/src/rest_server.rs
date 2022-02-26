@@ -18,7 +18,8 @@ fn main() -> Result<(), String> {
      * Build a description of the API.
      */
     let mut api = ApiDescription::new();
-    // [DEBUG][SUI]
+
+    // [DEBUG]
     api.register(genesis).unwrap();
     api.register(sui_start).unwrap();
     api.register(sui_stop).unwrap();
@@ -58,47 +59,49 @@ impl ServerContext {
 }
 
 /**
-* 'GenesisRequest' represents the server configuration.
-*
-* Example GenesisRequest
-* ------------------------
-{
-    "num_authorities": 4,
-    "num_accounts": 4,
-    "num_objects": 2,
-}
-* ------------------------
-* All attributes in GenesisRequest are optional, a default value will be use if
-* the fields are not set. For example, the request shown above will create a
-* network of 4 authorities, and pre-populate 2 objects for 4 accounts.
+Request containing the server configuration.
+
+All attributes in GenesisRequest are optional, a default value will be used if
+the fields are not set.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GenesisRequest {
+    /** Optional; Number of authorities to be started in the network */
     num_authorities: Option<u16>,
-    num_accounts: Option<u16>,
-    num_objects: Option<u16>,
+    /** Optional; Number of managed addresses to be created at genesis */
+    num_addresses: Option<u16>,
+    /** Optional; Number of gas objects to be created for each address */
+    num_gas_objects: Option<u16>,
 }
 
 /**
- * 'GenesisResponse' returns the resulting wallet & network config of the
- * provided genesis configuration.
+Response containing the resulting wallet & network config of the
+provided genesis configuration.
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GenesisResponse {
+    /** List of managed addresses and the list of authorities */
     wallet_config: serde_json::Value,
+    /** Information about authorities and the list of loaded move packages. */
     network_config: serde_json::Value,
 }
 
 /**
- * [DEBUG][SUI] Use to provide network/wallet configurations for Sui genesis.
+Specify the genesis state of the network.
+
+You can specify the number of authorities, an initial number of addresses
+and the number of gas objects to be assigned to those addresses.
+
+Note: This is a temporary endpoint that will no longer be needed once the
+network has been started on testnet or mainnet.
  */
 #[allow(unused_variables)]
 #[endpoint {
     method = POST,
-    path = "/debug/sui/genesis",
-    tags = [ "debug", "sui" ],
+    path = "/sui/genesis",
+    tags = [ "debug" ],
 }]
 async fn genesis(
     rqctx: Arc<RequestContext<ServerContext>>,
@@ -113,13 +116,16 @@ async fn genesis(
 }
 
 /**
- * [DEBUG][SUI] Start servers with specified configurations from genesis.
+Start servers with the specified configurations from the genesis endpoint.
+
+Note: This is a temporary endpoint that will no longer be needed once the
+network has been started on testnet or mainnet.
  */
 #[allow(unused_variables)]
 #[endpoint {
     method = POST,
-    path = "/debug/sui/start",
-    tags = [ "debug", "sui" ],
+    path = "/sui/start",
+    tags = [ "debug" ],
 }]
 async fn sui_start(
     rqctx: Arc<RequestContext<ServerContext>>,
@@ -128,13 +134,16 @@ async fn sui_start(
 }
 
 /**
- * [DEBUG][SUI] Stop sui network and delete generated configs & storage.
+Stop sui network and delete generated configs & storage.
+
+Note: This is a temporary endpoint that will no longer be needed once the
+network has been started on testnet or mainnet.
  */
 #[allow(unused_variables)]
 #[endpoint {
     method = POST,
-    path = "/debug/sui/stop",
-    tags = [ "debug", "sui" ],
+    path = "/sui/stop",
+    tags = [ "debug" ],
 }]
 async fn sui_stop(
     rqctx: Arc<RequestContext<ServerContext>>,
@@ -143,21 +152,22 @@ async fn sui_stop(
 }
 
 /**
- * `GetAddressResponse` represents the list of managed accounts for this client.
+Response containing the managed addresses for this client.
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GetAddressResponse {
+    /** Vector of hex codes as strings representing the managed addresses */
     addresses: Vec<String>,
 }
 
 /**
- * [WALLET] Retrieve all managed accounts.
+Retrieve all managed addresses for this client.
  */
 #[allow(unused_variables)]
 #[endpoint {
     method = GET,
-    path = "/wallet/addresses",
+    path = "/addresses",
     tags = [ "wallet" ],
 }]
 async fn get_addresses(
@@ -171,37 +181,50 @@ async fn get_addresses(
 }
 
 /**
-* 'GetObjectsScanParams' represents the objects scan parameters
+Scan parameters used to retrieve objects owned by an address.
+
+Describes the set of querystring parameters that your endpoint
+accepts for the first request of the scan.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GetObjectsScanParams {
+    /** Required; Hex code as string representing the address */
     address: String,
 }
 
 /**
-* 'GetObjectsPageSelector' represents the objects page selector
+Page selector used to retrieve the next set of objects owned by an address.
+
+Describes the information your endpoint needs for requests after the first one.
+Typically this would include an id of some sort for the last item on the
+previous page. The entire PageSelector will be serialized to an opaque string
+and included in the ResultsPage. The client is expected to provide this string
+as the "page_token" querystring parameter in the subsequent request.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GetObjectsPageSelector {
+    /** Required; Hex code as string representing the address */
     address: String,
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct Object {
+    /** Hex code as string representing the object id */
     object_id: String,
+    /** Contains the object id, sequence number and object digest */
     object_ref: serde_json::Value,
 }
 
 /**
- * [WALLET] Return all objects owned by the account address.
+Returns list of objects owned by an address.
  */
 #[allow(unused_variables)]
 #[endpoint {
     method = GET,
-    path = "/wallet/objects",
+    path = "/objects",
     tags = [ "wallet" ],
 }]
 async fn get_objects(
@@ -241,37 +264,48 @@ async fn get_objects(
 }
 
 /**
-* `GetObjectInfoRequest` represents the owner & object for which info is to be
-* retrieved.
+Request containing the object for which info is to be retrieved.
+
+If owner is specified we look for this obejct in that address's account store,
+otherwise we look for it in the shared object store.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GetObjectInfoRequest {
-    owner: String,
+    /** Optional; Hex code as string representing the owner's address */
+    owner: Option<String>,
+    /** Required; Hex code as string representing the object id */
     object_id: String,
 }
 
 /**
-* 'ObjectInfoResponse' represents the object info on the network.
+Response containing the information of an object if found, otherwise an error
+is returned.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct ObjectInfoResponse {
+    /** Hex code as string representing the owner's address */
     owner: String,
+    /** Sequence number of the object */
     version: String,
+    /** Hex code as string representing the objet id */
     id: String,
+    /** Boolean representing if the object is mutable */
     readonly: String,
+    /** Type of object, i.e. Coin */
     obj_type: String,
+    /** JSON representation of the object data */
     data: serde_json::Value,
 }
 
 /**
- * [WALLET] Get object info.
+Returns the object information for a specified object.
  */
 #[allow(unused_variables)]
 #[endpoint {
     method = GET,
-    path = "/wallet/object_info",
+    path = "/object_info",
     tags = [ "wallet" ],
 }]
 async fn object_info(
@@ -291,35 +325,54 @@ async fn object_info(
 }
 
 /**
-* 'TransferTransactionRequest' represents the transaction to be sent to the
-* network.
+Request containing the information needed to execute a transfer transaction.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct TransferTransactionRequest {
+    /** Required; Hex code as string representing the address to be sent from */
     from_address: String,
+    /** Required; Hex code as string representing the object id */
     object_id: String,
+    /** Required; Hex code as string representing the address to be sent to */
     to_address: String,
+    /** Required; Hex code as string representing the gas object id to be used as payment */
     gas_object_id: String,
 }
 
 /**
-* 'TransactionResponse' represents the transaction response
+Response containing the summary of effects made on an object and the certificate
+associated with the transaction that verifies the transaction.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct TransactionResponse {
+    /** JSON representation of the list of resulting effects on the object */
     object_effects_summary: serde_json::Value,
+    /** JSON representation of the certificate verifying the transaction */
     certificate: serde_json::Value,
 }
 
 /**
- * [WALLET] Transfer object from one address to another.
+Transfer object from one address to another. Gas will be paid using the gas
+provided in the request. This will be done through a native transfer
+transaction that does not require Move VM executions, hence is much cheaper.
+
+Notes:
+- Non-coin objects cannot be transferred natively and will require a Move call
+
+Example TransferTransactionRequest
+{
+    "from_address": "1DA89C9279E5199DDC9BC183EB523CF478AB7168",
+    "object_id": "4EED236612B000B9BEBB99BA7A317EFF27556A0C",
+    "to_address": "5C20B3F832F2A36ED19F792106EC73811CB5F62C",
+    "gas_object_id": "96ABE602707B343B571AAAA23E3A4594934159A5"
+}
  */
 #[allow(unused_variables)]
 #[endpoint {
     method = POST,
-    path = "/wallet/transfer",
+    path = "/transfer",
     tags = [ "wallet" ],
 }]
 async fn transfer_object(
@@ -335,23 +388,31 @@ async fn transfer_object(
 }
 
 /**
-* 'PublishRequest' represents the publish request
+Request representing the contents of the Move module to be published.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct PublishRequest {
+    /** Required; Hex code as string representing the sender's address */
     sender: String,
-    path: String,
+    /** Required; Move module serialized as bytes? */
+    module: String,
+    /** Required; Hex code as string representing the gas object id */
     gas_object_id: String,
+    /** Required; Gas budget required because of the need to execute module initializers */
     gas_budget: u64,
 }
 
 /**
- * [WALLET] Publish move module.
+Publish move module. It will perform proper verification and linking to make
+sure the pacakge is valid. If some modules have initializers, these initializers
+will also be executed in Move (which means new Move objects can be created in
+the process of publishing a Move package). Gas budget is required because of the
+need to execute module initializers.
  */
 #[endpoint {
     method = POST,
-    path = "/wallet/publish",
+    path = "/publish",
     tags = [ "wallet" ],
     // TODO: Figure out how to pass modules over the network before publishing this.
     unpublished = true
@@ -370,10 +431,34 @@ async fn publish(
 }
 
 /**
-* 'CallRequest' represents the call request
-*
-* Example CallRequest
-* ------------------------
+Request containing the information required to execute a move module.
+*/
+// TODO: Adjust call specs based on how linter officially lands (pull#508)
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct CallRequest {
+    /** Required; Hex code as string representing the sender's address */
+    sender: String,
+    /** Required; Hex code as string representing Move module location */
+    package_object_id: String,
+    /** Required; Name of the move module */
+    module: String,
+    /** Required; Name of the function to be called in the move module */
+    function: String,
+    /** Required; JSON representation of the arguments */
+    args: Vec<serde_json::Value>,
+    /** Required; Hex code as string representing the gas object id */
+    gas_object_id: String,
+    /** Required; Gas budget required as a cap for gas usage */
+    gas_budget: u64,
+}
+
+/**
+Execute a Move call transaction by calling the specified function in the
+module of the given package. Arguments are passed in and type will be
+inferred from function signature. Gas usage is capped by the gas_budget.
+
+Example CallRequest
 {
     "sender": "b378b8d26c4daa95c5f6a2e2295e6e5f34371c1659e95f572788ffa55c265363",
     "package_object_id": "0x2",
@@ -386,27 +471,11 @@ async fn publish(
     "gas_object_id": "1AC945CA31E77991654C0A0FCA8B0FD9C469B5C6",
     "gas_budget": 2000
 }
-* ------------------------
-*/
-// TODO: Adjust call specs based on how linter officially lands (pull#508)
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct CallRequest {
-    sender: String,
-    package_object_id: String,
-    module: String,
-    function: String,
-    args: Vec<serde_json::Value>,
-    gas_object_id: String,
-    gas_budget: u64,
-}
-
-/**
- * [WALLET] Call move module.
  */
 #[endpoint {
     method = POST,
-    path = "/wallet/call",
+    path = "/call",
+    tags = [ "wallet" ],
 }]
 #[allow(unused_variables)]
 async fn call(
@@ -422,20 +491,23 @@ async fn call(
 }
 
 /**
-* 'SyncRequest' represents the address that requires a sync.
+Request containing the address that requires a sync.
 */
+// TODO: This call may not be required. Sync should not need to be triggered by user.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct SyncRequest {
+    /** Required; Hex code as string representing the address */
     address: String,
 }
 
 /**
- * [WALLET] Synchronize client state with authorities.
+Synchronize client state with authorities. This will fetch the latest information
+on all objects owned by each address that is managed by this client state.
  */
 #[endpoint {
     method = POST,
-    path = "/wallet/sync",
+    path = "/sync",
     tags = [ "wallet" ],
 }]
 #[allow(unused_variables)]
