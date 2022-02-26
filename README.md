@@ -3,7 +3,7 @@
 [![Build Status](https://github.com/mystenlabs/fastnft/actions/workflows/rust.yml/badge.svg)](https://github.com/mystenlabs/fastnft/actions/workflows/rust.yml)
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE.md)
 
-Sui is a decentralized permisionless smart contracts platform
+Sui is a decentralized and permisionless smart contracts platform
 developed with a goal of efficient management of rich assets. Sui uses
 low-latency scalable and reliable broadcast between a set of validators to
 ensure the safety of common operations on assets. It relies on full
