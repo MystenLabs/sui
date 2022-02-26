@@ -448,9 +448,9 @@ async fn start_network(
     let network_conf_path = &working_dir.join("network.conf");
     let genesis_conf_path = &working_dir.join("genesis.conf");
 
-    let mut config = NetworkConfig::read_or_create(&network_conf_path)?;
+    let mut config = NetworkConfig::read_or_create(network_conf_path)?;
     let mut port_allocator = PortAllocator::new(starting_port);
-    let mut genesis_config = genesis.unwrap_or(GenesisConfig::default_genesis(&genesis_conf_path)?);
+    let mut genesis_config = genesis.unwrap_or(GenesisConfig::default_genesis(genesis_conf_path)?);
     let authorities = genesis_config
         .authorities
         .iter()
@@ -471,7 +471,7 @@ async fn start_network(
     .execute(&mut config)
     .await?;
 
-    let mut config = NetworkConfig::read(&network_conf_path)?;
+    let mut config = NetworkConfig::read(network_conf_path)?;
 
     // Start network
     let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
