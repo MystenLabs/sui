@@ -101,7 +101,7 @@ pub struct ClientSingleAddressStore {
     /// Confirmed objects with it's ref owned by the client.
     pub object_refs: DBMap<ObjectID, ObjectRef>,
     /// Certificate <-> object id linking map.
-    pub object_certs: DBMap<ObjectID, Vec<TransactionDigest>>,
+    pub object_certs: DBMap<ObjectRef, TransactionDigest>,
     /// Map from object ref to actual object to track object history
     /// There can be duplicates and we never delete objects
     pub objects: DBMap<ObjectRef, Object>,

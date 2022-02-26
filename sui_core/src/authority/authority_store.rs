@@ -449,7 +449,7 @@ impl AuthorityStore {
             .parent_sync
             .iter()
             // Make the max possible entry for this object ID.
-            .skip_prior_to(&(object_id, SEQUENCE_NUMBER_MAX, OBJECT_DIGEST_MAX))?;
+            .skip_prior_to(&(object_id, SequenceNumber::MAX, OBJECT_DIGEST_MAX))?;
 
         Ok(iterator.next().and_then(|(obj_ref, tx_digest)| {
             if obj_ref.0 == object_id {

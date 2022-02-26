@@ -264,17 +264,27 @@ impl<A> ClientState<A> {
     pub fn object_refs(&self) -> impl Iterator<Item = (ObjectID, ObjectRef)> + '_ {
         self.store.object_refs.iter()
     }
+
+    fn tx_digests_for_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Vec<TransactionDigest>, SuiError> {
+        let digests: Vec<_> = self
+            .store
+            .object_certs
+            .iter()
+            .skip_to(&(*object_id, SequenceNumber::MIN, ObjectDigest::MIN))?
+            .take_while(|((oid, _, _), _)| oid == object_id)
+            .map(|(_k, v)| v)
+            .collect();
+        Ok(digests)
+    }
+
     pub fn certificates(
         &self,
         object_id: &ObjectID,
     ) -> Result<Vec<CertifiedTransaction>, SuiError> {
-        let tx_digests =
-            self.store
-                .object_certs
-                .get(object_id)?
-                .ok_or(SuiError::ObjectNotFound {
-                    object_id: *object_id,
-                })?;
+        let tx_digests = self.tx_digests_for_object(object_id)?;
 
         // we need to check we get one certificate per digest, or we lost one
         self.store
@@ -296,9 +306,6 @@ impl<A> ClientState<A> {
         parent_tx_digest: &TransactionDigest,
     ) -> Result<(), SuiError> {
         let (object_id, _, _) = object_ref;
-        let mut tx_digests = self.store.object_certs.get(object_id)?.unwrap_or_default();
-        tx_digests.push(*parent_tx_digest);
-
         // Multi table atomic insert using batches
         let batch = self
             .store
@@ -306,7 +313,7 @@ impl<A> ClientState<A> {
             .batch()
             .insert_batch(
                 &self.store.object_certs,
-                std::iter::once((object_id, &tx_digests.to_vec())),
+                std::iter::once((object_ref, parent_tx_digest)),
             )?
             .insert_batch(
                 &self.store.object_refs,
@@ -318,12 +325,15 @@ impl<A> ClientState<A> {
     }
 
     pub fn remove_object_info(&mut self, object_id: &ObjectID) -> Result<(), SuiError> {
+        let min_for_id = (*object_id, SequenceNumber::MIN, ObjectDigest::MIN);
+        let max_for_id = (*object_id, SequenceNumber::MAX, ObjectDigest::MAX);
+
         // Multi table atomic delete using batches
         let batch = self
             .store
             .object_refs
             .batch()
-            .delete_batch(&self.store.object_certs, std::iter::once(object_id))?
+            .delete_range(&self.store.object_certs, &min_for_id, &max_for_id)?
             .delete_batch(&self.store.object_refs, std::iter::once(object_id))?;
         // Execute atomic write of opers
         batch.write()?;
