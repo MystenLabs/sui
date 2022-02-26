@@ -481,14 +481,7 @@ async fn start_network(
 #[tokio::test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
-
-    SuiCommand::Genesis { config: None }
-        .execute(&mut config)
-        .await?;
-
-    // Start network
-    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+    let network = start_network(working_dir.path(), 10500, None).await?;
 
     // Wait for authorities to come alive.
     retry_assert!(
@@ -564,13 +557,11 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .await?;
     resp.print(true);
 
-    let mut count = 0;
-    while count < 5 && !logs_contain("Mutated Objects:") {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        count += 1;
-    }
+    retry_assert!(
+        logs_contain("Mutated Objects:"),
+        Duration::from_millis(1000)
+    );
     assert!(logs_contain("Created Objects:"));
-    assert!(count < 5);
 
     // Get the created object
     let created_obj: ObjectID;
@@ -658,14 +649,11 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
 
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    let mut count = 0;
-    while count < 5 && !logs_contain("Mutated Objects:") {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        count += 1;
-    }
+    retry_assert!(
+        logs_contain("Mutated Objects:"),
+        Duration::from_millis(1000)
+    );
     assert!(logs_contain("Created Objects:"));
-    assert!(count < 5);
 
     network.abort();
     Ok(())
