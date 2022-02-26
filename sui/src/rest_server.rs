@@ -325,8 +325,8 @@ async fn sui_start(
 
     // Sync all accounts.
     for address in addresses.iter() {
-        let client_state = wallet_context
-            .get_or_create_client_state(address)
+        wallet_context
+            .create_account_state(address)
             .map_err(|error| {
                 custom_http_error(
                     StatusCode::CONFLICT,
@@ -334,12 +334,16 @@ async fn sui_start(
                 )
             })?;
 
-        client_state.sync_client_state().await.map_err(|err| {
-            custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Sync error: {:?}", err),
-            )
-        })?;
+        wallet_context
+            .address_manager
+            .sync_client_state(*address)
+            .await
+            .map_err(|err| {
+                custom_http_error(
+                    StatusCode::FAILED_DEPENDENCY,
+                    format!("Sync error: {:?}", err),
+                )
+            })?;
     }
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
@@ -421,18 +425,19 @@ async fn get_addresses(
     // TODO: Speed up sync operations by kicking them off concurrently.
     // Also need to investigate if this should be an automatic sync or manually triggered.
     for address in addresses.iter() {
-        let client_state = match wallet_context.get_or_create_client_state(address) {
-            Ok(client_state) => client_state,
-            Err(err) => {
-                *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-                return Err(custom_http_error(
-                    StatusCode::FAILED_DEPENDENCY,
-                    format!("Can't create client state: {err}"),
-                ));
-            }
-        };
+        if let Err(err) = wallet_context.create_account_state(address) {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Can't create client state: {err}"),
+            ));
+        }
 
-        if let Err(err) = client_state.sync_client_state().await {
+        if let Err(err) = wallet_context
+            .address_manager
+            .sync_client_state(*address)
+            .await
+        {
             *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,

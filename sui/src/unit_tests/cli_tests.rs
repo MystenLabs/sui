@@ -14,7 +14,6 @@ use sui::config::{
 };
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
-use sui_core::client::Client;
 use sui_network::network::PortAllocator;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
