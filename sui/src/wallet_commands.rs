@@ -159,7 +159,7 @@ impl WalletCommands {
                     .await?
                     .get_single_owner_address()?;
                 let client_state = context.get_or_create_client_state(sender)?;
-                let gas_obj_ref = client_state.object_ref(*gas)?;
+                let gas_obj_ref = client_state.latest_object_ref(gas)?;
 
                 let (cert, effects) = client_state
                     .publish(path.clone(), gas_obj_ref, *gas_budget)
@@ -223,7 +223,7 @@ impl WalletCommands {
                 )?;
 
                 // Fetch the object info for the gas obj
-                let gas_obj_ref = client_state.object_ref(*gas)?;
+                let gas_obj_ref = client_state.latest_object_ref(gas)?;
 
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
