@@ -4,7 +4,7 @@ module Examples::Hero {
     use Examples::TrustedCoin::EXAMPLE;
     use Sui::Coin::{Self, Coin};
     use Sui::Event;
-    use Sui::ID::{Self, VersionedID, IDBytes};
+    use Sui::ID::{Self, ID, VersionedID};
     use Sui::Math;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
@@ -61,9 +61,9 @@ module Examples::Hero {
         /// Address of the user that slayed the boar
         slayer_address: address,
         /// ID of the Hero that slayed the boar
-        hero: IDBytes,
+        hero: ID,
         /// ID of the now-deceased boar
-        boar: IDBytes,
+        boar: ID,
     }
 
     /// Address of the admin account that receives payment for swords
@@ -137,8 +137,8 @@ module Examples::Hero {
         // let the world know about the hero's triumph by emitting an event!
         Event::emit(BoarSlainEvent {
             slayer_address: TxContext::get_signer_address(ctx),
-            hero: *ID::get_inner(&hero.id),
-            boar: *ID::get_inner(&boar_id),
+            hero: *ID::inner(&hero.id),
+            boar: *ID::inner(&boar_id),
         });
         ID::delete(boar_id);
 
