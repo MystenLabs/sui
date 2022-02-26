@@ -265,41 +265,6 @@ impl<A> ClientState<A> {
         self.store.object_refs.iter()
     }
 
-    fn tx_digests_for_object(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<Vec<TransactionDigest>, SuiError> {
-        let digests: Vec<_> = self
-            .store
-            .object_certs
-            .iter()
-            .skip_to(&(*object_id, SequenceNumber::MIN, ObjectDigest::MIN))?
-            .take_while(|((oid, _, _), _)| oid == object_id)
-            .map(|(_k, v)| v)
-            .collect();
-        Ok(digests)
-    }
-
-    pub fn certificates(
-        &self,
-        object_id: &ObjectID,
-    ) -> Result<Vec<CertifiedTransaction>, SuiError> {
-        let tx_digests = self.tx_digests_for_object(object_id)?;
-
-        // we need to check we get one certificate per digest, or we lost one
-        self.store
-            .certificates
-            .multi_get(&tx_digests)?
-            .into_iter()
-            .zip(tx_digests)
-            .map(|(opt_cert, tx_digest)| {
-                opt_cert.ok_or(SuiError::CertificateNotfound {
-                    certificate_digest: tx_digest,
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()
-    }
-
     pub fn insert_object_info(
         &mut self,
         object_ref: &ObjectRef,
