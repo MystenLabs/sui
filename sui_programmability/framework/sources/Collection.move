@@ -2,7 +2,7 @@ module Sui::Collection {
     use Std::Errors;
     use Std::Option::{Self, Option};
     use Std::Vector::Self;
-    use Sui::ID::{Self, VersionedID, IDBytes};
+    use Sui::ID::{Self, ID, VersionedID};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
 
@@ -17,7 +17,7 @@ module Sui::Collection {
 
     struct Collection has key {
         id: VersionedID,
-        objects: vector<IDBytes>,
+        objects: vector<ID>,
         max_capacity: u64,
     }
 
@@ -34,7 +34,7 @@ module Sui::Collection {
         );
         Collection {
             id: TxContext::new_id(ctx),
-            objects: Vector::empty<IDBytes>(),
+            objects: Vector::empty(),
             max_capacity,
         }
     }
@@ -56,24 +56,24 @@ module Sui::Collection {
             size(c) + 1 <= c.max_capacity,
             Errors::limit_exceeded(EMAX_CAPACITY_EXCEEDED)
         );
-        let id_bytes = ID::get_id_bytes(&object);
-        if (contains(c, id_bytes)) {
+        let id = ID::id(&object);
+        if (contains(c, id)) {
             abort EOBJECT_DOUBLE_ADD
         };
-        Vector::push_back(&mut c.objects, *id_bytes);
+        Vector::push_back(&mut c.objects, *id);
         Transfer::transfer_to_object(object, c);
     }
 
     /// Check whether the collection contains a specific object,
     /// identified by the object id in bytes.
-    public fun contains(c: &Collection, id_bytes: &IDBytes): bool {
-        Option::is_some(&find(c, id_bytes))
+    public fun contains(c: &Collection, id: &ID): bool {
+        Option::is_some(&find(c, id))
     }
 
     /// Remove and return the object from the collection.
     /// Abort if the object is not found.
     public fun remove<T: key>(c: &mut Collection, object: T): T {
-        let idx = find(c, ID::get_id_bytes(&object));
+        let idx = find(c, ID::id(&object));
         if (Option::is_none(&idx)) {
             abort EOBJECT_DOUBLE_ADD
         };
@@ -100,11 +100,11 @@ module Sui::Collection {
 
     /// Look for the object identified by `id_bytes` in the collection.
     /// Returns the index if found, none if not found.
-    fun find(c: &Collection, id_bytes: &IDBytes): Option<u64> {
+    fun find(c: &Collection, id: &ID): Option<u64> {
         let i = 0;
         let len = size(c);
         while (i < len) {
-            if (Vector::borrow(&c.objects, i) == id_bytes) {
+            if (Vector::borrow(&c.objects, i) == id) {
                 return Option::some(i)
             };
             i = i + 1;

@@ -614,7 +614,7 @@ async fn test_handle_move_transaction() {
 
     // Check that gas is properly deducted.
     // If the number changes, we want to verify that the change is intended.
-    let gas_cost = 53;
+    let gas_cost = 54;
     let gas_payment_object = authority_state
         .get_object(&gas_payment_object_id)
         .await

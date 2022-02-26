@@ -2,7 +2,7 @@ module Examples::TicTacToe {
     use Std::Option::{Self, Option};
     use Std::Vector;
 
-    use Sui::ID::{Self, VersionedID, IDBytes};
+    use Sui::ID::{Self, ID, VersionedID};
     use Sui::Event;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
@@ -28,7 +28,7 @@ module Examples::TicTacToe {
 
     struct MarkMintCap has key {
         id: VersionedID,
-        game_id: IDBytes,
+        game_id: ID,
         remaining_supply: u8,
     }
 
@@ -45,14 +45,14 @@ module Examples::TicTacToe {
 
     struct MarkSentEvent has copy, drop {
         // The Object ID of the game object
-        game_id: IDBytes,
+        game_id: ID,
         // The object ID of the mark sent
-        mark_id: IDBytes,
+        mark_id: ID,
     }
 
     struct GameEndEvent has copy, drop {
         // The Object ID of the game object
-        game_id: IDBytes,
+        game_id: ID,
     }
 
     /// `x_address` and `o_address` are the account address of the two players.
@@ -60,7 +60,7 @@ module Examples::TicTacToe {
         // TODO: Validate sender address, only GameAdmin can create games.
 
         let id = TxContext::new_id(ctx);
-        let game_id_bytes = *ID::get_inner(&id);
+        let game_id = *ID::inner(&id);
         let gameboard = vector[
             vector[Option::none(), Option::none(), Option::none()],
             vector[Option::none(), Option::none(), Option::none()],
@@ -77,13 +77,13 @@ module Examples::TicTacToe {
         Transfer::transfer(game, TxContext::get_signer_address(ctx));
         let cap = MarkMintCap {
             id: TxContext::new_id(ctx),
-            game_id: copy game_id_bytes,
+            game_id: copy game_id,
             remaining_supply: 5,
         };
         Transfer::transfer(cap, x_address);
         let cap = MarkMintCap {
             id: TxContext::new_id(ctx),
-            game_id: game_id_bytes,
+            game_id,
             remaining_supply: 5,
         };
         Transfer::transfer(cap, o_address);
@@ -100,7 +100,7 @@ module Examples::TicTacToe {
         // The game server will then call `place_mark` to place this mark.
         Event::emit(MarkSentEvent {
             game_id: *&cap.game_id,
-            mark_id: *ID::get_id_bytes(&mark),
+            mark_id: *ID::inner(&mark.id),
         });
         Transfer::transfer(mark, game_address);
     }
@@ -126,7 +126,7 @@ module Examples::TicTacToe {
 
         if (game.game_status != IN_PROGRESS) {
             // Notify the server that the game ended so that it can delete the game.
-            Event::emit(GameEndEvent { game_id: *ID::get_id_bytes(game) });
+            Event::emit(GameEndEvent { game_id: *ID::inner(&game.id) });
             if (game.game_status == X_WIN) {
                 Transfer::transfer( Trophy { id: TxContext::new_id(ctx) }, *&game.x_address);
             } else if (game.game_status == O_WIN) {
