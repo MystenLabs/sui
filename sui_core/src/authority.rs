@@ -561,13 +561,15 @@ impl AuthorityState {
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
         let vm = adapter::verify_and_link(&temporary_store, &modules, package_id, natives)?;
-        adapter::store_package_and_init_modules(
+        if let ExecutionStatus::Failure { error, .. } = adapter::store_package_and_init_modules(
             &mut temporary_store,
             &vm,
             modules,
             ctx,
             MAX_GAS_BUDGET,
-        )?;
+        ) {
+            return Err(*error);
+        };
         self._database
             .update_objects_state_for_genesis(temporary_store, ctx.digest())
     }
