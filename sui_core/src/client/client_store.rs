@@ -98,8 +98,6 @@ pub struct ClientSingleAddressStore {
     // The remaining fields are used to minimize networking, and may not always be persisted locally.
     /// Known certificates, indexed by TX digest.
     pub certificates: DBMap<TransactionDigest, CertifiedTransaction>,
-    /// The known objects with it's sequence number owned by the client.
-    pub object_sequence_numbers: DBMap<ObjectID, SequenceNumber>,
     /// Confirmed objects with it's ref owned by the client.
     pub object_refs: DBMap<ObjectID, ObjectRef>,
     /// Certificate <-> object id linking map.
@@ -132,7 +130,6 @@ impl ClientSingleAddressStore {
         ClientSingleAddressStore {
             pending_transactions: client_store::reopen_db(&db, PENDING_TRANSACTIONS_CF_NAME),
             certificates: client_store::reopen_db(&db, CERT_CF_NAME),
-            object_sequence_numbers: client_store::reopen_db(&db, SEQ_NUMBER_CF_NAME),
             object_refs: client_store::reopen_db(&db, OBJ_REF_CF_NAME),
             object_certs: client_store::reopen_db(&db, TX_DIGEST_TO_CERT_CF_NAME),
             objects: client_store::reopen_db(&db, OBJECT_CF_NAME),

@@ -424,11 +424,6 @@ async fn fund_account(
             client_ref.insert_object(object).await;
             client
                 .store()
-                .object_sequence_numbers
-                .insert(&object_id, &SequenceNumber::new())
-                .unwrap();
-            client
-                .store()
                 .object_refs
                 .insert(&object_id, &object_ref)
                 .unwrap();
@@ -708,11 +703,10 @@ fn test_client_state_sync() {
 
     let mut sender = rt.block_on(init_local_client_state(authority_objects));
 
-    let old_object_ids: BTreeMap<_, _> = sender.store().object_sequence_numbers.iter().collect();
+    let old_object_refs: BTreeMap<_, _> = sender.store().object_refs.iter().collect();
     let old_certificates: BTreeMap<_, _> = sender.store().certificates.iter().collect();
 
     // Remove all client-side data
-    sender.store().object_sequence_numbers.clear().unwrap();
     sender.store().certificates.clear().unwrap();
     sender.store().object_refs.clear().unwrap();
     assert!(sender.get_owned_objects().is_empty());
@@ -723,8 +717,8 @@ fn test_client_state_sync() {
     // Confirm data are the same after sync
     assert!(!sender.get_owned_objects().is_empty());
     assert_eq!(
-        &old_object_ids,
-        &sender.store().object_sequence_numbers.iter().collect()
+        &old_object_refs,
+        &sender.store().object_refs.iter().collect()
     );
     for tx_digest in old_certificates.keys() {
         // valid since our test authority should not lead us to download new certs
@@ -767,7 +761,7 @@ async fn test_client_state_sync_with_transferred_object() {
 
     // Client 2's local object_id and cert should be empty before sync
     assert!(client2.get_owned_objects().is_empty());
-    assert!(client2.store().object_sequence_numbers.is_empty());
+    assert!(client2.store().object_refs.is_empty());
     assert!(&client2.store().certificates.is_empty());
 
     // Sync client state
@@ -775,7 +769,7 @@ async fn test_client_state_sync_with_transferred_object() {
 
     // Confirm client 2 received the new object id and cert
     assert_eq!(1, client2.get_owned_objects().len());
-    assert_eq!(1, client2.store().object_sequence_numbers.iter().count());
+    assert_eq!(1, client2.store().object_refs.iter().count());
     assert_eq!(1, client2.store().certificates.iter().count());
 }
 
@@ -1406,11 +1400,7 @@ fn test_transfer_object_error() {
         .object_refs
         .insert(&obj.id(), &obj.to_object_reference())
         .unwrap();
-    sender
-        .store()
-        .object_sequence_numbers
-        .insert(&obj.id(), &SequenceNumber::new())
-        .unwrap();
+
     let result = rt.block_on(sender.transfer_object(obj.id(), gas_object, recipient));
     assert!(result.is_err());
 
@@ -1430,18 +1420,9 @@ fn test_transfer_object_error() {
     let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
     assert!(result.is_err());
 
-    // Test 4: Invalid sequence number;
-    let object_id = *objects.next().unwrap();
-
-    // give object an incorrect sequence number
-    sender
-        .store()
-        .object_sequence_numbers
-        .insert(&object_id, &SequenceNumber::from(2))
-        .unwrap();
-
-    let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
-    assert!(result.is_err());
+    // Test 4: Used to detect a mismatch between the object reference in `object_refs`, on the one hand, and
+    // the sequence number table (then part of the client state), used in executing the transaction, on the other hand.
+    // There is now one single table.
 
     // Test 5: The client does not allow concurrent transfer;
     let object_id = *objects.next().unwrap();
@@ -1468,29 +1449,32 @@ fn test_client_store() {
 
     // Make random sequence numbers
     let keys_vals = (0..100)
-        .map(|i| (ObjectID::random(), SequenceNumber::from(i)))
+        .map(|i| {
+            let oid = ObjectID::random();
+            (oid, (oid, SequenceNumber::from(i), ObjectDigest::random()))
+        })
         .collect::<Vec<_>>();
     // Try insert batch
     store
-        .object_sequence_numbers
+        .object_refs
         .multi_insert(keys_vals.clone().into_iter())
         .unwrap();
 
     // Check the size
-    assert_eq!(store.object_sequence_numbers.iter().count(), 100);
+    assert_eq!(store.object_refs.iter().count(), 100);
 
     // Check that the items are all correct
     keys_vals.iter().for_each(|(k, v)| {
-        assert_eq!(*v, store.object_sequence_numbers.get(k).unwrap().unwrap());
+        assert_eq!(*v, store.object_refs.get(k).unwrap().unwrap());
     });
 
     // Check that are removed
     store
-        .object_sequence_numbers
+        .object_refs
         .multi_remove(keys_vals.into_iter().map(|(k, _)| k))
         .unwrap();
 
-    assert!(store.object_sequence_numbers.is_empty());
+    assert!(store.object_refs.is_empty());
 }
 
 #[tokio::test]
@@ -2231,11 +2215,7 @@ async fn test_transfer_pending_transactions() {
         .object_refs
         .insert(&obj.id(), &obj.to_object_reference())
         .unwrap();
-    sender_state
-        .store()
-        .object_sequence_numbers
-        .insert(&obj.id(), &SequenceNumber::new())
-        .unwrap();
+
     let result = sender_state
         .transfer_object(obj.id(), gas_object, recipient)
         .await;
