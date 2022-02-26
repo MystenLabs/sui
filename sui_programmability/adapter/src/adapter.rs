@@ -38,8 +38,8 @@ use std::{
 pub use move_vm_runtime::move_vm::MoveVM;
 
 macro_rules! exec_failure {
-    ($gas:expr, $err:expr) => {
-        return Ok(ExecutionStatus::new_failure($gas, $err))
+    ($gas_used:expr, $err:expr) => {
+        return Ok(ExecutionStatus::new_failure($gas_used, $err))
     };
 }
 
@@ -311,8 +311,10 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         ctx,
         gas_budget - gas_used_for_publish,
     ) {
-        Ok(ok) => ok,
-        Err(err) => exec_failure!(gas::MIN_MOVE, err),
+        ExecutionStatus::Success { gas_used } => gas_used,
+        ExecutionStatus::Failure { gas_used, error } => {
+            exec_failure!(gas_used + gas_used_for_publish, *error)
+        }
     };
 
     let total_gas_used = gas_used_for_publish + gas_used_for_init;
@@ -330,6 +332,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 }
 
 /// Store package in state_view and call module initializers
+/// Return gas used for initialization
 pub fn store_package_and_init_modules<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
@@ -339,7 +342,7 @@ pub fn store_package_and_init_modules<
     modules: Vec<CompiledModule>,
     ctx: &mut TxContext,
     gas_budget: u64,
-) -> Result<u64, SuiError> {
+) -> ExecutionStatus {
     let mut modules_to_init = Vec::new();
     for module in modules.iter() {
         if module_has_init(module) {
@@ -362,7 +365,7 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
     module_ids_to_init: Vec<ModuleId>,
     ctx: &mut TxContext,
     gas_budget: u64,
-) -> Result<u64, SuiError> {
+) -> ExecutionStatus {
     let mut total_gas_used = 0;
     let mut current_gas_budget = gas_budget;
     for module_id in module_ids_to_init {
@@ -383,8 +386,11 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
             true,
         ) {
             ExecutionStatus::Success { gas_used } => gas_used,
-            ExecutionStatus::Failure { gas_used: _, error } => {
-                return Err(*error);
+            ExecutionStatus::Failure { gas_used, error } => {
+                return ExecutionStatus::Failure {
+                    gas_used: gas_used + total_gas_used,
+                    error,
+                };
             }
         };
         // This should never be the case as current_gas_budget
@@ -396,7 +402,9 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
         total_gas_used += gas_used;
     }
 
-    Ok(total_gas_used)
+    ExecutionStatus::Success {
+        gas_used: total_gas_used,
+    }
 }
 
 /// Given a list of `modules`, links each module against its
