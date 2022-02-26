@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use dropshot::endpoint;
+use dropshot::{endpoint, Query};
 use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
+use sui_types::object::ObjectRead;
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
 
@@ -48,6 +49,8 @@ async fn main() -> Result<(), String> {
     api.register(genesis).unwrap();
     api.register(stop).unwrap();
     api.register(get_addresses).unwrap();
+    api.register(get_objects).unwrap();
+    api.register(object_info).unwrap();
 
     let api_context = ServerContext::new();
 
@@ -141,8 +144,9 @@ async fn genesis(
                 format!("Wallet config was unable to be created: {error}"),
             )
         })?;
-    // Need to use a random id because rocksdb locks on current process which means even if the directory is deleted
-    // the lock will remain causing an IO Error when a restart is attempted.
+    // Need to use a random id because rocksdb locks on current process which
+    // means even if the directory is deleted the lock will remain causing an
+    // IO Error when a restart is attempted.
     let client_db_path = format!("client_db_{:?}", ObjectID::random());
     wallet_config.db_folder_path = working_dir.join(&client_db_path);
     *server_context.client_db_path.lock().unwrap() = client_db_path;
@@ -347,8 +351,7 @@ async fn get_addresses(
     // TODO: Find a better way to utilize wallet context here that does not require 'take()'
     let wallet_context = server_context.wallet_context.lock().unwrap().take();
     let mut wallet_context = wallet_context.ok_or_else(|| {
-        HttpError::for_client_error(
-            None,
+        custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
             "Wallet Context does not exist.".to_string(),
         )
@@ -391,6 +394,212 @@ async fn get_addresses(
             .into_iter()
             .map(|address| format!("{}", address))
             .collect(),
+    }))
+}
+
+/**
+* 'GetObjectsRequest' represents the request to get objects for an address.
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct GetObjectsRequest {
+    address: String,
+}
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct Object {
+    object_id: String,
+    object_ref: serde_json::Value,
+}
+
+/**
+ * 'GetObjectsResponse' is a collection of objects owned by an address.
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct GetObjectsResponse {
+    objects: Vec<Object>,
+}
+
+/**
+ * [WALLET] Return all objects owned by the account address.
+ */
+// TODO: Add pagination support
+#[endpoint {
+    method = GET,
+    path = "/wallet/objects",
+}]
+async fn get_objects(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    query: Query<GetObjectsRequest>,
+) -> Result<HttpResponseOk<GetObjectsResponse>, HttpError> {
+    let server_context = rqctx.context();
+
+    let get_objects_params = query.into_inner();
+    let address = get_objects_params.address;
+
+    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
+    let wallet_context = wallet_context.as_mut().ok_or_else(|| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist.".to_string(),
+        )
+    })?;
+
+    let address = &decode_bytes_hex(address.as_str()).map_err(|error| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            format!("Could not decode address from hex {error}"),
+        )
+    })?;
+
+    let client_state = match wallet_context.get_or_create_client_state(address) {
+        Ok(client_state) => client_state,
+        Err(error) => {
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Could not get or create client state: {error}"),
+            ));
+        }
+    };
+    let object_refs = client_state.object_refs();
+
+    Ok(HttpResponseOk(GetObjectsResponse {
+        objects: object_refs
+            .map(|(obj_id, object_ref)| Object {
+                object_id: obj_id.to_string(),
+                object_ref: json!(object_ref),
+            })
+            .collect::<Vec<Object>>(),
+    }))
+}
+
+/**
+* `GetObjectInfoRequest` represents the owner & object for which info is to be
+* retrieved.
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct GetObjectInfoRequest {
+    owner: String,
+    object_id: String,
+}
+
+/**
+* 'ObjectInfoResponse' represents the object info on the network.
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+struct ObjectInfoResponse {
+    owner: String,
+    version: String,
+    id: String,
+    readonly: String,
+    obj_type: String,
+    data: serde_json::Value,
+}
+
+/**
+ * [WALLET] Get object info.
+ */
+#[endpoint {
+    method = GET,
+    path = "/wallet/object_info",
+}]
+async fn object_info(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    query: Query<GetObjectInfoRequest>,
+) -> Result<HttpResponseOk<ObjectInfoResponse>, HttpError> {
+    let server_context = rqctx.context();
+    let object_info_params = query.into_inner();
+
+    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
+    let wallet_context = server_context.wallet_context.lock().unwrap().take();
+    let mut wallet_context = wallet_context.ok_or_else(|| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist.".to_string(),
+        )
+    })?;
+
+    let object_id = match ObjectID::try_from(object_info_params.object_id) {
+        Ok(object_id) => object_id,
+        Err(error) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("{error}"),
+            ));
+        }
+    };
+
+    let owner = match decode_bytes_hex(object_info_params.owner.as_str()) {
+        Ok(owner) => owner,
+        Err(error) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Could not decode address from hex {error}"),
+            ));
+        }
+    };
+
+    // Fetch the object ref
+    let client_state = match wallet_context.get_or_create_client_state(&owner) {
+        Ok(client_state) => client_state,
+        Err(error) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!(
+                    "Could not get client state for account {:?}: {error}",
+                    owner
+                ),
+            ));
+        }
+    };
+
+    let (object, layout) = match client_state.get_object_info(object_id).await {
+        Ok(ObjectRead::Exists(_, object, layout)) => (object, layout),
+        Ok(ObjectRead::Deleted(_)) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({object_id}) was deleted."),
+            ));
+        }
+        Ok(ObjectRead::NotExists(_)) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({object_id}) does not exist."),
+            ));
+        }
+        Err(error) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Error while getting object info: {:?}", error),
+            ));
+        }
+    };
+
+    let object_data = object.to_json(&layout).unwrap_or_else(|_| json!(""));
+
+    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+
+    Ok(HttpResponseOk(ObjectInfoResponse {
+        owner: format!("{:?}", object.owner),
+        version: format!("{:?}", object.version().value()),
+        id: format!("{:?}", object.id()),
+        readonly: format!("{:?}", object.is_read_only()),
+        obj_type: format!(
+            "{:?}",
+            object
+                .data
+                .type_()
+                .map_or("Type Unwrap Failed".to_owned(), |type_| type_
+                    .module
+                    .as_ident_str()
+                    .to_string())
+        ),
+        data: object_data,
     }))
 }
 
