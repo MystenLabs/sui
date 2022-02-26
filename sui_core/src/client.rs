@@ -248,7 +248,7 @@ impl<A> ClientState<A> {
         self.address
     }
 
-    pub fn next_sequence_number(&self, object_id: &ObjectID) -> Result<SequenceNumber, SuiError> {
+    pub fn highest_known_version(&self, object_id: &ObjectID) -> Result<SequenceNumber, SuiError> {
         if self.store.object_sequence_numbers.contains_key(object_id)? {
             Ok(self
                 .store
@@ -398,7 +398,7 @@ where
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         for object_kind in &transaction.input_objects() {
             let object_id = object_kind.object_id();
-            let next_sequence_number = self.next_sequence_number(&object_id).unwrap_or_default();
+            let next_sequence_number = self.highest_known_version(&object_id).unwrap_or_default();
             fp_ensure!(
                 object_kind.version() >= next_sequence_number,
                 SuiError::UnexpectedSequenceNumber {

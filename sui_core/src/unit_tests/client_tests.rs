@@ -494,7 +494,7 @@ fn test_initiating_valid_transfer() {
         .block_on(sender.transfer_object(object_id_1, gas_object, recipient))
         .unwrap();
     assert_eq!(
-        sender.next_sequence_number(&object_id_1),
+        sender.highest_known_version(&object_id_1),
         Err(SuiError::ObjectNotFound {
             object_id: object_id_1
         })
@@ -539,7 +539,7 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
         .block_on(sender.transfer_object(object_id, gas_object, recipient))
         .unwrap();
     assert_eq!(
-        sender.next_sequence_number(&object_id),
+        sender.highest_known_version(&object_id),
         Err(ObjectNotFound { object_id })
     );
     assert!(sender.store().pending_transactions.is_empty());
@@ -578,7 +578,7 @@ fn test_initiating_transfer_low_funds() {
         .is_err());
     // Trying to overspend does not block an account.
     assert_eq!(
-        sender.next_sequence_number(&object_id_2),
+        sender.highest_known_version(&object_id_2),
         Ok(SequenceNumber::from(0))
     );
     // assert_eq!(sender.pending_transfer, None);
