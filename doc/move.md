@@ -384,4 +384,145 @@ test the code we have written.
 
 ## Testing a package
 
-TBD
+Sui included support for Move's testing
+[framework](https://github.com/diem/move/blob/main/language/documentation/book/src/unit-testing.md)
+that allows you to write unit tests to test Move code much like test
+frameworks for other languages (e.g., Rust's built-in testing
+[framework](https://doc.rust-lang.org/rust-by-example/testing/unit_testing.html)
+or the JUnit [framework](https://junit.org/) for Java).
+
+An individual Move unit test is encapsulated in a public function that
+has no parameters, no return values, and has the `#[test]`
+annotation - such functions will be executed by the testing framework
+upon executing the following command (in the `my_move_package`
+directory as per our running example):
+
+``` shell
+sui-move test
+```
+
+If we execute this command for the package we created in the previous
+[section](#writing-a-package), we will see the following output
+indicating, unsurprisingly, that no tests have been ran we have not
+written any tests yet:
+
+``` shell
+BUILDING MoveStdlib
+BUILDING Sui
+BUILDING MyMovePackage
+Running Move unit tests
+Test result: OK. Total tests: 0; passed: 0; failed: 0
+```
+
+Let us the write a simple test function and insert it into the M1.move
+file:
+
+``` rust
+    #[test]
+    public fun test_sword_create() {
+        use Sui::TxContext;
+        
+        // create a dummy TxContext for testing
+        let ctx = TxContext::dummy();
+        
+        // create a sword
+        let sword = Sword {
+            id: TxContext::new_id(&mut ctx),
+            magic: 42,
+            strength: 7,                
+        };
+        
+        // check if accessor functions return correct values
+        assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
+    }
+```
+
+The code of the unit test function is largely self-explanatory - we
+create a dummy instance of the `TxContext` struct needed to create
+unique identifier of our sword object, then create the sword itself,
+and finally call its accessor functions to verify that they return
+correct values. Please note that the dummy context is passed to the
+`TxContext::new_id` function as a mutable reference argument (`&mut`)
+and the sword itself is passed to its accessor functions as read-only
+reference argument.
+
+Now that we have written a test, let's try to run the tests again
+then:
+
+``` shell
+sui-move test
+```
+
+After running the test command, however, instead of a test result we
+get a compilation error:
+
+``` shell
+error[E06001]: unused value without 'drop'
+   ┌─ ./sources/M1.move:34:65
+   │  
+ 4 │       struct Sword has key, store {
+   │              ----- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·  
+27 │           let sword = Sword {
+   │               ----- The local variable 'sword' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
+   │ ╭─────────────────────'
+28 │ │             id: TxContext::new_id(&mut ctx),
+29 │ │             magic: 42,
+30 │ │             strength: 7,                
+31 │ │         };
+   │ ╰─────────' The type 'MyMovePackage::M1::Sword' does not have the ability 'drop'
+   · │
+34 │           assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
+   │                                                                   ^ Invalid return
+```
+
+This error message looks quite complicated, but it contains all the
+information needed to understand what went wrong. What happened here
+is that while writing the test, we accidentally stumbled upon one of
+the Move language's safety features.
+
+Please remember that the `Sword` struct represents a game asset
+digitally mimicking a real-world item. At the same time, while a sword
+in a real world cannot simply disappear (though it can be explicitly
+destroyed), there is no such restriction on a digital one. In fact,
+this is exactly what's happening in our test function - we create an
+instance of a `Sword` struct that simply disappears at the end of the
+function call. And this is the gist of the error message we are
+seeing, and on of the solutions (as suggested in the message itself),
+is to add the `drop` ability to the definition of the `Sword` struct,
+which would allow instances of this struct disappear (be
+"dropped"). Arguably, being able to "drop" a valuable asset is not an
+asset property we would like to have, so another solution to our
+problem is to transfer ownership of the sword.
+
+In order to get our test to work, we then add the following line to
+the beginning of our testing function to import the Transfer
+[module](../sui_programmability/framework/sources/Transfer.move):
+
+``` rust
+        use Sui::Transfer;
+
+```
+
+We then use the Transfer module to transfer ownership of the sword to
+a freshly created dummy address by adding the following lines to the
+end of our test function:
+
+``` rust
+        // create a dummy address and transfer the sword
+        let dummy_address = @0xCAFE;        
+        Transfer::transfer(sword, dummy_address);
+```
+
+We can now run the test command again and see that indeed a single
+successful test has been ran:
+
+``` shell
+BUILDING MoveStdlib
+BUILDING Sui
+BUILDING MyMovePackage
+Running Move unit tests
+[ PASS    ] 0x0::M1::test_sword_create
+Test result: OK. Total tests: 1; passed: 1; failed: 0
+```
+
