@@ -19,7 +19,7 @@ use sui_network::network::PortAllocator;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::TransactionEffects;
-use sui_types::object::GAS_VALUE_FOR_TESTING;
+use sui_types::object::{Data, Object, ObjectRead, GAS_VALUE_FOR_TESTING};
 use tokio::task;
 use tokio::task::JoinHandle;
 use tracing_test::traced_test;
@@ -219,19 +219,26 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Error> {
+    use sui_types::crypto::get_key_pair_from_bytes;
+
+    let (admin, admin_key) = get_key_pair_from_bytes(&[
+        10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
+        92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
+        90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
+        105, 254, 59, 163,
+    ]);
+
     let working_dir = tempfile::tempdir()?;
     // Create and save genesis config file
-    // Create 4 authorities, 1 account with 1 gas object with custom id
+    // Create 4 authorities and 1 account
     let genesis_path = working_dir.path().join("genesis.conf");
-    let mut config = GenesisConfig::default_genesis(&genesis_path)?;
+    // Chris's Note: increasing `num_authorities` will break the test!!!!!!!!!!!!!!
+    let num_authorities = 1;
+    let mut config = GenesisConfig::custom_genesis(&genesis_path, num_authorities, 0, 0)?;
     config.accounts.clear();
-    let object_id = ObjectID::random();
     config.accounts.push(AccountConfig {
-        address: None,
-        gas_objects: vec![ObjectConfig {
-            object_id,
-            gas_value: 500,
-        }],
+        address: Some(admin),
+        gas_objects: vec![],
     });
     config
         .move_packages
@@ -260,6 +267,92 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     for (_, id) in network_conf.loaded_move_packages {
         assert!(logs_contain(&*format!("{}", id)));
     }
+
+    // Start network
+    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+
+    // Wait for authorities to come alive.
+    retry_assert!(
+        logs_contain("Listening to TCP traffic on 127.0.0.1"),
+        Duration::from_millis(5000)
+    );
+
+    // Create Wallet context.
+    let mut wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let new_addresses = vec![AccountInfo {
+        address: admin,
+        key_pair: admin_key,
+    }];
+    wallet_conf.accounts = new_addresses;
+
+    let address = wallet_conf.accounts.first().unwrap().address;
+    let mut context = WalletContext::new(wallet_conf)?;
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState { address }
+        .execute(&mut context)
+        .await?
+        .print(true);
+
+    // Print objects owned by `address`
+    let objects = WalletCommands::Objects { address }
+        .execute(&mut context)
+        .await?;
+
+    // if let WalletCommandResult::Objects(object_refs) = objects {
+    //     assert_eq!(object_refs.len(), 1);
+    //     let obj = WalletCommands::Object {
+    //         id: object_refs.first().unwrap().0,
+    //     }
+    //     .execute(&mut context)
+    //     .await?;
+    //     if let WalletCommandResult::Object(ObjectRead::Exists(
+    //         _,
+    //         Object {
+    //             data: Data::Move(m),
+    //             ..
+    //         },
+    //         ..,
+    //     )) = obj
+    //     {
+    //         assert_eq!(m.type_.module.as_str(), "M1");
+    //     } else {
+    //         panic!("WalletCommands::Object returns wrong type {}", obj);
+    //     }
+    // } else {
+    //     panic!("WalletCommands::Objects returns wrong type {}", objects);
+    // }
+
+    // For debug:
+    if let WalletCommandResult::Objects(object_refs) = objects {
+        for (id, ..) in object_refs {
+            let obj = WalletCommands::Object { id }.execute(&mut context).await?;
+            if let WalletCommandResult::Object(or) = obj {
+                let oo = match or {
+                    ObjectRead::Exists(_, oo, ..) => Some(oo),
+                    // Chris's Note: increasing `num_authorities` to greater than 3 will
+                    // cause make the object not exist !!!
+                    ObjectRead::NotExists(id) => {
+                        println!("Not exists {}", id);
+                        None
+                    }
+                    ObjectRead::Deleted((id, ..)) => {
+                        println!("deleted {}", id);
+                        None
+                    }
+                };
+                if let Some(Object {
+                    data: Data::Move(m),
+                    ..
+                }) = oo
+                {
+                    println!("Move Object  {} with id {}", m.type_, id);
+                }
+            }
+        }
+    }
+
+    network.abort();
     Ok(())
 }
 

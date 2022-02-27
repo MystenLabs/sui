@@ -268,9 +268,23 @@ const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
 
 impl GenesisConfig {
     pub fn default_genesis(path: &Path) -> Result<Self, anyhow::Error> {
+        GenesisConfig::custom_genesis(
+            path,
+            DEFAULT_NUMBER_OF_AUTHORITIES,
+            DEFAULT_NUMBER_OF_ACCOUNT,
+            DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
+        )
+    }
+
+    pub fn custom_genesis(
+        path: &Path,
+        num_authorities: usize,
+        num_accounts: usize,
+        num_objects_per_account: usize,
+    ) -> Result<Self, anyhow::Error> {
         let working_dir = path.parent().ok_or(anyhow!("Cannot resolve file path."))?;
         let mut authorities = Vec::new();
-        for _ in 0..DEFAULT_NUMBER_OF_AUTHORITIES {
+        for _ in 0..num_authorities {
             // Get default authority config from deserialization logic.
             let mut authority = AuthorityPrivateInfo::deserialize(Value::String(String::new()))?;
             authority.db_path = working_dir
@@ -279,9 +293,9 @@ impl GenesisConfig {
             authorities.push(authority)
         }
         let mut accounts = Vec::new();
-        for _ in 0..DEFAULT_NUMBER_OF_ACCOUNT {
+        for _ in 0..num_accounts {
             let mut objects = Vec::new();
-            for _ in 0..DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT {
+            for _ in 0..num_objects_per_account {
                 objects.push(ObjectConfig {
                     object_id: ObjectID::random(),
                     gas_value: DEFAULT_GAS_AMOUNT,
