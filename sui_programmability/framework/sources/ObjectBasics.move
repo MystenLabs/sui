@@ -55,12 +55,12 @@ module Sui::ObjectBasics {
     }
 
     public fun wrap(o: Object, ctx: &mut TxContext) {
-        Transfer::transfer(Wrapper { id: TxContext::new_id(ctx), o }, TxContext::get_signer_address(ctx))
+        Transfer::transfer(Wrapper { id: TxContext::new_id(ctx), o }, TxContext::sender(ctx))
     }
 
     public fun unwrap(w: Wrapper, ctx: &mut TxContext) {
         let Wrapper { id, o } = w;
         ID::delete(id);
-        Transfer::transfer(o, TxContext::get_signer_address(ctx))
+        Transfer::transfer(o, TxContext::sender(ctx))
     }
 }

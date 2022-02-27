@@ -16,7 +16,7 @@ module Examples::CombinableObjects {
     }
 
     struct Sandwich has key {
-        id: VersionedID
+        id: VersionedID,
     }
 
     /// Address selling ham, bread, etc
@@ -46,12 +46,12 @@ module Examples::CombinableObjects {
     /// Combine the `ham` and `bread` into a delicious sandwich
     public fun make_sandwich(
         ham: Ham, bread: Bread, ctx: &mut TxContext
-    ): Sandwich {
+    ) {
         let Ham { id: ham_id } = ham;
         let Bread { id: bread_id } = bread;
         ID::delete(ham_id);
         ID::delete(bread_id);
-        Sandwich { id: TxContext::new_id(ctx) }
+        Transfer::transfer(Sandwich { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
 
     fun admin(): address {
