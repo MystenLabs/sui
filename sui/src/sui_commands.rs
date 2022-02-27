@@ -186,6 +186,7 @@ pub async fn genesis(
         for path in genesis_conf.move_packages {
             let mut modules =
                 sui_framework::build_move_package(&path, BuildConfig::default(), false)?;
+
             let package_id = generate_package_id(&mut modules, &mut genesis_ctx)?;
 
             info!("Loaded package [{}] from {:?}.", package_id, path);
@@ -203,7 +204,7 @@ pub async fn genesis(
             preload_modules.clone(),
             &preload_objects,
             config.buffer_size,
-            &mut genesis_ctx,
+            &mut genesis_ctx.clone(),
         )
         .await?;
     }
