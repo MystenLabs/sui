@@ -35,7 +35,7 @@ module Sui::Escrow {
         escrowed: T,
         ctx: &mut TxContext
     ) {
-        let sender = TxContext::get_signer_address(ctx);
+        let sender = TxContext::sender(ctx);
         let id = TxContext::new_id(ctx);
         // escrow the object with the trusted third party
         Transfer::transfer(

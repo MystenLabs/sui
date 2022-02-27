@@ -55,7 +55,7 @@ module Sui::Coin {
     /// and the remaining balance is left is `self`.
     public fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
         let new_coin = withdraw(self, split_amount, ctx);
-        Transfer::transfer(new_coin, TxContext::get_signer_address(ctx));
+        Transfer::transfer(new_coin, TxContext::sender(ctx));
     }
 
     /// Split coin `self` into multiple coins, each with balance specified
