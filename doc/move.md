@@ -403,8 +403,8 @@ sui-move test
 
 If we execute this command for the package we created in the previous
 [section](#writing-a-package), we will see the following output
-indicating, unsurprisingly, that no tests have been ran we have not
-written any tests yet:
+indicating, unsurprisingly, that no tests have ran because we have not
+written any yet!
 
 ``` shell
 BUILDING MoveStdlib
@@ -414,7 +414,7 @@ Running Move unit tests
 Test result: OK. Total tests: 0; passed: 0; failed: 0
 ```
 
-Let us the write a simple test function and insert it into the M1.move
+Let us write a simple test function and insert it into the M1.move
 file:
 
 ``` rust
