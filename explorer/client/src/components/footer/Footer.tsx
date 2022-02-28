@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 
 import ExternalLink from '../external-link/ExternalLink';
+
 import styles from './Footer.module.css';
 
 function Footer() {
