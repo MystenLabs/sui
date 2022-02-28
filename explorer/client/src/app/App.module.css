@@ -1,0 +1,11 @@
+.app {
+    @apply font-sans w-screen;
+}
+
+.search > h2 {
+    @apply ml-[5vw] mb-[1vh];
+}
+
+.search {
+    @apply bg-black text-white pb-4 w-[100vw];
+}

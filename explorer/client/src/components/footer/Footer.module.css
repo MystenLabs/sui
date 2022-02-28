@@ -1,0 +1,7 @@
+.footer {
+    @apply fixed bottom-0 bg-black w-full px-[5vw];
+}
+
+.links > a {
+    @apply text-white no-underline hover:underline leading-[5vh] mr-[5vw];
+}
