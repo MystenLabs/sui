@@ -401,31 +401,40 @@ async fn get_addresses(
 * 'GetObjectsRequest' represents the request to get objects for an address.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 struct GetObjectsRequest {
+    /** Required; Hex code as string representing the address */
     address: String,
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 struct Object {
+    /** Hex code as string representing the object id */
     object_id: String,
-    object_ref: serde_json::Value,
+    /** Object version */
+    sequence_number: String,
+    /** History of signed effects used for local validation of object */
+    object_digest: String,
 }
 
 /**
  * 'GetObjectsResponse' is a collection of objects owned by an address.
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 struct GetObjectsResponse {
     objects: Vec<Object>,
 }
 
 /**
- * [WALLET] Return all objects owned by the account address.
+Returns list of objects owned by an address.
  */
 // TODO: Add pagination support
 #[endpoint {
     method = GET,
     path = "/wallet/objects",
+    tags = [ "wallet" ],
 }]
 async fn get_objects(
     rqctx: Arc<RequestContext<ServerContext>>,
@@ -464,43 +473,58 @@ async fn get_objects(
 
     Ok(HttpResponseOk(GetObjectsResponse {
         objects: object_refs
-            .map(|(obj_id, object_ref)| Object {
-                object_id: obj_id.to_string(),
-                object_ref: json!(object_ref),
+            .map(|(_, (object_id, sequence_number, object_digest))| Object {
+                object_id: object_id.to_string(),
+                sequence_number: format!("{:?}", sequence_number),
+                object_digest: format!("{:?}", object_digest),
             })
             .collect::<Vec<Object>>(),
     }))
 }
 
 /**
-* `GetObjectInfoRequest` represents the owner & object for which info is to be
-* retrieved.
+Request containing the object for which info is to be retrieved.
+
+If owner is specified we look for this obejct in that address's account store,
+otherwise we look for it in the shared object store.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct GetObjectInfoRequest {
+    // TODO: Refactor client state code so that owner can be an optional field.
+    /** Required; Hex code as string representing the owner's address */
     owner: String,
+    /** Required; Hex code as string representing the object id */
     object_id: String,
 }
 
 /**
-* 'ObjectInfoResponse' represents the object info on the network.
+Response containing the information of an object if found, otherwise an error
+is returned.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 struct ObjectInfoResponse {
+    /** Hex code as string representing the owner's address */
     owner: String,
+    /** Sequence number of the object */
     version: String,
+    /** Hex code as string representing the objet id */
     id: String,
+    /** Boolean representing if the object is mutable */
     readonly: String,
+    /** Type of object, i.e. Coin */
     obj_type: String,
+    /** JSON representation of the object data */
     data: serde_json::Value,
 }
 
 /**
- * [WALLET] Get object info.
+Returns the object information for a specified object.
  */
 #[endpoint {
     method = GET,
     path = "/wallet/object_info",
+    tags = [ "wallet" ],
 }]
 async fn object_info(
     rqctx: Arc<RequestContext<ServerContext>>,
