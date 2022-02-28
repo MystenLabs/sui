@@ -19,12 +19,12 @@ struct Genesis {
     pub modules: Vec<Vec<CompiledModule>>,
 }
 
-pub fn clone_genesis_modules() -> Vec<Vec<CompiledModule>> {
+pub fn clone_genesis_compiled_modules() -> Vec<Vec<CompiledModule>> {
     let genesis = GENESIS.lock().unwrap();
     genesis.modules.clone()
 }
 
-pub fn clone_genesis_objects() -> Vec<Object> {
+pub fn clone_genesis_packages() -> Vec<Object> {
     let genesis = GENESIS.lock().unwrap();
     genesis.objects.clone()
 }

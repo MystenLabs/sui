@@ -207,7 +207,7 @@ fn test_object_basics() {
 
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -374,7 +374,7 @@ fn test_wrap_unwrap() {
 
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment. Note that we won't really use it because we won't be providing a gas budget.
@@ -474,7 +474,7 @@ fn test_wrap_unwrap() {
 fn test_move_call_insufficient_gas() {
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -530,7 +530,7 @@ fn test_move_call_insufficient_gas() {
 fn test_publish_module_insufficient_gas() {
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -572,7 +572,7 @@ fn test_transfer_and_freeze() {
 
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -677,7 +677,7 @@ fn test_transfer_and_freeze() {
 fn test_move_call_args_type_mismatch() {
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -736,7 +736,7 @@ fn test_move_call_args_type_mismatch() {
 fn test_move_call_incorrect_function() {
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // 0. Create a gas object for gas payment.
@@ -794,7 +794,7 @@ fn test_move_call_incorrect_function() {
 fn test_publish_module_linker_error() {
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let id_module = CompiledModule::deserialize(
         genesis_objects[1]
             .data
@@ -864,7 +864,7 @@ fn test_publish_module_linker_error() {
 fn test_publish_module_non_zero_address() {
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
 
     let mut storage = InMemoryStorage::new(genesis_objects);
 
@@ -906,7 +906,7 @@ fn test_coin_transfer() {
 
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
 
     let mut storage = InMemoryStorage::new(genesis_objects);
 
@@ -985,7 +985,7 @@ fn publish_from_src(
 fn test_simple_call() {
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
@@ -1046,7 +1046,7 @@ fn test_simple_call() {
 fn test_publish_init() {
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
@@ -1085,7 +1085,7 @@ fn test_publish_init() {
 fn test_publish_init_public() {
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
@@ -1111,7 +1111,7 @@ fn test_publish_init_public() {
 fn test_publish_init_ret() {
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
@@ -1137,7 +1137,7 @@ fn test_publish_init_ret() {
 fn test_publish_init_param() {
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-    let genesis_objects = genesis::clone_genesis_objects();
+    let genesis_objects = genesis::clone_genesis_packages();
     let mut storage = InMemoryStorage::new(genesis_objects);
 
     // crate gas object for payment
