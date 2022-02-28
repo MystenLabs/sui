@@ -68,13 +68,13 @@ name = "wallet"
 path = "src/wallet.rs"
 
 [[bin]]
-name = "rest_server"
-path = "src/rest_server.rs"
-
-[[bin]]
 name = "sui"
 path = "src/sui.rs"
 
 [[bin]]
 name = "sui-move"
 path = "src/sui-move.rs"
+
+[[bin]]
+name = "rest_server"
+path = "src/rest_server.rs"
