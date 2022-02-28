@@ -278,7 +278,7 @@ impl AuthorityState {
                 // (the execution engine will simply execute no-op).
                 match self._database.sequenced(transaction_digest, *object_id)? {
                     Some(lock) => {
-                        if let Some(object) = self._database.get_object(&object_id)? {
+                        if let Some(object) = self._database.get_object(object_id)? {
                             if object.version() != lock {
                                 lock_errors.push(SuiError::InvalidSequenceNumber);
                             }
@@ -305,8 +305,8 @@ impl AuthorityState {
                 for object_id in transaction.shared_input_objects() {
                     self._database
                         .delete_sequence_lock(transaction_digest, *object_id)?;
-                    if self._database.get_object(&object_id)?.is_none() {
-                        self._database.delete_schedule(&object_id)?;
+                    if self._database.get_object(object_id)?.is_none() {
+                        self._database.delete_schedule(object_id)?;
                     }
                 }
             }
