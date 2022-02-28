@@ -86,7 +86,7 @@ impl AuthorityState {
                     }
                 );
             }
-            InputObjectKind::MutableMoveObject((object_id, sequence_number, object_digest)) => {
+            InputObjectKind::OwnedMoveObject((object_id, sequence_number, object_digest)) => {
                 fp_ensure!(
                     sequence_number <= SequenceNumber::MAX,
                     SuiError::InvalidSequenceNumber
@@ -230,7 +230,7 @@ impl AuthorityState {
             .into_iter()
             .filter_map(|(object_kind, object)| match object_kind {
                 InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::MutableMoveObject(object_ref) => {
+                InputObjectKind::OwnedMoveObject(object_ref) => {
                     if object.is_read_only() {
                         None
                     } else {

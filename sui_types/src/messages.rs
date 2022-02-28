@@ -373,7 +373,7 @@ impl PartialEq for SignedTransaction {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InputObjectKind {
     MovePackage(ObjectID),
-    MutableMoveObject(ObjectRef),
+    OwnedMoveObject(ObjectRef),
     SharedMoveObject(ObjectID),
 }
 
@@ -381,7 +381,7 @@ impl InputObjectKind {
     pub fn object_id(&self) -> ObjectID {
         match self {
             Self::MovePackage(id) => *id,
-            Self::MutableMoveObject((id, _, _)) => *id,
+            Self::OwnedMoveObject((id, _, _)) => *id,
             Self::SharedMoveObject(id) => *id,
         }
     }
@@ -389,7 +389,7 @@ impl InputObjectKind {
     pub fn version(&self) -> SequenceNumber {
         match self {
             Self::MovePackage(..) => OBJECT_START_VERSION,
-            Self::MutableMoveObject((_, version, _)) => *version,
+            Self::OwnedMoveObject((_, version, _)) => *version,
             Self::SharedMoveObject(..) => OBJECT_START_VERSION,
         }
     }
@@ -397,7 +397,7 @@ impl InputObjectKind {
     pub fn object_not_found_error(&self) -> SuiError {
         match *self {
             Self::MovePackage(package_id) => SuiError::DependentPackageNotFound { package_id },
-            Self::MutableMoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
+            Self::OwnedMoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
             Self::SharedMoveObject(object_id) => SuiError::ObjectNotFound { object_id },
         }
     }
@@ -508,7 +508,7 @@ impl Transaction {
     pub fn input_objects(&self) -> Vec<InputObjectKind> {
         let mut inputs = match &self.data.kind {
             TransactionKind::Transfer(t) => {
-                vec![InputObjectKind::MutableMoveObject(t.object_ref)]
+                vec![InputObjectKind::OwnedMoveObject(t.object_ref)]
             }
             TransactionKind::Call(c) => {
                 let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
@@ -516,7 +516,7 @@ impl Transaction {
                     c.object_arguments
                         .clone()
                         .into_iter()
-                        .map(InputObjectKind::MutableMoveObject)
+                        .map(InputObjectKind::OwnedMoveObject)
                         .collect::<Vec<_>>(),
                 );
                 call_inputs.extend(
@@ -561,7 +561,7 @@ impl Transaction {
                     .collect::<Vec<_>>()
             }
         };
-        inputs.push(InputObjectKind::MutableMoveObject(
+        inputs.push(InputObjectKind::OwnedMoveObject(
             *self.gas_payment_object_ref(),
         ));
         inputs
