@@ -1,40 +1,39 @@
 # Move Quick Start
 
-Welcome to the Sui tutorial focusing on building smart contracts using
-the Move language. This tutorial will provide a brief explanation of
-the Move language but will mostly focus on using concrete examples to
-demonstrate how Move can be used in the context of Sui.
+Welcome to the Sui tutorial for building smart contracts with
+the [Move](https://github.com/diem/move) language. This tutorial
+provides a brief explanation of the Move language and includes
+concrete examples to demonstrate how Move can be used in Sui.
 
 
 ## Move
 
-Move is an [open-source](https://github.com/diem/move) language for
-writing safe smart contracts. It was originally developed at Facebook
-to power the [Diem](https://github.com/diem/diem) blockchain. However,
-Move was designed as a platform-agnostic language to enable common
-libraries, tooling, and developer communities across blockchains with
-vastly different data and execution models. Sui,
+Move is an open source language for writing safe smart contracts. It
+was originally developed at Facebook to power the [Diem](https://github.com/diem/diem)
+blockchain. However, Move was designed as a platform-agnostic language
+to enable common libraries, tooling, and developer communities across
+blockchains with vastly different data and execution models. [Sui](../README.md),
 [0L](https://github.com/OLSF/libra), and
-[StarCoin](https://github.com/starcoinorg/starcoin) are using Move,
+[Starcoin](https://github.com/starcoinorg/starcoin) are using Move,
 and there are also plans to integrate the language in several upcoming
 and existing platforms (e.g.,
 [Celo](https://www.businesswire.com/news/home/20210921006104/en/Celo-Sets-Sights-On-Becoming-Fastest-EVM-Chain-Through-Collaboration-With-Mysten-Labs)).
 
 
-The Move language documentation is available in the Move Github
-repository, and includes a
+The Move language documentation is available in the
+[Move Github](https://github.com/diem/move) repository and includes a
 [tutorial](https://github.com/diem/move/blob/main/language/documentation/tutorial/README.md)
 and a
 [book](https://github.com/diem/move/blob/main/language/documentation/book/src/SUMMARY.md)
 describing language features in detail. These are invaluable resources
-to deepen your understanding of the Move language, but they are not a
-strict prerequisite to following the Sui tutorial which we strived to
-make self-contained.
+to deepen your understanding of the Move language but not strict prerequisites
+to following the Sui tutorial, which we strived to make self-contained.
+Further, Sui does differ in some ways from Move, which we explore here.
 
 In Sui, Move is used to define, create and manage programmable Sui
-[objects](objects.md#objects) representing user-level assets.  Sui
+[objects](objects.md) representing user-level assets.  Sui
 imposes additional restrictions on the code that can be written in
-Move, effectively using a subset of Move (a.k.a. Sui Move), which
+Move, effectively using a subset of Move (a.k.a. *Sui Move*), which
 makes certain parts of the original Move documentation not applicable
 to smart contract development in Sui (e.g., there is no concept of a
 [script](https://github.com/diem/move/blob/main/language/documentation/book/src/modules-and-scripts.md#scripts)
@@ -49,12 +48,13 @@ Sui and the custom code written by the developers.
 ## Move code organization
 
 The main unit of Move code organization (and distribution) is a
-_package_. A package consists of set of _modules_ defined in separate
-files with the .move extension, which include Move functions and type
-definitions. A package must include the Move.toml manifest file
+_package_. A package consists of a set of _modules_ defined in separate
+files with the `.move` extension. These files include Move functions and
+type definitions. A package must include the `Move.toml` manifest file
 describing package configuration, for example package metadata or
-package dependencies (more information about package manifest files
-can be found [here](Move.toml)).
+package dependencies. See
+[Move.toml](https://github.com/diem/move/blob/main/language/documentation/book/src/packages.md#package-layout-and-manifest-syntax)
+for more information about package manifest files.
 
 The minimal package source directory structure looks as follows and
 contains the manifest file and the `sources` subdirectory where one or
