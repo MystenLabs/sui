@@ -17,8 +17,8 @@ pub fn all_natives(
     const SUI_NATIVES: &[(&str, &str, NativeFunction)] = &[
         ("Event", "emit", event::emit),
         ("ID", "bytes_to_address", id::bytes_to_address),
-        ("ID", "delete", id::delete),
-        ("ID", "get_id", id::get_id),
+        ("ID", "delete_id", id::delete_id),
+        ("ID", "get_versioned_id", id::get_versioned_id),
         (
             "TestScenario",
             "deleted_object_ids",

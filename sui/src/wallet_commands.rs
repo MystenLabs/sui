@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::config::{AccountInfo, Config, WalletConfig};
+use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
 use core::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use sui_core::authority_client::AuthorityClient;
@@ -9,14 +10,14 @@ use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{CertifiedTransaction, ExecutionStatus, TransactionEffects};
+use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::ObjectRead::Exists;
 
 use anyhow::anyhow;
 use colored::Colorize;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
-use move_core_types::parser::{parse_transaction_argument, parse_type_tag};
-use move_core_types::transaction_argument::{convert_txn_args, TransactionArgument};
+use move_core_types::parser::parse_type_tag;
 use serde::ser::Error;
 use serde::Serialize;
 use std::fmt::Write;
@@ -81,15 +82,10 @@ pub enum WalletCommands {
         /// Function name in module
         #[structopt(long, parse(try_from_str = parse_type_tag))]
         type_args: Vec<TypeTag>,
-        /// Object args object IDs
+        /// Simplified ordered args like in the function syntax
+        /// ObjectIDs, Addresses must be hex strings
         #[structopt(long)]
-        object_args: Vec<ObjectID>,
-        /// Pure arguments to the functions, which conform to move_core_types::transaction_argument
-        /// Special case formatting rules:
-        /// Use one string with CSV token embedded, for example "54u8,0x43"
-        /// When specifying FastX addresses, specify as vector. Example x\"01FE4E6F9F57935C5150A486B5B78AC2B94E2C5CD9352C132691D99B3E8E095C\"
-        #[structopt(long, parse(try_from_str = parse_transaction_argument))]
-        pure_args: Vec<TransactionArgument>,
+        args: Vec<SuiJsonValue>,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         #[structopt(long)]
         gas: ObjectID,
@@ -157,9 +153,13 @@ impl WalletCommands {
                 gas_budget,
             } => {
                 // Find owner of gas object
-                let sender = &context.address_manager.get_object_owner(*gas).await?;
+                let sender = &context
+                    .address_manager
+                    .get_object_owner(*gas)
+                    .await?
+                    .get_single_owner_address()?;
                 let client_state = context.get_or_create_client_state(sender)?;
-                let gas_obj_ref = client_state.object_ref(*gas)?;
+                let gas_obj_ref = client_state.latest_object_ref(gas)?;
 
                 let (cert, effects) = client_state
                     .publish(path.clone(), gas_obj_ref, *gas_budget)
@@ -181,24 +181,54 @@ impl WalletCommands {
                 module,
                 function,
                 type_args,
-                object_args,
-                pure_args,
                 gas,
                 gas_budget,
+                args,
             } => {
-                let sender = &context.address_manager.get_object_owner(*gas).await?;
+                let sender = &context
+                    .address_manager
+                    .get_object_owner(*gas)
+                    .await?
+                    .get_single_owner_address()?;
                 let client_state = context.get_or_create_client_state(sender)?;
 
                 let package_obj_info = client_state.get_object_info(*package).await?;
-                let package_obj_ref = package_obj_info.object()?.to_object_reference();
+                let package_obj = package_obj_info.object().clone()?;
+                let package_obj_ref = package_obj_info.reference().unwrap();
+
+                // These steps can potentially be condensed and moved into the client/manager level
+                // Extract the input args
+                let (object_ids, pure_args) = resolve_move_function_args(
+                    package_obj,
+                    module.clone(),
+                    function.clone(),
+                    args.clone(),
+                )?;
+
+                // Fetch all the objects needed for this call
+                let mut input_objs = vec![];
+                for obj_id in object_ids.clone() {
+                    input_objs.push(client_state.get_object_info(obj_id).await?.into_object()?);
+                }
+
+                // Pass in the objects for a deeper check
+                // We can technically move this to impl MovePackage
+                resolve_and_type_check(
+                    package_obj.clone(),
+                    module,
+                    function,
+                    type_args,
+                    input_objs,
+                    pure_args.clone(),
+                )?;
 
                 // Fetch the object info for the gas obj
-                let gas_obj_ref = client_state.object_ref(*gas)?;
+                let gas_obj_ref = client_state.latest_object_ref(gas)?;
 
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
-                for obj_id in object_args {
-                    let obj_info = client_state.get_object_info(*obj_id).await?;
+                for obj_id in object_ids {
+                    let obj_info = client_state.get_object_info(obj_id).await?;
                     object_args_refs.push(obj_info.object()?.to_object_reference());
                 }
 
@@ -210,7 +240,7 @@ impl WalletCommands {
                         type_args.clone(),
                         gas_obj_ref,
                         object_args_refs,
-                        convert_txn_args(pure_args),
+                        pure_args,
                         *gas_budget,
                     )
                     .await?;
@@ -221,7 +251,11 @@ impl WalletCommands {
             }
 
             WalletCommands::Transfer { to, object_id, gas } => {
-                let from = &context.address_manager.get_object_owner(*gas).await?;
+                let from = &context
+                    .address_manager
+                    .get_object_owner(*gas)
+                    .await?
+                    .get_single_owner_address()?;
                 let client_state = context.get_or_create_client_state(from)?;
                 let time_start = Instant::now();
                 let (cert, effects) = client_state.transfer_object(*object_id, *gas, *to).await?;
@@ -320,7 +354,7 @@ impl WalletContext {
         Ok(context)
     }
 
-    fn get_or_create_client_state(
+    pub fn get_or_create_client_state(
         &mut self,
         owner: &SuiAddress,
     ) -> Result<&mut ClientState<AuthorityClient>, SuiError> {

@@ -1,12 +1,11 @@
-module FastX::TxContext {
+module Sui::TxContext {
+    use Std::Signer;
+    use Sui::ID::{Self, VersionedID};
+
     #[test_only]
     use Std::Errors;
     #[test_only]
     use Std::Vector;
-
-    use Std::Signer;
-
-    use FastX::ID::{Self, VersionedID};
 
     /// Number of bytes in an inputs_hash (which will be the transaction digest)
     const INPUTS_HASH_LENGTH: u64 = 32;
@@ -18,7 +17,6 @@ module FastX::TxContext {
     /// This is a privileged object created by the VM and passed into `main`
     struct TxContext has drop {
         /// The signer of the current transaction
-        // TODO: use vector<signer> if we want to support multi-agent
         signer: signer,
         /// Hash of all the input objects to this transaction
         inputs_hash: vector<u8>,
@@ -43,14 +41,15 @@ module FastX::TxContext {
         self.ids_created
     }
 
-    /// Generate a new object ID
+    /// Generate a new, globally unqiue object ID with version 0
     public fun new_id(ctx: &mut TxContext): VersionedID {
         let ids_created = ctx.ids_created;
-        let id = ID::new(fresh_id(*&ctx.inputs_hash, ids_created));
+        let id = ID::new_versioned_id(fresh_id(*&ctx.inputs_hash, ids_created));
         ctx.ids_created = ids_created + 1;
         id
     }
 
+    /// Native function for deriving an ID via hash(inputs_hash || ids_created || domain_separator)
     native fun fresh_id(inputs_hash: vector<u8>, ids_created: u64): address;
 
     // ==== test-only functions ====
@@ -91,6 +90,7 @@ module FastX::TxContext {
         inputs_hash
     }
 
+    #[test_only]
     /// Test-only function for creating a new signer from `signer_address`.
     native fun new_signer_from_address(signer_address: address): signer;
 }

@@ -1,7 +1,7 @@
-module FastX::Coin {
-    use FastX::ID::{Self, VersionedID};
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+module Sui::Coin {
+    use Sui::ID::{Self, VersionedID};
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
     use Std::Errors;
     use Std::Vector;
 

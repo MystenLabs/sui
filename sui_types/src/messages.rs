@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature};
-use crate::object::{Object, ObjectFormatOptions, OBJECT_START_VERSION};
+use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 
@@ -280,14 +280,14 @@ pub struct TransactionEffects {
     // The transaction digest
     pub transaction_digest: TransactionDigest,
     // ObjectRef and owner of new objects created.
-    pub created: Vec<(ObjectRef, SuiAddress)>,
+    pub created: Vec<(ObjectRef, Owner)>,
     // ObjectRef and owner of mutated objects, including gas object.
-    pub mutated: Vec<(ObjectRef, SuiAddress)>,
+    pub mutated: Vec<(ObjectRef, Owner)>,
     // Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
     // The updated gas object reference. Have a dedicated field for convenient access.
     // It's also included in mutated.
-    pub gas_object: (ObjectRef, SuiAddress),
+    pub gas_object: (ObjectRef, Owner),
     /// The events emitted during execution. Note that only successful transactions emit events
     pub events: Vec<Event>,
     /// The set of transaction digests this transaction depends on.
@@ -298,12 +298,12 @@ impl TransactionEffects {
     /// Return an iterator that iterates through both mutated and
     /// created objects.
     /// It doesn't include deleted objects.
-    pub fn mutated_and_created(&self) -> impl Iterator<Item = &(ObjectRef, SuiAddress)> {
+    pub fn mutated_and_created(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> {
         self.mutated.iter().chain(self.created.iter())
     }
 
     /// Return an iterator of mutated objects, but excluding the gas object.
-    pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &(ObjectRef, SuiAddress)> {
+    pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> {
         self.mutated.iter().filter(|o| *o != &self.gas_object)
     }
 }

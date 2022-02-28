@@ -1,0 +1,14 @@
+.form {
+    @apply flex;
+}
+
+.searchbtn {
+    @apply bg-blue-500 hover:bg-blue-900 
+  border-none text-white rounded-r-md 
+  cursor-pointer font-sans
+  leading-8 flex-initial mr-[5vw];
+}
+
+.searchtext {
+    @apply border-none rounded-l-md font-mono leading-8 flex-1 ml-[5vw];
+}

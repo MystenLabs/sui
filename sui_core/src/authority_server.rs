@@ -31,10 +31,6 @@ impl AuthorityServer {
     }
 
     pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
-        info!(
-            "Listening to TCP traffic on {}:{}",
-            self.server.base_address, self.server.base_port
-        );
         let address = format!("{}:{}", self.server.base_address, self.server.base_port);
         let buffer_size = self.server.buffer_size;
 

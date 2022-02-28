@@ -1,5 +1,5 @@
 /// Basic math for nicer programmability
-module FastX::Math {
+module Sui::Math {
 
     /// Return the larger of `x` and `y`
     public fun max(x: u64, y: u64): u64 {

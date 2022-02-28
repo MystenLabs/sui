@@ -36,10 +36,59 @@ customized with additional accounts, objects, code, etc. as described
 
 
 The network configuration is stored in `network.conf` and
-can be used subsequently to start the network. A `wallet.conf` will
-also be generated to be used by the `wallet` binary to manage the
+can be used subsequently to start the network. A `wallet.conf` is
+also created to be used by the Sui wallet to manage the
 newly created accounts.
 
+### View created accounts
+The genesis process creates a configuration file `wallet.conf` for the Sui wallet, 
+the config file contains information of the accounts and the Sui network, 
+Sui wallet uses the network information to communicate with the Sui network authorities 
+and create transactions using the key pairs residing in the config file.
+
+Below is an example of `wallet.conf` showing the accounts and key pairs in the wallet configuration. (some values are omitted)
+```json
+{
+  "accounts": [
+    {
+      "address": "a4c0a493ce9879ea06bac93461810cf947823bb3",
+      "key_pair": "MTpXG/yJq0OLOknghzYRCS6D/Rz+97gpR7hZhUCUNT5pMCy49v7hZkCSHm38e+cp+sdxLgTrSAuCbDxqkF1MTg=="
+    },
+    ...
+  ],
+  "authorities": [
+    {
+      "name": "d72e7bd8f435fa56af47c8d0a0b8738c48f446762d620863ac328605325692f7",
+      "host": "127.0.0.1",
+      "base_port": 10000
+    },
+    ...
+  ],
+  "send_timeout": {
+    "secs": 4,
+    "nanos": 0
+  },
+  "recv_timeout": {
+    "secs": 4,
+    "nanos": 0
+  },
+  "buffer_size": 65507,
+  "db_folder_path": "./client_db"
+}
+```
+The `accounts` variable contains all the account's address and key pairs, this will be used by the wallet to sign transactions.
+`authorities` contains Sui network authorities' name, host and port information, it is used to establish connections to the Sui network.
+
+`send_timeout`, `recv_timeout` and `buffer_size` are the network parameters.
+`db_folder_path` is the path to the account's client state database, which will be storing 
+all the transaction data, certificates and object data belonging to the account.
+
+#### Key management
+As you might have noticed, the key pairs are stored as plain text in `wallet.conf`, 
+which is not secure and shouldn't be used in production environment, we have plans to 
+implement more secure key management and support hardware signing in future release.
+
+:warning: **Do not use in production**: Keys are stored in plain text!
 
 ### Starting the network
 
@@ -77,15 +126,16 @@ The wallet config file path is defaulted to `./wallet.conf` if not specified.
 
 The following commands are supported by the interactive wallet:
 
-    addresses      Obtain the Account Addresses managed by the wallet
-    call           Call Move
+    addresses      Obtain the Addresses managed by the wallet
+    call           Call Move function
+    gas            Obtain all gas objects owned by the address
     help           Prints this message or the help of the given subcommand(s)
     new-address    Generate new address and keypair
     object         Get obj info
-    objects        Obtain all objects owned by the account address
+    objects        Obtain all objects owned by the address
     publish        Publish Move modules
     sync           Synchronize client state with authorities
-    transfer       Transfer funds
+    transfer       Transfer an object
 
 Use `help <command>` to see more information on each command.
 
@@ -112,12 +162,36 @@ you verbatim**.
 
 ```shell
 Showing 5 results.
-0523fc67f30e3922147877ca56ce36a41ba122623fee86043f5c9a05d2b3bde4
-5986f0651a5329b90d1d76acd992021377684509909b23a9bbf79c4416afd9cf
-ce3c1f3f3cbb5abf7cb492c31a162b58089d03a2e6057b88fd8228435c9d44e7
-d346982dd3a61084c6f7f5af0f1b559cdf2921a3e76f403e85925b3dcf1d991d
-dc3e8f72f84422ce3b332756520d7730e7a44b6720b0cd91eaf21bf65d56de3e
+054FDE3B99A88D8A176CF2E795A18EDC19B32D21
+19A6D4720C1C7D16583A9FB3FB537EF31E169DE6
+20007C278237AA4BED5FF6094AA05A7FEC90F932
+594E3CD1445281FF1BB7D1892534F0235FF810BA
+A4C0A493CE9879EA06BAC93461810CF947823BB3
 ```
+
+## Adding accounts to the wallet
+Sui's genesis process will create five accounts by default, if that's not enough, there are two ways to add accounts to the Sui wallet if needed.
+#### 1. use `new-address` command to generate new account
+To create a new account, execute the `new-address` command in Sui interactive console:
+``` shell
+sui>-$ new-address
+```
+The console should return a confirmation after the account has been created.
+```
+Created new keypair for address : 3F8962C87474F8FB8BFB99151D5F83E677062078
+```
+  
+#### 2. Add existing accounts to `wallet.conf` manually.
+If you have existing key pair from an old wallet config, you can copy the account data manually to the new `wallet.conf`'s accounts section.
+
+The account data looks like this: 
+```json
+    {
+      "address": "a4c0a493ce9879ea06bac93461810cf947823bb3",
+      "key_pair": "MTpXG/yJq0OLOknghzYRCS6D/Rz+97gpR7hZhUCUNT5pMCy49v7hZkCSHm38e+cp+sdxLgTrSAuCbDxqkF1MTg=="
+    }
+```
+Restart the Sui wallet after the modification, the new accounts will appear in the wallet if you query the addresses.
 
 ## Calling Move code
 
@@ -141,7 +215,7 @@ accomplished using the following command:
 
 
 ``` shell
-./wallet --no-shell objects --address 0523fc67f30e3922147877ca56ce36a41ba122623fee86043f5c9a05d2b3bde4
+./wallet --no-shell objects --address 054FDE3B99A88D8A176CF2E795A18EDC19B32D21
 ```
 
 When looking at the output, let's focus on the first column which
@@ -174,10 +248,9 @@ the GAS module using the following Sui Wallet command:
 --pure-args x\"5986f0651a5329b90d1d76acd992021377684509909b23a9bbf79c4416afd9cf\" \
 --gas 1FD8DA0C56694229761E9A3DCE50C49AF2EA5DB1 \
 --gas-budget 1000 \
---sender 0523fc67f30e3922147877ca56ce36a41ba122623fee86043f5c9a05d2b3bde4
 ```
 
-This a pretty complicated command so let's explain all its parameters
+This is a pretty complicated command so let's explain all its parameters
 one-by-one:
 
 - `--function` - name of the function to be called
@@ -185,7 +258,7 @@ one-by-one:
 - `--package` - ID of the package object where the module containing
   the function is located (please
   [remember](#a-quick-look-at-the-gas-module) that the ID of the
-  genesis FastX package containing the GAS module is defined in its
+  genesis Sui package containing the GAS module is defined in its
   manifest file, and is equal to 0x2)
 - `object-args` - a list of arguments of Sui object type (in this case
   there is only one representing the `c` parameter of the `transfer`
@@ -233,7 +306,7 @@ of the `transfer` function) but querying objects that are now owned by
 the sender (abbreviated output):
 
 ``` shell
-./wallet --no-shell objects --address 0523fc67f30e3922147877ca56ce36a41ba122623fee86043f5c9a05d2b3bde4
+./wallet --no-shell objects --address 054FDE3B99A88D8A176CF2E795A18EDC19B32D21
 Showing 4 results.
 1FD8DA0C56694229761E9A3DCE50C49AF2EA5DB1: ...
 363D5BCAC9D5855122202B6B832B321D4256F22E: ...
@@ -246,7 +319,7 @@ starts with `B800`. On the other hand, the recipient now owns 6
 objects including the transferred one (in the fourth position):
 
 ``` shell
-./wallet --no-shell objects --address 5986f0651a5329b90d1d76acd992021377684509909b23a9bbf79c4416afd9cf
+./wallet --no-shell objects --address 054FDE3B99A88D8A176CF2E795A18EDC19B32D21
 Showing 6 results.
 348B607E5C8B80524D6BF8275FB7F35267A7814E: ...
 5852529FE26D138D7B6B9281ADBF29645D93543A: ...
@@ -293,7 +366,7 @@ Example `genesis.conf`
     }
   ],
   "move_packages": ["<Paths to custom move packages>"],
-  "sui_framework_lib_path": "<Paths to sui framework lib>",
+  "sui_framework_lib_path": "<Paths to Sui framework lib>",
   "move_framework_lib_path": "<Paths to move framework lib>"
 }
 ```
