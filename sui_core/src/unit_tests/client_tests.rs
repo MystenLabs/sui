@@ -20,7 +20,6 @@ use sui_types::crypto::get_key_pair;
 use sui_types::crypto::Signature;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
-use tokio::runtime::Runtime;
 use typed_store::Map;
 
 use std::env;
@@ -462,9 +461,8 @@ async fn init_local_client_state_with_bad_authority(
     client
 }
 
-#[test]
-fn test_initiating_valid_transfer() {
-    let rt = Runtime::new().unwrap();
+#[tokio::test]
+async fn test_initiating_valid_transfer() {
     let recipient = get_new_address();
     let object_id_1 = ObjectID::random();
     let object_id_2 = ObjectID::random();
@@ -476,17 +474,18 @@ fn test_initiating_valid_transfer() {
         vec![object_id_1, object_id_2, gas_object],
     ];
 
-    let mut sender = rt.block_on(init_local_client_state(authority_objects));
+    let mut sender = init_local_client_state(authority_objects).await;
     assert_eq!(
-        rt.block_on(sender.authorities().get_latest_owner(object_id_1)),
+        sender.authorities().get_latest_owner(object_id_1).await,
         (sender.address(), SequenceNumber::from(0))
     );
     assert_eq!(
-        rt.block_on(sender.authorities().get_latest_owner(object_id_2)),
+        sender.authorities().get_latest_owner(object_id_2).await,
         (sender.address(), SequenceNumber::from(0))
     );
-    let (certificate, _) = rt
-        .block_on(sender.transfer_object(object_id_1, gas_object, recipient))
+    let (certificate, _) = sender
+        .transfer_object(object_id_1, gas_object, recipient)
+        .await
         .unwrap();
     assert_eq!(
         sender.highest_known_version(&object_id_1),
@@ -496,28 +495,26 @@ fn test_initiating_valid_transfer() {
     );
     assert!(sender.store().pending_transactions.is_empty());
     assert_eq!(
-        rt.block_on(sender.authorities().get_latest_owner(object_id_1)),
+        sender.authorities().get_latest_owner(object_id_1).await,
         (recipient, SequenceNumber::from(1))
     );
     assert_eq!(
-        rt.block_on(sender.authorities().get_latest_owner(object_id_2)),
+        sender.authorities().get_latest_owner(object_id_2).await,
         (sender.address(), SequenceNumber::from(0))
     );
     // valid since our test authority should not update its certificate set
     compare_certified_transactions(
-        &rt.block_on(sender.authorities().request_certificate(
-            sender.address(),
-            object_id_1,
-            SequenceNumber::from(0),
-        ))
-        .unwrap(),
+        &sender
+            .authorities()
+            .request_certificate(sender.address(), object_id_1, SequenceNumber::from(0))
+            .await
+            .unwrap(),
         &certificate,
     );
 }
 
-#[test]
-fn test_initiating_valid_transfer_despite_bad_authority() {
-    let rt = Runtime::new().unwrap();
+#[tokio::test]
+async fn test_initiating_valid_transfer_despite_bad_authority() {
     let recipient = get_new_address();
     let object_id = ObjectID::random();
     let gas_object = ObjectID::random();
@@ -527,11 +524,10 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
         vec![object_id, gas_object],
         vec![object_id, gas_object],
     ];
-    let mut sender = rt.block_on(init_local_client_state_with_bad_authority(
-        authority_objects,
-    ));
-    let (certificate, _) = rt
-        .block_on(sender.transfer_object(object_id, gas_object, recipient))
+    let mut sender = init_local_client_state_with_bad_authority(authority_objects).await;
+    let (certificate, _) = sender
+        .transfer_object(object_id, gas_object, recipient)
+        .await
         .unwrap();
     assert_eq!(
         sender.highest_known_version(&object_id),
@@ -539,24 +535,22 @@ fn test_initiating_valid_transfer_despite_bad_authority() {
     );
     assert!(sender.store().pending_transactions.is_empty());
     assert_eq!(
-        rt.block_on(sender.authorities().get_latest_owner(object_id)),
+        sender.authorities().get_latest_owner(object_id).await,
         (recipient, SequenceNumber::from(1))
     );
     // valid since our test authority shouldn't update its certificate set
     compare_certified_transactions(
-        &rt.block_on(sender.authorities().request_certificate(
-            sender.address(),
-            object_id,
-            SequenceNumber::from(0),
-        ))
-        .unwrap(),
+        &sender
+            .authorities()
+            .request_certificate(sender.address(), object_id, SequenceNumber::from(0))
+            .await
+            .unwrap(),
         &certificate,
     );
 }
 
-#[test]
-fn test_initiating_transfer_low_funds() {
-    let rt = Runtime::new().unwrap();
+#[tokio::test]
+async fn test_initiating_transfer_low_funds() {
     let recipient = get_new_address();
     let object_id_1 = ObjectID::random();
     let object_id_2 = ObjectID::random();
@@ -567,9 +561,10 @@ fn test_initiating_transfer_low_funds() {
         vec![object_id_1, object_id_2, gas_object],
         vec![object_id_1, object_id_2, gas_object],
     ];
-    let mut sender = rt.block_on(init_local_client_state(authority_objects));
-    assert!(rt
-        .block_on(sender.transfer_object(object_id_2, gas_object, recipient))
+    let mut sender = init_local_client_state(authority_objects).await;
+    assert!(sender
+        .transfer_object(object_id_2, gas_object, recipient)
+        .await
         .is_err());
     // Trying to overspend does not block an account.
     assert_eq!(
@@ -578,12 +573,11 @@ fn test_initiating_transfer_low_funds() {
     );
     // assert_eq!(sender.pending_transfer, None);
     assert_eq!(
-        rt.block_on(sender.authorities().get_latest_owner(object_id_1)),
+        sender.authorities().get_latest_owner(object_id_1).await,
         (sender.address(), SequenceNumber::from(0)),
     );
     assert_eq!(
-        rt.block_on(sender.authorities().get_latest_owner(object_id_2))
-            .1,
+        sender.authorities().get_latest_owner(object_id_2).await.1,
         SequenceNumber::from(0),
     );
 }
@@ -692,16 +686,14 @@ async fn test_bidirectional_transfer() {
         .is_err());
 }
 
-#[test]
-fn test_client_state_sync() {
-    let rt = Runtime::new().unwrap();
-
+#[tokio::test]
+async fn test_client_state_sync() {
     let object_ids = (0..20)
         .map(|_| ObjectID::random())
         .collect::<Vec<ObjectID>>();
     let authority_objects = (0..10).map(|_| object_ids.clone()).collect();
 
-    let mut sender = rt.block_on(init_local_client_state(authority_objects));
+    let mut sender = init_local_client_state(authority_objects).await;
 
     let old_object_refs: BTreeMap<_, _> = sender.store().object_refs.iter().collect();
     let old_certificates: BTreeMap<_, _> = sender.store().certificates.iter().collect();
@@ -712,7 +704,7 @@ fn test_client_state_sync() {
     assert!(sender.get_owned_objects().is_empty());
 
     // Sync client state
-    rt.block_on(sender.sync_client_state()).unwrap();
+    sender.sync_client_state().await.unwrap();
 
     // Confirm data are the same after sync
     assert!(!sender.get_owned_objects().is_empty());
@@ -1362,9 +1354,8 @@ async fn test_module_publish_naughty_path() {
     }
 }
 
-#[test]
-fn test_transfer_object_error() {
-    let rt = Runtime::new().unwrap();
+#[tokio::test]
+async fn test_transfer_object_error() {
     let recipient = get_new_address();
 
     let objects: Vec<ObjectID> = (0..10).map(|_| ObjectID::random()).collect();
@@ -1377,15 +1368,19 @@ fn test_transfer_object_error() {
         .map(|_| all_objects.clone())
         .collect();
 
-    let mut sender = rt.block_on(init_local_client_state(authority_objects));
+    let mut sender = init_local_client_state(authority_objects).await;
 
     let mut objects = objects.iter();
 
     // Test 1: Double spend
     let object_id = *objects.next().unwrap();
-    rt.block_on(sender.transfer_object(object_id, gas_object, recipient))
+    sender
+        .transfer_object(object_id, gas_object, recipient)
+        .await
         .unwrap();
-    let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
+    let result = sender
+        .transfer_object(object_id, gas_object, recipient)
+        .await;
 
     assert!(result.is_err());
     assert!(matches!(
@@ -1401,7 +1396,9 @@ fn test_transfer_object_error() {
         .insert(&obj.id(), &obj.to_object_reference())
         .unwrap();
 
-    let result = rt.block_on(sender.transfer_object(obj.id(), gas_object, recipient));
+    let result = sender
+        .transfer_object(obj.id(), gas_object, recipient)
+        .await;
     assert!(result.is_err());
 
     // Test 3: invalid object digest
@@ -1417,7 +1414,9 @@ fn test_transfer_object_error() {
         )
         .unwrap();
 
-    let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
+    let result = sender
+        .transfer_object(object_id, gas_object, recipient)
+        .await;
     assert!(result.is_err());
 
     // Test 4: Used to detect a mismatch between the object reference in `object_refs`, on the one hand, and
@@ -1437,12 +1436,14 @@ fn test_transfer_object_error() {
         ))
         .unwrap();
 
-    let result = rt.block_on(sender.transfer_object(object_id, gas_object, recipient));
+    let result = sender
+        .transfer_object(object_id, gas_object, recipient)
+        .await;
     assert!(result.is_err());
 }
 
-#[test]
-fn test_client_store() {
+#[tokio::test]
+async fn test_client_store() {
     let store = ClientSingleAddressStore::new(
         env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
     );
