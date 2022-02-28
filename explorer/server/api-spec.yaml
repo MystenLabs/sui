@@ -1,0 +1,133 @@
+openapi: 3.0.1
+info:
+  title: Initial API
+  version: 0.0.1
+paths:
+  /transactions:
+    get:
+      tags:
+        - Transactions
+      summary: Get transactions - when no params provided returns the last 10
+      parameters:
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "time"
+              - "-time"
+              - "id"
+              - "-id"
+            default: "time"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+  /transactions/{id}:
+    get:
+      tags:
+        - Transactions
+      summary: Get transaction by id
+      parameters:
+        - name: id
+          in: path
+          description: ID of transaction to return
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+  /search/{term}:
+    get:
+      tags:
+        - Search
+      summary: Search for transactions or objects related to the search term
+      description: The items are sorted by relevance with the term
+      parameters:
+        - name: term
+          in: path
+          description: The term to search for
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      enum:
+                        - tx
+                        - obj
+                    item:
+                      oneOf:
+                        - $ref: "#/components/schemas/Transaction"
+                        - $ref: "#/components/schemas/Object"
+
+components:
+  schemas:
+    Transaction:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/TransactionID"
+        sender:
+          $ref: "#/components/schemas/AccountAddress"
+        status:
+          $ref: "#/components/schemas/TransactionStatus"
+        created:
+          type: array
+          description: Objects created in this transaction
+          items:
+            $ref: "#/components/schemas/ObjectID"
+        mutated:
+          type: array
+          description: Objects mutated in this transaction
+          items:
+            $ref: "#/components/schemas/ObjectID"
+        deleted:
+          type: array
+          description: Objects deleted in this transaction
+          items:
+            $ref: "#/components/schemas/ObjectID"
+    TransactionID:
+      type: string
+    TransactionStatus:
+      type: string
+      enum:
+        - success
+        - fail
+    Object:
+      type: object
+      properties:
+        id:
+          type: string
+    AccountAddress:
+      type: string
+    ObjectID:
+      type: string
