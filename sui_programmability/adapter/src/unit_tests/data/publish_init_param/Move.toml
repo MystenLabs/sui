@@ -7,4 +7,4 @@ Test = "0x0"
 
 [dependencies]
 MoveStdlib = { local = "../../../../../framework/deps/move-stdlib/" }
-FastX =      { local = "../../../../../framework" }
+Sui =      { local = "../../../../../framework" }

@@ -1,7 +1,7 @@
 #[test_only]
-module FastX::IDTests {
-    use FastX::ID;
-    use FastX::TxContext;
+module Sui::IDTests {
+    use Sui::ID;
+    use Sui::TxContext;
 
     const ID_BYTES_MISMATCH: u64 = 0;
 
@@ -12,10 +12,10 @@ module FastX::IDTests {
     #[test]
     fun test_get_id() {
         let ctx = TxContext::dummy();
-        let id = TxContext::new_id(&mut ctx);
-        let id_bytes = *ID::get_inner(&id);
-        let obj = Object { id };
-        assert!(ID::get_inner(ID::get_id(&obj)) == &id_bytes, ID_BYTES_MISMATCH);
+        let versioned_id = TxContext::new_id(&mut ctx);
+        let obj_id = *ID::inner(&versioned_id);
+        let obj = Object { id: versioned_id };
+        assert!(*ID::id(&obj) == obj_id, ID_BYTES_MISMATCH);
         let Object { id } = obj;
         ID::delete(id);
     }

@@ -12,8 +12,8 @@ use sui_types::{
     event::Event,
     gas,
     messages::ExecutionStatus,
-    move_call::*,
-    object::{MoveObject, Object},
+    move_package::*,
+    object::{MoveObject, Object, Owner},
     storage::Storage,
 };
 use sui_verifier::verifier;
@@ -75,9 +75,17 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     mut gas_object: Object,
     ctx: &mut TxContext,
 ) -> SuiResult<ExecutionStatus> {
+    // object_owner_map maps from object ID to its exclusive owner.
+    // objects that are not exclusively owned won't be in this map.
+    // This map will be used for detecting circular ownership among
+    // objects, which can only happen to objects exclusively owned
+    // by objects.
     let mut object_owner_map = HashMap::new();
-    for object in object_args.iter().filter(|obj| !obj.is_read_only()) {
-        object_owner_map.insert(object.id().into(), object.owner);
+    for (owner, id) in object_args
+        .iter()
+        .filter_map(|obj| obj.get_single_owner_and_id())
+    {
+        object_owner_map.insert(id.into(), owner);
     }
     let TypeCheckSuccess {
         module_id,
@@ -177,7 +185,7 @@ fn execute_internal<
             // we already checked that the function had no return types in resolve_and_type_check--it should
             // also not return any values at runtime
             debug_assert!(return_values.is_empty());
-            // FastX Move programs should never touch global state, so ChangeSet should be empty
+            // Sui Move programs should never touch global state, so ChangeSet should be empty
             debug_assert!(change_set.accounts().is_empty());
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
             debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
@@ -248,7 +256,6 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     state_view: &mut S,
     natives: NativeFunctionTable,
     module_bytes: Vec<Vec<u8>>,
-    sender: SuiAddress,
     ctx: &mut TxContext,
     gas_budget: u64,
     mut gas_object: Object,
@@ -305,7 +312,8 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     }
 
     // wrap the modules in an object, write it to the store
-    let package_object = Object::new_package(modules, sender, ctx.digest());
+    // The call to unwrap() will go away once we remove address owner from Immutable objects.
+    let package_object = Object::new_package(modules, ctx.digest());
     state_view.write_object(package_object);
 
     let mut total_gas_used = gas_cost;
@@ -358,7 +366,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
 /// Given a list of `modules`, links each module against its
 /// dependencies and runs each module with both the Move VM verifier
-/// and the FastX verifier.
+/// and the Sui verifier.
 pub fn verify_and_link<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
@@ -369,7 +377,7 @@ pub fn verify_and_link<
     natives: NativeFunctionTable,
 ) -> Result<MoveVM, SuiError> {
     // Run the Move bytecode verifier and linker.
-    // It is important to do this before running the FastX verifier, since the fastX
+    // It is important to do this before running the Sui verifier, since the sui
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
     let vm = MoveVM::new(natives)
         .expect("VM creation only fails if natives are invalid, and we created the natives");
@@ -397,9 +405,9 @@ pub fn verify_and_link<
             error: e.to_string(),
         })?;
 
-    // run the FastX verifier
+    // run the Sui verifier
     for module in modules.iter() {
-        // Run FastX bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
+        // Run Sui bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
         verifier::verify_module(module)?;
     }
     Ok(vm)
@@ -533,8 +541,8 @@ fn process_successful_execution<
     }
 
     // any object left in `by_value_objects` is an input passed by value that was not transferred or frozen.
-    // this means that either the object was (1) deleted from the FastX system altogether, or
-    // (2) wrapped inside another object that is in the FastX object pool
+    // this means that either the object was (1) deleted from the Sui system altogether, or
+    // (2) wrapped inside another object that is in the Sui object pool
     // in either case, we want to delete it
     let mut gas_refund: u64 = 0;
     for (id, object) in by_value_objects.iter() {
@@ -574,10 +582,12 @@ fn handle_transfer<
             // freshly created, this means that its version will now be 1.
             // thus, all objects in the global object pool have version > 0
             move_obj.increment_version();
-            if should_freeze {
-                move_obj.freeze();
-            }
-            let obj = Object::new_move(move_obj, recipient, tx_digest);
+            let new_owner = if should_freeze {
+                Owner::SharedImmutable
+            } else {
+                Owner::SingleOwner(recipient)
+            };
+            let obj = Object::new_move(move_obj, new_owner, tx_digest);
             if old_object.is_none() {
                 // Charge extra gas based on object size if we are creating a new object.
                 *gas_used += gas::calculate_object_creation_cost(&obj);

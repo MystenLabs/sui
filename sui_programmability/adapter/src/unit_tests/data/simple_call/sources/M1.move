@@ -1,9 +1,8 @@
 module Test::M1 {
-    use FastX::Address;
-    use FastX::ID::VersionedID;
-    use FastX::TxContext::{Self, TxContext};
-    use FastX::Transfer;
-    use FastX::Coin::Coin;
+    use Sui::ID::VersionedID;
+    use Sui::TxContext::{Self, TxContext};
+    use Sui::Transfer;
+    use Sui::Coin::Coin;
 
     struct Object has key, store {
         id: VersionedID,
@@ -14,10 +13,10 @@ module Test::M1 {
         value1 
     }
 
-    public fun create(value: u64, recipient: vector<u8>, ctx: &mut TxContext) {
+    public fun create(value: u64, recipient: address, ctx: &mut TxContext) {
         Transfer::transfer(
             Object { id: TxContext::new_id(ctx), value },
-            Address::new(recipient)
+            recipient
         )
     }    
 }

@@ -1,7 +1,7 @@
 #[test_only]
-module FastX::TxContextTests {
-    use FastX::ID;
-    use FastX::TxContext;
+module Sui::TxContextTests {
+    use Sui::ID;
+    use Sui::TxContext;
 
     #[test]
     fun test_id_generation() {

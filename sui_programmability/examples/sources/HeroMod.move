@@ -7,11 +7,10 @@
 /// anyone is free to create a mod like this.
 module Examples::HeroMod {
     use Examples::Hero::{Self, Hero};
-    use FastX::Address::Address;
-    use FastX::ID::{Self, VersionedID};
-    use FastX::Coin::{Self, Coin, TreasuryCap };
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+    use Sui::ID::{Self, VersionedID};
+    use Sui::Coin::{Self, Coin, TreasuryCap };
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
 
     /// A new kind of monster for the hero to fight
     struct SeaMonster has key, store {
@@ -93,7 +92,7 @@ module Examples::HeroMod {
     public fun create_monster(
         admin: &mut SeaScapeAdmin,
         reward_amount: u64,
-        recipient: Address,
+        recipient: address,
         ctx: &mut TxContext
     ) {
         let current_coin_supply = Coin::total_supply(&admin.treasury_cap);
@@ -115,7 +114,7 @@ module Examples::HeroMod {
 
     /// Send `monster` to `recipient`
     public fun transfer_monster(
-        monster: SeaMonster, recipient: Address
+        monster: SeaMonster, recipient: address
     ) {
         Transfer::transfer(monster, recipient)
     }

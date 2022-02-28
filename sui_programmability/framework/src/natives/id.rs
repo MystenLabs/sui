@@ -36,7 +36,7 @@ pub fn bytes_to_address(
     Ok(NativeResult::ok(cost, smallvec![Value::address(addr)]))
 }
 
-pub fn get_id(
+pub fn get_versioned_id(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -53,7 +53,7 @@ pub fn get_id(
     Ok(NativeResult::ok(cost, smallvec![id_field]))
 }
 
-pub fn delete(
+pub fn delete_id(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -63,8 +63,11 @@ pub fn delete(
 
     let obj = pop_arg!(args, Struct);
     // All of the following unwraps are safe by construction because a properly verified
-    // bytecode ensures that the parameter must be of ID type with the correct fields.
-    // Get the `id` field of the ID struct, which is of type IDBytes.
+    // bytecode ensures that the parameter must be of type UniqueID with the correct fields:
+    // ```
+    // UniqueID { id: ID { bytes: address } }
+    // ```
+    // Get the `id` field of the UniqueID struct, which is of type ID
     let id_field = obj
         .unpack()
         .unwrap()
@@ -72,7 +75,7 @@ pub fn delete(
         .unwrap()
         .value_as::<Struct>()
         .unwrap();
-    // Get the inner address of type IDBytes.
+    // Get the inner address of the ID type
     let id = id_field.unpack().unwrap().next().unwrap();
 
     // TODO: what should the cost of this be?

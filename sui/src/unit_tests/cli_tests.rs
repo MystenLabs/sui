@@ -1,19 +1,30 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use move_core_types::identifier::Identifier;
+use serde_json::json;
+use std::collections::BTreeSet;
 use std::fs::read_dir;
 use std::ops::Add;
+use std::path::Path;
 use std::time::Duration;
 use sui::config::{
-    AccountConfig, AccountInfo, GenesisConfig, NetworkConfig, ObjectConfig, WalletConfig,
-    AUTHORITIES_DB_NAME,
+    AccountConfig, AccountInfo, AuthorityPrivateInfo, GenesisConfig, NetworkConfig, ObjectConfig,
+    WalletConfig, AUTHORITIES_DB_NAME,
 };
-use sui::wallet_commands::{WalletCommands, WalletContext};
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui::sui_json::SuiJsonValue;
+use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
+use sui_core::client::Client;
+use sui_network::network::PortAllocator;
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::get_key_pair;
+use sui_types::messages::TransactionEffects;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use tokio::task;
+use tokio::task::JoinHandle;
 use tracing_test::traced_test;
+
+const TEST_DATA_DIR: &str = "src/unit_tests/data/";
 
 macro_rules! retry_assert {
     ($test:expr, $timeout:expr) => {{
@@ -111,15 +122,8 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_objects_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
 
-    SuiCommand::Genesis { config: None }
-        .execute(&mut config)
-        .await?;
-
-    // Start network
-    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
-
+    let network = start_network(working_dir.path(), 10100, None).await?;
     // Wait for authorities to come alive.
     retry_assert!(
         logs_contain("Listening to TCP traffic on 127.0.0.1"),
@@ -175,23 +179,8 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
             gas_value: 500,
         }],
     });
-    config.save()?;
 
-    // Create empty network config for genesis
-    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
-
-    // Genesis
-    SuiCommand::Genesis {
-        config: Some(genesis_path),
-    }
-    .execute(&mut config)
-    .await?;
-
-    let mut config = NetworkConfig::read(&working_dir.path().join("network.conf"))?;
-    assert_eq!(4, config.authorities.len());
-
-    // Start network
-    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+    let network = start_network(working_dir.path(), 10200, Some(config)).await?;
 
     // Wait for authorities to come alive.
     retry_assert!(
@@ -244,11 +233,12 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
             gas_value: 500,
         }],
     });
-    config.move_packages.push(
-        PathBuf::from("..")
-            .join("sui_programmability")
-            .join("examples"),
-    );
+    config
+        .move_packages
+        .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_1"));
+    config
+        .move_packages
+        .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_2"));
     config.save()?;
 
     // Create empty network config for genesis
@@ -261,10 +251,10 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     .execute(&mut config)
     .await?;
 
-    assert!(logs_contain("Loading 1 Move packages"));
+    assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids
     let network_conf = NetworkConfig::read(&working_dir.path().join("network.conf"))?;
-    assert_eq!(1, network_conf.loaded_move_packages.len());
+    assert_eq!(2, network_conf.loaded_move_packages.len());
 
     // Make sure we log out package id
     for (_, id) in network_conf.loaded_move_packages {
@@ -277,15 +267,8 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 #[tokio::test]
 async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
 
-    SuiCommand::Genesis { config: None }
-        .execute(&mut config)
-        .await?;
-
-    // Start network
-    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
-
+    let network = start_network(working_dir.path(), 10300, None).await?;
     // Wait for authorities to come alive.
     retry_assert!(
         logs_contain("Listening to TCP traffic on 127.0.0.1"),
@@ -331,14 +314,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_gas_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
-
-    SuiCommand::Genesis { config: None }
-        .execute(&mut config)
-        .await?;
-
-    // Start network
-    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+    let network = start_network(working_dir.path(), 10400, None).await?;
 
     // Wait for authorities to come alive.
     retry_assert!(
@@ -462,4 +438,230 @@ fn extract_gas_info(s: &str) -> Option<(ObjectID, SequenceNumber, u64)> {
         SequenceNumber::from_u64(tokens[1].parse::<u64>().unwrap()),
         tokens[2].parse::<u64>().unwrap(),
     ))
+}
+
+async fn start_network(
+    working_dir: &Path,
+    starting_port: u16,
+    genesis: Option<GenesisConfig>,
+) -> Result<JoinHandle<Result<(), anyhow::Error>>, anyhow::Error> {
+    let network_conf_path = &working_dir.join("network.conf");
+    let genesis_conf_path = &working_dir.join("genesis.conf");
+
+    let mut config = NetworkConfig::read_or_create(network_conf_path)?;
+    let mut port_allocator = PortAllocator::new(starting_port);
+    let mut genesis_config = genesis.unwrap_or(GenesisConfig::default_genesis(genesis_conf_path)?);
+    let authorities = genesis_config
+        .authorities
+        .iter()
+        .map(|info| AuthorityPrivateInfo {
+            key_pair: info.key_pair.copy(),
+            host: info.host.clone(),
+            port: port_allocator.next_port().unwrap(),
+            db_path: info.db_path.clone(),
+            stake: info.stake,
+        })
+        .collect();
+    genesis_config.authorities = authorities;
+    genesis_config.save()?;
+
+    SuiCommand::Genesis {
+        config: Some(genesis_conf_path.to_path_buf()),
+    }
+    .execute(&mut config)
+    .await?;
+
+    let mut config = NetworkConfig::read(network_conf_path)?;
+
+    // Start network
+    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+    Ok(network)
+}
+
+#[traced_test]
+#[tokio::test]
+async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+    let network = start_network(working_dir.path(), 10500, None).await?;
+
+    // Wait for authorities to come alive.
+    retry_assert!(
+        logs_contain("Listening to TCP traffic on 127.0.0.1"),
+        Duration::from_millis(5000)
+    );
+
+    // Create Wallet context.
+    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let address1 = wallet_conf.accounts.first().unwrap().address;
+    let address2 = wallet_conf.accounts.get(1).unwrap().address;
+
+    let mut context = WalletContext::new(wallet_conf)?;
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState { address: address1 }
+        .execute(&mut context)
+        .await?
+        .print(true);
+    WalletCommands::SyncClientState { address: address2 }
+        .execute(&mut context)
+        .await?
+        .print(true);
+
+    // Print objects owned by `address1`
+    WalletCommands::Objects { address: address1 }
+        .execute(&mut context)
+        .await?
+        .print(true);
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+
+    let state1 = context
+        .address_manager
+        .get_managed_address_states()
+        .get(&address1)
+        .unwrap();
+
+    let object_refs = state1
+        .object_refs()
+        .collect::<BTreeSet<(ObjectID, ObjectRef)>>()
+        .clone();
+    // Check log output contains all object ids.
+    for (object_id, _) in object_refs.clone() {
+        assert!(logs_contain(format!("{}", object_id).as_str()))
+    }
+
+    // Create an object for address1 using Move call
+
+    // Certain prep work
+    // Get a gas object
+    let gas = *state1.get_owned_objects().first().unwrap();
+    let obj = *state1.get_owned_objects().get(1).unwrap();
+
+    // Create the args
+    let addr1_str = format!("0x{:02x}", address1);
+    let args_json = json!([123u8, addr1_str]);
+
+    let mut args = vec![];
+    for a in args_json.as_array().unwrap() {
+        args.push(SuiJsonValue::new(a.clone()).unwrap());
+    }
+
+    let resp = WalletCommands::Call {
+        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        module: Identifier::new("ObjectBasics").unwrap(),
+        function: Identifier::new("create").unwrap(),
+        type_args: vec![],
+        args,
+        gas,
+        gas_budget: 1000,
+    }
+    .execute(&mut context)
+    .await?;
+    resp.print(true);
+
+    retry_assert!(
+        logs_contain("Mutated Objects:"),
+        Duration::from_millis(1000)
+    );
+    assert!(logs_contain("Created Objects:"));
+
+    // Get the created object
+    let created_obj: ObjectID = if let WalletCommandResult::Call(
+        _,
+        TransactionEffects {
+            created: new_objs, ..
+        },
+    ) = resp
+    {
+        let ((obj_id, _seq_num, _obj_digest), _owner) = new_objs.first().unwrap();
+        *obj_id
+    } else {
+        panic!()
+    };
+
+    // Try a bad argument: decimal
+    let args_json = json!([0.3f32, addr1_str]);
+    assert!(SuiJsonValue::new(args_json.as_array().unwrap().get(0).unwrap().clone()).is_err());
+
+    // Try a bad argument: too few args
+    let args_json = json!([300usize]);
+    let mut args = vec![];
+    for a in args_json.as_array().unwrap() {
+        args.push(SuiJsonValue::new(a.clone()).unwrap());
+    }
+
+    let resp = WalletCommands::Call {
+        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        module: Identifier::new("ObjectBasics").unwrap(),
+        function: Identifier::new("create").unwrap(),
+        type_args: vec![],
+        args: args.to_vec(),
+        gas,
+        gas_budget: 1000,
+    }
+    .execute(&mut context)
+    .await;
+
+    assert!(resp.is_err());
+
+    let err_string = format!("{} ", resp.err().unwrap());
+    assert!(err_string.contains("Expected 2 args, found 1"));
+
+    // Try a transfer
+    // This should fail due to mismatch of object being sent
+    let obj_str = format!("0x{:02x}", obj);
+    let addr2_str = format!("0x{:02x}", address2);
+
+    let args_json = json!([obj_str, addr2_str]);
+    let mut args = vec![];
+    for a in args_json.as_array().unwrap() {
+        args.push(SuiJsonValue::new(a.clone()).unwrap());
+    }
+
+    let resp = WalletCommands::Call {
+        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        module: Identifier::new("ObjectBasics").unwrap(),
+        function: Identifier::new("transfer").unwrap(),
+        type_args: vec![],
+        args: args.to_vec(),
+        gas,
+        gas_budget: 1000,
+    }
+    .execute(&mut context)
+    .await;
+
+    assert!(resp.is_err());
+
+    let err_string = format!("{} ", resp.err().unwrap());
+    assert!(err_string.contains("Expected argument of type 0x2::ObjectBasics::Object, but found type 0x2::Coin::Coin<0x2::GAS::GAS>"));
+
+    // Try a proper transfer
+    let obj_str = format!("0x{:02x}", created_obj);
+    let addr2_str = format!("0x{:02x}", address2);
+
+    let args_json = json!([obj_str, addr2_str]);
+    let mut args = vec![];
+    for a in args_json.as_array().unwrap() {
+        args.push(SuiJsonValue::new(a.clone()).unwrap());
+    }
+
+    WalletCommands::Call {
+        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        module: Identifier::new("ObjectBasics").unwrap(),
+        function: Identifier::new("transfer").unwrap(),
+        type_args: vec![],
+        args: args.to_vec(),
+        gas,
+        gas_budget: 1000,
+    }
+    .execute(&mut context)
+    .await?;
+
+    retry_assert!(
+        logs_contain("Mutated Objects:"),
+        Duration::from_millis(1000)
+    );
+    assert!(logs_contain("Created Objects:"));
+
+    network.abort();
+    Ok(())
 }

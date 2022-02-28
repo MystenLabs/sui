@@ -1,24 +1,23 @@
 /// An escrow for atomic swap of objects that
 /// trusts a third party for liveness, but not
 /// safety.
-module FastX::Escrow {
-    use FastX::Address::Address;
-    use FastX::ID::{Self, IDBytes, VersionedID};
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+module Sui::Escrow {
+    use Sui::ID::{Self, ID, VersionedID};
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
 
     /// An object held in escrow
     struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
         id: VersionedID,
         /// owner of the escrowed object
-        sender: Address,
+        sender: address,
         /// intended recipient of the escrowed object
-        recipient: Address,
+        recipient: address,
         /// ID of the object `sender` wants in exchange
         // TODO: this is probably a bad idea if the object is mutable.
         // that can be fixed by asking for an additional approval
         // from `sender`, but let's keep it simple for now.
-        exchange_for: IDBytes,
+        exchange_for: ID,
         /// the escrowed object
         escrowed: T,
     }
@@ -30,9 +29,9 @@ module FastX::Escrow {
     /// `counterparty`, mediated by a `third_party`
     /// that is trusted for liveness
     public fun create<T: key + store, ExchangeForT: key + store>(
-        recipient: Address,
-        third_party: Address,
-        exchange_for: IDBytes,
+        recipient: address,
+        third_party: address,
+        exchange_for: ID,
         escrowed: T,
         ctx: &mut TxContext
     ) {
@@ -71,8 +70,8 @@ module FastX::Escrow {
         assert!(&sender1 == &recipient2, ETODO);
         assert!(&sender2 == &recipient1, ETODO);
         // check object ID compatibility
-        assert!(ID::get_id_bytes(&escrowed1) == &exchange_for2, ETODO);
-        assert!(ID::get_id_bytes(&escrowed2) == &exchange_for1, ETODO);
+        assert!(ID::id(&escrowed1) == &exchange_for2, ETODO);
+        assert!(ID::id(&escrowed2) == &exchange_for1, ETODO);
         // everything matches. do the swap!
         Transfer::transfer(escrowed1, sender2);
         Transfer::transfer(escrowed2, sender1)

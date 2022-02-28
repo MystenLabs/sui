@@ -71,6 +71,13 @@ where
     let handle = {
         // see https://fly.io/blog/the-tokio-1-x-upgrade/#tcplistener-from_std-needs-to-be-set-to-nonblocking
         let std_listener = std::net::TcpListener::bind(address)?;
+
+        if let Ok(local_addr) = std_listener.local_addr() {
+            let host = local_addr.ip();
+            let port = local_addr.port();
+            info!("Listening to TCP traffic on {host}:{port}");
+        }
+
         std_listener.set_nonblocking(true)?;
         let listener = TcpListener::from_std(std_listener)?;
 

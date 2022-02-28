@@ -1,7 +1,6 @@
 #[test_only]
 module Examples::TicTacToeTests {
-    use FastX::Address::{Self, Address};
-    use FastX::TestScenario::{Self, Scenario};
+    use Sui::TestScenario::{Self, Scenario};
     use Examples::TicTacToe::{Self, Mark, MarkMintCap, TicTacToe, Trophy};
 
     const SEND_MARK_FAILED: u64 = 0;
@@ -12,9 +11,9 @@ module Examples::TicTacToeTests {
 
     #[test]
     fun play_tictactoe() {
-        let admin = Address::dummy_with_hint(0);
-        let player_x = Address::dummy_with_hint(1);
-        let player_o = Address::dummy_with_hint(2);
+        let admin = @0x0;
+        let player_x = @0x1;
+        let player_o = @0x2;
 
         let scenario = &mut TestScenario::begin(&admin);
         // Admin creates a game
@@ -75,8 +74,8 @@ module Examples::TicTacToeTests {
     fun place_mark(
         row: u64,
         col: u64,
-        admin: &Address,
-        player: &Address,
+        admin: &address,
+        player: &address,
         scenario: &mut Scenario,
     ): u8  {
         // Step 1: player creates a mark and sends it to the game.

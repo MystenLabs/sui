@@ -36,3 +36,20 @@ pub fn fresh_id(
 
     Ok(NativeResult::ok(cost, smallvec![id]))
 }
+
+/// Create a new signer (for test only) from an address.
+pub fn new_signer_from_address(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert_eq!(args.len(), 1);
+
+    let address = pop_arg!(args, AccountAddress);
+    let signer = Value::signer(address);
+
+    // Gas amount doesn't matter as this is test only.
+    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+    Ok(NativeResult::ok(cost, smallvec![signer]))
+}

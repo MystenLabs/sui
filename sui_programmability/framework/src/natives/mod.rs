@@ -17,8 +17,8 @@ pub fn all_natives(
     const SUI_NATIVES: &[(&str, &str, NativeFunction)] = &[
         ("Event", "emit", event::emit),
         ("ID", "bytes_to_address", id::bytes_to_address),
-        ("ID", "delete", id::delete),
-        ("ID", "get_id", id::get_id),
+        ("ID", "delete_id", id::delete_id),
+        ("ID", "get_versioned_id", id::get_versioned_id),
         (
             "TestScenario",
             "deleted_object_ids",
@@ -52,6 +52,11 @@ pub fn all_natives(
             transfer::transfer_to_object_id,
         ),
         ("TxContext", "fresh_id", tx_context::fresh_id),
+        (
+            "TxContext",
+            "new_signer_from_address",
+            tx_context::new_signer_from_address,
+        ),
     ];
     SUI_NATIVES
         .iter()

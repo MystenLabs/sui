@@ -1,9 +1,8 @@
-/// Coin<Gas> is the token used to pay for gas in FastX
-module FastX::GAS {
-    use FastX::Coin;
-    use FastX::Transfer;
-    use FastX::Address;
-    use FastX::TxContext::{Self, TxContext};
+/// Coin<Gas> is the token used to pay for gas in Sui
+module Sui::GAS {
+    use Sui::Coin;
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
 
     /// Name of the coin
     struct GAS has drop {}
@@ -19,8 +18,8 @@ module FastX::GAS {
     }
 
     /// Transfer to a recipient
-    public fun transfer(c: Coin::Coin<GAS>, recipient: vector<u8>, _ctx: &mut TxContext) {
-        Coin::transfer(c, Address::new(recipient))
+    public fun transfer(c: Coin::Coin<GAS>, recipient: address, _ctx: &mut TxContext) {
+        Coin::transfer(c, recipient)
     }
 
 }

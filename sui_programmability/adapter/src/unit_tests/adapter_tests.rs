@@ -14,7 +14,7 @@ use sui_types::{
     crypto::get_key_pair,
     error::SuiResult,
     gas_coin::GAS,
-    object::Data,
+    object::{Data, Owner},
     storage::Storage,
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -164,7 +164,7 @@ impl ResourceResolver for InMemoryStorage {
         _address: &AccountAddress,
         _struct_tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        unreachable!("Should never be called in FastX")
+        unreachable!("Should never be called in Sui")
     }
 }
 
@@ -220,7 +220,7 @@ fn test_object_basics() {
     // ObjectBasics::create expects integer value and recipient address
     let pure_args = vec![
         10u64.to_le_bytes().to_vec(),
-        bcs::to_bytes(&addr1.to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(addr1)).unwrap(),
     ];
     call(
         &mut storage,
@@ -247,7 +247,7 @@ fn test_object_basics() {
     assert_eq!(obj1.version(), obj1_seq);
 
     // 2. Transfer obj1 to addr2
-    let pure_args = vec![bcs::to_bytes(&addr2.to_vec()).unwrap()];
+    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(addr2)).unwrap()];
     call(
         &mut storage,
         &native_functions,
@@ -284,7 +284,7 @@ fn test_object_basics() {
     // 3. Create another object obj2 owned by addr2, use it to update addr1
     let pure_args = vec![
         20u64.to_le_bytes().to_vec(),
-        bcs::to_bytes(&addr2.to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(addr2)).unwrap(),
     ];
     call(
         &mut storage,
@@ -385,7 +385,7 @@ fn test_wrap_unwrap() {
     // 1. Create obj1 owned by addr
     let pure_args = vec![
         10u64.to_le_bytes().to_vec(),
-        bcs::to_bytes(&addr.to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(addr)).unwrap(),
     ];
     call(
         &mut storage,
@@ -489,7 +489,7 @@ fn test_move_call_insufficient_gas() {
     let addr1 = get_key_pair().0;
     let pure_args = vec![
         10u64.to_le_bytes().to_vec(),
-        bcs::to_bytes(&addr1.to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(addr1)).unwrap(),
     ];
     let response = call(
         &mut storage,
@@ -497,7 +497,7 @@ fn test_move_call_insufficient_gas() {
         "ObjectBasics",
         "create",
         gas_object,
-        20, // This budget is not enough to execute all bytecode.
+        15, // This budget is not enough to execute all bytecode.
         Vec::new(),
         Vec::new(),
         pure_args.clone(),
@@ -505,7 +505,7 @@ fn test_move_call_insufficient_gas() {
     let err = response.unwrap().unwrap_err();
     assert!(err.1.to_string().contains("VMError with status OUT_OF_GAS"));
     // Provided gas_budget will be deducted as gas.
-    assert_eq!(err.0, 20);
+    assert_eq!(err.0, 15);
 
     // Trying again with a different gas budget.
     let gas_object = storage.read_object(&gas_object_id).unwrap();
@@ -554,7 +554,6 @@ fn test_publish_module_insufficient_gas() {
         &mut storage,
         native_functions,
         module_bytes,
-        base_types::SuiAddress::default(),
         &mut tx_context,
         GAS_BUDGET,
         gas_object,
@@ -586,7 +585,7 @@ fn test_transfer_and_freeze() {
     // ObjectBasics::create expects integer value and recipient address
     let pure_args = vec![
         10u64.to_le_bytes().to_vec(),
-        bcs::to_bytes(&addr1.to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(addr1)).unwrap(),
     ];
     call(
         &mut storage,
@@ -608,7 +607,7 @@ fn test_transfer_and_freeze() {
     assert!(!obj1.is_read_only());
 
     // 2. Call transfer_and_freeze.
-    let pure_args = vec![bcs::to_bytes(&addr2.to_vec()).unwrap()];
+    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(addr2)).unwrap()];
     call(
         &mut storage,
         &native_functions,
@@ -626,10 +625,10 @@ fn test_transfer_and_freeze() {
     storage.flush();
     let obj1 = storage.read_object(&id1).unwrap();
     assert!(obj1.is_read_only());
-    assert!(obj1.owner == addr2);
+    assert!(obj1.owner == Owner::SharedImmutable);
 
     // 3. Call transfer again and it should fail.
-    let pure_args = vec![bcs::to_bytes(&addr1.to_vec()).unwrap()];
+    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(addr1)).unwrap()];
     let result = call(
         &mut storage,
         &native_functions,
@@ -848,7 +847,6 @@ fn test_publish_module_linker_error() {
         &mut storage,
         native_functions,
         module_bytes,
-        base_types::SuiAddress::default(),
         &mut tx_context,
         GAS_BUDGET,
         gas_object,
@@ -891,7 +889,6 @@ fn test_publish_module_non_zero_address() {
         &mut storage,
         native_functions,
         module_bytes,
-        base_types::SuiAddress::default(),
         &mut tx_context,
         GAS_BUDGET,
         gas_object,
@@ -934,7 +931,7 @@ fn test_coin_transfer() {
         vec![to_transfer],
         vec![
             10u64.to_le_bytes().to_vec(),
-            bcs::to_bytes(&addr1.to_vec()).unwrap(),
+            bcs::to_bytes(&AccountAddress::from(addr1)).unwrap(),
         ],
     )
     .unwrap()
@@ -977,7 +974,6 @@ fn publish_from_src(
         storage,
         natives.clone(),
         all_module_bytes,
-        base_types::SuiAddress::default(),
         &mut tx_context,
         gas_budget,
         gas_object,
@@ -1015,7 +1011,7 @@ fn test_simple_call() {
     let addr = base_types::get_new_address();
     let pure_args = vec![
         obj_val.to_le_bytes().to_vec(),
-        bcs::to_bytes(&addr.to_vec()).unwrap(),
+        bcs::to_bytes(&AccountAddress::from(addr)).unwrap(),
     ];
 
     let response = call(

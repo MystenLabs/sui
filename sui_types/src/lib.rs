@@ -22,7 +22,7 @@ pub mod gas;
 pub mod gas_coin;
 pub mod id;
 pub mod messages;
-pub mod move_call;
+pub mod move_package;
 pub mod object;
 pub mod serialize;
 pub mod storage;
@@ -31,7 +31,7 @@ pub mod storage;
 /// Same as the ObjectID
 pub const MOVE_STDLIB_ADDRESS: AccountAddress = AccountAddress::ONE;
 
-/// 0x2-- account address where fastX framework modules are stored
+/// 0x2-- account address where sui framework modules are stored
 /// Same as the ObjectID
 pub const SUI_FRAMEWORK_ADDRESS: AccountAddress = get_hex_address_two();
 
