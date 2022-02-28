@@ -269,15 +269,14 @@ impl AuthorityState {
         let transaction_digest = transaction.digest();
         if transaction.contains_shared_object() {
             let mut lock_errors = Vec::new();
-            let shared_object_ids = transaction.shared_input_objects();
-            for object_id in shared_object_ids.clone() {
+            for object_id in transaction.shared_input_objects() {
                 // Check whether the shared objects have already been assigned a sequence number by
                 // the consensus. Bail if the transaction contains even one shared object that either:
                 // (i) was not assigned a sequence number, or (ii) has a different sequence number
                 // than the current one. Note that if the shared object is not in storage (it has been
                 // destroyed), we keep processing the transaction to unlock all single-writer objects
                 // (the execution engine will simply execute no-op).
-                match self._database.sequenced(transaction_digest, object_id)? {
+                match self._database.sequenced(transaction_digest, *object_id)? {
                     Some(lock) => {
                         if let Some(object) = self._database.get_object(&object_id)? {
                             if object.version() != lock {
@@ -297,13 +296,15 @@ impl AuthorityState {
 
             // Now let's process the certificate as usual: this executes the transaction and
             // unlock all single-writer objects.
-            let result = self.process_certificate(confirmation_transaction).await;
+            let result = self
+                .process_certificate(confirmation_transaction.clone())
+                .await;
 
             // If the execution is successfully, we cleanup some data structures.
             if result.is_ok() {
-                for object_id in shared_object_ids {
+                for object_id in transaction.shared_input_objects() {
                     self._database
-                        .delete_sequence_lock(transaction_digest, object_id)?;
+                        .delete_sequence_lock(transaction_digest, *object_id)?;
                     if self._database.get_object(&object_id)?.is_none() {
                         self._database.delete_schedule(&object_id)?;
                     }
@@ -337,7 +338,7 @@ impl AuthorityState {
             .into_iter()
             .map(|(_, object)| object)
             .collect();
-        for object_id in &transaction.shared_input_objects() {
+        for object_id in transaction.shared_input_objects() {
             if let Some(object) = self._database.get_object(object_id)? {
                 inputs.push(object);
             }
@@ -437,7 +438,7 @@ impl AuthorityState {
         let transaction = &confirmation_transaction.certificate.transaction;
         let transaction_digest = transaction.digest();
         for id in transaction.shared_input_objects() {
-            if self._database.sequenced(transaction_digest, id)?.is_some() {
+            if self._database.sequenced(transaction_digest, *id)?.is_some() {
                 return Ok(());
             }
         }

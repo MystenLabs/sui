@@ -494,10 +494,10 @@ impl Transaction {
         }
     }
 
-    pub fn shared_input_objects(&self) -> Vec<ObjectID> {
+    pub fn shared_input_objects(&self) -> &[ObjectID] {
         match &self.data.kind {
-            TransactionKind::Call(c) => c.shared_object_arguments.to_vec(),
-            _ => vec![],
+            TransactionKind::Call(c) => &c.shared_object_arguments,
+            _ => &[],
         }
     }
 

@@ -517,7 +517,7 @@ impl AuthorityStore {
         let mut schedule_to_write = Vec::new();
         for id in transaction.shared_input_objects() {
             let version = self.schedule.get(&id)?.unwrap_or_default();
-            sequenced_to_write.push(((transaction_digest, id), version));
+            sequenced_to_write.push(((transaction_digest, *id), version));
             let next_version = version.increment();
             schedule_to_write.push((id, next_version));
         }
