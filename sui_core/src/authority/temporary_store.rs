@@ -88,6 +88,7 @@ impl AuthorityTemporaryStore {
                 let mut object = self.objects[id].clone();
                 // Active input object must be Move object.
                 object.data.try_as_move_mut().unwrap().increment_version();
+                object.previous_transaction = self.tx_digest;
                 self.written.insert(*id, object);
             }
         }
@@ -220,7 +221,7 @@ impl Storage for AuthorityTemporaryStore {
         caller.
     */
 
-    fn write_object(&mut self, mut object: Object) {
+    fn write_object(&mut self, object: Object) {
         // there should be no write after delete
         debug_assert!(self.deleted.get(&object.id()) == None);
         // Check it is not read-only
@@ -233,9 +234,10 @@ impl Storage for AuthorityTemporaryStore {
             }
         }
 
+        // TODO: do we still need this?
         // The adapter is not very disciplined at filling in the correct
         // previous transaction digest, so we ensure it is correct here.
-        object.previous_transaction = self.tx_digest;
+        // object.previous_transaction = self.tx_digest;
         self.written.insert(object.id(), object);
     }
 

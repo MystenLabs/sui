@@ -92,6 +92,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         args,
         mutable_ref_objects,
         by_value_objects,
+        read_only_refs,
     } = match resolve_and_type_check(
         package_object,
         module,
@@ -116,6 +117,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         type_args,
         args,
         mutable_ref_objects,
+        read_only_refs,
         by_value_objects,
         object_owner_map,
         gas_budget,
@@ -128,6 +130,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         ExecutionStatus::Success { gas_used } => {
             match gas::try_deduct_gas(&mut gas_object, gas_used) {
                 Ok(()) => {
+                    gas_object.previous_transaction = ctx.digest();
                     state_view.write_object(gas_object);
                     Ok(ExecutionStatus::Success { gas_used })
                 }
@@ -152,6 +155,7 @@ fn execute_internal<
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
     mutable_ref_objects: Vec<Object>,
+    read_ref_objects: Vec<Object>,
     by_value_objects: BTreeMap<ObjectID, Object>,
     object_owner_map: HashMap<SuiAddress, SuiAddress>,
     gas_budget: u64, // gas budget for the current call operation
@@ -213,6 +217,7 @@ fn execute_internal<
                 state_view,
                 by_value_objects,
                 mutable_refs,
+                read_ref_objects.into_iter(),
                 events,
                 ctx,
                 object_owner_map,
@@ -329,6 +334,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
                 &Identifier::new(INIT_FN_NAME.as_str()).unwrap(),
                 Vec::new(),
                 args,
+                Vec::new(),
                 Vec::new(),
                 BTreeMap::new(),
                 HashMap::new(),
@@ -468,18 +474,44 @@ fn process_successful_execution<
     state_view: &mut S,
     mut by_value_objects: BTreeMap<ObjectID, Object>,
     mutable_refs: impl Iterator<Item = (Object, Vec<u8>)>,
+    read_ref_objects: impl Iterator<Item = Object>,
     events: Vec<MoveEvent>,
     ctx: &TxContext,
     mut object_owner_map: HashMap<SuiAddress, SuiAddress>,
 ) -> (u64, u64, SuiResult) {
+    // Four situations with object arguments
+    // 1. Immutable objects: nothing to do
+    // 2. Mutable objects but not mutated during TX (read ref): update the previous_tx and incr the seq #
+    // 3. Mutable objects mutated during tx (mutable ref): update the contents, previous_tx, incr the seq #
+    // 4. Mutable objects mutated during tx (by value Structs, a.k.a consumed): update the contents/owner, previous_tx, incr the seq #
+
+    // 1. Immutable objects: nothing to do
+    // 2. Mutable objects but not mutated during TX (read ref): update the previous_tx and incr the seq #
+    for mut obj in read_ref_objects {
+        if !obj.is_read_only() {
+            // Update preivous tx for non-readonly objects
+            obj.data
+                .try_as_move_mut()
+                .expect("Mutable objects must be Move objects")
+                .increment_version();
+            obj.previous_transaction = ctx.digest();
+            state_view.write_object(obj)
+        }
+    }
+
+    // 3. Mutable objects mutated during tx (mutable ref): update the contents, previous_tx, incr the seq #
     for (mut obj, new_contents) in mutable_refs {
         // update contents and increment sequence number
         obj.data
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
             .update_contents(new_contents);
+        obj.previous_transaction = ctx.digest();
         state_view.write_object(obj);
     }
+
+    // 4. Mutable objects mutated during tx (by value Structs, a.k.a consumed): update the contents/owner, previous_tx, incr the seq #
+
     // process events to identify transfers, freezes
     let mut gas_used = 0;
     let tx_digest = ctx.digest();

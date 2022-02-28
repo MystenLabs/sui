@@ -321,7 +321,8 @@ fn test_object_basics() {
     )
     .unwrap()
     .unwrap();
-    assert_eq!(storage.updated().len(), 2);
+    // Although obj2 contents are not changed, we update its previous tx and seq #
+    assert_eq!(storage.updated().len(), 3);
     assert!(storage.created().is_empty());
     assert!(storage.deleted().is_empty());
     // test than an event was emitted as expected

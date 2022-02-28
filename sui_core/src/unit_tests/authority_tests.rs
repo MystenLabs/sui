@@ -1509,6 +1509,165 @@ async fn test_object_owning_another_object() {
     );
 }
 
+#[tokio::test]
+async fn test_object_previous_transaction_field() {
+    let (sender, sender_key) = get_key_pair();
+    let (recipient, _) = get_key_pair();
+
+    let gas_object_id = ObjectID::random();
+    let rec_gas_object_id = ObjectID::random();
+
+    let authority_state = init_state_with_ids(vec![
+        (sender, gas_object_id),
+        (recipient, rec_gas_object_id),
+    ])
+    .await;
+
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
+        .await
+        .unwrap();
+    let (new_object_id1, _seq1, _) = effects.created[0].0;
+    let obj1 = authority_state
+        .get_object(&new_object_id1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(effects.transaction_digest, obj1.previous_transaction);
+
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
+        .await
+        .unwrap();
+    let (new_object_id2, _seq2, _) = effects.created[0].0;
+
+    let effects = call_framework_code(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        "ObjectBasics",
+        "update",
+        vec![],
+        vec![new_object_id1, new_object_id2],
+        vec![],
+    )
+    .await
+    .unwrap();
+    println!("{}", effects);
+    println!("{:?}", effects.transaction_digest);
+
+    let obj1 = authority_state
+        .get_object(&new_object_id1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(effects.transaction_digest, obj1.previous_transaction);
+    let obj2 = authority_state
+        .get_object(&new_object_id2)
+        .await
+        .unwrap()
+        .unwrap();
+    println!("{:?}", obj1.to_object_reference());
+    println!("{:?}", obj2.to_object_reference());
+
+    assert_eq!(effects.transaction_digest, obj2.previous_transaction);
+
+    // Check entry for object to be deleted is returned
+    let (obj_ref, tx) = authority_state
+        .get_latest_parent_entry(new_object_id1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(obj_ref.0, new_object_id1);
+    assert_eq!(obj_ref.1, SequenceNumber::from(2));
+    assert_eq!(effects.transaction_digest, tx);
+
+    let _ = call_framework_code(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        "ObjectBasics",
+        "delete",
+        vec![],
+        vec![new_object_id1],
+        vec![],
+    )
+    .await
+    .unwrap();
+
+    assert!(authority_state
+        .get_object(&new_object_id1)
+        .await
+        .unwrap()
+        .is_none());
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
+        .await
+        .unwrap();
+    let (new_object_id3, _seq3, _) = effects.created[0].0;
+
+    // Transfer obj1 to obj2.
+    let effects = call_framework_code(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        "ObjectBasics",
+        "transfer_to_object",
+        vec![],
+        vec![new_object_id2, new_object_id3],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert_eq!(effects.mutated.len(), 3);
+    assert_eq!(
+        authority_state
+            .get_object(&new_object_id2)
+            .await
+            .unwrap()
+            .unwrap()
+            .owner,
+        SuiAddress::from(new_object_id3),
+    );
+
+    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
+        .await
+        .unwrap();
+    let (new_object_id4, _seq4, _) = effects.created[0].0;
+
+    let effects = call_framework_code(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        "ObjectBasics",
+        "transfer",
+        vec![],
+        vec![new_object_id4],
+        vec![bcs::to_bytes(&AccountAddress::from(recipient)).unwrap()],
+    )
+    .await
+    .unwrap();
+
+    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert_eq!(effects.mutated.len(), 2);
+
+    let obj4 = authority_state
+        .get_object(&new_object_id4)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_obj = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(effects.transaction_digest, obj4.previous_transaction);
+    assert_eq!(effects.transaction_digest, gas_obj.previous_transaction);
+}
+
 // helpers
 
 #[cfg(test)]

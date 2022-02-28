@@ -358,6 +358,7 @@ impl AuthorityState {
             gas::deduct_gas(&mut gas_object, *gas_used);
             temporary_store.write_object(gas_object);
         }
+        // We must ensure that even in the case of failure, ensure to advance seq# and update previous tx
         temporary_store.ensure_active_inputs_mutated();
         Ok((temporary_store, status))
     }

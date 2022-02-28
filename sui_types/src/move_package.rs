@@ -33,6 +33,7 @@ pub struct TypeCheckSuccess {
     pub args: Vec<Vec<u8>>,
     pub by_value_objects: BTreeMap<ObjectID, Object>,
     pub mutable_ref_objects: Vec<Object>,
+    pub read_only_refs: Vec<Object>,
 }
 
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
@@ -210,6 +211,7 @@ pub fn resolve_and_type_check(
     let mut num_immutable_objects = 0;
     #[cfg(debug_assertions)]
     let num_objects = object_args.len();
+    let mut read_only_refs = vec![];
 
     let ty_args: Vec<Type> = type_args.iter().map(|t| Type::from(t.clone())).collect();
     for (idx, object) in object_args.into_iter().enumerate() {
@@ -240,6 +242,7 @@ pub fn resolve_and_type_check(
                         {
                             num_immutable_objects += 1
                         }
+                        read_only_refs.push(object);
                     }
                     Type::Struct { .. } => {
                         if object.is_read_only() {
@@ -293,6 +296,7 @@ pub fn resolve_and_type_check(
         args,
         by_value_objects,
         mutable_ref_objects,
+        read_only_refs,
     })
 }
 
