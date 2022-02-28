@@ -1,0 +1,12 @@
+.logo {
+    @apply font-advanced text-2xl lg:text-4xl text-black 
+  no-underline;
+}
+
+.nav {
+    @apply mt-[1vh] ml-[5vw];
+}
+
+header {
+    @apply h-[2rem];
+}
