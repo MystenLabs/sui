@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod config;
+pub mod keystore;
 pub mod shell;
 pub mod sui_commands;
 pub mod sui_json;

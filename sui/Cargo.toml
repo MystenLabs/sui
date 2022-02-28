@@ -25,7 +25,7 @@ ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 rocksdb = "0.17.0"
 hex = "0.4.3"
 async-trait = "0.1.52"
-serde_with = "1.11.0"
+serde_with = { version = "1.11.0", features = ["hex"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 serde-value = "0.7.0"

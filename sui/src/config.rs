@@ -2,11 +2,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::keystore::KeystoreType;
 use anyhow::anyhow;
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::hex::Hex;
+use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::fs::{self, File};
@@ -21,7 +24,6 @@ use sui_network::transport;
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, KeyPair};
-use sui_types::error::SuiError;
 use tracing::log::trace;
 
 const DEFAULT_WEIGHT: usize = 1;
@@ -31,13 +33,6 @@ pub const DEFAULT_STARTING_PORT: u16 = 10000;
 
 static PORT_ALLOCATOR: Lazy<Mutex<PortAllocator>> =
     Lazy::new(|| Mutex::new(PortAllocator::new(DEFAULT_STARTING_PORT)));
-
-#[derive(Serialize, Deserialize)]
-pub struct AccountInfo {
-    #[serde(serialize_with = "bytes_as_hex", deserialize_with = "bytes_from_hex")]
-    pub address: SuiAddress,
-    pub key_pair: KeyPair,
-}
 
 #[derive(Serialize, Deserialize)]
 pub struct AuthorityInfo {
@@ -107,14 +102,17 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
     }
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct WalletConfig {
-    pub accounts: Vec<AccountInfo>,
+    #[serde_as(as = "Vec<Hex>")]
+    pub accounts: Vec<SuiAddress>,
     pub authorities: Vec<AuthorityInfo>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
     pub buffer_size: usize,
     pub db_folder_path: PathBuf,
+    pub keystore: KeystoreType,
 
     #[serde(skip)]
     config_path: PathBuf,
@@ -122,13 +120,17 @@ pub struct WalletConfig {
 
 impl Config for WalletConfig {
     fn create(path: &Path) -> Result<Self, anyhow::Error> {
+        let working_dir = path
+            .parent()
+            .ok_or(anyhow!("Cannot determine parent directory."))?;
         Ok(WalletConfig {
             accounts: Vec::new(),
             authorities: Vec::new(),
             send_timeout: Duration::from_micros(4000000),
             recv_timeout: Duration::from_micros(4000000),
             buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE.to_string().parse()?,
-            db_folder_path: PathBuf::from("./client_db"),
+            db_folder_path: working_dir.join("client_db"),
+            keystore: KeystoreType::File(working_dir.join("wallet.ks")),
             config_path: path.to_path_buf(),
         })
     }
@@ -165,12 +167,6 @@ impl WalletConfig {
             authority_clients.insert(authority.name, client);
         }
         authority_clients
-    }
-    pub fn get_account_cfg_info(&self, address: &SuiAddress) -> Result<&AccountInfo, SuiError> {
-        self.accounts
-            .iter()
-            .find(|info| &info.address == address)
-            .ok_or(SuiError::AccountNotFound)
     }
 }
 

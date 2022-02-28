@@ -87,6 +87,14 @@ impl From<ObjectID> for SuiAddress {
     }
 }
 
+impl From<Vec<u8>> for SuiAddress {
+    fn from(address: Vec<u8>) -> SuiAddress {
+        let mut res = [0u8; SUI_ADDRESS_LENGTH];
+        res.copy_from_slice(&address[..SUI_ADDRESS_LENGTH]);
+        Self(res)
+    }
+}
+
 impl From<&PublicKeyBytes> for SuiAddress {
     fn from(key: &PublicKeyBytes) -> SuiAddress {
         use sha2::Digest;

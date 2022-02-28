@@ -311,11 +311,7 @@ async fn sui_start(
             )
         })?;
 
-    let addresses = wallet_config
-        .accounts
-        .iter()
-        .map(|info| info.address)
-        .collect::<Vec<_>>();
+    let addresses = wallet_config.accounts.clone();
     let mut wallet_context = WalletContext::new(wallet_config).map_err(|error| {
         custom_http_error(
             StatusCode::CONFLICT,
