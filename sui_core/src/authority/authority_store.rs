@@ -55,8 +55,8 @@ pub struct AuthorityStore {
     /// the same response for any call after the first (ie. make certificate processing idempotent).
     signed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
 
+    /// Hold the lock for shared objects. These two maps should eventually be merged into a single one.
     sequenced: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
-
     schedule: DBMap<ObjectID, SequenceNumber>,
 
     /// Internal vector of locks to manage concurrent writes to the database
