@@ -511,6 +511,7 @@ fn process_successful_execution<
     }
 
     // 4. Mutable objects mutated during tx (by value Structs, a.k.a consumed): update the contents/owner, previous_tx, incr the seq #
+    // This step is handled as part of `handle_transfer`
 
     // process events to identify transfers, freezes
     let mut gas_used = 0;
