@@ -24,6 +24,7 @@ use sui_types::{
 use typed_store::rocks::open_cf;
 use typed_store::Map;
 
+use futures::future::BoxFuture;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::{
@@ -40,6 +41,13 @@ use self::client_responses::{MergeCoinResponse, SplitCoinResponse};
 /// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
 ///
 pub type StableSyncSigner = Pin<Box<dyn signature::Signer<Signature> + Send + Sync>>;
+
+pub type SignatureCallback<'a> = Box<
+    dyn FnOnce(SuiAddress, TransactionData) -> BoxFuture<'a, Result<Signature, anyhow::Error>>
+        + Send
+        + Sync
+        + 'a,
+>;
 
 pub mod client_responses;
 pub mod client_store;
@@ -127,8 +135,6 @@ where
 pub struct ClientState {
     /// Our Sui address.
     address: SuiAddress,
-    /// Our signature key.
-    secret: StableSyncSigner,
     /// Persistent store for client
     store: client_store::ClientSingleAddressStore,
 }
@@ -143,6 +149,7 @@ pub trait Client {
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: SuiAddress,
+        signature_callback: SignatureCallback<'_>,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
     /// Synchronise client state with a random authorities, updates all object_ids and certificates
@@ -163,6 +170,7 @@ pub trait Client {
         shared_object_arguments: Vec<ObjectID>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
+        signature_callback: SignatureCallback<'_>,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
     /// Publish Move modules
@@ -172,6 +180,7 @@ pub trait Client {
         package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
+        signature_callback: SignatureCallback<'_>,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
     /// Split the coin object (identified by `coin_object_ref`) into
@@ -187,6 +196,7 @@ pub trait Client {
         split_amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        signature_callback: SignatureCallback<'_>,
     ) -> Result<SplitCoinResponse, anyhow::Error>;
 
     /// Merge the `coin_to_merge` coin object into `primary_coin`.
@@ -204,6 +214,7 @@ pub trait Client {
         coin_to_merge: ObjectRef,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        signature_callback: SignatureCallback<'_>,
     ) -> Result<MergeCoinResponse, anyhow::Error>;
 
     /// Get the object information
@@ -226,24 +237,18 @@ impl ClientState {
     /// TODO: client should manage multiple addresses instead of each addr having DBs
     /// https://github.com/MystenLabs/fastnft/issues/332
     #[cfg(test)]
-    pub fn new(path: PathBuf, address: SuiAddress, secret: StableSyncSigner) -> Self {
+    pub fn new(path: PathBuf, address: SuiAddress) -> Self {
         ClientState {
             address,
-            secret,
             store: client_store::ClientSingleAddressStore::new(path),
         }
     }
 
     pub fn new_for_manager(
         address: SuiAddress,
-        secret: StableSyncSigner,
         store: client_store::ClientSingleAddressStore,
     ) -> Self {
-        ClientState {
-            address,
-            secret,
-            store,
-        }
+        ClientState { address, store }
     }
 
     pub fn address(&self) -> SuiAddress {
@@ -384,10 +389,6 @@ impl ClientState {
     #[cfg(test)]
     pub fn store(&self) -> &client_store::ClientSingleAddressStore {
         &self.store
-    }
-
-    pub fn secret(&self) -> &dyn signature::Signer<Signature> {
-        &*self.secret
     }
 
     pub fn get_unique_pending_transactions(&self) -> HashSet<Transaction> {
@@ -690,8 +691,9 @@ where
         shared_object_arguments: Vec<ObjectID>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
+        signature_callback: SignatureCallback<'_>,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        let move_call_transaction = Transaction::new_move_call(
+        let data = TransactionData::new_move_call(
             signer,
             package_object_ref,
             module,
@@ -702,9 +704,10 @@ where
             shared_object_arguments,
             pure_arguments,
             gas_budget,
-            self.get_account(&signer)?.secret(),
         );
-        self.execute_transaction(move_call_transaction).await
+        let signature = signature_callback(self.address, data.clone()).await?;
+        self.execute_transaction(Transaction::new(data, signature))
+            .await
     }
 
     async fn publish(
@@ -713,15 +716,13 @@ where
         package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
+        signature_callback: SignatureCallback<'_>,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        let move_publish_transaction = Transaction::new_module(
-            signer,
-            gas_object_ref,
-            package_bytes,
-            gas_budget,
-            self.get_account(&signer)?.secret(),
-        );
-        self.execute_transaction(move_publish_transaction).await
+        let data = TransactionData::new_module(signer, gas_object_ref, package_bytes, gas_budget);
+        let signature = signature_callback(self.address, data.clone()).await?;
+
+        self.execute_transaction(Transaction::new(data, signature))
+            .await
     }
 
     async fn split_coin(
@@ -731,6 +732,7 @@ where
         split_amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        signature_callback: SignatureCallback<'_>,
     ) -> Result<SplitCoinResponse, anyhow::Error> {
         let coin_type = self
             .get_object_info(coin_object_ref.0)
@@ -738,7 +740,7 @@ where
             .object()?
             .get_move_template_type()?;
 
-        let move_call_transaction = Transaction::new_move_call(
+        let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
@@ -749,9 +751,13 @@ where
             vec![],
             vec![bcs::to_bytes(&split_amounts)?],
             gas_budget,
-            self.get_account(&signer)?.secret(),
         );
-        let (certificate, effects) = self.execute_transaction(move_call_transaction).await?;
+
+        let signature = signature_callback(self.address, data.clone()).await?;
+
+        let (certificate, effects) = self
+            .execute_transaction(Transaction::new(data, signature))
+            .await?;
         if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
             return Err(error.into());
         }
@@ -786,6 +792,7 @@ where
         coin_to_merge: ObjectRef,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        signature_callback: SignatureCallback<'_>,
     ) -> Result<MergeCoinResponse, anyhow::Error> {
         let coin_type = self
             .get_object_info(primary_coin.0)
@@ -793,7 +800,7 @@ where
             .object()?
             .get_move_template_type()?;
 
-        let move_call_transaction = Transaction::new_move_call(
+        let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
@@ -804,9 +811,11 @@ where
             vec![],
             vec![],
             gas_budget,
-            self.get_account(&signer)?.secret(),
         );
-        let (certificate, effects) = self.execute_transaction(move_call_transaction).await?;
+        let signature = signature_callback(self.address, data.clone()).await?;
+        let (certificate, effects) = self
+            .execute_transaction(Transaction::new(data, signature))
+            .await?;
         if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
             return Err(error.into());
         }

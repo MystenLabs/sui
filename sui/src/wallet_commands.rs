@@ -6,25 +6,29 @@ use core::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::path::Path;
 use sui_core::authority_client::AuthorityClient;
-use sui_core::client::{Client, ClientAddressManager};
+use sui_core::client::{Client, ClientAddressManager, SignatureCallback};
 use sui_framework::build_move_package_to_bytes;
 use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
-use sui_types::crypto::get_key_pair;
+use sui_types::crypto::{get_key_pair, Signable};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{CertifiedTransaction, ExecutionStatus, TransactionEffects};
+use sui_types::messages::{
+    CertifiedTransaction, ExecutionStatus, TransactionData, TransactionEffects,
+};
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::ObjectRead::Exists;
 
-use crate::keystore::{Keystore, SuiKeystoreSigner};
+use crate::keystore::Keystore;
 use anyhow::anyhow;
 use colored::Colorize;
+use futures::lock::Mutex;
+use futures::FutureExt;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::parse_type_tag;
 use serde::ser::Error;
 use serde::Serialize;
 use std::fmt::Write;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
@@ -150,6 +154,18 @@ impl WalletCommands {
         &mut self,
         context: &mut WalletContext,
     ) -> Result<WalletCommandResult, anyhow::Error> {
+        let keystore = context.keystore.clone();
+        let signature_callback: SignatureCallback =
+            Box::new(|addr: SuiAddress, data: TransactionData| {
+                async move {
+                    let keystore = keystore.lock().await;
+                    let mut msg = Vec::new();
+                    data.write(&mut msg);
+                    keystore.sign(&addr, &msg)
+                }
+                .boxed()
+            });
+
         Ok(match self {
             WalletCommands::Publish {
                 path,
@@ -172,7 +188,13 @@ impl WalletCommands {
                 let compiled_modules = build_move_package_to_bytes(Path::new(path))?;
                 let (cert, effects) = context
                     .address_manager
-                    .publish(*sender, compiled_modules, gas_obj_ref, *gas_budget)
+                    .publish(
+                        *sender,
+                        compiled_modules,
+                        gas_obj_ref,
+                        *gas_budget,
+                        signature_callback,
+                    )
                     .await?;
 
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
@@ -265,6 +287,7 @@ impl WalletCommands {
                         vec![],
                         pure_args,
                         *gas_budget,
+                        signature_callback,
                     )
                     .await?;
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
@@ -280,9 +303,10 @@ impl WalletCommands {
                     .await?
                     .get_single_owner_address()?;
                 let time_start = Instant::now();
+
                 let (cert, effects) = context
                     .address_manager
-                    .transfer_object(*from, *object_id, *gas, *to)
+                    .transfer_object(*from, *object_id, *gas, *to, signature_callback)
                     .await?;
                 let time_total = time_start.elapsed().as_micros();
 
@@ -312,7 +336,7 @@ impl WalletCommands {
             WalletCommands::NewAddress => {
                 let (address, key) = get_key_pair();
                 context.config.accounts.push(address);
-                context.keystore.lock().unwrap().add_key(key)?;
+                context.keystore.lock().await.add_key(key)?;
                 context.config.save()?;
                 // Create an address to be managed
                 context.create_account_state(&address)?;
@@ -371,8 +395,7 @@ impl WalletContext {
     }
 
     pub fn create_account_state(&mut self, owner: &SuiAddress) -> SuiResult {
-        let signer = Box::pin(SuiKeystoreSigner::new(self.keystore.clone(), *owner));
-        self.address_manager.create_account_state(*owner, signer)
+        self.address_manager.create_account_state(*owner)
     }
 }
 

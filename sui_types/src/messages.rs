@@ -5,6 +5,9 @@
 use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
+#[cfg(test)]
+use crate::crypto::KeyPair;
+
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 
 #[cfg(test)]
@@ -68,6 +71,67 @@ pub struct TransactionData {
     pub kind: TransactionKind,
     sender: SuiAddress,
     gas_payment: ObjectRef,
+}
+
+impl TransactionData {
+    pub fn new(kind: TransactionKind, sender: SuiAddress, gas_payment: ObjectRef) -> Self {
+        TransactionData {
+            kind,
+            sender,
+            gas_payment,
+        }
+    }
+
+    pub fn new_move_call(
+        sender: SuiAddress,
+        package: ObjectRef,
+        module: Identifier,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        gas_payment: ObjectRef,
+        object_arguments: Vec<ObjectRef>,
+        shared_object_arguments: Vec<ObjectID>,
+        pure_arguments: Vec<Vec<u8>>,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Call(MoveCall {
+            package,
+            module,
+            function,
+            type_arguments,
+            object_arguments,
+            shared_object_arguments,
+            pure_arguments,
+            gas_budget,
+        });
+        Self::new(kind, sender, gas_payment)
+    }
+
+    pub fn new_transfer(
+        recipient: SuiAddress,
+        object_ref: ObjectRef,
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+    ) -> Self {
+        let kind = TransactionKind::Transfer(Transfer {
+            recipient,
+            object_ref,
+        });
+        Self::new(kind, sender, gas_payment)
+    }
+
+    pub fn new_module(
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        modules: Vec<Vec<u8>>,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Publish(MoveModulePublish {
+            modules,
+            gas_budget,
+        });
+        Self::new(kind, sender, gas_payment)
+    }
 }
 
 /// An transaction signed by a client. signature is applied on data.
@@ -404,74 +468,14 @@ impl InputObjectKind {
 }
 
 impl Transaction {
-    pub fn new(
-        kind: TransactionKind,
-        secret: &dyn signature::Signer<Signature>,
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-    ) -> Self {
-        let data = TransactionData {
-            kind,
-            sender,
-            gas_payment,
-        };
-        let signature = Signature::new(&data, secret);
+    #[cfg(test)]
+    pub fn from_data(data: TransactionData, keypair: &KeyPair) -> Self {
+        let signature = Signature::new(&data, keypair);
+        Self::new(data, signature)
+    }
+
+    pub fn new(data: TransactionData, signature: Signature) -> Self {
         Transaction { data, signature }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_move_call(
-        sender: SuiAddress,
-        package: ObjectRef,
-        module: Identifier,
-        function: Identifier,
-        type_arguments: Vec<TypeTag>,
-        gas_payment: ObjectRef,
-        object_arguments: Vec<ObjectRef>,
-        shared_object_arguments: Vec<ObjectID>,
-        pure_arguments: Vec<Vec<u8>>,
-        gas_budget: u64,
-        secret: &dyn signature::Signer<Signature>,
-    ) -> Self {
-        let kind = TransactionKind::Call(MoveCall {
-            package,
-            module,
-            function,
-            type_arguments,
-            object_arguments,
-            shared_object_arguments,
-            pure_arguments,
-            gas_budget,
-        });
-        Self::new(kind, secret, sender, gas_payment)
-    }
-
-    pub fn new_module(
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        modules: Vec<Vec<u8>>,
-        gas_budget: u64,
-        secret: &dyn signature::Signer<Signature>,
-    ) -> Self {
-        let kind = TransactionKind::Publish(MoveModulePublish {
-            modules,
-            gas_budget,
-        });
-        Self::new(kind, secret, sender, gas_payment)
-    }
-
-    pub fn new_transfer(
-        recipient: SuiAddress,
-        object_ref: ObjectRef,
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        secret: &dyn signature::Signer<Signature>,
-    ) -> Self {
-        let kind = TransactionKind::Transfer(Transfer {
-            recipient,
-            object_ref,
-        });
-        Self::new(kind, secret, sender, gas_payment)
     }
 
     pub fn check_signature(&self) -> Result<(), SuiError> {
