@@ -40,7 +40,7 @@ fn test_signatures() {
 
 #[test]
 fn test_max_sequence_number() {
-    let max = SequenceNumber::max();
+    let max = SequenceNumber::MAX;
     assert_eq!(max.0 * 2 + 1, std::u64::MAX);
 }
 

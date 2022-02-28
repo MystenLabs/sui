@@ -17,7 +17,14 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
 };
+use serde::{Deserialize, Serialize};
+use serde_bytes::ByteBuf;
 use std::collections::BTreeMap;
+
+// TODO: robust MovePackage tests
+// #[cfg(test)]
+// #[path = "unit_tests/move_package.rs"]
+// mod base_types_tests;
 
 pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 
@@ -26,6 +33,124 @@ pub struct TypeCheckSuccess {
     pub args: Vec<Vec<u8>>,
     pub by_value_objects: BTreeMap<ObjectID, Object>,
     pub mutable_ref_objects: Vec<Object>,
+}
+
+// serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
+pub struct MovePackage {
+    module_map: BTreeMap<String, ByteBuf>,
+}
+
+impl MovePackage {
+    pub fn serialized_module_map(&self) -> &BTreeMap<String, ByteBuf> {
+        &self.module_map
+    }
+
+    pub fn from_map(module_map: &BTreeMap<String, ByteBuf>) -> Self {
+        Self {
+            module_map: module_map.clone(),
+        }
+    }
+
+    pub fn id(&self) -> ObjectID {
+        // TODO: simplify this
+        // https://github.com/MystenLabs/fastnft/issues/249
+        // All modules in the same package must have the same address. Pick any
+        ObjectID::from(
+            *CompiledModule::deserialize(self.module_map.values().next().unwrap())
+                .unwrap()
+                .self_id()
+                .address(),
+        )
+    }
+
+    pub fn module_id(&self, module: &Identifier) -> Result<ModuleId, SuiError> {
+        let ser =
+            self.serialized_module_map()
+                .get(module.as_str())
+                .ok_or(SuiError::ModuleNotFound {
+                    module_name: module.to_string(),
+                })?;
+        Ok(CompiledModule::deserialize(ser)?.self_id())
+    }
+
+    /// Get the function signature for the specified function
+    pub fn get_function_signature(
+        &self,
+        module: &Identifier,
+        function: &Identifier,
+    ) -> Result<Function, SuiError> {
+        let bytes =
+            self.serialized_module_map()
+                .get(module.as_str())
+                .ok_or(SuiError::ModuleNotFound {
+                    module_name: module.to_string(),
+                })?;
+        let m = CompiledModule::deserialize(bytes)
+            .expect("Unwrap safe because FastX serializes/verifies modules before publishing them");
+
+        Function::new_from_name(&m, function).ok_or(SuiError::FunctionNotFound {
+            error: format!(
+                "Could not resolve function '{}' in module {}::{}",
+                function,
+                self.id(),
+                module
+            ),
+        })
+    }
+
+    /// Checks if the specified function is an entry function and returns the function if so
+    /// There are specific rules for what can be an entry functions
+    /// If not entry functions, it returns Err
+    pub fn check_and_get_entry_function(
+        &self,
+        module: &Identifier,
+        function: &Identifier,
+    ) -> Result<Function, SuiError> {
+        let function_signature = self.get_function_signature(module, function)?;
+
+        // Function has to be public
+        if function_signature.visibility != Visibility::Public {
+            return Err(SuiError::InvalidFunctionSignature {
+                error: "Invoked function must have public visibility".to_string(),
+            });
+        }
+
+        // Function cannot return a value
+        if !function_signature.return_.is_empty() {
+            return Err(SuiError::InvalidFunctionSignature {
+                error: "Invoked function must not return a value".to_string(),
+            });
+        }
+
+        // Last arg must be `&mut TxContext`
+        let last_param = &function_signature.parameters[function_signature.parameters.len() - 1];
+        if !is_param_tx_context(last_param) {
+            return Err(SuiError::InvalidFunctionSignature {
+                error: format!(
+                "Expected last parameter of function signature to be &mut {}::{}::{}, but found {}",
+                SUI_FRAMEWORK_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, last_param
+            ),
+            });
+        }
+
+        Ok(function_signature)
+    }
+}
+
+impl From<&Vec<CompiledModule>> for MovePackage {
+    fn from(compiled_modules: &Vec<CompiledModule>) -> Self {
+        MovePackage::from_map(
+            &compiled_modules
+                .iter()
+                .map(|module| {
+                    let mut bytes = Vec::new();
+                    module.serialize(&mut bytes).unwrap();
+                    (module.self_id().name().to_string(), ByteBuf::from(bytes))
+                })
+                .collect(),
+        )
+    }
 }
 
 /// - Check that `package_object`, `module` and `function` are valid
@@ -40,10 +165,10 @@ pub fn resolve_and_type_check(
     object_args: Vec<Object>,
     mut pure_args: Vec<Vec<u8>>,
 ) -> Result<TypeCheckSuccess, SuiError> {
-    // resolve the function we are calling
+    // Resolve the function we are calling
     let (function_signature, module_id) = match package_object.data {
         Data::Package(package) => (
-            package.get_function_signature(module, function)?,
+            package.check_and_get_entry_function(module, function)?,
             package.module_id(module)?,
         ),
         Data::Move(_) => {
@@ -53,18 +178,6 @@ pub fn resolve_and_type_check(
         }
     };
 
-    if function_signature.visibility != Visibility::Public {
-        return Err(SuiError::InvalidFunctionSignature {
-            error: "Invoked function must have public visibility".to_string(),
-        });
-    }
-
-    // check validity conditions on the invoked function
-    if !function_signature.return_.is_empty() {
-        return Err(SuiError::InvalidFunctionSignature {
-            error: "Invoked function must not return a value".to_string(),
-        });
-    }
     // check arity of type and value arguments
     if function_signature.type_parameters.len() != type_args.len() {
         return Err(SuiError::InvalidFunctionSignature {
@@ -75,6 +188,7 @@ pub fn resolve_and_type_check(
             ),
         });
     }
+
     // total number of args is |objects| + |pure_args| + 1 for the the `TxContext` object
     let num_args = object_args.len() + pure_args.len() + 1;
     if function_signature.parameters.len() != num_args {
@@ -84,16 +198,6 @@ pub fn resolve_and_type_check(
                 function_signature.parameters.len(),
                 function,
                 num_args
-            ),
-        });
-    }
-    // check that the last arg is `&mut TxContext`
-    let last_param = &function_signature.parameters[function_signature.parameters.len() - 1];
-    if !is_param_tx_context(last_param) {
-        return Err(SuiError::InvalidFunctionSignature {
-            error: format!(
-                "Expected last parameter of function signature to be &mut {}::{}::{}, but found {}",
-                SUI_FRAMEWORK_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, last_param
             ),
         });
     }
@@ -192,6 +296,7 @@ pub fn resolve_and_type_check(
     })
 }
 
+/// Checks for the special TxContext param
 pub fn is_param_tx_context(param: &Type) -> bool {
     if let Type::MutableReference(typ) = param {
         match &**typ {
@@ -213,7 +318,7 @@ pub fn is_param_tx_context(param: &Type) -> bool {
 }
 
 // TODO: upstream Type::is_primitive in diem
-fn is_primitive(t: &Type) -> bool {
+pub fn is_primitive(t: &Type) -> bool {
     use Type::*;
     match t {
         Bool | U8 | U64 | U128 | Address => true,
@@ -243,7 +348,7 @@ fn type_check_struct(arg_type: &StructTag, param_type: &Type) -> Result<(), SuiE
         })
     }
 }
-
+/// Checks if this module has a conformant `init`
 pub fn module_has_init(module: &CompiledModule) -> bool {
     let function = match Function::new_from_name(module, INIT_FN_NAME) {
         Some(v) => v,

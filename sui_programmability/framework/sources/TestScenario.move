@@ -3,7 +3,7 @@
 
 #[test_only]
 module Sui::TestScenario {
-    use Sui::ID::{Self, VersionedID, IDBytes};
+    use Sui::ID::{Self, ID, VersionedID};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
     use Std::Vector;
@@ -62,7 +62,7 @@ module Sui::TestScenario {
         ctx: TxContext,
         /// Object ID's that have been removed during the current transaction. Needed to prevent
         /// double removals
-        removed: vector<IDBytes>,
+        removed: vector<ID>,
         /// The `i`th entry in this vector is the start index for events emitted by the `i`th transaction.
         /// This information allows us to partition events emitted by distinct transactions
         event_start_indexes: vector<u64>,
@@ -93,7 +93,7 @@ module Sui::TestScenario {
         let removed = &scenario.removed;
         let num_removed = Vector::length(removed);
         while (i < num_removed) {
-            let removed_id = ID::get_bytes_as_vec(Vector::borrow(removed, i));
+            let removed_id = ID::bytes(Vector::borrow(removed, i));
             if (!Vector::contains(&transferred_ids, &removed_id) && !Vector::contains(&deleted_ids, &removed_id)) {
                 // removed_id was wrapped by this transaction. emit a wrapped event
                 emit_wrapped_object_event(removed_id)
@@ -137,13 +137,13 @@ module Sui::TestScenario {
     public fun remove_nested_object<T1: key, T2: key>(
         scenario: &mut Scenario, parent_obj: &T1
     ): T2 {
-        remove_unique_object(scenario, *ID::get_bytes(ID::get_id_bytes(parent_obj)))        
+        remove_unique_object(scenario, ID::id_address(parent_obj))        
     }
 
     /// Same as `remove_object`, but returns the object of type `T` with object ID `id`.
     /// Should only be used in cases where current tx sender has more than one object of
     /// type `T` in their inventory.
-    public fun remove_object_by_id<T: key>(_scenario: &mut Scenario, _id: IDBytes): T {
+    public fun remove_object_by_id<T: key>(_scenario: &mut Scenario, _id: ID): T {
         // TODO: implement me
         abort(100)
     }
@@ -151,7 +151,7 @@ module Sui::TestScenario {
     /// Same as `remove_nested_object`, but returns the child object of type `T` with object ID `id`.
     /// Should only be used in cases where the parent object has more than one child of type `T`.
     public fun remove_nested_object_by_id<T1: key, T2: key>(
-        _scenario: &mut Scenario, _parent_obj: &T1, _child_id: IDBytes
+        _scenario: &mut Scenario, _parent_obj: &T1, _child_id: ID
     ): T2 {  
         // TODO: implement me
         abort(200)
@@ -162,7 +162,7 @@ module Sui::TestScenario {
     /// transaction sender.
     /// Aborts if `t` was not previously removed from the inventory via a call to `remove_object` or similar.
     public fun return_object<T: key>(scenario: &mut Scenario, t: T) {
-        let id = ID::get_id_bytes(&t);
+        let id = ID::id(&t);
         let removed = &mut scenario.removed;
         // TODO: add Vector::remove_element to Std that does this 3-liner
         let (is_mem, idx) = Vector::index_of(removed, id);
@@ -242,11 +242,11 @@ module Sui::TestScenario {
         if (objects_len == 1) {
             // found a unique object. ensure that it hasn't already been removed, then return it
             let t = Vector::pop_back(&mut objects);
-            let id = *ID::get_id_bytes(&t);
+            let id = ID::id(&t);
             Vector::destroy_empty(objects);
 
-            assert!(!Vector::contains(&scenario.removed, &id), EALREADY_REMOVED_OBJECT);
-            Vector::push_back(&mut scenario.removed, id);
+            assert!(!Vector::contains(&scenario.removed, id), EALREADY_REMOVED_OBJECT);
+            Vector::push_back(&mut scenario.removed, *id);
             t
         } else if (objects_len == 0) {
             abort(EEMPTY_INVENTORY)

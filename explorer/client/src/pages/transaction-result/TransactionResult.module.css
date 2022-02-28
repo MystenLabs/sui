@@ -1,0 +1,37 @@
+.data > dt {
+    @apply font-bold text-lg mt-[0.5rem];
+}
+
+.data > dd {
+    @apply font-mono text-gray-900 overflow-hidden break-all 
+  text-sm h-[4rem] sm:h-[1.5rem] mb-[0.5rem]
+  border-solid border-gray-500 rounded-md p-1 align-middle;
+}
+
+.data > dd:last-child {
+    @apply mb-[10vh];
+}
+
+.data {
+    @apply mx-[5vw];
+}
+
+.data > dd.status-success {
+    @apply h-[1.5rem] border-none bg-green-300;
+}
+
+.data > dd.status-fail {
+    @apply h-[1.5rem] border-none bg-red-300;
+}
+
+.data > dd.action-create {
+    @apply h-[1.5rem] border-none bg-lime-300;
+}
+
+.data > dd.action-mutate {
+    @apply h-[1.5rem] border-none bg-blue-300;
+}
+
+.data > dd.action-delete {
+    @apply h-[1.5rem] border-none bg-orange-300;
+}
