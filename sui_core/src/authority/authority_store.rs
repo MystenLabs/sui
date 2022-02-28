@@ -220,7 +220,7 @@ impl AuthorityStore {
         self.objects.insert(&object.id(), &object)?;
 
         // Update the index
-        if let Some(address) = object.get_signle_owner() {
+        if let Some(address) = object.get_single_owner() {
             self.owner_index
                 .insert(&(address, object.id()), &object.to_object_reference())?;
         }

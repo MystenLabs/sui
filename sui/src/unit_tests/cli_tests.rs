@@ -19,7 +19,7 @@ use sui_network::network::PortAllocator;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::TransactionEffects;
-use sui_types::object::GAS_VALUE_FOR_TESTING;
+use sui_types::object::{ObjectRead, GAS_VALUE_FOR_TESTING};
 use tokio::task;
 use tokio::task::JoinHandle;
 use tracing_test::traced_test;
@@ -661,6 +661,213 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         Duration::from_millis(1000)
     );
     assert!(logs_contain("Created Objects:"));
+
+    network.abort();
+    Ok(())
+}
+
+#[traced_test]
+#[tokio::test]
+async fn test_package_publish_command() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+
+    let network = start_network(working_dir.path(), 10600, None).await?;
+    // Wait for authorities to come alive.
+    retry_assert!(
+        logs_contain("Listening to TCP traffic on 127.0.0.1"),
+        Duration::from_millis(5000)
+    );
+
+    // Create Wallet context.
+    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let address = wallet_conf.accounts.first().unwrap().address;
+    let mut context = WalletContext::new(wallet_conf)?;
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState { address }
+        .execute(&mut context)
+        .await?
+        .print(true);
+
+    let state = context
+        .address_manager
+        .get_managed_address_states()
+        .get(&address)
+        .unwrap();
+
+    // Check log output contains all object ids.
+    let gas_obj_id = state.object_refs().next().unwrap().0;
+
+    // Provide path to well formed package sources
+    let mut path = TEST_DATA_DIR.to_owned();
+    path.push_str("dummy_modules_publish");
+
+    let resp = WalletCommands::Publish {
+        path,
+        gas: gas_obj_id,
+        gas_budget: 1000,
+    }
+    .execute(&mut context)
+    .await?;
+
+    // Print it out to CLI/logs
+    resp.print(true);
+
+    // Get the created objects
+    let (created_obj1, created_obj2) = if let WalletCommandResult::Publish(
+        _,
+        TransactionEffects {
+            created: new_objs, ..
+        },
+    ) = resp
+    {
+        (new_objs.get(0).unwrap().0, new_objs.get(1).unwrap().0)
+    } else {
+        panic!()
+    };
+
+    // One is the actual module, while the other is the object created at init
+    retry_assert!(
+        logs_contain(&format!("{:02X}", created_obj1.0)),
+        Duration::from_millis(5000)
+    );
+    retry_assert!(
+        logs_contain(&format!("{:02X}", created_obj2.0)),
+        Duration::from_millis(5000)
+    );
+
+    // Check the objects
+    let resp = WalletCommands::Object { id: created_obj1.0 }
+        .execute(&mut context)
+        .await?;
+    let created_obj1 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
+        object
+    } else {
+        panic!()
+    };
+
+    let resp = WalletCommands::Object { id: created_obj2.0 }
+        .execute(&mut context)
+        .await?;
+    let created_obj2 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
+        object
+    } else {
+        panic!()
+    };
+
+    let (pkg, obj) = if created_obj1.is_package() {
+        (created_obj1, created_obj2)
+    } else {
+        (created_obj2, created_obj1)
+    };
+
+    assert!(pkg.is_package());
+    assert!(!obj.is_package());
+
+    network.abort();
+    Ok(())
+}
+
+#[traced_test]
+#[tokio::test]
+async fn test_native_transfer() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+
+    let network = start_network(working_dir.path(), 10700, None).await?;
+    // Wait for authorities to come alive.
+    retry_assert!(
+        logs_contain("Listening to TCP traffic on 127.0.0.1"),
+        Duration::from_millis(5000)
+    );
+
+    // Create Wallet context.
+    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let address = wallet_conf.accounts.first().unwrap().address;
+    let recipient = wallet_conf.accounts.get(1).unwrap().address;
+
+    let mut context = WalletContext::new(wallet_conf)?;
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState { address }
+        .execute(&mut context)
+        .await?
+        .print(true);
+
+    let state = context
+        .address_manager
+        .get_managed_address_states()
+        .get(&address)
+        .unwrap();
+
+    // Check log output contains all object ids.
+    let gas_obj_id = state.object_refs().next().unwrap().0;
+    let obj_id = state.object_refs().nth(1).unwrap().0;
+
+    let resp = WalletCommands::Transfer {
+        gas: gas_obj_id,
+        to: recipient,
+        object_id: obj_id,
+    }
+    .execute(&mut context)
+    .await?;
+
+    // Print it out to CLI/logs
+    resp.print(true);
+
+    // Get the mutated objects
+    let (mut_obj1, mut_obj2) =
+        if let WalletCommandResult::Transfer(_, _, TransactionEffects { mutated, .. }) = resp {
+            (mutated.get(0).unwrap().0, mutated.get(1).unwrap().0)
+        } else {
+            panic!()
+        };
+
+    retry_assert!(
+        logs_contain(&format!("{:02X}", mut_obj1.0)),
+        Duration::from_millis(5000)
+    );
+    retry_assert!(
+        logs_contain(&format!("{:02X}", mut_obj2.0)),
+        Duration::from_millis(5000)
+    );
+
+    // Sync both to fetch objects
+    WalletCommands::SyncClientState { address }
+        .execute(&mut context)
+        .await?
+        .print(true);
+    WalletCommands::SyncClientState { address: recipient }
+        .execute(&mut context)
+        .await?
+        .print(true);
+
+    // Check the objects
+    let resp = WalletCommands::Object { id: mut_obj1.0 }
+        .execute(&mut context)
+        .await?;
+    let mut_obj1 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
+        object
+    } else {
+        panic!()
+    };
+
+    let resp = WalletCommands::Object { id: mut_obj2.0 }
+        .execute(&mut context)
+        .await?;
+    let mut_obj2 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
+        object
+    } else {
+        panic!()
+    };
+
+    let (gas, obj) = if mut_obj1.get_single_owner().unwrap() == address {
+        (mut_obj1, mut_obj2)
+    } else {
+        (mut_obj2, mut_obj1)
+    };
+
+    assert_eq!(gas.get_single_owner().unwrap(), address);
+    assert_eq!(obj.get_single_owner().unwrap(), recipient);
 
     network.abort();
     Ok(())
