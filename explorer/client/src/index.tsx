@@ -7,13 +7,28 @@ import reportWebVitals from './utils/reportWebVitals';
 
 import './index.scss';
 
-ReactDOM.render(
-    <React.StrictMode>
-        <Router>
-            <App />
-        </Router>
-    </React.StrictMode>,
-    document.getElementById('root')
-);
+let init = Promise.resolve();
 
-reportWebVitals();
+if (
+    process.env.NODE_ENV === 'development' &&
+    process.env.REACT_APP_MOCK_API === 'true'
+) {
+    init = (async () => {
+        (await import('./mocks/api/browser-mock')).worker.start({
+            onUnhandledRequest: 'bypass',
+        });
+    })();
+}
+
+init.then(() => {
+    ReactDOM.render(
+        <React.StrictMode>
+            <Router>
+                <App />
+            </Router>
+        </React.StrictMode>,
+        document.getElementById('root')
+    );
+
+    reportWebVitals();
+});

@@ -49,7 +49,8 @@
         "stylelint:check": "stylelint \"**/*.{css,scss}\"",
         "stylelint:fix": "npm run stylelint:check -- --fix",
         "lint": "npm run eslint:check && npm run prettier:check && npm run stylelint:check",
-        "lint:fix": "npm run eslint:fix && npm run prettier:fix && npm run stylelint:fix"
+        "lint:fix": "npm run eslint:fix && npm run prettier:fix && npm run stylelint:fix",
+        "msw:update": "msw init ./public --save=false"
     },
     "browserslist": {
         "production": [
@@ -62,8 +63,5 @@
             "last 1 firefox version",
             "last 1 safari version"
         ]
-    },
-    "msw": {
-        "workerDirectory": "public"
     }
 }
