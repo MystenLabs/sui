@@ -300,7 +300,7 @@ async fn init_local_authorities(
             authority_name,
             Box::pin(secret),
             store,
-            genesis::clone_genesis_modules(),
+            genesis::clone_genesis_compiled_modules(),
             &mut genesis::get_genesis_context(),
         )
         .await;
@@ -348,7 +348,7 @@ async fn init_local_authorities_bad_1(
             address,
             Box::pin(secret),
             store,
-            genesis::clone_genesis_modules(),
+            genesis::clone_genesis_compiled_modules(),
             &mut genesis::get_genesis_context(),
         )
         .await;
