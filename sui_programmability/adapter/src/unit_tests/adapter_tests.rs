@@ -199,6 +199,22 @@ fn call(
     )
 }
 
+fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> Object {
+    genesis_objects
+        .iter()
+        .find_map(|o| match o.data.try_as_package() {
+            Some(p) => {
+                if p.serialized_module_map().keys().any(|name| name == module) {
+                    Some(o.clone())
+                } else {
+                    None
+                }
+            }
+            None => None,
+        })
+        .unwrap()
+}
+
 /// Exercise test functions that create, transfer, read, update, and delete objects
 #[test]
 fn test_object_basics() {
@@ -1155,4 +1171,37 @@ fn test_publish_init_param() {
 
     // only a package object should have been crated
     assert_eq!(storage.created().len(), 1);
+}
+
+/// Check that the logic for verifying entry functions is correct
+/// This test should ideally be owned by MovePackage module, however there's a circular dependency
+/// because to test MovePackage properly, we need to generate packages
+#[test]
+fn test_entry_function_verif() {
+    let genesis_objects = genesis::clone_genesis_modules();
+    let sui_package = get_genesis_package_by_module(&genesis_objects, "ObjectBasics");
+
+    let checks = vec![
+        ("ObjectBasics", "create", true),
+        ("ObjectBasics", "transfer", true),
+        // Returns a value and last arg is not TxContext
+        ("Coin", "total_supply", false),
+        // Last arg is not TxContext
+        ("Coin", "transfer_cap", false),
+        // Private visibility, returns val, no TxContext
+        ("ID", "created_by_current_tx", false),
+    ];
+
+    for (module, function, res) in checks {
+        let fn_sig = sui_package
+            .data
+            .try_as_package()
+            .unwrap()
+            .get_function_signature(
+                &Identifier::new(module).unwrap(),
+                &Identifier::new(function).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(MovePackage::check_entry_function(&fn_sig).is_ok(), res);
+    }
 }

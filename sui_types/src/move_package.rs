@@ -52,6 +52,8 @@ impl MovePackage {
         }
     }
 
+    /// Get the module ID for this module.
+    /// TODO: make this less expensive
     pub fn id(&self) -> ObjectID {
         // TODO: simplify this
         // https://github.com/MystenLabs/fastnft/issues/249
@@ -99,16 +101,9 @@ impl MovePackage {
         })
     }
 
-    /// Checks if the specified function is an entry function and returns the function if so
-    /// There are specific rules for what can be an entry functions
-    /// If not entry functions, it returns Err
-    pub fn check_and_get_entry_function(
-        &self,
-        module: &Identifier,
-        function: &Identifier,
-    ) -> Result<Function, SuiError> {
-        let function_signature = self.get_function_signature(module, function)?;
-
+    /// Determines if a Move function can be called from Sui
+    /// An entry function has to satisfy very specific requirements
+    pub fn check_entry_function(function_signature: &Function) -> Result<(), SuiError> {
         // Function has to be public
         if function_signature.visibility != Visibility::Public {
             return Err(SuiError::InvalidFunctionSignature {
@@ -123,7 +118,7 @@ impl MovePackage {
             });
         }
 
-        // Last arg must be `&mut TxContext`
+        // Last arg in the function must be `&mut TxContext`
         let last_param = &function_signature.parameters[function_signature.parameters.len() - 1];
         if !is_param_tx_context(last_param) {
             return Err(SuiError::InvalidFunctionSignature {
@@ -134,7 +129,33 @@ impl MovePackage {
             });
         }
 
-        Ok(function_signature)
+        Ok(())
+    }
+
+    /// Get all the entry functions in the module
+    pub fn get_entry_functions(
+        &self,
+        module: &Identifier,
+    ) -> Result<Vec<(Identifier, Function)>, SuiError> {
+        let ser =
+            self.serialized_module_map()
+                .get(module.as_str())
+                .ok_or(SuiError::ModuleNotFound {
+                    module_name: module.to_string(),
+                })?;
+        let compiled_module = CompiledModule::deserialize(ser)?;
+        Ok(compiled_module
+            .function_defs
+            .iter()
+            .filter_map(|f| {
+                let fn_sig = Function::new(&compiled_module, f);
+
+                match Self::check_entry_function(&fn_sig.1) {
+                    Ok(_) => Some(fn_sig),
+                    Err(_) => None,
+                }
+            })
+            .collect())
     }
 }
 
@@ -167,10 +188,11 @@ pub fn resolve_and_type_check(
 ) -> Result<TypeCheckSuccess, SuiError> {
     // Resolve the function we are calling
     let (function_signature, module_id) = match package_object.data {
-        Data::Package(package) => (
-            package.check_and_get_entry_function(module, function)?,
-            package.module_id(module)?,
-        ),
+        Data::Package(package) => {
+            let fn_sig = package.get_function_signature(module, function)?;
+            MovePackage::check_entry_function(&fn_sig)?;
+            (fn_sig, package.module_id(module)?)
+        }
         Data::Move(_) => {
             return Err(SuiError::ModuleLoadFailure {
                 error: "Expected a module object, but found a Move object".to_string(),
