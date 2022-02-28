@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module FastX::TestScenarioTests {
-    use FastX::ID;
-    use FastX::TestScenario;
-    use FastX::Transfer;
+module Sui::TestScenarioTests {
+    use Sui::ID;
+    use Sui::TestScenario;
+    use Sui::Transfer;
 
     const ID_BYTES_MISMATCH: u64 = 0;
     const VALUE_MISMATCH: u64 = 1;
@@ -180,7 +180,7 @@ module FastX::TestScenarioTests {
         let id_bytes;
         {
             let id = TestScenario::new_id(&mut scenario);
-            id_bytes = *ID::get_inner(&id);
+            id_bytes = *ID::inner(&id);
             let obj = Object { id, value: 100 };
             Transfer::transfer(obj, copy tx2_sender);
             // sender cannot access the object
@@ -192,7 +192,7 @@ module FastX::TestScenarioTests {
             assert!(TestScenario::can_remove_object<Object>(&scenario), 1);
             let received_obj = TestScenario::remove_object<Object>(&mut scenario);
             let Object { id: received_id, value } = received_obj;
-            assert!(ID::get_inner(&received_id) == &id_bytes, ID_BYTES_MISMATCH);
+            assert!(ID::inner(&received_id) == &id_bytes, ID_BYTES_MISMATCH);
             assert!(value == 100, VALUE_MISMATCH);
             ID::delete(received_id);
         };

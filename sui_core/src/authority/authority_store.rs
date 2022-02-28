@@ -240,8 +240,10 @@ impl AuthorityStore {
         self.objects.insert(&object.id(), &object)?;
 
         // Update the index
-        self.owner_index
-            .insert(&(object.owner, object.id()), &object.to_object_reference())?;
+        if let Some(address) = object.get_signle_owner() {
+            self.owner_index
+                .insert(&(address, object.id()), &object.to_object_reference())?;
+        }
 
         // Update the parent
         self.parent_sync
@@ -355,20 +357,19 @@ impl AuthorityStore {
 
         // Make an iterator over all objects that are either deleted or have changed owner,
         // along with their old owner.  This is used to update the owner index.
-        let old_object_owners =
-            deleted
-                .iter()
-                .map(|id| (objects[id].owner, *id))
-                .chain(
-                    written
-                        .iter()
-                        .filter_map(|(id, new_object)| match objects.get(id) {
-                            Some(old_object) if old_object.owner != new_object.owner => {
-                                Some((old_object.owner, *id))
-                            }
-                            _ => None,
-                        }),
-                );
+        let old_object_owners = deleted
+            .iter()
+            .filter_map(|id| objects[id].get_single_owner_and_id())
+            .chain(
+                written
+                    .iter()
+                    .filter_map(|(id, new_object)| match objects.get(id) {
+                        Some(old_object) if old_object.owner != new_object.owner => {
+                            old_object.get_single_owner_and_id()
+                        }
+                        _ => None,
+                    }),
+            );
 
         // Delete the old owner index entries
         write_batch = write_batch.delete_batch(&self.owner_index, old_object_owners)?;
@@ -411,8 +412,10 @@ impl AuthorityStore {
         // Update the indexes of the objects written
         write_batch = write_batch.insert_batch(
             &self.owner_index,
-            written.iter().map(|(id, new_object)| {
-                ((new_object.owner, *id), new_object.to_object_reference())
+            written.iter().filter_map(|(_id, new_object)| {
+                new_object
+                    .get_single_owner_and_id()
+                    .map(|owner_id| (owner_id, new_object.to_object_reference()))
             }),
         )?;
 
@@ -466,7 +469,7 @@ impl AuthorityStore {
             .parent_sync
             .iter()
             // Make the max possible entry for this object ID.
-            .skip_prior_to(&(object_id, SEQUENCE_NUMBER_MAX, OBJECT_DIGEST_MAX))?;
+            .skip_prior_to(&(object_id, SequenceNumber::MAX, OBJECT_DIGEST_MAX))?;
 
         Ok(iterator.next().and_then(|(obj_ref, tx_digest)| {
             if obj_ref.0 == object_id {

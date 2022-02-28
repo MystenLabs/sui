@@ -11,8 +11,14 @@ use move_core_types::language_storage::TypeTag;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
 use sui_types::{
-    base_types::*, coin, committee::Committee, error::SuiError, fp_ensure, messages::*,
-    object::ObjectRead, SUI_FRAMEWORK_ADDRESS,
+    base_types::*,
+    coin,
+    committee::Committee,
+    error::SuiError,
+    fp_ensure,
+    messages::*,
+    object::{ObjectRead, Owner},
+    SUI_FRAMEWORK_ADDRESS,
 };
 use typed_store::rocks::open_cf;
 use typed_store::Map;
@@ -105,7 +111,7 @@ where
     }
 
     /// Get the current owner of the given object
-    pub async fn get_object_owner(&self, object_id: ObjectID) -> Result<SuiAddress, anyhow::Error> {
+    pub async fn get_object_owner(&self, object_id: ObjectID) -> Result<Owner, anyhow::Error> {
         let obj_read = self.authorities.get_object_info_execute(object_id).await?;
         Ok(obj_read.object()?.owner)
     }
@@ -125,7 +131,7 @@ pub struct ClientState<A> {
 // Operations are considered successful when they successfully reach a quorum of authorities.
 #[async_trait]
 pub trait Client {
-    /// Send object to a FastX account.
+    /// Send object to a Sui account.
     async fn transfer_object(
         &mut self,
         object_id: ObjectID,
@@ -243,55 +249,21 @@ impl<A> ClientState<A> {
         self.address
     }
 
-    pub fn next_sequence_number(&self, object_id: &ObjectID) -> Result<SequenceNumber, SuiError> {
-        if self.store.object_sequence_numbers.contains_key(object_id)? {
-            Ok(self
-                .store
-                .object_sequence_numbers
-                .get(object_id)?
-                .expect("Unable to get sequence number"))
-        } else {
-            Err(SuiError::ObjectNotFound {
-                object_id: *object_id,
-            })
-        }
+    pub fn highest_known_version(&self, object_id: &ObjectID) -> Result<SequenceNumber, SuiError> {
+        self.latest_object_ref(object_id)
+            .map(|(_oid, seq_num, _digest)| seq_num)
     }
-    pub fn object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, SuiError> {
+    pub fn latest_object_ref(&self, object_id: &ObjectID) -> Result<ObjectRef, SuiError> {
         self.store
             .object_refs
-            .get(&object_id)?
-            .ok_or(SuiError::ObjectNotFound { object_id })
+            .get(object_id)?
+            .ok_or(SuiError::ObjectNotFound {
+                object_id: *object_id,
+            })
     }
 
     pub fn object_refs(&self) -> impl Iterator<Item = (ObjectID, ObjectRef)> + '_ {
         self.store.object_refs.iter()
-    }
-
-    /// Need to remove unwraps. Found this tricky due to iterator requirements of downloader and not being able to exit from closure to top fn
-    /// https://github.com/MystenLabs/fastnft/issues/307
-    pub fn certificates(
-        &self,
-        object_id: &ObjectID,
-    ) -> impl Iterator<Item = CertifiedTransaction> + '_ {
-        self.store
-            .object_certs
-            .get(object_id)
-            .unwrap()
-            .into_iter()
-            .flat_map(|cert_digests| {
-                self.store
-                    .certificates
-                    .multi_get(&cert_digests[..])
-                    .unwrap()
-                    .into_iter()
-                    .flatten()
-            })
-    }
-
-    pub fn all_certificates(
-        &self,
-    ) -> impl Iterator<Item = (TransactionDigest, CertifiedTransaction)> + '_ {
-        self.store.certificates.iter()
     }
 
     pub fn insert_object_info(
@@ -299,22 +271,15 @@ impl<A> ClientState<A> {
         object_ref: &ObjectRef,
         parent_tx_digest: &TransactionDigest,
     ) -> Result<(), SuiError> {
-        let (object_id, seq, _) = object_ref;
-        let mut tx_digests = self.store.object_certs.get(object_id)?.unwrap_or_default();
-        tx_digests.push(*parent_tx_digest);
-
+        let (object_id, _, _) = object_ref;
         // Multi table atomic insert using batches
         let batch = self
             .store
-            .object_sequence_numbers
+            .object_refs
             .batch()
             .insert_batch(
-                &self.store.object_sequence_numbers,
-                std::iter::once((object_id, seq)),
-            )?
-            .insert_batch(
                 &self.store.object_certs,
-                std::iter::once((object_id, &tx_digests.to_vec())),
+                std::iter::once((object_ref, parent_tx_digest)),
             )?
             .insert_batch(
                 &self.store.object_refs,
@@ -326,16 +291,15 @@ impl<A> ClientState<A> {
     }
 
     pub fn remove_object_info(&mut self, object_id: &ObjectID) -> Result<(), SuiError> {
+        let min_for_id = (*object_id, SequenceNumber::MIN, ObjectDigest::MIN);
+        let max_for_id = (*object_id, SequenceNumber::MAX, ObjectDigest::MAX);
+
         // Multi table atomic delete using batches
         let batch = self
             .store
-            .object_sequence_numbers
+            .object_refs
             .batch()
-            .delete_batch(
-                &self.store.object_sequence_numbers,
-                std::iter::once(object_id),
-            )?
-            .delete_batch(&self.store.object_certs, std::iter::once(object_id))?
+            .delete_range(&self.store.object_certs, &min_for_id, &max_for_id)?
             .delete_batch(&self.store.object_refs, std::iter::once(object_id))?;
         // Execute atomic write of opers
         batch.write()?;
@@ -393,7 +357,7 @@ where
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         for object_kind in &transaction.input_objects() {
             let object_id = object_kind.object_id();
-            let next_sequence_number = self.next_sequence_number(&object_id).unwrap_or_default();
+            let next_sequence_number = self.highest_known_version(&object_id).unwrap_or_default();
             fp_ensure!(
                 object_kind.version() >= next_sequence_number,
                 SuiError::UnexpectedSequenceNumber {
@@ -494,11 +458,7 @@ where
 
         for &(object_ref, owner) in effects.mutated_and_created() {
             let (object_id, seq, _) = object_ref;
-            let old_seq = self
-                .store
-                .object_sequence_numbers
-                .get(&object_id)?
-                .unwrap_or_default();
+            let old_seq = self.highest_known_version(&object_id).unwrap_or_default();
             // only update if data is new
             if old_seq < seq {
                 if owner == self.address {
@@ -507,7 +467,7 @@ where
                 } else {
                     self.remove_object_info(&object_id)?;
                 }
-            } else if old_seq == seq && owner == self.address {
+            } else if old_seq == seq && owner == Owner::SingleOwner(self.address) {
                 // ObjectRef can be 1 version behind because it's only updated after confirmation.
                 self.store.object_refs.insert(&object_id, &object_ref)?;
             }
@@ -518,11 +478,7 @@ where
         let _failed = self.download_objects_not_in_db(objs_to_download).await?;
 
         for (object_id, seq, _) in &effects.deleted {
-            let old_seq = self
-                .store
-                .object_sequence_numbers
-                .get(object_id)?
-                .unwrap_or_default();
+            let old_seq = self.highest_known_version(object_id).unwrap_or_default();
             if old_seq < *seq {
                 self.remove_object_info(object_id)?;
             }
@@ -636,7 +592,6 @@ where
             self.try_complete_pending_transactions().await?;
         }
         // update object_ids.
-        self.store.object_sequence_numbers.clear()?;
         self.store.object_refs.clear()?;
 
         let (active_object_certs, _deleted_refs_certs) = self
@@ -646,10 +601,8 @@ where
 
         for (object, option_layout, option_cert) in active_object_certs {
             let object_ref = object.to_object_reference();
-            let (object_id, sequence_number, _) = object_ref;
-            self.store
-                .object_sequence_numbers
-                .insert(&object_id, &sequence_number)?;
+            let (object_id, _seqnum, _) = object_ref;
+
             self.store.object_refs.insert(&object_id, &object_ref)?;
             if let Some(cert) = option_cert {
                 self.store
@@ -748,7 +701,7 @@ where
         fp_ensure!(
             effects.mutated.len() == 2     // coin and gas
                && created.len() == split_amounts.len()
-               && created.iter().all(|(_, owner)| owner == &self.address),
+               && created.iter().all(|(_, owner)| owner == &Owner::SingleOwner(self.address)),
             SuiError::IncorrectGasSplit.into()
         );
         let updated_coin = self
@@ -816,7 +769,7 @@ where
     }
 
     fn get_owned_objects(&self) -> Vec<ObjectID> {
-        self.store.object_sequence_numbers.keys().collect()
+        self.store.object_refs.keys().collect()
     }
 
     async fn download_owned_objects_not_in_db(&self) -> Result<BTreeSet<ObjectRef>, SuiError> {

@@ -14,7 +14,7 @@ use sui_types::{
     crypto::get_key_pair,
     error::SuiResult,
     gas_coin::GAS,
-    object::Data,
+    object::{Data, Owner},
     storage::Storage,
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -164,7 +164,7 @@ impl ResourceResolver for InMemoryStorage {
         _address: &AccountAddress,
         _struct_tag: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        unreachable!("Should never be called in FastX")
+        unreachable!("Should never be called in Sui")
     }
 }
 
@@ -554,7 +554,6 @@ fn test_publish_module_insufficient_gas() {
         &mut storage,
         native_functions,
         module_bytes,
-        base_types::SuiAddress::default(),
         &mut tx_context,
         GAS_BUDGET,
         gas_object,
@@ -626,7 +625,7 @@ fn test_transfer_and_freeze() {
     storage.flush();
     let obj1 = storage.read_object(&id1).unwrap();
     assert!(obj1.is_read_only());
-    assert!(obj1.owner == addr2);
+    assert!(obj1.owner == Owner::SharedImmutable);
 
     // 3. Call transfer again and it should fail.
     let pure_args = vec![bcs::to_bytes(&AccountAddress::from(addr1)).unwrap()];
@@ -848,7 +847,6 @@ fn test_publish_module_linker_error() {
         &mut storage,
         native_functions,
         module_bytes,
-        base_types::SuiAddress::default(),
         &mut tx_context,
         GAS_BUDGET,
         gas_object,
@@ -891,7 +889,6 @@ fn test_publish_module_non_zero_address() {
         &mut storage,
         native_functions,
         module_bytes,
-        base_types::SuiAddress::default(),
         &mut tx_context,
         GAS_BUDGET,
         gas_object,
@@ -977,7 +974,6 @@ fn publish_from_src(
         storage,
         natives.clone(),
         all_module_bytes,
-        base_types::SuiAddress::default(),
         &mut tx_context,
         gas_budget,
         gas_object,

@@ -11,7 +11,7 @@ use sui::shell::{AsyncHandler, CommandStructure, Shell};
 use sui::wallet_commands::*;
 use tracing::error;
 
-const FAST_X: &str = "   _____       _    _       __      ____     __
+const SUI: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
   \\__ \\/ / / / /   | | /| / / __ `/ / / _ \\/ __/
  ___/ / /_/ / /    | |/ |/ / /_/ / / /  __/ /_
@@ -70,7 +70,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     if !options.no_shell {
         let app: App = WalletCommands::clap();
-        println!("{}", FAST_X.cyan().bold());
+        println!("{}", SUI.cyan().bold());
         print!("--- Sui");
         app.write_long_version(&mut io::stdout())?;
         println!(" ---");

@@ -21,7 +21,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     fp_bail, fp_ensure, gas,
     messages::*,
-    object::{Data, Object},
+    object::{Data, Object, Owner},
     storage::Storage,
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -88,7 +88,7 @@ impl AuthorityState {
             }
             InputObjectKind::MutableMoveObject((object_id, sequence_number, object_digest)) => {
                 fp_ensure!(
-                    sequence_number <= SequenceNumber::max(),
+                    sequence_number <= SequenceNumber::MAX,
                     SuiError::InvalidSequenceNumber
                 );
 
@@ -110,30 +110,45 @@ impl AuthorityState {
                     }
                 );
 
-                if object.is_read_only() {
-                    // Gas object must not be immutable.
+                // If the object is the gas object, check that it is not shared object
+                // and there is enough gas.
+                if object_kind.object_id() == transaction.gas_payment_object_ref().0 {
                     fp_ensure!(
-                        object_id != transaction.gas_payment_object_ref().0,
+                        matches!(object.owner, Owner::SingleOwner(..)),
                         SuiError::InsufficientGas {
-                            error: "Gas object should not be immutable".to_string()
+                            error: "Gas object cannot be shared object".to_string()
                         }
                     );
-                    // Checks for read-only objects end here.
-                    return Ok(());
-                }
-
-                // Additional checks for mutable objects
-                // Check the object owner is either the transaction sender, or
-                // another mutable object in the input.
-                fp_ensure!(
-                    transaction.sender_address() == object.owner
-                        || mutable_object_addresses.contains(&object.owner),
-                    SuiError::IncorrectSigner
-                );
-
-                if object_id == transaction.gas_payment_object_ref().0 {
                     gas::check_gas_requirement(transaction, object)?;
                 }
+
+                // If the object is the transfer object, check that it is not shared object.
+                if let TransactionKind::Transfer(t) = &transaction.data.kind {
+                    if object_kind.object_id() == t.object_ref.0 {
+                        fp_ensure!(
+                            matches!(object.owner, Owner::SingleOwner(..)),
+                            SuiError::TransferImmutableError
+                        );
+                    }
+                }
+
+                match object.owner {
+                    Owner::SharedImmutable => {
+                        // Nothing else to check for SharedImmutable.
+                    }
+                    Owner::SingleOwner(owner) => {
+                        // Check the object owner is either the transaction sender, or
+                        // another mutable object in the input.
+                        fp_ensure!(
+                            transaction.sender_address() == owner
+                                || mutable_object_addresses.contains(&owner),
+                            SuiError::IncorrectSigner
+                        );
+                    }
+                    Owner::SharedMutable => {
+                        return Err(SuiError::UnsupportedSharedObjectError);
+                    }
+                };
             }
             InputObjectKind::SharedMoveObject(..) => (),
         };
@@ -368,7 +383,6 @@ impl AuthorityState {
         // unwraps here are safe because we built `inputs`
         let mut gas_object = inputs.pop().unwrap();
 
-        let sender = transaction.sender_address();
         let status = match transaction.data.kind {
             TransactionKind::Transfer(t) => AuthorityState::transfer(
                 &mut temporary_store,
@@ -398,7 +412,6 @@ impl AuthorityState {
                 &mut temporary_store,
                 self._native_functions.clone(),
                 m.modules,
-                sender,
                 tx_ctx,
                 m.gas_budget,
                 gas_object.clone(),

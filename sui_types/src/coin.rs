@@ -20,7 +20,7 @@ pub const COIN_STRUCT_NAME: &IdentStr = COIN_MODULE_NAME;
 pub const COIN_JOIN_FUNC_NAME: &IdentStr = ident_str!("join");
 pub const COIN_SPLIT_VEC_FUNC_NAME: &IdentStr = ident_str!("split_vec");
 
-// Rust version of the Move FastX::Coin::Coin type
+// Rust version of the Move Sui::Coin::Coin type
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Coin {
     id: VersionedID,

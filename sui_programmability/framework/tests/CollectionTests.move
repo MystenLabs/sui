@@ -1,8 +1,8 @@
 #[test_only]
-module FastX::CollectionTests {
-    use FastX::Collection;
-    use FastX::ID::{Self, VersionedID};
-    use FastX::TxContext;
+module Sui::CollectionTests {
+    use Sui::Collection;
+    use Sui::ID::{Self, VersionedID};
+    use Sui::TxContext;
 
     const ECOLLECTION_SIZE_MISMATCH: u64 = 0;
     const EOBJECT_NOT_FOUND: u64 = 1;
@@ -18,16 +18,16 @@ module FastX::CollectionTests {
         assert!(Collection::size(&collection) == 0, ECOLLECTION_SIZE_MISMATCH);
 
         let obj1 = Object { id: TxContext::new_id(&mut ctx) };
-        let id_bytes1 = *ID::get_id_bytes(&obj1);
+        let id1 = *ID::id(&obj1);
         let obj2 = Object { id: TxContext::new_id(&mut ctx) };
-        let id_bytes2 = *ID::get_id_bytes(&obj2);
+        let id2 = *ID::id(&obj2);
 
         Collection::add(&mut collection, obj1);
         Collection::add(&mut collection, obj2);
         assert!(Collection::size(&collection) == 2, ECOLLECTION_SIZE_MISMATCH);
 
-        assert!(Collection::contains(&collection, &id_bytes1), EOBJECT_NOT_FOUND);
-        assert!(Collection::contains(&collection, &id_bytes2), EOBJECT_NOT_FOUND);
+        assert!(Collection::contains(&collection, &id1), EOBJECT_NOT_FOUND);
+        assert!(Collection::contains(&collection, &id2), EOBJECT_NOT_FOUND);
 
         Collection::transfer(collection, TxContext::get_signer_address(&ctx));
     }
@@ -36,7 +36,7 @@ module FastX::CollectionTests {
     #[expected_failure(abort_code = 520)] 
     fun test_init_with_invalid_max_capacity() {
         let ctx = TxContext::dummy();
-        // FastX::Collection::DEFAULT_MAX_CAPACITY is not readable outside the module
+        // Sui::Collection::DEFAULT_MAX_CAPACITY is not readable outside the module
         let max_capacity = 65536;
         let collection = Collection::new_with_max_capacity(&mut ctx, max_capacity + 1);
         Collection::transfer(collection, TxContext::get_signer_address(&ctx));

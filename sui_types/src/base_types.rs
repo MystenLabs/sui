@@ -119,7 +119,6 @@ impl AsRef<[u8]> for SuiAddress {
 // We use SHA3-256 hence 32 bytes here
 const TRANSACTION_DIGEST_LENGTH: usize = 32;
 
-pub const SEQUENCE_NUMBER_MAX: SequenceNumber = SequenceNumber(0x7fff_ffff_ffff_ffff);
 pub const OBJECT_DIGEST_MAX: ObjectDigest = ObjectDigest([255; 32]);
 pub const OBJECT_DIGEST_DELETED: ObjectDigest = ObjectDigest([99; 32]);
 
@@ -228,6 +227,9 @@ impl TransactionDigest {
 }
 
 impl ObjectDigest {
+    pub const MIN: ObjectDigest = ObjectDigest([u8::MIN; 32]);
+    pub const MAX: ObjectDigest = ObjectDigest([u8::MAX; 32]);
+
     pub fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
@@ -235,6 +237,12 @@ impl ObjectDigest {
     /// A marker that signifies the object is deleted.
     pub fn deleted() -> Self {
         OBJECT_DIGEST_DELETED
+    }
+
+    // for testing
+    pub fn random() -> Self {
+        let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
+        Self::new(random_bytes)
     }
 }
 
@@ -365,12 +373,11 @@ impl std::fmt::Debug for TransactionDigest {
 
 // TODO: rename to version
 impl SequenceNumber {
+    pub const MIN: SequenceNumber = SequenceNumber(u64::MIN);
+    pub const MAX: SequenceNumber = SequenceNumber(0x7fff_ffff_ffff_ffff);
+
     pub fn new() -> Self {
         SequenceNumber(0)
-    }
-
-    pub fn max() -> Self {
-        SEQUENCE_NUMBER_MAX
     }
 
     pub fn value(&self) -> u64 {

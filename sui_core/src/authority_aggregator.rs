@@ -1001,6 +1001,7 @@ where
 
     /// Return owner address and sequence number of an object backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
+    /// This function doesn't work for shared objects that don't have an exclusive owner.
     #[cfg(test)]
     async fn get_latest_owner(&self, object_id: ObjectID) -> (SuiAddress, SequenceNumber) {
         let (object_infos, _certificates) = self
@@ -1008,7 +1009,10 @@ where
             .await
             .unwrap(); // Not safe, but want to blow up if testing.
         let (top_ref, obj) = object_infos.iter().last().unwrap();
-        (obj.0.as_ref().unwrap().owner, top_ref.0 .1)
+        (
+            obj.0.as_ref().unwrap().get_signle_owner().unwrap(),
+            top_ref.0 .1,
+        )
     }
 
     pub async fn execute_transaction(

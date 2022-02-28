@@ -5,4 +5,5 @@
 pub mod config;
 pub mod shell;
 pub mod sui_commands;
+pub mod sui_json;
 pub mod wallet_commands;
