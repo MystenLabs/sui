@@ -149,11 +149,7 @@ impl MovePackage {
             .iter()
             .filter_map(|f| {
                 let fn_sig = Function::new(&compiled_module, f);
-
-                match Self::check_entry_function(&fn_sig.1) {
-                    Ok(_) => Some(fn_sig),
-                    Err(_) => None,
-                }
+                match_opt::match_opt!(Self::check_entry_function(&fn_sig.1), Ok(_) => fn_sig)
             })
             .collect())
     }

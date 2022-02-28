@@ -202,15 +202,13 @@ fn call(
 fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> Object {
     genesis_objects
         .iter()
-        .find_map(|o| match o.data.try_as_package() {
-            Some(p) => {
-                if p.serialized_module_map().keys().any(|name| name == module) {
-                    Some(o.clone())
-                } else {
-                    None
+        .find_map(|o| {
+            if let Some(q) = o.data.try_as_package() {
+                if q.serialized_module_map().keys().any(|name| name == module) {
+                    return Some(o.clone());
                 }
             }
-            None => None,
+            None
         })
         .unwrap()
 }
