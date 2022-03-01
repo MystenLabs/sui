@@ -230,7 +230,7 @@ for now - since the function is part of Sui framework, you can trust
 that it will do what it is intended to do):
 
 ```rust
-public fun transfer(c: Coin::Coin<GAS>, recipient: vector<u8>, _ctx: &mut TxContext) {
+public fun transfer(c: Coin::Coin<GAS>, recipient: address, _ctx: &mut TxContext) {
     ...
 }
 ```
@@ -251,11 +251,8 @@ value, and has three parameters:
 
 - `c` - it represents a gas object whose ownership is to be
   transferred
-- `recipient` - it is the address of the intended recipient,
-  represented as a vector (built-in `vector` type) of 8-bit integers
-  (built-in `u8` type) - you can read more about built-in primitive
-  types like these
-  [here](https://github.com/diem/move/blob/main/language/documentation/book/src/SUMMARY.md#primitive-types)
+- `recipient` - it is the address of the intended recipient - you can read more about the built-in address type
+  [here](https://github.com/diem/move/blob/main/language/documentation/book/src/address.md)
 - `_ctx` - it is a mutable reference to an instance of the `TxContext`
   struct (in this particular case, this parameter is not actually used
   in the function's body as indicated by its name starting with `_`)
