@@ -19,7 +19,7 @@ use sui_network::network::PortAllocator;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::TransactionEffects;
-use sui_types::object::{ObjectRead, GAS_VALUE_FOR_TESTING};
+use sui_types::object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING};
 use tokio::task;
 use tokio::task::JoinHandle;
 use tracing_test::traced_test;
@@ -713,17 +713,24 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
+    let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
     // Get the created objects
-    let (created_obj1, created_obj2) = if let WalletCommandResult::Publish(
+    let (mut created_obj1, mut created_obj2) = (
+        dumy_obj.to_object_reference(),
+        dumy_obj.to_object_reference(),
+    );
+
+    if let WalletCommandResult::Publish(
         _,
         TransactionEffects {
             created: new_objs, ..
         },
     ) = resp
     {
-        (new_objs.get(0).unwrap().0, new_objs.get(1).unwrap().0)
+        (created_obj1, created_obj2) = (new_objs.get(0).unwrap().0, new_objs.get(1).unwrap().0);
     } else {
-        panic!()
+        // Fail
+        assert!(false);
     };
 
     // One is the actual module, while the other is the object created at init
@@ -737,28 +744,35 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     );
 
     // Check the objects
+    // Init with some value to satisfy the type checker
+    let mut cr_obj1 = dumy_obj.clone();
+
     let resp = WalletCommands::Object { id: created_obj1.0 }
         .execute(&mut context)
         .await?;
-    let created_obj1 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
-        object
+    if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
+        cr_obj1 = object;
     } else {
-        panic!()
+        // Fail this way because Panic! causes test issues
+        assert!(false)
     };
+
+    let mut cr_obj2 = dumy_obj;
 
     let resp = WalletCommands::Object { id: created_obj2.0 }
         .execute(&mut context)
         .await?;
-    let created_obj2 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
-        object
+    if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
+        cr_obj2 = object;
     } else {
-        panic!()
+        // Fail this way because Panic! causes test issues
+        assert!(false)
     };
 
-    let (pkg, obj) = if created_obj1.is_package() {
-        (created_obj1, created_obj2)
+    let (pkg, obj) = if cr_obj1.is_package() {
+        (cr_obj1, cr_obj2)
     } else {
-        (created_obj2, created_obj1)
+        (cr_obj2, cr_obj1)
     };
 
     assert!(pkg.is_package());
