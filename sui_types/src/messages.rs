@@ -5,9 +5,6 @@
 use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
-#[cfg(test)]
-use crate::crypto::KeyPair;
-
 use super::{base_types::*, committee::Committee, error::*, event::Event};
 
 #[cfg(test)]
@@ -469,8 +466,8 @@ impl InputObjectKind {
 
 impl Transaction {
     #[cfg(test)]
-    pub fn from_data(data: TransactionData, keypair: &KeyPair) -> Self {
-        let signature = Signature::new(&data, keypair);
+    pub fn from_data(data: TransactionData, signer: &dyn signature::Signer<Signature>) -> Self {
+        let signature = Signature::new(&data, signer);
         Self::new(data, signature)
     }
 

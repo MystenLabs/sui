@@ -19,7 +19,6 @@ use sui_types::base_types::{SequenceNumber, TxContext};
 use crate::keystore::KeystoreType;
 use sui_adapter::adapter::generate_package_id;
 use sui_types::committee::Committee;
-use sui_types::crypto::get_key_pair;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
 use tracing::{error, info};
@@ -148,9 +147,8 @@ pub async fn genesis(
         let address = if let Some(address) = account.address {
             address
         } else {
-            let (address, key_pair) = get_key_pair();
+            let address = keystore.add_random_key()?;
             new_addresses.push(address);
-            keystore.add_key(key_pair)?;
             address
         };
         for object_conf in account.gas_objects {

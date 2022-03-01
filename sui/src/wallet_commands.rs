@@ -6,10 +6,9 @@ use core::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::path::Path;
 use sui_core::authority_client::AuthorityClient;
-use sui_core::client::{Client, ClientAddressManager, SignatureCallback};
+use sui_core::client::{AsyncTransactionSigner, Client, ClientAddressManager};
 use sui_framework::build_move_package_to_bytes;
 use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
-use sui_types::crypto::{get_key_pair, Signable};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CertifiedTransaction, ExecutionStatus, TransactionData, TransactionEffects,
@@ -19,20 +18,20 @@ use sui_types::object::ObjectRead::Exists;
 
 use crate::keystore::Keystore;
 use anyhow::anyhow;
+use async_trait::async_trait;
 use colored::Colorize;
-use futures::lock::Mutex;
-use futures::FutureExt;
+use ed25519_dalek::ed25519::signature;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::parse_type_tag;
 use serde::ser::Error;
 use serde::Serialize;
 use std::fmt::Write;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
-use sui_types::error::SuiResult;
+use sui_types::crypto::{Signable, Signature};
 use sui_types::object::ObjectRead;
 use tracing::info;
 
@@ -149,22 +148,32 @@ pub enum WalletCommands {
     },
 }
 
+struct SimpleTransactionSigner {
+    keystore: Arc<RwLock<Box<dyn Keystore>>>,
+}
+// A simple signer callback implementation, which signs the content without validation.
+#[async_trait]
+impl AsyncTransactionSigner for SimpleTransactionSigner {
+    async fn sign(
+        &self,
+        address: &SuiAddress,
+        data: TransactionData,
+    ) -> Result<Signature, signature::Error> {
+        let keystore = self.keystore.read().unwrap();
+        let mut msg = Vec::new();
+        data.write(&mut msg);
+        keystore.sign(address, &msg)
+    }
+}
+
 impl WalletCommands {
     pub async fn execute(
         &mut self,
         context: &mut WalletContext,
     ) -> Result<WalletCommandResult, anyhow::Error> {
-        let keystore = context.keystore.clone();
-        let signature_callback: SignatureCallback =
-            Box::new(|addr: SuiAddress, data: TransactionData| {
-                async move {
-                    let keystore = keystore.lock().await;
-                    let mut msg = Vec::new();
-                    data.write(&mut msg);
-                    keystore.sign(&addr, &msg)
-                }
-                .boxed()
-            });
+        let signature_callback = Box::pin(SimpleTransactionSigner {
+            keystore: context.keystore.clone(),
+        });
 
         Ok(match self {
             WalletCommands::Publish {
@@ -334,12 +343,11 @@ impl WalletCommands {
                 WalletCommandResult::SyncClientState
             }
             WalletCommands::NewAddress => {
-                let (address, key) = get_key_pair();
+                let address = context.keystore.write().unwrap().add_random_key()?;
                 context.config.accounts.push(address);
-                context.keystore.lock().await.add_key(key)?;
                 context.config.save()?;
                 // Create an address to be managed
-                context.create_account_state(&address)?;
+                context.address_manager.create_account_state(address)?;
                 WalletCommandResult::NewAddress(address)
             }
             WalletCommands::Gas { address } => {
@@ -368,7 +376,7 @@ impl WalletCommands {
 
 pub struct WalletContext {
     pub config: WalletConfig,
-    pub keystore: Arc<Mutex<Box<dyn Keystore>>>,
+    pub keystore: Arc<RwLock<Box<dyn Keystore>>>,
     pub address_manager: ClientAddressManager<AuthorityClient>,
 }
 
@@ -379,7 +387,7 @@ impl WalletContext {
         let committee = config.make_committee();
         let authority_clients = config.make_authority_clients();
 
-        let keystore = Arc::new(Mutex::new(config.keystore.init()?));
+        let keystore = Arc::new(RwLock::new(config.keystore.init()?));
         let accounts = config.accounts.clone();
 
         let mut context = Self {
@@ -389,13 +397,9 @@ impl WalletContext {
         };
         // Pre-populate client state for each address in the config.
         for address in accounts {
-            context.create_account_state(&address)?;
+            context.address_manager.create_account_state(address)?;
         }
         Ok(context)
-    }
-
-    pub fn create_account_state(&mut self, owner: &SuiAddress) -> SuiResult {
-        self.address_manager.create_account_state(*owner)
     }
 }
 
