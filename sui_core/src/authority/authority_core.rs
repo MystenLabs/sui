@@ -2,12 +2,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_store::AuthorityStore;
+use crate::authority::temporary_store::AuthorityTemporaryStore;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
-use move_core_types::{
-    language_storage::{ModuleId, StructTag},
-    resolver::{ModuleResolver, ResourceResolver},
-};
+use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
@@ -20,22 +19,16 @@ use sui_types::{
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
-    fp_bail, fp_ensure, gas,
+    fp_ensure, gas,
     messages::*,
-    object::{Data, Object, Owner},
+    object::{Object, Owner},
     storage::Storage,
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
 #[cfg(test)]
-#[path = "unit_tests/authority_tests.rs"]
+#[path = "../unit_tests/authority_tests.rs"]
 mod authority_tests;
-
-mod temporary_store;
-use temporary_store::AuthorityTemporaryStore;
-
-mod authority_store;
-pub use authority_store::AuthorityStore;
 
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
@@ -62,7 +55,7 @@ pub struct AuthorityState {
     move_vm: Arc<adapter::MoveVM>,
 
     /// The database
-    _database: Arc<AuthorityStore>,
+    pub _database: Arc<AuthorityStore>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -227,7 +220,7 @@ impl AuthorityState {
     }
 
     /// Initiate a new transaction.
-    pub async fn handle_transaction(
+    pub async fn handle_client_transaction(
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -266,12 +259,11 @@ impl AuthorityState {
     }
 
     /// Confirm a transfer.
-    pub async fn handle_confirmation_transaction(
+    pub async fn handle_client_certificate(
         &self,
-        confirmation_transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         // Check the certificate and retrieve the transfer data.
-        let certificate = &confirmation_transaction.certificate;
         certificate.check(&self.committee)?;
 
         // If the transaction contains shared objects, we need to ensure they have been scheduled
@@ -307,9 +299,7 @@ impl AuthorityState {
 
             // Now let's process the certificate as usual: this executes the transaction and
             // unlock all single-writer objects.
-            let result = self
-                .process_certificate(confirmation_transaction.clone())
-                .await;
+            let result = self.process_certificate(certificate.clone()).await;
 
             // If the execution is successfully, we cleanup some data structures.
             if result.is_ok() {
@@ -325,15 +315,14 @@ impl AuthorityState {
         }
         // In case there are no shared objects, we simply process the certificate.
         else {
-            self.process_certificate(confirmation_transaction).await
+            self.process_certificate(certificate).await
         }
     }
 
     async fn process_certificate(
         &self,
-        confirmation_transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let certificate = confirmation_transaction.certificate;
         let transaction = certificate.transaction.clone();
         let transaction_digest = transaction.digest();
 
@@ -441,12 +430,12 @@ impl AuthorityState {
     }
 
     /// Handle sequenced certificates from the consensus protocol.
-    pub fn handle_commit(
+    pub fn handle_sequenced_certificate(
         &mut self,
-        confirmation_transaction: ConfirmationTransaction,
+        certificate: CertifiedTransaction,
     ) -> SuiResult<()> {
         // Ensure it is the first time we see this certificate.
-        let transaction = &confirmation_transaction.certificate.transaction;
+        let transaction = &certificate.transaction;
         let transaction_digest = transaction.digest();
         for id in transaction.shared_input_objects() {
             if self._database.sequenced(transaction_digest, *id)?.is_some() {
@@ -455,13 +444,12 @@ impl AuthorityState {
         }
 
         // Check the certificate.
-        let certificate = &confirmation_transaction.certificate;
         certificate.check(&self.committee)?;
 
         // Persist the certificate. We are about to lock one or more shared object.
         // We thus need to make sure someone (if not the client) can continue the protocol.
         self._database
-            .persist_certificate(&transaction_digest, certificate)?;
+            .persist_certificate(&transaction_digest, &certificate)?;
 
         // Lock the shared object for this particular transaction.
         self._database

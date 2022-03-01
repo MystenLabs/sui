@@ -220,6 +220,10 @@ pub enum SuiError {
     )]
     QuorumNotReached { errors: Vec<SuiError> },
 
+    // Conversion from bincode serialization errors.
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
+
     // Errors returned by authority and client read API's
     #[error("Failure serializing object in the requested format")]
     ObjectSerializationError,
@@ -247,5 +251,11 @@ impl std::convert::From<PartialVMError> for SuiError {
         SuiError::ModuleVerificationFailure {
             error: error.to_string(),
         }
+    }
+}
+
+impl From<Box<bincode::ErrorKind>> for SuiError {
+    fn from(error: Box<bincode::ErrorKind>) -> Self {
+        SuiError::SerializationError(error.to_string())
     }
 }

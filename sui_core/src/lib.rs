@@ -5,6 +5,5 @@
 pub mod authority;
 pub mod authority_aggregator;
 pub mod authority_client;
-pub mod authority_server;
 pub mod client;
 pub mod safe_client;
