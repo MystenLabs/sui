@@ -39,7 +39,6 @@ use temporary_store::AuthorityTemporaryStore;
 mod authority_store;
 pub use authority_store::AuthorityStore;
 
-
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
 

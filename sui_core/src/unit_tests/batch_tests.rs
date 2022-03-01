@@ -248,7 +248,7 @@ async fn test_handle_move_order_with_batch() {
     println!("{:?}", y);
     assert!(matches!(
         y,
-        UpdateItem::Transaction((2, x)) if x == effects.transaction_digest
+        UpdateItem::Transaction((0, x)) if x == effects.transaction_digest
     ));
 
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
