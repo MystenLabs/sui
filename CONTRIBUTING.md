@@ -9,20 +9,14 @@ cd sui
 cargo build --all --all-targets
 cargo test
 ```
-TODO: Note the `git clone` command above fails with the following error, which *should* go away when we open our repo up:
+TODO: Note the `git clone` command above may fail with the following error, which *should* go away when we open our repo up:
 
 ```
 remote: Support for password authentication was removed on August 13, 2021. Please use a personal access token instead.
 remote: Please see https://github.blog/2020-12-15-token-authentication-requirements-for-git-operations/ for more information.
 ```
 
-## Coding guidelines for Rust code
-
-For detailed guidance on how to contribute to the Rust code in the Sui repository refer to the [Diem developer documentation](https://developers.diem.com/docs/welcome-to-diem/).
-
 ## Pull requests
-
-Please refer to the documentation to determine the status of each project (e.g. actively developed vs. archived) before submitting a pull request.
 
 To submit your pull request:
 
@@ -34,7 +28,4 @@ To submit your pull request:
 6. Complete the Contributor License Agreement (CLA), if you haven't already done so.
 7. Submit your pull request.
 
-TODO: Add links to the steps above for more details, such as how to build and test the dev site and where to find the CLA.
-
-## Code of Conduct
-Please refer to the [Diem Code of Conduct](https://developers.diem.com/docs/policies/code-of-conduct/) for guidelines on interacting with the community.
+TODO: Add links to the steps above for more details, such as how to build and test the dev site and where to find the CLA once we have one.
