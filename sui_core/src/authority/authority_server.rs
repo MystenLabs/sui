@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_core::AuthorityState;
-use crate::authority::{CoreReplier, SyncReplier};
+use crate::authority::Replier;
 use bytes::Bytes;
 use sui_types::error::SuiError;
-use sui_types::messages::{ClientToAuthorityCoreMessage, SyncReply, SyncRequest};
+use sui_types::messages::{AuthorityToClientCoreMessage, ClientToAuthorityCoreMessage};
 use tokio::sync::mpsc::Receiver;
 use tokio::task::JoinHandle;
 
@@ -16,9 +16,7 @@ pub struct AuthorityServer {
     /// The state of the authority, where all the core logic is.
     state: AuthorityState,
     /// Receive core messages from the clients.
-    rx_client_core_message: Receiver<(ClientToAuthorityCoreMessage, CoreReplier)>,
-    /// Receive sync requests.
-    rx_sync_request: Receiver<(SyncRequest, SyncReplier)>,
+    rx_client_core_message: Receiver<(ClientToAuthorityCoreMessage, Replier)>,
     /// Receives messages from consensus.
     rx_consensus: Receiver<Bytes>,
 }
@@ -27,15 +25,13 @@ impl AuthorityServer {
     /// Create an `AuthorityServer` and spawn it in a new tokio task.
     pub fn spawn(
         state: AuthorityState,
-        rx_client_core_message: Receiver<(ClientToAuthorityCoreMessage, CoreReplier)>,
-        rx_sync_request: Receiver<(SyncRequest, SyncReplier)>,
+        rx_client_core_message: Receiver<(ClientToAuthorityCoreMessage, Replier)>,
         rx_consensus: Receiver<Bytes>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 state,
                 rx_client_core_message,
-                rx_sync_request,
                 rx_consensus,
             }
             .run()
@@ -55,11 +51,32 @@ impl AuthorityServer {
                         ClientToAuthorityCoreMessage::Transaction(tx) => self
                             .state
                             .handle_client_transaction(tx)
-                            .await,
+                            .await
+                            .map(AuthorityToClientCoreMessage::TransactionInfoResponse),
                         ClientToAuthorityCoreMessage::Certificate(certificate) => self
                             .state
                             .handle_client_certificate(certificate)
                             .await
+                            .map(AuthorityToClientCoreMessage::TransactionInfoResponse),
+
+                        // TODO: The messages below should probably not be mixed up with core (safety-critical)
+                        // messages within `AuthorityState`. It is probably better to keep the core as simple
+                        // as possible and run a separate synchronizer task.
+                        ClientToAuthorityCoreMessage::AccountInfoRequest(request) => self
+                            .state
+                            .handle_account_info_request(request)
+                            .await
+                            .map(AuthorityToClientCoreMessage::AccountInfoResponse),
+                        ClientToAuthorityCoreMessage::ObjectInfoRequest(request) => self
+                            .state
+                            .handle_object_info_request(request)
+                            .await
+                            .map(AuthorityToClientCoreMessage::ObjectInfoResponse),
+                        ClientToAuthorityCoreMessage::TransactionInfoRequest(request) => self
+                            .state
+                            .handle_transaction_info_request(request)
+                            .await
+                            .map(AuthorityToClientCoreMessage::TransactionInfoResponse),
                     };
 
                     // Log the errors that are our fault, such as storage failures.
@@ -71,32 +88,6 @@ impl AuthorityServer {
 
                     // This is the reply that the network will send back to the client.
                     replier.send(reply).expect("Failed to reply to core message");
-                },
-
-                // Handle sync requests.
-                // TODO: Those should probably not be mixed up with core (safety-critical) messages
-                // within `AuthorityState`. It is probably better to keep the core as simple as possible.
-                Some((message, replier)) = self.rx_sync_request.recv() => {
-                    let reply = match message {
-                        SyncRequest::AccountInfoRequest(request) => self
-                            .state
-                            .handle_account_info_request(request)
-                            .await
-                            .map(SyncReply::AccountInfoResponse),
-                        SyncRequest::ObjectInfoRequest(request) => self
-                            .state
-                            .handle_object_info_request(request)
-                            .await
-                            .map(SyncReply::ObjectInfoResponse),
-                        SyncRequest::TransactionInfoRequest(request) => self
-                            .state
-                            .handle_transaction_info_request(request)
-                            .await
-                            .map(SyncReply::TransactionInfoResponse),
-                    };
-
-                    // This is the reply that the network will send back to the sender of the request.
-                    replier.send(reply).expect("Failed to reply to sync request");
                 },
 
                 // Handle the messages coming from consensus. Those are simply sequenced

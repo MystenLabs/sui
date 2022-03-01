@@ -748,26 +748,25 @@ impl ConfirmationTransaction {
 
 impl BcsSignable for TransactionData {}
 
-/// The core messages sent by the clients to the authority. The core messages
-/// are transactions and certificates, driving the authority's state updates.
-/// The authority replies to to these messages with a `TransactionInfoResponse`.
+/// The messages sent by the clients to the authorities.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ClientToAuthorityCoreMessage {
+    // The core messages are transactions and certificates, driving the
+    // authority's state updates.
     Transaction(Transaction),
     Certificate(CertifiedTransaction),
-}
 
-/// The sync requests sent by clients (or anyone else).
-#[derive(Serialize, Deserialize, Debug)]
-pub enum SyncRequest {
+    // The sync requests sent by clients (or anyone else).
+    // TODO: These should probably be separated into another data structure.
     AccountInfoRequest(AccountInfoRequest),
     ObjectInfoRequest(ObjectInfoRequest),
     TransactionInfoRequest(TransactionInfoRequest),
 }
 
-/// The sync replies sent by the authorities as response to a `SyncRequest`.
+/// The messages sent by the authorities to the clients as reply to a
+/// a client's message.
 #[derive(Serialize, Deserialize, Debug)]
-pub enum SyncReply {
+pub enum AuthorityToClientCoreMessage {
     AccountInfoResponse(AccountInfoResponse),
     ObjectInfoResponse(ObjectInfoResponse),
     TransactionInfoResponse(TransactionInfoResponse),

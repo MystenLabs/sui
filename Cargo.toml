@@ -1,10 +1,11 @@
 [workspace]
 members = [
-        "sui_core",
-        "sui",
-        "sui_programmability/adapter",
-        "sui_programmability/framework",
+    "sui_core",
+    "sui",
+    "sui_programmability/adapter",
+    "sui_programmability/framework",
 	"sui_types",
+    "network"
 ]
 
 [profile.release]
