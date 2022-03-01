@@ -1,12 +1,13 @@
+**/.vscode/
+.DS_Store
+
 # Rust build directory
-/target
+**/target
 .pre-commit*
 
 # Move build directory
 build
 storage/
-
-.DS_Store
 
 # Thumbnails
 ._*

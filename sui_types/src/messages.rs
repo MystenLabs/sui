@@ -41,6 +41,7 @@ pub struct MoveCall {
     pub function: Identifier,
     pub type_arguments: Vec<TypeTag>,
     pub object_arguments: Vec<ObjectRef>,
+    pub shared_object_arguments: Vec<ObjectID>,
     pub pure_arguments: Vec<Vec<u8>>,
     pub gas_budget: u64,
 }
@@ -372,28 +373,32 @@ impl PartialEq for SignedTransaction {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InputObjectKind {
     MovePackage(ObjectID),
-    MoveObject(ObjectRef),
+    OwnedMoveObject(ObjectRef),
+    SharedMoveObject(ObjectID),
 }
 
 impl InputObjectKind {
     pub fn object_id(&self) -> ObjectID {
         match self {
             Self::MovePackage(id) => *id,
-            Self::MoveObject((id, _, _)) => *id,
+            Self::OwnedMoveObject((id, _, _)) => *id,
+            Self::SharedMoveObject(id) => *id,
         }
     }
 
     pub fn version(&self) -> SequenceNumber {
         match self {
-            Self::MovePackage(_) => OBJECT_START_VERSION,
-            Self::MoveObject((_, version, _)) => *version,
+            Self::MovePackage(..) => OBJECT_START_VERSION,
+            Self::OwnedMoveObject((_, version, _)) => *version,
+            Self::SharedMoveObject(..) => OBJECT_START_VERSION,
         }
     }
 
     pub fn object_not_found_error(&self) -> SuiError {
         match *self {
             Self::MovePackage(package_id) => SuiError::DependentPackageNotFound { package_id },
-            Self::MoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
+            Self::OwnedMoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
+            Self::SharedMoveObject(object_id) => SuiError::ObjectNotFound { object_id },
         }
     }
 }
@@ -423,6 +428,7 @@ impl Transaction {
         type_arguments: Vec<TypeTag>,
         gas_payment: ObjectRef,
         object_arguments: Vec<ObjectRef>,
+        shared_object_arguments: Vec<ObjectID>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
         secret: &dyn signature::Signer<Signature>,
@@ -433,6 +439,7 @@ impl Transaction {
             function,
             type_arguments,
             object_arguments,
+            shared_object_arguments,
             pure_arguments,
             gas_budget,
         });
@@ -479,6 +486,21 @@ impl Transaction {
         &self.data.gas_payment
     }
 
+    pub fn contains_shared_object(&self) -> bool {
+        match &self.data.kind {
+            TransactionKind::Transfer(..) => false,
+            TransactionKind::Call(c) => !c.shared_object_arguments.is_empty(),
+            TransactionKind::Publish(..) => false,
+        }
+    }
+
+    pub fn shared_input_objects(&self) -> &[ObjectID] {
+        match &self.data.kind {
+            TransactionKind::Call(c) => &c.shared_object_arguments,
+            _ => &[],
+        }
+    }
+
     /// Return the metadata of each of the input objects for the transaction.
     /// For a Move object, we attach the object reference;
     /// for a Move package, we provide the object id only since they never change on chain.
@@ -486,7 +508,7 @@ impl Transaction {
     pub fn input_objects(&self) -> Vec<InputObjectKind> {
         let mut inputs = match &self.data.kind {
             TransactionKind::Transfer(t) => {
-                vec![InputObjectKind::MoveObject(t.object_ref)]
+                vec![InputObjectKind::OwnedMoveObject(t.object_ref)]
             }
             TransactionKind::Call(c) => {
                 let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
@@ -494,7 +516,14 @@ impl Transaction {
                     c.object_arguments
                         .clone()
                         .into_iter()
-                        .map(InputObjectKind::MoveObject)
+                        .map(InputObjectKind::OwnedMoveObject)
+                        .collect::<Vec<_>>(),
+                );
+                call_inputs.extend(
+                    c.shared_object_arguments
+                        .iter()
+                        .cloned()
+                        .map(InputObjectKind::SharedMoveObject)
                         .collect::<Vec<_>>(),
                 );
                 call_inputs.push(InputObjectKind::MovePackage(c.package.0));
@@ -520,7 +549,9 @@ impl Transaction {
                 Transaction::input_objects_in_compiled_modules(&compiled_modules)
             }
         };
-        inputs.push(InputObjectKind::MoveObject(*self.gas_payment_object_ref()));
+        inputs.push(InputObjectKind::OwnedMoveObject(
+            *self.gas_payment_object_ref(),
+        ));
         inputs
     }
 

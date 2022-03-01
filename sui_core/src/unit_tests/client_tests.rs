@@ -170,6 +170,7 @@ fn transaction_create(
         Vec::new(),
         gas_object_ref,
         Vec::new(),
+        vec![],
         pure_arguments,
         GAS_VALUE_FOR_TESTING / 2,
         &*secret,
@@ -195,6 +196,7 @@ fn transaction_transfer(
         Vec::new(),
         gas_object_ref,
         vec![object_ref],
+        vec![],
         pure_args,
         GAS_VALUE_FOR_TESTING / 2,
         secret,
@@ -220,6 +222,7 @@ fn transaction_set(
         Vec::new(),
         gas_object_ref,
         vec![object_ref],
+        vec![],
         pure_args,
         GAS_VALUE_FOR_TESTING / 2,
         secret,
@@ -243,6 +246,7 @@ fn transaction_delete(
         gas_object_ref,
         vec![object_ref],
         Vec::new(),
+        vec![],
         GAS_VALUE_FOR_TESTING / 2,
         secret,
     )
@@ -802,6 +806,7 @@ async fn test_move_calls_object_create() {
             Vec::new(),
             gas_object_ref,
             Vec::new(),
+            vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
         )
@@ -863,6 +868,7 @@ async fn test_move_calls_object_transfer() {
             Vec::new(),
             gas_object_ref,
             Vec::new(),
+            vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
         )
@@ -885,6 +891,7 @@ async fn test_move_calls_object_transfer() {
             Vec::new(),
             gas_object_ref,
             vec![new_obj_ref],
+            vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING / 2,
         )
@@ -951,6 +958,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
             Vec::new(),
             gas_object_ref,
             Vec::new(),
+            vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
         )
@@ -972,6 +980,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
             Vec::new(),
             gas_object_ref,
             vec![new_obj_ref],
+            vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING / 2,
         )
@@ -1038,6 +1047,7 @@ async fn test_move_calls_object_delete() {
             Vec::new(),
             gas_object_ref,
             Vec::new(),
+            vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
         )
@@ -1057,6 +1067,7 @@ async fn test_move_calls_object_delete() {
             Vec::new(),
             gas_object_ref,
             vec![new_obj_ref],
+            vec![],
             Vec::new(),
             GAS_VALUE_FOR_TESTING / 2,
         )
@@ -1195,6 +1206,7 @@ async fn test_module_publish_and_call_good() {
             vec![],
             gas_object_ref,
             vec![tres_cap_obj_info.object().unwrap().to_object_reference()],
+            vec![],
             vec![42u64.to_le_bytes().to_vec()],
             1000,
         )
@@ -2326,6 +2338,7 @@ async fn test_address_manager() {
             Vec::new(),
             gas_ref_1,
             Vec::new(),
+            vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
         )
