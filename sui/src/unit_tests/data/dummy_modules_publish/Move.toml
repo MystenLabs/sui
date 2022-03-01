@@ -1,0 +1,12 @@
+[package]
+name = "Examples"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../../../sui_programmability/framework" }
+
+[addresses]
+Examples = "0x0"
+
+[dev-addresses]
+Examples = "0x0"
