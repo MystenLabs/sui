@@ -16,10 +16,10 @@ use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_core::client::Client;
 use sui_network::network::PortAllocator;
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::TransactionEffects;
-use sui_types::object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING};
+use sui_types::object::{Data, MoveObject, Object, ObjectRead, GAS_VALUE_FOR_TESTING};
 use tokio::task;
 use tokio::task::JoinHandle;
 use tracing_test::traced_test;
@@ -219,19 +219,25 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Error> {
+    use sui_types::crypto::get_key_pair_from_bytes;
+
+    let (address, admin_key) = get_key_pair_from_bytes(&[
+        10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
+        92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
+        90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
+        105, 254, 59, 163,
+    ]);
+
     let working_dir = tempfile::tempdir()?;
     // Create and save genesis config file
-    // Create 4 authorities, 1 account with 1 gas object with custom id
+    // Create 4 authorities and 1 account
     let genesis_path = working_dir.path().join("genesis.conf");
-    let mut config = GenesisConfig::default_genesis(&genesis_path)?;
+    let num_authorities = 4;
+    let mut config = GenesisConfig::custom_genesis(&genesis_path, num_authorities, 0, 0)?;
     config.accounts.clear();
-    let object_id = ObjectID::random();
     config.accounts.push(AccountConfig {
-        address: None,
-        gas_objects: vec![ObjectConfig {
-            object_id,
-            gas_value: 500,
-        }],
+        address: Some(address),
+        gas_objects: vec![],
     });
     config
         .move_packages
@@ -260,6 +266,30 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     for (_, id) in network_conf.loaded_move_packages {
         assert!(logs_contain(&*format!("{}", id)));
     }
+
+    // Start network
+    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+
+    // Wait for authorities to come alive.
+    retry_assert!(
+        logs_contain("Listening to TCP traffic on 127.0.0.1"),
+        Duration::from_millis(5000)
+    );
+
+    // Create Wallet context.
+    let mut wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    wallet_conf.accounts = vec![AccountInfo {
+        address,
+        key_pair: admin_key,
+    }];
+    let mut context = WalletContext::new(wallet_conf)?;
+
+    // Make sure init() is executed correctly for custom_genesis_package_2::M1
+    let move_objects = get_move_objects(&mut context, address).await?;
+    assert_eq!(move_objects.len(), 1);
+    assert_eq!(move_objects[0].type_.module.as_str(), "M1");
+
+    network.abort();
     Ok(())
 }
 
@@ -438,6 +468,53 @@ fn extract_gas_info(s: &str) -> Option<(ObjectID, SequenceNumber, u64)> {
         SequenceNumber::from_u64(tokens[1].parse::<u64>().unwrap()),
         tokens[2].parse::<u64>().unwrap(),
     ))
+}
+
+async fn get_move_objects(
+    context: &mut WalletContext,
+    address: SuiAddress,
+) -> Result<Vec<MoveObject>, anyhow::Error> {
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState { address }
+        .execute(context)
+        .await?
+        .print(true);
+
+    // Fetch objects owned by `address`
+    let objects_result = WalletCommands::Objects { address }.execute(context).await?;
+
+    match objects_result {
+        WalletCommandResult::Objects(object_refs) => {
+            let mut objs = vec![];
+            for (id, ..) in object_refs {
+                objs.push(get_move_object(context, id).await?);
+            }
+            Ok(objs)
+        }
+        _ => panic!(
+            "WalletCommands::Objects returns wrong type {}",
+            objects_result
+        ),
+    }
+}
+
+async fn get_move_object(
+    context: &mut WalletContext,
+    id: ObjectID,
+) -> Result<MoveObject, anyhow::Error> {
+    let obj = WalletCommands::Object { id }.execute(context).await?;
+
+    match obj {
+        WalletCommandResult::Object(ObjectRead::Exists(
+            _,
+            Object {
+                data: Data::Move(m),
+                ..
+            },
+            ..,
+        )) => Ok(m),
+        _ => panic!("WalletCommands::Object returns wrong type {}", obj),
+    }
 }
 
 async fn start_network(
