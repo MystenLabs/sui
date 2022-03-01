@@ -7,10 +7,10 @@ publish = false
 edition = "2021"
 
 [dependencies]
-futures = "0.3.19"
+futures = "0.3.21"
 serde = { version = "1.0.136", features = ["derive"] }
-tokio = { version = "1.16.1", features = ["sync", "rt", "macros"] }
-tokio-util = { version = "0.6.9", features = ["codec"] }
+tokio = { version = "1.17.0", features = ["sync", "rt", "macros"] }
+tokio-util = { version = "0.7.0", features = ["codec"] }
 ed25519-dalek = "1.0.1"
 thiserror = "1.0.30"
 bincode = "1.3.3"
@@ -18,7 +18,7 @@ bytes = "1.1.0"
 async-recursion = "1.0.0"
 async-trait = "0.1.52"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store" }
-tracing = { version = "0.1.29", features = ["log"] }
+tracing = { version = "0.1.31", features = ["log"] }
 
 crypto = { path = "../crypto" }
 config = { path = "../config" }

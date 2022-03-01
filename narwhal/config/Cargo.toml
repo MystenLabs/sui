@@ -9,8 +9,8 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0.30"
-serde_json = "1.0.78"
-tracing = { version = "0.1.29", features = ["log"] }
+serde_json = "1.0.79"
+tracing = { version = "0.1.31", features = ["log"] }
 
 crypto = { path = "../crypto" }
 

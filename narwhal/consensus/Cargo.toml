@@ -6,12 +6,12 @@ authors = ["Alberto Sonnino <asonnino@fb.com>"]
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.16.1", features = ["sync"] }
+tokio = { version = "1.17.0", features = ["sync"] }
 rand = { version = "0.7.3", optional = true }
 crypto = { path = "../crypto" }
 config = { path = "../config" }
 primary = { path = "../primary" }
-tracing = "0.1.29"
+tracing = "0.1.31"
 
 [dev-dependencies]
 bincode = "1.3.3"
