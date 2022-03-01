@@ -40,6 +40,8 @@ The architecture is as follows:
 
 */
 
+pub type TxSequenceNumber = u64;
+
 pub type BroadcastPair = (
     tokio::sync::broadcast::Sender<UpdateItem>,
     tokio::sync::broadcast::Receiver<UpdateItem>,
@@ -48,18 +50,18 @@ pub type BroadcastPair = (
 /// Either a freshly sequenced transaction hash or a batch
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
 pub enum UpdateItem {
-    Transaction((u64, TransactionDigest)),
+    Transaction((TxSequenceNumber, TransactionDigest)),
     Batch(AuthorityBatch),
 }
 
 pub struct BatcherSender {
     /// Channel for sending updates.
-    tx_send: Sender<(u64, TransactionDigest)>,
+    tx_send: Sender<(TxSequenceNumber, TransactionDigest)>,
 }
 
 pub struct BatcherManager {
     /// Channel for receiving updates
-    tx_recv: Receiver<(u64, TransactionDigest)>,
+    tx_recv: Receiver<(TxSequenceNumber, TransactionDigest)>,
     /// The sender end of the broadcast channel used to send updates to listeners
     tx_broadcast: tokio::sync::broadcast::Sender<UpdateItem>,
     /// Copy of the database to write batches and read transactions.
@@ -70,7 +72,7 @@ impl BatcherSender {
     /// Send a new event to the batch manager
     pub async fn send_item(
         &self,
-        transaction_sequence: u64,
+        transaction_sequence: TxSequenceNumber,
         transaction_digest: TransactionDigest,
     ) -> Result<(), SuiError> {
         self.tx_send
@@ -117,7 +119,13 @@ impl BatcherManager {
 
     async fn init_from_database(&self) -> Result<AuthorityBatch, SuiError> {
         // First read the last batch in the db
-        let mut last_batch = match self.db.batches.iter().skip_prior_to(&u64::MAX)?.next() {
+        let mut last_batch = match self
+            .db
+            .batches
+            .iter()
+            .skip_prior_to(&TxSequenceNumber::MAX)?
+            .next()
+        {
             Some((_, last_batch)) => last_batch,
             None => {
                 // Make a batch at zero
@@ -141,29 +149,37 @@ impl BatcherManager {
                 .skip_to(&last_batch.total_size)?
                 .collect();
 
-            if transactions.len() as u64 != total_seq - last_batch.total_size {
-                // NOTE: The database is corrupt, namely we have a higher maximum transaction sequence
-                //       than number of items, which means there is a hole in the sequence. This can happen
-                //       in case we crash after writting command seq x but before x-1 was written. What we
-                //       need to do is run the database recovery logic.
-
+            if transactions.len() as TxSequenceNumber != total_seq - last_batch.total_size {
+                /*
+                NOTE: The database is corrupt, namely we have a higher maximum transaction sequence
+                      than number of items since the end of the last batch,
+                      which means there is a hole in the sequence. This can happen
+                      in case we crash after writting command seq x but before x-1 was written.
+                */
                 let db_batch = self.db.executed_sequence.batch();
 
-                // Delete all old transactions
+                // Delete the transactions that we read above, that are out of a batch and we are about
+                // to re-sequence with new numbers.
                 let db_batch = db_batch.delete_batch(
                     &self.db.executed_sequence,
                     transactions.iter().map(|(k, _)| *k),
                 )?;
 
                 // Reorder the transactions
-                total_seq = last_batch.total_size + transactions.len() as u64;
+                total_seq = last_batch.total_size + transactions.len() as TxSequenceNumber;
                 self.db
                     .next_sequence_number
                     .store(total_seq, std::sync::atomic::Ordering::Relaxed);
 
+                /*
+                Update transactions
+
+                Here we re-write the transactions in the same order but using a new sequential
+                sequence number (the range) to ensure the sequence of transactions contains no
+                gaps in the sequence.
+                */
                 let range = last_batch.total_size..total_seq;
 
-                // Update transactions
                 transactions = range
                     .into_iter()
                     .zip(transactions.into_iter().map(|(_, v)| v))
@@ -200,10 +216,9 @@ impl BatcherManager {
         // The structures we use to build the next batch. The current_batch holds the sequence
         // of transactions in order, following the last batch. The loose transactions holds
         // transactions we may have received out of order.
-        let (mut current_batch, mut loose_transactions): (
-            Vec<(u64, TransactionDigest)>,
-            BTreeMap<u64, TransactionDigest>,
-        ) = (Vec::new(), BTreeMap::new());
+        let mut current_batch: Vec<(TxSequenceNumber, TransactionDigest)> = Vec::new();
+        let mut loose_transactions: BTreeMap<TxSequenceNumber, TransactionDigest> = BTreeMap::new();
+
         let mut next_sequence_number = prev_batch.total_size;
 
         while !exit {
@@ -234,7 +249,7 @@ impl BatcherManager {
                       next_sequence_number += 1;
                     }
 
-                    if current_batch.len() as u64 >= min_batch_size {
+                    if current_batch.len() as TxSequenceNumber >= min_batch_size {
                       make_batch = true;
                     }
                   }
@@ -309,7 +324,7 @@ impl AuthorityBatch {
     /// batch.
     pub fn make_next(
         previous_batch: &AuthorityBatch,
-        transactions: &[(u64, TransactionDigest)],
+        transactions: &[(TxSequenceNumber, TransactionDigest)],
     ) -> AuthorityBatch {
         AuthorityBatch {
             total_size: previous_batch.total_size + transactions.len() as u64,

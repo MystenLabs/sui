@@ -68,11 +68,11 @@ pub struct AuthorityStore {
     /// Internal vector of locks to manage concurrent writes to the database
     lock_table: Vec<parking_lot::Mutex<()>>,
 
-    // Tables used for authority block structure
+    // Tables used for authority batch structure
     /// A sequence on all executed certificates and effects.
     pub executed_sequence: DBMap<u64, TransactionDigest>,
 
-    /// A sequence of blocks indexing into the sequence of executed transactions.
+    /// A sequence of batches indexing into the sequence of executed transactions.
     pub batches: DBMap<u64, AuthorityBatch>,
 
     /// The size of the executed transactions sequence, used to timestamp the next
