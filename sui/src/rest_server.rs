@@ -467,7 +467,7 @@ struct Object {
     /** Hex code as string representing the object id */
     object_id: String,
     /** Object version */
-    sequence_number: String,
+    version: String,
     /** Hash of the object's contents used for local validation */
     object_digest: String,
 }
@@ -529,7 +529,7 @@ async fn get_objects(
         objects: object_refs
             .map(|(_, (object_id, sequence_number, object_digest))| Object {
                 object_id: object_id.to_string(),
-                sequence_number: format!("{:?}", sequence_number),
+                version: format!("{:?}", sequence_number),
                 object_digest: format!("{:?}", object_digest),
             })
             .collect::<Vec<Object>>(),
