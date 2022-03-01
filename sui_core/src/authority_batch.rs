@@ -300,14 +300,7 @@ pub struct AuthorityBatch {
 
     /// The number of items in the previous block.
     previous_total_size: u64,
-    /*
-    TODO: Add the following information:
-    - Authenticator of previous block (digest)
-    - Authenticator of this block header + contents (digest)
-    - Signature on block + authenticators
-    - Structures to facilitate sync, eg. IBLT or Merkle Tree.
-    - Maybe: a timestamp (wall clock time)?
-    */
+
 }
 
 impl AuthorityBatch {
