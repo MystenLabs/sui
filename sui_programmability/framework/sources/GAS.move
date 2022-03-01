@@ -14,7 +14,7 @@ module Sui::GAS {
     fun init(ctx: &mut TxContext) {
         // Get a treasury cap for the coin and give it to the transaction sender
         let treasury_cap = Coin::create_currency(GAS{}, ctx);
-        Transfer::transfer(treasury_cap, TxContext::get_signer_address(ctx))
+        Transfer::transfer(treasury_cap, TxContext::sender(ctx))
     }
 
     /// Transfer to a recipient

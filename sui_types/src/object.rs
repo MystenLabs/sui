@@ -311,7 +311,7 @@ impl Object {
         }
     }
 
-    pub fn get_signle_owner(&self) -> Option<SuiAddress> {
+    pub fn get_single_owner(&self) -> Option<SuiAddress> {
         match &self.owner {
             Owner::SingleOwner(owner) => Some(*owner),
             Owner::SharedMutable | Owner::SharedImmutable => None,
@@ -325,6 +325,11 @@ impl Object {
             Owner::SingleOwner(owner) => Some((*owner, self.id())),
             Owner::SharedMutable | Owner::SharedImmutable => None,
         }
+    }
+
+    // TODO: Support shared object type from the Move/Executor side.
+    pub fn is_shared(&self) -> bool {
+        false
     }
 
     /// Return true if this object is a Move package, false if it is a Move value
@@ -366,6 +371,7 @@ impl Object {
     pub fn transfer(&mut self, new_owner: SuiAddress) {
         // TODO: these should be raised SuiError's instead of panic's
         assert!(!self.is_read_only(), "Cannot transfer an immutable object");
+        assert!(!self.is_shared(), "Cannot transfer an shared object");
         match &mut self.data {
             Data::Move(m) => {
                 assert!(
@@ -522,9 +528,7 @@ impl Display for Object {
         let type_string = self
             .data
             .type_()
-            .map_or("Type Unwrap Failed".to_owned(), |type_| {
-                format!("{}", type_)
-            });
+            .map_or("Move Package".to_owned(), |type_| format!("{}", type_));
 
         write!(
             f,

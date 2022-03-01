@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
     language_storage::{ModuleId, StructTag},
@@ -35,6 +36,9 @@ use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
 pub use authority_store::AuthorityStore;
+
+// based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
+const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -86,7 +90,7 @@ impl AuthorityState {
                     }
                 );
             }
-            InputObjectKind::MoveObject((object_id, sequence_number, object_digest)) => {
+            InputObjectKind::OwnedMoveObject((object_id, sequence_number, object_digest)) => {
                 fp_ensure!(
                     sequence_number <= SequenceNumber::MAX,
                     SuiError::InvalidSequenceNumber
@@ -150,7 +154,8 @@ impl AuthorityState {
                     }
                 };
             }
-        }
+            InputObjectKind::SharedMoveObject(..) => (),
+        };
         Ok(())
     }
 
@@ -163,20 +168,7 @@ impl AuthorityState {
         let input_objects = transaction.input_objects();
         let mut all_objects = Vec::with_capacity(input_objects.len());
 
-        // There is at least one input
-        fp_ensure!(
-            !input_objects.is_empty(),
-            SuiError::ObjectInputArityViolation
-        );
-        // Ensure that there are no duplicate inputs
-        let mut used = HashSet::new();
-        if !input_objects.iter().all(|o| used.insert(o.object_id())) {
-            return Err(SuiError::DuplicateObjectRefInput);
-        }
-
-        let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
-
-        let objects = self.get_objects(&ids[..]).await?;
+        let objects = self.fetch_objects(&input_objects).await?;
         let mutable_object_addresses: HashSet<_> = objects
             .iter()
             .flat_map(|opt_obj| match opt_obj {
@@ -214,6 +206,26 @@ impl AuthorityState {
         Ok(all_objects)
     }
 
+    async fn fetch_objects(
+        &self,
+        input_objects: &[InputObjectKind],
+    ) -> Result<Vec<Option<Object>>, SuiError> {
+        // There is at least one input
+        fp_ensure!(
+            !input_objects.is_empty(),
+            SuiError::ObjectInputArityViolation
+        );
+        // Ensure that there are no duplicate inputs
+        let mut used = HashSet::new();
+        if !input_objects.iter().all(|o| used.insert(o.object_id())) {
+            return Err(SuiError::DuplicateObjectRefInput);
+        }
+
+        let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
+
+        self.get_objects(&ids[..]).await
+    }
+
     /// Initiate a new transaction.
     pub async fn handle_transaction(
         &self,
@@ -229,13 +241,14 @@ impl AuthorityState {
             .into_iter()
             .filter_map(|(object_kind, object)| match object_kind {
                 InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::MoveObject(object_ref) => {
+                InputObjectKind::OwnedMoveObject(object_ref) => {
                     if object.is_read_only() {
                         None
                     } else {
                         Some(object_ref)
                     }
                 }
+                InputObjectKind::SharedMoveObject(..) => None,
             })
             .collect();
 
@@ -256,13 +269,73 @@ impl AuthorityState {
     pub async fn handle_confirmation_transaction(
         &self,
         confirmation_transaction: ConfirmationTransaction,
+    ) -> SuiResult<TransactionInfoResponse> {
+        // Check the certificate and retrieve the transfer data.
+        let certificate = &confirmation_transaction.certificate;
+        certificate.check(&self.committee)?;
+
+        // If the transaction contains shared objects, we need to ensure they have been scheduled
+        // for processing by the consensus protocol.
+        let transaction = &certificate.transaction;
+        let transaction_digest = transaction.digest();
+        if transaction.contains_shared_object() {
+            let mut lock_errors = Vec::new();
+            for object_id in transaction.shared_input_objects() {
+                // Check whether the shared objects have already been assigned a sequence number by
+                // the consensus. Bail if the transaction contains even one shared object that either:
+                // (i) was not assigned a sequence number, or (ii) has a different sequence number
+                // than the current one. Note that if the shared object is not in storage (it has been
+                // destroyed), we keep processing the transaction to unlock all single-writer objects
+                // (the execution engine will simply execute no-op).
+                match self._database.sequenced(transaction_digest, *object_id)? {
+                    Some(lock) => {
+                        if let Some(object) = self._database.get_object(object_id)? {
+                            if object.version() != lock {
+                                lock_errors.push(SuiError::InvalidSequenceNumber);
+                            }
+                        }
+                    }
+                    None => lock_errors.push(SuiError::InvalidSequenceNumber),
+                }
+            }
+            fp_ensure!(
+                lock_errors.is_empty(),
+                SuiError::LockErrors {
+                    errors: lock_errors
+                }
+            );
+
+            // Now let's process the certificate as usual: this executes the transaction and
+            // unlock all single-writer objects.
+            let result = self
+                .process_certificate(confirmation_transaction.clone())
+                .await;
+
+            // If the execution is successfully, we cleanup some data structures.
+            if result.is_ok() {
+                for object_id in transaction.shared_input_objects() {
+                    self._database
+                        .delete_sequence_lock(transaction_digest, *object_id)?;
+                    if self._database.get_object(object_id)?.is_none() {
+                        self._database.delete_schedule(object_id)?;
+                    }
+                }
+            }
+            result
+        }
+        // In case there are no shared objects, we simply process the certificate.
+        else {
+            self.process_certificate(confirmation_transaction).await
+        }
+    }
+
+    async fn process_certificate(
+        &self,
+        confirmation_transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let certificate = confirmation_transaction.certificate;
         let transaction = certificate.transaction.clone();
         let transaction_digest = transaction.digest();
-
-        // Check the certificate and retrieve the transfer data.
-        certificate.check(&self.committee)?;
 
         // Ensure an idempotent answer
         let transaction_info = self.make_transaction_info(&transaction_digest).await?;
@@ -270,12 +343,17 @@ impl AuthorityState {
             return Ok(transaction_info);
         }
 
-        let inputs: Vec<_> = self
+        let mut inputs: Vec<_> = self
             .check_locks(&transaction)
             .await?
             .into_iter()
             .map(|(_, object)| object)
             .collect();
+        for object_id in transaction.shared_input_objects() {
+            if let Some(object) = self._database.get_object(object_id)? {
+                inputs.push(object);
+            }
+        }
 
         let mut transaction_dependencies: BTreeSet<_> = inputs
             .iter()
@@ -360,6 +438,34 @@ impl AuthorityState {
         }
         temporary_store.ensure_active_inputs_mutated();
         Ok((temporary_store, status))
+    }
+
+    /// Handle sequenced certificates from the consensus protocol.
+    pub fn handle_commit(
+        &mut self,
+        confirmation_transaction: ConfirmationTransaction,
+    ) -> SuiResult<()> {
+        // Ensure it is the first time we see this certificate.
+        let transaction = &confirmation_transaction.certificate.transaction;
+        let transaction_digest = transaction.digest();
+        for id in transaction.shared_input_objects() {
+            if self._database.sequenced(transaction_digest, *id)?.is_some() {
+                return Ok(());
+            }
+        }
+
+        // Check the certificate.
+        let certificate = &confirmation_transaction.certificate;
+        certificate.check(&self.committee)?;
+
+        // Persist the certificate. We are about to lock one or more shared object.
+        // We thus need to make sure someone (if not the client) can continue the protocol.
+        self._database
+            .persist_certificate(&transaction_digest, certificate)?;
+
+        // Lock the shared object for this particular transaction.
+        self._database
+            .lock_shared_objects(transaction_digest, transaction)
     }
 
     fn transfer(
@@ -497,7 +603,8 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
-        genesis_modules: Vec<Object>,
+        genesis_packages: Vec<Vec<CompiledModule>>,
+        genesis_ctx: &mut TxContext,
     ) -> Self {
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
@@ -511,14 +618,11 @@ impl AuthorityState {
             _database: store,
         };
 
-        for genesis_module in genesis_modules {
-            #[cfg(debug_assertions)]
-            genesis_module.data.try_as_package().unwrap();
-
+        for genesis_modules in genesis_packages {
             state
-                .init_transaction_lock(genesis_module.to_object_reference())
-                .await;
-            state.insert_object(genesis_module).await;
+                .store_package_and_init_modules_for_genesis(genesis_ctx, genesis_modules)
+                .await
+                .expect("We expect publishing the Genesis packages to not fail");
         }
         state
     }
@@ -531,6 +635,38 @@ impl AuthorityState {
         self._database
             .insert_object(object)
             .expect("TODO: propagate the error")
+    }
+
+    /// Persist the Genesis package to DB along with the side effects for module initialization
+    async fn store_package_and_init_modules_for_genesis(
+        &self,
+        ctx: &mut TxContext,
+        modules: Vec<CompiledModule>,
+    ) -> SuiResult {
+        debug_assert!(ctx.digest() == TransactionDigest::genesis());
+        let inputs = Transaction::input_objects_in_compiled_modules(&modules);
+        let input_objects = self
+            .fetch_objects(&inputs)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        let mut temporary_store = AuthorityTemporaryStore::new(self, &input_objects, ctx.digest());
+        let package_id = ObjectID::from(*modules[0].self_id().address());
+        let natives = self._native_functions.clone();
+        let vm = adapter::verify_and_link(&temporary_store, &modules, package_id, natives)?;
+        if let ExecutionStatus::Failure { error, .. } = adapter::store_package_and_init_modules(
+            &mut temporary_store,
+            &vm,
+            modules,
+            ctx,
+            MAX_GAS_BUDGET,
+        ) {
+            return Err(*error);
+        };
+        self._database
+            .update_objects_state_for_genesis(temporary_store, ctx.digest())
     }
 
     /// Make an information response for a transaction

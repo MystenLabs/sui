@@ -96,7 +96,7 @@ module Examples::CustomObjectTemplate {
         write_field(to_write, v + int_input);
         transfer(to_consume, recipient);
         // demonstrate creating a new object for the sender
-        let sender = TxContext::get_signer_address(ctx);
+        let sender = TxContext::sender(ctx);
         Transfer::transfer(create(ctx), sender)
     }
 

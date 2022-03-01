@@ -285,7 +285,7 @@ async fn test_transfer_immutable() {
         .await
         .unwrap()
         .unwrap();
-    let genesis_package_objects = genesis::clone_genesis_modules();
+    let genesis_package_objects = genesis::clone_genesis_packages();
     let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, "ID");
     // We are trying to transfer the genesis package object, which is immutable.
     let transfer_transaction = init_transfer_transaction(
@@ -401,7 +401,7 @@ async fn test_publish_dependent_module_ok() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module_objects = genesis::clone_genesis_modules();
+    let genesis_module_objects = genesis::clone_genesis_packages();
     let genesis_module = match &genesis_module_objects[0].data {
         Data::Package(m) => {
             CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
@@ -494,7 +494,7 @@ async fn test_publish_non_existing_dependent_module() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // create a genesis state that contains the gas object and genesis modules
-    let genesis_module_objects = genesis::clone_genesis_modules();
+    let genesis_module_objects = genesis::clone_genesis_packages();
     let genesis_module = match &genesis_module_objects[0].data {
         Data::Package(m) => {
             CompiledModule::deserialize(m.serialized_module_map().values().next().unwrap()).unwrap()
@@ -637,7 +637,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.to_object_reference();
     // find the function Object::create and call it to create a new object
-    let genesis_package_objects = genesis::clone_genesis_modules();
+    let genesis_package_objects = genesis::clone_genesis_packages();
     let package_object_ref =
         get_genesis_package_by_module(&genesis_package_objects, "ObjectBasics");
 
@@ -652,6 +652,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
         Vec::new(),
         gas_payment_object_ref,
         Vec::new(),
+        vec![],
         vec![
             16u64.to_le_bytes().to_vec(),
             bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
@@ -1104,6 +1105,7 @@ async fn test_move_call_mutable_object_not_mutated() {
         vec![],
         vec![new_object_id1, new_object_id2],
         vec![],
+        vec![],
     )
     .await
     .unwrap();
@@ -1160,6 +1162,7 @@ async fn test_move_call_delete() {
         vec![],
         vec![new_object_id1, new_object_id2],
         vec![],
+        vec![],
     )
     .await
     .unwrap();
@@ -1177,6 +1180,7 @@ async fn test_move_call_delete() {
         "delete",
         vec![],
         vec![new_object_id1],
+        vec![],
         vec![],
     )
     .await
@@ -1211,6 +1215,7 @@ async fn test_get_latest_parent_entry() {
         vec![],
         vec![new_object_id1, new_object_id2],
         vec![],
+        vec![],
     )
     .await
     .unwrap();
@@ -1234,6 +1239,7 @@ async fn test_get_latest_parent_entry() {
         "delete",
         vec![],
         vec![new_object_id1],
+        vec![],
         vec![],
     )
     .await
@@ -1333,6 +1339,7 @@ async fn test_authority_persist() {
         Box::pin(authority_key.copy()),
         store,
         vec![],
+        &mut genesis::get_genesis_context(),
     )
     .await;
 
@@ -1360,6 +1367,7 @@ async fn test_authority_persist() {
         Box::pin(authority_key),
         store,
         vec![],
+        &mut genesis::get_genesis_context(),
     )
     .await;
     let obj2 = authority2.get_object(&object_id).await.unwrap().unwrap();
@@ -1402,6 +1410,7 @@ async fn test_object_owning_another_object() {
         vec![],
         vec![obj1, obj2],
         vec![],
+        vec![],
     )
     .await
     .unwrap();
@@ -1424,6 +1433,7 @@ async fn test_object_owning_another_object() {
         vec![],
         vec![obj1, obj3],
         vec![],
+        vec![],
     )
     .await;
     assert!(effects.unwrap_err().to_string().contains("IncorrectSigner"));
@@ -1438,6 +1448,7 @@ async fn test_object_owning_another_object() {
         "transfer_to_object",
         vec![],
         vec![obj2, obj1],
+        vec![],
         vec![],
     )
     .await
@@ -1459,6 +1470,7 @@ async fn test_object_owning_another_object() {
         "transfer",
         vec![],
         vec![obj2],
+        vec![],
         vec![bcs::to_bytes(&AccountAddress::from(sender2)).unwrap()],
     )
     .await
@@ -1482,6 +1494,7 @@ async fn test_object_owning_another_object() {
         vec![],
         vec![obj1, obj2],
         vec![],
+        vec![],
     )
     .await;
     assert!(effects.unwrap_err().to_string().contains("IncorrectSigner"));
@@ -1497,6 +1510,7 @@ async fn test_object_owning_another_object() {
         "transfer_to_object",
         vec![],
         vec![obj1, obj2],
+        vec![],
         vec![],
     )
     .await
@@ -1541,7 +1555,8 @@ async fn init_state() -> AuthorityState {
         *authority_key.public_key_bytes(),
         Box::pin(authority_key),
         store,
-        genesis::clone_genesis_modules(),
+        genesis::clone_genesis_compiled_modules(),
+        &mut genesis::get_genesis_context(),
     )
     .await
 }
@@ -1638,6 +1653,7 @@ async fn call_move(
     function: Identifier,
     type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
+    shared_object_args_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
 ) -> SuiResult<TransactionEffects> {
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
@@ -1661,6 +1677,7 @@ async fn call_move(
         type_args,
         gas_object_ref,
         object_args,
+        shared_object_args_ids,
         pure_args,
         MAX_GAS,
         sender_key,
@@ -1678,9 +1695,10 @@ async fn call_framework_code(
     function: &'static str,
     type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
+    shared_object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
 ) -> SuiResult<TransactionEffects> {
-    let genesis_package_objects = genesis::clone_genesis_modules();
+    let genesis_package_objects = genesis::clone_genesis_packages();
     let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
 
     call_move(
@@ -1693,6 +1711,7 @@ async fn call_framework_code(
         ident_str!(function).to_owned(),
         type_args,
         object_arg_ids,
+        shared_object_arg_ids,
         pure_args,
     )
     .await
@@ -1711,6 +1730,7 @@ async fn create_move_object(
         sender_key,
         "ObjectBasics",
         "create",
+        vec![],
         vec![],
         vec![],
         vec![
