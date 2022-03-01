@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use dropshot::{endpoint, PaginationParams, Query, ResultsPage, TypedBody};
+use dropshot::{endpoint, Query, TypedBody};
 use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
@@ -20,8 +20,9 @@ use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::net::{Ipv6Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
+use sui_types::object::ObjectRead;
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
 
@@ -30,7 +31,7 @@ use std::sync::{Arc, Mutex};
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let config_dropshot: ConfigDropshot = ConfigDropshot {
-        bind_address: SocketAddr::from((Ipv6Addr::LOCALHOST, 5000)),
+        bind_address: SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 5000)),
         ..Default::default()
     };
 
@@ -185,8 +186,9 @@ async fn genesis(
                 format!("Wallet config was unable to be created: {error}"),
             )
         })?;
-    // Need to use a random id because rocksdb locks on current process which means even if the directory is deleted
-    // the lock will remain causing an IO Error when a restart is attempted.
+    // Need to use a random id because rocksdb locks on current process which
+    // means even if the directory is deleted the lock will remain causing an
+    // IO Error when a restart is attempted.
     let client_db_path = format!("client_db_{:?}", ObjectID::random());
     wallet_config.db_folder_path = working_dir.join(&client_db_path);
     *server_context.client_db_path.lock().unwrap() = client_db_path;
@@ -403,8 +405,7 @@ async fn get_addresses(
     // TODO: Find a better way to utilize wallet context here that does not require 'take()'
     let wallet_context = server_context.wallet_context.lock().unwrap().take();
     let mut wallet_context = wallet_context.ok_or_else(|| {
-        HttpError::for_client_error(
-            None,
+        custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
             "Wallet Context does not exist.".to_string(),
         )
@@ -451,39 +452,36 @@ async fn get_addresses(
 }
 
 /**
-Scan parameters used to retrieve objects owned by an address.
-Describes the set of querystring parameters that your endpoint
-accepts for the first request of the scan.
+Request containing the address of which objecst are to be retrieved.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct GetObjectsScanParams {
+struct GetObjectsRequest {
     /** Required; Hex code as string representing the address */
     address: String,
 }
 
 /**
-Page selector used to retrieve the next set of objects owned by an address.
-Describes the information your endpoint needs for requests after the first one.
-Typically this would include an id of some sort for the last item on the
-previous page. The entire PageSelector will be serialized to an opaque string
-and included in the ResultsPage. The client is expected to provide this string
-as the "page_token" querystring parameter in the subsequent request.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct GetObjectsPageSelector {
-    /** Required; Hex code as string representing the address */
-    address: String,
-}
-
+JSON representation of an object in the Sui network.
+ */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct Object {
     /** Hex code as string representing the object id */
     object_id: String,
-    /** Contains the object id, sequence number and object digest */
-    object_ref: serde_json::Value,
+    /** Object version */
+    version: String,
+    /** Hash of the object's contents used for local validation */
+    object_digest: String,
+}
+
+/**
+Returns the list of objects owned by an address.
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct GetObjectsResponse {
+    objects: Vec<Object>,
 }
 
 /**
@@ -497,50 +495,62 @@ Returns list of objects owned by an address.
 }]
 async fn get_objects(
     rqctx: Arc<RequestContext<ServerContext>>,
-    query: Query<PaginationParams<GetObjectsScanParams, GetObjectsPageSelector>>,
-) -> Result<HttpResponseOk<ResultsPage<Object>>, HttpError> {
-    let pag_params = query.into_inner();
-    let limit = rqctx.page_limit(&pag_params)?.get();
-    let tmp;
-    let (objects, scan_params) = match &pag_params.page {
-        dropshot::WhichPage::First(scan_params) => {
-            let object = Object {
-                object_id: String::new(),
-                object_ref: json!(""),
-            };
-            (vec![object], scan_params)
-        }
-        dropshot::WhichPage::Next(page_selector) => {
-            let object = Object {
-                object_id: String::new(),
-                object_ref: json!(""),
-            };
-            tmp = GetObjectsScanParams {
-                address: page_selector.address.clone(),
-            };
-            (vec![object], &tmp)
+    query: Query<GetObjectsRequest>,
+) -> Result<HttpResponseOk<GetObjectsResponse>, HttpError> {
+    let server_context = rqctx.context();
+
+    let get_objects_params = query.into_inner();
+    let address = get_objects_params.address;
+
+    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
+    let wallet_context = wallet_context.as_mut().ok_or_else(|| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist.".to_string(),
+        )
+    })?;
+
+    let address = &decode_bytes_hex(address.as_str()).map_err(|error| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            format!("Could not decode address from hex {error}"),
+        )
+    })?;
+
+    let client_state = match wallet_context.get_or_create_client_state(address) {
+        Ok(client_state) => client_state,
+        Err(error) => {
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Could not get or create client state: {error}"),
+            ));
         }
     };
+    let object_refs = client_state.object_refs();
 
-    Ok(HttpResponseOk(ResultsPage::new(
-        objects,
-        scan_params,
-        |last, scan_params| GetObjectsPageSelector {
-            address: scan_params.address.clone(),
-        },
-    )?))
+    Ok(HttpResponseOk(GetObjectsResponse {
+        objects: object_refs
+            .map(|(_, (object_id, sequence_number, object_digest))| Object {
+                object_id: object_id.to_string(),
+                version: format!("{:?}", sequence_number),
+                object_digest: format!("{:?}", object_digest),
+            })
+            .collect::<Vec<Object>>(),
+    }))
 }
 
 /**
 Request containing the object for which info is to be retrieved.
-If owner is specified we look for this obejct in that address's account store,
+
+If owner is specified we look for this object in that address's account store,
 otherwise we look for it in the shared object store.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GetObjectInfoRequest {
-    /** Optional; Hex code as string representing the owner's address */
-    owner: Option<String>,
+    // TODO: Refactor client state code so that owner can be an optional field.
+    /** Required; Hex code as string representing the owner's address */
+    owner: String,
     /** Required; Hex code as string representing the object id */
     object_id: String,
 }
@@ -579,16 +589,101 @@ async fn object_info(
     rqctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectInfoRequest>,
 ) -> Result<HttpResponseOk<ObjectInfoResponse>, HttpError> {
-    let object_info_response = ObjectInfoResponse {
-        owner: String::new(),
-        version: String::new(),
-        id: String::new(),
-        readonly: String::new(),
-        obj_type: String::new(),
-        data: json!(""),
+    let server_context = rqctx.context();
+    let object_info_params = query.into_inner();
+
+    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
+    let wallet_context = server_context.wallet_context.lock().unwrap().take();
+    let mut wallet_context = wallet_context.ok_or_else(|| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist.".to_string(),
+        )
+    })?;
+
+    let object_id = match ObjectID::try_from(object_info_params.object_id) {
+        Ok(object_id) => object_id,
+        Err(error) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("{error}"),
+            ));
+        }
     };
 
-    Ok(HttpResponseOk(object_info_response))
+    let owner = match decode_bytes_hex(object_info_params.owner.as_str()) {
+        Ok(owner) => owner,
+        Err(error) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Could not decode address from hex {error}"),
+            ));
+        }
+    };
+
+    // Fetch the object ref
+    let client_state = match wallet_context.get_or_create_client_state(&owner) {
+        Ok(client_state) => client_state,
+        Err(error) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!(
+                    "Could not get client state for account {:?}: {error}",
+                    owner
+                ),
+            ));
+        }
+    };
+
+    let (object, layout) = match client_state.get_object_info(object_id).await {
+        Ok(ObjectRead::Exists(_, object, layout)) => (object, layout),
+        Ok(ObjectRead::Deleted(_)) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({object_id}) was deleted."),
+            ));
+        }
+        Ok(ObjectRead::NotExists(_)) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({object_id}) does not exist."),
+            ));
+        }
+        Err(error) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Error while getting object info: {:?}", error),
+            ));
+        }
+    };
+
+    let object_data = object.to_json(&layout).unwrap_or_else(|_| json!(""));
+
+    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+
+    Ok(HttpResponseOk(ObjectInfoResponse {
+        owner: format!("{:?}", object.owner),
+        version: format!("{:?}", object.version().value()),
+        id: format!("{:?}", object.id()),
+        readonly: format!("{:?}", object.is_read_only()),
+        obj_type: format!(
+            "{:?}",
+            object
+                .data
+                .type_()
+                .map_or("Type Unwrap Failed".to_owned(), |type_| type_
+                    .module
+                    .as_ident_str()
+                    .to_string())
+        ),
+        data: object_data,
+    }))
 }
 
 /**
@@ -624,8 +719,10 @@ struct TransactionResponse {
 Transfer object from one address to another. Gas will be paid using the gas
 provided in the request. This will be done through a native transfer
 transaction that does not require Move VM executions, hence is much cheaper.
+
 Notes:
 - Non-coin objects cannot be transferred natively and will require a Move call
+
 Example TransferTransactionRequest
 {
     "from_address": "1DA89C9279E5199DDC9BC183EB523CF478AB7168",
@@ -722,6 +819,7 @@ struct CallRequest {
 Execute a Move call transaction by calling the specified function in the
 module of the given package. Arguments are passed in and type will be
 inferred from function signature. Gas usage is capped by the gas_budget.
+
 Example CallRequest
 {
     "sender": "b378b8d26c4daa95c5f6a2e2295e6e5f34371c1659e95f572788ffa55c265363",
