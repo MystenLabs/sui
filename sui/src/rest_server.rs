@@ -452,7 +452,7 @@ async fn get_addresses(
 }
 
 /**
-* 'GetObjectsRequest' represents the request to get objects for an address.
+Request containing the address of which objecst are to be retrieved.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -461,6 +461,9 @@ struct GetObjectsRequest {
     address: String,
 }
 
+/**
+JSON representation of an object in the Sui network.
+ */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct Object {
@@ -473,7 +476,7 @@ struct Object {
 }
 
 /**
- * 'GetObjectsResponse' is a collection of objects owned by an address.
+Returns the list of objects owned by an address.
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -539,7 +542,7 @@ async fn get_objects(
 /**
 Request containing the object for which info is to be retrieved.
 
-If owner is specified we look for this obejct in that address's account store,
+If owner is specified we look for this object in that address's account store,
 otherwise we look for it in the shared object store.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
@@ -716,8 +719,10 @@ struct TransactionResponse {
 Transfer object from one address to another. Gas will be paid using the gas
 provided in the request. This will be done through a native transfer
 transaction that does not require Move VM executions, hence is much cheaper.
+
 Notes:
 - Non-coin objects cannot be transferred natively and will require a Move call
+
 Example TransferTransactionRequest
 {
     "from_address": "1DA89C9279E5199DDC9BC183EB523CF478AB7168",
@@ -814,6 +819,7 @@ struct CallRequest {
 Execute a Move call transaction by calling the specified function in the
 module of the given package. Arguments are passed in and type will be
 inferred from function signature. Gas usage is capped by the gas_budget.
+
 Example CallRequest
 {
     "sender": "b378b8d26c4daa95c5f6a2e2295e6e5f34371c1659e95f572788ffa55c265363",
