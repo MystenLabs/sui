@@ -4,7 +4,6 @@
 
 use super::*;
 use bcs;
-
 use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
@@ -12,7 +11,8 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
-
+use std::fs;
+use std::{convert::TryInto, env};
 use sui_adapter::genesis;
 use sui_types::{
     base_types::dbg_addr,
@@ -20,12 +20,8 @@ use sui_types::{
     crypto::{get_key_pair, Signature},
     gas::{calculate_module_publish_cost, get_gas_balance},
     messages::ExecutionStatus,
-    object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
+    object::{Data, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
 };
-
-use std::fs;
-
-use std::{convert::TryInto, env};
 
 pub fn system_maxfiles() -> usize {
     fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
@@ -91,7 +87,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
     bad_signature_transfer_transaction.signature =
         Signature::new(&transfer_transaction.data, &unknown_key);
     assert!(authority_state
-        .handle_transaction(bad_signature_transfer_transaction)
+        .handle_client_transaction(bad_signature_transfer_transaction)
         .await
         .is_err());
 
@@ -142,7 +138,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
     );
 
     assert!(authority_state
-        .handle_transaction(unknown_sender_transfer_transaction)
+        .handle_client_transaction(unknown_sender_transfer_transaction)
         .await
         .is_err());
 
@@ -236,7 +232,7 @@ async fn test_handle_transfer_transaction_ok() {
         .is_err());
 
     let account_info = authority_state
-        .handle_transaction(transfer_transaction.clone())
+        .handle_client_transaction(transfer_transaction.clone())
         .await
         .unwrap();
 
@@ -296,7 +292,7 @@ async fn test_transfer_immutable() {
         gas_object.to_object_reference(),
     );
     let result = authority_state
-        .handle_transaction(transfer_transaction.clone())
+        .handle_client_transaction(transfer_transaction.clone())
         .await;
     assert_eq!(
         result.unwrap_err(),
@@ -337,7 +333,7 @@ async fn test_handle_transfer_zero_balance() {
     );
 
     let result = authority_state
-        .handle_transaction(transfer_transaction.clone())
+        .handle_client_transaction(transfer_transaction.clone())
         .await;
     assert!(result
         .unwrap_err()
@@ -350,7 +346,9 @@ async fn send_and_confirm_transaction(
     transaction: Transaction,
 ) -> Result<TransactionInfoResponse, SuiError> {
     // Make the initial request
-    let response = authority.handle_transaction(transaction.clone()).await?;
+    let response = authority
+        .handle_client_transaction(transaction.clone())
+        .await?;
     let vote = response.signed_transaction.unwrap();
 
     // Collect signatures from a quorum of authorities
@@ -361,9 +359,7 @@ async fn send_and_confirm_transaction(
         .unwrap();
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    authority
-        .handle_confirmation_transaction(ConfirmationTransaction::new(certificate))
-        .await
+    authority.handle_client_certificate(certificate).await
 }
 
 /// Create a `CompiledModule` that depends on `m`
@@ -526,7 +522,7 @@ async fn test_publish_non_existing_dependent_module() {
         &sender_key,
     );
 
-    let response = authority.handle_transaction(transaction).await;
+    let response = authority.handle_client_transaction(transaction).await;
     assert!(response
         .unwrap_err()
         .to_string()
@@ -572,7 +568,7 @@ async fn test_publish_module_insufficient_gas() {
         &sender_key,
     );
     let response = authority
-        .handle_transaction(transaction.clone())
+        .handle_client_transaction(transaction.clone())
         .await
         .unwrap_err();
     assert!(response
@@ -661,7 +657,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
         &sender_key,
     );
     let response = authority_state
-        .handle_transaction(transaction.clone())
+        .handle_client_transaction(transaction.clone())
         .await
         .unwrap_err();
     assert!(response
@@ -696,12 +692,12 @@ async fn test_handle_transfer_transaction_double_spend() {
     );
 
     let signed_transaction = authority_state
-        .handle_transaction(transfer_transaction.clone())
+        .handle_client_transaction(transfer_transaction.clone())
         .await
         .unwrap();
     // calls to handlers are idempotent -- returns the same.
     let double_spend_signed_transaction = authority_state
-        .handle_transaction(transfer_transaction)
+        .handle_client_transaction(transfer_transaction)
         .await
         .unwrap();
     // this is valid because our test authority should not change its certified transaction
@@ -733,9 +729,7 @@ async fn test_handle_confirmation_transaction_unknown_sender() {
     );
 
     assert!(authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction
-        ))
+        .handle_client_certificate(certified_transfer_transaction)
         .await
         .is_err());
 }
@@ -802,9 +796,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
     // Explanation: providing an old cert that has already need applied
     //              returns a Ok(_) with info about the new object states.
     let response = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction,
-        ))
+        .handle_client_certificate(certified_transfer_transaction)
         .await
         .unwrap();
     assert!(response.signed_effects.is_none());
@@ -848,9 +840,7 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         &authority_state,
     );
     let response = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction,
-        ))
+        .handle_client_certificate(certified_transfer_transaction)
         .await
         .unwrap();
     response.signed_effects.unwrap().effects.status.unwrap();
@@ -904,9 +894,7 @@ async fn test_handle_confirmation_transaction_gas() {
         );
 
         authority_state
-            .handle_confirmation_transaction(ConfirmationTransaction::new(
-                certified_transfer_transaction.clone(),
-            ))
+            .handle_client_certificate(certified_transfer_transaction.clone())
             .await
             .unwrap()
             .signed_effects
@@ -959,9 +947,7 @@ async fn test_handle_confirmation_transaction_ok() {
     next_sequence_number = next_sequence_number.increment();
 
     let info = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction.clone(),
-        ))
+        .handle_client_certificate(certified_transfer_transaction.clone())
         .await
         .unwrap();
     info.signed_effects.unwrap().effects.status.unwrap();
@@ -1040,9 +1026,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
     );
 
     let info = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction.clone(),
-        ))
+        .handle_client_certificate(certified_transfer_transaction.clone())
         .await
         .unwrap();
     assert!(matches!(
@@ -1051,9 +1035,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
     ));
 
     let info2 = authority_state
-        .handle_confirmation_transaction(ConfirmationTransaction::new(
-            certified_transfer_transaction.clone(),
-        ))
+        .handle_client_certificate(certified_transfer_transaction.clone())
         .await
         .unwrap();
     assert!(matches!(

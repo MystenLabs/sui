@@ -551,18 +551,21 @@ SuiError:
               SEQ:
                 TYPENAME: SuiError
     71:
-      ObjectSerializationError: UNIT
+      SerializationError:
+        NEWTYPE: STR
     72:
-      ConcurrentTransactionError: UNIT
+      ObjectSerializationError: UNIT
     73:
-      IncorrectRecipientError: UNIT
+      ConcurrentTransactionError: UNIT
     74:
-      TooManyIncorrectAuthorities: UNIT
+      IncorrectRecipientError: UNIT
     75:
-      IncorrectGasSplit: UNIT
+      TooManyIncorrectAuthorities: UNIT
     76:
-      IncorrectGasMerge: UNIT
+      IncorrectGasSplit: UNIT
     77:
+      IncorrectGasMerge: UNIT
+    78:
       AccountNotFound: UNIT
 Transaction:
   STRUCT:

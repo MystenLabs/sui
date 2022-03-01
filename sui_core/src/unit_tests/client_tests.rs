@@ -4,7 +4,7 @@
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
 use super::*;
-use crate::authority::{AuthorityState, AuthorityStore};
+use crate::authority::{authority_core::AuthorityState, authority_store::AuthorityStore};
 use crate::client::client_store::ClientSingleAddressStore;
 use crate::client::{Client, ClientState};
 use async_trait::async_trait;
@@ -51,7 +51,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.0.clone();
-        let result = state.lock().await.handle_transaction(transaction).await;
+        let result = state.lock().await.handle_client_transaction(transaction).await;
         result
     }
 
@@ -63,7 +63,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         let result = state
             .lock()
             .await
-            .handle_confirmation_transaction(transaction)
+            .handle_client_certificate(transaction.certificate)
             .await;
         result
     }

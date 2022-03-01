@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod authority_core;
+pub mod authority_core; // TODO: Does only need to be public for tests.
 mod authority_server;
-mod authority_store;
+pub mod authority_store; // TODO: Does only need to be public for tests.
 mod temporary_store;
 
 use async_trait::async_trait;
