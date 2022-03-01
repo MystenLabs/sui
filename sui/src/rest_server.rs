@@ -7,26 +7,21 @@ use dropshot::{
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
 };
 use hyper::StatusCode;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::fs;
+use std::net::{Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use sui::config::{Config, GenesisConfig, NetworkConfig, WalletConfig};
 use sui::sui_commands;
 use sui::wallet_commands::WalletContext;
 use sui_core::client::Client;
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
-
-use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use std::fs;
-use std::net::{Ipv4Addr, SocketAddr};
-use std::path::PathBuf;
 use sui_types::object::ObjectRead;
-use tokio::task::{self, JoinHandle};
-use tracing::{error, info};
-
-use std::sync::{Arc, Mutex};
+use tokio::task::JoinHandle;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -256,49 +251,18 @@ async fn sui_start(
             .map(|info| (*info.key_pair.public_key_bytes(), info.stake))
             .collect(),
     );
-    let mut handles = FuturesUnordered::new();
 
-    for authority in &network_config.authorities {
-        let server = sui_commands::make_server(
-            authority,
-            &committee,
-            vec![],
-            &[],
-            network_config.buffer_size,
-        )
-        .await
-        .map_err(|error| {
-            custom_http_error(
-                StatusCode::CONFLICT,
-                format!("Unable to make server: {error}"),
-            )
-        })?;
-        handles.push(async move {
-            match server.spawn().await {
-                Ok(server) => Ok(server),
-                Err(err) => {
-                    return Err(custom_http_error(
-                        StatusCode::FAILED_DEPENDENCY,
-                        format!("Failed to start server: {}", err),
-                    ));
-                }
-            }
-        })
-    }
-
-    let num_authorities = handles.len();
-    info!("Started {} authorities", num_authorities);
-
-    while let Some(spawned_server) = handles.next().await {
+    let num_authorities = network_config.authorities.len();
+    for authority in network_config.authorities {
+        let committee = committee.clone();
+        let handle = tokio::spawn(async move {
+            sui_commands::make_server(&authority, committee, vec![], &[]).await
+        });
         server_context
             .authority_handles
             .lock()
             .unwrap()
-            .push(task::spawn(async {
-                if let Err(err) = spawned_server.unwrap().join().await {
-                    error!("Server ended with an error: {}", err);
-                }
-            }));
+            .push(handle);
     }
 
     let wallet_config_path = &server_context.wallet_config_path;

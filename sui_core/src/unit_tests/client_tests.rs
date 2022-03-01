@@ -51,7 +51,11 @@ impl AuthorityAPI for LocalAuthorityClient {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.0.clone();
-        let result = state.lock().await.handle_client_transaction(transaction).await;
+        let result = state
+            .lock()
+            .await
+            .handle_client_transaction(transaction)
+            .await;
         result
     }
 

@@ -60,10 +60,6 @@ once_cell = "1.9.0"
 tracing-test = "0.2.1"
 
 [[bin]]
-name = "bench"
-path = "src/bench.rs"
-
-[[bin]]
 name = "wallet"
 path = "src/wallet.rs"
 

@@ -10,19 +10,16 @@ use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use structopt::StructOpt;
-use sui_adapter::genesis;
-use sui_core::authority::{AuthorityState, AuthorityStore};
-use sui_core::authority_server::AuthorityServer;
-use sui_types::base_types::{SequenceNumber, TxContext};
-
 use sui_adapter::adapter::generate_package_id;
+use sui_adapter::genesis;
+use sui_core::authority::spawn_authority;
+use sui_types::base_types::{SequenceNumber, TxContext};
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
-use sui_types::error::SuiResult;
 use sui_types::object::Object;
-use tracing::{error, info};
+use tokio::sync::mpsc::channel;
+use tracing::info;
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
@@ -58,7 +55,7 @@ impl SuiCommand {
     }
 }
 
-async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
+async fn start_network(config: &mut NetworkConfig) -> Result<(), anyhow::Error> {
     if config.authorities.is_empty() {
         return Err(anyhow!(
             "No authority configured for the network, please run genesis."
@@ -78,20 +75,12 @@ async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
             .collect(),
     );
 
-    for authority in &config.authorities {
-        let server = make_server(authority, &committee, vec![], &[], config.buffer_size).await?;
-        handles.push(async move {
-            let spawned_server = match server.spawn().await {
-                Ok(server) => server,
-                Err(err) => {
-                    error!("Failed to start server: {}", err);
-                    return;
-                }
-            };
-            if let Err(err) = spawned_server.join().await {
-                error!("Server ended with an error: {}", err);
-            }
+    while let Some(authority) = config.authorities.pop() {
+        let committee = committee.clone();
+        let handle = tokio::spawn(async move {
+            make_server(&authority, committee, vec![], &[]).await;
         });
+        handles.push(handle);
     }
     info!("Started {} authorities", handles.len());
     join_all(handles).await;
@@ -196,27 +185,36 @@ pub async fn genesis(
         }
     }
 
-    let committee = Committee::new(voting_right);
-    for authority in &config.authorities {
-        make_server_with_genesis_ctx(
-            authority,
-            &committee,
-            preload_modules.clone(),
-            &preload_objects,
-            config.buffer_size,
-            &mut genesis_ctx.clone(),
-        )
-        .await?;
-    }
-    wallet_config.authorities = authority_info;
-    wallet_config.accounts = new_addresses;
-
-    info!("Network genesis completed.");
     config.save()?;
     info!(
         "Network config file is stored in {:?}.",
         config.config_path()
     );
+
+    // Spawning the authorities is only required to create the database folder.
+    let committee = Committee::new(voting_right);
+    while let Some(authority) = config.authorities.pop() {
+        let committee = committee.clone();
+        let preload_modules = preload_modules.clone();
+        let preload_objects = preload_objects.clone();
+        let mut genesis_ctx = genesis_ctx.clone();
+        tokio::spawn(async move {
+            make_server_with_genesis_ctx(
+                &authority,
+                committee,
+                preload_modules,
+                &preload_objects,
+                &mut genesis_ctx,
+            )
+            .await;
+        });
+    }
+    tokio::task::yield_now().await;
+
+    wallet_config.authorities = authority_info;
+    wallet_config.accounts = new_addresses;
+
+    info!("Network genesis completed.");
     wallet_config.save()?;
     info!(
         "Wallet config file is stored in {:?}.",
@@ -227,18 +225,16 @@ pub async fn genesis(
 
 pub async fn make_server(
     authority: &AuthorityPrivateInfo,
-    committee: &Committee,
+    committee: Committee,
     preload_modules: Vec<Vec<CompiledModule>>,
     preload_objects: &[Object],
-    buffer_size: usize,
-) -> SuiResult<AuthorityServer> {
+) {
     let mut genesis_ctx = genesis::get_genesis_context();
     make_server_with_genesis_ctx(
         authority,
         committee,
         preload_modules,
         preload_objects,
-        buffer_size,
         &mut genesis_ctx,
     )
     .await
@@ -246,36 +242,29 @@ pub async fn make_server(
 
 async fn make_server_with_genesis_ctx(
     authority: &AuthorityPrivateInfo,
-    committee: &Committee,
+    committee: Committee,
     preload_modules: Vec<Vec<CompiledModule>>,
     preload_objects: &[Object],
-    buffer_size: usize,
     genesis_ctx: &mut TxContext,
-) -> SuiResult<AuthorityServer> {
-    let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
-    let name = *authority.key_pair.public_key_bytes();
+) {
+    // The sender part of this channel goes to the sequencer (TODO).
+    let (_tx_consensus, rx_consensus) = channel(1_000);
 
-    let state = AuthorityState::new(
-        committee.clone(),
-        name,
-        Box::pin(authority.key_pair.copy()),
-        store,
+    // Extract the network address of this authority from its configs.
+    let address = format!("{}:{}", authority.host, authority.port)
+        .parse()
+        .unwrap();
+
+    // Spawn the authority.
+    spawn_authority(
+        &authority.key_pair,
+        committee,
+        &authority.db_path.as_path().display().to_string(),
+        address,
         preload_modules,
+        preload_objects,
         genesis_ctx,
+        rx_consensus,
     )
     .await;
-
-    for object in preload_objects {
-        state
-            .init_transaction_lock(object.to_object_reference())
-            .await;
-        state.insert_object(object.clone()).await;
-    }
-
-    Ok(AuthorityServer::new(
-        authority.host.clone(),
-        authority.port,
-        buffer_size,
-        state,
-    ))
 }

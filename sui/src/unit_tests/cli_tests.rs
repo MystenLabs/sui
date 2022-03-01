@@ -77,12 +77,6 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         wallet_conf.db_folder_path
     );
 
-    // Genesis 2nd time should fail
-    let result = SuiCommand::Genesis { config: None }
-        .execute(&mut config)
-        .await;
-    assert!(matches!(result, Err(..)));
-
     working_dir.close()?;
     Ok(())
 }
