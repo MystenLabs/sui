@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
 use sui_types::base_types::SequenceNumber;
-use typed_store::rocks::{open_cf, DBMap};
+use typed_store::rocks::{open_cf, DBBatch, DBMap};
 use typed_store::traits::Map;
 
 pub struct AuthorityStore {
@@ -240,7 +240,7 @@ impl AuthorityStore {
         self.objects.insert(&object.id(), &object)?;
 
         // Update the index
-        if let Some(address) = object.get_signle_owner() {
+        if let Some(address) = object.get_single_owner() {
             self.owner_index
                 .insert(&(address, object.id()), &object.to_object_reference())?;
         }
@@ -333,11 +333,7 @@ impl AuthorityStore {
     ) -> Result<TransactionInfoResponse, SuiError> {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
-        let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
         let mut write_batch = self.transaction_lock.batch();
-
-        // Archive the old lock.
-        write_batch = write_batch.delete_batch(&self.transaction_lock, active_inputs.iter())?;
 
         // Store the certificate indexed by transaction digest
         let transaction_digest: TransactionDigest = certificate.transaction.digest();
@@ -351,6 +347,38 @@ impl AuthorityStore {
             &self.signed_effects,
             std::iter::once((transaction_digest, &signed_effects)),
         )?;
+
+        self.batch_update_objects(write_batch, temporary_store, transaction_digest)?;
+
+        Ok(TransactionInfoResponse {
+            signed_transaction: self.signed_transactions.get(&transaction_digest)?,
+            certified_transaction: Some(certificate),
+            signed_effects: Some(signed_effects),
+        })
+    }
+
+    /// Persist temporary storage to DB for genesis modules
+    pub fn update_objects_state_for_genesis(
+        &self,
+        temporary_store: AuthorityTemporaryStore,
+        transaction_digest: TransactionDigest,
+    ) -> Result<(), SuiError> {
+        debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
+        let write_batch = self.transaction_lock.batch();
+        self.batch_update_objects(write_batch, temporary_store, transaction_digest)
+    }
+
+    /// Helper function for updating the objects in the state
+    fn batch_update_objects(
+        &self,
+        mut write_batch: DBBatch,
+        temporary_store: AuthorityTemporaryStore,
+        transaction_digest: TransactionDigest,
+    ) -> Result<(), SuiError> {
+        let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
+
+        // Archive the old lock.
+        write_batch = write_batch.delete_batch(&self.transaction_lock, active_inputs.iter())?;
 
         // Delete objects
         write_batch = write_batch.delete_batch(&self.objects, deleted.iter())?;
@@ -443,11 +471,7 @@ impl AuthorityStore {
             // implicit: drop(_mutexes);
         } // End of critical region
 
-        Ok(TransactionInfoResponse {
-            signed_transaction: self.signed_transactions.get(&transaction_digest)?,
-            certified_transaction: Some(certificate),
-            signed_effects: Some(signed_effects),
-        })
+        Ok(())
     }
 
     /// Returns the last entry we have for this object in the parents_sync index used

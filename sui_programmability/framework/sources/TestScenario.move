@@ -125,7 +125,7 @@ module Sui::TestScenario {
     /// only succeeds when the object to choose is unambiguous. In cases where there are multiple `T`'s, 
     /// the caller should resolve the ambiguity by using `remove_object_by_id`.
     public fun remove_object<T: key>(scenario: &mut Scenario): T {
-        let sender = get_signer_address(scenario);
+        let sender = sender(scenario);
         remove_unique_object(scenario, sender)
     }
 
@@ -175,13 +175,13 @@ module Sui::TestScenario {
         // to do (e.g.) `delete_object_for_testing(t)` instead.
         // TODO: do this with a special test-only event to enable writing tests that look directly at system events
         // like transfers. the current scheme will perturb the count of transfer events.
-        Transfer::transfer(t, get_signer_address(scenario))
+        Transfer::transfer(t, sender(scenario))
     }
 
     /// Return `true` if a call to `remove_object<T>(scenario)` will succeed
     public fun can_remove_object<T: key>(scenario: &Scenario): bool {
         let objects: vector<T> = get_inventory<T>(
-            get_signer_address(scenario),
+            sender(scenario),
             last_tx_start_index(scenario)
         );
         let res = !Vector::is_empty(&objects);
@@ -200,8 +200,8 @@ module Sui::TestScenario {
     }
 
     /// Return the sender of the current tx in this `scenario`
-    public fun get_signer_address(scenario: &Scenario): address {
-        TxContext::get_signer_address(&scenario.ctx)
+    public fun sender(scenario: &Scenario): address {
+        TxContext::sender(&scenario.ctx)
     }
 
     /// Return the number of concluded transactions in this scenario.

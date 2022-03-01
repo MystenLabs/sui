@@ -51,7 +51,6 @@ impl AuthorityTemporaryStore {
     }
 
     // Helpers to access private fields
-
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
         &self.objects
     }

@@ -143,7 +143,7 @@ module Sui::Geniteam {
     ) {
         let farm = create_farm_(farm_name, farm_img_id, total_monster_slots, ctx);
         let player = create_player_(player_name, farm, ctx);
-        Transfer::transfer(player, TxContext::get_signer_address(ctx))
+        Transfer::transfer(player, TxContext::sender(ctx))
     }
 
     /// Update the attributes of a player
@@ -178,7 +178,7 @@ module Sui::Geniteam {
             monster_description,
             ctx
         );
-        Transfer::transfer(monster, TxContext::get_signer_address(ctx))
+        Transfer::transfer(monster, TxContext::sender(ctx))
     }
 
     /// Add a monster to a farm
@@ -192,7 +192,7 @@ module Sui::Geniteam {
     public fun remove_monster(self: &mut Farm, monster_id: vector<u8>, ctx: &mut TxContext) {
         // TODO: monster_id should be probably be `address`, but leaving this as-is to avoid breaking Geniteam
         let monster = remove_monster_(self, &ID::new_from_bytes(monster_id));
-        Transfer::transfer(monster, TxContext::get_signer_address(ctx))
+        Transfer::transfer(monster, TxContext::sender(ctx))
     }
 
     /// Update the attributes of a farm

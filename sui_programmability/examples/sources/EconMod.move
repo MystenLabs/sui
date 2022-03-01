@@ -47,7 +47,7 @@ module Examples::EconMod {
             HelpMeSlayThisMonster {
                 id: TxContext::new_id(ctx),
                 monster,
-                monster_owner: TxContext::get_signer_address(ctx),
+                monster_owner: TxContext::sender(ctx),
                 helper_reward
             },
             helper

@@ -311,7 +311,7 @@ impl Object {
         }
     }
 
-    pub fn get_signle_owner(&self) -> Option<SuiAddress> {
+    pub fn get_single_owner(&self) -> Option<SuiAddress> {
         match &self.owner {
             Owner::SingleOwner(owner) => Some(*owner),
             Owner::SharedMutable | Owner::SharedImmutable => None,
@@ -528,9 +528,7 @@ impl Display for Object {
         let type_string = self
             .data
             .type_()
-            .map_or("Type Unwrap Failed".to_owned(), |type_| {
-                format!("{}", type_)
-            });
+            .map_or("Move Package".to_owned(), |type_| format!("{}", type_));
 
         write!(
             f,

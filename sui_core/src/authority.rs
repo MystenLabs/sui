@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
     language_storage::{ModuleId, StructTag},
@@ -35,6 +36,9 @@ use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
 pub use authority_store::AuthorityStore;
+
+// based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
+const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -164,20 +168,7 @@ impl AuthorityState {
         let input_objects = transaction.input_objects();
         let mut all_objects = Vec::with_capacity(input_objects.len());
 
-        // There is at least one input
-        fp_ensure!(
-            !input_objects.is_empty(),
-            SuiError::ObjectInputArityViolation
-        );
-        // Ensure that there are no duplicate inputs
-        let mut used = HashSet::new();
-        if !input_objects.iter().all(|o| used.insert(o.object_id())) {
-            return Err(SuiError::DuplicateObjectRefInput);
-        }
-
-        let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
-
-        let objects = self.get_objects(&ids[..]).await?;
+        let objects = self.fetch_objects(&input_objects).await?;
         let mutable_object_addresses: HashSet<_> = objects
             .iter()
             .flat_map(|opt_obj| match opt_obj {
@@ -213,6 +204,26 @@ impl AuthorityState {
         fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
 
         Ok(all_objects)
+    }
+
+    async fn fetch_objects(
+        &self,
+        input_objects: &[InputObjectKind],
+    ) -> Result<Vec<Option<Object>>, SuiError> {
+        // There is at least one input
+        fp_ensure!(
+            !input_objects.is_empty(),
+            SuiError::ObjectInputArityViolation
+        );
+        // Ensure that there are no duplicate inputs
+        let mut used = HashSet::new();
+        if !input_objects.iter().all(|o| used.insert(o.object_id())) {
+            return Err(SuiError::DuplicateObjectRefInput);
+        }
+
+        let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
+
+        self.get_objects(&ids[..]).await
     }
 
     /// Initiate a new transaction.
@@ -592,7 +603,8 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
-        genesis_modules: Vec<Object>,
+        genesis_packages: Vec<Vec<CompiledModule>>,
+        genesis_ctx: &mut TxContext,
     ) -> Self {
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
@@ -606,14 +618,11 @@ impl AuthorityState {
             _database: store,
         };
 
-        for genesis_module in genesis_modules {
-            #[cfg(debug_assertions)]
-            genesis_module.data.try_as_package().unwrap();
-
+        for genesis_modules in genesis_packages {
             state
-                .init_transaction_lock(genesis_module.to_object_reference())
-                .await;
-            state.insert_object(genesis_module).await;
+                .store_package_and_init_modules_for_genesis(genesis_ctx, genesis_modules)
+                .await
+                .expect("We expect publishing the Genesis packages to not fail");
         }
         state
     }
@@ -626,6 +635,38 @@ impl AuthorityState {
         self._database
             .insert_object(object)
             .expect("TODO: propagate the error")
+    }
+
+    /// Persist the Genesis package to DB along with the side effects for module initialization
+    async fn store_package_and_init_modules_for_genesis(
+        &self,
+        ctx: &mut TxContext,
+        modules: Vec<CompiledModule>,
+    ) -> SuiResult {
+        debug_assert!(ctx.digest() == TransactionDigest::genesis());
+        let inputs = Transaction::input_objects_in_compiled_modules(&modules);
+        let input_objects = self
+            .fetch_objects(&inputs)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        let mut temporary_store = AuthorityTemporaryStore::new(self, &input_objects, ctx.digest());
+        let package_id = ObjectID::from(*modules[0].self_id().address());
+        let natives = self._native_functions.clone();
+        let vm = adapter::verify_and_link(&temporary_store, &modules, package_id, natives)?;
+        if let ExecutionStatus::Failure { error, .. } = adapter::store_package_and_init_modules(
+            &mut temporary_store,
+            &vm,
+            modules,
+            ctx,
+            MAX_GAS_BUDGET,
+        ) {
+            return Err(*error);
+        };
+        self._database
+            .update_objects_state_for_genesis(temporary_store, ctx.digest())
     }
 
     /// Make an information response for a transaction

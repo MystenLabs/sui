@@ -96,7 +96,7 @@ module Examples::Hero {
     fun init(ctx: &mut TxContext) {
         let admin = admin();
         // ensure this is being initialized by the expected admin authenticator
-        assert!(&TxContext::get_signer_address(ctx) == &admin, ENOT_ADMIN);
+        assert!(&TxContext::sender(ctx) == &admin, ENOT_ADMIN);
         Transfer::transfer(
             GameAdmin {
                 id: TxContext::new_id(ctx),
@@ -136,7 +136,7 @@ module Examples::Hero {
         };
         // let the world know about the hero's triumph by emitting an event!
         Event::emit(BoarSlainEvent {
-            slayer_address: TxContext::get_signer_address(ctx),
+            slayer_address: TxContext::sender(ctx),
             hero: *ID::inner(&hero.id),
             boar: *ID::inner(&boar_id),
         });
@@ -222,7 +222,7 @@ module Examples::Hero {
     public fun acquire_hero(payment: Coin<EXAMPLE>, ctx: &mut TxContext) {
         let sword = create_sword(payment, ctx);
         let hero = create_hero(sword, ctx);
-        Transfer::transfer(hero, TxContext::get_signer_address(ctx))
+        Transfer::transfer(hero, TxContext::sender(ctx))
     }
 
     /// Anyone can create a hero if they have a sword. All heros start with the

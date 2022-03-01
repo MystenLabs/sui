@@ -66,7 +66,7 @@ fn add_tx_context(builder: &mut ModuleBuilder) -> StructInfo {
         vec![
             ("signer", SignatureToken::Struct(signer.handle)),
             (
-                "inputs_hash",
+                "tx_hash",
                 SignatureToken::Vector(Box::new(SignatureToken::U8)),
             ),
             ("ids_created", SignatureToken::U64),

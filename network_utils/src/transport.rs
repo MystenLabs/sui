@@ -186,7 +186,11 @@ impl TcpDataStreamPool {
         address: &'a str,
     ) -> Result<(), std::io::Error> {
         let stream = self.get_stream(address).await?;
-        TcpDataStream::tcp_write_data(stream, buffer).await
+        let result = TcpDataStream::tcp_write_data(stream, buffer).await;
+        if result.is_err() {
+            self.streams.remove(address);
+        }
+        result
     }
 }
 
@@ -216,8 +220,10 @@ where
                 let buffer = match TcpDataStream::tcp_read_data(&mut stream, buffer_size).await {
                     Ok(buffer) => buffer,
                     Err(err) => {
-                        // We expect an EOF error at the end.
-                        if err.kind() != io::ErrorKind::UnexpectedEof {
+                        // We expect some EOF or disconnect error at the end.
+                        if err.kind() != io::ErrorKind::UnexpectedEof
+                            && err.kind() != io::ErrorKind::ConnectionReset
+                        {
                             error!("Error while reading TCP stream: {}", err);
                         }
                         break;

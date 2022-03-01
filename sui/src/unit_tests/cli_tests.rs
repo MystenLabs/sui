@@ -16,10 +16,10 @@ use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_core::client::Client;
 use sui_network::network::PortAllocator;
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::TransactionEffects;
-use sui_types::object::GAS_VALUE_FOR_TESTING;
+use sui_types::object::{Data, MoveObject, Object, ObjectRead, GAS_VALUE_FOR_TESTING};
 use tokio::task;
 use tokio::task::JoinHandle;
 use tracing_test::traced_test;
@@ -219,19 +219,25 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Error> {
+    use sui_types::crypto::get_key_pair_from_bytes;
+
+    let (address, admin_key) = get_key_pair_from_bytes(&[
+        10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
+        92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
+        90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
+        105, 254, 59, 163,
+    ]);
+
     let working_dir = tempfile::tempdir()?;
     // Create and save genesis config file
-    // Create 4 authorities, 1 account with 1 gas object with custom id
+    // Create 4 authorities and 1 account
     let genesis_path = working_dir.path().join("genesis.conf");
-    let mut config = GenesisConfig::default_genesis(&genesis_path)?;
+    let num_authorities = 4;
+    let mut config = GenesisConfig::custom_genesis(&genesis_path, num_authorities, 0, 0)?;
     config.accounts.clear();
-    let object_id = ObjectID::random();
     config.accounts.push(AccountConfig {
-        address: None,
-        gas_objects: vec![ObjectConfig {
-            object_id,
-            gas_value: 500,
-        }],
+        address: Some(address),
+        gas_objects: vec![],
     });
     config
         .move_packages
@@ -260,6 +266,30 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     for (_, id) in network_conf.loaded_move_packages {
         assert!(logs_contain(&*format!("{}", id)));
     }
+
+    // Start network
+    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+
+    // Wait for authorities to come alive.
+    retry_assert!(
+        logs_contain("Listening to TCP traffic on 127.0.0.1"),
+        Duration::from_millis(5000)
+    );
+
+    // Create Wallet context.
+    let mut wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    wallet_conf.accounts = vec![AccountInfo {
+        address,
+        key_pair: admin_key,
+    }];
+    let mut context = WalletContext::new(wallet_conf)?;
+
+    // Make sure init() is executed correctly for custom_genesis_package_2::M1
+    let move_objects = get_move_objects(&mut context, address).await?;
+    assert_eq!(move_objects.len(), 1);
+    assert_eq!(move_objects[0].type_.module.as_str(), "M1");
+
+    network.abort();
     Ok(())
 }
 
@@ -440,6 +470,53 @@ fn extract_gas_info(s: &str) -> Option<(ObjectID, SequenceNumber, u64)> {
     ))
 }
 
+async fn get_move_objects(
+    context: &mut WalletContext,
+    address: SuiAddress,
+) -> Result<Vec<MoveObject>, anyhow::Error> {
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState { address }
+        .execute(context)
+        .await?
+        .print(true);
+
+    // Fetch objects owned by `address`
+    let objects_result = WalletCommands::Objects { address }.execute(context).await?;
+
+    match objects_result {
+        WalletCommandResult::Objects(object_refs) => {
+            let mut objs = vec![];
+            for (id, ..) in object_refs {
+                objs.push(get_move_object(context, id).await?);
+            }
+            Ok(objs)
+        }
+        _ => panic!(
+            "WalletCommands::Objects returns wrong type {}",
+            objects_result
+        ),
+    }
+}
+
+async fn get_move_object(
+    context: &mut WalletContext,
+    id: ObjectID,
+) -> Result<MoveObject, anyhow::Error> {
+    let obj = WalletCommands::Object { id }.execute(context).await?;
+
+    match obj {
+        WalletCommandResult::Object(ObjectRead::Exists(
+            _,
+            Object {
+                data: Data::Move(m),
+                ..
+            },
+            ..,
+        )) => Ok(m),
+        _ => panic!("WalletCommands::Object returns wrong type {}", obj),
+    }
+}
+
 async fn start_network(
     working_dir: &Path,
     starting_port: u16,
@@ -478,6 +555,7 @@ async fn start_network(
     Ok(network)
 }
 
+#[allow(clippy::assertions_on_constants)]
 #[traced_test]
 #[tokio::test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
@@ -575,7 +653,10 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         let ((obj_id, _seq_num, _obj_digest), _owner) = new_objs.first().unwrap();
         *obj_id
     } else {
-        panic!()
+        // User assert since panic causes test issues
+        assert!(false);
+        // Use this to satisfy type checker
+        ObjectID::random()
     };
 
     // Try a bad argument: decimal
@@ -661,6 +742,239 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         Duration::from_millis(1000)
     );
     assert!(logs_contain("Created Objects:"));
+
+    network.abort();
+    Ok(())
+}
+
+#[allow(clippy::assertions_on_constants)]
+#[traced_test]
+#[tokio::test]
+async fn test_package_publish_command() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+
+    let network = start_network(working_dir.path(), 10600, None).await?;
+    // Wait for authorities to come alive.
+    retry_assert!(
+        logs_contain("Listening to TCP traffic on 127.0.0.1"),
+        Duration::from_millis(5000)
+    );
+
+    // Create Wallet context.
+    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let address = wallet_conf.accounts.first().unwrap().address;
+    let mut context = WalletContext::new(wallet_conf)?;
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState { address }
+        .execute(&mut context)
+        .await?
+        .print(true);
+
+    let state = context
+        .address_manager
+        .get_managed_address_states()
+        .get(&address)
+        .unwrap();
+
+    // Check log output contains all object ids.
+    let gas_obj_id = state.object_refs().next().unwrap().0;
+
+    // Provide path to well formed package sources
+    let mut path = TEST_DATA_DIR.to_owned();
+    path.push_str("dummy_modules_publish");
+
+    let resp = WalletCommands::Publish {
+        path,
+        gas: gas_obj_id,
+        gas_budget: 1000,
+    }
+    .execute(&mut context)
+    .await?;
+
+    // Print it out to CLI/logs
+    resp.print(true);
+
+    let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
+    // Get the created objects
+    let (mut created_obj1, mut created_obj2) = (
+        dumy_obj.to_object_reference(),
+        dumy_obj.to_object_reference(),
+    );
+
+    if let WalletCommandResult::Publish(
+        _,
+        TransactionEffects {
+            created: new_objs, ..
+        },
+    ) = resp
+    {
+        (created_obj1, created_obj2) = (new_objs.get(0).unwrap().0, new_objs.get(1).unwrap().0);
+    } else {
+        // Fail this way because Panic! causes test issues
+        assert!(false);
+    };
+
+    // One is the actual module, while the other is the object created at init
+    retry_assert!(
+        logs_contain(&format!("{:02X}", created_obj1.0)),
+        Duration::from_millis(5000)
+    );
+    retry_assert!(
+        logs_contain(&format!("{:02X}", created_obj2.0)),
+        Duration::from_millis(5000)
+    );
+
+    // Check the objects
+    // Init with some value to satisfy the type checker
+    let mut cr_obj1 = dumy_obj.clone();
+
+    let resp = WalletCommands::Object { id: created_obj1.0 }
+        .execute(&mut context)
+        .await?;
+    if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
+        cr_obj1 = object;
+    } else {
+        // Fail this way because Panic! causes test issues
+        assert!(false)
+    };
+
+    let mut cr_obj2 = dumy_obj;
+
+    let resp = WalletCommands::Object { id: created_obj2.0 }
+        .execute(&mut context)
+        .await?;
+    if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
+        cr_obj2 = object;
+    } else {
+        // Fail this way because Panic! causes test issues
+        assert!(false)
+    };
+
+    let (pkg, obj) = if cr_obj1.is_package() {
+        (cr_obj1, cr_obj2)
+    } else {
+        (cr_obj2, cr_obj1)
+    };
+
+    assert!(pkg.is_package());
+    assert!(!obj.is_package());
+
+    network.abort();
+    Ok(())
+}
+
+#[allow(clippy::assertions_on_constants)]
+#[traced_test]
+#[tokio::test]
+async fn test_native_transfer() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+
+    let network = start_network(working_dir.path(), 10700, None).await?;
+    // Wait for authorities to come alive.
+    retry_assert!(
+        logs_contain("Listening to TCP traffic on 127.0.0.1"),
+        Duration::from_millis(5000)
+    );
+
+    // Create Wallet context.
+    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let address = wallet_conf.accounts.first().unwrap().address;
+    let recipient = wallet_conf.accounts.get(1).unwrap().address;
+
+    let mut context = WalletContext::new(wallet_conf)?;
+
+    // Sync client to retrieve objects from the network.
+    WalletCommands::SyncClientState { address }
+        .execute(&mut context)
+        .await?
+        .print(true);
+
+    let state = context
+        .address_manager
+        .get_managed_address_states()
+        .get(&address)
+        .unwrap();
+
+    // Check log output contains all object ids.
+    let gas_obj_id = state.object_refs().next().unwrap().0;
+    let obj_id = state.object_refs().nth(1).unwrap().0;
+
+    let resp = WalletCommands::Transfer {
+        gas: gas_obj_id,
+        to: recipient,
+        object_id: obj_id,
+    }
+    .execute(&mut context)
+    .await?;
+
+    // Print it out to CLI/logs
+    resp.print(true);
+
+    let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
+
+    // Get the mutated objects
+    let (mut_obj1, mut_obj2) =
+        if let WalletCommandResult::Transfer(_, _, TransactionEffects { mutated, .. }) = resp {
+            (mutated.get(0).unwrap().0, mutated.get(1).unwrap().0)
+        } else {
+            assert!(false);
+            (
+                dumy_obj.to_object_reference(),
+                dumy_obj.to_object_reference(),
+            )
+        };
+
+    retry_assert!(
+        logs_contain(&format!("{:02X}", mut_obj1.0)),
+        Duration::from_millis(5000)
+    );
+    retry_assert!(
+        logs_contain(&format!("{:02X}", mut_obj2.0)),
+        Duration::from_millis(5000)
+    );
+
+    // Sync both to fetch objects
+    WalletCommands::SyncClientState { address }
+        .execute(&mut context)
+        .await?
+        .print(true);
+    WalletCommands::SyncClientState { address: recipient }
+        .execute(&mut context)
+        .await?
+        .print(true);
+
+    // Check the objects
+    let resp = WalletCommands::Object { id: mut_obj1.0 }
+        .execute(&mut context)
+        .await?;
+    let mut_obj1 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
+        object
+    } else {
+        // Fail this way because Panic! causes test issues
+        assert!(false);
+        dumy_obj.clone()
+    };
+
+    let resp = WalletCommands::Object { id: mut_obj2.0 }
+        .execute(&mut context)
+        .await?;
+    let mut_obj2 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
+        object
+    } else {
+        // Fail this way because Panic! causes test issues
+        assert!(false);
+        dumy_obj
+    };
+
+    let (gas, obj) = if mut_obj1.get_single_owner().unwrap() == address {
+        (mut_obj1, mut_obj2)
+    } else {
+        (mut_obj2, mut_obj1)
+    };
+
+    assert_eq!(gas.get_single_owner().unwrap(), address);
+    assert_eq!(obj.get_single_owner().unwrap(), recipient);
 
     network.abort();
     Ok(())

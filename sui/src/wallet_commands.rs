@@ -62,8 +62,8 @@ pub enum WalletCommands {
         #[structopt(long)]
         gas: ObjectID,
 
-        /// gas budget for running module initializers
-        #[structopt(default_value = "0")]
+        /// Gas budget for running module initializers
+        #[structopt(long)]
         gas_budget: u64,
     },
 

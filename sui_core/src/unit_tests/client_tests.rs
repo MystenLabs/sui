@@ -304,7 +304,8 @@ async fn init_local_authorities(
             authority_name,
             Box::pin(secret),
             store,
-            genesis::clone_genesis_modules(),
+            genesis::clone_genesis_compiled_modules(),
+            &mut genesis::get_genesis_context(),
         )
         .await;
         clients.insert(authority_name, LocalAuthorityClient::new(state));
@@ -351,7 +352,8 @@ async fn init_local_authorities_bad_1(
             address,
             Box::pin(secret),
             store,
-            genesis::clone_genesis_modules(),
+            genesis::clone_genesis_compiled_modules(),
+            &mut genesis::get_genesis_context(),
         )
         .await;
         clients.insert(address, LocalAuthorityClient::new(state));
