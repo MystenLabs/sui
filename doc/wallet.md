@@ -162,11 +162,11 @@ you verbatim**.
 
 ```shell
 Showing 5 results.
-054FDE3B99A88D8A176CF2E795A18EDC19B32D21
-19A6D4720C1C7D16583A9FB3FB537EF31E169DE6
-20007C278237AA4BED5FF6094AA05A7FEC90F932
-594E3CD1445281FF1BB7D1892534F0235FF810BA
-A4C0A493CE9879EA06BAC93461810CF947823BB3
+0DC70EA8CA82FE6966900C697B73A235B8E2346F
+3111A757BE55F195201FD9140DCE55EAEB719D35
+4E523C1FAFECE13628161C78521E60AA8B602324
+D9573E0B7F73B15C4416DCBD9911CC1A9456CF21
+FE574F043D282AAF10B9AE8AB337C74BA8B428C3
 ```
 
 ## Adding accounts to the wallet
@@ -202,52 +202,63 @@ the first look at Move source code and a description of the following
 function we will be calling in this tutorial:
 
 ```rust
-public fun transfer(c: Coin::Coin<GAS>, recipient: vector<u8>, _ctx: &mut TxContext) {
+public fun transfer(c: Coin::Coin<GAS>, recipient: address, _ctx: &mut TxContext) {
     Coin::transfer(c, Address::new(recipient))
 }
 ```
 
-At the end of the previous [section](#running-interactive-wallet) we
-learned how to find out the user addresses available as part of Sui
-genesis setup. Let us proceed with listing gas objects owned by the
-first address on the list starting with `0523`, which can be
-accomplished using the following command:
-
+Throughout the Move call example we will be using the non-interactive
+shell (all commands will be issued within the shell's prompt:
+`sui>-$`) that can be started as follows:
 
 ``` shell
-./wallet --no-shell objects --address 054FDE3B99A88D8A176CF2E795A18EDC19B32D21
+./wallet
+   _____       _    _       __      ____     __
+  / ___/__  __(_)  | |     / /___ _/ / /__  / /_
+  \__ \/ / / / /   | | /| / / __ `/ / / _ \/ __/
+ ___/ / /_/ / /    | |/ |/ / /_/ / / /  __/ /_
+/____/\__,_/_/     |__/|__/\__,_/_/_/\___/\__/
+--- Suisui 0.1.0 ---
+Config path : "./wallet.conf"
+Client state DB folder path : "./client_db"
+Managed addresses : 5
+
+Welcome to the Sui interactive shell.
+
+sui>-$
 ```
 
-When looking at the output, let's focus on the first column which
-lists object IDs owned by this address (the rest of the input is
-replaced with `...` below):
+Let us proceed with listing gas objects owned by the
+first address on the list starting with `0DC7`. 
+
 
 ``` shell
-1FD8DA0C56694229761E9A3DCE50C49AF2EA5DB1: ...
-363D5BCAC9D5855122202B6B832B321D4256F22E: ...
-7022F48406251C0D5AE4EBEBB4C7150F3D34E195: ...
-771101CE95E5A774D94E172CD54178C124327EB6: ...
-B80052DE4A17C0A61B27857A31A5CAC0EF01EF2F: ...
+sui>-$ objects --address 0DC70EA8CA82FE6966900C697B73A235B8E2346F
+```
+
+When looking at the output, let's focus on the first column (ignore
+the opening parenthesis) which lists object IDs owned by this address
+the rest of the input is replaced with `...` below):
+
+``` shell
+(60DADCE6E5081C3EFCA162694D7EFD8D99D46636 ...
+(B216DCFE027479D0BE9D85A5CD7184E9673452D8 ...
+(B56269D5C471367BEDEDDFCBE8A9D928E7C1F170 ...
+(D9DBDEDB501C63996E2662DDD23A76A642E8160B ...
+(F18F5B785D5766CD85BC2247F8C73F07BFF901BB ...
 ```
 
 Now that we know which objects are owned by the address starting with
-`0523`, we can transfer one of them to another address, say one
-starting with `5986`. We can try any object, but for the sake of this
+`0DC7`, we can transfer one of them to another address, say one
+starting with `3111`. We can try any object, but for the sake of this
 exercise, let's choose the last one on the list, that is one whose ID
-is starting with `B800`.
+is starting with `F18F`.
 
 We will perform the transfer by calling the `transfer` function from
 the GAS module using the following Sui Wallet command:
 
 ``` shell
-./wallet --no-shell call \
---function transfer \
---module GAS \
---package 0x2 \
---object-args B80052DE4A17C0A61B27857A31A5CAC0EF01EF2F \
---pure-args x\"5986f0651a5329b90d1d76acd992021377684509909b23a9bbf79c4416afd9cf\" \
---gas 1FD8DA0C56694229761E9A3DCE50C49AF2EA5DB1 \
---gas-budget 1000 \
+sui>-$ call --function transfer --module GAS --package 0x2 --args "0xF18F5B785D5766CD85BC2247F8C73F07BFF901BB" "0x3111A757BE55F195201FD9140DCE55EAEB719D35" --gas 60DADCE6E5081C3EFCA162694D7EFD8D99D46636 --gas-budget 1000
 ```
 
 This is a pretty complicated command so let's explain all its parameters
@@ -260,16 +271,13 @@ one-by-one:
   [remember](#a-quick-look-at-the-gas-module) that the ID of the
   genesis Sui package containing the GAS module is defined in its
   manifest file, and is equal to 0x2)
-- `object-args` - a list of arguments of Sui object type (in this case
-  there is only one representing the `c` parameter of the `transfer`
-  function)
-- `pure-args` - a list of arguments of Sui primitive types or vectors
-  of such types (in this case there is only one representing the
-  `recipient` parameter of the `transfer` function)
+- `args` - a list of function arguments:
+  - ID of the gas object representing the `c` parameter of the `transfer` function
+  - address of the new gas object owner
 - `--gas` - an object containing gas that will be used to pay for this
   function call that is owned by the address initiating the `transfer`
-  function call (i.e., address starting with `0523`) - we chose gas
-  object whose ID starts with `1FD8` but we could have any object
+  function call (i.e., address starting with `0DC7`) - we chose gas
+  object whose ID starts with `60DA` but we could have any object
   owned by this address as at this point the only objects in Sui are
   gas objects
 - `--gas-budget` - a decimal value expressing how much gas we are
@@ -277,8 +285,6 @@ one-by-one:
   object may contain a lot more gas than 1000 units and we may want to
   prevent it being drained accidentally beyond what we are intended to
   pay)
-- `--sender` - the address of the account initiating the function
-  call, which also needs to own the object to be transferred
   
 Please note that the third argument to the `transfer` function
 representing `TxContext` does not have to be specified explicitly - it
@@ -294,39 +300,36 @@ containing its ID):
 ``` shell
 ...
 Mutated Objects:
-1FD8DA0C56694229761E9A3DCE50C49AF2EA5DB1 ...
-B80052DE4A17C0A61B27857A31A5CAC0EF01EF2F ...
+60DADCE6E5081C3EFCA162694D7EFD8D99D46636 ...
+F18F5B785D5766CD85BC2247F8C73F07BFF901BB ...
 ```
 
-This output indicates that the gas object whose ID starts with `1FD8`
+This output indicates that the gas object whose ID starts with `60DA`
 was updated to collect gas payment for the function call, and the
-object whose ID starts with `B800` was updated as its owner had been
+object whose ID starts with `F18F` was updated as its owner had been
 modified. We can confirm the latter (and thus a successful execution
 of the `transfer` function) but querying objects that are now owned by
 the sender (abbreviated output):
 
 ``` shell
-./wallet --no-shell objects --address 054FDE3B99A88D8A176CF2E795A18EDC19B32D21
+sui>-$ objects --address 0DC70EA8CA82FE6966900C697B73A235B8E2346F
 Showing 4 results.
-1FD8DA0C56694229761E9A3DCE50C49AF2EA5DB1: ...
-363D5BCAC9D5855122202B6B832B321D4256F22E: ...
-7022F48406251C0D5AE4EBEBB4C7150F3D34E195: ...
-771101CE95E5A774D94E172CD54178C124327EB6: ...
+(60DADCE6E5081C3EFCA162694D7EFD8D99D46636 ...
+(B216DCFE027479D0BE9D85A5CD7184E9673452D8 ...
+(B56269D5C471367BEDEDDFCBE8A9D928E7C1F170 ...
+(D9DBDEDB501C63996E2662DDD23A76A642E8160B ...
 ```
 
-We can now see that this address no longer owns the object whose IS
-starts with `B800`. On the other hand, the recipient now owns 6
-objects including the transferred one (in the fourth position):
+We can now see that this address no longer owns the object whose ID
+starts with `F18F`. On the other hand, if we inspect this object, we can see that it has the new owner:
 
 ``` shell
-./wallet --no-shell objects --address 054FDE3B99A88D8A176CF2E795A18EDC19B32D21
-Showing 6 results.
-348B607E5C8B80524D6BF8275FB7F35267A7814E: ...
-5852529FE26D138D7B6B9281ADBF29645D93543A: ...
-87128A733E6F8AE432C2B928A432309FD1E70363: ...
-B80052DE4A17C0A61B27857A31A5CAC0EF01EF2F: ...
-C80707F7D1C8CBAC58BFD9A1EAD18199F0ECE931: ...
-DC5530627AFBFFBB1F52B81F273A7B666B31CB85: ...
+sui>-$ object --id F18F5B785D5766CD85BC2247F8C73F07BFF901BB
+Owner: SingleOwner(k#3111a757be55f195201fd9140dce55eaeb719d35)
+Version: 1
+ID: F18F5B785D5766CD85BC2247F8C73F07BFF901BB
+Readonly: false
+Type: 0x2::Coin::Coin<0x2::GAS::GAS>
 ```
 
 ## Package Publishing
@@ -350,7 +353,7 @@ same gas object we used to pay for the function call in the previous
 (we use 1000 as our gas budget. The whole command looks as follows:
 
 ``` shell
-./wallet --no-shell publish --path "$PACKAGE_PATH"/my_move_package --gas 1FD8DA0C56694229761E9A3DCE50C49AF2EA5DB1 1000
+sui>-$ publish --path /Users/adamwelc/my_move_package --gas 60DADCE6E5081C3EFCA162694D7EFD8D99D46636 1000
 ```
 
 The (abbreviated) result of running this command should show that one
@@ -359,9 +362,10 @@ modified:
 
 ``` shell
 Created Objects:
-BCC2E80B02B08226BF95522B0D4B59E687C5900E
+DF12826C99CE99E9028D72A7B2CE78CFDAE15B54 ...
 Mutated Objects:
-1FD8DA0C56694229761E9A3DCE50C49AF2EA5DB
+60DADCE6E5081C3EFCA162694D7EFD8D99D46636 ...
+
 ```
 
 From now on, we can use package object id in the Sui wallet's call
