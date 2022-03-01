@@ -26,8 +26,8 @@ directory.
 ```
 
 The genesis command creates 4 authorities, 5 user accounts each with 5
-gas objects, which are Sui objects used to pay for Sui
-[transactions](https://github.com/MystenLabs/fastnft/blob/main/doc/transactions.md#transaction-metadata),
+gas objects, which are Sui [objects](objects.md) used to pay for Sui
+[transactions](transactions.md#transaction-metadata),
 such other object transfers or smart contract (Move) calls. These
 numbers represent a sample configuration and have been chosen somewhat
 arbitrarily, but the process of generating the genesis state can be
@@ -331,8 +331,42 @@ DC5530627AFBFFBB1F52B81F273A7B666B31CB85: ...
 
 ## Package Publishing
 
-TBD
+In order for user-written code to be available in Sui, it must be
+_published_ to to Sui's [distributed
+ledger](SUMMARY.md#architecture). Please see Move developer
+[documentation](move.md) for a
+[description](move.md#writing-a-package) on how to write a simple Move
+code package, which we can publish using Sui wallet's publish command.
 
+In order to show how to publish user-defined Move package, let us
+continue where we left off in the previous
+[section](#calling-move-code) describing how to call an existing Move
+function. The publish command requires us to specify a directory where
+user-defined package lives (it's a path to the `my_move_package` as
+per package creation [description](move.md#writing-a-package)), a gas
+object that will be used to pay for publishing the package (we use the
+same gas object we used to pay for the function call in the previous
+[section](#calling-move-code)), and gas budget to put an upper limit
+(we use 1000 as our gas budget. The whole command looks as follows:
+
+``` shell
+./wallet --no-shell publish --path "$PACKAGE_PATH"/my_move_package --gas 1FD8DA0C56694229761E9A3DCE50C49AF2EA5DB1 1000
+```
+
+The (abbreviated) result of running this command should show that one
+object (package object) was created and one object (gas object) was
+modified:
+
+``` shell
+Created Objects:
+BCC2E80B02B08226BF95522B0D4B59E687C5900E
+Mutated Objects:
+1FD8DA0C56694229761E9A3DCE50C49AF2EA5DB
+```
+
+From now on, we can use package object id in the Sui wallet's call
+command just like we used 0x2 for built-in packages in the previous
+[section](#calling-move-code).
 
 ## Genesis customization
 
