@@ -246,9 +246,9 @@ pub fn create_db_stores() -> (
         CERTIFICATES_CF;<Digest, Certificate<Ed25519PublicKey>>,
         PAYLOAD_CF;<(Digest, WorkerId), PayloadToken>);
 
-    return (
+    (
         Store::new(header_map),
         Store::new(certificate_map),
         Store::new(payload_map),
-    );
+    )
 }

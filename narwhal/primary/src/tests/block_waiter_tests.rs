@@ -15,7 +15,7 @@ use crypto::{
     traits::{KeyPair, VerifyingKey},
     Digest, Hash,
 };
-use ed25519_dalek::{Digest as _, Sha512};
+use ed25519_dalek::{Digest as _};
 use futures::StreamExt;
 use network::SimpleSender;
 use std::{collections::HashMap, net::SocketAddr};
@@ -156,7 +156,7 @@ async fn test_one_pending_request_for_block_at_time() {
 
     let get_mock_sender = || {
         let (tx, _) = channel(1);
-        return tx;
+        tx
     };
 
     // WHEN we send GetBlock command
@@ -229,7 +229,7 @@ async fn test_unlocking_pending_get_block_request_after_response() {
 
     let get_mock_sender = || {
         let (tx, _) = channel(1);
-        return tx;
+        tx
     };
 
     // AND we send GetBlock commands
