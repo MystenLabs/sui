@@ -555,6 +555,7 @@ async fn start_network(
     Ok(network)
 }
 
+#[allow(clippy::assertions_on_constants)]
 #[traced_test]
 #[tokio::test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
@@ -746,6 +747,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[allow(clippy::assertions_on_constants)]
 #[traced_test]
 #[tokio::test]
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
@@ -862,6 +864,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[allow(clippy::assertions_on_constants)]
 #[traced_test]
 #[tokio::test]
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
