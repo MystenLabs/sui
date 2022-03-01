@@ -12,7 +12,7 @@ module Test::M1 {
     fun init(ctx: &mut TxContext): u64 {
         let value = 42;
         let singleton = Object { id: TxContext::new_id(ctx), value };
-        Transfer::transfer(singleton, TxContext::get_signer_address(ctx));
+        Transfer::transfer(singleton, TxContext::sender(ctx));
         value
     }
 }

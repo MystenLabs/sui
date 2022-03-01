@@ -41,7 +41,7 @@ module Sui::Collection {
 
     /// Create a new Collection and transfer it to the signer.
     public fun create(ctx: &mut TxContext) {
-        Transfer::transfer(new(ctx), TxContext::get_signer_address(ctx))
+        Transfer::transfer(new(ctx), TxContext::sender(ctx))
     }
 
     /// Returns the size of the collection.
@@ -84,7 +84,7 @@ module Sui::Collection {
     /// Remove the object from the collection, and then transfer it to the signer.
     public fun remove_and_take<T: key>(c: &mut Collection, object: T, ctx: &mut TxContext) {
         let object = remove(c, object);
-        Transfer::transfer(object, TxContext::get_signer_address(ctx));
+        Transfer::transfer(object, TxContext::sender(ctx));
     }
 
     /// Transfer the entire collection to `recipient`.

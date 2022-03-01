@@ -74,7 +74,7 @@ module Examples::TicTacToe {
             x_address: x_address,
             o_address: o_address,
         };
-        Transfer::transfer(game, TxContext::get_signer_address(ctx));
+        Transfer::transfer(game, TxContext::sender(ctx));
         let cap = MarkMintCap {
             id: TxContext::new_id(ctx),
             game_id: copy game_id,
@@ -174,7 +174,7 @@ module Examples::TicTacToe {
         cap.remaining_supply = cap.remaining_supply - 1;
         Mark {
             id: TxContext::new_id(ctx),
-            player: TxContext::get_signer_address(ctx),
+            player: TxContext::sender(ctx),
             row,
             col,
         }

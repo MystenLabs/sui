@@ -1010,7 +1010,7 @@ where
             .unwrap(); // Not safe, but want to blow up if testing.
         let (top_ref, obj) = object_infos.iter().last().unwrap();
         (
-            obj.0.as_ref().unwrap().get_signle_owner().unwrap(),
+            obj.0.as_ref().unwrap().get_single_owner().unwrap(),
             top_ref.0 .1,
         )
     }
