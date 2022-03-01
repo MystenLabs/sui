@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::{AccountInfo, Config, WalletConfig};
+use crate::config::{Config, WalletConfig};
 use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
 use core::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -13,6 +13,7 @@ use sui_types::messages::{CertifiedTransaction, ExecutionStatus, TransactionEffe
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::ObjectRead::Exists;
 
+use crate::keystore::{Keystore, SuiKeystoreSigner};
 use anyhow::anyhow;
 use colored::Colorize;
 use move_core_types::identifier::Identifier;
@@ -21,6 +22,7 @@ use move_core_types::parser::parse_type_tag;
 use serde::ser::Error;
 use serde::Serialize;
 use std::fmt::Write;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
@@ -306,10 +308,8 @@ impl WalletCommands {
             }
             WalletCommands::NewAddress => {
                 let (address, key) = get_key_pair();
-                context.config.accounts.push(AccountInfo {
-                    address,
-                    key_pair: key,
-                });
+                context.config.accounts.push(address);
+                context.keystore.lock().unwrap().add_key(key)?;
                 context.config.save()?;
                 // Create an address to be managed
                 context.create_account_state(&address)?;
@@ -341,34 +341,35 @@ impl WalletCommands {
 
 pub struct WalletContext {
     pub config: WalletConfig,
+    pub keystore: Arc<Mutex<Box<dyn Keystore>>>,
     pub address_manager: ClientAddressManager<AuthorityClient>,
 }
 
 impl WalletContext {
     pub fn new(config: WalletConfig) -> Result<Self, anyhow::Error> {
         let path = config.db_folder_path.clone();
-        let addresses = config
-            .accounts
-            .iter()
-            .map(|info| info.address)
-            .collect::<Vec<_>>();
 
         let committee = config.make_committee();
         let authority_clients = config.make_authority_clients();
+
+        let keystore = Arc::new(Mutex::new(config.keystore.init()?));
+        let accounts = config.accounts.clone();
+
         let mut context = Self {
             config,
+            keystore,
             address_manager: ClientAddressManager::new(path, committee, authority_clients),
         };
         // Pre-populate client state for each address in the config.
-        for address in addresses {
+        for address in accounts {
             context.create_account_state(&address)?;
         }
         Ok(context)
     }
 
     pub fn create_account_state(&mut self, owner: &SuiAddress) -> SuiResult {
-        let kp = Box::pin(self.config.get_account_cfg_info(owner)?.key_pair.copy());
-        self.address_manager.create_account_state(*owner, kp)
+        let signer = Box::pin(SuiKeystoreSigner::new(self.keystore.clone(), *owner));
+        self.address_manager.create_account_state(*owner, signer)
     }
 }
 

@@ -54,11 +54,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let wallet_conf_path = options.config;
     let config =
         WalletConfig::read_or_create(&wallet_conf_path).expect("Unable to read wallet config");
-    let addresses = config
-        .accounts
-        .iter()
-        .map(|info| info.address)
-        .collect::<Vec<_>>();
+    let addresses = config.accounts.clone();
     let mut context = WalletContext::new(config)?;
 
     // Sync all accounts on start up.
