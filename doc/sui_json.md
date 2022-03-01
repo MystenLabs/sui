@@ -84,8 +84,8 @@ TypeTag
   </tr>
 </table>
 
-
 ## **Type Coercion**
+
 Due to the loosely typed nature of JSON/SuiJSON and the strongly typed nature of Move Types, we sometimes need to overload SuiJSON types to represent multiple Move Types. \
 For example _SuiJSON::Number_ can represent both _U8_ and _U64_. This means we have to coerce and sometimes convert types.
 
@@ -127,7 +127,7 @@ Which type we coerce to depends on the expected Move Type. For example if the Mo
 
 <strong>NaN</strong>: not allowed
 
-<strong>300</strong>: U8 must be less than 255
+<strong>300</strong>: U8 must be less than 256
 
    </td>
   </tr>
@@ -195,10 +195,13 @@ Which type we coerce to depends on the expected Move Type. For example if the Mo
    </td>
    <td><em>For convenience, we allow:</em>
 
-U8 vectors represented as UTF-8 strings.
+U8 vectors represented as UTF-8 (and ASCII) strings.
 
    </td>
-   <td>“√®ˆbo72 √∂†∆˚–œ∑π2ie”
+   <td><strong>“√®ˆbo72 √∂†∆˚–œ∑π2ie”</strong>: UTF-8
+
+   <strong>“abcdE738-2 _=?”</strong>: ASCII
+
    </td>
    <td>
    </td>
@@ -215,4 +218,4 @@ U8 vectors represented as UTF-8 strings.
   </tr>
 </table>
 
-For practical examples, see *Anatomy Of A Move Call From REST & CLI*
+For practical examples, see _Anatomy Of A Move Call From REST & CLI_
