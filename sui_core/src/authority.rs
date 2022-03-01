@@ -67,8 +67,8 @@ pub struct AuthorityState {
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
 ///
-/// Note the authority operations can be accesessed through a read ref (&) and do not
-/// require &mut. Internally a database is syncronized through a mutex lock.
+/// Note the authority operations can be accessed through a read ref (&) and do not
+/// require &mut. Internally a database is synchronized through a mutex lock.
 ///
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
@@ -90,7 +90,7 @@ impl AuthorityState {
                     }
                 );
             }
-            InputObjectKind::MoveObject((object_id, sequence_number, object_digest)) => {
+            InputObjectKind::OwnedMoveObject((object_id, sequence_number, object_digest)) => {
                 fp_ensure!(
                     sequence_number <= SequenceNumber::MAX,
                     SuiError::InvalidSequenceNumber
@@ -154,7 +154,8 @@ impl AuthorityState {
                     }
                 };
             }
-        }
+            InputObjectKind::SharedMoveObject(..) => (),
+        };
         Ok(())
     }
 
@@ -240,13 +241,14 @@ impl AuthorityState {
             .into_iter()
             .filter_map(|(object_kind, object)| match object_kind {
                 InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::MoveObject(object_ref) => {
+                InputObjectKind::OwnedMoveObject(object_ref) => {
                     if object.is_read_only() {
                         None
                     } else {
                         Some(object_ref)
                     }
                 }
+                InputObjectKind::SharedMoveObject(..) => None,
             })
             .collect();
 
@@ -267,13 +269,73 @@ impl AuthorityState {
     pub async fn handle_confirmation_transaction(
         &self,
         confirmation_transaction: ConfirmationTransaction,
+    ) -> SuiResult<TransactionInfoResponse> {
+        // Check the certificate and retrieve the transfer data.
+        let certificate = &confirmation_transaction.certificate;
+        certificate.check(&self.committee)?;
+
+        // If the transaction contains shared objects, we need to ensure they have been scheduled
+        // for processing by the consensus protocol.
+        let transaction = &certificate.transaction;
+        let transaction_digest = transaction.digest();
+        if transaction.contains_shared_object() {
+            let mut lock_errors = Vec::new();
+            for object_id in transaction.shared_input_objects() {
+                // Check whether the shared objects have already been assigned a sequence number by
+                // the consensus. Bail if the transaction contains even one shared object that either:
+                // (i) was not assigned a sequence number, or (ii) has a different sequence number
+                // than the current one. Note that if the shared object is not in storage (it has been
+                // destroyed), we keep processing the transaction to unlock all single-writer objects
+                // (the execution engine will simply execute no-op).
+                match self._database.sequenced(transaction_digest, *object_id)? {
+                    Some(lock) => {
+                        if let Some(object) = self._database.get_object(object_id)? {
+                            if object.version() != lock {
+                                lock_errors.push(SuiError::InvalidSequenceNumber);
+                            }
+                        }
+                    }
+                    None => lock_errors.push(SuiError::InvalidSequenceNumber),
+                }
+            }
+            fp_ensure!(
+                lock_errors.is_empty(),
+                SuiError::LockErrors {
+                    errors: lock_errors
+                }
+            );
+
+            // Now let's process the certificate as usual: this executes the transaction and
+            // unlock all single-writer objects.
+            let result = self
+                .process_certificate(confirmation_transaction.clone())
+                .await;
+
+            // If the execution is successfully, we cleanup some data structures.
+            if result.is_ok() {
+                for object_id in transaction.shared_input_objects() {
+                    self._database
+                        .delete_sequence_lock(transaction_digest, *object_id)?;
+                    if self._database.get_object(object_id)?.is_none() {
+                        self._database.delete_schedule(object_id)?;
+                    }
+                }
+            }
+            result
+        }
+        // In case there are no shared objects, we simply process the certificate.
+        else {
+            self.process_certificate(confirmation_transaction).await
+        }
+    }
+
+    async fn process_certificate(
+        &self,
+        confirmation_transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let certificate = confirmation_transaction.certificate;
         let transaction = certificate.transaction.clone();
         let transaction_digest = transaction.digest();
-
-        // Check the certificate and retrieve the transfer data.
-        certificate.check(&self.committee)?;
 
         // Ensure an idempotent answer
         let transaction_info = self.make_transaction_info(&transaction_digest).await?;
@@ -281,12 +343,17 @@ impl AuthorityState {
             return Ok(transaction_info);
         }
 
-        let inputs: Vec<_> = self
+        let mut inputs: Vec<_> = self
             .check_locks(&transaction)
             .await?
             .into_iter()
             .map(|(_, object)| object)
             .collect();
+        for object_id in transaction.shared_input_objects() {
+            if let Some(object) = self._database.get_object(object_id)? {
+                inputs.push(object);
+            }
+        }
 
         let mut transaction_dependencies: BTreeSet<_> = inputs
             .iter()
@@ -371,6 +438,34 @@ impl AuthorityState {
         }
         temporary_store.ensure_active_inputs_mutated();
         Ok((temporary_store, status))
+    }
+
+    /// Handle sequenced certificates from the consensus protocol.
+    pub fn handle_commit(
+        &mut self,
+        confirmation_transaction: ConfirmationTransaction,
+    ) -> SuiResult<()> {
+        // Ensure it is the first time we see this certificate.
+        let transaction = &confirmation_transaction.certificate.transaction;
+        let transaction_digest = transaction.digest();
+        for id in transaction.shared_input_objects() {
+            if self._database.sequenced(transaction_digest, *id)?.is_some() {
+                return Ok(());
+            }
+        }
+
+        // Check the certificate.
+        let certificate = &confirmation_transaction.certificate;
+        certificate.check(&self.committee)?;
+
+        // Persist the certificate. We are about to lock one or more shared object.
+        // We thus need to make sure someone (if not the client) can continue the protocol.
+        self._database
+            .persist_certificate(&transaction_digest, certificate)?;
+
+        // Lock the shared object for this particular transaction.
+        self._database
+            .lock_shared_objects(transaction_digest, transaction)
     }
 
     fn transfer(

@@ -81,6 +81,9 @@ MoveCall:
             - TYPENAME: ObjectID
             - TYPENAME: SequenceNumber
             - TYPENAME: ObjectDigest
+    - shared_object_arguments:
+        SEQ:
+          TYPENAME: ObjectID
     - pure_arguments:
         SEQ:
           SEQ: U8
