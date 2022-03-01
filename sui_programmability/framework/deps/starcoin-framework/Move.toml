@@ -1,18 +1,18 @@
 [package]
-name = "Sui"
-version = "0.0.1"
+name = "StarcoinFramework"
+version = "0.1.0"
+
+[addresses]
+StarcoinFramework = "0x3"
+StarcoinAssociation = "0xA550C18"
+VMReserved = "0x0"
+
+[dev-addresses]
+StarcoinFramework = "0x3"
 
 [dependencies]
 # Using a local dep for the Move stdlib instead of a git dep to avoid the overhead of fetching the git dep in
 # CI. The local dep is an unmodified version of the upstream stdlib
-MoveStdlib = { local = "deps/move-stdlib" }
+MoveStdlib = { local = "../move-stdlib" }
 #MoveStdlib = { git = "https://github.com/diem/diem.git", subdir="language/move-stdlib", rev = "346301f33b3489bb4e486ae6c0aa5e030223b492" }
 
-# This is added for the support of U256(https://github.com/MystenLabs/fastnft/pull/616#issuecomment-1056132030)
-StarcoinFramework = { local = "deps/starcoin-framework" }
-
-[addresses]
-Sui = "0x2"
-
-[dev-addresses]
-Sui = "0x2"
