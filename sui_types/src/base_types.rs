@@ -87,11 +87,13 @@ impl From<ObjectID> for SuiAddress {
     }
 }
 
-impl From<Vec<u8>> for SuiAddress {
-    fn from(address: Vec<u8>) -> SuiAddress {
-        let mut res = [0u8; SUI_ADDRESS_LENGTH];
-        res.copy_from_slice(&address[..SUI_ADDRESS_LENGTH]);
-        Self(res)
+impl TryFrom<Vec<u8>> for SuiAddress {
+    type Error = SuiError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
+        let arr: [u8; SUI_ADDRESS_LENGTH] =
+            bytes.try_into().map_err(|_| SuiError::InvalidAddress)?;
+        Ok(Self(arr))
     }
 }
 
