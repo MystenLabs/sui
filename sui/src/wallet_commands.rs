@@ -320,8 +320,8 @@ impl WalletCommands {
 
                 // TODO: We should ideally fetch the objects from local cache
                 let mut coins = Vec::new();
-                for obj in object_refs {
-                    match context.address_manager.get_object_info(obj.0).await? {
+                for (id, _, _) in object_refs {
+                    match context.address_manager.get_object_info(id).await? {
                         Exists(_, o, _) => {
                             if matches!( o.type_(), Some(v)  if *v == GasCoin::type_()) {
                                 // Okay to unwrap() since we already checked type
