@@ -14,12 +14,12 @@ module Examples::TrustedCoin {
         // Get a treasury cap for the coin and give it to the transaction
         // sender
         let treasury_cap = Coin::create_currency<EXAMPLE>(EXAMPLE{}, ctx);
-        Transfer::transfer(treasury_cap, TxContext::get_signer_address(ctx))
+        Transfer::transfer(treasury_cap, TxContext::sender(ctx))
     }
 
     public fun mint(treasury_cap: &mut TreasuryCap<EXAMPLE>, amount: u64, ctx: &mut TxContext) {
         let coin = Coin::mint<EXAMPLE>(amount, treasury_cap, ctx);
-        Coin::transfer(coin, TxContext::get_signer_address(ctx));
+        Coin::transfer(coin, TxContext::sender(ctx));
     }
 
     public fun transfer(treasury_cap: TreasuryCap<EXAMPLE>, recipient: address, _ctx: &mut TxContext) {

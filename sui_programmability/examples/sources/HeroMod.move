@@ -63,7 +63,7 @@ module Examples::HeroMod {
                 token_supply_max,
                 monster_max,
             },
-            TxContext::get_signer_address(ctx)
+            TxContext::sender(ctx)
         )
     }
 

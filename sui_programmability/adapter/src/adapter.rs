@@ -38,8 +38,8 @@ use std::{
 pub use move_vm_runtime::move_vm::MoveVM;
 
 macro_rules! exec_failure {
-    ($gas:expr, $err:expr) => {
-        return Ok(ExecutionStatus::new_failure($gas, $err))
+    ($gas_used:expr, $err:expr) => {
+        return Ok(ExecutionStatus::new_failure($gas_used, $err))
     };
 }
 
@@ -277,8 +277,8 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     };
 
     // run validation checks
-    let gas_cost = gas::calculate_module_publish_cost(&module_bytes);
-    if gas_cost > gas_budget {
+    let gas_used_for_publish = gas::calculate_module_publish_cost(&module_bytes);
+    if gas_used_for_publish > gas_budget {
         exec_failure!(
             gas::MIN_MOVE,
             SuiError::InsufficientGas {
@@ -304,6 +304,45 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         Err(err) => exec_failure!(gas::MIN_MOVE, err),
     };
 
+    let gas_used_for_init = match store_package_and_init_modules(
+        state_view,
+        &vm,
+        modules,
+        ctx,
+        gas_budget - gas_used_for_publish,
+    ) {
+        ExecutionStatus::Success { gas_used } => gas_used,
+        ExecutionStatus::Failure { gas_used, error } => {
+            exec_failure!(gas_used + gas_used_for_publish, *error)
+        }
+    };
+
+    let total_gas_used = gas_used_for_publish + gas_used_for_init;
+    // successful execution of both publishing operation and or all
+    // (optional) initializer calls
+    match gas::try_deduct_gas(&mut gas_object, total_gas_used) {
+        Ok(()) => {
+            state_view.write_object(gas_object);
+            Ok(ExecutionStatus::Success {
+                gas_used: total_gas_used,
+            })
+        }
+        Err(err) => exec_failure!(gas_budget, err),
+    }
+}
+
+/// Store package in state_view and call module initializers
+/// Return gas used for initialization
+pub fn store_package_and_init_modules<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+>(
+    state_view: &mut S,
+    vm: &MoveVM,
+    modules: Vec<CompiledModule>,
+    ctx: &mut TxContext,
+    gas_budget: u64,
+) -> ExecutionStatus {
     let mut modules_to_init = Vec::new();
     for module in modules.iter() {
         if module_has_init(module) {
@@ -316,51 +355,55 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     let package_object = Object::new_package(modules, ctx.digest());
     state_view.write_object(package_object);
 
-    let mut total_gas_used = gas_cost;
-    if !modules_to_init.is_empty() {
-        let mut current_gas_budget = gas_budget - total_gas_used;
-        for module_id in modules_to_init {
-            let args = vec![ctx.to_vec()];
+    init_modules(state_view, vm, modules_to_init, ctx, gas_budget)
+}
 
-            let gas_used = match execute_internal(
-                &vm,
-                state_view,
-                &module_id,
-                &Identifier::new(INIT_FN_NAME.as_str()).unwrap(),
-                Vec::new(),
-                args,
-                Vec::new(),
-                BTreeMap::new(),
-                HashMap::new(),
-                current_gas_budget,
-                ctx,
-                true,
-            ) {
-                ExecutionStatus::Success { gas_used } => gas_used,
-                ExecutionStatus::Failure { gas_used, error } => {
-                    exec_failure!(total_gas_used + gas_used, *error)
-                }
-            };
-            // This should never be the case as current_gas_budget
-            // (before the call) must be larger than gas_used (after
-            // the call) in order for the call to succeed in the first
-            // place.
-            debug_assert!(current_gas_budget >= gas_used);
-            current_gas_budget -= gas_used;
-            total_gas_used += gas_used;
-        }
+/// Modules in module_ids_to_init must have the init method defined
+fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
+    state_view: &mut S,
+    vm: &MoveVM,
+    module_ids_to_init: Vec<ModuleId>,
+    ctx: &mut TxContext,
+    gas_budget: u64,
+) -> ExecutionStatus {
+    let mut total_gas_used = 0;
+    let mut current_gas_budget = gas_budget;
+    for module_id in module_ids_to_init {
+        let args = vec![ctx.to_vec()];
+
+        let gas_used = match execute_internal(
+            vm,
+            state_view,
+            &module_id,
+            &Identifier::new(INIT_FN_NAME.as_str()).unwrap(),
+            Vec::new(),
+            args,
+            Vec::new(),
+            BTreeMap::new(),
+            HashMap::new(),
+            current_gas_budget,
+            ctx,
+            true,
+        ) {
+            ExecutionStatus::Success { gas_used } => gas_used,
+            ExecutionStatus::Failure { gas_used, error } => {
+                return ExecutionStatus::Failure {
+                    gas_used: gas_used + total_gas_used,
+                    error,
+                };
+            }
+        };
+        // This should never be the case as current_gas_budget
+        // (before the call) must be larger than gas_used (after
+        // the call) in order for the call to succeed in the first
+        // place.
+        debug_assert!(current_gas_budget >= gas_used);
+        current_gas_budget -= gas_used;
+        total_gas_used += gas_used;
     }
 
-    // successful execution of both publishign operation and or all
-    // (optional) initializer calls
-    match gas::try_deduct_gas(&mut gas_object, total_gas_used) {
-        Ok(()) => {
-            state_view.write_object(gas_object);
-            Ok(ExecutionStatus::Success {
-                gas_used: total_gas_used,
-            })
-        }
-        Err(err) => exec_failure!(gas_budget, err),
+    ExecutionStatus::Success {
+        gas_used: total_gas_used,
     }
 }
 
