@@ -575,7 +575,10 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         let ((obj_id, _seq_num, _obj_digest), _owner) = new_objs.first().unwrap();
         *obj_id
     } else {
-        panic!()
+        // User assert since panic causes test issues
+        assert!(false);
+        // Use this to satisfy type checker
+        ObjectID::random()
     };
 
     // Try a bad argument: decimal
@@ -729,7 +732,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     {
         (created_obj1, created_obj2) = (new_objs.get(0).unwrap().0, new_objs.get(1).unwrap().0);
     } else {
-        // Fail
+        // Fail this way because Panic! causes test issues
         assert!(false);
     };
 
@@ -828,12 +831,18 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
+    let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
+
     // Get the mutated objects
     let (mut_obj1, mut_obj2) =
         if let WalletCommandResult::Transfer(_, _, TransactionEffects { mutated, .. }) = resp {
             (mutated.get(0).unwrap().0, mutated.get(1).unwrap().0)
         } else {
-            panic!()
+            assert!(false);
+            (
+                dumy_obj.to_object_reference(),
+                dumy_obj.to_object_reference(),
+            )
         };
 
     retry_assert!(
@@ -862,7 +871,9 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let mut_obj1 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
         object
     } else {
-        panic!()
+        // Fail this way because Panic! causes test issues
+        assert!(false);
+        dumy_obj.clone()
     };
 
     let resp = WalletCommands::Object { id: mut_obj2.0 }
@@ -871,7 +882,9 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let mut_obj2 = if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
         object
     } else {
-        panic!()
+        // Fail this way because Panic! causes test issues
+        assert!(false);
+        dumy_obj
     };
 
     let (gas, obj) = if mut_obj1.get_single_owner().unwrap() == address {
