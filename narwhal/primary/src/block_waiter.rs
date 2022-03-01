@@ -35,6 +35,7 @@ pub type Transaction = Vec<u8>;
 #[path = "tests/block_waiter_tests.rs"]
 pub mod block_waiter_tests;
 
+#[derive(Debug)]
 pub enum BlockCommand {
     /// GetBlock dictates retrieving the block data
     /// (vector of transactions) by a given block digest.

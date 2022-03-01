@@ -15,7 +15,7 @@ use crypto::{
     traits::{KeyPair, VerifyingKey},
     Digest, Hash,
 };
-use ed25519_dalek::{Digest as _};
+
 use futures::StreamExt;
 use network::SimpleSender;
 use std::{collections::HashMap, net::SocketAddr};
@@ -88,14 +88,14 @@ async fn test_successfully_retrieve_block() {
             id: block_id.clone(),
             sender: tx_get_block,
         })
-        .await;
+        .await
+        .unwrap();
 
     // Wait for the worker server to complete before continue.
     // Then we'll be confident that the expected batch responses
     // have been sent (via the tx_batch_messages channel though)
-    match timeout(Duration::from_millis(4_000), handle).await {
-        Err(_) => panic!("worker hasn't received expected batch requests"),
-        _ => {}
+    if let Err(_) = timeout(Duration::from_millis(4_000), handle).await {
+        panic!("worker hasn't received expected batch requests")
     }
 
     // THEN we should expect to get back the result
@@ -251,8 +251,8 @@ async fn test_unlocking_pending_get_block_request_after_response() {
     waiter.handle_batch_waiting_result(result).await;
 
     // THEN
-    assert_eq!(waiter.pending_get_block.contains_key(&block_id), false);
-    assert_eq!(waiter.tx_get_block_map.contains_key(&block_id), false);
+    assert!(!waiter.pending_get_block.contains_key(&block_id));
+    assert!(!waiter.tx_get_block_map.contains_key(&block_id));
 }
 
 #[tokio::test]
@@ -291,7 +291,8 @@ async fn test_batch_timeout() {
             id: block_id.clone(),
             sender: tx_get_block,
         })
-        .await;
+        .await
+        .unwrap();
 
     // THEN we should expect to get back the result
     let timer = sleep(Duration::from_millis(5_000));
@@ -341,7 +342,8 @@ async fn test_return_error_when_certificate_is_missing() {
             id: block_id.clone(),
             sender: tx_get_block,
         })
-        .await;
+        .await
+        .unwrap();
 
     // THEN we should expect to get back the error
     let timer = sleep(Duration::from_millis(5_000));
@@ -398,7 +400,8 @@ pub fn worker_listener<PublicKey: VerifyingKey>(
                             if expected_batches.contains_key(&id) {
                                 tx_batch_messages
                                     .send(expected_batches.get(&id).cloned().unwrap())
-                                    .await;
+                                    .await
+                                    .unwrap();
 
                                 counter += 1;
 
