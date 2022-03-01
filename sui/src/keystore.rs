@@ -1,3 +1,6 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use anyhow::anyhow;
 use ed25519_dalek::ed25519::signature;
 use ed25519_dalek::{ed25519, Signer};
