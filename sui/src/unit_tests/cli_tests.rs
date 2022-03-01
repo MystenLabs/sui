@@ -220,7 +220,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Error> {
     use sui_types::crypto::get_key_pair_from_bytes;
 
-    let (address, admin_key) = get_key_pair_from_bytes(&[
+    let (address, _) = get_key_pair_from_bytes(&[
         10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
         92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
         90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
@@ -277,10 +277,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 
     // Create Wallet context.
     let mut wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    wallet_conf.accounts = vec![AccountInfo {
-        address,
-        key_pair: admin_key,
-    }];
+    wallet_conf.accounts = vec![address];
     let mut context = WalletContext::new(wallet_conf)?;
 
     // Make sure init() is executed correctly for custom_genesis_package_2::M1
@@ -761,7 +758,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 
     // Create Wallet context.
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address = wallet_conf.accounts.first().unwrap().address;
+    let address = *wallet_conf.accounts.first().unwrap();
     let mut context = WalletContext::new(wallet_conf)?;
 
     // Sync client to retrieve objects from the network.
@@ -878,8 +875,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 
     // Create Wallet context.
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address = wallet_conf.accounts.first().unwrap().address;
-    let recipient = wallet_conf.accounts.get(1).unwrap().address;
+    let address = *wallet_conf.accounts.first().unwrap();
+    let recipient = *wallet_conf.accounts.get(1).unwrap();
 
     let mut context = WalletContext::new(wallet_conf)?;
 
