@@ -94,7 +94,7 @@ async fn test_successfully_retrieve_block() {
     // Wait for the worker server to complete before continue.
     // Then we'll be confident that the expected batch responses
     // have been sent (via the tx_batch_messages channel though)
-    if let Err(_) = timeout(Duration::from_millis(4_000), handle).await {
+    if timeout(Duration::from_millis(4_000), handle).await.is_err() {
         panic!("worker hasn't received expected batch requests")
     }
 
