@@ -468,7 +468,7 @@ struct Object {
     object_id: String,
     /** Object version */
     sequence_number: String,
-    /** History of signed effects used for local validation of object */
+    /** Hash of the object's contents used for local validation */
     object_digest: String,
 }
 
