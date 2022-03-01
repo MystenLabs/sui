@@ -353,7 +353,7 @@ same gas object we used to pay for the function call in the previous
 (we use 1000 as our gas budget. The whole command looks as follows:
 
 ``` shell
-sui>-$ publish --path /Users/adamwelc/my_move_package --gas 60DADCE6E5081C3EFCA162694D7EFD8D99D46636 1000
+sui>-$ publish --path /PATH_TO_PACKAGE/my_move_package --gas 60DADCE6E5081C3EFCA162694D7EFD8D99D46636 1000
 ```
 
 The (abbreviated) result of running this command should show that one
