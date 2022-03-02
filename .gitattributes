@@ -1,2 +1,6 @@
 # Best-effort syntax highlighting for Move: just use Rust
 *.move linguist-language=Rust
+
+# This file is used in "porcelain" file comparison, 
+# we don't want an equality to fail because of line endings.
+sui_core/tests/staged/sui.yaml text eol=lf
