@@ -140,7 +140,7 @@ async fn genesis(
 
     let genesis_params = request.into_inner();
     let num_authorities = genesis_params.num_authorities.unwrap_or(4);
-    let num_objects = genesis_params.num_objects.unwrap_or(5);
+    // let num_objects = genesis_params.num_objects.unwrap_or(5);
 
     let mut network_config =
         match NetworkConfig::read_or_create(&PathBuf::from(network_config_path)) {

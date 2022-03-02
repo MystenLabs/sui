@@ -103,7 +103,7 @@ pub fn resolve_move_function_components(
         .parameters
         .iter()
         .position(is_primitive)
-        .unwrap_or(function_signature.parameters.len());
+        .unwrap_or(expected_len);
 
     // Everything to the left of pure args must be object args
 
@@ -143,8 +143,8 @@ fn check_and_serialize_pure_args(
     for (idx, curr) in args
         .iter()
         .enumerate()
-        .take(end_exclusive - start)
         .skip(start)
+        .take(end_exclusive - start)
     {
         // The arg we got in JSON
         let curr_pure_arg = curr.to_owned();
