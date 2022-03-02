@@ -564,6 +564,8 @@ SuiError:
       IncorrectGasMerge: UNIT
     77:
       AccountNotFound: UNIT
+    78:
+      AccountExists: UNIT
 Transaction:
   STRUCT:
     - data:
