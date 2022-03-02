@@ -378,18 +378,18 @@ impl Display for WalletCommandResult {
         let mut writer = String::new();
         match self {
             WalletCommandResult::Publish(cert, effects) => {
-                writeln!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
             WalletCommandResult::Object(object_read) => {
                 let object = object_read.object().map_err(fmt::Error::custom)?;
                 writeln!(writer, "{}", object)?;
             }
             WalletCommandResult::Call(cert, effects) => {
-                writeln!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
             WalletCommandResult::Transfer(time_elapsed, cert, effects) => {
                 writeln!(writer, "Transfer confirmed after {} us", time_elapsed)?;
-                writeln!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
             }
             WalletCommandResult::Addresses(addresses) => {
                 writeln!(writer, "Showing {} results.", addresses.len())?;
@@ -441,9 +441,9 @@ fn write_cert_and_effects(
 ) -> Result<String, fmt::Error> {
     let mut writer = String::new();
     writeln!(writer, "{}", "----- Certificate ----".bold())?;
-    writeln!(writer, "{}", cert)?;
+    write!(writer, "{}", cert)?;
     writeln!(writer, "{}", "----- Transaction Effects ----".bold())?;
-    writeln!(writer, "{}", effects)?;
+    write!(writer, "{}", effects)?;
     Ok(writer)
 }
 
