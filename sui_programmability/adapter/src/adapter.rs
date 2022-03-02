@@ -11,10 +11,11 @@ use sui_types::{
     error::{SuiError, SuiResult},
     event::Event,
     gas,
+    id::VersionedID,
     messages::ExecutionStatus,
     move_package::*,
     object::{MoveObject, Object, Owner},
-    storage::Storage,
+    storage::{DeleteKind, Storage},
 };
 use sui_verifier::verifier;
 
@@ -524,6 +525,7 @@ fn process_successful_execution<
     // process events to identify transfers, freezes
     let mut gas_used = 0;
     let tx_digest = ctx.digest();
+    let mut deleted_ids = HashMap::new();
     for e in events {
         let (recipient, event_type, type_, event_bytes) = e;
         let result = match EventType::try_from(event_type as u8)
@@ -560,7 +562,10 @@ fn process_successful_execution<
                 &mut object_owner_map,
             ),
             EventType::DeleteObjectID => {
-                // TODO: Process deleted object event.
+                // unwrap safe because this event can only be emitted from processing
+                // native call delete_id, which guarantees the type of the id.
+                let id: VersionedID = bcs::from_bytes(&event_bytes).unwrap();
+                deleted_ids.insert(*id.object_id(), id.version());
                 Ok(())
             }
             EventType::User => {
@@ -581,11 +586,32 @@ fn process_successful_execution<
     // any object left in `by_value_objects` is an input passed by value that was not transferred or frozen.
     // this means that either the object was (1) deleted from the Sui system altogether, or
     // (2) wrapped inside another object that is in the Sui object pool
-    // in either case, we want to delete it
     let mut gas_refund: u64 = 0;
     for (id, object) in by_value_objects.iter() {
-        state_view.delete_object(id);
+        if deleted_ids.contains_key(id) {
+            state_view.delete_object(id, object.version(), DeleteKind::ExistInInput);
+        } else {
+            state_view.delete_object(id, object.version(), DeleteKind::Wrap);
+        }
         gas_refund += gas::calculate_object_deletion_refund(object);
+    }
+    // The loop above may not cover all ids in deleted_ids, i.e. some of the deleted_ids
+    // may not show up in by_value_objects.
+    // This can happen for two reasons:
+    //  1. The call to ID::delete_id() was not a result of deleting a pre-existing object.
+    //    This can happen either because we were deleting an object that just got created
+    //    in this same transaction, and hence we don't need to care about them; or we have
+    //    an ID that's created but not associated with a real object.
+    //  2. This object was wrapped in the past, and now is getting deleted. It won't show up
+    //    in the input, but the deletion is also real.
+    // We cannot distinguish the above two cases here just yet. So we just add it with
+    // the kind NotExistInInput. Once we get back to authorities, we can remove ids from case (1)
+    // by finding out which ID was wrapped in the past.
+    // This is done in AuthorityTemporaryStore::patch_unwrapped_objects.
+    for (id, version) in deleted_ids {
+        if !by_value_objects.contains_key(&id) {
+            state_view.delete_object(&id, version, DeleteKind::NotExistInInput);
+        }
     }
 
     (gas_used, gas_refund, Ok(()))

@@ -129,11 +129,7 @@ impl AsRef<[u8]> for SuiAddress {
 // We use SHA3-256 hence 32 bytes here
 const TRANSACTION_DIGEST_LENGTH: usize = 32;
 
-pub const OBJECT_DIGEST_MAX: ObjectDigest = ObjectDigest([255; 32]);
-pub const OBJECT_DIGEST_DELETED: ObjectDigest = ObjectDigest([99; 32]);
-
 /// A transaction will have a (unique) digest.
-
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 pub struct TransactionDigest(#[serde_as(as = "Bytes")] [u8; TRANSACTION_DIGEST_LENGTH]);
@@ -240,13 +236,14 @@ impl ObjectDigest {
     pub const MIN: ObjectDigest = ObjectDigest([u8::MIN; 32]);
     pub const MAX: ObjectDigest = ObjectDigest([u8::MAX; 32]);
 
+    /// A marker that signifies the object is deleted.
+    pub const OBJECT_DIGEST_DELETED: ObjectDigest = ObjectDigest([99; 32]);
+
+    /// A marker that signifies the object is wrapped into another object.
+    pub const OBJECT_DIGEST_WRAPPED: ObjectDigest = ObjectDigest([88; 32]);
+
     pub fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
-    }
-
-    /// A marker that signifies the object is deleted.
-    pub fn deleted() -> Self {
-        OBJECT_DIGEST_DELETED
     }
 
     // for testing
