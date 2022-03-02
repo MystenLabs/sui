@@ -660,7 +660,7 @@ impl AuthorityState {
         self._database.clone()
     }
 
-    pub async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self._database.get_object(object_id)
     }
 
