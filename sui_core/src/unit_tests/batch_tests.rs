@@ -5,7 +5,7 @@ use super::*;
 use crate::authority::authority_tests::*;
 
 use std::fs;
-use std::{convert::TryInto, env};
+use std::{env, };
 
 #[tokio::test]
 async fn test_open_manager() {
@@ -19,7 +19,7 @@ async fn test_open_manager() {
     // Make a test key pair
     let (_, key_pair) = get_key_pair();
     let key_pair = Arc::pin(key_pair);
-    let address = key_pair.public_key_bytes().clone();
+    let address = *key_pair.public_key_bytes();
 
     {
         // Create an authority
@@ -41,7 +41,7 @@ async fn test_open_manager() {
 
         store
             .executed_sequence
-            .insert(&0, &TransactionDigest::new([0; 32].try_into().unwrap()))
+            .insert(&0, &TransactionDigest::new([0; 32]))
             .expect("no error on write");
     }
     // drop all
@@ -62,7 +62,7 @@ async fn test_open_manager() {
         // TEST 3: If the database contains out of order transactions we fix it
         store
             .executed_sequence
-            .insert(&2, &TransactionDigest::new([0; 32].try_into().unwrap()))
+            .insert(&2, &TransactionDigest::new([0; 32]))
             .expect("no error on write");
     }
     // drop all
@@ -100,7 +100,7 @@ async fn test_batch_manager_happy_path() {
     // Make a test key pair
     let (_, key_pair) = get_key_pair();
     let key_pair = Arc::pin(key_pair);
-    let address = key_pair.public_key_bytes().clone();
+    let address = *key_pair.public_key_bytes();
 
     // TEST 1: init from an empty database should return to a zero block
     let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
@@ -110,9 +110,9 @@ async fn test_batch_manager_happy_path() {
         .expect("No errors starting manager.");
 
     // Send a transaction.
-    let tx_zero = TransactionDigest::new([0; 32].try_into().unwrap());
+    let tx_zero = TransactionDigest::new([0; 32]);
     _send
-        .send_item(0, tx_zero.clone())
+        .send_item(0, tx_zero)
         .await
         .expect("Send to the channel.");
 
@@ -127,7 +127,7 @@ async fn test_batch_manager_happy_path() {
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
     _send
-        .send_item(1, tx_zero.clone())
+        .send_item(1, tx_zero)
         .await
         .expect("Send to the channel.");
 
@@ -161,7 +161,7 @@ async fn test_batch_manager_out_of_order() {
     // Make a test key pair
     let (_, key_pair) = get_key_pair();
     let key_pair = Arc::pin(key_pair);
-    let address = key_pair.public_key_bytes().clone();
+    let address = *key_pair.public_key_bytes();
 
     // TEST 1: init from an empty database should return to a zero block
     let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
@@ -171,24 +171,24 @@ async fn test_batch_manager_out_of_order() {
         .expect("Start service with no issues.");
 
     // Send transactions out of order
-    let tx_zero = TransactionDigest::new([0; 32].try_into().unwrap());
+    let tx_zero = TransactionDigest::new([0; 32]);
     _send
-        .send_item(1, tx_zero.clone())
+        .send_item(1, tx_zero)
         .await
         .expect("Send to the channel.");
 
     _send
-        .send_item(3, tx_zero.clone())
+        .send_item(3, tx_zero)
         .await
         .expect("Send to the channel.");
 
     _send
-        .send_item(2, tx_zero.clone())
+        .send_item(2, tx_zero)
         .await
         .expect("Send to the channel.");
 
     _send
-        .send_item(0, tx_zero.clone())
+        .send_item(0, tx_zero)
         .await
         .expect("Send to the channel.");
 
