@@ -9,6 +9,7 @@ use sui_types::error::{SuiError, SuiResult};
 
 use std::collections::BTreeMap;
 use std::time::Duration;
+use sui_types::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::interval;
 
@@ -48,7 +49,7 @@ pub type BroadcastPair = (
 );
 
 /// Either a freshly sequenced transaction hash or a batch
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Debug, Serialize, Deserialize)]
 pub enum UpdateItem {
     Transaction((TxSequenceNumber, TransactionDigest)),
     Batch(AuthorityBatch),
@@ -268,7 +269,7 @@ impl BatcherManager {
                 self.db.batches.insert(&new_batch.total_size, &new_batch)?;
 
                 // Send the update
-                let _ = self.tx_broadcast.send(UpdateItem::Batch(new_batch));
+                let _ = self.tx_broadcast.send(UpdateItem::Batch(new_batch.clone()));
 
                 // A new batch is actually made, so we reset the conditions.
                 prev_batch = new_batch;
@@ -291,8 +292,16 @@ impl BatcherManager {
     pub fn register_listener() {}
 }
 
+pub type BatchDigest = [u8; 32];
+
 #[derive(
-    Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Default, Debug, Serialize, Deserialize,
+    Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize,
+)]
+pub struct TransactionBatch(Vec<(TxSequenceNumber, TransactionDigest)>);
+impl BcsSignable for TransactionBatch {}
+
+#[derive(
+    Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize,
 )]
 pub struct AuthorityBatch {
     /// The total number of items executed by this authority.
@@ -301,15 +310,33 @@ pub struct AuthorityBatch {
     /// The number of items in the previous block.
     previous_total_size: u64,
 
+    /// The digest of the previous block, if there is one
+    previous_digest: Option<BatchDigest>,
+
+    // The digest of all transactions digests in this batch
+    transactions_digest: [u8; 32],
 }
 
+impl BcsSignable for AuthorityBatch {}
+
 impl AuthorityBatch {
+
+    pub fn digest(&self) -> BatchDigest {
+        sha3_hash(self)
+    }
+
     /// The first batch for any authority indexes at zero
     /// and has zero length.
     pub fn initial() -> AuthorityBatch {
+
+        let to_hash = TransactionBatch(Vec::new());
+        let transactions_digest = sha3_hash(&to_hash);
+
         AuthorityBatch {
             total_size: 0,
             previous_total_size: 0,
+            previous_digest: None,
+            transactions_digest,
         }
     }
 
@@ -319,9 +346,15 @@ impl AuthorityBatch {
         previous_batch: &AuthorityBatch,
         transactions: &[(TxSequenceNumber, TransactionDigest)],
     ) -> AuthorityBatch {
+
+        let to_hash = TransactionBatch(transactions.iter().copied().collect());
+        let transactions_digest = sha3_hash(&to_hash);
+
         AuthorityBatch {
             total_size: previous_batch.total_size + transactions.len() as u64,
             previous_total_size: previous_batch.total_size,
+            previous_digest: Some(previous_batch.digest()),
+            transactions_digest,
         }
     }
 }

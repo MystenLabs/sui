@@ -68,15 +68,10 @@ async fn test_open_manager() {
         let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
         let (_send, manager, _pair) = BatcherManager::new(store.clone(), 100);
-        let last_block = manager.init_from_database().await;
+        let last_block = manager.init_from_database().await.unwrap();
 
-        assert_eq!(
-            last_block.unwrap(),
-            AuthorityBatch {
-                total_size: 2,
-                previous_total_size: 1
-            }
-        );
+        assert_eq!(last_block.total_size, 2);
+        assert_eq!(last_block.previous_total_size, 1);
     }
 }
 
