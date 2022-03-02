@@ -294,15 +294,11 @@ impl BatchManager {
 
 pub type BatchDigest = [u8; 32];
 
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct TransactionBatch(Vec<(TxSequenceNumber, TransactionDigest)>);
 impl BcsSignable for TransactionBatch {}
 
-#[derive(
-    Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize,
-)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct AuthorityBatch {
     /// The total number of items executed by this authority.
     total_size: u64,
@@ -320,7 +316,6 @@ pub struct AuthorityBatch {
 impl BcsSignable for AuthorityBatch {}
 
 impl AuthorityBatch {
-
     pub fn digest(&self) -> BatchDigest {
         sha3_hash(self)
     }
@@ -328,7 +323,6 @@ impl AuthorityBatch {
     /// The first batch for any authority indexes at zero
     /// and has zero length.
     pub fn initial() -> AuthorityBatch {
-
         let to_hash = TransactionBatch(Vec::new());
         let transactions_digest = sha3_hash(&to_hash);
 
@@ -346,8 +340,7 @@ impl AuthorityBatch {
         previous_batch: &AuthorityBatch,
         transactions: &[(TxSequenceNumber, TransactionDigest)],
     ) -> AuthorityBatch {
-
-        let to_hash = TransactionBatch(transactions.iter().copied().collect());
+        let to_hash = TransactionBatch(transactions.to_vec());
         let transactions_digest = sha3_hash(&to_hash);
 
         AuthorityBatch {
