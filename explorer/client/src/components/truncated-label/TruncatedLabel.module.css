@@ -1,0 +1,7 @@
+.label {
+    @apply truncate max-w-[10rem] min-w-[8rem] inline-block;
+}
+
+.label.small {
+    @apply max-w-[8rem] min-w-[5rem];
+}

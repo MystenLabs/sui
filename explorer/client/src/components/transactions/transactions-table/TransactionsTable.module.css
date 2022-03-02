@@ -1,0 +1,47 @@
+.table-container {
+    @apply overflow-y-auto rounded pt-5 pb-3 border-solid border-2;
+}
+
+.table {
+    @apply table-auto w-full border-collapse max-h-[60vh] block overflow-y-auto;
+}
+
+.table thead {
+    @apply sticky top-0 bg-white;
+}
+
+.row:nth-child(2n + 1) {
+    @apply bg-slate-100;
+}
+
+th.column {
+    @apply font-semibold;
+}
+
+.column {
+    @apply whitespace-nowrap pl-5 text-left;
+}
+
+.column-objs {
+    @apply max-w-[40vw] whitespace-normal;
+}
+
+.column:last-child {
+    @apply pr-5;
+}
+
+.objects {
+    @apply list-none p-0 m-0;
+}
+
+.object {
+    @apply inline-block align-top whitespace-nowrap mr-1;
+}
+
+.object:last-child {
+    @apply mr-0;
+}
+
+.extra {
+    @apply text-xs tracking-tight;
+}

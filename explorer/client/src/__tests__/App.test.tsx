@@ -90,4 +90,23 @@ describe('App component', () => {
         fireEvent.click(screen.getByRole('link', { name: /logo/i }));
         expectHome();
     });
+
+    describe('latest transactions', () => {
+        it('shows latest transactions on home page', () => {
+            render(<App />, { wrapper: MemoryRouter });
+            expect(screen.getByText('Transaction ID')).toBeInTheDocument();
+        });
+        it('navigates to transaction details when clicked', () => {
+            const history = createMemoryHistory();
+            render(
+                <HistoryRouter history={history}>
+                    <App />
+                </HistoryRouter>
+            );
+            fireEvent.click(screen.getByText(/A1dddd/));
+            expect(history.location.pathname).toBe(
+                '/transactions/A1dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
+            );
+        });
+    });
 });
