@@ -27,7 +27,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::authority_batch::BatcherSender;
+use crate::authority_batch::BatchSender;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -69,7 +69,7 @@ pub struct AuthorityState {
     /// The sender to notify of new transactions
     /// and create batches for this authority.
     /// Keep as None if there is no need for this.
-    batch_sender: Option<BatcherSender>,
+    batch_sender: Option<BatchSender>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -81,7 +81,7 @@ pub struct AuthorityState {
 impl AuthorityState {
     /// Set a listener for transaction certificate updates. Returns an
     /// error if a listener is already registered.
-    pub fn set_batcher_sender(&mut self, batch_sender: BatcherSender) -> SuiResult {
+    pub fn set_batch_sender(&mut self, batch_sender: BatchSender) -> SuiResult {
         if self.batch_sender.is_some() {
             return Err(SuiError::AuthorityUpdateFailure);
         }

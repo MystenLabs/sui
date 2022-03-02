@@ -55,12 +55,12 @@ pub enum UpdateItem {
     Batch(AuthorityBatch),
 }
 
-pub struct BatcherSender {
+pub struct BatchSender {
     /// Channel for sending updates.
     tx_send: Sender<(TxSequenceNumber, TransactionDigest)>,
 }
 
-pub struct BatcherManager {
+pub struct BatchManager {
     /// Channel for receiving updates
     tx_recv: Receiver<(TxSequenceNumber, TransactionDigest)>,
     /// The sender end of the broadcast channel used to send updates to listeners
@@ -69,7 +69,7 @@ pub struct BatcherManager {
     db: Arc<AuthorityStore>,
 }
 
-impl BatcherSender {
+impl BatchSender {
     /// Send a new event to the batch manager
     pub async fn send_item(
         &self,
@@ -83,15 +83,15 @@ impl BatcherSender {
     }
 }
 
-impl BatcherManager {
+impl BatchManager {
     pub fn new(
         db: Arc<AuthorityStore>,
         capacity: usize,
-    ) -> (BatcherSender, BatcherManager, BroadcastPair) {
+    ) -> (BatchSender, BatchManager, BroadcastPair) {
         let (tx_send, tx_recv) = channel(capacity);
         let (tx_broadcast, rx_broadcast) = tokio::sync::broadcast::channel(capacity);
-        let sender = BatcherSender { tx_send };
-        let manager = BatcherManager {
+        let sender = BatchSender { tx_send };
+        let manager = BatchManager {
             tx_recv,
             tx_broadcast: tx_broadcast.clone(),
             db,

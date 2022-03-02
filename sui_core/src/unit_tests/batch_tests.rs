@@ -23,7 +23,7 @@ async fn test_open_manager() {
         let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
         // TEST 1: init from an empty database should return to a zero block
-        let (_send, manager, _pair) = BatcherManager::new(store.clone(), 100);
+        let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
         let last_block = manager
             .init_from_database()
             .await
@@ -46,7 +46,7 @@ async fn test_open_manager() {
         opts.set_max_open_files(max_files_authority_tests());
         let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
-        let (_send, manager, _pair) = BatcherManager::new(store.clone(), 100);
+        let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
         let last_block = manager
             .init_from_database()
             .await
@@ -67,7 +67,7 @@ async fn test_open_manager() {
         opts.set_max_open_files(max_files_authority_tests());
         let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
-        let (_send, manager, _pair) = BatcherManager::new(store.clone(), 100);
+        let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
         let last_block = manager.init_from_database().await.unwrap();
 
         assert_eq!(last_block.total_size, 2);
@@ -90,7 +90,7 @@ async fn test_batch_manager_happy_path() {
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
     // TEST 1: init from an empty database should return to a zero block
-    let (_send, manager, _pair) = BatcherManager::new(store.clone(), 100);
+    let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
     let _join = manager
         .start_service(1000, Duration::from_millis(500))
         .await
@@ -146,7 +146,7 @@ async fn test_batch_manager_out_of_order() {
     let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
     // TEST 1: init from an empty database should return to a zero block
-    let (_send, manager, _pair) = BatcherManager::new(store.clone(), 100);
+    let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
     let _join = manager
         .start_service(4, Duration::from_millis(5000))
         .await
@@ -216,14 +216,14 @@ async fn test_handle_move_order_with_batch() {
     let mut authority_state = init_state_with_objects(vec![gas_payment_object]).await;
 
     // Create a listening infrastrucure.
-    let (_send, manager, _pair) = BatcherManager::new(authority_state.db(), 100);
+    let (_send, manager, _pair) = BatchManager::new(authority_state.db(), 100);
     let _join = manager
         .start_service(4, Duration::from_millis(500))
         .await
         .expect("No issues starting service.");
 
     authority_state
-        .set_batcher_sender(_send)
+        .set_batch_sender(_send)
         .expect("No problem registering");
     tokio::task::yield_now().await;
 
