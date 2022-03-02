@@ -58,11 +58,11 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                 Err(err) => return Err(err.into()),
             };
 
+            let line = Self::substitution_env_variables(line);
+
             // Runs the line
             match Self::split_and_unescape(line.trim()) {
                 Ok(line) => {
-                    let line = Self::swap_env_variables(line);
-
                     if let Some(s) = line.first() {
                         // These are shell only commands.
                         match s.as_str() {
@@ -78,6 +78,12 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                             "echo" => {
                                 let out = line.as_slice()[1..line.len()].join(" ");
                                 println!("{}", out);
+                                continue 'shell;
+                            }
+                            "env" => {
+                                for (key, var) in env::vars() {
+                                    println!("{}={}", key, var);
+                                }
                                 continue 'shell;
                             }
                             _ => {}
@@ -97,16 +103,26 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
         Ok(())
     }
 
-    fn swap_env_variables(line: Vec<String>) -> Vec<String> {
-        line.into_iter()
-            .map(|s| {
-                if s.starts_with('$') {
-                    env::var(&s[1..s.len()]).unwrap_or_default()
+    fn substitution_env_variables(s: String) -> String {
+        if !s.contains('$') {
+            return s;
+        }
+        let mut env = env::vars().collect::<Vec<_>>();
+        // Sort variable name by the length in descending order, to prevent wrong substitution by variable with partial same name.
+        env.sort_by(|(k1, _), (k2, _)| Ord::cmp(&k2.len(), &k1.len()));
+
+        for (key, value) in env {
+            let var = format!("${}", key);
+            if s.contains(&var) {
+                let result = s.replace(var.as_str(), value.as_str());
+                return if result.contains('$') {
+                    Self::substitution_env_variables(result)
                 } else {
-                    s
-                }
-            })
-            .collect()
+                    result
+                };
+            }
+        }
+        s
     }
 
     fn split_and_unescape(line: &str) -> Result<Vec<String>, String> {
@@ -128,6 +144,7 @@ pub fn install_shell_plugins<'a>(clap: App<'a, 'a>) -> App<'a, 'a> {
     )
     .subcommand(SubCommand::with_name("clear").about("Clear screen"))
     .subcommand(SubCommand::with_name("echo").about("Write arguments to the console output"))
+    .subcommand(SubCommand::with_name("env").about("Print environment"))
 }
 
 #[derive(Helper)]
