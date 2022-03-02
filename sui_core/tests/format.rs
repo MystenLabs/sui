@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test]
-#[ignore]
 fn test_format() {
     let status = std::process::Command::new("cargo")
         .current_dir("..")

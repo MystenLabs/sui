@@ -4,8 +4,8 @@
 use super::*;
 use crate::authority::authority_tests::*;
 
+use std::env;
 use std::fs;
-use std::{env, };
 
 #[tokio::test]
 async fn test_open_manager() {
