@@ -20,7 +20,7 @@ use std::sync::Arc;
 use sui_types::base_types::TxContext;
 use sui_types::committee::Committee;
 use sui_types::crypto::KeyPair;
-use sui_types::error::{SuiError, SuiResult};
+use sui_types::error::SuiError;
 use sui_types::messages::{AuthorityToClientCoreMessage, ClientToAuthorityCoreMessage};
 use sui_types::object::Object;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
@@ -30,7 +30,7 @@ use tokio::sync::oneshot;
 pub(crate) const DEFAULT_CHANNEL_CAPACITY: usize = 1_000;
 
 /// One-shot channel allowing the core to reply to core messages.
-pub(crate) type Replier = oneshot::Sender<SuiResult<AuthorityToClientCoreMessage>>;
+pub(crate) type Replier = oneshot::Sender<AuthorityToClientCoreMessage>;
 
 /// Spawn a new authority.
 pub async fn spawn_authority(

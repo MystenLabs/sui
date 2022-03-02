@@ -174,7 +174,6 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     });
 
     let network = start_network(working_dir.path(), 10200, Some(config)).await?;
-
     // Wait for authorities to come alive.
     retry_assert!(
         logs_contain("Listening to TCP traffic on 127.0.0.1"),
@@ -289,11 +288,14 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
 
     let network = start_network(working_dir.path(), 10300, None).await?;
+    tokio::task::yield_now().await;
+    /*
     // Wait for authorities to come alive.
     retry_assert!(
         logs_contain("Listening to TCP traffic on 127.0.0.1"),
         Duration::from_millis(5000)
     );
+    */
 
     // Create Wallet context.
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;

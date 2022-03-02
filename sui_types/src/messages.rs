@@ -767,7 +767,7 @@ pub enum ClientToAuthorityCoreMessage {
 /// a client's message.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum AuthorityToClientCoreMessage {
-    AccountInfoResponse(AccountInfoResponse),
-    ObjectInfoResponse(ObjectInfoResponse),
-    TransactionInfoResponse(TransactionInfoResponse),
+    AccountInfoResponse(SuiResult<AccountInfoResponse>),
+    ObjectInfoResponse(SuiResult<ObjectInfoResponse>),
+    TransactionInfoResponse(SuiResult<TransactionInfoResponse>),
 }

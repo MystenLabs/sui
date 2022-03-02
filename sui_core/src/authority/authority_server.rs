@@ -48,43 +48,33 @@ impl AuthorityServer {
                 // or certificates (ie. messages processed by the core).
                 Some((message, replier)) = self.rx_client_core_message.recv() => {
                     let reply = match message {
-                        ClientToAuthorityCoreMessage::Transaction(tx) => self
-                            .state
-                            .handle_client_transaction(tx)
-                            .await
-                            .map(AuthorityToClientCoreMessage::TransactionInfoResponse),
-                        ClientToAuthorityCoreMessage::Certificate(certificate) => self
-                            .state
-                            .handle_client_certificate(certificate)
-                            .await
-                            .map(AuthorityToClientCoreMessage::TransactionInfoResponse),
+                        ClientToAuthorityCoreMessage::Transaction(transaction) => {
+                            let reply = self.state.handle_client_transaction(transaction).await;
+                            AuthorityToClientCoreMessage::TransactionInfoResponse(reply)
+                        },
+                        ClientToAuthorityCoreMessage::Certificate(certificate) => {
+                            let reply = self.state.handle_client_certificate(certificate).await;
+                            AuthorityToClientCoreMessage::TransactionInfoResponse(reply)
+                        },
 
                         // TODO: The messages below should probably not be mixed up with core (safety-critical)
                         // messages within `AuthorityState`. It is probably better to keep the core as simple
                         // as possible and run a separate synchronizer task.
-                        ClientToAuthorityCoreMessage::AccountInfoRequest(request) => self
-                            .state
-                            .handle_account_info_request(request)
-                            .await
-                            .map(AuthorityToClientCoreMessage::AccountInfoResponse),
-                        ClientToAuthorityCoreMessage::ObjectInfoRequest(request) => self
-                            .state
-                            .handle_object_info_request(request)
-                            .await
-                            .map(AuthorityToClientCoreMessage::ObjectInfoResponse),
-                        ClientToAuthorityCoreMessage::TransactionInfoRequest(request) => self
-                            .state
-                            .handle_transaction_info_request(request)
-                            .await
-                            .map(AuthorityToClientCoreMessage::TransactionInfoResponse),
+                        ClientToAuthorityCoreMessage::AccountInfoRequest(request) => {
+                            let reply = self.state.handle_account_info_request(request).await;
+                            AuthorityToClientCoreMessage::AccountInfoResponse(reply)
+                        },
+                        ClientToAuthorityCoreMessage::ObjectInfoRequest(request) => {
+                            let reply = self.state.handle_object_info_request(request).await;
+                            AuthorityToClientCoreMessage::ObjectInfoResponse(reply)
+                        },
+                        ClientToAuthorityCoreMessage::TransactionInfoRequest(request) => {
+                            let reply = self.state.handle_transaction_info_request(request).await;
+                            AuthorityToClientCoreMessage::TransactionInfoResponse(reply)
+                        }
                     };
 
-                    // Log the errors that are our fault, such as storage failures.
-                    // TODO: Are there other errors to log here?
-                    match &reply {
-                        Err(SuiError::StorageError(e)) => log::error!("{}", e),
-                        _ => ()
-                    }
+                    // TODO: Log the errors that are our fault, such as storage failures.
 
                     // This is the reply that the network will send back to the client.
                     replier.send(reply).expect("Failed to reply to core message");

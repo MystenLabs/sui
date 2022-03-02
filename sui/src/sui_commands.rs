@@ -196,6 +196,7 @@ pub async fn genesis(
         config.config_path()
     );
 
+    /*
     // Spawning the authorities is only required to create the database folder.
     let committee = Committee::new(voting_right);
     while let Some(authority) = config.authorities.pop() {
@@ -215,6 +216,7 @@ pub async fn genesis(
         });
     }
     tokio::task::yield_now().await;
+    */
 
     wallet_config.authorities = authority_info;
     wallet_config.accounts = new_addresses;

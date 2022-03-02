@@ -19,7 +19,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use sui_core::authority_client::AuthorityClient;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_network::network::{NetworkClient, PortAllocator};
+use sui_network::network::{ PortAllocator};
 use sui_network::transport;
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
@@ -157,13 +157,8 @@ impl WalletConfig {
     pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, AuthorityClient> {
         let mut authority_clients = BTreeMap::new();
         for authority in &self.authorities {
-            let client = AuthorityClient::new(NetworkClient::new(
-                authority.host.clone(),
-                authority.base_port,
-                self.buffer_size,
-                self.send_timeout,
-                self.recv_timeout,
-            ));
+            let authority_address = format!("{}:{}",  authority.host,authority.base_port).parse().unwrap();
+            let client = AuthorityClient::new(authority_address);
             authority_clients.insert(authority.name, client);
         }
         authority_clients

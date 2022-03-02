@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use sui_network::network::NetworkClient;
-use sui_types::{error::SuiError, messages::*, serialize::*};
+use bytes::Bytes;
+use network::reliable_sender::ReliableSender;
+use std::net::SocketAddr;
+use sui_types::{error::SuiError, messages::*};
 
 #[async_trait]
 pub trait AuthorityAPI {
@@ -40,11 +42,13 @@ pub trait AuthorityAPI {
 }
 
 #[derive(Clone)]
-pub struct AuthorityClient(NetworkClient);
+pub struct AuthorityClient {
+    authority_address: SocketAddr,
+}
 
 impl AuthorityClient {
-    pub fn new(network_client: NetworkClient) -> Self {
-        Self(network_client)
+    pub fn new(authority_address: SocketAddr) -> Self {
+        Self { authority_address }
     }
 }
 
@@ -55,11 +59,16 @@ impl AuthorityAPI for AuthorityClient {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let response = self
-            .0
-            .send_recv_bytes(serialize_transaction(&transaction))
-            .await?;
-        deserialize_transaction_info(response)
+        let message = ClientToAuthorityCoreMessage::Transaction(transaction);
+        let bytes = Bytes::from(bincode::serialize(&message)?);
+        let handle = ReliableSender::new()
+            .send(self.authority_address, bytes)
+            .await;
+        let reply = handle.await.unwrap();
+        match bincode::deserialize(&reply)? {
+            AuthorityToClientCoreMessage::TransactionInfoResponse(x) => x,
+            _ => Err(SuiError::UnexpectedMessage),
+        }
     }
 
     /// Confirm a transfer to a Sui or Primary account.
@@ -67,33 +76,49 @@ impl AuthorityAPI for AuthorityClient {
         &self,
         transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let response = self
-            .0
-            .send_recv_bytes(serialize_cert(&transaction.certificate))
-            .await?;
-        deserialize_transaction_info(response)
+        let certificate = transaction.certificate;
+        let message = ClientToAuthorityCoreMessage::Certificate(certificate);
+        let bytes = Bytes::from(bincode::serialize(&message)?);
+        let handle = ReliableSender::new()
+            .send(self.authority_address, bytes)
+            .await;
+        let reply = handle.await.unwrap();
+        match bincode::deserialize(&reply)? {
+            AuthorityToClientCoreMessage::TransactionInfoResponse(x) => x,
+            _ => Err(SuiError::UnexpectedMessage),
+        }
     }
 
     async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
-        let response = self
-            .0
-            .send_recv_bytes(serialize_account_info_request(&request))
-            .await?;
-        deserialize_account_info(response)
+        let message = ClientToAuthorityCoreMessage::AccountInfoRequest(request);
+        let bytes = Bytes::from(bincode::serialize(&message)?);
+        let handle = ReliableSender::new()
+            .send(self.authority_address, bytes)
+            .await;
+        let reply = handle.await.unwrap();
+        match bincode::deserialize(&reply)? {
+            AuthorityToClientCoreMessage::AccountInfoResponse(x) => x,
+            _ => Err(SuiError::UnexpectedMessage),
+        }
     }
 
     async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
-        let response = self
-            .0
-            .send_recv_bytes(serialize_object_info_request(&request))
-            .await?;
-        deserialize_object_info(response)
+        let message = ClientToAuthorityCoreMessage::ObjectInfoRequest(request);
+        let bytes = Bytes::from(bincode::serialize(&message)?);
+        let handle = ReliableSender::new()
+            .send(self.authority_address, bytes)
+            .await;
+        let reply = handle.await.unwrap();
+        match bincode::deserialize(&reply)? {
+            AuthorityToClientCoreMessage::ObjectInfoResponse(x) => x,
+            _ => Err(SuiError::UnexpectedMessage),
+        }
     }
 
     /// Handle Object information requests for this account.
@@ -101,10 +126,15 @@ impl AuthorityAPI for AuthorityClient {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let response = self
-            .0
-            .send_recv_bytes(serialize_transaction_info_request(&request))
-            .await?;
-        deserialize_transaction_info(response)
+        let message = ClientToAuthorityCoreMessage::TransactionInfoRequest(request);
+        let bytes = Bytes::from(bincode::serialize(&message)?);
+        let handle = ReliableSender::new()
+            .send(self.authority_address, bytes)
+            .await;
+        let reply = handle.await.unwrap();
+        match bincode::deserialize(&reply)? {
+            AuthorityToClientCoreMessage::TransactionInfoResponse(x) => x,
+            _ => Err(SuiError::UnexpectedMessage),
+        }
     }
 }
