@@ -9,7 +9,7 @@ use sui_types::error::{SuiError, SuiResult};
 
 use std::collections::BTreeMap;
 use std::time::Duration;
-use sui_types::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature};
+use sui_types::crypto::{sha3_hash, AuthoritySignature, BcsSignable, };
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::interval;
 
@@ -103,6 +103,8 @@ impl BatchManager {
     /// Starts the manager service / tokio task
     pub async fn start_service(
         mut self,
+        address: AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
         min_batch_size: u64,
         max_delay: Duration,
     ) -> Result<tokio::task::JoinHandle<()>, SuiError> {
@@ -300,6 +302,9 @@ impl BcsSignable for TransactionBatch {}
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct AuthorityBatch {
+
+    // TODO: Add epoch
+
     /// The total number of items executed by this authority.
     total_size: u64,
 
@@ -349,5 +354,31 @@ impl AuthorityBatch {
             previous_digest: Some(previous_batch.digest()),
             transactions_digest,
         }
+    }
+}
+
+/// An transaction signed by a single authority
+#[derive(Eq, Clone, Debug, Serialize, Deserialize)]
+pub struct SignedBatch {
+    pub batch: AuthorityBatch,
+    pub authority: AuthorityName,
+    pub signature: AuthoritySignature,
+}
+
+impl SignedBatch {
+    pub fn new(batch: AuthorityBatch,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+        authority: AuthorityName,) -> SignedBatch {
+            SignedBatch {
+                signature: AuthoritySignature::new(&batch, secret),
+                batch,
+                authority,
+            }
+        }
+}
+
+impl PartialEq for SignedBatch {
+    fn eq(&self, other: &Self) -> bool {
+        self.batch == other.batch && self.authority == other.authority
     }
 }
