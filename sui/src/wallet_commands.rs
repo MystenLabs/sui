@@ -1,11 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::{AccountInfo, Config, WalletConfig};
+use crate::config::{Config, WalletConfig};
 use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
 use core::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use sui_core::authority_client::AuthorityClient;
-use sui_core::client::{Client, ClientAddressManager, ClientState};
+use sui_core::client::{Client, ClientAddressManager};
 use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::gas_coin::GasCoin;
@@ -13,6 +13,7 @@ use sui_types::messages::{CertifiedTransaction, ExecutionStatus, TransactionEffe
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::ObjectRead::Exists;
 
+use crate::keystore::{Keystore, SuiKeystoreSigner};
 use anyhow::anyhow;
 use colored::Colorize;
 use move_core_types::identifier::Identifier;
@@ -21,10 +22,11 @@ use move_core_types::parser::parse_type_tag;
 use serde::ser::Error;
 use serde::Serialize;
 use std::fmt::Write;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
-use sui_types::error::SuiError;
+use sui_types::error::SuiResult;
 use sui_types::object::ObjectRead;
 use tracing::info;
 
@@ -158,11 +160,16 @@ impl WalletCommands {
                     .get_object_owner(*gas)
                     .await?
                     .get_single_owner_address()?;
-                let client_state = context.get_or_create_client_state(sender)?;
-                let gas_obj_ref = client_state.latest_object_ref(gas)?;
+                let gas_obj_ref = context
+                    .address_manager
+                    .get_object_info(*gas)
+                    .await?
+                    .into_object()?
+                    .to_object_reference();
 
-                let (cert, effects) = client_state
-                    .publish(path.clone(), gas_obj_ref, *gas_budget)
+                let (cert, effects) = context
+                    .address_manager
+                    .publish(*sender, path.clone(), gas_obj_ref, *gas_budget)
                     .await?;
 
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
@@ -185,14 +192,13 @@ impl WalletCommands {
                 gas_budget,
                 args,
             } => {
-                let sender = &context
+                let sender = context
                     .address_manager
                     .get_object_owner(*gas)
                     .await?
                     .get_single_owner_address()?;
-                let client_state = context.get_or_create_client_state(sender)?;
 
-                let package_obj_info = client_state.get_object_info(*package).await?;
+                let package_obj_info = context.address_manager.get_object_info(*package).await?;
                 let package_obj = package_obj_info.object().clone()?;
                 let package_obj_ref = package_obj_info.reference().unwrap();
 
@@ -208,7 +214,13 @@ impl WalletCommands {
                 // Fetch all the objects needed for this call
                 let mut input_objs = vec![];
                 for obj_id in object_ids.clone() {
-                    input_objs.push(client_state.get_object_info(obj_id).await?.into_object()?);
+                    input_objs.push(
+                        context
+                            .address_manager
+                            .get_object_info(obj_id)
+                            .await?
+                            .into_object()?,
+                    );
                 }
 
                 // Pass in the objects for a deeper check
@@ -223,17 +235,24 @@ impl WalletCommands {
                 )?;
 
                 // Fetch the object info for the gas obj
-                let gas_obj_ref = client_state.latest_object_ref(gas)?;
+                let gas_obj_ref = context
+                    .address_manager
+                    .get_object_info(*gas)
+                    .await?
+                    .into_object()?
+                    .to_object_reference();
 
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
                 for obj_id in object_ids {
-                    let obj_info = client_state.get_object_info(obj_id).await?;
+                    let obj_info = context.address_manager.get_object_info(obj_id).await?;
                     object_args_refs.push(obj_info.object()?.to_object_reference());
                 }
 
-                let (cert, effects) = client_state
+                let (cert, effects) = context
+                    .address_manager
                     .move_call(
+                        sender,
                         package_obj_ref,
                         module.to_owned(),
                         function.to_owned(),
@@ -257,9 +276,11 @@ impl WalletCommands {
                     .get_object_owner(*gas)
                     .await?
                     .get_single_owner_address()?;
-                let client_state = context.get_or_create_client_state(from)?;
                 let time_start = Instant::now();
-                let (cert, effects) = client_state.transfer_object(*object_id, *gas, *to).await?;
+                let (cert, effects) = context
+                    .address_manager
+                    .transfer_object(*from, *object_id, *gas, *to)
+                    .await?;
                 let time_total = time_start.elapsed().as_micros();
 
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
@@ -278,40 +299,30 @@ impl WalletCommands {
             ),
 
             WalletCommands::Objects { address } => {
-                let client_state = context.get_or_create_client_state(address)?;
-                WalletCommandResult::Objects(
-                    client_state
-                        .object_refs()
-                        .map(|(_, object_ref)| object_ref)
-                        .collect(),
-                )
+                WalletCommandResult::Objects(context.address_manager.get_owned_objects(*address))
             }
 
             WalletCommands::SyncClientState { address } => {
-                let client_state = context.get_or_create_client_state(address)?;
-                client_state.sync_client_state().await?;
+                context.address_manager.sync_client_state(*address).await?;
                 WalletCommandResult::SyncClientState
             }
             WalletCommands::NewAddress => {
                 let (address, key) = get_key_pair();
-                context.config.accounts.push(AccountInfo {
-                    address,
-                    key_pair: key,
-                });
+                context.config.accounts.push(address);
+                context.keystore.lock().unwrap().add_key(key)?;
                 context.config.save()?;
                 // Create an address to be managed
-                context.get_or_create_client_state(&address)?;
+                context.create_account_state(&address)?;
                 WalletCommandResult::NewAddress(address)
             }
             WalletCommands::Gas { address } => {
-                let client_state = context.get_or_create_client_state(address)?;
-                client_state.sync_client_state().await?;
-                let object_ids = client_state.get_owned_objects();
+                context.address_manager.sync_client_state(*address).await?;
+                let object_refs = context.address_manager.get_owned_objects(*address);
 
                 // TODO: We should ideally fetch the objects from local cache
                 let mut coins = Vec::new();
-                for obj in object_ids {
-                    match context.address_manager.get_object_info(obj).await? {
+                for (id, _, _) in object_refs {
+                    match context.address_manager.get_object_info(id).await? {
                         Exists(_, o, _) => {
                             if matches!( o.type_(), Some(v)  if *v == GasCoin::type_()) {
                                 // Okay to unwrap() since we already checked type
@@ -330,37 +341,35 @@ impl WalletCommands {
 
 pub struct WalletContext {
     pub config: WalletConfig,
+    pub keystore: Arc<Mutex<Box<dyn Keystore>>>,
     pub address_manager: ClientAddressManager<AuthorityClient>,
 }
 
 impl WalletContext {
     pub fn new(config: WalletConfig) -> Result<Self, anyhow::Error> {
         let path = config.db_folder_path.clone();
-        let addresses = config
-            .accounts
-            .iter()
-            .map(|info| info.address)
-            .collect::<Vec<_>>();
 
         let committee = config.make_committee();
         let authority_clients = config.make_authority_clients();
+
+        let keystore = Arc::new(Mutex::new(config.keystore.init()?));
+        let accounts = config.accounts.clone();
+
         let mut context = Self {
             config,
+            keystore,
             address_manager: ClientAddressManager::new(path, committee, authority_clients),
         };
         // Pre-populate client state for each address in the config.
-        for address in addresses {
-            context.get_or_create_client_state(&address)?;
+        for address in accounts {
+            context.create_account_state(&address)?;
         }
         Ok(context)
     }
 
-    pub fn get_or_create_client_state(
-        &mut self,
-        owner: &SuiAddress,
-    ) -> Result<&mut ClientState<AuthorityClient>, SuiError> {
-        let kp = Box::pin(self.config.get_account_cfg_info(owner)?.key_pair.copy());
-        self.address_manager.get_or_create_state_mut(*owner, kp)
+    pub fn create_account_state(&mut self, owner: &SuiAddress) -> SuiResult {
+        let signer = Box::pin(SuiKeystoreSigner::new(self.keystore.clone(), *owner));
+        self.address_manager.create_account_state(*owner, signer)
     }
 }
 

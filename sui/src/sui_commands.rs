@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::config::{
-    AccountInfo, AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig,
-    WalletConfig,
+    AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, WalletConfig,
 };
+use crate::keystore::KeystoreType;
 use anyhow::anyhow;
 use futures::future::join_all;
 use move_binary_format::CompiledModule;
@@ -49,6 +49,7 @@ impl SuiCommand {
                 let wallet_path = working_dir.join("wallet.conf");
                 let mut wallet_config = WalletConfig::create(&wallet_path)?;
                 wallet_config.db_folder_path = working_dir.join("client_db");
+                wallet_config.keystore = KeystoreType::File(working_dir.join("wallet.key"));
                 genesis(config, genesis_conf, &mut wallet_config).await
             }
         }
@@ -129,12 +130,16 @@ pub async fn genesis(
         "Creating {} account(s) and gas objects...",
         new_account_count
     );
+
+    let mut keystore = wallet_config.keystore.init()?;
+
     for account in genesis_conf.accounts {
         let address = if let Some(address) = account.address {
             address
         } else {
             let (address, key_pair) = get_key_pair();
-            new_addresses.push(AccountInfo { address, key_pair });
+            new_addresses.push(address);
+            keystore.add_key(key_pair)?;
             address
         };
         for object_conf in account.gas_objects {

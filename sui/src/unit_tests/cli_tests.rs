@@ -9,12 +9,11 @@ use std::ops::Add;
 use std::path::Path;
 use std::time::Duration;
 use sui::config::{
-    AccountConfig, AccountInfo, AuthorityPrivateInfo, GenesisConfig, NetworkConfig, ObjectConfig,
-    WalletConfig, AUTHORITIES_DB_NAME,
+    AccountConfig, AuthorityPrivateInfo, GenesisConfig, NetworkConfig, ObjectConfig, WalletConfig,
+    AUTHORITIES_DB_NAME,
 };
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
-use sui_core::client::Client;
 use sui_network::network::PortAllocator;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
@@ -59,10 +58,11 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
-    assert_eq!(3, files.len());
+    assert_eq!(4, files.len());
     assert!(files.contains(&"wallet.conf".to_string()));
     assert!(files.contains(&AUTHORITIES_DB_NAME.to_string()));
     assert!(files.contains(&"network.conf".to_string()));
+    assert!(files.contains(&"wallet.key".to_string()));
 
     // Check network.conf
     let network_conf = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
@@ -87,13 +87,12 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
 
     let mut wallet_config = WalletConfig::create(&working_dir.path().join("wallet.conf"))?;
-    wallet_config.db_folder_path = working_dir.path().join("client_db");
 
     // Add 3 accounts
     for _ in 0..3 {
         wallet_config.accounts.push({
-            let (address, key_pair) = get_key_pair();
-            AccountInfo { address, key_pair }
+            let (address, _) = get_key_pair();
+            address
         });
     }
     let mut context = WalletContext::new(wallet_config)?;
@@ -105,7 +104,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         .print(true);
 
     // Check log output contains all addresses
-    for address in context.config.accounts.iter().map(|info| info.address) {
+    for address in context.config.accounts {
         assert!(logs_contain(&*format!("{}", address)));
     }
 
@@ -126,7 +125,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
 
     // Create Wallet context.
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address = wallet_conf.accounts.first().unwrap().address;
+    let address = *wallet_conf.accounts.first().unwrap();
     let mut context = WalletContext::new(wallet_conf)?;
 
     // Sync client to retrieve objects from the network.
@@ -186,7 +185,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     let wallet_conf = WalletConfig::read(&working_dir.path().join("wallet.conf"))?;
     assert_eq!(1, wallet_conf.accounts.len());
 
-    let address = wallet_conf.accounts.first().unwrap().address;
+    let address = *wallet_conf.accounts.first().unwrap();
     let mut context = WalletContext::new(wallet_conf)?;
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
@@ -215,7 +214,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Error> {
     use sui_types::crypto::get_key_pair_from_bytes;
 
-    let (address, admin_key) = get_key_pair_from_bytes(&[
+    let (address, _) = get_key_pair_from_bytes(&[
         10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
         92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
         90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
@@ -272,10 +271,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 
     // Create Wallet context.
     let mut wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    wallet_conf.accounts = vec![AccountInfo {
-        address,
-        key_pair: admin_key,
-    }];
+    wallet_conf.accounts = vec![address];
     let mut context = WalletContext::new(wallet_conf)?;
 
     // Make sure init() is executed correctly for custom_genesis_package_2::M1
@@ -301,7 +297,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 
     // Create Wallet context.
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address = wallet_conf.accounts.first().unwrap().address;
+    let address = *wallet_conf.accounts.first().unwrap();
     let mut context = WalletContext::new(wallet_conf)?;
 
     // Sync client to retrieve objects from the network.
@@ -348,8 +344,8 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
 
     // Create Wallet context.
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address = wallet_conf.accounts.first().unwrap().address;
-    let recipient = wallet_conf.accounts.get(1).unwrap().address;
+    let address = *wallet_conf.accounts.first().unwrap();
+    let recipient = *wallet_conf.accounts.get(1).unwrap();
 
     let mut context = WalletContext::new(wallet_conf)?;
 
@@ -564,8 +560,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Create Wallet context.
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address1 = wallet_conf.accounts.first().unwrap().address;
-    let address2 = wallet_conf.accounts.get(1).unwrap().address;
+    let address1 = *wallet_conf.accounts.first().unwrap();
+    let address2 = *wallet_conf.accounts.get(1).unwrap();
 
     let mut context = WalletContext::new(wallet_conf)?;
 
@@ -756,7 +752,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 
     // Create Wallet context.
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address = wallet_conf.accounts.first().unwrap().address;
+    let address = *wallet_conf.accounts.first().unwrap();
     let mut context = WalletContext::new(wallet_conf)?;
 
     // Sync client to retrieve objects from the network.
@@ -873,8 +869,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 
     // Create Wallet context.
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address = wallet_conf.accounts.first().unwrap().address;
-    let recipient = wallet_conf.accounts.get(1).unwrap().address;
+    let address = *wallet_conf.accounts.first().unwrap();
+    let recipient = *wallet_conf.accounts.get(1).unwrap();
 
     let mut context = WalletContext::new(wallet_conf)?;
 
