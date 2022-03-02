@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::AuthorityStore;
+use crate::authority::{AuthorityStore, StableSyncAuthoritySigner};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use sui_types::base_types::*;
@@ -9,7 +9,7 @@ use sui_types::error::{SuiError, SuiResult};
 
 use std::collections::BTreeMap;
 use std::time::Duration;
-use sui_types::crypto::{sha3_hash, AuthoritySignature, BcsSignable, };
+use sui_types::crypto::{sha3_hash, AuthoritySignature, BcsSignable};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::interval;
 
@@ -49,10 +49,10 @@ pub type BroadcastPair = (
 );
 
 /// Either a freshly sequenced transaction hash or a batch
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum UpdateItem {
     Transaction((TxSequenceNumber, TransactionDigest)),
-    Batch(AuthorityBatch),
+    Batch(SignedBatch),
 }
 
 pub struct BatchSender {
@@ -103,24 +103,36 @@ impl BatchManager {
     /// Starts the manager service / tokio task
     pub async fn start_service(
         mut self,
-        address: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
+        authority_name: AuthorityName,
+        secret: StableSyncAuthoritySigner,
         min_batch_size: u64,
         max_delay: Duration,
     ) -> Result<tokio::task::JoinHandle<()>, SuiError> {
-        let last_batch = self.init_from_database().await?;
+        let last_batch = self
+            .init_from_database(authority_name, secret.clone())
+            .await?;
 
         let join_handle = tokio::spawn(async move {
-            self.run_service(last_batch, min_batch_size, max_delay)
-                .await
-                .expect("Service returns with no errors");
+            self.run_service(
+                authority_name,
+                secret,
+                last_batch,
+                min_batch_size,
+                max_delay,
+            )
+            .await
+            .expect("Service returns with no errors");
             drop(self);
         });
 
         Ok(join_handle)
     }
 
-    async fn init_from_database(&self) -> Result<AuthorityBatch, SuiError> {
+    async fn init_from_database(
+        &self,
+        authority_name: AuthorityName,
+        secret: StableSyncAuthoritySigner,
+    ) -> Result<AuthorityBatch, SuiError> {
         // First read the last batch in the db
         let mut last_batch = match self
             .db
@@ -129,12 +141,13 @@ impl BatchManager {
             .skip_prior_to(&TxSequenceNumber::MAX)?
             .next()
         {
-            Some((_, last_batch)) => last_batch,
+            Some((_, last_batch)) => last_batch.batch,
             None => {
                 // Make a batch at zero
-                let zero_batch = AuthorityBatch::initial();
+                let zero_batch =
+                    SignedBatch::new(AuthorityBatch::initial(), &*secret, authority_name);
                 self.db.batches.insert(&0, &zero_batch)?;
-                zero_batch
+                zero_batch.batch
             }
         };
 
@@ -194,8 +207,13 @@ impl BatchManager {
                 db_batch.write()?;
             }
 
-            last_batch = AuthorityBatch::make_next(&last_batch, &transactions[..]);
-            self.db.batches.insert(&total_seq, &last_batch)?;
+            let last_signed_batch = SignedBatch::new(
+                AuthorityBatch::make_next(&last_batch, &transactions[..]),
+                &*secret,
+                authority_name,
+            );
+            self.db.batches.insert(&total_seq, &last_signed_batch)?;
+            last_batch = last_signed_batch.batch;
         }
 
         Ok(last_batch)
@@ -203,6 +221,8 @@ impl BatchManager {
 
     pub async fn run_service(
         &mut self,
+        authority_name: AuthorityName,
+        secret: StableSyncAuthoritySigner,
         prev_batch: AuthorityBatch,
         min_batch_size: u64,
         max_delay: Duration,
@@ -267,14 +287,20 @@ impl BatchManager {
                 }
 
                 // Make and store a new batch.
-                let new_batch = AuthorityBatch::make_next(&prev_batch, &current_batch);
-                self.db.batches.insert(&new_batch.total_size, &new_batch)?;
+                let new_batch = SignedBatch::new(
+                    AuthorityBatch::make_next(&prev_batch, &current_batch),
+                    &*secret,
+                    authority_name,
+                );
+                self.db
+                    .batches
+                    .insert(&new_batch.batch.total_size, &new_batch)?;
 
                 // Send the update
                 let _ = self.tx_broadcast.send(UpdateItem::Batch(new_batch.clone()));
 
                 // A new batch is actually made, so we reset the conditions.
-                prev_batch = new_batch;
+                prev_batch = new_batch.batch;
                 current_batch.clear();
 
                 // We rest the interval here to ensure that blocks
@@ -302,9 +328,7 @@ impl BcsSignable for TransactionBatch {}
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct AuthorityBatch {
-
     // TODO: Add epoch
-
     /// The total number of items executed by this authority.
     total_size: u64,
 
@@ -366,15 +390,17 @@ pub struct SignedBatch {
 }
 
 impl SignedBatch {
-    pub fn new(batch: AuthorityBatch,
+    pub fn new(
+        batch: AuthorityBatch,
         secret: &dyn signature::Signer<AuthoritySignature>,
-        authority: AuthorityName,) -> SignedBatch {
-            SignedBatch {
-                signature: AuthoritySignature::new(&batch, secret),
-                batch,
-                authority,
-            }
+        authority: AuthorityName,
+    ) -> SignedBatch {
+        SignedBatch {
+            signature: AuthoritySignature::new(&batch, secret),
+            batch,
+            authority,
         }
+    }
 }
 
 impl PartialEq for SignedBatch {

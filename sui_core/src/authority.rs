@@ -48,7 +48,8 @@ const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
 ///
 /// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
 ///
-type StableSyncAuthoritySigner = Pin<Box<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
+pub type StableSyncAuthoritySigner =
+    Pin<Arc<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
 
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority

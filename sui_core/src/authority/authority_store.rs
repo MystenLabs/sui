@@ -15,6 +15,7 @@ use std::sync::atomic::Ordering;
 use typed_store::traits::Map;
 
 pub use crate::authority_batch::AuthorityBatch;
+use crate::authority_batch::{SignedBatch, TxSequenceNumber};
 
 pub struct AuthorityStore {
     /// This is a map between the object ID and the latest state of the object, namely the
@@ -70,10 +71,10 @@ pub struct AuthorityStore {
 
     // Tables used for authority batch structure
     /// A sequence on all executed certificates and effects.
-    pub executed_sequence: DBMap<u64, TransactionDigest>,
+    pub executed_sequence: DBMap<TxSequenceNumber, TransactionDigest>,
 
     /// A sequence of batches indexing into the sequence of executed transactions.
-    pub batches: DBMap<u64, AuthorityBatch>,
+    pub batches: DBMap<TxSequenceNumber, SignedBatch>,
 
     /// The size of the executed transactions sequence, used to timestamp the next
     /// item in the sequence.

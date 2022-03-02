@@ -1336,7 +1336,7 @@ async fn test_authority_persist() {
         committee.clone(),
         *authority_key.public_key_bytes(),
         // we assume that the node runner is in charge for its key -> it's ok to reopen a copy below.
-        Box::pin(authority_key.copy()),
+        Arc::pin(authority_key.copy()),
         store,
         vec![],
         &mut genesis::get_genesis_context(),
@@ -1364,7 +1364,7 @@ async fn test_authority_persist() {
     let authority2 = AuthorityState::new(
         committee,
         *authority_key.public_key_bytes(),
-        Box::pin(authority_key),
+        Arc::pin(authority_key),
         store,
         vec![],
         &mut genesis::get_genesis_context(),
@@ -1553,7 +1553,7 @@ async fn init_state() -> AuthorityState {
     AuthorityState::new(
         committee,
         *authority_key.public_key_bytes(),
-        Box::pin(authority_key),
+        Arc::pin(authority_key),
         store,
         genesis::clone_genesis_compiled_modules(),
         &mut genesis::get_genesis_context(),

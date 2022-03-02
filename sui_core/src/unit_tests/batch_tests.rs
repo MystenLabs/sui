@@ -16,6 +16,11 @@ async fn test_open_manager() {
     let path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&path).unwrap();
 
+    // Make a test key pair
+    let (_, key_pair) = get_key_pair();
+    let key_pair = Arc::pin(key_pair);
+    let address = key_pair.public_key_bytes().clone();
+
     {
         // Create an authority
         let mut opts = rocksdb::Options::default();
@@ -25,7 +30,7 @@ async fn test_open_manager() {
         // TEST 1: init from an empty database should return to a zero block
         let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
         let last_block = manager
-            .init_from_database()
+            .init_from_database(address, key_pair.clone())
             .await
             .expect("No error expected.");
 
@@ -48,7 +53,7 @@ async fn test_open_manager() {
 
         let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
         let last_block = manager
-            .init_from_database()
+            .init_from_database(address, key_pair.clone())
             .await
             .expect("No error expected.");
 
@@ -68,7 +73,10 @@ async fn test_open_manager() {
         let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
         let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
-        let last_block = manager.init_from_database().await.unwrap();
+        let last_block = manager
+            .init_from_database(address, key_pair.clone())
+            .await
+            .unwrap();
 
         assert_eq!(last_block.total_size, 2);
         assert_eq!(last_block.previous_total_size, 1);
@@ -91,12 +99,13 @@ async fn test_batch_manager_happy_path() {
 
     // Make a test key pair
     let (_, key_pair) = get_key_pair();
+    let key_pair = Arc::pin(key_pair);
     let address = key_pair.public_key_bytes().clone();
 
     // TEST 1: init from an empty database should return to a zero block
     let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
     let _join = manager
-        .start_service(address, &key_pair, 1000, Duration::from_millis(500))
+        .start_service(address, key_pair, 1000, Duration::from_millis(500))
         .await
         .expect("No errors starting manager.");
 
@@ -151,12 +160,13 @@ async fn test_batch_manager_out_of_order() {
 
     // Make a test key pair
     let (_, key_pair) = get_key_pair();
+    let key_pair = Arc::pin(key_pair);
     let address = key_pair.public_key_bytes().clone();
 
     // TEST 1: init from an empty database should return to a zero block
     let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
     let _join = manager
-        .start_service(address, &key_pair, 4, Duration::from_millis(5000))
+        .start_service(address, key_pair, 4, Duration::from_millis(5000))
         .await
         .expect("Start service with no issues.");
 
@@ -226,7 +236,12 @@ async fn test_handle_move_order_with_batch() {
     // Create a listening infrastrucure.
     let (_send, manager, _pair) = BatchManager::new(authority_state.db(), 100);
     let _join = manager
-        .start_service(authority_state.name, &*authority_state.secret, 4, Duration::from_millis(500))
+        .start_service(
+            authority_state.name,
+            authority_state.secret.clone(),
+            4,
+            Duration::from_millis(500),
+        )
         .await
         .expect("No issues starting service.");
 
