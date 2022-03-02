@@ -501,10 +501,13 @@ struct GetObjectsRequest {
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct Object {
+    /** Hex code as string representing the object id */
     object_id: String,
-    object_ref: serde_json::Value,
+    /** Object version */
+    version: String,
+    /** Hash of the object's contents used for local validation */
+    object_digest: String,
 }
-
 /**
  * 'GetObjectsResponse' is a collection of objects owned by an address.
  */
@@ -569,9 +572,10 @@ async fn get_objects(
     Ok(HttpResponseOk(GetObjectsResponse {
         objects: object_refs
             .into_iter()
-            .map(|e| Object {
-                object_id: e.0.to_string(),
-                object_ref: json!(e.1),
+            .map(|(_, (object_id, sequence_number, object_digest))| Object {
+                object_id: object_id.to_string(),
+                version: format!("{:?}", sequence_number),
+                object_digest: format!("{:?}", object_digest),
             })
             .collect::<Vec<Object>>(),
     }))
@@ -780,6 +784,7 @@ struct TransferOrderRequest {
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 struct OrderResponse {
+    gas_used: u64,
     object_effects_summary: serde_json::Value,
     certificate: serde_json::Value,
 }
@@ -866,7 +871,7 @@ async fn transfer_object(
         }
     };
 
-    let (cert, effects) = match cb_thread::scope(|scope| {
+    let (cert, effects, gas_used) = match cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
                 // transfer object
@@ -882,14 +887,17 @@ async fn transfer_object(
         Ok(result) => match result {
             Ok(result) => match result {
                 Ok((cert, effects)) => {
-                    if !matches!(effects.status, ExecutionStatus::Success { .. }) {
-                        return Err(HttpError::for_client_error(
-                            None,
-                            hyper::StatusCode::FAILED_DEPENDENCY,
-                            format!("Error transferring object: {:#?}", effects.status),
-                        ));
-                    }
-                    (cert, effects)
+                    let gas_used = match effects.status {
+                        ExecutionStatus::Success { gas_used } => gas_used,
+                        ExecutionStatus::Failure { gas_used, error } => {
+                            return Err(HttpError::for_client_error(
+                                None,
+                                hyper::StatusCode::FAILED_DEPENDENCY,
+                                format!("Error transferring object: {:#?} \n gas_used: {gas_used}", error),
+                            ));
+                        }
+                    };
+                    (cert, effects, gas_used)
                 }
                 Err(err) => {
                     return Err(HttpError::for_client_error(
@@ -919,6 +927,7 @@ async fn transfer_object(
     let object_effects_summary = get_object_effects(effects);
 
     Ok(HttpResponseOk(OrderResponse {
+        gas_used,
         object_effects_summary: json!(object_effects_summary),
         certificate: json!(cert),
     }))
@@ -1011,7 +1020,7 @@ async fn publish(
         }
     };
 
-    let (cert, effects) = match cb_thread::scope(|scope| {
+    let (cert, effects, gas_used) = match cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
                 // publish
@@ -1027,14 +1036,17 @@ async fn publish(
         Ok(result) => match result {
             Ok(result) => match result {
                 Ok((cert, effects)) => {
-                    if !matches!(effects.status, ExecutionStatus::Success { .. }) {
-                        return Err(HttpError::for_client_error(
-                            None,
-                            hyper::StatusCode::FAILED_DEPENDENCY,
-                            format!("Error publishing module: {:#?}", effects.status),
-                        ));
-                    }
-                    (cert, effects)
+                    let gas_used = match effects.status {
+                        ExecutionStatus::Success { gas_used } => gas_used,
+                        ExecutionStatus::Failure { gas_used, error } => {
+                            return Err(HttpError::for_client_error(
+                                None,
+                                hyper::StatusCode::FAILED_DEPENDENCY,
+                                format!("Error transferring object: {:#?} \n gas_used: {gas_used}", error),
+                            ));
+                        }
+                    };
+                    (cert, effects, gas_used)
                 }
                 Err(err) => {
                     return Err(HttpError::for_client_error(
@@ -1064,6 +1076,7 @@ async fn publish(
     let object_effects_summary = get_object_effects(effects);
 
     Ok(HttpResponseOk(OrderResponse {
+        gas_used,
         object_effects_summary: json!(object_effects_summary),
         certificate: json!(cert),
     }))
@@ -1229,7 +1242,7 @@ async fn call(
         object_args_refs.push(obj.to_object_reference());
     }
 
-    let (cert, effects) = match cb_thread::scope(|scope| {
+    let (cert, effects, gas_used) = match cb_thread::scope(|scope| {
         scope
             .spawn(|_| {
                 // execute move call
@@ -1253,7 +1266,19 @@ async fn call(
     }) {
         Ok(result) => match result {
             Ok(result) => match result {
-                Ok((cert, effects)) => (cert, effects),
+                Ok((cert, effects)) => {
+                    let gas_used = match effects.status {
+                        ExecutionStatus::Success { gas_used } => gas_used,
+                        ExecutionStatus::Failure { gas_used, error } => {
+                            return Err(HttpError::for_client_error(
+                                None,
+                                hyper::StatusCode::FAILED_DEPENDENCY,
+                                format!("Error transferring object: {:#?} \n gas_used: {gas_used}", error),
+                            ));
+                        }
+                    };
+                    (cert, effects, gas_used)
+                },
                 Err(err) => {
                     return Err(HttpError::for_client_error(
                         None,
@@ -1282,39 +1307,46 @@ async fn call(
     let object_effects_summary = get_object_effects(effects);
 
     Ok(HttpResponseOk(OrderResponse {
+        gas_used,
         object_effects_summary: json!(object_effects_summary),
         certificate: json!(cert),
     }))
 }
 
 fn get_object_effects(
-    order_effects: OrderEffects,
-) -> HashMap<String, HashMap<&'static str, String>> {
+    transaction_effects: OrderEffects,
+) -> HashMap<String, Vec<HashMap<String, String>>> {
     let mut object_effects_summary = HashMap::new();
-    if !order_effects.created.is_empty() {
-        let mut effects = HashMap::new();
-        for (obj, _) in order_effects.created {
-            effects.insert("id", obj.0.to_string());
-            effects.insert("sequence_number", format!("{:?}", obj.1));
-            effects.insert("object_digest", format!("{:?}", obj.2));
+    if !transaction_effects.created.is_empty() {
+        let mut effects = Vec::new();
+        for (obj, _) in transaction_effects.created {
+            let mut effect = HashMap::new();
+            effect.insert("id".to_string(), obj.0.to_string());
+            effect.insert("version".to_string(), format!("{:?}", obj.1));
+            effect.insert("object_digest".to_string(), format!("{:?}", obj.2));
+            effects.push(effect);
         }
         object_effects_summary.insert(String::from("created_objects"), effects);
     }
-    if !order_effects.mutated.is_empty() {
-        let mut effects = HashMap::new();
-        for (obj, _) in order_effects.mutated {
-            effects.insert("id", obj.0.to_string());
-            effects.insert("sequence_number", format!("{:?}", obj.1));
-            effects.insert("object_digest", format!("{:?}", obj.2));
+    if !transaction_effects.mutated.is_empty() {
+        let mut effects = Vec::new();
+        for (obj, _) in transaction_effects.mutated {
+            let mut effect = HashMap::new();
+            effect.insert("id".to_string(), obj.0.to_string());
+            effect.insert("version".to_string(), format!("{:?}", obj.1));
+            effect.insert("object_digest".to_string(), format!("{:?}", obj.2));
+            effects.push(effect);
         }
         object_effects_summary.insert(String::from("mutated_objects"), effects);
     }
-    if !order_effects.deleted.is_empty() {
-        let mut effects = HashMap::new();
-        for obj in order_effects.deleted {
-            effects.insert("id", obj.0.to_string());
-            effects.insert("sequence_number", format!("{:?}", obj.1));
-            effects.insert("object_digest", format!("{:?}", obj.2));
+    if !transaction_effects.deleted.is_empty() {
+        let mut effects = Vec::new();
+        for obj in transaction_effects.deleted {
+            let mut effect = HashMap::new();
+            effect.insert("id".to_string(), obj.0.to_string());
+            effect.insert("version".to_string(), format!("{:?}", obj.1));
+            effect.insert("object_digest".to_string(), format!("{:?}", obj.2));
+            effects.push(effect);
         }
         object_effects_summary.insert(String::from("deleted_objects"), effects);
     }
