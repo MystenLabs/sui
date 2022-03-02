@@ -8,7 +8,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-anyhow = "1.0.53"
+anyhow = "1.0.55"
 smallvec = "1.8.0"
 num_enum = "0.5.6"
 
