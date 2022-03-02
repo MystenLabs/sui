@@ -209,19 +209,30 @@ async fn genesis(
     let mut new_addresses = Vec::new();
     let mut preload_objects: Vec<SuiObject> = Vec::new();
 
-    for _ in 0..num_objects {
-        let (address, key_pair) = get_key_pair();
-        new_addresses.push(AccountInfo { address, key_pair });
-        for _ in 0..num_objects {
-            let new_object = SuiObject::with_id_owner_gas_coin_object_for_testing(
-                ObjectID::random(),
-                SequenceNumber::new(),
-                address,
-                1000000,
-            );
-            preload_objects.push(new_object);
-        }
-    }
+    let q = r#"{
+        "address": "e29a7386cacb8b385498664c2743dcbde65dff60e0ea48725115d2847060e85a",
+        "key_pair": "XzcEHpEIX5Etomj0mbEXAsdjRSXmEHvB3fta9nHZbS/imnOGysuLOFSYZkwnQ9y95l3/YODqSHJRFdKEcGDoWg=="
+      }"#;
+    let acc: AccountInfo = serde_json::from_str(q).unwrap();
+
+    let address = acc.address;
+    println!("{:?}", address);
+
+    let kp: KeyPair = acc.key_pair;
+
+    let new_object = SuiObject::with_id_owner_gas_coin_object_for_testing(
+        ObjectID::from_hex_literal("0x3").unwrap(),
+        SequenceNumber::new(),
+        address,
+        u64::MAX - 1,
+    );
+    new_addresses.push(AccountInfo {
+        address,
+        key_pair: kp.copy(),
+    });
+
+    preload_objects.push(new_object.clone());
+
     let committee = Committee::new(authorities);
 
     // Make server state to persist the objects.
@@ -1276,7 +1287,9 @@ async fn call(
     }))
 }
 
-fn get_object_effects(order_effects: OrderEffects) -> HashMap<String, HashMap<&'static str, String>> {
+fn get_object_effects(
+    order_effects: OrderEffects,
+) -> HashMap<String, HashMap<&'static str, String>> {
     let mut object_effects_summary = HashMap::new();
     if !order_effects.created.is_empty() {
         let mut effects = HashMap::new();
