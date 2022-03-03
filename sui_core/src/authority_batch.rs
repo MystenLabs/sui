@@ -152,67 +152,24 @@ impl BatchManager {
         };
 
         // See if there are any transactions in the database not in a batch
-        let mut total_seq = self
+        let transactions: Vec<_> = self
             .db
-            .next_sequence_number
-            .load(std::sync::atomic::Ordering::Relaxed);
-        if total_seq > last_batch.total_size {
+            .executed_sequence
+            .iter()
+            .skip_to(&last_batch.next_sequence_number)?
+            .collect();
+
+        if !transactions.is_empty() {
             // Make a new batch, to put the old transactions not in a batch in.
-            let mut transactions: Vec<_> = self
-                .db
-                .executed_sequence
-                .iter()
-                .skip_to(&last_batch.total_size)?
-                .collect();
-
-            if transactions.len() as TxSequenceNumber != total_seq - last_batch.total_size {
-                /*
-                NOTE: The database is corrupt, namely we have a higher maximum transaction sequence
-                      than number of items since the end of the last batch,
-                      which means there is a hole in the sequence. This can happen
-                      in case we crash after writting command seq x but before x-1 was written.
-                */
-                let db_batch = self.db.executed_sequence.batch();
-
-                // Delete the transactions that we read above, that are out of a batch and we are about
-                // to re-sequence with new numbers.
-                let db_batch = db_batch.delete_batch(
-                    &self.db.executed_sequence,
-                    transactions.iter().map(|(k, _)| *k),
-                )?;
-
-                // Reorder the transactions
-                total_seq = last_batch.total_size + transactions.len() as TxSequenceNumber;
-                self.db
-                    .next_sequence_number
-                    .store(total_seq, std::sync::atomic::Ordering::Relaxed);
-
-                /*
-                Update transactions
-
-                Here we re-write the transactions in the same order but using a new sequential
-                sequence number (the range) to ensure the sequence of transactions contains no
-                gaps in the sequence.
-                */
-                let range = last_batch.total_size..total_seq;
-
-                transactions = range
-                    .into_iter()
-                    .zip(transactions.into_iter().map(|(_, v)| v))
-                    .collect();
-
-                let db_batch = db_batch
-                    .insert_batch(&self.db.executed_sequence, transactions.iter().cloned())?;
-
-                db_batch.write()?;
-            }
-
             let last_signed_batch = SignedBatch::new(
                 AuthorityBatch::make_next(&last_batch, &transactions[..]),
                 &*secret,
                 authority_name,
             );
-            self.db.batches.insert(&total_seq, &last_signed_batch)?;
+            self.db.batches.insert(
+                &last_signed_batch.batch.next_sequence_number,
+                &last_signed_batch,
+            )?;
             last_batch = last_signed_batch.batch;
         }
 
@@ -242,7 +199,7 @@ impl BatchManager {
         let mut current_batch: Vec<(TxSequenceNumber, TransactionDigest)> = Vec::new();
         let mut loose_transactions: BTreeMap<TxSequenceNumber, TransactionDigest> = BTreeMap::new();
 
-        let mut next_sequence_number = prev_batch.total_size;
+        let mut next_sequence_number = prev_batch.next_sequence_number;
 
         while !exit {
             // Reset the flags.
@@ -294,7 +251,7 @@ impl BatchManager {
                 );
                 self.db
                     .batches
-                    .insert(&new_batch.batch.total_size, &new_batch)?;
+                    .insert(&new_batch.batch.next_sequence_number, &new_batch)?;
 
                 // Send the update
                 let _ = self.tx_broadcast.send(UpdateItem::Batch(new_batch.clone()));
@@ -329,11 +286,14 @@ impl BcsSignable for TransactionBatch {}
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct AuthorityBatch {
     // TODO: Add epoch
-    /// The total number of items executed by this authority.
-    total_size: u64,
+    /// The next sequence number after the end of this batch
+    next_sequence_number: u64,
 
-    /// The number of items in the previous block.
-    previous_total_size: u64,
+    /// The first sequence number of this batch
+    initial_sequence_number: u64,
+
+    // The number of items in the batch
+    size: u64,
 
     /// The digest of the previous block, if there is one
     previous_digest: Option<BatchDigest>,
@@ -356,8 +316,9 @@ impl AuthorityBatch {
         let transactions_digest = sha3_hash(&to_hash);
 
         AuthorityBatch {
-            total_size: 0,
-            previous_total_size: 0,
+            next_sequence_number: 0,
+            initial_sequence_number: 0,
+            size: 0,
             previous_digest: None,
             transactions_digest,
         }
@@ -369,12 +330,19 @@ impl AuthorityBatch {
         previous_batch: &AuthorityBatch,
         transactions: &[(TxSequenceNumber, TransactionDigest)],
     ) -> AuthorityBatch {
-        let to_hash = TransactionBatch(transactions.to_vec());
+        let transaction_vec = transactions.to_vec();
+        debug_assert!(!transaction_vec.is_empty());
+
+        let initial_sequence_number = transaction_vec[0].0 as u64;
+        let next_sequence_number = (transaction_vec[transaction_vec.len() - 1].0 + 1) as u64;
+
+        let to_hash = TransactionBatch(transaction_vec);
         let transactions_digest = sha3_hash(&to_hash);
 
         AuthorityBatch {
-            total_size: previous_batch.total_size + transactions.len() as u64,
-            previous_total_size: previous_batch.total_size,
+            next_sequence_number,
+            initial_sequence_number,
+            size: transactions.len() as u64,
             previous_digest: Some(previous_batch.digest()),
             transactions_digest,
         }

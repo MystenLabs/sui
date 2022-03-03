@@ -34,7 +34,7 @@ async fn test_open_manager() {
             .await
             .expect("No error expected.");
 
-        assert_eq!(0, last_block.total_size);
+        assert_eq!(0, last_block.next_sequence_number);
 
         // TEST 2: init from a db with a transaction not in the sequence makes a new block
         //         when we re-open the database.
@@ -57,9 +57,9 @@ async fn test_open_manager() {
             .await
             .expect("No error expected.");
 
-        assert_eq!(1, last_block.total_size);
+        assert_eq!(1, last_block.next_sequence_number);
 
-        // TEST 3: If the database contains out of order transactions we fix it
+        // TEST 3: If the database contains out of order transactions we just make a block with gaps
         store
             .executed_sequence
             .insert(&2, &TransactionDigest::new([0; 32]))
@@ -78,8 +78,9 @@ async fn test_open_manager() {
             .await
             .unwrap();
 
-        assert_eq!(last_block.total_size, 2);
-        assert_eq!(last_block.previous_total_size, 1);
+        assert_eq!(last_block.next_sequence_number, 3);
+        assert_eq!(last_block.initial_sequence_number, 2);
+        assert_eq!(last_block.size, 1);
     }
 }
 

@@ -76,8 +76,7 @@ pub struct AuthorityStore {
     /// A sequence of batches indexing into the sequence of executed transactions.
     pub batches: DBMap<TxSequenceNumber, SignedBatch>,
 
-    /// The size of the executed transactions sequence, used to timestamp the next
-    /// item in the sequence.
+    /// The next available sequence number to use in the `executed sequence` table.
     pub next_sequence_number: AtomicU64,
 }
 
