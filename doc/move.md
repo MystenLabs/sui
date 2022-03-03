@@ -78,16 +78,16 @@ We are now ready to look at some Move code!
 The Sui platform includes _framework_ Move code that is needed to
 bootstrap Sui operations. In particular, Sui supports multiple
 user-defined coin types, which are custom assets define in the Move
-language. Sui framework code contains the `Coin module` supporting
-creation and management of custom coins. The Coin module is
+language. Sui framework code contains the `Coin` module supporting
+creation and management of custom coins. The `Coin` module is
 located in the
 [sui_programmability/framework/sources/Coin.move](../sui_programmability/framework/sources/Coin.move)
 file. As you would expect, the manifest file describing how to build the
-package containing the Coin module is located in the corresponding
+package containing the `Coin` module is located in the corresponding
 [sui_programmability/framework/Move.toml](../sui_programmability/framework/Move.toml)
 file.
 
-Let's see what module definition in the Coin module file looks like:
+Let's see what module definition in the `Coin` module file looks like:
 
 ```rust
 module Sui::Coin {
@@ -106,6 +106,11 @@ As we can see, when defining a module we specify the module name
 is used to uniquely identify a module in Move source code (e.g., to be
 able to use if from other modules). The package name is globally
 unique, but different packages can contain modules with the same name.
+
+For example, if you have package "P" that has been published, you cannot
+publish another package named "P". At the same time you can have module
+"P1::M1", "P2::M1", and "P1::M2" but not another, say, "P1::M1" in the system
+at the same time.
 
 TODO: Clarify this last sentence. How is the package name globally
 unique then? Or are you saying the aforementioned *combination* is
@@ -128,7 +133,7 @@ Sui = "0x2"
 
 ### Move structs
 
-The Coin module defines the `Coin` struct type that can be used to
+The `Coin` module defines the `Coin` struct type that can be used to
 represent different types of user-defined coins as Sui objects:
 
 ``` rust
@@ -153,11 +158,11 @@ In order for a Move struct type to define a Sui object type such as
 struct type defined in the
 [ID module](../sui_programmability/framework/sources/ID.move). The
 Move struct type must
-also have the `key`, which allows the object to be persisted in Sui's
-global storage. Abilities of a Move struct are listed after the `has`
-keyword in the struct definition, and their existence (or lack
-thereof) helps enforcing various properties on a definition or on
-instances of a given struct
+also have the `key` ability, which allows the object to be persisted
+in Sui's global storage. Abilities of a Move struct are listed after
+the `has` keyword in the struct definition, and their existence (or
+lack thereof) helps enforcing various properties on a definition or on
+instances of a given struct.
 
 You can read more about struct
 [abilities](https://github.com/diem/move/blob/main/language/documentation/book/src/abilities.md)
@@ -169,11 +174,11 @@ parameter. When an instance of the `Coin` struct is created, it can
 be passed an arbitrary concrete Move type (e.g. another struct type)
 to distinguish different types of coins from one another.
 
-(Learn about Move type parameters known as
+Learn about Move type parameters known as
 [generics](https://github.com/diem/move/blob/main/language/documentation/book/src/generics.md)
 and also about the optional
 [phantom keyword](https://github.com/diem/move/blob/main/language/documentation/book/src/generics.md#phantom-type-parameters))
-at your leisure.)
+at your leisure.
 
 In particular, one type of custom coin already defined in Sui is
 `Coin<GAS>`, which represents a token used to pay for gas used in Sui
@@ -205,9 +210,9 @@ public fun value<T>(self: &Coin<T>): u64 {
 
 This _public_ function can be called by functions in other modules to
 return the unsigned integer value currently stored in a given
-instance of the `Coin` struct. (Direct access to fields of a struct is
+instance of the `Coin` struct. Direct access to fields of a struct is
 allowed only within the module defining a given struct as described in
-[Privileged Struct Operations](https://github.com/diem/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations).)
+[Privileged Struct Operations](https://github.com/diem/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations).
 The body of the function simply retrieves the `value` field from the
 `Coin` struct instance parameter and returns it. Please note that the
 coin parameter is a read-only reference to the `Coin` struct instance,
