@@ -263,7 +263,7 @@ async fn make_server_with_genesis_ctx(
     let state = AuthorityState::new(
         committee.clone(),
         name,
-        Box::pin(authority.key_pair.copy()),
+        Arc::pin(authority.key_pair.copy()),
         store,
         preload_modules,
         genesis_ctx,

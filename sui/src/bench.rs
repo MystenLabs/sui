@@ -167,7 +167,7 @@ impl ClientServerBenchmark {
             let state = AuthorityState::new(
                 committee.clone(),
                 public_auth0,
-                Box::pin(secret_auth0),
+                Arc::pin(secret_auth0),
                 store,
                 genesis::clone_genesis_compiled_modules(),
                 &mut genesis::get_genesis_context(),
