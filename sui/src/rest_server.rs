@@ -83,6 +83,7 @@ struct ServerContext {
     wallet_config_path: String,
     network_config_path: String,
     authority_db_path: String,
+    wallet_ks_path: String,
     client_db_path: Arc<Mutex<String>>,
     // Server handles that will be used to restart authorities.
     authority_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -97,6 +98,7 @@ impl ServerContext {
             wallet_config_path: String::from("wallet.conf"),
             network_config_path: String::from("./network.conf"),
             authority_db_path: String::from("./authorities_db"),
+            wallet_ks_path: String::from("./wallet.ks"),
             client_db_path: Arc::new(Mutex::new(String::new())),
             authority_handles: Arc::new(Mutex::new(Vec::new())),
             wallet_context: Arc::new(Mutex::new(None)),
@@ -324,15 +326,6 @@ async fn sui_start(
     // Sync all accounts.
     for address in addresses.iter() {
         wallet_context
-            .create_account_state(address)
-            .map_err(|error| {
-                custom_http_error(
-                    StatusCode::CONFLICT,
-                    format!("Can't create client state: {error}"),
-                )
-            })?;
-
-        wallet_context
             .address_manager
             .sync_client_state(*address)
             .await
@@ -377,6 +370,7 @@ async fn sui_stop(
     fs::remove_dir_all(&server_context.authority_db_path).ok();
     fs::remove_file(&server_context.network_config_path).ok();
     fs::remove_file(&server_context.wallet_config_path).ok();
+    fs::remove_file(&server_context.wallet_ks_path).ok();
 
     Ok(HttpResponseUpdatedNoContent())
 }
@@ -422,14 +416,6 @@ async fn get_addresses(
     // TODO: Speed up sync operations by kicking them off concurrently.
     // Also need to investigate if this should be an automatic sync or manually triggered.
     for address in addresses.iter() {
-        if let Err(err) = wallet_context.create_account_state(address) {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Can't create client state: {err}"),
-            ));
-        }
-
         if let Err(err) = wallet_context
             .address_manager
             .sync_client_state(*address)
@@ -518,14 +504,6 @@ async fn get_objects(
         )
     })?;
 
-    wallet_context
-        .create_account_state(address)
-        .map_err(|error| {
-            custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Could not get or create client state: {error}"),
-            )
-        })?;
     let object_refs = wallet_context.address_manager.get_owned_objects(*address);
 
     Ok(HttpResponseOk(GetObjectsResponse {
@@ -549,9 +527,6 @@ otherwise we look for it in the shared object store.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GetObjectInfoRequest {
-    // TODO: Refactor client state code so that owner can be an optional field.
-    /** Required; Hex code as string representing the owner's address */
-    owner: String,
     /** Required; Hex code as string representing the object id */
     object_id: String,
 }
@@ -594,7 +569,7 @@ async fn object_info(
 
     // TODO: Find a better way to utilize wallet context here that does not require 'take()'
     let wallet_context = server_context.wallet_context.lock().unwrap().take();
-    let mut wallet_context = wallet_context.ok_or_else(|| {
+    let wallet_context = wallet_context.ok_or_else(|| {
         custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
             "Wallet Context does not exist.".to_string(),
@@ -611,29 +586,6 @@ async fn object_info(
             ));
         }
     };
-
-    let owner = match decode_bytes_hex(object_info_params.owner.as_str()) {
-        Ok(owner) => owner,
-        Err(error) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Could not decode address from hex {error}"),
-            ));
-        }
-    };
-
-    // Fetch the object ref
-    if let Err(error) = wallet_context.create_account_state(&owner) {
-        *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-        return Err(custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            format!(
-                "Could not get client state for account {:?}: {error}",
-                owner
-            ),
-        ));
-    }
 
     let (object, layout) = match wallet_context
         .address_manager
@@ -772,22 +724,9 @@ async fn transfer_object(
         )
     })?;
 
-    let client_state = match wallet_context.get_or_create_client_state(&owner) {
-        Ok(client_state) => client_state,
-        Err(err) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!(
-                    "Could not create or get client state for {:?}: {err}",
-                    owner
-                ),
-            ));
-        }
-    };
-
-    let (cert, effects, gas_used) = match client_state
-        .transfer_object(object_id, gas_object_id, to_address)
+    let (cert, effects, gas_used) = match wallet_context
+        .address_manager
+        .transfer_object(owner, object_id, gas_object_id, to_address)
         .await
     {
         Ok((cert, effects)) => {
@@ -798,7 +737,7 @@ async fn transfer_object(
                     return Err(custom_http_error(
                         StatusCode::FAILED_DEPENDENCY,
                         format!(
-                            "Error calling move function: {:#?}, gas used {}",
+                            "Error transferring object: {:#?}, gas used {}",
                             error, gas_used
                         ),
                     ));
@@ -973,21 +912,16 @@ async fn sync(
         )
     })?;
 
-    let client_state = match wallet_context.get_or_create_client_state(&address) {
-        Ok(client_state) => client_state,
-        Err(err) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!(
-                    "Could not create or get client state for {:?}: {err}",
-                    address
-                ),
-            ));
-        }
-    };
+    // Attempt to create a new account state, but continue if it already exists.
+    if let Err(error) = wallet_context.create_account_state(&address) {
+        info!("{:?}", error);
+    }
 
-    if let Err(err) = client_state.sync_client_state().await {
+    if let Err(err) = wallet_context
+        .address_manager
+        .sync_client_state(address)
+        .await
+    {
         *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
         return Err(custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
