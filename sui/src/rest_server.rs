@@ -265,6 +265,7 @@ async fn sui_start(
             vec![],
             &[],
             network_config.buffer_size,
+            None,
         )
         .await
         .map_err(|error| {

@@ -29,6 +29,7 @@ serde_with = { version = "1.11.0", features = ["hex"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.3", features = ["time", "env-filter"] }
 serde-value = "0.7.0"
+log = "0.4.14"
 
 bcs = "0.1.3"
 sui_core = { path = "../sui_core" }

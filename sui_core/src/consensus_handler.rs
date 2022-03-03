@@ -1,9 +1,12 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::authority::AuthorityState;
 use bytes::Bytes;
 use std::sync::Arc;
 use sui_types::error::SuiError;
 use sui_types::messages::ConfirmationTransaction;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
 
 /// The `ConsensusHandler` receives certificates sequenced by the consensus and updates
@@ -30,7 +33,7 @@ impl ConsensusHandler {
 
     /// Main reactor loop receiving certificates from consensus.
     async fn run(&mut self) {
-        while let Some(bytes) = self.rx_consensus.recv().await {
+        while let Ok(bytes) = self.rx_consensus.recv().await {
             // The consensus simply orders bytes, so we first need to deserialize the
             // certificate.
             let confirmation: ConfirmationTransaction = match bincode::deserialize(&bytes) {
