@@ -276,7 +276,7 @@ impl ClientState {
     /// Returns all object references that are in `object_refs` but not in the store.
     pub fn object_refs_not_in_store(
         &self,
-        object_refs: &Vec<ObjectRef>,
+        object_refs: &[ObjectRef],
     ) -> SuiResult<BTreeSet<ObjectRef>> {
         let result = self
             .store
