@@ -127,8 +127,9 @@ module Sui::Geniteam {
 
     /// Remove a monster from a farm.
     /// Aborts if the monster with the given ID is not found
-    public fun remove_monster_(self: &mut Farm, monster_id: &ID): Monster {
-        let monsters = &mut self.pet_monsters;
+    public fun remove_monster_(self: &mut Player, monster_id: &ID): Monster {
+        let farm = &mut self.farm;
+        let monsters = &mut farm.pet_monsters;
         let num_monsters = Vector::length(monsters);
         let i = 0;
         while (i < num_monsters) {
@@ -139,7 +140,7 @@ module Sui::Geniteam {
             i = i + 1;
         };
         assert!(i != num_monsters, EMONSTER_NOT_FOUND);
-        self.occupied_monster_slots = self.occupied_monster_slots - 1;
+        farm.occupied_monster_slots = farm.occupied_monster_slots - 1;
         Vector::remove(monsters, i)
     }
 
@@ -197,7 +198,7 @@ module Sui::Geniteam {
     }
 
     /// Remove a monster from a farm amd transfer it to the transaction sender
-    public fun remove_monster(self: &mut Farm, monster_id: vector<u8>, ctx: &mut TxContext) {
+    public fun remove_monster(self: &mut Player, monster_id: vector<u8>, ctx: &mut TxContext) {
         // TODO: monster_id should be probably be `address`, but leaving this as-is to avoid breaking Geniteam
         let monster = remove_monster_(self, &ID::new_from_bytes(monster_id));
         Transfer::transfer(monster, TxContext::sender(ctx))
