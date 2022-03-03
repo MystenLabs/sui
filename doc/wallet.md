@@ -371,7 +371,7 @@ It's the path to the `my_move_package` as per the
 object that will be used to pay for publishing the package (we use the
 same gas object we used to pay for the function call in the previous
 [calling Move code](#calling-move-code) section), and gas budget to put
-an upper limit (we use 1000 as our gas budget. The whole command resembles:
+an upper limit on gas usage (we use 1000 as our gas budget). The whole command resembles:
 
 ``` shell
 sui>-$ publish --path /PATH_TO_PACKAGE/my_move_package --gas 60DADCE6E5081C3EFCA162694D7EFD8D99D46636 1000
