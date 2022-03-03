@@ -3,18 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
+use std::io;
+use std::sync::Arc;
 use sui_network::{
     network::NetworkServer,
     transport::{spawn_server, MessageHandler, SpawnedServer},
 };
 use sui_types::{error::*, messages::*, serialize::*};
-
-use std::io;
 use tracing::*;
 
 pub struct AuthorityServer {
     server: NetworkServer,
-    state: AuthorityState,
+    state: Arc<AuthorityState>,
 }
 
 impl AuthorityServer {
@@ -22,7 +22,7 @@ impl AuthorityServer {
         base_address: String,
         base_port: u16,
         buffer_size: usize,
-        state: AuthorityState,
+        state: Arc<AuthorityState>,
     ) -> Self {
         Self {
             server: NetworkServer::new(base_address, base_port, buffer_size),

@@ -7,4 +7,5 @@ pub mod authority_aggregator;
 pub mod authority_client;
 pub mod authority_server;
 pub mod client;
+pub mod consensus_handler;
 pub mod safe_client;

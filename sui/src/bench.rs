@@ -278,7 +278,12 @@ impl ClientServerBenchmark {
     }
 
     async fn spawn_server(&self, state: AuthorityState) -> transport::SpawnedServer {
-        let server = AuthorityServer::new(self.host.clone(), self.port, self.buffer_size, state);
+        let server = AuthorityServer::new(
+            self.host.clone(),
+            self.port,
+            self.buffer_size,
+            Arc::new(state),
+        );
         server.spawn().await.unwrap()
     }
 

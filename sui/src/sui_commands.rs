@@ -3,6 +3,7 @@
 use crate::config::{
     AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, WalletConfig,
 };
+use crate::keystore::KeystoreType;
 use anyhow::anyhow;
 use futures::future::join_all;
 use move_binary_format::CompiledModule;
@@ -11,17 +12,17 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
+use sui_adapter::adapter::generate_package_id;
 use sui_adapter::genesis;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
+use sui_core::consensus_handler::ConsensusHandler;
 use sui_types::base_types::{SequenceNumber, TxContext};
-
-use crate::keystore::KeystoreType;
-use sui_adapter::adapter::generate_package_id;
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
+use tokio::sync::mpsc::channel;
 use tracing::{error, info};
 
 #[derive(StructOpt)]
@@ -257,6 +258,8 @@ async fn make_server_with_genesis_ctx(
     buffer_size: usize,
     genesis_ctx: &mut TxContext,
 ) -> SuiResult<AuthorityServer> {
+    let (tx_consensus_output, rx_consensus_output) = channel(1_000);
+
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
     let name = *authority.key_pair.public_key_bytes();
 
@@ -277,10 +280,13 @@ async fn make_server_with_genesis_ctx(
         state.insert_object(object.clone()).await;
     }
 
+    let guarded_state = Arc::new(state);
+    ConsensusHandler::spawn(rx_consensus_output, guarded_state.clone());
+
     Ok(AuthorityServer::new(
         authority.host.clone(),
         authority.port,
         buffer_size,
-        state,
+        guarded_state,
     ))
 }

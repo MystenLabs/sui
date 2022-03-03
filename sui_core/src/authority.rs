@@ -440,13 +440,13 @@ impl AuthorityState {
         Ok((temporary_store, status))
     }
 
-    /// Handle sequenced certificates from the consensus protocol.
-    pub fn handle_commit(
-        &mut self,
-        confirmation_transaction: ConfirmationTransaction,
+    /// Process certificates coming from the consensus.
+    pub async fn handle_consensus_certificate(
+        &self,
+        certificate: &CertifiedTransaction,
     ) -> SuiResult<()> {
         // Ensure it is the first time we see this certificate.
-        let transaction = &confirmation_transaction.certificate.transaction;
+        let transaction = &certificate.transaction;
         let transaction_digest = transaction.digest();
         for id in transaction.shared_input_objects() {
             if self._database.sequenced(transaction_digest, *id)?.is_some() {
@@ -455,7 +455,6 @@ impl AuthorityState {
         }
 
         // Check the certificate.
-        let certificate = &confirmation_transaction.certificate;
         certificate.check(&self.committee)?;
 
         // Persist the certificate. We are about to lock one or more shared object.
