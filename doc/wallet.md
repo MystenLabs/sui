@@ -370,7 +370,7 @@ It's the path to the `my_move_package` as per the
 [package creation description](move.md#writing-a-package)), a gas
 object that will be used to pay for publishing the package (we use the
 same gas object we used to pay for the function call in the previous
-[calling Move code](#calling-move-code)) section, and gas budget to put
+[calling Move code](#calling-move-code) section), and gas budget to put
 an upper limit (we use 1000 as our gas budget. The whole command resembles:
 
 ``` shell
