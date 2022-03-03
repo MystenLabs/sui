@@ -6,8 +6,16 @@ use rocksdb::Options;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
+
+use std::sync::atomic::AtomicU64;
+use sui_types::base_types::SequenceNumber;
 use typed_store::rocks::{open_cf, DBBatch, DBMap};
+
+use std::sync::atomic::Ordering;
 use typed_store::traits::Map;
+
+pub use crate::authority_batch::AuthorityBatch;
+use crate::authority_batch::{SignedBatch, TxSequenceNumber};
 
 pub struct AuthorityStore {
     /// This is a map between the object ID and the latest state of the object, namely the
@@ -35,7 +43,7 @@ pub struct AuthorityStore {
     /// transaction can also be deleted from this structure.
     signed_transactions: DBMap<TransactionDigest, SignedTransaction>,
 
-    /// This is a map between the tranbsaction digest and the corresponding certificate for all
+    /// This is a map between the transaction digest and the corresponding certificate for all
     /// certificates that have been successfully processed by this authority. This set of certificates
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
@@ -54,8 +62,22 @@ pub struct AuthorityStore {
     /// the same response for any call after the first (ie. make certificate processing idempotent).
     signed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
 
+    /// Hold the lock for shared objects. These two maps should eventually be merged into a single one.
+    sequenced: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
+    schedule: DBMap<ObjectID, SequenceNumber>,
+
     /// Internal vector of locks to manage concurrent writes to the database
     lock_table: Vec<parking_lot::Mutex<()>>,
+
+    // Tables used for authority batch structure
+    /// A sequence on all executed certificates and effects.
+    pub executed_sequence: DBMap<TxSequenceNumber, TransactionDigest>,
+
+    /// A sequence of batches indexing into the sequence of executed transactions.
+    pub batches: DBMap<TxSequenceNumber, SignedBatch>,
+
+    /// The next available sequence number to use in the `executed sequence` table.
+    pub next_sequence_number: AtomicU64,
 }
 
 impl AuthorityStore {
@@ -72,9 +94,29 @@ impl AuthorityStore {
                 "certificates",
                 "parent_sync",
                 "signed_effects",
+                "sequenced",
+                "schedule",
+                "executed_sequence",
+                "batches",
             ],
         )
         .expect("Cannot open DB.");
+
+        let executed_sequence =
+            DBMap::reopen(&db, Some("executed_sequence")).expect("Cannot open CF.");
+
+        // Read the index of the last entry in the sequence of commands
+        // to extract the next sequence number or it is zero.
+        let next_sequence_number = AtomicU64::new(
+            executed_sequence
+                .iter()
+                .skip_prior_to(&TxSequenceNumber::MAX)
+                .expect("Error reading table.")
+                .next()
+                .map(|(v, _)| v + 1u64)
+                .unwrap_or(0),
+        );
+
         AuthorityStore {
             objects: DBMap::reopen(&db, Some("objects")).expect("Cannot open CF."),
             owner_index: DBMap::reopen(&db, Some("owner_index")).expect("Cannot open CF."),
@@ -85,17 +127,22 @@ impl AuthorityStore {
             certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
             parent_sync: DBMap::reopen(&db, Some("parent_sync")).expect("Cannot open CF."),
             signed_effects: DBMap::reopen(&db, Some("signed_effects")).expect("Cannot open CF."),
+            sequenced: DBMap::reopen(&db, Some("sequenced")).expect("Cannot open CF."),
+            schedule: DBMap::reopen(&db, Some("schedule")).expect("Cannot open CF."),
             lock_table: (0..1024)
                 .into_iter()
                 .map(|_| parking_lot::Mutex::new(()))
                 .collect(),
+            executed_sequence,
+            batches: DBMap::reopen(&db, Some("batches")).expect("Cannot open CF."),
+            next_sequence_number,
         }
     }
 
-    /// A function that aquires all locks associated with the objects (in order to avoid deadlocks.)
-    fn aqcuire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
+    /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
+    fn acquire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
         let num_locks = self.lock_table.len();
-        // TODO: randomize the lock mapping based on a secet to avoid DoS attacks.
+        // TODO: randomize the lock mapping based on a secret to avoid DoS attacks.
         let lock_number: BTreeSet<usize> = _input_objects
             .iter()
             .map(|(_, _, digest)| {
@@ -103,7 +150,7 @@ impl AuthorityStore {
             })
             .collect();
         // Note: we need to iterate over the sorted unique elements, hence the use of a Set
-        //       in order to prevent deadlocks when trying to aquire many locks.
+        //       in order to prevent deadlocks when trying to acquire many locks.
         lock_number
             .into_iter()
             .map(|lock_seq| self.lock_table[lock_seq].lock())
@@ -213,6 +260,17 @@ impl AuthorityStore {
             .collect())
     }
 
+    /// Read a lock for a specific (transaction, shared object) pair.
+    pub fn sequenced(
+        &self,
+        transaction_digest: TransactionDigest,
+        object_id: ObjectID,
+    ) -> Result<Option<SequenceNumber>, SuiError> {
+        self.sequenced
+            .get(&(transaction_digest, object_id))
+            .map_err(SuiError::from)
+    }
+
     // Methods to mutate the store
 
     /// Insert an object
@@ -272,7 +330,7 @@ impl AuthorityStore {
         // new locks must be atomic, and not writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
-            let _mutexes = self.aqcuire_locks(mutable_input_objects);
+            let _mutexes = self.acquire_locks(mutable_input_objects);
 
             let locks = self.transaction_lock.multi_get(mutable_input_objects)?;
 
@@ -304,13 +362,13 @@ impl AuthorityStore {
     /// Updates the state resulting from the execution of a certificate.
     ///
     /// Internally it checks that all locks for active inputs are at the correct
-    /// version, and then writes locks, objects, certificates, parents atomicaly.
+    /// version, and then writes locks, objects, certificates, parents atomically.
     pub fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<(TxSequenceNumber, TransactionInfoResponse), SuiError> {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let mut write_batch = self.transaction_lock.batch();
@@ -328,13 +386,19 @@ impl AuthorityStore {
             std::iter::once((transaction_digest, &signed_effects)),
         )?;
 
-        self.batch_update_objects(write_batch, temporary_store, transaction_digest)?;
+        // Safe to unwrap since the "true" flag ensures we get a sequence value back.
+        let seq: TxSequenceNumber = self
+            .batch_update_objects(write_batch, temporary_store, transaction_digest, true)?
+            .unwrap();
 
-        Ok(TransactionInfoResponse {
-            signed_transaction: self.signed_transactions.get(&transaction_digest)?,
-            certified_transaction: Some(certificate),
-            signed_effects: Some(signed_effects),
-        })
+        Ok((
+            seq,
+            TransactionInfoResponse {
+                signed_transaction: self.signed_transactions.get(&transaction_digest)?,
+                certified_transaction: Some(certificate),
+                signed_effects: Some(signed_effects),
+            },
+        ))
     }
 
     /// Persist temporary storage to DB for genesis modules
@@ -345,7 +409,8 @@ impl AuthorityStore {
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
         let write_batch = self.transaction_lock.batch();
-        self.batch_update_objects(write_batch, temporary_store, transaction_digest)
+        self.batch_update_objects(write_batch, temporary_store, transaction_digest, false)
+            .map(|_| ())
     }
 
     /// Helper function for updating the objects in the state
@@ -354,7 +419,8 @@ impl AuthorityStore {
         mut write_batch: DBBatch,
         temporary_store: AuthorityTemporaryStore,
         transaction_digest: TransactionDigest,
-    ) -> Result<(), SuiError> {
+        should_sequence: bool,
+    ) -> Result<Option<TxSequenceNumber>, SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
 
         // Archive the old lock.
@@ -434,9 +500,10 @@ impl AuthorityStore {
 
         // This is the critical region: testing the locks and writing the
         // new locks must be atomic, and no writes should happen in between.
+        let mut return_seq = None;
         {
-            // Aquire the lock to ensure no one else writes when we are in here.
-            let _mutexes = self.aqcuire_locks(&active_inputs[..]);
+            // Acquire the lock to ensure no one else writes when we are in here.
+            let _mutexes = self.acquire_locks(&active_inputs[..]);
 
             // Check the locks are still active
             // TODO: maybe we could just check if the certificate is there instead?
@@ -445,18 +512,35 @@ impl AuthorityStore {
                 object_lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
             }
 
+            if should_sequence {
+                // Now we are sure we are going to execute, add to the sequence
+                // number and insert into authority sequence.
+                //
+                // NOTE: it is possible that we commit to the database transactions
+                //       out of order with respect to their sequence number. It is also
+                //       possible for the authority to crash without committing the
+                //       full sequence, and the batching logic needs to deal with this.
+                let next_seq = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
+                write_batch = write_batch.insert_batch(
+                    &self.executed_sequence,
+                    std::iter::once((next_seq, transaction_digest)),
+                )?;
+
+                return_seq = Some(next_seq);
+            }
+
             // Atomic write of all locks & other data
             write_batch.write()?;
 
-            // implict: drop(_mutexes);
+            // implicit: drop(_mutexes);
         } // End of critical region
 
-        Ok(())
+        Ok(return_seq)
     }
 
     /// Returns the last entry we have for this object in the parents_sync index used
     /// to facilitate client and authority sync. In turn the latest entry provides the
-    /// latest object_reference, and also the latest tranaction that has interacted with
+    /// latest object_reference, and also the latest transaction that has interacted with
     /// this object.
     ///
     /// This parent_sync index also contains entries for deleted objects (with a digest of
@@ -482,6 +566,56 @@ impl AuthorityStore {
                 None
             }
         }))
+    }
+
+    /// Delete a lock of a shared object.
+    pub fn delete_sequence_lock(
+        &self,
+        transaction_digest: TransactionDigest,
+        object_id: ObjectID,
+    ) -> Result<(), SuiError> {
+        self.sequenced
+            .remove(&(transaction_digest, object_id))
+            .map_err(SuiError::from)
+    }
+
+    /// Free the schedule data structure.
+    pub fn delete_schedule(&self, object_id: &ObjectID) -> Result<(), SuiError> {
+        self.schedule.remove(object_id).map_err(SuiError::from)
+    }
+
+    /// Persist a certificate.
+    pub fn persist_certificate(
+        &self,
+        transaction_digest: &TransactionDigest,
+        certificate: &CertifiedTransaction,
+    ) -> Result<(), SuiError> {
+        self.certificates
+            .insert(transaction_digest, certificate)
+            .map_err(SuiError::from)
+    }
+
+    /// Lock a sequence number for the shared objects of the input transaction.
+    pub fn lock_shared_objects(
+        &self,
+        transaction_digest: TransactionDigest,
+        transaction: &Transaction,
+    ) -> Result<(), SuiError> {
+        let mut sequenced_to_write = Vec::new();
+        let mut schedule_to_write = Vec::new();
+        for id in transaction.shared_input_objects() {
+            let version = self.schedule.get(id)?.unwrap_or_default();
+            sequenced_to_write.push(((transaction_digest, *id), version));
+            let next_version = version.increment();
+            schedule_to_write.push((id, next_version));
+        }
+
+        // TODO: Writing into `sequenced` and `schedule` should be atomic. Should we merge
+        // them into a single DB?
+        let mut write_batch = self.sequenced.batch();
+        write_batch = write_batch.insert_batch(&self.sequenced, sequenced_to_write)?;
+        write_batch = write_batch.insert_batch(&self.schedule, schedule_to_write)?;
+        write_batch.write().map_err(SuiError::from)
     }
 }
 

@@ -7,18 +7,18 @@ publish = false
 edition = "2021"
 
 [dependencies]
-rocksdb = "0.17.0"
-anyhow = "1.0.53"
+rocksdb = "0.18.0"
+anyhow = "1.0.55"
 bcs = "0.1.3"
-futures = "0.3.19"
+futures = "0.3.21"
 rand = "0.7.3"
 serde = { version = "1.0.136", features = ["derive"] }
-tokio = { version = "1.16.1", features = ["full"] }
+tokio = { version = "1.17.0", features = ["full"] }
 parking_lot = "0.12.0"
 itertools = "0.10.3"
 async-trait = "0.1.52"
 tempfile = "3.3.0"
-tracing = { version = "0.1", features = ["log"] }
+tracing = { version = "0.1.31", features = ["log"] }
 signature = "1.5.0"
 ed25519-dalek = "1.0.1"
 structopt = "0.3.26"
@@ -28,20 +28,20 @@ sui-framework = { path = "../sui_programmability/framework" }
 sui-network = { path = "../network_utils" }
 sui-types = { path = "../sui_types" }
 
-move-binary-format = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
-move-bytecode-utils = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
-move-core-types = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7", features = ["address20"] }
-move-package = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
-move-vm-runtime = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-binary-format = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
+move-bytecode-utils = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
+move-core-types = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940", features = ["address20"] }
+move-package = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
+move-vm-runtime = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d04c29e686aba380e6f9fc0c60a2dfdb974c5f8a"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a36c852c30729a16ee3c8a6a863f654887f0c30e"}
 
 [dev-dependencies]
 fdlimit = "0.2.1"
 naughty-strings = "0.2.4"
-similar-asserts = { version = "1.1.0" }
-serde-reflection = "0.3.2"
-serde_yaml = "0.8.17"
+similar-asserts = "1.2.0"
+serde-reflection = "0.3.5"
+serde_yaml = "0.8.23"
 assert-str = "0.1.0"
 
 [[example]]

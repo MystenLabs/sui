@@ -24,11 +24,9 @@ pub fn bytes_to_address(
     debug_assert!(args.len() == 1);
 
     let addr_bytes = pop_arg!(args, Vec<u8>);
-    assert!(addr_bytes.len() == 32);
-    // truncate the ID to 16 bytes
-    // TODO: truncation not secure. we'll either need to support longer account addresses in Move or do this a different way
-    // TODO: fix unwrap
-    let addr = AccountAddress::from_bytes(&addr_bytes[0..16]).unwrap();
+    // unwrap safe because this native function is only called from new_from_bytes,
+    // which already asserts the size of bytes to be equal of account address.
+    let addr = AccountAddress::from_bytes(addr_bytes).unwrap();
 
     // TODO: what should the cost of this be?
     let cost = native_gas(context.cost_table(), NativeCostIndex::CREATE_SIGNER, 0);

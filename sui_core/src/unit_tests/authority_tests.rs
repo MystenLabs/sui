@@ -31,7 +31,7 @@ pub fn system_maxfiles() -> usize {
     fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
 }
 
-fn max_files_authority_tests() -> i32 {
+pub fn max_files_authority_tests() -> i32 {
     (system_maxfiles() / 8).try_into().unwrap()
 }
 
@@ -383,7 +383,7 @@ fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
 }
 
 #[cfg(test)]
-fn check_gas_object(
+pub fn check_gas_object(
     gas_object: &Object,
     expected_balance: u64,
     expected_sequence_number: SequenceNumber,
@@ -652,6 +652,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
         Vec::new(),
         gas_payment_object_ref,
         Vec::new(),
+        vec![],
         vec![
             16u64.to_le_bytes().to_vec(),
             bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
@@ -1104,6 +1105,7 @@ async fn test_move_call_mutable_object_not_mutated() {
         vec![],
         vec![new_object_id1, new_object_id2],
         vec![],
+        vec![],
     )
     .await
     .unwrap();
@@ -1160,6 +1162,7 @@ async fn test_move_call_delete() {
         vec![],
         vec![new_object_id1, new_object_id2],
         vec![],
+        vec![],
     )
     .await
     .unwrap();
@@ -1177,6 +1180,7 @@ async fn test_move_call_delete() {
         "delete",
         vec![],
         vec![new_object_id1],
+        vec![],
         vec![],
     )
     .await
@@ -1211,6 +1215,7 @@ async fn test_get_latest_parent_entry() {
         vec![],
         vec![new_object_id1, new_object_id2],
         vec![],
+        vec![],
     )
     .await
     .unwrap();
@@ -1234,6 +1239,7 @@ async fn test_get_latest_parent_entry() {
         "delete",
         vec![],
         vec![new_object_id1],
+        vec![],
         vec![],
     )
     .await
@@ -1330,7 +1336,7 @@ async fn test_authority_persist() {
         committee.clone(),
         *authority_key.public_key_bytes(),
         // we assume that the node runner is in charge for its key -> it's ok to reopen a copy below.
-        Box::pin(authority_key.copy()),
+        Arc::pin(authority_key.copy()),
         store,
         vec![],
         &mut genesis::get_genesis_context(),
@@ -1358,7 +1364,7 @@ async fn test_authority_persist() {
     let authority2 = AuthorityState::new(
         committee,
         *authority_key.public_key_bytes(),
-        Box::pin(authority_key),
+        Arc::pin(authority_key),
         store,
         vec![],
         &mut genesis::get_genesis_context(),
@@ -1404,6 +1410,7 @@ async fn test_object_owning_another_object() {
         vec![],
         vec![obj1, obj2],
         vec![],
+        vec![],
     )
     .await
     .unwrap();
@@ -1426,6 +1433,7 @@ async fn test_object_owning_another_object() {
         vec![],
         vec![obj1, obj3],
         vec![],
+        vec![],
     )
     .await;
     assert!(effects.unwrap_err().to_string().contains("IncorrectSigner"));
@@ -1440,6 +1448,7 @@ async fn test_object_owning_another_object() {
         "transfer_to_object",
         vec![],
         vec![obj2, obj1],
+        vec![],
         vec![],
     )
     .await
@@ -1461,6 +1470,7 @@ async fn test_object_owning_another_object() {
         "transfer",
         vec![],
         vec![obj2],
+        vec![],
         vec![bcs::to_bytes(&AccountAddress::from(sender2)).unwrap()],
     )
     .await
@@ -1484,6 +1494,7 @@ async fn test_object_owning_another_object() {
         vec![],
         vec![obj1, obj2],
         vec![],
+        vec![],
     )
     .await;
     assert!(effects.unwrap_err().to_string().contains("IncorrectSigner"));
@@ -1499,6 +1510,7 @@ async fn test_object_owning_another_object() {
         "transfer_to_object",
         vec![],
         vec![obj1, obj2],
+        vec![],
         vec![],
     )
     .await
@@ -1541,7 +1553,7 @@ async fn init_state() -> AuthorityState {
     AuthorityState::new(
         committee,
         *authority_key.public_key_bytes(),
-        Box::pin(authority_key),
+        Arc::pin(authority_key),
         store,
         genesis::clone_genesis_compiled_modules(),
         &mut genesis::get_genesis_context(),
@@ -1564,7 +1576,7 @@ async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
     state
 }
 
-async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
+pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
     let state = init_state().await;
 
     for o in objects {
@@ -1641,6 +1653,7 @@ async fn call_move(
     function: Identifier,
     type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
+    shared_object_args_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
 ) -> SuiResult<TransactionEffects> {
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
@@ -1664,6 +1677,7 @@ async fn call_move(
         type_args,
         gas_object_ref,
         object_args,
+        shared_object_args_ids,
         pure_args,
         MAX_GAS,
         sender_key,
@@ -1681,6 +1695,7 @@ async fn call_framework_code(
     function: &'static str,
     type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
+    shared_object_arg_ids: Vec<ObjectID>,
     pure_args: Vec<Vec<u8>>,
 ) -> SuiResult<TransactionEffects> {
     let genesis_package_objects = genesis::clone_genesis_packages();
@@ -1696,12 +1711,13 @@ async fn call_framework_code(
         ident_str!(function).to_owned(),
         type_args,
         object_arg_ids,
+        shared_object_arg_ids,
         pure_args,
     )
     .await
 }
 
-async fn create_move_object(
+pub async fn create_move_object(
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
@@ -1714,6 +1730,7 @@ async fn create_move_object(
         sender_key,
         "ObjectBasics",
         "create",
+        vec![],
         vec![],
         vec![],
         vec![
