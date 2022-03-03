@@ -8,6 +8,7 @@ use sui_types::error::SuiError;
 use sui_types::messages::ConfirmationTransaction;
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
+use sui_types::serialize::{deserialize_message, SerializedMessage};
 
 /// The `ConsensusHandler` receives certificates sequenced by the consensus and updates
 /// the authority's database
@@ -36,8 +37,14 @@ impl ConsensusHandler {
         while let Ok(bytes) = self.rx_consensus.recv().await {
             // The consensus simply orders bytes, so we first need to deserialize the
             // certificate.
-            let confirmation: ConfirmationTransaction = match bincode::deserialize(&bytes) {
-                Ok(x) => x,
+            let confirmation = match deserialize_message(&*bytes) {
+                Ok(SerializedMessage::Cert(certificate)) => ConfirmationTransaction {
+                    certificate: *certificate,
+                } ,
+                Ok(_) => {
+                    log::debug!("{}", SuiError::UnexpectedMessage);
+                    continue;
+                }
                 Err(e) => {
                     log::debug!("Failed to deserialize certificate {}", e);
                     continue;
