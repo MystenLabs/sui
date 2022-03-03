@@ -166,8 +166,8 @@ pub struct ClientState {
 // Operations are considered successful when they successfully reach a quorum of authorities.
 #[async_trait]
 pub trait Client {
-    /// Send object to a Sui account.
-    async fn transfer_object(
+    /// Send coin object to a Sui address.
+    async fn transfer_coin(
         &mut self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -667,7 +667,7 @@ impl<A> Client for ClientAddressManager<A>
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
-    async fn transfer_object(
+    async fn transfer_coin(
         &mut self,
         signer: SuiAddress,
         object_id: ObjectID,
@@ -677,6 +677,11 @@ where
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         let account = self.get_account(&signer)?;
         let object_ref = account.latest_object_ref(&object_id)?;
+        self.get_object_info(object_id)
+            .await?
+            .object()?
+            .is_transfer_elegible()?;
+
         let gas_payment = account.latest_object_ref(&gas_payment)?;
         let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_payment);
         let signature = tx_signer.sign(&signer, data.clone()).await?;

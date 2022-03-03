@@ -498,7 +498,7 @@ async fn test_initiating_valid_transfer() {
         (sender, SequenceNumber::from(0))
     );
     let (certificate, _) = client
-        .transfer_object(
+        .transfer_coin(
             sender,
             object_id_1,
             gas_object,
@@ -548,7 +548,7 @@ async fn test_initiating_valid_transfer_despite_bad_authority() {
     let (sender, sender_key) = get_key_pair();
     let mut client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
     let (certificate, _) = client
-        .transfer_object(
+        .transfer_coin(
             sender,
             object_id,
             gas_object,
@@ -593,7 +593,7 @@ async fn test_initiating_transfer_low_funds() {
     let (sender, sender_key) = get_key_pair();
     let mut client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
     assert!(client
-        .transfer_object(
+        .transfer_coin(
             sender,
             object_id_2,
             gas_object,
@@ -649,7 +649,7 @@ async fn test_bidirectional_transfer() {
     );
     // Transfer object to client.
     let (certificate, _) = client
-        .transfer_object(
+        .transfer_coin(
             addr1,
             object_id,
             gas_object1,
@@ -694,7 +694,7 @@ async fn test_bidirectional_transfer() {
 
     // Transfer the object back to Client1
     client
-        .transfer_object(
+        .transfer_coin(
             addr2,
             object_id,
             gas_object2,
@@ -727,7 +727,7 @@ async fn test_bidirectional_transfer() {
 
     // Should fail if Client 2 double spend the object
     assert!(client
-        .transfer_object(
+        .transfer_coin(
             addr2,
             object_id,
             gas_object2,
@@ -796,7 +796,7 @@ async fn test_client_state_sync_with_transferred_object() {
 
     // Transfer object to client.
     client
-        .transfer_object(
+        .transfer_coin(
             addr1,
             object_id,
             gas_object_id,
@@ -1393,7 +1393,7 @@ async fn test_transfer_object_error() {
     // Test 1: Double spend
     let object_id = *objects.next().unwrap();
     client
-        .transfer_object(
+        .transfer_coin(
             sender,
             object_id,
             gas_object,
@@ -1403,7 +1403,7 @@ async fn test_transfer_object_error() {
         .await
         .unwrap();
     let result = client
-        .transfer_object(
+        .transfer_coin(
             sender,
             object_id,
             gas_object,
@@ -1427,7 +1427,7 @@ async fn test_transfer_object_error() {
         .unwrap();
 
     let result = client
-        .transfer_object(
+        .transfer_coin(
             sender,
             obj.id(),
             gas_object,
@@ -1451,7 +1451,7 @@ async fn test_transfer_object_error() {
         .unwrap();
 
     let result = client
-        .transfer_object(
+        .transfer_coin(
             sender,
             object_id,
             gas_object,
@@ -1481,7 +1481,7 @@ async fn test_transfer_object_error() {
         .unwrap();
 
     let result = client
-        .transfer_object(
+        .transfer_coin(
             sender,
             object_id,
             gas_object,
@@ -1685,7 +1685,7 @@ async fn test_object_store_transfer() {
 
     // Transfer object to client.
     let _certificate = client
-        .transfer_object(
+        .transfer_coin(
             addr1,
             object_id,
             gas_object1,
@@ -1712,7 +1712,7 @@ async fn test_object_store_transfer() {
 
     // Transfer the object back to Client1
     let _certificate = client
-        .transfer_object(
+        .transfer_coin(
             addr2,
             object_id,
             gas_object2,
@@ -2293,7 +2293,7 @@ async fn test_transfer_pending_transactions() {
     // Test 1: Normal transfer
     let object_id = *objects.next().unwrap();
     client
-        .transfer_object(
+        .transfer_coin(
             sender,
             object_id,
             gas_object,
@@ -2317,7 +2317,7 @@ async fn test_transfer_pending_transactions() {
         .unwrap();
 
     let result = client
-        .transfer_object(
+        .transfer_coin(
             sender,
             obj.id(),
             gas_object,
@@ -2348,7 +2348,7 @@ async fn test_transfer_pending_transactions() {
         .unwrap();
 
     let result = client
-        .transfer_object(
+        .transfer_coin(
             sender,
             object_id,
             gas_object,
@@ -2382,7 +2382,7 @@ async fn test_transfer_pending_transactions() {
         .unwrap();
     // Try to use those objects in another transaction
     let result = client
-        .transfer_object(
+        .transfer_coin(
             sender,
             object_id,
             gas_object,
