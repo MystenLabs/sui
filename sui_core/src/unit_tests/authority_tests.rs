@@ -31,7 +31,7 @@ pub fn system_maxfiles() -> usize {
     fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
 }
 
-fn max_files_authority_tests() -> i32 {
+pub fn max_files_authority_tests() -> i32 {
     (system_maxfiles() / 8).try_into().unwrap()
 }
 
@@ -383,7 +383,7 @@ fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
 }
 
 #[cfg(test)]
-fn check_gas_object(
+pub fn check_gas_object(
     gas_object: &Object,
     expected_balance: u64,
     expected_sequence_number: SequenceNumber,
@@ -1336,7 +1336,7 @@ async fn test_authority_persist() {
         committee.clone(),
         *authority_key.public_key_bytes(),
         // we assume that the node runner is in charge for its key -> it's ok to reopen a copy below.
-        Box::pin(authority_key.copy()),
+        Arc::pin(authority_key.copy()),
         store,
         vec![],
         &mut genesis::get_genesis_context(),
@@ -1364,7 +1364,7 @@ async fn test_authority_persist() {
     let authority2 = AuthorityState::new(
         committee,
         *authority_key.public_key_bytes(),
-        Box::pin(authority_key),
+        Arc::pin(authority_key),
         store,
         vec![],
         &mut genesis::get_genesis_context(),
@@ -1553,7 +1553,7 @@ async fn init_state() -> AuthorityState {
     AuthorityState::new(
         committee,
         *authority_key.public_key_bytes(),
-        Box::pin(authority_key),
+        Arc::pin(authority_key),
         store,
         genesis::clone_genesis_compiled_modules(),
         &mut genesis::get_genesis_context(),
@@ -1576,7 +1576,7 @@ async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
     state
 }
 
-async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
+pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
     let state = init_state().await;
 
     for o in objects {
@@ -1717,7 +1717,7 @@ async fn call_framework_code(
     .await
 }
 
-async fn create_move_object(
+pub async fn create_move_object(
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
