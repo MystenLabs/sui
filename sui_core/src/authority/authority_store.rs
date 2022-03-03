@@ -111,7 +111,7 @@ impl AuthorityStore {
         let next_sequence_number = AtomicU64::new(
             executed_sequence
                 .iter()
-                .skip_prior_to(&u64::MAX)
+                .skip_prior_to(&TxSequenceNumber::MAX)
                 .expect("Error reading table.")
                 .next()
                 .map(|(v, _)| v + 1u64)
@@ -369,7 +369,7 @@ impl AuthorityStore {
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
-    ) -> Result<(u64, TransactionInfoResponse), SuiError> {
+    ) -> Result<(TxSequenceNumber, TransactionInfoResponse), SuiError> {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let mut write_batch = self.transaction_lock.batch();
@@ -388,7 +388,7 @@ impl AuthorityStore {
         )?;
 
         // Safe to unwrap since the "true" flag ensures we get a sequence value back.
-        let seq: u64 = self
+        let seq: TxSequenceNumber = self
             .batch_update_objects(write_batch, temporary_store, transaction_digest, true)?
             .unwrap();
 
@@ -421,7 +421,7 @@ impl AuthorityStore {
         temporary_store: AuthorityTemporaryStore,
         transaction_digest: TransactionDigest,
         should_sequence: bool,
-    ) -> Result<Option<u64>, SuiError> {
+    ) -> Result<Option<TxSequenceNumber>, SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
 
         // Archive the old lock.
