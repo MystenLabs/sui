@@ -167,7 +167,7 @@ async fn genesis(
     if !network_config.authorities.is_empty() {
         return Err(custom_http_error(
             StatusCode::CONFLICT,
-            String::from("Cannot run genesis on a existing network, run /stop to reset."),
+            String::from("Cannot run genesis on a existing network, please make a POST request to the `sui/stop` endpoint to reset."),
         ));
     }
 
@@ -238,7 +238,7 @@ async fn sui_start(
     if network_config.authorities.is_empty() {
         return Err(custom_http_error(
             StatusCode::CONFLICT,
-            String::from("No authority configured for the network, please run /genesis."),
+            String::from("No authority configured for the network, please make a POST request to the `sui/genesis` endpoint."),
         ));
     }
 
@@ -493,7 +493,7 @@ async fn get_objects(
     let wallet_context = wallet_context.as_mut().ok_or_else(|| {
         custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist. Call genesis/ and start/ to boostrap the network."
+            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
                 .to_string(),
         )
     })?;
@@ -574,7 +574,7 @@ async fn object_info(
     let wallet_context = wallet_context.ok_or_else(|| {
         custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist. Call genesis/ and start/ to boostrap the network."
+            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
                 .to_string(),
         )
     })?;
