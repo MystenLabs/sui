@@ -258,7 +258,7 @@ In general, an entry function, must satisfy the following properties:
 
 - be public
 - have no return value
-- with parameters ordered as follows:
+- have parameters ordered as follows:
   - one or more Sui objects (or vectors of objects)
   - one or more primitive types (or vectors of such types)
   - a mutable reference to an instance of the `TxContext` struct
