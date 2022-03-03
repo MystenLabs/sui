@@ -246,8 +246,11 @@ async fn test_handle_move_order_with_batch() {
         .await
         .expect("No issues starting service.");
 
+    // Check we can subscribe
+    let mut rx = _pair.0.subscribe();
+
     authority_state
-        .set_batch_sender(_send)
+        .set_batch_sender(_send, _pair)
         .expect("No problem registering");
     tokio::task::yield_now().await;
 
@@ -260,8 +263,6 @@ async fn test_handle_move_order_with_batch() {
     .await
     .unwrap();
 
-    let (_tx, mut rx) = _pair;
-
     // Second and after is the one
     let y = rx.recv().await.unwrap();
     println!("{:?}", y);
@@ -272,7 +273,6 @@ async fn test_handle_move_order_with_batch() {
 
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
-    drop(_tx);
     drop(authority_state);
 
     _join.await.expect("No issues ending task.");

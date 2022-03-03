@@ -27,7 +27,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::authority_batch::BatchSender;
+use crate::authority_batch::{BatchSender, BroadcastPair};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -67,10 +67,11 @@ pub struct AuthorityState {
     /// The database
     _database: Arc<AuthorityStore>,
 
+    // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
     /// and create batches for this authority.
     /// Keep as None if there is no need for this.
-    batch_sender: Option<BatchSender>,
+    batch_sender: Option<(BatchSender, BroadcastPair)>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -82,11 +83,15 @@ pub struct AuthorityState {
 impl AuthorityState {
     /// Set a listener for transaction certificate updates. Returns an
     /// error if a listener is already registered.
-    pub fn set_batch_sender(&mut self, batch_sender: BatchSender) -> SuiResult {
+    pub fn set_batch_sender(
+        &mut self,
+        batch_sender: BatchSender,
+        broadcast_pair: BroadcastPair,
+    ) -> SuiResult {
         if self.batch_sender.is_some() {
             return Err(SuiError::AuthorityUpdateFailure);
         }
-        self.batch_sender = Some(batch_sender);
+        self.batch_sender = Some((batch_sender, broadcast_pair));
         Ok(())
     }
 
@@ -415,7 +420,7 @@ impl AuthorityState {
             .await?; // Returns the OrderInfoResponse
 
         // If there is a notifier registered, notify:
-        if let Some(sender) = &self.batch_sender {
+        if let Some((sender, _)) = &self.batch_sender {
             sender.send_item(seq, transaction_digest).await?;
         }
 
