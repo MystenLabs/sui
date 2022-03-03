@@ -6,9 +6,9 @@ use bytes::Bytes;
 use std::sync::Arc;
 use sui_types::error::SuiError;
 use sui_types::messages::ConfirmationTransaction;
+use sui_types::serialize::{deserialize_message, SerializedMessage};
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
-use sui_types::serialize::{deserialize_message, SerializedMessage};
 
 /// The `ConsensusHandler` receives certificates sequenced by the consensus and updates
 /// the authority's database
@@ -40,7 +40,7 @@ impl ConsensusHandler {
             let confirmation = match deserialize_message(&*bytes) {
                 Ok(SerializedMessage::Cert(certificate)) => ConfirmationTransaction {
                     certificate: *certificate,
-                } ,
+                },
                 Ok(_) => {
                     log::debug!("{}", SuiError::UnexpectedMessage);
                     continue;
