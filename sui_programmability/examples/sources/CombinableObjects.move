@@ -2,26 +2,25 @@
 /// new objects
 module Examples::CombinableObjects {
     use Examples::TrustedCoin::EXAMPLE;
-    use FastX::Address::{Self, Address};
-    use FastX::Coin::{Self, Coin};
-    use FastX::ID::{Self, ID};
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+    use Sui::Coin::{Self, Coin};
+    use Sui::ID::{Self, VersionedID};
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
 
     struct Ham has key {
-        id: ID
+        id: VersionedID
     }
 
     struct Bread has key {
-        id: ID
+        id: VersionedID
     }
 
     struct Sandwich has key {
-        id: ID
+        id: VersionedID,
     }
 
     /// Address selling ham, bread, etc
-    const GROCERY: vector<u8> = b"";
+    const GROCERY: address = @0x0;
     /// Price for ham
     const HAM_PRICE: u64 = 10;
     /// Price for bread
@@ -47,15 +46,15 @@ module Examples::CombinableObjects {
     /// Combine the `ham` and `bread` into a delicious sandwich
     public fun make_sandwich(
         ham: Ham, bread: Bread, ctx: &mut TxContext
-    ): Sandwich {
+    ) {
         let Ham { id: ham_id } = ham;
         let Bread { id: bread_id } = bread;
         ID::delete(ham_id);
         ID::delete(bread_id);
-        Sandwich { id: TxContext::new_id(ctx) }
+        Transfer::transfer(Sandwich { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
     }
 
-    fun admin(): Address {
-        Address::new(GROCERY)
+    fun admin(): address {
+        GROCERY
     }
 }

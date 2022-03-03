@@ -1,4 +1,5 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
@@ -6,6 +7,7 @@ use crate::safe_client::SafeClient;
 
 use futures::{future, StreamExt};
 use move_core_types::value::MoveStructLayout;
+use sui_types::crypto::{sha3_hash, AuthoritySignature, PublicKeyBytes};
 use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
 use sui_types::{
     base_types::*,
@@ -30,18 +32,15 @@ mod client_tests;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
-pub struct AuthorityAggregator<AuthorityAPI> {
+pub struct AuthorityAggregator<A> {
     /// Our Sui committee.
     pub committee: Committee,
     /// How to talk to this committee.
-    authority_clients: BTreeMap<AuthorityName, SafeClient<AuthorityAPI>>,
+    authority_clients: BTreeMap<AuthorityName, SafeClient<A>>,
 }
 
-impl<AuthorityAPI> AuthorityAggregator<AuthorityAPI> {
-    pub fn new(
-        committee: Committee,
-        authority_clients: BTreeMap<AuthorityName, AuthorityAPI>,
-    ) -> Self {
+impl<A> AuthorityAggregator<A> {
+    pub fn new(committee: Committee, authority_clients: BTreeMap<AuthorityName, A>) -> Self {
         Self {
             committee: committee.clone(),
             authority_clients: authority_clients
@@ -70,7 +69,7 @@ where
     /// an unbounded amount of resources.
     async fn sync_authority_source_to_destination(
         &self,
-        cert: ConfirmationOrder,
+        cert: ConfirmationTransaction,
         source_authority: AuthorityName,
         destination_authority: AuthorityName,
     ) -> Result<(), SuiError> {
@@ -82,7 +81,7 @@ where
         // represent certificates that earlier insertions depend on. Thus updating an
         // authority in the order we pop() the certificates from this stack should ensure
         // certificates are uploaded in causal order.
-        let digest = cert.certificate.order.digest();
+        let digest = cert.certificate.transaction.digest();
         let mut missing_certificates: Vec<_> = vec![cert.clone()];
 
         // We keep a list of certificates already processed to avoid duplicates
@@ -92,7 +91,7 @@ where
 
         while let Some(target_cert) = missing_certificates.pop() {
             match destination_client
-                .handle_confirmation_order(target_cert.clone())
+                .handle_confirmation_transaction(target_cert.clone())
                 .await
             {
                 Ok(_) => continue,
@@ -107,7 +106,7 @@ where
             // The first time we cannot find the cert from the destination authority
             // we try to get its dependencies. But the second time we have already tried
             // to update its dependencies, so we should just admit failure.
-            let cert_digest = target_cert.certificate.order.digest();
+            let cert_digest = target_cert.certificate.transaction.digest();
             if attempted_certificates.contains(&cert_digest) {
                 return Err(SuiError::AuthorityInformationUnavailable);
             }
@@ -117,7 +116,7 @@ where
             // first try to read certificates and parents from a local cache before
             // asking an authority.
 
-            let order_info = if missing_certificates.is_empty() {
+            let transaction_info = if missing_certificates.is_empty() {
                 // Here we cover a corner case due to the nature of using consistent
                 // broadcast: it is possible for the client to have a certificate
                 // signed by some authority, before the authority has processed the
@@ -129,7 +128,7 @@ where
                 // is ok.
 
                 source_client
-                    .handle_confirmation_order(target_cert.clone())
+                    .handle_confirmation_transaction(target_cert.clone())
                     .await?
             } else {
                 // Unlike the previous case if a certificate created an object that
@@ -138,7 +137,7 @@ where
                 // of such an execution.
 
                 source_client
-                    .handle_order_info_request(OrderInfoRequest {
+                    .handle_transaction_info_request(TransactionInfoRequest {
                         transaction_digest: cert_digest,
                     })
                     .await?
@@ -146,35 +145,30 @@ where
 
             // Put back the target cert
             missing_certificates.push(target_cert);
-            let signed_effects = &order_info
+            let signed_effects = &transaction_info
                 .signed_effects
                 .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
             for returned_digest in &signed_effects.effects.dependencies {
                 // We check that we are not processing twice the same certificate, as
-                // it would be common if two objects used by one order, were also both
-                // mutated by the same preceeding order.
+                // it would be common if two objects used by one transaction, were also both
+                // mutated by the same preceeding transaction.
                 if !candidate_certificates.contains(returned_digest) {
                     // Add this cert to the set we have processed
                     candidate_certificates.insert(*returned_digest);
 
-                    let inner_order_info = source_client
-                        .handle_order_info_request(OrderInfoRequest {
+                    let inner_transaction_info = source_client
+                        .handle_transaction_info_request(TransactionInfoRequest {
                             transaction_digest: *returned_digest,
                         })
                         .await?;
 
-                    let returned_certificate = inner_order_info
-                        .certified_order
+                    let returned_certificate = inner_transaction_info
+                        .certified_transaction
                         .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-                    // Check & Add it to the list of certificates to sync
-                    returned_certificate.check(&self.committee).map_err(|_| {
-                        SuiError::ByzantineAuthoritySuspicion {
-                            authority: source_authority,
-                        }
-                    })?;
-                    missing_certificates.push(ConfirmationOrder::new(returned_certificate));
+                    // Add it to the list of certificates to sync
+                    missing_certificates.push(ConfirmationTransaction::new(returned_certificate));
                 }
             }
         }
@@ -191,7 +185,7 @@ where
     /// `timeout_milliseconds`.
     async fn sync_certificate_to_authority_with_timeout(
         &self,
-        cert: ConfirmationOrder,
+        cert: ConfirmationTransaction,
         destination_authority: AuthorityName,
         timeout_period: Duration,
         retries: usize,
@@ -225,17 +219,40 @@ where
             // Note: here we could improve this function by passing into the
             //       `sync_authority_source_to_destination` call a cache of
             //       certificates and parents to avoid re-downloading them.
-            if timeout(
-                timeout_period,
-                self.sync_authority_source_to_destination(
-                    cert.clone(),
-                    source_authority,
-                    destination_authority,
-                ),
-            )
-            .await
-            .is_ok()
-            {
+
+            let logic = async {
+                let res = self
+                    .sync_authority_source_to_destination(
+                        cert.clone(),
+                        source_authority,
+                        destination_authority,
+                    )
+                    .await;
+
+                if let Err(err) = &res {
+                    // We checked that the source authority has all the information
+                    // since the source has signed the certificate. Either the
+                    // source or the destination authority may be faulty.
+
+                    let inner_err = SuiError::PairwiseSyncFailed {
+                        xsource: source_authority,
+                        destination: destination_authority,
+                        tx_digest: cert.certificate.transaction.digest(),
+                        error: Box::new(err.clone()),
+                    };
+
+                    // Report the error to both authority clients.
+                    let source_client = &self.authority_clients[&source_authority];
+                    let destination_client = &self.authority_clients[&destination_authority];
+
+                    source_client.report_client_error(inner_err.clone());
+                    destination_client.report_client_error(inner_err);
+                }
+
+                res
+            };
+
+            if timeout(timeout_period, logic).await.is_ok() {
                 // If the updates suceeds we return, since there is no need
                 // to try other sources.
                 return Ok(());
@@ -330,8 +347,13 @@ where
         Ok(accumulated_state)
     }
 
-    /// Return all the information in the network about a specific object, including all versions of it
-    /// as well as all certificates that lead to the versions and the authorities at that version.
+    /// Return all the information in the network regarding the latest state of a specific object.
+    /// For each authority queried, we obtain the latest object state along with the certificate that
+    /// lead up to that state. The results from each authority are aggreated for the return.
+    /// The first part of the return value is a map from each unique (ObjectRef, TransactionDigest)
+    /// pair to the content of the object as well as a list of authorities that responded this
+    /// pair.
+    /// The second part of the return value is a map from transaction digest to the cert.
     async fn get_object_by_id(
         &self,
         object_id: ObjectID,
@@ -343,10 +365,10 @@ where
                 (
                     Option<Object>,
                     Option<MoveStructLayout>,
-                    Vec<(AuthorityName, Option<SignedOrder>)>,
+                    Vec<(AuthorityName, Option<SignedTransaction>)>,
                 ),
             >,
-            HashMap<TransactionDigest, CertifiedOrder>,
+            HashMap<TransactionDigest, CertifiedTransaction>,
         ),
         SuiError,
     > {
@@ -359,7 +381,11 @@ where
                 |_name, client| {
                     Box::pin(async move {
                         // Request and return an error if any
-                        let request = ObjectInfoRequest::from(object_id);
+                        // TODO: Expose layout format option.
+                        let request = ObjectInfoRequest::latest_object_info_request(
+                            object_id,
+                            Some(ObjectFormatOptions::default()),
+                        );
                         client.handle_object_info_request(request).await
                     })
                 },
@@ -406,7 +432,7 @@ where
             (
                 Option<Object>,
                 Option<MoveStructLayout>,
-                Vec<(AuthorityName, Option<SignedOrder>)>,
+                Vec<(AuthorityName, Option<SignedTransaction>)>,
             ),
         >::new();
         let mut certificates = HashMap::new();
@@ -427,7 +453,7 @@ where
                 };
 
                 let (transaction_digest, cert_option) = if let Some(cert) = parent_certificate {
-                    (cert.order.digest(), Some(cert))
+                    (cert.transaction.digest(), Some(cert))
                 } else {
                     (TransactionDigest::genesis(), None)
                 };
@@ -435,8 +461,8 @@ where
                 // Extract an optional object to be used in the value, note that the object can be
                 // None if the object was deleted at this authority
                 //
-                // NOTE: here we could also be gathering the locked orders to see if we could make a cert.
-                let (object_option, signed_order_option, layout_option) =
+                // NOTE: here we could also be gathering the locked transactions to see if we could make a cert.
+                let (object_option, signed_transaction_option, layout_option) =
                     if let Some(ObjectResponse {
                         object,
                         lock,
@@ -452,10 +478,10 @@ where
                 let entry = object_map
                     .entry((object_ref, transaction_digest))
                     .or_insert((object_option, layout_option, Vec::new()));
-                entry.2.push((name, signed_order_option));
+                entry.2.push((name, signed_transaction_option));
 
                 if let Some(cert) = cert_option {
-                    certificates.insert(cert.order.digest(), cert);
+                    certificates.insert(cert.transaction.digest(), cert);
                 }
             } else {
                 error_list.push((name, result));
@@ -502,7 +528,7 @@ where
                 |mut state, name, weight, _result| {
                     Box::pin(async move {
                         // Here we increase the stake counter no matter if we got a correct
-                        // response or not. A final order will have effects on 2f+1 so if we
+                        // response or not. A final transaction will have effects on 2f+1 so if we
                         // ask any 2f+1 we should get the version of the latest object.
                         state.0 .0 += weight;
 
@@ -553,8 +579,12 @@ where
         timeout_after_quorum: Duration,
     ) -> Result<
         (
-            Vec<(Object, Option<MoveStructLayout>, Option<CertifiedOrder>)>,
-            Vec<(ObjectRef, Option<CertifiedOrder>)>,
+            Vec<(
+                Object,
+                Option<MoveStructLayout>,
+                Option<CertifiedTransaction>,
+            )>,
+            Vec<(ObjectRef, Option<CertifiedTransaction>)>,
         ),
         SuiError,
     > {
@@ -579,7 +609,7 @@ where
 
             // If more that one version of an object is available, we update all authorities with it.
             while !aggregate_object_info.is_empty() {
-                // This will be the very latest object version, because object_ref is ordered this way.
+                // This will be the very latest object version, because object_ref is transactioned this way.
                 let (
                     (object_ref, transaction_digest),
                     (object_option, layout_option, object_authorities),
@@ -604,18 +634,18 @@ where
                 let cert = certificates[&transaction_digest].clone(); // safe due to check above.
 
                 // Remove authorities at this version, they will not need to be updated.
-                for (name, _signed_order) in object_authorities {
+                for (name, _signed_transaction) in object_authorities {
                     authorites.remove(&name);
                 }
 
-                // NOTE: Just above we have access to signed orders that have not quite
+                // NOTE: Just above we have access to signed transactions that have not quite
                 //       been processed by enough authorities. We should either return them
                 //       to the caller, or -- more in the spirit of this function -- do what
                 //       needs to be done to force their processing if this is possible.
 
                 // Add authorities that need to be updated
                 let entry = certs_to_sync
-                    .entry(cert.order.digest())
+                    .entry(cert.transaction.digest())
                     .or_insert((cert.clone(), HashSet::new()));
                 entry.1.extend(authorites);
 
@@ -637,7 +667,7 @@ where
                 //       the usual FuturesUnordered.
                 let _result = self
                     .sync_certificate_to_authority_with_timeout(
-                        ConfirmationOrder::new(cert.clone()),
+                        ConfirmationTransaction::new(cert.clone()),
                         name,
                         timeout_after_quorum,
                         DEFAULT_RETRIES,
@@ -664,8 +694,12 @@ where
         timeout_after_quorum: Duration,
     ) -> Result<
         (
-            Vec<(Object, Option<MoveStructLayout>, Option<CertifiedOrder>)>,
-            Vec<(ObjectRef, Option<CertifiedOrder>)>,
+            Vec<(
+                Object,
+                Option<MoveStructLayout>,
+                Option<CertifiedTransaction>,
+            )>,
+            Vec<(ObjectRef, Option<CertifiedTransaction>)>,
         ),
         SuiError,
     > {
@@ -684,16 +718,16 @@ where
         .await
     }
 
-    /// Takes an order, brings all authorities up to date with the versions of the
-    /// objects needed, and then submits the order to make a certificate.
-    pub async fn process_order(
+    /// Takes a transaction, brings all authorities up to date with the versions of the
+    /// objects needed, and then submits the transaction to make a certificate.
+    pub async fn process_transaction(
         &self,
-        order: Order,
+        transaction: Transaction,
         timeout_after_quorum: Duration,
-    ) -> Result<CertifiedOrder, SuiError> {
-        // Find out which objects are required by this order and
+    ) -> Result<CertifiedTransaction, SuiError> {
+        // Find out which objects are required by this transaction and
         // ensure they are synced on authorities.
-        let required_ids: Vec<ObjectID> = order
+        let required_ids: Vec<ObjectID> = transaction
             .input_objects()
             .iter()
             .map(|o| o.object_id())
@@ -703,15 +737,15 @@ where
             .sync_all_given_objects(&required_ids, timeout_after_quorum)
             .await?;
 
-        // Now broadcast the order to all authorities.
+        // Now broadcast the transaction to all authorities.
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
-        struct ProcessOrderState {
+        struct ProcessTransactionState {
             // The list of signatures gathered at any point
-            signatures: Vec<(AuthorityName, Signature)>,
+            signatures: Vec<(AuthorityName, AuthoritySignature)>,
             // A certificate if we manage to make or find one
-            certificate: Option<CertifiedOrder>,
+            certificate: Option<CertifiedTransaction>,
             // The list of errors gathered at any point
             errors: Vec<SuiError>,
             // Tally of stake for good vs bad responses.
@@ -719,7 +753,7 @@ where
             bad_stake: usize,
         }
 
-        let state = ProcessOrderState {
+        let state = ProcessTransactionState {
             signatures: vec![],
             certificate: None,
             errors: vec![],
@@ -727,38 +761,42 @@ where
             bad_stake: 0,
         };
 
-        let order_ref = &order;
+        let transaction_ref = &transaction;
         let state = self
             .quorum_map_then_reduce_with_timeout(
                 state,
                 |_name, client| {
-                    Box::pin(async move { client.handle_order(order_ref.clone()).await })
+                    Box::pin(
+                        async move { client.handle_transaction(transaction_ref.clone()).await },
+                    )
                 },
                 |mut state, name, weight, result| {
                     Box::pin(async move {
                         match result {
                             // If we are given back a certificate, then we do not need
-                            // to re-submit this order, we just returned the ready made
+                            // to re-submit this transaction, we just returned the ready made
                             // certificate.
-                            Ok(OrderInfoResponse {
-                                certified_order: Some(inner_certificate),
+                            Ok(TransactionInfoResponse {
+                                certified_transaction: Some(inner_certificate),
                                 ..
                             }) => {
                                 state.certificate = Some(inner_certificate);
                             }
 
-                            // If we get back a signed order, then we aggregate the
+                            // If we get back a signed transaction, then we aggregate the
                             // new signature and check whether we have enough to form
                             // a certificate.
-                            Ok(OrderInfoResponse {
-                                signed_order: Some(inner_signed_order),
+                            Ok(TransactionInfoResponse {
+                                signed_transaction: Some(inner_signed_transaction),
                                 ..
                             }) => {
-                                state.signatures.push((name, inner_signed_order.signature));
+                                state
+                                    .signatures
+                                    .push((name, inner_signed_transaction.signature));
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
-                                    state.certificate = Some(CertifiedOrder {
-                                        order: order_ref.clone(),
+                                    state.certificate = Some(CertifiedTransaction {
+                                        transaction: transaction_ref.clone(),
                                         signatures: state.signatures.clone(),
                                     });
                                 }
@@ -782,7 +820,7 @@ where
                             }
                             // In case we don't get an error but also don't get a valid value
                             _ => {
-                                state.errors.push(SuiError::ErrorWhileProcessingOrder);
+                                state.errors.push(SuiError::ErrorWhileProcessingTransaction);
                                 state.bad_stake += weight; // This is the bad stake counter
                                 if state.bad_stake > validity {
                                     // Too many errors
@@ -807,22 +845,24 @@ where
             .await?;
 
         // If we have some certificate return it, or return an error.
-        state.certificate.ok_or(SuiError::ErrorWhileProcessingOrder)
+        state
+            .certificate
+            .ok_or(SuiError::ErrorWhileProcessingTransaction)
     }
 
     /// Process a certificate assuming that 2f+1 authorites already are up to date.
     ///
-    /// This call is meant to be called after `process_order` returns a certificate.
+    /// This call is meant to be called after `process_transaction` returns a certificate.
     /// At that point (and after) enough authorities are up to date with all objects
     /// needed to process the certificate that a submission should succeed. However,
     /// in case an authority returns an error, we do try to bring it up to speed.
-    pub async fn process_certificate(
+    async fn process_certificate(
         &self,
-        certificate: CertifiedOrder,
+        certificate: CertifiedTransaction,
         timeout_after_quorum: Duration,
-    ) -> Result<OrderEffects, SuiError> {
+    ) -> Result<TransactionEffects, SuiError> {
         struct ProcessCertificateState {
-            effects_map: HashMap<[u8; 32], (usize, OrderEffects)>,
+            effects_map: HashMap<[u8; 32], (usize, TransactionEffects)>,
             bad_stake: usize,
         }
 
@@ -845,19 +885,28 @@ where
                         // - we try to re-process the certificate and return the result.
 
                         let res = client
-                            .handle_confirmation_order(ConfirmationOrder::new(cert_ref.clone()))
+                            .handle_confirmation_transaction(ConfirmationTransaction::new(
+                                cert_ref.clone(),
+                            ))
                             .await;
 
                         if res.is_ok() {
                             // We got an ok answer, so returning the result of processing
-                            // the order.
+                            // the transaction.
                             return res;
                         }
 
-                        // If we got an error, we try to update the authority.
+                        // LockErrors indicate the authority may be out-of-date.
+                        // We only attempt to update authority and retry if we are seeing LockErrors.
+                        // For any other error, we stop here and return.
+                        if !matches!(res, Err(SuiError::LockErrors { .. })) {
+                            return res;
+                        }
+
+                        // If we got LockErrors, we try to update the authority.
                         let _result = self
                             .sync_certificate_to_authority_with_timeout(
-                                ConfirmationOrder::new(cert_ref.clone()),
+                                ConfirmationTransaction::new(cert_ref.clone()),
                                 _name,
                                 timeout_after_quorum,
                                 DEFAULT_RETRIES,
@@ -866,7 +915,9 @@ where
 
                         // Now try again
                         client
-                            .handle_confirmation_order(ConfirmationOrder::new(cert_ref.clone()))
+                            .handle_confirmation_transaction(ConfirmationTransaction::new(
+                                cert_ref.clone(),
+                            ))
                             .await
                     })
                 },
@@ -874,7 +925,7 @@ where
                     Box::pin(async move {
                         // We aggregate the effects response, until we have more than 2f
                         // and return.
-                        if let Ok(OrderInfoResponse {
+                        if let Ok(TransactionInfoResponse {
                             signed_effects: Some(inner_effects),
                             ..
                         }) = result
@@ -927,7 +978,7 @@ where
         _sender: SuiAddress,
         object_id: ObjectID,
         _sequence_number: SequenceNumber,
-    ) -> Result<CertifiedOrder, SuiError> {
+    ) -> Result<CertifiedTransaction, SuiError> {
         let (object_map, transaction_map) = self
             .get_object_by_id(object_id, Duration::from_secs(10))
             .await?;
@@ -950,6 +1001,7 @@ where
 
     /// Return owner address and sequence number of an object backed by a quorum of authorities.
     /// NOTE: This is only reliable in the synchronous model, with a sufficient timeout value.
+    /// This function doesn't work for shared objects that don't have an exclusive owner.
     #[cfg(test)]
     async fn get_latest_owner(&self, object_id: ObjectID) -> (SuiAddress, SequenceNumber) {
         let (object_infos, _certificates) = self
@@ -957,15 +1009,18 @@ where
             .await
             .unwrap(); // Not safe, but want to blow up if testing.
         let (top_ref, obj) = object_infos.iter().last().unwrap();
-        (obj.0.as_ref().unwrap().owner, top_ref.0 .1)
+        (
+            obj.0.as_ref().unwrap().get_single_owner().unwrap(),
+            top_ref.0 .1,
+        )
     }
 
     pub async fn execute_transaction(
         &self,
-        order: &Order,
-    ) -> Result<(CertifiedOrder, OrderEffects), anyhow::Error> {
+        transaction: &Transaction,
+    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         let new_certificate = self
-            .process_order(order.clone(), Duration::from_secs(60))
+            .process_transaction(transaction.clone(), Duration::from_secs(60))
             .await?;
         let response = self
             .process_certificate(new_certificate.clone(), Duration::from_secs(60))
@@ -975,7 +1030,7 @@ where
     }
 
     pub async fn get_object_info_execute(
-        &mut self,
+        &self,
         object_id: ObjectID,
     ) -> Result<ObjectRead, anyhow::Error> {
         let (object_map, cert_map) = self
@@ -991,18 +1046,10 @@ where
                 .map(|(name, _)| self.committee.weight(name))
                 .sum();
 
-            // If we have f+1 stake telling us of the latest version of the object, we just accept it.
+            let mut is_ok = false;
             if stake >= self.committee.validity_threshold() {
-                if obj_option.is_none() {
-                    return Ok(ObjectRead::Deleted(obj_ref));
-                } else {
-                    // safe due to check
-                    return Ok(ObjectRead::Exists(
-                        obj_ref,
-                        obj_option.unwrap(),
-                        layout_option,
-                    ));
-                }
+                // If we have f+1 stake telling us of the latest version of the object, we just accept it.
+                is_ok = true;
             } else if cert_map.contains_key(&tx_digest) {
                 // If we have less stake telling us about the latest state of an object
                 // we re-run the certificate on all authorities to ensure it is correct.
@@ -1010,21 +1057,10 @@ where
                     .process_certificate(cert_map[&tx_digest].clone(), AUTHORITY_REQUEST_TIMEOUT)
                     .await
                 {
-                    let mut is_ok = false;
-
                     // The mutated or created case
                     if _effects
-                        .mutated
-                        .iter()
-                        .filter(|(oref, _)| *oref == obj_ref)
-                        .count()
-                        != 0
-                        || _effects
-                            .created
-                            .iter()
-                            .filter(|(oref, _)| *oref == obj_ref)
-                            .count()
-                            != 0
+                        .mutated_and_created()
+                        .any(|(oref, _)| *oref == obj_ref)
                     {
                         is_ok = true;
                     }
@@ -1034,30 +1070,26 @@ where
                         && _effects
                             .deleted
                             .iter()
-                            .filter(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
-                            .count()
-                            != 0
+                            .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
                     {
                         is_ok = true;
                     }
 
                     if !is_ok {
-                        // Report a byzantine fault here
+                        // TODO: Report a byzantine fault here
                         continue;
                     }
-
-                    // NOTE: here we should validate the object is correct from the effects
-                    if obj_option.is_none() {
-                        return Ok(ObjectRead::Deleted(obj_ref));
-                    } else {
-                        // safe due to check
-                        return Ok(ObjectRead::Exists(
-                            obj_ref,
-                            obj_option.unwrap(),
-                            layout_option,
-                        ));
-                    }
                 }
+            }
+            if is_ok {
+                match obj_option {
+                    Some(obj) => {
+                        return Ok(ObjectRead::Exists(obj_ref, obj, layout_option));
+                    }
+                    None => {
+                        return Ok(ObjectRead::Deleted(obj_ref));
+                    }
+                };
             }
         }
 
@@ -1095,12 +1127,11 @@ where
     ) {
         let object_id = object_ref.0;
         // Prepare the request
-        let request = ObjectInfoRequest {
+        // TODO: We should let users decide what layout they want in the result.
+        let request = ObjectInfoRequest::latest_object_info_request(
             object_id,
-            request_sequence_number: None,
-            // TODO: allow caller to decide whether they want the layout, and which options. For now, we always ask, and get the default format
-            request_layout: Some(ObjectFormatOptions::default()),
-        };
+            Some(ObjectFormatOptions::default()),
+        );
 
         // For now assume all authorities. Assume they're all honest
         // This assumption is woeful, and should be fixed

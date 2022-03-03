@@ -1,4 +1,5 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 mod common;
@@ -11,7 +12,7 @@ use sui_verifier::id_immutable_verifier::verify_module;
 fn mut_borrow_key_struct_id_field() {
     /*
     struct Foo has key {
-        id: 0x2::ID::ID
+        id: 0x2::ID::VersionedID
     }
 
     fun foo(f: Foo) {
@@ -50,7 +51,7 @@ fn mut_borrow_key_struct_id_field() {
 fn mut_borrow_non_key_struct_id_field() {
     /*
     struct Foo {
-        id: 0x2::ID::ID
+        id: 0x2::ID::VersionedID
     }
     fun foo(f: Foo) {
         let ref = &mut f.id;
@@ -83,8 +84,8 @@ fn mut_borrow_non_key_struct_id_field() {
 fn mut_borrow_key_struct_non_id_field() {
     /*
     struct Foo has key {
-        id: 0x2::ID::ID,
-        other: 0x2::ID::ID
+        id: 0x2::ID::VersionedID,
+        other: 0x2::ID::VersionedID
     }
     fun foo(f: Foo) {
         let ref = &mut f.other;
@@ -120,7 +121,7 @@ fn mut_borrow_key_struct_non_id_field() {
 fn mut_borrow_generic_key_struct_id_field() {
     /*
     struct Foo<T> has key {
-        id: 0x2::ID::ID
+        id: 0x2::ID::VersionedID
     }
 
     fun foo(f: Foo<u64>) {

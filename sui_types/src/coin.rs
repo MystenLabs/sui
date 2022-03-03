@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{
@@ -11,22 +11,24 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     base_types::{ObjectID, SequenceNumber},
-    id::ID,
+    id::VersionedID,
     SUI_FRAMEWORK_ADDRESS,
 };
 
 pub const COIN_MODULE_NAME: &IdentStr = ident_str!("Coin");
 pub const COIN_STRUCT_NAME: &IdentStr = COIN_MODULE_NAME;
+pub const COIN_JOIN_FUNC_NAME: &IdentStr = ident_str!("join");
+pub const COIN_SPLIT_VEC_FUNC_NAME: &IdentStr = ident_str!("split_vec");
 
-// Rust version of the Move FastX::Coin::Coin type
+// Rust version of the Move Sui::Coin::Coin type
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Coin {
-    id: ID,
+    id: VersionedID,
     value: u64,
 }
 
 impl Coin {
-    pub fn new(id: ID, value: u64) -> Self {
+    pub fn new(id: VersionedID, value: u64) -> Self {
         Self { id, value }
     }
 
@@ -61,7 +63,7 @@ impl Coin {
             fields: vec![
                 MoveFieldLayout::new(
                     ident_str!("id").to_owned(),
-                    MoveTypeLayout::Struct(ID::layout()),
+                    MoveTypeLayout::Struct(VersionedID::layout()),
                 ),
                 MoveFieldLayout::new(ident_str!("value").to_owned(), MoveTypeLayout::U64),
             ],

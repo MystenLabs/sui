@@ -1,16 +1,16 @@
 module Test::M1 {
-    use FastX::ID::ID;
-    use FastX::TxContext::{Self, TxContext};
-    use FastX::Transfer;
+    use Sui::ID::VersionedID;
+    use Sui::TxContext::{Self, TxContext};
+    use Sui::Transfer;
 
     struct Object has key, store {
-        id: ID,
+        id: VersionedID,
         value: u64,
     }
 
     // initializer that should be executed upon publishing this module
     fun init(ctx: &mut TxContext, value: u64) {
         let singleton = Object { id: TxContext::new_id(ctx), value };
-        Transfer::transfer(singleton, TxContext::get_signer_address(ctx))
+        Transfer::transfer(singleton, TxContext::sender(ctx))
     }
 }

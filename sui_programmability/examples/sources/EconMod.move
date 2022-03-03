@@ -5,22 +5,21 @@
 module Examples::EconMod {
     use Examples::HeroMod::{Self, SeaMonster, RUM};
     use Examples::Hero::Hero;
-    use FastX::Address::Address;
-    use FastX::Coin::{Self, Coin};
-    use FastX::ID::{Self, ID};
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+    use Sui::Coin::{Self, Coin};
+    use Sui::ID::{Self, VersionedID};
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
 
     /// Created by `monster_owner`, a player with a monster that's too strong
     /// for them to slay + transferred to a player who can slay the monster.
     /// The two players split the reward for slaying the monster according to
     /// the `helper_reward` parameter.
     struct HelpMeSlayThisMonster has key {
-        id: ID,
+        id: VersionedID,
         /// Monster to be slay by the owner of this object
         monster: SeaMonster,
         /// Identity of the user that originally owned the monster
-        monster_owner: Address,
+        monster_owner: address,
         /// Number of tokens that will go to the helper. The owner will get
         /// the `monster` reward - `helper_reward` tokens
         helper_reward: u64,
@@ -35,7 +34,7 @@ module Examples::EconMod {
     public fun create(
         monster: SeaMonster,
         helper_reward: u64,
-        helper: Address,
+        helper: address,
         ctx: &mut TxContext,
     ) {
         // make sure the advertised reward is not too large + that the owner
@@ -48,7 +47,7 @@ module Examples::EconMod {
             HelpMeSlayThisMonster {
                 id: TxContext::new_id(ctx),
                 monster,
-                monster_owner: TxContext::get_signer_address(ctx),
+                monster_owner: TxContext::sender(ctx),
                 helper_reward
             },
             helper

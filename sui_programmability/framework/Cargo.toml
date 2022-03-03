@@ -3,7 +3,7 @@ name = "sui-framework"
 version = "0.1.0"
 edition = "2021"
 authors = ["Mysten Labs <eng@mystenlabs.com>"]
-description = "Move framework for fastX platform"
+description = "Move framework for sui platform"
 license = "Apache-2.0"
 publish = false
 
@@ -15,15 +15,15 @@ num_enum = "0.5.6"
 sui-types = { path = "../../sui_types" }
 sui-verifier = { path = "../verifier" }
 
-move-binary-format = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
-move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
-move-cli = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
-move-core-types = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7", features = ["address20"] }
-move-package = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
-move-stdlib = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
-move-unit-test = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
-move-vm-runtime = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
-move-vm-types = { git = "https://github.com/diem/move", rev = "7683d09732dd930c581583bf5fde97fb7ac02ff7" }
+move-binary-format = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
+move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
+move-cli = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
+move-core-types = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940", features = ["address20"] }
+move-package = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
+move-stdlib = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
+move-unit-test = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
+move-vm-runtime = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
+move-vm-types = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
 
 
 [package.metadata.cargo-udeps.ignore]

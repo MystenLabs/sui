@@ -1,21 +1,20 @@
-module FastX::Coin {
-    use FastX::Address::{Self, Address};
-    use FastX::ID::{Self, ID};
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+module Sui::Coin {
+    use Sui::ID::{Self, VersionedID};
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
     use Std::Errors;
     use Std::Vector;
 
     /// A coin of type `T` worth `value`. Transferrable
     struct Coin<phantom T> has key, store {
-        id: ID,
+        id: VersionedID,
         value: u64
     }
 
     /// Capability allowing the bearer to mint and burn
     /// coins of type `T`. Transferrable
     struct TreasuryCap<phantom T> has key, store {
-        id: ID,
+        id: VersionedID,
         total_supply: u64
     }
 
@@ -27,29 +26,47 @@ module FastX::Coin {
     // === Functionality for Coin<T> holders ===
 
     /// Send `c` to `recipient`
-    public fun transfer<T>(c: Coin<T>, recipient: Address) {
+    public fun transfer<T>(c: Coin<T>, recipient: address) {
         Transfer::transfer(c, recipient)
     }
 
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
-    public fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
+    public fun join<T>(self: &mut Coin<T>, c: Coin<T>, _ctx: &mut TxContext) {
         let Coin { id, value } = c;
         ID::delete(id);
         self.value = self.value + value
     }
 
     /// Join everything in `coins` with `self`
-    public fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
+    public fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>, ctx: &mut TxContext) {
         let i = 0;
         let len = Vector::length(&coins);
         while (i < len) {
             let coin = Vector::remove(&mut coins, i);
-            join(self, coin);
+            join(self, coin, ctx);
             i = i + 1
         };
         // safe because we've drained the vector
         Vector::destroy_empty(coins)
+    }
+
+    /// Split coin `self` to two coins, one with balance `split_amount`,
+    /// and the remaining balance is left is `self`.
+    public fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
+        let new_coin = withdraw(self, split_amount, ctx);
+        Transfer::transfer(new_coin, TxContext::sender(ctx));
+    }
+
+    /// Split coin `self` into multiple coins, each with balance specified
+    /// in `split_amounts`. Remaining balance is left in `self`.
+    public fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
+        let i = 0;
+        let len = Vector::length(&split_amounts);
+        while (i < len) {
+            split(self, *Vector::borrow(&split_amounts, i), ctx);
+            i = i + 1;
+        };
     }
 
     /// Subtract `value` from `self` and create a new coin
@@ -117,7 +134,7 @@ module FastX::Coin {
     }
 
     /// Give away the treasury cap to `recipient`
-    public fun transfer_cap<T>(c: TreasuryCap<T>, recipient: Address) {
+    public fun transfer_cap<T>(c: TreasuryCap<T>, recipient: address) {
         Transfer::transfer(c, recipient)
     }
 
@@ -125,7 +142,7 @@ module FastX::Coin {
 
     /// Send `amount` units of `c` to `recipient
     /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
-    public fun transfer_<T>(c: &mut Coin<T>, amount: u64, recipient: vector<u8>, ctx: &mut TxContext) {        
-        Transfer::transfer(withdraw(c, amount, ctx), Address::new(recipient))
+    public fun transfer_<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {        
+        Transfer::transfer(withdraw(c, amount, ctx), recipient)
     }
 }

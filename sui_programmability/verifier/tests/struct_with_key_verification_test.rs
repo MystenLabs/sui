@@ -1,4 +1,5 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 mod common;
@@ -101,7 +102,7 @@ fn key_struct_id_field_incorrect_struct_address() {
     let new_module_idx = module.add_module(addr, "ID");
     let fake_id_struct = module.add_struct(
         new_module_idx,
-        "ID",
+        "VersionedID",
         AbilitySet::EMPTY | Ability::Store | Ability::Drop,
         vec![],
     );
@@ -113,7 +114,7 @@ fn key_struct_id_field_incorrect_struct_address() {
     );
     let err_str = verify_module(module.get_module()).unwrap_err().to_string();
     assert!(err_str.contains(&format!(
-        "First field of struct S must be of type {}::ID::ID, {}::ID::ID type found",
+        "First field of struct S must be of type {}::ID::VersionedID, {}::ID::VersionedID type found",
         SUI_FRAMEWORK_ADDRESS, addr
     )));
 }
@@ -137,7 +138,7 @@ fn key_struct_id_field_incorrect_struct_name() {
         .unwrap_err()
         .to_string()
         .contains(&format!(
-            "First field of struct S must be of type {0}::ID::ID, {0}::ID::FOO type found",
+            "First field of struct S must be of type {0}::ID::VersionedID, {0}::ID::FOO type found",
             SUI_FRAMEWORK_ADDRESS
         )));
 }

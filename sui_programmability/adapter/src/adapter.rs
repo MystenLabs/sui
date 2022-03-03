@@ -1,14 +1,10 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
-use move_binary_format::{
-    errors::PartialVMResult,
-    file_format::{CompiledModule, Visibility},
-    normalized::{Function, Type},
-};
+use move_binary_format::{errors::PartialVMResult, file_format::CompiledModule};
 use sui_framework::EventType;
 use sui_types::{
     base_types::*,
@@ -16,18 +12,17 @@ use sui_types::{
     event::Event,
     gas,
     messages::ExecutionStatus,
-    object::{Data, MoveObject, Object},
+    move_package::*,
+    object::{MoveObject, Object, Owner},
     storage::Storage,
-    SUI_FRAMEWORK_ADDRESS,
 };
 use sui_verifier::verifier;
 
 use move_cli::sandbox::utils::get_gas_status;
 use move_core_types::{
     account_address::AccountAddress,
-    ident_str,
-    identifier::{IdentStr, Identifier},
-    language_storage::{ModuleId, StructTag, TypeTag},
+    identifier::Identifier,
+    language_storage::{ModuleId, TypeTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::{native_functions::NativeFunctionTable, session::ExecutionResult};
@@ -43,8 +38,8 @@ use std::{
 pub use move_vm_runtime::move_vm::MoveVM;
 
 macro_rules! exec_failure {
-    ($gas:expr, $err:expr) => {
-        return Ok(ExecutionStatus::new_failure($gas, $err))
+    ($gas_used:expr, $err:expr) => {
+        return Ok(ExecutionStatus::new_failure($gas_used, $err))
     };
 }
 
@@ -80,9 +75,17 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     mut gas_object: Object,
     ctx: &mut TxContext,
 ) -> SuiResult<ExecutionStatus> {
+    // object_owner_map maps from object ID to its exclusive owner.
+    // objects that are not exclusively owned won't be in this map.
+    // This map will be used for detecting circular ownership among
+    // objects, which can only happen to objects exclusively owned
+    // by objects.
     let mut object_owner_map = HashMap::new();
-    for object in object_args.iter().filter(|obj| !obj.is_read_only()) {
-        object_owner_map.insert(object.id().into(), object.owner);
+    for (owner, id) in object_args
+        .iter()
+        .filter_map(|obj| obj.get_single_owner_and_id())
+    {
+        object_owner_map.insert(id.into(), owner);
     }
     let TypeCheckSuccess {
         module_id,
@@ -96,7 +99,6 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         &type_args,
         object_args,
         pure_args,
-        ctx,
     ) {
         Ok(ok) => ok,
         Err(err) => {
@@ -104,6 +106,8 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         }
     };
 
+    let mut args = args;
+    args.push(ctx.to_vec());
     match execute_internal(
         vm,
         state_view,
@@ -148,7 +152,7 @@ fn execute_internal<
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
     mutable_ref_objects: Vec<Object>,
-    by_value_objects: BTreeMap<AccountAddress, Object>,
+    by_value_objects: BTreeMap<ObjectID, Object>,
     object_owner_map: HashMap<SuiAddress, SuiAddress>,
     gas_budget: u64, // gas budget for the current call operation
     ctx: &mut TxContext,
@@ -181,7 +185,7 @@ fn execute_internal<
             // we already checked that the function had no return types in resolve_and_type_check--it should
             // also not return any values at runtime
             debug_assert!(return_values.is_empty());
-            // FastX Move programs should never touch global state, so ChangeSet should be empty
+            // Sui Move programs should never touch global state, so ChangeSet should be empty
             debug_assert!(change_set.accounts().is_empty());
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
             debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
@@ -218,8 +222,22 @@ fn execute_internal<
                 // Cap total_gas by gas_budget in the fail case.
                 return ExecutionStatus::new_failure(cmp::min(total_gas, gas_budget), err);
             }
-            ExecutionStatus::Success {
-                gas_used: total_gas,
+            // gas_budget should be enough to pay not only the VM excution cost,
+            // but also the cost to process all events, such as transfers.
+            if total_gas > gas_budget {
+                ExecutionStatus::new_failure(
+                    gas_budget,
+                    SuiError::InsufficientGas {
+                        error: format!(
+                            "Total gas used ({}) exceeds gas budget ({})",
+                            total_gas, gas_budget
+                        ),
+                    },
+                )
+            } else {
+                ExecutionStatus::Success {
+                    gas_used: total_gas,
+                }
             }
         }
         // charge for all computations so far
@@ -238,7 +256,6 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     state_view: &mut S,
     natives: NativeFunctionTable,
     module_bytes: Vec<Vec<u8>>,
-    sender: SuiAddress,
     ctx: &mut TxContext,
     gas_budget: u64,
     mut gas_object: Object,
@@ -260,8 +277,8 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     };
 
     // run validation checks
-    let gas_cost = gas::calculate_module_publish_cost(&module_bytes);
-    if gas_cost > gas_budget {
+    let gas_used_for_publish = gas::calculate_module_publish_cost(&module_bytes);
+    if gas_used_for_publish > gas_budget {
         exec_failure!(
             gas::MIN_MOVE,
             SuiError::InsufficientGas {
@@ -287,53 +304,21 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         Err(err) => exec_failure!(gas::MIN_MOVE, err),
     };
 
-    let mut modules_to_init = Vec::new();
-    for module in modules.iter() {
-        if module_has_init(module) {
-            modules_to_init.push(module.self_id());
+    let gas_used_for_init = match store_package_and_init_modules(
+        state_view,
+        &vm,
+        modules,
+        ctx,
+        gas_budget - gas_used_for_publish,
+    ) {
+        ExecutionStatus::Success { gas_used } => gas_used,
+        ExecutionStatus::Failure { gas_used, error } => {
+            exec_failure!(gas_used + gas_used_for_publish, *error)
         }
-    }
+    };
 
-    // wrap the modules in an object, write it to the store
-    let package_object = Object::new_package(modules, sender, ctx.digest());
-    state_view.write_object(package_object);
-
-    let mut total_gas_used = gas_cost;
-    if !modules_to_init.is_empty() {
-        let mut current_gas_budget = gas_budget - total_gas_used;
-        for module_id in modules_to_init {
-            let args = vec![ctx.to_vec()];
-
-            let gas_used = match execute_internal(
-                &vm,
-                state_view,
-                &module_id,
-                &Identifier::new(INIT_FN_NAME.as_str()).unwrap(),
-                Vec::new(),
-                args,
-                Vec::new(),
-                BTreeMap::new(),
-                HashMap::new(),
-                current_gas_budget,
-                ctx,
-                true,
-            ) {
-                ExecutionStatus::Success { gas_used } => gas_used,
-                ExecutionStatus::Failure { gas_used, error } => {
-                    exec_failure!(total_gas_used + gas_used, *error)
-                }
-            };
-            // This should never be the case as current_gas_budget
-            // (before the call) must be larger than gas_used (after
-            // the call) in order for the call to succeed in the first
-            // place.
-            debug_assert!(current_gas_budget >= gas_used);
-            current_gas_budget -= gas_used;
-            total_gas_used += gas_used;
-        }
-    }
-
-    // successful execution of both publishign operation and or all
+    let total_gas_used = gas_used_for_publish + gas_used_for_init;
+    // successful execution of both publishing operation and or all
     // (optional) initializer calls
     match gas::try_deduct_gas(&mut gas_object, total_gas_used) {
         Ok(()) => {
@@ -346,31 +331,85 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     }
 }
 
-const INIT_FN_NAME: &IdentStr = ident_str!("init");
+/// Store package in state_view and call module initializers
+/// Return gas used for initialization
+pub fn store_package_and_init_modules<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+>(
+    state_view: &mut S,
+    vm: &MoveVM,
+    modules: Vec<CompiledModule>,
+    ctx: &mut TxContext,
+    gas_budget: u64,
+) -> ExecutionStatus {
+    let mut modules_to_init = Vec::new();
+    for module in modules.iter() {
+        if module_has_init(module) {
+            modules_to_init.push(module.self_id());
+        }
+    }
 
-pub fn module_has_init(module: &CompiledModule) -> bool {
-    let function = match Function::new_from_name(module, INIT_FN_NAME) {
-        Some(v) => v,
-        None => return false,
-    };
-    if function.visibility != Visibility::Private {
-        return false;
+    // wrap the modules in an object, write it to the store
+    // The call to unwrap() will go away once we remove address owner from Immutable objects.
+    let package_object = Object::new_package(modules, ctx.digest());
+    state_view.write_object(package_object);
+
+    init_modules(state_view, vm, modules_to_init, ctx, gas_budget)
+}
+
+/// Modules in module_ids_to_init must have the init method defined
+fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
+    state_view: &mut S,
+    vm: &MoveVM,
+    module_ids_to_init: Vec<ModuleId>,
+    ctx: &mut TxContext,
+    gas_budget: u64,
+) -> ExecutionStatus {
+    let mut total_gas_used = 0;
+    let mut current_gas_budget = gas_budget;
+    for module_id in module_ids_to_init {
+        let args = vec![ctx.to_vec()];
+
+        let gas_used = match execute_internal(
+            vm,
+            state_view,
+            &module_id,
+            &Identifier::new(INIT_FN_NAME.as_str()).unwrap(),
+            Vec::new(),
+            args,
+            Vec::new(),
+            BTreeMap::new(),
+            HashMap::new(),
+            current_gas_budget,
+            ctx,
+            true,
+        ) {
+            ExecutionStatus::Success { gas_used } => gas_used,
+            ExecutionStatus::Failure { gas_used, error } => {
+                return ExecutionStatus::Failure {
+                    gas_used: gas_used + total_gas_used,
+                    error,
+                };
+            }
+        };
+        // This should never be the case as current_gas_budget
+        // (before the call) must be larger than gas_used (after
+        // the call) in order for the call to succeed in the first
+        // place.
+        debug_assert!(current_gas_budget >= gas_used);
+        current_gas_budget -= gas_used;
+        total_gas_used += gas_used;
     }
-    if !function.type_parameters.is_empty() {
-        return false;
+
+    ExecutionStatus::Success {
+        gas_used: total_gas_used,
     }
-    if !function.return_.is_empty() {
-        return false;
-    }
-    if function.parameters.len() != 1 {
-        return false;
-    }
-    is_param_tx_context(&function.parameters[0])
 }
 
 /// Given a list of `modules`, links each module against its
 /// dependencies and runs each module with both the Move VM verifier
-/// and the FastX verifier.
+/// and the Sui verifier.
 pub fn verify_and_link<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
@@ -381,7 +420,7 @@ pub fn verify_and_link<
     natives: NativeFunctionTable,
 ) -> Result<MoveVM, SuiError> {
     // Run the Move bytecode verifier and linker.
-    // It is important to do this before running the FastX verifier, since the fastX
+    // It is important to do this before running the Sui verifier, since the sui
     // verifier may assume well-formedness conditions enforced by the Move verifier hold
     let vm = MoveVM::new(natives)
         .expect("VM creation only fails if natives are invalid, and we created the natives");
@@ -400,14 +439,18 @@ pub fn verify_and_link<
         })
         .collect();
     session
-        .publish_module_bundle(new_module_bytes, package_id, &mut gas_status)
+        .publish_module_bundle(
+            new_module_bytes,
+            AccountAddress::from(package_id),
+            &mut gas_status,
+        )
         .map_err(|e| SuiError::ModulePublishFailure {
             error: e.to_string(),
         })?;
 
-    // run the FastX verifier
+    // run the Sui verifier
     for module in modules.iter() {
-        // Run FastX bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
+        // Run Sui bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
         verifier::verify_module(module)?;
     }
     Ok(vm)
@@ -433,7 +476,10 @@ pub fn generate_package_id(
                 error: "Publishing modules with non-zero address is not allowed".to_string(),
             });
         }
-        let new_module_id = ModuleId::new(package_id, old_module_id.name().to_owned());
+        let new_module_id = ModuleId::new(
+            AccountAddress::from(package_id),
+            old_module_id.name().to_owned(),
+        );
         if sub_map.insert(old_module_id, new_module_id).is_some() {
             return Err(SuiError::ModulePublishFailure {
                 error: "Publishing two modules with the same ID".to_string(),
@@ -486,7 +532,7 @@ fn process_successful_execution<
             .expect("Safe because event_type is derived from an EventType enum")
         {
             EventType::TransferToAddress => handle_transfer(
-                SuiAddress::try_from(recipient.borrow()).unwrap(),
+                SuiAddress::try_from(recipient.as_slice()).unwrap(),
                 type_,
                 event_bytes,
                 false, /* should_freeze */
@@ -497,7 +543,7 @@ fn process_successful_execution<
                 &mut object_owner_map,
             ),
             EventType::TransferToAddressAndFreeze => handle_transfer(
-                SuiAddress::try_from(recipient.borrow()).unwrap(),
+                SuiAddress::try_from(recipient.as_slice()).unwrap(),
                 type_,
                 event_bytes,
                 true, /* should_freeze */
@@ -538,8 +584,8 @@ fn process_successful_execution<
     }
 
     // any object left in `by_value_objects` is an input passed by value that was not transferred or frozen.
-    // this means that either the object was (1) deleted from the FastX system altogether, or
-    // (2) wrapped inside another object that is in the FastX object pool
+    // this means that either the object was (1) deleted from the Sui system altogether, or
+    // (2) wrapped inside another object that is in the Sui object pool
     // in either case, we want to delete it
     let mut gas_refund: u64 = 0;
     for (id, object) in by_value_objects.iter() {
@@ -579,10 +625,12 @@ fn handle_transfer<
             // freshly created, this means that its version will now be 1.
             // thus, all objects in the global object pool have version > 0
             move_obj.increment_version();
-            if should_freeze {
-                move_obj.freeze();
-            }
-            let obj = Object::new_move(move_obj, recipient, tx_digest);
+            let new_owner = if should_freeze {
+                Owner::SharedImmutable
+            } else {
+                Owner::SingleOwner(recipient)
+            };
+            let obj = Object::new_move(move_obj, new_owner, tx_digest);
             if old_object.is_none() {
                 // Charge extra gas based on object size if we are creating a new object.
                 *gas_used += gas::calculate_object_creation_cost(&obj);
@@ -609,241 +657,6 @@ fn handle_transfer<
         _ => unreachable!("Only structs can be transferred"),
     }
     Ok(())
-}
-
-struct TypeCheckSuccess {
-    module_id: ModuleId,
-    args: Vec<Vec<u8>>,
-    by_value_objects: BTreeMap<ObjectID, Object>,
-    mutable_ref_objects: Vec<Object>,
-}
-
-/// - Check that `package_object`, `module` and `function` are valid
-/// - Check that the the signature of `function` is well-typed w.r.t `type_args`, `object_args`, and `pure_args`
-/// - Return the ID of the resolved module, a vector of BCS encoded arguments to pass to the VM, and a partitioning
-/// of the input objects into objects passed by value vs by mutable reference
-fn resolve_and_type_check(
-    package_object: Object,
-    module: &Identifier,
-    function: &Identifier,
-    type_args: &[TypeTag],
-    object_args: Vec<Object>,
-    mut pure_args: Vec<Vec<u8>>,
-    ctx: &TxContext,
-) -> Result<TypeCheckSuccess, SuiError> {
-    // resolve the function we are calling
-    let (function_signature, module_id) = match package_object.data {
-        Data::Package(modules) => {
-            let bytes = modules
-                .get(module.as_str())
-                .ok_or(SuiError::ModuleNotFound {
-                    module_name: module.to_string(),
-                })?;
-            let m = CompiledModule::deserialize(bytes).expect(
-                "Unwrap safe because FastX serializes/verifies modules before publishing them",
-            );
-            (
-                Function::new_from_name(&m, function).ok_or(SuiError::FunctionNotFound {
-                    error: format!(
-                        "Could not resolve function '{}' in module {}",
-                        function,
-                        m.self_id()
-                    ),
-                })?,
-                m.self_id(),
-            )
-        }
-        Data::Move(_) => {
-            return Err(SuiError::ModuleLoadFailure {
-                error: "Expected a module object, but found a Move object".to_string(),
-            })
-        }
-    };
-    // check validity conditions on the invoked function
-    if !function_signature.return_.is_empty() {
-        return Err(SuiError::InvalidFunctionSignature {
-            error: "Invoked function must not return a value".to_string(),
-        });
-    }
-    // check arity of type and value arguments
-    if function_signature.type_parameters.len() != type_args.len() {
-        return Err(SuiError::InvalidFunctionSignature {
-            error: format!(
-                "Expected {:?} type arguments, but found {:?}",
-                function_signature.type_parameters.len(),
-                type_args.len()
-            ),
-        });
-    }
-    // total number of args is |objects| + |pure_args| + 1 for the the `TxContext` object
-    let num_args = object_args.len() + pure_args.len() + 1;
-    if function_signature.parameters.len() != num_args {
-        return Err(SuiError::InvalidFunctionSignature {
-            error: format!(
-                "Expected {:?} arguments calling function '{}', but found {:?}",
-                function_signature.parameters.len(),
-                function,
-                num_args
-            ),
-        });
-    }
-    // check that the last arg is `&mut TxContext`
-    let last_param = &function_signature.parameters[function_signature.parameters.len() - 1];
-    if !is_param_tx_context(last_param) {
-        return Err(SuiError::InvalidFunctionSignature {
-            error: format!(
-                "Expected last parameter of function signature to be &mut {}::{}::{}, but found {}",
-                SUI_FRAMEWORK_ADDRESS, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME, last_param
-            ),
-        });
-    }
-
-    // type check object arguments passed in by value and by reference
-    let mut args = Vec::new();
-    let mut mutable_ref_objects = Vec::new();
-    let mut by_value_objects = BTreeMap::new();
-    #[cfg(debug_assertions)]
-    let mut num_immutable_objects = 0;
-    #[cfg(debug_assertions)]
-    let num_objects = object_args.len();
-
-    let ty_args: Vec<Type> = type_args.iter().map(|t| Type::from(t.clone())).collect();
-    for (idx, object) in object_args.into_iter().enumerate() {
-        let mut param_type = function_signature.parameters[idx].clone();
-        if !param_type.is_closed() {
-            param_type = param_type.subst(&ty_args);
-        }
-        match &object.data {
-            Data::Move(m) => {
-                args.push(m.contents().to_vec());
-                // check that m.type_ matches the parameter types of the function
-                match &param_type {
-                    Type::MutableReference(inner_t) => {
-                        if m.is_read_only() {
-                            return Err(SuiError::TypeError {
-                                error: format!(
-                                    "Argument {} is expected to be mutable, immutable object found",
-                                    idx
-                                ),
-                            });
-                        }
-                        type_check_struct(&m.type_, inner_t)?;
-                        mutable_ref_objects.push(object);
-                    }
-                    Type::Reference(inner_t) => {
-                        type_check_struct(&m.type_, inner_t)?;
-                        #[cfg(debug_assertions)]
-                        {
-                            num_immutable_objects += 1
-                        }
-                    }
-                    Type::Struct { .. } => {
-                        if m.is_read_only() {
-                            return Err(SuiError::TypeError {
-                                error: format!(
-                                    "Argument {} is expected to be mutable, immutable object found",
-                                    idx
-                                ),
-                            });
-                        }
-                        type_check_struct(&m.type_, &param_type)?;
-                        let res = by_value_objects.insert(object.id(), object);
-                        // should always pass due to earlier "no duplicate ID's" check
-                        debug_assert!(res.is_none())
-                    }
-                    t => {
-                        return Err(SuiError::TypeError {
-                            error: format!(
-                                "Found object argument {}, but function expects {}",
-                                m.type_, t
-                            ),
-                        })
-                    }
-                }
-            }
-            Data::Package(_) => {
-                return Err(SuiError::TypeError {
-                    error: format!("Found module argument, but function expects {}", param_type),
-                })
-            }
-        }
-    }
-    #[cfg(debug_assertions)]
-    debug_assert!(
-        by_value_objects.len() + mutable_ref_objects.len() + num_immutable_objects == num_objects
-    );
-    // check that the non-object parameters are primitive types
-    for param_type in
-        &function_signature.parameters[args.len()..function_signature.parameters.len() - 1]
-    {
-        if !is_primitive(param_type) {
-            return Err(SuiError::TypeError {
-                error: format!("Expected primitive type, but found {}", param_type),
-            });
-        }
-    }
-    args.append(&mut pure_args);
-    args.push(ctx.to_vec());
-
-    Ok(TypeCheckSuccess {
-        module_id,
-        args,
-        by_value_objects,
-        mutable_ref_objects,
-    })
-}
-
-fn is_param_tx_context(param: &Type) -> bool {
-    if let Type::MutableReference(typ) = param {
-        match &**typ {
-            Type::Struct {
-                address,
-                module,
-                name,
-                type_arguments,
-            } if address == &SUI_FRAMEWORK_ADDRESS
-                && module.as_ident_str() == TX_CONTEXT_MODULE_NAME
-                && name.as_ident_str() == TX_CONTEXT_STRUCT_NAME
-                && type_arguments.is_empty() =>
-            {
-                return true
-            }
-            _ => return false,
-        }
-    }
-    false
-}
-
-fn type_check_struct(arg_type: &StructTag, param_type: &Type) -> Result<(), SuiError> {
-    if let Some(param_struct_type) = param_type.clone().into_struct_tag() {
-        if arg_type != &param_struct_type {
-            Err(SuiError::TypeError {
-                error: format!(
-                    "Expected argument of type {}, but found type {}",
-                    param_struct_type, arg_type
-                ),
-            })
-        } else {
-            Ok(())
-        }
-    } else {
-        Err(SuiError::TypeError {
-            error: format!(
-                "Expected argument of type {}, but found struct type {}",
-                param_type, arg_type
-            ),
-        })
-    }
-}
-
-// TODO: upstream Type::is_primitive in diem
-fn is_primitive(t: &Type) -> bool {
-    use Type::*;
-    match t {
-        Bool | U8 | U64 | U128 | Address => true,
-        Vector(inner_t) => is_primitive(inner_t),
-        Signer | Struct { .. } | TypeParameter(_) | Reference(_) | MutableReference(_) => false,
-    }
 }
 
 #[cfg(debug_assertions)]

@@ -7,15 +7,14 @@
 /// anyone is free to create a mod like this.
 module Examples::HeroMod {
     use Examples::Hero::{Self, Hero};
-    use FastX::Address::Address;
-    use FastX::ID::{Self, ID};
-    use FastX::Coin::{Self, Coin, TreasuryCap };
-    use FastX::Transfer;
-    use FastX::TxContext::{Self, TxContext};
+    use Sui::ID::{Self, VersionedID};
+    use Sui::Coin::{Self, Coin, TreasuryCap };
+    use Sui::Transfer;
+    use Sui::TxContext::{Self, TxContext};
 
     /// A new kind of monster for the hero to fight
     struct SeaMonster has key, store {
-        id: ID,
+        id: VersionedID,
         /// Tokens that the user will earn for slaying this monster
         reward: Coin<RUM>
     }
@@ -23,7 +22,7 @@ module Examples::HeroMod {
     /// Admin capability granting permission to mint RUM tokens and
     /// create monsters
     struct SeaScapeAdmin has key {
-        id: ID,
+        id: VersionedID,
         /// Permission to mint RUM
         treasury_cap: TreasuryCap<RUM>,
         /// Total number of monsters created so far
@@ -64,7 +63,7 @@ module Examples::HeroMod {
                 token_supply_max,
                 monster_max,
             },
-            TxContext::get_signer_address(ctx)
+            TxContext::sender(ctx)
         )
     }
 
@@ -93,7 +92,7 @@ module Examples::HeroMod {
     public fun create_monster(
         admin: &mut SeaScapeAdmin,
         reward_amount: u64,
-        recipient: Address,
+        recipient: address,
         ctx: &mut TxContext
     ) {
         let current_coin_supply = Coin::total_supply(&admin.treasury_cap);
@@ -115,7 +114,7 @@ module Examples::HeroMod {
 
     /// Send `monster` to `recipient`
     public fun transfer_monster(
-        monster: SeaMonster, recipient: Address
+        monster: SeaMonster, recipient: address
     ) {
         Transfer::transfer(monster, recipient)
     }

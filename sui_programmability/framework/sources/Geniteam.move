@@ -1,7 +1,7 @@
-module FastX::Geniteam {
-    use FastX::ID::{Self, ID, IDBytes};
-    use FastX::TxContext::{Self, TxContext};
-    use FastX::Transfer;
+module Sui::Geniteam {
+    use Sui::ID::{Self, ID, VersionedID};
+    use Sui::TxContext::{Self, TxContext};
+    use Sui::Transfer;
     use Std::ASCII::{Self, String};
     use Std::Option::{Self, Option};
     use Std::Vector::Self;
@@ -12,7 +12,7 @@ module FastX::Geniteam {
     const EMONSTER_NOT_FOUND: u64 = 1;
 
     struct Player has key {
-        id: ID,
+        id: VersionedID,
         player_name: String,
         farm: Farm,
         water_runes_count: u64,
@@ -24,7 +24,7 @@ module FastX::Geniteam {
     }
 
     struct Farm has key, store {
-        id: ID,
+        id: VersionedID,
         farm_name: String,
         farm_img_id: u64,
         level: u64,
@@ -37,7 +37,7 @@ module FastX::Geniteam {
     }
 
     struct Monster has key, store {
-        id: ID,
+        id: VersionedID,
         monster_name: String,
         monster_img_id: u64,
         breed: u8,
@@ -127,13 +127,13 @@ module FastX::Geniteam {
 
     /// Remove a monster from a farm.
     /// Aborts if the monster with the given ID is not found
-    public fun remove_monster_(self: &mut Farm, monster_id: &IDBytes): Monster {
+    public fun remove_monster_(self: &mut Farm, monster_id: &ID): Monster {
         let monsters = &mut self.pet_monsters;
         let num_monsters = Vector::length(monsters);
         let i = 0;
         while (i < num_monsters) {
             let m = Vector::borrow(monsters, i);
-            if (ID::get_inner(&m.id) == monster_id) {
+            if (ID::id(m) == monster_id) {
                 break
             };
             i = i + 1;
@@ -151,7 +151,7 @@ module FastX::Geniteam {
     ) {
         let farm = create_farm_(farm_name, farm_img_id, total_monster_slots, ctx);
         let player = create_player_(player_name, farm, ctx);
-        Transfer::transfer(player, TxContext::get_signer_address(ctx))
+        Transfer::transfer(player, TxContext::sender(ctx))
     }
 
     /// Update the attributes of a player
@@ -186,7 +186,7 @@ module FastX::Geniteam {
             monster_description,
             ctx
         );
-        Transfer::transfer(monster, TxContext::get_signer_address(ctx))
+        Transfer::transfer(monster, TxContext::sender(ctx))
     }
 
     /// Add a monster to a farm
@@ -197,9 +197,10 @@ module FastX::Geniteam {
     }
 
     /// Remove a monster from a farm amd transfer it to the transaction sender
-    public fun remove_monster(self: &mut Player, monster_id: vector<u8>, ctx: &mut TxContext) {
-        let monster = remove_monster_(&mut self.farm, &ID::new_bytes(monster_id));
-        Transfer::transfer(monster, TxContext::get_signer_address(ctx))
+    public fun remove_monster(self: &mut Farm, monster_id: vector<u8>, ctx: &mut TxContext) {
+        // TODO: monster_id should be probably be `address`, but leaving this as-is to avoid breaking Geniteam
+        let monster = remove_monster_(self, &ID::new_from_bytes(monster_id));
+        Transfer::transfer(monster, TxContext::sender(ctx))
     }
 
     /// Update the attributes of a player's farm

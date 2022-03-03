@@ -1,12 +1,11 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 extern crate core;
 
-// Copyright (c) Mysten Labs
-// SPDX-License-Identifier: Apache-2.0
 use std::path::PathBuf;
 use structopt::StructOpt;
-use sui::config::NetworkConfig;
+use sui::config::{Config, NetworkConfig};
 use sui::sui_commands::SuiCommand;
-use sui::utils::Config;
 
 #[cfg(test)]
 #[path = "unit_tests/cli_tests.rs"]

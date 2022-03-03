@@ -1,4 +1,5 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future;
@@ -70,6 +71,13 @@ where
     let handle = {
         // see https://fly.io/blog/the-tokio-1-x-upgrade/#tcplistener-from_std-needs-to-be-set-to-nonblocking
         let std_listener = std::net::TcpListener::bind(address)?;
+
+        if let Ok(local_addr) = std_listener.local_addr() {
+            let host = local_addr.ip();
+            let port = local_addr.port();
+            info!("Listening to TCP traffic on {host}:{port}");
+        }
+
         std_listener.set_nonblocking(true)?;
         let listener = TcpListener::from_std(std_listener)?;
 
@@ -178,7 +186,11 @@ impl TcpDataStreamPool {
         address: &'a str,
     ) -> Result<(), std::io::Error> {
         let stream = self.get_stream(address).await?;
-        TcpDataStream::tcp_write_data(stream, buffer).await
+        let result = TcpDataStream::tcp_write_data(stream, buffer).await;
+        if result.is_err() {
+            self.streams.remove(address);
+        }
+        result
     }
 }
 
@@ -208,8 +220,10 @@ where
                 let buffer = match TcpDataStream::tcp_read_data(&mut stream, buffer_size).await {
                     Ok(buffer) => buffer,
                     Err(err) => {
-                        // We expect an EOF error at the end.
-                        if err.kind() != io::ErrorKind::UnexpectedEof {
+                        // We expect some EOF or disconnect error at the end.
+                        if err.kind() != io::ErrorKind::UnexpectedEof
+                            && err.kind() != io::ErrorKind::ConnectionReset
+                        {
                             error!("Error while reading TCP stream: {}", err);
                         }
                         break;

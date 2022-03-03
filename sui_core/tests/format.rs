@@ -1,7 +1,6 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) 2021, Facebook, Inc. and its affiliates
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-/* TODO: Fix define new formats and re-enable tests
 
 #[test]
 fn test_format() {
@@ -13,4 +12,3 @@ fn test_format() {
         .expect("failed to execute process");
     assert!(status.success());
 }
-*/

@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main, extensions ]
   pull_request:
-    branches: [ main, extensions ]
     types: [opened, synchronize, reopened, ready_for_review]
 
 env:
@@ -93,7 +92,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all -- -D clippy::all -D warnings -D clippy::disallowed_method
+          args: --all --tests -- -D clippy::all -D warnings -D clippy::disallowed_method
 
   rustfmt:
     name: rustfmt
@@ -113,6 +112,8 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
+      - name: license-check
+        run: scripts/license_check.sh
 
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)

@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{
@@ -15,26 +15,35 @@ use crate::{
 };
 
 pub const ID_MODULE_NAME: &IdentStr = ident_str!("ID");
+pub const VERSIONED_ID_STRUCT_NAME: &IdentStr = ident_str!("VersionedID");
+pub const UNIQUE_ID_STRUCT_NAME: &IdentStr = ident_str!("UniqueID");
 pub const ID_STRUCT_NAME: &IdentStr = ID_MODULE_NAME;
-pub const ID_BYTES_STRUCT_NAME: &IdentStr = ident_str!("IDBytes");
 
-/// Rust version of the Move FastX::ID::ID type
+/// Rust version of the Move Sui::ID::VersionedID type
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ID {
-    id: IDBytes,
+pub struct VersionedID {
+    id: UniqueID,
     version: u64,
 }
 
-/// Rust version of the Move FastX::ID::IDBytes type
+/// Rust version of the Move Sui::ID::UniqueID type
 #[derive(Debug, Serialize, Deserialize)]
-struct IDBytes {
+struct UniqueID {
+    id: ID,
+}
+
+/// Rust version of the Move Sui::ID::ID type
+#[derive(Debug, Serialize, Deserialize)]
+struct ID {
     bytes: ObjectID,
 }
 
-impl ID {
+impl VersionedID {
     pub fn new(bytes: ObjectID, version: SequenceNumber) -> Self {
         Self {
-            id: IDBytes::new(bytes),
+            id: UniqueID {
+                id: { ID { bytes } },
+            },
             version: version.value(),
         }
     }
@@ -42,14 +51,14 @@ impl ID {
     pub fn type_() -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
-            name: ID_STRUCT_NAME.to_owned(),
+            name: VERSIONED_ID_STRUCT_NAME.to_owned(),
             module: ID_MODULE_NAME.to_owned(),
             type_params: Vec::new(),
         }
     }
 
     pub fn object_id(&self) -> &ObjectID {
-        &self.id.bytes
+        &self.id.id.bytes
     }
 
     pub fn version(&self) -> SequenceNumber {
@@ -66,7 +75,7 @@ impl ID {
             fields: vec![
                 MoveFieldLayout::new(
                     ident_str!("id").to_owned(),
-                    MoveTypeLayout::Struct(IDBytes::layout()),
+                    MoveTypeLayout::Struct(UniqueID::layout()),
                 ),
                 MoveFieldLayout::new(ident_str!("version").to_owned(), MoveTypeLayout::U64),
             ],
@@ -74,15 +83,32 @@ impl ID {
     }
 }
 
-impl IDBytes {
-    pub fn new(bytes: ObjectID) -> Self {
-        Self { bytes }
-    }
-
+impl UniqueID {
     pub fn type_() -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
-            name: ID_BYTES_STRUCT_NAME.to_owned(),
+            name: UNIQUE_ID_STRUCT_NAME.to_owned(),
+            module: ID_MODULE_NAME.to_owned(),
+            type_params: Vec::new(),
+        }
+    }
+
+    pub fn layout() -> MoveStructLayout {
+        MoveStructLayout::WithTypes {
+            type_: Self::type_(),
+            fields: vec![MoveFieldLayout::new(
+                ident_str!("id").to_owned(),
+                MoveTypeLayout::Struct(ID::layout()),
+            )],
+        }
+    }
+}
+
+impl ID {
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            name: ID_STRUCT_NAME.to_owned(),
             module: ID_MODULE_NAME.to_owned(),
             type_params: Vec::new(),
         }

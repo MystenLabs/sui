@@ -1,9 +1,9 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 mod event;
 mod id;
-mod test_helper;
+mod test_scenario;
 mod transfer;
 mod tx_context;
 
@@ -17,12 +17,33 @@ pub fn all_natives(
     const SUI_NATIVES: &[(&str, &str, NativeFunction)] = &[
         ("Event", "emit", event::emit),
         ("ID", "bytes_to_address", id::bytes_to_address),
-        ("ID", "delete", id::delete),
-        ("ID", "get_id", id::get_id),
+        ("ID", "delete_id", id::delete_id),
+        ("ID", "get_versioned_id", id::get_versioned_id),
         (
-            "TestHelper",
-            "get_last_received_object_internal",
-            test_helper::get_last_received_object,
+            "TestScenario",
+            "deleted_object_ids",
+            test_scenario::deleted_object_ids,
+        ),
+        (
+            "TestScenario",
+            "delete_object_for_testing",
+            test_scenario::delete_object_for_testing,
+        ),
+        (
+            "TestScenario",
+            "emit_wrapped_object_event",
+            test_scenario::emit_wrapped_object_event,
+        ),
+        (
+            "TestScenario",
+            "get_inventory",
+            test_scenario::get_inventory,
+        ),
+        ("TestScenario", "num_events", test_scenario::num_events),
+        (
+            "TestScenario",
+            "transferred_object_ids",
+            test_scenario::transferred_object_ids,
         ),
         ("Transfer", "transfer_internal", transfer::transfer_internal),
         (
@@ -31,6 +52,11 @@ pub fn all_natives(
             transfer::transfer_to_object_id,
         ),
         ("TxContext", "fresh_id", tx_context::fresh_id),
+        (
+            "TxContext",
+            "new_signer_from_address",
+            tx_context::new_signer_from_address,
+        ),
     ];
     SUI_NATIVES
         .iter()

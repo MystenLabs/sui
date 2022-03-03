@@ -1,3 +1,5 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 use super::*;
 use move_core_types::language_storage::StructTag;
 use move_core_types::value::MoveStructLayout;
@@ -11,7 +13,7 @@ const CERT_CF_NAME: &str = "certificates";
 const SEQ_NUMBER_CF_NAME: &str = "object_sequence_numbers";
 const OBJ_REF_CF_NAME: &str = "object_refs";
 const TX_DIGEST_TO_CERT_CF_NAME: &str = "object_certs";
-const PENDING_ORDERS_CF_NAME: &str = "pending_orders";
+const PENDING_TRANSACTIONS_CF_NAME: &str = "pending_transactions";
 const OBJECT_CF_NAME: &str = "objects";
 const OBJECT_LAYOUTS_CF_NAME: &str = "object_layouts";
 
@@ -73,12 +75,11 @@ impl ClientAddressManagerStore {
     pub fn get_managed_address(
         &self,
         address: SuiAddress,
-    ) -> Result<client_store::ClientSingleAddressStore, typed_store::rocks::TypedStoreError> {
-        // Create an a path for this address
-        let path = self.make_db_path_for_address(address);
-
-        self.managed_address_paths.get(&address)?;
-        Ok(ClientSingleAddressStore::new(path))
+    ) -> Result<Option<client_store::ClientSingleAddressStore>, typed_store::rocks::TypedStoreError>
+    {
+        self.managed_address_paths
+            .get(&address)
+            .map(|opt_path| opt_path.map(ClientSingleAddressStore::new))
     }
 
     /// Check if an address is managed
@@ -92,17 +93,15 @@ impl ClientAddressManagerStore {
 
 /// This is the store of one address
 pub struct ClientSingleAddressStore {
-    /// Table of objects to orders pending on the objects
-    pub pending_orders: DBMap<ObjectID, Order>,
+    /// Table of objects to transactions pending on the objects
+    pub pending_transactions: DBMap<ObjectID, Transaction>,
     // The remaining fields are used to minimize networking, and may not always be persisted locally.
     /// Known certificates, indexed by TX digest.
-    pub certificates: DBMap<TransactionDigest, CertifiedOrder>,
-    /// The known objects with it's sequence number owned by the client.
-    pub object_sequence_numbers: DBMap<ObjectID, SequenceNumber>,
+    pub certificates: DBMap<TransactionDigest, CertifiedTransaction>,
     /// Confirmed objects with it's ref owned by the client.
     pub object_refs: DBMap<ObjectID, ObjectRef>,
     /// Certificate <-> object id linking map.
-    pub object_certs: DBMap<ObjectID, Vec<TransactionDigest>>,
+    pub object_certs: DBMap<ObjectRef, TransactionDigest>,
     /// Map from object ref to actual object to track object history
     /// There can be duplicates and we never delete objects
     pub objects: DBMap<ObjectRef, Object>,
@@ -118,7 +117,7 @@ impl ClientSingleAddressStore {
         let db = client_store::init_store(
             path,
             vec![
-                PENDING_ORDERS_CF_NAME,
+                PENDING_TRANSACTIONS_CF_NAME,
                 CERT_CF_NAME,
                 SEQ_NUMBER_CF_NAME,
                 OBJ_REF_CF_NAME,
@@ -129,9 +128,8 @@ impl ClientSingleAddressStore {
         );
 
         ClientSingleAddressStore {
-            pending_orders: client_store::reopen_db(&db, PENDING_ORDERS_CF_NAME),
+            pending_transactions: client_store::reopen_db(&db, PENDING_TRANSACTIONS_CF_NAME),
             certificates: client_store::reopen_db(&db, CERT_CF_NAME),
-            object_sequence_numbers: client_store::reopen_db(&db, SEQ_NUMBER_CF_NAME),
             object_refs: client_store::reopen_db(&db, OBJ_REF_CF_NAME),
             object_certs: client_store::reopen_db(&db, TX_DIGEST_TO_CERT_CF_NAME),
             objects: client_store::reopen_db(&db, OBJECT_CF_NAME),

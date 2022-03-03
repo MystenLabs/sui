@@ -1,4 +1,4 @@
-// Copyright (c) Mysten Labs
+// Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{bail, Result};
@@ -111,7 +111,7 @@ impl ModuleHandleRewriter {
         // also check this later, but it's easier to understand what's going on if we raise the alarm
         // here.
         // TODO: if we wanted to, we could support rewriting the tables to eliminate duplicates,
-        // but this is more involved + will never happen in FastX's usage of the rewriter
+        // but this is more involved + will never happen in Sui's usage of the rewriter
         // (modulo hash collisions in ID generation).
         #[cfg(debug_assertions)]
         {

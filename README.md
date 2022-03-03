@@ -1,112 +1,50 @@
-# Sui (pre-alpha)
+# Sui Developer Portal
 
-[![Build Status](https://github.com/mystenlabs/fastnft/actions/workflows/rust.yml/badge.svg)](https://github.com/mystenlabs/fastnft/actions/workflows/rust.yml)
-[![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE.md)
+Welcome to Sui, a next generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by the [Move](https://github.com/MystenLabs/awesome-move) programming language! Here are some suggested starting points:
 
-This repository is dedicated to sharing material related to the Sui protocol, developed at Novi Financial (formerly Calibra). Software is provided for research-purpose only and is not meant to be used in production.
+* To jump right into building smart contract applications on top of Sui, go to [Move Quick Start](https://github.com/MystenLabs/fastnft/tree/main/doc/move.md).
+* To experiment with a sample Sui wallet, check out [Wallet Quick Start](https://github.com/MystenLabs/fastnft/tree/main/doc/wallet.md).
+<!---* To understand what's possible by browsing examples of full-fledged applications and games built on top of Sui, review the [Demos](TODO).--->
+* To understand what's possible by browsing Move code built on top of Sui, review the [examples](https://github.com/MystenLabs/fastnft/tree/main/sui_programmability/examples/sources)
+* To start coding against Sui's REST API's, start [here](https://app.swaggerhub.com/apis/arun-koshy/sui-api)
+* To go deep on how Sui works, understand [Key Concepts](https://github.com/MystenLabs/fastnft/tree/main/doc/key-concepts.md).
+* To learn what distinguishes Sui from other blockchain systems, see [What Makes Sui Different?](https://github.com/MystenLabs/fastnft/tree/main/doc/what-makes-sui-different.md).
+<!---* To experience Sui's speed and scalability for yourself, try [Benchmarking](TODO).--->
+<!---* To see the current status of the Sui software/network and preview what's coming next, read through our [Roadmap](TODO).--->
 
-## Summary
+<!---TODO: Populate and link to the missing pages above or strike the links and references.--->
 
-Sui extends Sui by allowing objects to be transacted.
+## Architecture
 
-Sui allows a set of distributed authorities, some of which are Byzantine, to maintain a high-integrity and availability settlement system for pre-funded payments. It can be used to settle payments in a native unit of value (crypto-currency), or as a financial side-infrastructure to support retail payments in fiat currencies. Sui is based on Byzantine Consistent Broadcast as its core primitive, foregoing the expenses of full atomic commit channels (consensus). The resulting system has low-latency for both confirmation and payment finality. Remarkably, each authority can be sharded across many machines to allow unbounded horizontal scalability. Our experiments demonstrate intra-continental confirmation latency of less than 100ms, making Sui applicable to point of sale payments. In laboratory environments, we achieve over 80,000 transactions per second with 20 authorities---surpassing the requirements of current retail card payment networks, while significantly increasing their robustness.
+Sui is a distributed ledger that stores a collection of programmable *[objects](https://github.com/MystenLabs/fastnft/tree/main/doc/objects.md)*, each with a globally unique ID. Every object is owned by a single *address*, and each address can own an arbitrary number of objects.
 
-## Quickstart with local Sui network and interactive wallet
+The ledger is updated via a *[transaction](https://github.com/MystenLabs/fastnft/tree/main/doc/transactions.md)* sent by a particular address. A transaction can create, destroy, and write objects, as well as transfer them to other addresses.
 
-### 1. Build the binaries
+Structurally, a transaction contains a set of input object references and a pointer to a Move code object that already exists in the ledger. Executing a transaction produces updates to the input objects and (if applicable) a set of freshly created objects along with their owners. A transaction whose sender is address *A* can accept objects owned by *A*, shared objects, and objects owned by other objects in the first two groups as input.
 
-```shell
-cargo build --release
-cd target/release
+```mermaid
+flowchart LR
+    CC(CLI Client) --> ClientService
+    RC(Rest Client) --> ClientService
+    RPCC(RPC Client) --> ClientService
+    ClientService --> AuthorityAggregator
+    AuthorityAggregator --> AC1[AuthorityClient] & AC2[AuthorityClient]
+    subgraph Authority1
+      AS[AuthorityState]
+    end
+    subgraph Authority2
+      AS2[AuthorityState]
+    end
+    AC1 <==>|Network TCP| Authority1
+    AC2 <==>|Network TCP| Authority2
 ```
 
-This will create `sui` and `wallet` binaries in `target/release` directory.
+Sui authorities agree on and execute transactions in parallel with high throughput using [Byzantine Consistent Broadcast](https://en.wikipedia.org/wiki/Byzantine_fault).
 
-### 2. Genesis
+## Move quick start
+See the [Move Quick Start](https://github.com/MystenLabs/fastnft/tree/main/doc/move.md) for installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, and invoking your published code.
+<!--- Then deeper: Sui standard library, design patterns, examples. --->
 
-```shell
-./sui genesis
-```
-
-The genesis command creates 4 authorities, 5 user accounts each with 5 gas objects.
-The network configuration are stored in `network.conf` and can be used subsequently to start the network.  
-A `wallet.conf` will also be generated to be used by the `wallet` binary to manage the newly created accounts.
-
-### 3. Starting the network
-
-Run the following command to start the local Sui network:
-
-```shell
-./sui start 
-```
-
-or
-
-```shell
-./sui start --config [config file path]
-```
-
-The network config file path is defaulted to `./network.conf` if not specified.  
-
-### 4. Running interactive wallet
-
-To start the interactive wallet:
-
-```shell
-./wallet
-```
-
-or
-
-```shell
-./wallet --config [config file path]
-```
-
-The wallet config file path is defaulted to `./wallet.conf` if not specified.  
-
-The following commands are supported by the interactive wallet:
-
-    addresses      Obtain the Account Addresses managed by the wallet
-    call           Call Move
-    help           Prints this message or the help of the given subcommand(s)
-    new-address    Generate new address and keypair
-    object         Get obj info
-    objects        Obtain all objects owned by the account address
-    publish        Publish Move modules
-    sync           Synchronize client state with authorities
-    transfer       Transfer funds
-
-Use `help <command>` to see more information on each command.
-
-### 5. Using the wallet without interactive shell
-
-The wallet can also be use without the interactive shell
-
-```shell
-USAGE:
-    wallet --no-shell [SUBCOMMAND]
-```
-
-#### Example
-
-```shell
-sui@MystenLab release % ./wallet --no-shell addresses                                                                         
-Showing 5 results.
-4f145f9a706ae4932452c90ce006fbddc8ab2ced34584f26d8953df14a76463e
-47ea7f45ca66fc295cd10fbdf8a41828db2ed71c145476c710e04871758f48e9
-e91c22628771f1465947fe328ed47983b1a1013afbdd1c8ded2009ec4812054d
-9420c11579a0e4a75a48034d9617fd68406de4d59912e9d08f5aaf5808b7013c
-1be661a8d7157bffbb2cf7f652d270bbefb07b0b436aa10f2c8bdedcadcc22cb
-```
-
-## References
-
-* Sui is based on FastPay: [FastPay: High-Performance Byzantine Fault Tolerant Settlement](https://arxiv.org/pdf/2003.11506.pdf)
-
-## Contributing
-
-Read [Eng Plan](https://docs.google.com/document/d/1Cqxaw23PR2hc5bkbhXIDCnWjxA3AbfjsuB45ltWns4U/edit#).
-
-## License
-
-The content of this repository is licensed as [Apache 2.0](https://github.com/MystenLabs/fastnft/blob/update-readme/LICENSE)
+## Wallet quick start
+See the [Wallet Quick Start](https://github.com/MystenLabs/fastnft/tree/main/doc/wallet.md) for installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
+<!--- Then deeper: wallet CLI vs client service vs forwarder architecture, how to integrate your code (wallet, indexer, ...) with the client service or forwarder components. --->
