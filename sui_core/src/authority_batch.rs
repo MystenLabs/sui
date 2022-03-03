@@ -43,10 +43,10 @@ The architecture is as follows:
 
 pub type TxSequenceNumber = u64;
 
-pub type BroadcastPair = (
-    tokio::sync::broadcast::Sender<UpdateItem>,
-    tokio::sync::broadcast::Receiver<UpdateItem>,
-);
+pub type BroadcastSender = tokio::sync::broadcast::Sender<UpdateItem>;
+pub type BroadcastReceiver = tokio::sync::broadcast::Receiver<UpdateItem>;
+
+pub type BroadcastPair = (BroadcastSender, BroadcastReceiver);
 
 /// Either a freshly sequenced transaction hash or a batch
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -64,7 +64,7 @@ pub struct BatchManager {
     /// Channel for receiving updates
     tx_recv: Receiver<(TxSequenceNumber, TransactionDigest)>,
     /// The sender end of the broadcast channel used to send updates to listeners
-    tx_broadcast: tokio::sync::broadcast::Sender<UpdateItem>,
+    tx_broadcast: BroadcastSender,
     /// Copy of the database to write batches and read transactions.
     db: Arc<AuthorityStore>,
 }

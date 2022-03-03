@@ -27,7 +27,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::authority_batch::{BatchSender, BroadcastPair};
+use crate::authority_batch::{BatchSender, BroadcastPair, BroadcastReceiver};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -71,7 +71,7 @@ pub struct AuthorityState {
     /// The sender to notify of new transactions
     /// and create batches for this authority.
     /// Keep as None if there is no need for this.
-    batch_sender: Option<(BatchSender, BroadcastPair)>,
+    batch_channels: Option<(BatchSender, BroadcastPair)>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -88,11 +88,21 @@ impl AuthorityState {
         batch_sender: BatchSender,
         broadcast_pair: BroadcastPair,
     ) -> SuiResult {
-        if self.batch_sender.is_some() {
+        if self.batch_channels.is_some() {
             return Err(SuiError::AuthorityUpdateFailure);
         }
-        self.batch_sender = Some((batch_sender, broadcast_pair));
+        self.batch_channels = Some((batch_sender, broadcast_pair));
         Ok(())
+    }
+
+    /// Get a broadcast receiver for updates
+    pub fn subscribe(&self) -> Result<BroadcastReceiver, SuiError> {
+        self.batch_channels
+            .as_ref()
+            .map(|(_, (tx, _))| tx.subscribe())
+            .ok_or(SuiError::GenericAuthorityError {
+                error: "No broadcast subscriptions allowed for this authority.".to_string(),
+            })
     }
 
     /// The logic to check one object against a reference, and return the object if all is well
@@ -420,7 +430,7 @@ impl AuthorityState {
             .await?; // Returns the OrderInfoResponse
 
         // If there is a notifier registered, notify:
-        if let Some((sender, _)) = &self.batch_sender {
+        if let Some((sender, _)) = &self.batch_channels {
             sender.send_item(seq, transaction_digest).await?;
         }
 
@@ -656,7 +666,7 @@ impl AuthorityState {
             move_vm: adapter::new_move_vm(native_functions)
                 .expect("We defined natives to not fail here"),
             _database: store,
-            batch_sender: None,
+            batch_channels: None,
         };
 
         for genesis_modules in genesis_packages {

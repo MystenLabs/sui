@@ -215,6 +215,8 @@ pub enum SuiError {
     StorageError(#[from] typed_store::rocks::TypedStoreError),
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
+    #[error("Authority Error: {error:?}")]
+    GenericAuthorityError { error: String },
 
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",

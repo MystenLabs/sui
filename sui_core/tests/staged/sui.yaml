@@ -551,22 +551,26 @@ SuiError:
     70:
       BatchErrorSender: UNIT
     71:
+      GenericAuthorityError:
+        STRUCT:
+          - error: STR
+    72:
       QuorumNotReached:
         STRUCT:
           - errors:
               SEQ:
                 TYPENAME: SuiError
-    72:
-      ObjectSerializationError: UNIT
     73:
-      ConcurrentTransactionError: UNIT
+      ObjectSerializationError: UNIT
     74:
-      IncorrectRecipientError: UNIT
+      ConcurrentTransactionError: UNIT
     75:
-      TooManyIncorrectAuthorities: UNIT
+      IncorrectRecipientError: UNIT
     76:
-      IncorrectGasSplit: UNIT
+      TooManyIncorrectAuthorities: UNIT
     77:
+      IncorrectGasSplit: UNIT
+    78:
       IncorrectGasMerge: UNIT
 Transaction:
   STRUCT:
