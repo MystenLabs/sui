@@ -178,16 +178,17 @@ But the actual address values will most likely differ
 in your case (as will other values, such as object IDs, in the later
 parts of this tutorial). Consequently, **do not copy and paste
 the actual command from this tutorial as they are unlikely to work for
-you verbatim**.
-
-TODO: Clarify the above warning. Why won't the commands work? I understand why the output will differ...
+you verbatim**. Each time you create a config for the wallet, addresses
+and object IDs will be assigned randomly. Consequently, you cannot rely
+on copy-pasting commands that include these values, as they will be different
+between different users/configs.
 
 ## Adding accounts to the wallet
 
 Sui's genesis process will create five accounts by default; if that's
 not enough, there are two ways to add accounts to the Sui wallet if needed.
 
-#### 1. Use `new-address` command to generate new account
+#### Use `new-address` command to generate new account
 
 To create a new account, execute the `new-address` command in Sui interactive console:
 
@@ -200,7 +201,7 @@ The console returns a confirmation after the account has been created resembling
 Created new keypair for address : 3F8962C87474F8FB8BFB99151D5F83E677062078
 ```
   
-#### 2. Add existing accounts to `wallet.conf` manually.
+#### Add existing accounts to `wallet.conf` manually.
 
 If you have existing key pair from an old wallet config, you can copy the account data manually to the new `wallet.conf`'s accounts section.
 
@@ -212,7 +213,7 @@ The account data looks like this:
       "key_pair": "MTpXG/yJq0OLOknghzYRCS6D/Rz+97gpR7hZhUCUNT5pMCy49v7hZkCSHm38e+cp+sdxLgTrSAuCbDxqkF1MTg=="
     }
 ```
-Restart the Sui wallet after the modification (see below); the new accounts will appear in the wallet if you query the addresses.
+Restart the Sui wallet after the modification; the new accounts will appear in the wallet if you query the addresses.
 
 ## Calling Move code
 
@@ -292,7 +293,8 @@ parameters one-by-one:
   that the ID of the genesis Sui package containing the GAS module is
   defined in its manifest file, and is equal to `0x2`)
 - `args` - a list of function arguments:
-  - ID of the gas object representing the `c` parameter of the `transfer function
+  - ID of the gas object representing the `c` parameter of the `transfer`
+    function
   - address of the new gas object owner
 - `--gas` - an object containing gas used to pay for this
   function call owned by the address initiating the `transfer`
@@ -370,8 +372,8 @@ It's the path to the `my_move_package` as per the
 [package creation description](move.md#writing-a-package)), a gas
 object that will be used to pay for publishing the package (we use the
 same gas object we used to pay for the function call in the previous
-[calling Move code](#calling-move-code) section), and gas budget to put
-an upper limit on gas usage (we use 1000 as our gas budget). The whole command resembles:
+[calling Move code](#calling-move-code)) section, and gas budget to put
+an upper limit (we use 1000 as our gas budget. The whole command resembles:
 
 ``` shell
 sui>-$ publish --path /PATH_TO_PACKAGE/my_move_package --gas 60DADCE6E5081C3EFCA162694D7EFD8D99D46636 1000
@@ -450,6 +452,3 @@ pre-populate two gas objects for four accounts:
   ]
 }
 ```
-TODO: Provide summary text explaining the purpose of this config change. How would it be used?
-
-How do they determine the default values for all attributes?
