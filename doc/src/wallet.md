@@ -359,7 +359,7 @@ Type: 0x2::Coin::Coin<0x2::GAS::GAS>
 
 In order for user-written code to be available in Sui, it must be
 _published_ to Sui's [distributed
-ledger](../README.md#architecture). Please see the [Move developer
+ledger](../../README.md#architecture). Please see the [Move developer
 documentation](move.md) for a
 [description](move.md#writing-a-package) on how to write a simple Move
 code package, which we can publish using Sui wallet's `publish` command.
