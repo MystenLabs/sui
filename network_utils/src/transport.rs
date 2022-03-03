@@ -205,15 +205,17 @@ async fn run_tcp_server<S>(
 where
     S: MessageHandler + Send + Sync + 'static,
 {
-    let guarded_state = Arc::new(Box::new(state));
+    let guarded_state = Arc::new(state);
     loop {
-        let (mut stream, _) = match future::select(exit_future, Box::pin(listener.accept())).await {
-            future::Either::Left(_) => break,
-            future::Either::Right((value, new_exit_future)) => {
-                exit_future = new_exit_future;
-                value?
+        let mut stream;
+
+        tokio::select! {
+            _ = &mut exit_future => { break },
+            result = listener.accept() => {
+                let (value, _addr) = result?;
+                stream = value;
             }
-        };
+        }
 
         let guarded_state = guarded_state.clone();
         tokio::spawn(async move {
