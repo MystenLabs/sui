@@ -301,7 +301,7 @@ async fn init_local_authorities(
         let state = AuthorityState::new(
             committee.clone(),
             authority_name,
-            Box::pin(secret),
+            Arc::pin(secret),
             store,
             genesis::clone_genesis_compiled_modules(),
             &mut genesis::get_genesis_context(),
@@ -348,7 +348,7 @@ async fn init_local_authorities_bad(
         let state = AuthorityState::new(
             committee.clone(),
             address,
-            Box::pin(secret),
+            Arc::pin(secret),
             store,
             genesis::clone_genesis_compiled_modules(),
             &mut genesis::get_genesis_context(),
