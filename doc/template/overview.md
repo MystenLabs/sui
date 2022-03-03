@@ -2,6 +2,8 @@
 title: Understand Sui X
 ---
 
+Use this template to introduce a new Sui technology, such as a service, product, feature, or component. Simply copy this Markdown into a new file.
+
 Always make the tile of the page (above) active. Then modify, augment, and replace the sample text in this file as you see fit. It's merely a starting point.
 
 Explain the purpose of this page right here before the very first sub-heading.
