@@ -75,7 +75,7 @@ module Sui::Collection {
     public fun remove<T: key>(c: &mut Collection, object: T): T {
         let idx = find(c, ID::id(&object));
         if (Option::is_none(&idx)) {
-            abort EOBJECT_DOUBLE_ADD
+            abort EOBJECT_NOT_FOUND
         };
         Vector::remove(&mut c.objects, *Option::borrow(&idx));
         object
