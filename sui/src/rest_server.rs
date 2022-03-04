@@ -1019,20 +1019,20 @@ async fn call(
 
     // Pass in the objects for a deeper check
     // We can technically move this to impl MovePackage
-    resolve_and_type_check(
+    if let Err(error) = resolve_and_type_check(
         package_object.clone(),
         &module,
         &function,
         &type_args,
         input_objs,
         pure_args.clone(),
-    )
-    .map_err(|error| {
-        custom_http_error(
+    ) {
+        *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+        return Err(custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
             format!("Error while resolving and type checking: {:?}", error),
-        )
-    })?;
+        ));
+    };
 
     // Fetch the object info for the gas obj
     let gas_obj_ref = match wallet_context
