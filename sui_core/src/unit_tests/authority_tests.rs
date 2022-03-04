@@ -19,7 +19,7 @@ use sui_types::{
     crypto::KeyPair,
     crypto::{get_key_pair, Signature},
     gas::{calculate_module_publish_cost, get_gas_balance},
-    messages::ExecutionStatus,
+    messages::{ExecutionStatus, Transaction},
     object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
 };
 
