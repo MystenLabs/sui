@@ -146,6 +146,7 @@ pub async fn genesis(
 
     for account in genesis_conf.accounts {
         let address = if let Some(address) = account.address {
+            new_addresses.push(address);
             address
         } else {
             let (address, key_pair) = get_key_pair();
