@@ -325,6 +325,12 @@ impl AuthorityState {
         }
         // In case there are no shared objects, we simply process the certificate.
         else {
+            // Ensure an idempotent answer
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+            if transaction_info.certified_transaction.is_some() {
+                return Ok(transaction_info);
+            }
+
             self.process_certificate(confirmation_transaction).await
         }
     }
@@ -336,12 +342,6 @@ impl AuthorityState {
         let certificate = confirmation_transaction.certificate;
         let transaction = certificate.transaction.clone();
         let transaction_digest = transaction.digest();
-
-        // Ensure an idempotent answer
-        let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-        if transaction_info.certified_transaction.is_some() {
-            return Ok(transaction_info);
-        }
 
         let mut inputs: Vec<_> = self
             .check_locks(&transaction)
@@ -786,6 +786,11 @@ impl AuthorityState {
             .filter_map(|((object_id, _object), d)| d.map(|_| *object_id))
             .collect();
         Ok(filtered)
+    }
+
+    #[cfg(test)]
+    pub fn database(&self) -> &Arc<AuthorityStore> {
+        &self._database
     }
 }
 

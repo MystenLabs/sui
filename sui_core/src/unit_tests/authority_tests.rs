@@ -1740,3 +1740,110 @@ async fn create_move_object(
     )
     .await
 }
+
+#[tokio::test]
+async fn shared_object() {
+    let (sender, keypair) = get_key_pair();
+
+    // Initialize an authority with a (owned) gas object and a shared object.
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let gas_object_ref = gas_object.to_object_reference();
+
+    let shared_object_id = ObjectID::random();
+    let shared_object = {
+        use sui_types::gas_coin::GasCoin;
+        use sui_types::object::MoveObject;
+
+        let content = GasCoin::new(shared_object_id, SequenceNumber::new(), 10);
+        let data = Data::Move(MoveObject {
+            type_: GasCoin::type_(),
+            contents: content.to_bcs_bytes(),
+        });
+        Object {
+            data,
+            owner: Owner::SharedMutable,
+            previous_transaction: TransactionDigest::genesis(),
+        }
+    };
+
+    let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
+
+    // Make a sample transaction.
+    let module = "ObjectBasics";
+    let function = "create";
+    let genesis_package_objects = genesis::clone_genesis_packages();
+    let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
+
+    let transaction = Transaction::new_move_call(
+        sender,
+        package_object_ref,
+        ident_str!(module).to_owned(),
+        ident_str!(function).to_owned(),
+        /* type_args */ vec![],
+        gas_object_ref,
+        /* object_args */ vec![],
+        vec![shared_object_id],
+        /* pure_args */
+        vec![
+            16u64.to_le_bytes().to_vec(),
+            bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
+        ],
+        MAX_GAS,
+        &keypair,
+    );
+    let transaction_digest = transaction.digest();
+
+    // Submit the transaction and assemble a certificate.
+    let response = authority
+        .handle_transaction(transaction.clone())
+        .await
+        .unwrap();
+    let vote = response.signed_transaction.unwrap();
+    let certificate = SignatureAggregator::try_new(transaction, &authority.committee)
+        .unwrap()
+        .append(vote.authority, vote.signature)
+        .unwrap()
+        .unwrap();
+    let confirmation_transaction = ConfirmationTransaction::new(certificate.clone());
+
+    // Sending the certificate now fails since it was not sequenced.
+    let result = authority
+        .handle_confirmation_transaction(confirmation_transaction.clone())
+        .await;
+    assert!(matches!(result, Err(SuiError::LockErrors { .. })));
+
+    // Sequence the certificate to assign a sequence number to the shared object.
+    authority
+        .handle_consensus_certificate(&certificate)
+        .await
+        .unwrap();
+
+    let shared_object_version = authority
+        .database()
+        .sequenced(transaction_digest, shared_object_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(shared_object_version, SequenceNumber::new());
+
+    // Finally process the certificate and execute the contract. Ensure that the
+    // shared object lock is cleaned up and that its sequence number increased.
+    authority
+        .handle_confirmation_transaction(confirmation_transaction)
+        .await
+        .unwrap();
+
+    let shared_object_lock = authority
+        .database()
+        .sequenced(transaction_digest, shared_object_id)
+        .unwrap();
+    assert!(shared_object_lock.is_none());
+
+    let shared_object_version = authority
+        .get_object(&shared_object_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .version();
+    assert_eq!(shared_object_version, SequenceNumber::from(1));
+}
