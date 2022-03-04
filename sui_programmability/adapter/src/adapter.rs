@@ -451,7 +451,7 @@ pub fn verify_and_link<
     // run the Sui verifier
     for module in modules.iter() {
         // Run Sui bytecode verifier, which runs some additional checks that assume the Move bytecode verifier has passed.
-        verifier::verify_module(module)?;
+        verifier::verify_module(module, verifier::VerifyFlag::ForPublish)?;
     }
     Ok(vm)
 }

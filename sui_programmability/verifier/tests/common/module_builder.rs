@@ -21,6 +21,11 @@ pub struct FuncInfo {
     pub def: FunctionDefinitionIndex,
 }
 
+pub struct GenericFuncInfo {
+    pub handle: FunctionInstantiationIndex,
+    pub def: FunctionDefinitionIndex,
+}
+
 impl ModuleBuilder {
     pub fn new(address: AccountAddress, name: &str) -> Self {
         Self {
@@ -122,6 +127,30 @@ impl ModuleBuilder {
                 code: vec![Bytecode::Ret],
             },
         )
+    }
+
+    pub fn add_generic_function(
+        &mut self,
+        module_idx: ModuleHandleIndex,
+        name: &str,
+        type_parameters: Vec<SignatureToken>,
+        parameters: Vec<SignatureToken>,
+        ret: Vec<SignatureToken>,
+    ) -> GenericFuncInfo {
+        let func_info = self.add_function(module_idx, name, parameters, ret);
+        let sig = self.add_signature(type_parameters);
+        let handle_idx =
+            FunctionInstantiationIndex(self.module.function_instantiations.len() as u16);
+        self.module
+            .function_instantiations
+            .push(FunctionInstantiation {
+                handle: func_info.handle,
+                type_parameters: sig,
+            });
+        GenericFuncInfo {
+            handle: handle_idx,
+            def: func_info.def,
+        }
     }
 
     pub fn add_struct_verbose(

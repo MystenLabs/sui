@@ -20,9 +20,10 @@ pub enum MoveCommands {
 
 impl MoveCommands {
     pub fn execute(&self, path: &Path) -> Result<(), anyhow::Error> {
+        // TODO: Make dev_mode configurable.
         match self {
             Self::Build => {
-                sui_framework::build_and_verify_user_package(path, false)?;
+                sui_framework::build_and_verify_user_package(path, true)?;
             }
             Self::Test => {
                 sui_framework::build_and_verify_user_package(path, true).unwrap();
