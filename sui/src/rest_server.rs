@@ -3,6 +3,7 @@
 
 use move_core_types::identifier::Identifier;
 use move_core_types::parser::parse_type_tag;
+use move_core_types::value::MoveStructLayout;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
 
 use dropshot::{endpoint, Query};
@@ -21,6 +22,7 @@ use sui_types::move_package::resolve_and_type_check;
 use sui_core::client::Client;
 use sui_types::committee::Committee;
 use sui_types::messages::{ExecutionStatus, TransactionEffects};
+use sui_types::object::Object as SuiObject;
 use sui_types::{base_types::*, object::ObjectRead};
 
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
@@ -603,32 +605,11 @@ async fn object_info(
         }
     };
 
-    let (object, layout) = match wallet_context
-        .address_manager
-        .get_object_info(object_id)
-        .await
-    {
-        Ok(ObjectRead::Exists(_, object, layout)) => (object, layout),
-        Ok(ObjectRead::Deleted(_)) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Object ({object_id}) was deleted."),
-            ));
-        }
-        Ok(ObjectRead::NotExists(_)) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Object ({object_id}) does not exist."),
-            ));
-        }
+    let (object, layout) = match get_object_info(&wallet_context, object_id).await {
+        Ok((_, object, layout)) => (object, layout),
         Err(error) => {
             *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Error while getting object info: {:?}", error),
-            ));
+            return Err(error);
         }
     };
 
@@ -764,7 +745,13 @@ async fn transfer_object(
         }
     };
 
-    let object_effects_summary = get_object_effects(effects);
+    let object_effects_summary = match get_object_effects(&wallet_context, effects).await {
+        Ok(effects) => effects,
+        Err(err) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(err);
+        }
+    };
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
@@ -934,34 +921,14 @@ async fn call(
         }
     };
 
-    let (package_object_ref, package_object, layout) = match wallet_context
-        .address_manager
-        .get_object_info(package_object_id)
-        .await
-    {
-        Ok(ObjectRead::Exists(object_ref, object, layout)) => (object_ref, object, layout),
-        Ok(ObjectRead::Deleted(_)) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Object ({package_object_id}) was deleted."),
-            ));
-        }
-        Ok(ObjectRead::NotExists(_)) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Object ({package_object_id}) does not exist."),
-            ));
-        }
-        Err(error) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Error while getting object info: {:?}", error),
-            ));
-        }
-    };
+    let (package_object_ref, package_object, layout) =
+        match get_object_info(&wallet_context, package_object_id).await {
+            Ok((object_ref, object, layout)) => (object_ref, object, layout),
+            Err(error) => {
+                *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+                return Err(error);
+            }
+        };
 
     // These steps can potentially be condensed and moved into the client/manager level
     // Extract the input args
@@ -983,32 +950,13 @@ async fn call(
     // Fetch all the objects needed for this call
     let mut input_objs = vec![];
     for obj_id in object_ids.clone() {
-        input_objs.push(
-            match wallet_context.address_manager.get_object_info(obj_id).await {
-                Ok(ObjectRead::Exists(_, object, _)) => object,
-                Ok(ObjectRead::Deleted(_)) => {
-                    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-                    return Err(custom_http_error(
-                        StatusCode::FAILED_DEPENDENCY,
-                        format!("Object ({obj_id}) was deleted."),
-                    ));
-                }
-                Ok(ObjectRead::NotExists(_)) => {
-                    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-                    return Err(custom_http_error(
-                        StatusCode::FAILED_DEPENDENCY,
-                        format!("Object ({obj_id}) does not exist."),
-                    ));
-                }
-                Err(error) => {
-                    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-                    return Err(custom_http_error(
-                        StatusCode::FAILED_DEPENDENCY,
-                        format!("Error while getting object info: {:?}", error),
-                    ));
-                }
-            },
-        );
+        input_objs.push(match get_object_info(&wallet_context, obj_id).await {
+            Ok((_, object, _)) => object,
+            Err(error) => {
+                *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+                return Err(error);
+            }
+        });
     }
 
     // Pass in the objects for a deeper check
@@ -1029,64 +977,24 @@ async fn call(
     };
 
     // Fetch the object info for the gas obj
-    let gas_obj_ref = match wallet_context
-        .address_manager
-        .get_object_info(gas_object_id)
-        .await
-    {
-        Ok(ObjectRead::Exists(object_ref, _, _)) => object_ref,
-        Ok(ObjectRead::Deleted(_)) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Object ({gas_object_id}) was deleted."),
-            ));
-        }
-        Ok(ObjectRead::NotExists(_)) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Object ({gas_object_id}) does not exist."),
-            ));
-        }
+    let gas_obj_ref = match get_object_info(&wallet_context, gas_object_id).await {
+        Ok((obj_ref, _, _)) => obj_ref,
         Err(error) => {
             *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Error while getting object info: {:?}", error),
-            ));
+            return Err(error);
         }
     };
 
     // Fetch the objects for the object args
     let mut object_args_refs = Vec::new();
     for obj_id in object_ids {
-        object_args_refs.push(
-            match wallet_context.address_manager.get_object_info(obj_id).await {
-                Ok(ObjectRead::Exists(object_ref, _, _)) => object_ref,
-                Ok(ObjectRead::Deleted(_)) => {
-                    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-                    return Err(custom_http_error(
-                        StatusCode::FAILED_DEPENDENCY,
-                        format!("Object ({obj_id}) was deleted."),
-                    ));
-                }
-                Ok(ObjectRead::NotExists(_)) => {
-                    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-                    return Err(custom_http_error(
-                        StatusCode::FAILED_DEPENDENCY,
-                        format!("Object ({obj_id}) does not exist."),
-                    ));
-                }
-                Err(error) => {
-                    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-                    return Err(custom_http_error(
-                        StatusCode::FAILED_DEPENDENCY,
-                        format!("Error while getting object info: {:?}", error),
-                    ));
-                }
-            },
-        );
+        object_args_refs.push(match get_object_info(&wallet_context, obj_id).await {
+            Ok((obj_ref, _, _)) => obj_ref,
+            Err(error) => {
+                *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+                return Err(error);
+            }
+        });
     }
 
     let (cert, effects, gas_used) = match wallet_context
@@ -1130,7 +1038,13 @@ async fn call(
         }
     };
 
-    let object_effects_summary = get_object_effects(effects);
+    let object_effects_summary = match get_object_effects(&wallet_context, effects).await {
+        Ok(effects) => effects,
+        Err(err) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(err);
+        }
+    };
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
@@ -1205,44 +1119,100 @@ async fn sync(
     Ok(HttpResponseUpdatedNoContent())
 }
 
-fn get_object_effects(
+async fn get_object_effects(
+    wallet_context: &WalletContext,
     transaction_effects: TransactionEffects,
-) -> HashMap<String, Vec<HashMap<String, String>>> {
+) -> Result<HashMap<String, Vec<HashMap<String, String>>>, HttpError> {
     let mut object_effects_summary = HashMap::new();
     if !transaction_effects.created.is_empty() {
         let mut effects = Vec::new();
-        for (obj, _) in transaction_effects.created {
-            let mut effect = HashMap::new();
-            effect.insert("id".to_string(), obj.0.to_string());
-            effect.insert("version".to_string(), format!("{:?}", obj.1));
-            effect.insert("object_digest".to_string(), format!("{:?}", obj.2));
+        for ((object_id, sequence_number, object_digest), _) in transaction_effects.created {
+            let effect = get_effect(wallet_context, object_id, sequence_number, object_digest)
+                .await
+                .map_err(|error| error)?;
             effects.push(effect);
         }
         object_effects_summary.insert(String::from("created_objects"), effects);
     }
     if !transaction_effects.mutated.is_empty() {
         let mut effects = Vec::new();
-        for (obj, _) in transaction_effects.mutated {
-            let mut effect = HashMap::new();
-            effect.insert("id".to_string(), obj.0.to_string());
-            effect.insert("version".to_string(), format!("{:?}", obj.1));
-            effect.insert("object_digest".to_string(), format!("{:?}", obj.2));
+        for ((object_id, sequence_number, object_digest), _) in transaction_effects.mutated {
+            let effect = get_effect(wallet_context, object_id, sequence_number, object_digest)
+                .await
+                .map_err(|error| error)?;
             effects.push(effect);
         }
         object_effects_summary.insert(String::from("mutated_objects"), effects);
     }
     if !transaction_effects.deleted.is_empty() {
         let mut effects = Vec::new();
-        for obj in transaction_effects.deleted {
-            let mut effect = HashMap::new();
-            effect.insert("id".to_string(), obj.0.to_string());
-            effect.insert("version".to_string(), format!("{:?}", obj.1));
-            effect.insert("object_digest".to_string(), format!("{:?}", obj.2));
+        for (object_id, sequence_number, object_digest) in transaction_effects.deleted {
+            let effect = get_effect(wallet_context, object_id, sequence_number, object_digest)
+                .await
+                .map_err(|error| error)?;
             effects.push(effect);
         }
         object_effects_summary.insert(String::from("deleted_objects"), effects);
     }
-    object_effects_summary
+    Ok(object_effects_summary)
+}
+
+async fn get_effect(
+    wallet_context: &WalletContext,
+    object_id: ObjectID,
+    sequence_number: SequenceNumber,
+    object_digest: ObjectDigest,
+) -> Result<HashMap<String, String>, HttpError> {
+    let mut effect = HashMap::new();
+    let object = match get_object_info(wallet_context, object_id).await {
+        Ok((_, object, _)) => object,
+        Err(error) => {
+            return Err(error);
+        }
+    };
+    effect.insert(
+        "type".to_string(),
+        object
+            .data
+            .type_()
+            .map_or("Move Package".to_owned(), |type_| format!("{}", type_)),
+    );
+    effect.insert("id".to_string(), object_id.to_string());
+    effect.insert("version".to_string(), format!("{:?}", sequence_number));
+    effect.insert("object_digest".to_string(), format!("{:?}", object_digest));
+    Ok(effect)
+}
+
+async fn get_object_info(
+    wallet_context: &WalletContext,
+    object_id: ObjectID,
+) -> Result<(ObjectRef, SuiObject, Option<MoveStructLayout>), HttpError> {
+    let (object_ref, object, layout) = match wallet_context
+        .address_manager
+        .get_object_info(object_id)
+        .await
+    {
+        Ok(ObjectRead::Exists(object_ref, object, layout)) => (object_ref, object, layout),
+        Ok(ObjectRead::Deleted(_)) => {
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({object_id}) was deleted."),
+            ));
+        }
+        Ok(ObjectRead::NotExists(_)) => {
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({object_id}) does not exist."),
+            ));
+        }
+        Err(error) => {
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Error while getting object info: {:?}", error),
+            ));
+        }
+    };
+    Ok((object_ref, object, layout))
 }
 
 fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpError {
