@@ -299,6 +299,22 @@ module Sui::Geniteam {
         player.earth_runes_count = earth_runes_count
     }
 
+    /// Update the attributes of a monster
+    public fun update_monster(
+        self: &mut Monster,
+        monster_level: u64,
+        hunger_level: u64,
+        affection_level: u64,
+        buddy_level: u8,
+        _ctx: &mut TxContext
+    ) {
+        self.monster_level = monster_level;
+        self.hunger_level = hunger_level;
+        self.affection_level = affection_level;
+        self.buddy_level = buddy_level;
+    }
+
+
     /// Analog of Update_Farm
     /// Need to pass in Player for ownership checks
     public fun update_farm_stats(_player: &mut Player, farm: &mut Farm, level: u64, current_xp: u64, _ctx: &mut TxContext) {
