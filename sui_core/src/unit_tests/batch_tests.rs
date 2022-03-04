@@ -250,7 +250,7 @@ async fn test_handle_move_order_with_batch() {
     let mut rx = _pair.0.subscribe();
 
     authority_state
-        .set_batch_sender(_send, _pair)
+        .set_batch_sender(_send, _pair.0)
         .expect("No problem registering");
     tokio::task::yield_now().await;
 

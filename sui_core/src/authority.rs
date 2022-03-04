@@ -27,7 +27,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::authority_batch::{BatchSender, BroadcastPair, BroadcastReceiver};
+use crate::authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -71,7 +71,7 @@ pub struct AuthorityState {
     /// The sender to notify of new transactions
     /// and create batches for this authority.
     /// Keep as None if there is no need for this.
-    batch_channels: Option<(BatchSender, BroadcastPair)>,
+    batch_channels: Option<(BatchSender, BroadcastSender)>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -86,12 +86,12 @@ impl AuthorityState {
     pub fn set_batch_sender(
         &mut self,
         batch_sender: BatchSender,
-        broadcast_pair: BroadcastPair,
+        broadcast_sender: BroadcastSender,
     ) -> SuiResult {
         if self.batch_channels.is_some() {
             return Err(SuiError::AuthorityUpdateFailure);
         }
-        self.batch_channels = Some((batch_sender, broadcast_pair));
+        self.batch_channels = Some((batch_sender, broadcast_sender));
         Ok(())
     }
 
@@ -99,7 +99,7 @@ impl AuthorityState {
     pub fn subscribe(&self) -> Result<BroadcastReceiver, SuiError> {
         self.batch_channels
             .as_ref()
-            .map(|(_, (tx, _))| tx.subscribe())
+            .map(|(_, tx)| tx.subscribe())
             .ok_or(SuiError::GenericAuthorityError {
                 error: "No broadcast subscriptions allowed for this authority.".to_string(),
             })
