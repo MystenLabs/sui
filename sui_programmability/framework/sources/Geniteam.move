@@ -300,7 +300,10 @@ module Sui::Geniteam {
     }
 
     /// Update the attributes of a monster
-    public fun update_monster(
+    public fun update_monster_stats(
+        _player: &mut Player,
+        _farm: &mut Farm,
+        _pet_monsters: &mut Collection::Collection,
         self: &mut Monster,
         monster_level: u64,
         hunger_level: u64,
@@ -350,7 +353,7 @@ module Sui::Geniteam {
 
     /// Apply the cosmetics to the Monster from the inventory
     public fun update_monster_cosmetics(_player: &mut Player, _farm: &mut Farm, monster: &mut Monster, _monster_cosmetic_inventory: &mut Collection::Collection, 
-                                    monster_cosmetic: MonsterCosmetic, cosmetic_slot_id: u64,  _ctx: &mut TxContext) {
+                                    monster_cosmetic: MonsterCosmetic, _pet_monsters: &mut Collection::Collection, cosmetic_slot_id: u64,  _ctx: &mut TxContext) {
 
         // Only 2 slots allowed
         assert!(cosmetic_slot_id <= 1 , EINVALID_COSMETICS_SLOT);
