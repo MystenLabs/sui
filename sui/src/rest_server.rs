@@ -641,16 +641,10 @@ async fn object_info(
         version: format!("{:?}", object.version().value()),
         id: format!("{:?}", object.id()),
         readonly: format!("{:?}", object.is_read_only()),
-        obj_type: format!(
-            "{:?}",
-            object
-                .data
-                .type_()
-                .map_or("Type Unwrap Failed".to_owned(), |type_| type_
-                    .module
-                    .as_ident_str()
-                    .to_string())
-        ),
+        obj_type: object
+            .data
+            .type_()
+            .map_or("Move Package".to_owned(), |type_| format!("{}", type_)),
         data: object_data,
     }))
 }
@@ -1189,17 +1183,8 @@ async fn sync(
         )
     })?;
 
-    // TODO: Check if account is already created if not create....
     // Attempt to create a new account, but continue if it already exists.
     if let Err(error) = wallet_context.create_account_state(&address) {
-        // *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-        // return Err(custom_http_error(
-        //     StatusCode::FAILED_DEPENDENCY,
-        //     format!(
-        //         "Could not get client state for account {:?}: {error}",
-        //         address
-        //     ),
-        // ));
         info!("{:?}", error);
     }
 
