@@ -9,7 +9,6 @@ use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::value::MoveStructLayout;
-use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
 use sui_types::error::SuiResult;
 use sui_types::{
@@ -25,7 +24,7 @@ use sui_types::{
 use typed_store::rocks::open_cf;
 use typed_store::Map;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
@@ -170,7 +169,7 @@ pub trait Client {
     async fn publish(
         &mut self,
         signer: SuiAddress,
-        package_source_files_path: String,
+        package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
@@ -711,16 +710,14 @@ where
     async fn publish(
         &mut self,
         signer: SuiAddress,
-        package_source_files_path: String,
+        package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        // Try to compile the package at the given path
-        let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
         let move_publish_transaction = Transaction::new_module(
             signer,
             gas_object_ref,
-            compiled_modules,
+            package_bytes,
             gas_budget,
             self.get_account(&signer)?.secret(),
         );
