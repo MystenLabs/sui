@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::coin::Coin;
 use crate::crypto::{sha3_hash, BcsSignable};
 use crate::error::{SuiError, SuiResult};
 use crate::move_package::MovePackage;
@@ -368,22 +369,13 @@ impl Object {
     }
 
     /// Change the owner of `self` to `new_owner`
-    pub fn transfer(&mut self, new_owner: SuiAddress) {
-        // TODO: these should be raised SuiError's instead of panic's
-        assert!(!self.is_read_only(), "Cannot transfer an immutable object");
-        assert!(!self.is_shared(), "Cannot transfer an shared object");
-        match &mut self.data {
-            Data::Move(m) => {
-                assert!(
-                    m.type_ == GasCoin::type_(),
-                    "Invalid transfer: only transfer of GasCoin is supported"
-                );
-
-                self.owner = Owner::SingleOwner(new_owner);
-                m.increment_version();
-            }
-            Data::Package(_) => panic!("Cannot transfer a module object"),
-        }
+    pub fn transfer(&mut self, new_owner: SuiAddress) -> SuiResult {
+        self.is_transfer_elegible()?;
+        // unwrap safe as the above check guarantees it.
+        self.owner = Owner::SingleOwner(new_owner);
+        let data = self.data.try_as_move_mut().unwrap();
+        data.increment_version();
+        Ok(())
     }
 
     pub fn with_id_owner_gas_for_testing(
@@ -470,6 +462,17 @@ impl Object {
         // Index access safe due to checks above.
         let type_tag = move_struct.type_params[0].clone();
         Ok(type_tag)
+    }
+
+    pub fn is_transfer_elegible(&self) -> SuiResult {
+        fp_ensure!(!self.is_read_only(), SuiError::TransferImmutableError);
+        fp_ensure!(!self.is_shared(), SuiError::TransferSharedError);
+        let is_coin = match &self.data {
+            Data::Move(m) => bcs::from_bytes::<Coin>(&m.contents).is_ok(),
+            Data::Package(_) => false,
+        };
+        fp_ensure!(is_coin, SuiError::TransferNonCoinError);
+        Ok(())
     }
 }
 

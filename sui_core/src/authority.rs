@@ -520,14 +520,12 @@ impl AuthorityState {
         }
         temporary_store.write_object(gas_object);
 
-        if output_object.is_read_only() {
+        if let Err(err) = output_object.transfer(recipient) {
             return Ok(ExecutionStatus::Failure {
                 gas_used: gas::MIN_OBJ_TRANSFER_GAS,
-                error: Box::new(SuiError::CannotTransferReadOnlyObject),
+                error: Box::new(err),
             });
         }
-
-        output_object.transfer(recipient);
         temporary_store.write_object(output_object);
         Ok(ExecutionStatus::Success { gas_used })
     }
