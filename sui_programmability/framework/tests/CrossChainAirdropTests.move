@@ -15,7 +15,7 @@ module Sui::CrossChainAirdropTests {
 
     const RECIPIENT_ADDRESS: address = @0x10;
     const SOURCE_CONTRACT_ADDRESS: vector<u8> = x"BC4CA0EdA7647A8aB7C2061c2E118A18a936f13D";
-    const SOURCE_TOKEN_ID: u128 = 101;
+    const SOURCE_TOKEN_ID: u64 = 101;
     const NAME: vector<u8> = b"BoredApeYachtClub";
     const SYMBOL: vector<u8> = b"BAYC";
     const TOKEN_URI: vector<u8> = b"ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/101";
@@ -57,20 +57,20 @@ module Sui::CrossChainAirdropTests {
         (scenario, oracle_address)
     }
 
-    fun claim_token(scenario: &mut Scenario, oracle_address: &address, token_id: u128) {
+    fun claim_token(scenario: &mut Scenario, oracle_address: &address, token_id: u64) {
         TestScenario::next_tx(scenario, oracle_address);
         {
             let oracle = TestScenario::remove_object<CrossChainAirdropOracle>(scenario);
             let ctx = TestScenario::ctx(scenario);
             CrossChainAirdrop::claim(
-                ctx,
                 &mut oracle,
                 RECIPIENT_ADDRESS,
                 SOURCE_CONTRACT_ADDRESS,
                 token_id,
                 NAME,
                 SYMBOL,
-                TOKEN_URI
+                TOKEN_URI,
+                ctx,
             );
             TestScenario::return_object(scenario, oracle);
         };

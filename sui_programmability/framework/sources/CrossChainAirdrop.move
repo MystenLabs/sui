@@ -3,7 +3,7 @@
 
 /// Allow a trusted oracle to mint a copy of NFT from a different chain. There can
 /// only be one copy for each unique pair of contract_address and token_id. We only
-/// support a signle chain(Ethereum) right now, but this can be extended to other
+/// support a single chain(Ethereum) right now, but this can be extended to other
 /// chains by adding a chain_id field. 
 module Sui::CrossChainAirdrop {
     use Std::Vector;
@@ -25,10 +25,10 @@ module Sui::CrossChainAirdrop {
 
         /// The Ethereum token ids whose Airdrop has been claimed. These
         /// are stored to prevent the same NFT from being claimed twice
-        // TODO: replace u128 with u256 once the latter is supported
-        // <https://github.com/MystenLabs/fastnft/pull/616>
+        // TODO: replace u64 with u256 once the latter is supported
+        // <https://github.com/MystenLabs/fastnft/issues/618>
         // TODO: replace this with SparseSet for O(1) on-chain uniqueness check
-        claimed_source_token_ids: vector<u128>
+        claimed_source_token_ids: vector<u64>
     }
     
     /// The Sui representation of the original NFT
@@ -36,8 +36,10 @@ module Sui::CrossChainAirdrop {
         id: VersionedID,
         /// The Ethereum contract address
         source_contract_address: vector<u8>,
+        // TODO: replace u64 with u256 once the latter is supported
+        // <https://github.com/MystenLabs/fastnft/issues/618>
         /// The Ethereum token id associated with the source contract address
-        source_token_id: u128,
+        source_token_id: u64,
         /// A distinct Uniform Resource Identifier (URI) for a given asset.
         /// This corresponds to the `tokenURI()` method in the ERC721Metadata 
         /// interface in EIP-721.
@@ -59,7 +61,7 @@ module Sui::CrossChainAirdrop {
 
     /// Address of the Oracle
     // TODO: Change this to something else before testnet launch
-    const ORACLE_ADDRESS: address = @0x8c028a9e8e11ef91187153190d30c833b70338c9;
+    const ORACLE_ADDRESS: address = @0xCEF1A51D2AA1226E54A1ACB85CFC58A051125A49;
 
     // Error codes
 
@@ -80,14 +82,14 @@ module Sui::CrossChainAirdrop {
 
     /// Called by the oracle to mint the airdrop NFT and transfer to the recipient
     public fun claim(
-        ctx: &mut TxContext,
         oracle: &mut CrossChainAirdropOracle,
         recipient: address,
         source_contract_address: vector<u8>,
-        source_token_id: u128,
+        source_token_id: u64,
         name: vector<u8>,
         symbol: vector<u8>,
-        token_uri: vector<u8>
+        token_uri: vector<u8>,
+        ctx: &mut TxContext,
     ) {
         let contract = get_or_create_contract(oracle, &source_contract_address);
         // NOTE: this is where the globally uniqueness check happens
@@ -128,7 +130,7 @@ module Sui::CrossChainAirdrop {
         Vector::borrow_mut(&mut oracle.managed_contracts, idx)
     }
 
-    fun token_claimed(contract: &PerContractAirdropInfo, source_token_id: u128): bool {
+    fun token_claimed(contract: &PerContractAirdropInfo, source_token_id: u64): bool {
         // TODO: replace this with SparseSet so that the on-chain uniqueness check can be O(1)
         let index = 0;
         while (index < Vector::length(&contract.claimed_source_token_ids)) {
