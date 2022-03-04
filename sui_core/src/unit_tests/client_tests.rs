@@ -16,6 +16,7 @@ use std::{
     sync::Arc,
 };
 use sui_adapter::genesis;
+use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::Signature;
 use sui_types::gas_coin::GasCoin;
@@ -24,6 +25,7 @@ use typed_store::Map;
 
 use std::env;
 use std::fs;
+use std::path::Path;
 use sui_types::error::SuiError::ObjectNotFound;
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
@@ -1124,8 +1126,14 @@ async fn test_module_publish_and_call_good() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/src/unit_tests/data/hero/");
 
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
     let pub_res = client
-        .publish(addr1, hero_path, gas_object_ref, GAS_VALUE_FOR_TESTING / 2)
+        .publish(
+            addr1,
+            compiled_modules,
+            gas_object_ref,
+            GAS_VALUE_FOR_TESTING / 2,
+        )
         .await;
 
     let (_, published_effects) = pub_res.unwrap();
@@ -1244,8 +1252,14 @@ async fn test_module_publish_file_path() {
     // Use a path pointing to a different file
     hero_path.push_str("/src/unit_tests/data/hero/Hero.move");
 
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
     let pub_resp = client
-        .publish(addr1, hero_path, gas_object_ref, GAS_VALUE_FOR_TESTING / 2)
+        .publish(
+            addr1,
+            compiled_modules,
+            gas_object_ref,
+            GAS_VALUE_FOR_TESTING / 2,
+        )
         .await;
 
     let (_, published_effects) = pub_resp.unwrap();
@@ -1285,66 +1299,6 @@ async fn test_module_publish_file_path() {
 
     // Data should be castable as a package
     assert!(new_obj.object().unwrap().data.try_as_package().is_some());
-}
-
-#[tokio::test]
-async fn test_module_publish_bad_path() {
-    // Init the states
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_admin_account(&mut client);
-
-    let gas_object_id = ObjectID::random();
-
-    // Populate authorities with gas obj data
-    let gas_object_ref =
-        fund_account_with_same_objects(authority_clients, &mut client, addr1, vec![gas_object_id])
-            .await
-            .iter()
-            .next()
-            .unwrap()
-            .1
-            .to_object_reference();
-
-    // Compile
-    let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
-
-    // Use a bad path
-    hero_path.push_str("/src/unit____________tests/data/hero/");
-
-    let pub_resp = client.publish(addr1, hero_path, gas_object_ref, 1000).await;
-    // Has to fail
-    assert!(pub_resp.is_err());
-}
-
-#[tokio::test]
-async fn test_module_publish_naughty_path() {
-    // Init the states
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_admin_account(&mut client);
-
-    let gas_object_id = ObjectID::random();
-
-    // Populate authorities with gas obj data
-    let gas_object_ref =
-        fund_account_with_same_objects(authority_clients, &mut client, addr1, vec![gas_object_id])
-            .await
-            .iter()
-            .next()
-            .unwrap()
-            .1
-            .to_object_reference();
-
-    for ns in naughty_strings::BLNS {
-        // Compile
-        let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
-
-        // Use a bad path
-        hero_path.push_str(&format!("/../{}", ns));
-
-        let pub_resp = client.publish(addr1, hero_path, gas_object_ref, 1000).await;
-        // Has to fail
-        assert!(pub_resp.is_err());
-    }
 }
 
 #[tokio::test]
@@ -1524,8 +1478,14 @@ async fn test_object_store() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/src/unit_tests/data/hero/");
 
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
     let pub_res = client
-        .publish(addr1, hero_path, gas_object_ref, GAS_VALUE_FOR_TESTING / 2)
+        .publish(
+            addr1,
+            compiled_modules,
+            gas_object_ref,
+            GAS_VALUE_FOR_TESTING / 2,
+        )
         .await;
 
     let (_, published_effects) = pub_res.as_ref().unwrap();
