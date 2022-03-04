@@ -43,28 +43,20 @@ jobs:
             - '!(explorer|doc|.github)/**'
             - '.github/workflows/rust.yml'
   release-check:
-    name: Rust release-mode compilation ${{matrix.toolchain}} on ${{matrix.os}}
+    name: Rust release-mode compilation nightly on ubuntu
     needs: diff
-    runs-on: ${{matrix.os}}-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        toolchain: [nightly]
-        os: [ubuntu]
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-        if: needs.diff.outputs.isRust == 'true'
       - name: Install rust
-        if: needs.diff.outputs.isRust == 'true'
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{matrix.toolchain}}
+          toolchain: nightly
           profile: minimal
           override: true
       - uses: Swatinem/rust-cache@v1
-        if: needs.diff.outputs.isRust == 'true'
       - name: Check
-        if: needs.diff.outputs.isRust == 'true'
         uses: actions-rs/cargo@v1
         with:
           command: check
