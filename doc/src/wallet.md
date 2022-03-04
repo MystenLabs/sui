@@ -211,6 +211,237 @@ you won't be able to mutate objects if the account key is missing from the keyst
 
 Restart the Sui wallet after the modification; the new accounts will appear in the wallet if you query the addresses.
 
+## View objects owned by the account
+You can use the `objects` command to view the objects owned by the address.
+
+`objects` command usage :
+
+```shell
+USAGE:
+    objects [FLAGS] --address <address>
+
+FLAGS:
+    -h, --help       Prints help information
+        --json       Return command outputs in json format
+    -V, --version    Prints version information
+
+OPTIONS:
+        --address <address>    Address owning the objects
+```
+To view the objects owned by the accounts created in genesis, run the following command in the Sui interactive console (substitute the address with one of the genesis address in your wallet): 
+```shell
+sui>-$ objects --address 0DC70EA8CA82FE6966900C697B73A235B8E2346F
+```
+The result should look similar to the following, which shows the object in the format of (`object_id`, `sequence_number`, `object_hash`).
+```shell
+Showing 5 results.
+(0E4260A6AA1DF29790E76128DC094C030C2D1819, SequenceNumber(0), o#a4ab81b926bb51b64c33fd56fad24a5a33ea4ff8c244349a985c61c7d1a94570)
+(70B26102F9DE9A3CC6FF7CB085BA750DA16FDECE, SequenceNumber(0), o#0028abf5225bfcf0a3762996e7c6f54fa7fec00f0526b2ede51f592f49540c30)
+(8E306E956CF5C0F058F048A4A00C25BF90AE5A9B, SequenceNumber(0), o#5ae8e7feff1ad501d8ae96bd10fad846e51bd70d4000a284a65eb183b1a1e459)
+(9C7626A4CBFFCE894518B8A317F06D051597A378, SequenceNumber(0), o#10dd0b5cabf227952a6e731001d3b57039595225eb188ca6e7ac65bf55ac7c6f)
+(AFA6A58082E961E8706FFF48A0D531C2BED8A94D, SequenceNumber(0), o#2c4b5c7c8be3055287deb4d445c87cf02603d84155d761bcd71f0457d76254ad)
+```
+If you want to view more information about the objects, you can use the `object` command.
+
+Usage of `object` command :
+```shell
+USAGE:
+    object [FLAGS] --id <id>
+
+FLAGS:
+    -h, --help       Prints help information
+        --json       Return command outputs in json format
+    -V, --version    Prints version information
+
+OPTIONS:
+        --id <id>    Object ID of the object to fetch
+```
+To view the object, use the following command:
+```bash
+object --id 0E4260A6AA1DF29790E76128DC094C030C2D1819
+```
+This should give you output similar to the following:
+```shell
+Owner: SingleOwner(k#ebcf32ca2998dc04b29dc6083250408278f96435)
+Version: 0
+ID: 0E4260A6AA1DF29790E76128DC094C030C2D1819
+Readonly: false
+Type: 0x2::Coin::Coin<0x2::GAS::GAS>
+```
+The result shows some basic information about the object, the owner, 
+version, id, if the object is immutable and the type of the object.
+If you need a deeper look into the object, you can use the `--json`
+flag to view the raw json representation of the object.
+
+Here is an example:
+```json
+{"contents":{"fields":{"id":{"fields":{"id":{"fields":{"id":{"fields":{"bytes":"0e4260a6aa1df29790e76128dc094c030c2d1819"},"type":"0x2::ID::ID"}},"type":"0x2::ID::UniqueID"},"version":0},"type":"0x2::ID::VersionedID"},"value":100000},"type":"0x2::Coin::Coin<0x2::GAS::GAS>"},"owner":{"SingleOwner":[235,207,50,202,41,152,220,4,178,157,198,8,50,80,64,130,120,249,100,53]},"tx_digest":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+```
+
+## Transfer objects
+If you inspect a newly created account, you would expect the account does not own any object.
+```shell
+sui>-$ new-address
+Created new keypair for address : 830F66EA8EA867DDCA479535BC12CE2852E571F2
+sui>-$ objects --address 830F66EA8EA867DDCA479535BC12CE2852E571F2
+Showing 0 results.
+```
+To add objects to the account, you can invoke a move function (see [Calling Move code](#calling-move-code) for more information), 
+or you can transfer one of the existing object from the genesis account to the new account. 
+We will explore how to transfer objects using the wallet in this section.
+
+`transfer` command usage:
+```shell
+USAGE:
+    transfer [FLAGS] --gas <gas> --object-id <object-id> --to <to>
+
+FLAGS:
+    -h, --help       Prints help information
+        --json       Return command outputs in json format
+    -V, --version    Prints version information
+
+OPTIONS:
+        --gas <gas>                ID of the gas object for gas payment, in 20 bytes Hex string
+        --object-id <object-id>    Object to transfer, in 20 bytes Hex string
+        --to <to>                  Recipient address
+```
+To transfer an object to a recipient, you will need the recipient's address, 
+the object id of the object that you want to transfer, 
+and the gas object' id for the transaction fee payment.
+
+Here is an example of a transfer of object to account `830F66EA8EA867DDCA479535BC12CE2852E571F2`.
+```shell
+sui>-$ transfer --to 830F66EA8EA867DDCA479535BC12CE2852E571F2 --object-id 1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE --gas 27073453E1B556D1B6C2E4BE94FF2A3928D788BF
+Transfer confirmed after 10500 us
+----- Certificate ----
+Signed Authorities : [k#a723959ed6c6d9b4a508fa527c00c215681812b2f0e86c486bbc204ca94f6df9, k#de9739d8d39bd1e9cfd11ab777fdce42ddf3fd862601f6ab09ee7482054e8da0, k#fb942f73e08b2686d0daef41307fd15804bfd953baf497762f36255401d7b2bf]
+Transaction Kind : Transfer
+Recipient : 830F66EA8EA867DDCA479535BC12CE2852E571F2
+Object ID : 1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE
+Sequence Number : SequenceNumber(0)
+Object Digest : 9d0101cbc56fffae871896864910f6eab4d9af51884758d9e4582766314cce54
+----- Transaction Effects ----
+Status : Success { gas_used: 18 }
+Mutated Objects:
+1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE SequenceNumber(1) o#5e98374af72fa72f69f51b05eff1298b0f9045998f2d63db65ad1c26153bd5b3
+27073453E1B556D1B6C2E4BE94FF2A3928D788BF SequenceNumber(1) o#052a7e8af210c9be7409c5242e60d2d0e3f5f0e933e33b81280e4c5112923715
+```
+
+The account will now have 1 object
+```shell
+sui>-$ sync --address 830F66EA8EA867DDCA479535BC12CE2852E571F2
+Client state sync complete.
+
+sui>-$ objects --address 830F66EA8EA867DDCA479535BC12CE2852E571F2
+Showing 1 results.
+(1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE, SequenceNumber(1), o#5e98374af72fa72f69f51b05eff1298b0f9045998f2d63db65ad1c26153bd5b3)
+```
+
+## Merging and splitting coin objects
+Overtime, the account might receive coins from other account and will become unmanageable when 
+the number of coins grows; contrarily the account might need to split the coin for payment or 
+for transfer to other account.
+
+We can use the `merge-coin` command and `split-coin` command to consolidate or split coins.
+
+### Merge coins
+Usage of `merge-coin`:
+```shell
+USAGE:
+    merge-coin [FLAGS] --coin-to-merge <coin-to-merge> --gas <gas> --gas-budget <gas-budget> --primary-coin <primary-coin>
+
+FLAGS:
+    -h, --help       Prints help information
+        --json       Return command outputs in json format
+    -V, --version    Prints version information
+
+OPTIONS:
+        --coin-to-merge <coin-to-merge>    Coin to be merged, in 20 bytes Hex string
+        --gas <gas>                        ID of the gas object for gas payment, in 20 bytes Hex string
+        --gas-budget <gas-budget>          Gas budget for this call
+        --primary-coin <primary-coin>      Coin to merge into, in 20 bytes Hex string
+```
+Here is an example of how to merge coins, to merge coins, you will need at lease three coin objects - 
+two coin objects for merging, and one for the gas payment.
+```shell
+sui>-$ objects --address 830F66EA8EA867DDCA479535BC12CE2852E571F2
+Showing 3 results.
+(1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE, SequenceNumber(1), o#5e98374af72fa72f69f51b05eff1298b0f9045998f2d63db65ad1c26153bd5b3)
+(6A506E6779CF5936145628C689045A25643ACBDC, SequenceNumber(1), o#6f66513613dc5e5f7814c79f6849850e2489628a94094e4e037e4e1397425a0d)
+(B7FD91A802DAF5523CAAB69FF4652FAFA6FF4ADF, SequenceNumber(1), o#5e9289f55bac3508deaeca6d8ab4e9a4a43de5ef4f7d780a1a5a0a6633d85d96)
+
+sui>-$ merge-coin --primary-coin 1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE --coin-to-merge 6A506E6779CF5936145628C689045A25643ACBDC --gas B7FD91A802DAF5523CAAB69FF4652FAFA6FF4ADF --gas-budget 1000
+----- Certificate ----
+Signed Authorities : [k#de9739d8d39bd1e9cfd11ab777fdce42ddf3fd862601f6ab09ee7482054e8da0, k#a723959ed6c6d9b4a508fa527c00c215681812b2f0e86c486bbc204ca94f6df9, k#fb942f73e08b2686d0daef41307fd15804bfd953baf497762f36255401d7b2bf]
+Transaction Kind : Call
+Gas Budget : 1000
+Package ID : 0x2
+Module : Coin
+Function : join
+Object Arguments : [(1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE, SequenceNumber(1), o#5e98374af72fa72f69f51b05eff1298b0f9045998f2d63db65ad1c26153bd5b3), (6A506E6779CF5936145628C689045A25643ACBDC, SequenceNumber(1), o#6f66513613dc5e5f7814c79f6849850e2489628a94094e4e037e4e1397425a0d)]
+Pure Arguments : []
+Type Arguments : [Struct(StructTag { address: 0000000000000000000000000000000000000002, module: Identifier("GAS"), name: Identifier("GAS"), type_params: [] })]
+----- Merge Coin Results ----
+Updated Coin : Coin { id: 1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE, value: 200000 }
+Updated Gas : Coin { id: B7FD91A802DAF5523CAAB69FF4652FAFA6FF4ADF, value: 99996 }
+```
+
+### Split coin
+Usage of `split-coin`:
+```shell
+USAGE:
+    split-coin [FLAGS] [OPTIONS] --coin-id <coin-id> --gas <gas> --gas-budget <gas-budget>
+
+FLAGS:
+    -h, --help       Prints help information
+        --json       Return command outputs in json format
+    -V, --version    Prints version information
+
+OPTIONS:
+        --amounts <amounts>...       Amount to split out from the coin
+        --coin-id <coin-id>          Coin to Split, in 20 bytes Hex string
+        --gas <gas>                  ID of the gas object for gas payment, in 20 bytes Hex string
+        --gas-budget <gas-budget>    Gas budget for this call
+```
+For splitting coins, you will need at lease two coins to execute the `split-coin` command, 
+one coin to split, one for the gas payment.
+
+Here is an example of splitting coin, we are splitting out three new coins from the original coin, 
+with values of 1000, 5000 and 3000 respectively, note that the `--amounts` accepts list of values.
+```shell
+sui>-$ objects --address 830F66EA8EA867DDCA479535BC12CE2852E571F2
+Showing 2 results.
+(1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE, SequenceNumber(2), o#1ce25191bf2832df1bda257044f5764c4ec6144dc6d065ef0bec7ec8bd3e1d60)
+(B7FD91A802DAF5523CAAB69FF4652FAFA6FF4ADF, SequenceNumber(2), o#ee32f7158a56efdcfb20ce292f9b6065201f0d9f15dcea67ba3afb572910e3a5)
+
+sui>-$ split-coin --coin-id 1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE --amounts 1000 5000 3000 --gas B7FD91A802DAF5523CAAB69FF4652FAFA6FF4ADF --gas-budget 1000
+----- Certificate ----
+Signed Authorities : [k#a723959ed6c6d9b4a508fa527c00c215681812b2f0e86c486bbc204ca94f6df9, k#dee2507e5935e836624d66d16817d79426cfbf0a75b39564467463ce619862fa, k#fb942f73e08b2686d0daef41307fd15804bfd953baf497762f36255401d7b2bf]
+Transaction Kind : Call
+Gas Budget : 1000
+Package ID : 0x2
+Module : Coin
+Function : split_vec
+Object Arguments : [(1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE, SequenceNumber(2), o#1ce25191bf2832df1bda257044f5764c4ec6144dc6d065ef0bec7ec8bd3e1d60)]
+Pure Arguments : [[3, 232, 3, 0, 0, 0, 0, 0, 0, 136, 19, 0, 0, 0, 0, 0, 0, 184, 11, 0, 0, 0, 0, 0, 0]]
+Type Arguments : [Struct(StructTag { address: 0000000000000000000000000000000000000002, module: Identifier("GAS"), name: Identifier("GAS"), type_params: [] })]
+----- Split Coin Results ----
+Updated Coin : Coin { id: 1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE, value: 191000 }
+New Coins : Coin { id: 2311C83B04D0755390C0FA3DA5B0DBF7AA14FADD, value: 3000 },
+            Coin { id: 538D2C507C34BE647A86629CC9509B12FD5330C2, value: 1000 },
+            Coin { id: BFA8BAB64ED8F74BA3731C9220FD7462456BC601, value: 5000 }
+Updated Gas : Coin { id: B7FD91A802DAF5523CAAB69FF4652FAFA6FF4ADF, value: 99776 }
+
+sui>-$ objects --address 830F66EA8EA867DDCA479535BC12CE2852E571F2
+Showing 5 results.
+(1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE, SequenceNumber(3), o#300ca9a58cbfdca9e3692378753bf0c15026d21fa8f2e9169f09390a101f1097)
+(2311C83B04D0755390C0FA3DA5B0DBF7AA14FADD, SequenceNumber(1), o#158383eae6edaa37c3679653eb7edd46431a903397a305e15d0c3adadb7957b1)
+(538D2C507C34BE647A86629CC9509B12FD5330C2, SequenceNumber(1), o#d02a23b46168e62525401dbce913105989ebfb9d33045c0e58b8b759b173be29)
+(B7FD91A802DAF5523CAAB69FF4652FAFA6FF4ADF, SequenceNumber(3), o#839e98b33b3de62bc84c36c35b9fd6cdf3383f9d7c4f760c398cbbc7bef8c932)
+(BFA8BAB64ED8F74BA3731C9220FD7462456BC601, SequenceNumber(1), o#6748854128a8b4746fb5bd124eddafc4f9129bae36a8a34af85a8f29b07ee124)
+```
+From the result we can see three new coins got created in the transaction.
+
 ## Calling Move code
 
 The genesis state of the Sui platform includes Move code that is

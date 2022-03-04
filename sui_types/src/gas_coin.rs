@@ -108,6 +108,6 @@ impl TryFrom<&Object> for GasCoin {
 
 impl Display for GasCoin {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Coin {{ id: {}, value{} }}", self.id(), self.value())
+        write!(f, "Coin {{ id: {}, value: {} }}", self.id(), self.value())
     }
 }

@@ -204,7 +204,7 @@ impl WalletCommands {
         &mut self,
         context: &mut WalletContext,
     ) -> Result<WalletCommandResult, anyhow::Error> {
-        let signature_callback = Box::pin(SimpleTransactionSigner {
+        let tx_signer = Box::pin(SimpleTransactionSigner {
             keystore: context.keystore.clone(),
         });
 
@@ -235,7 +235,7 @@ impl WalletCommands {
                         compiled_modules,
                         gas_obj_ref,
                         *gas_budget,
-                        signature_callback,
+                        tx_signer,
                     )
                     .await?;
 
@@ -329,7 +329,7 @@ impl WalletCommands {
                         vec![],
                         pure_args,
                         *gas_budget,
-                        signature_callback,
+                        tx_signer,
                     )
                     .await?;
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
@@ -348,7 +348,7 @@ impl WalletCommands {
 
                 let (cert, effects) = context
                     .address_manager
-                    .transfer_coin(*from, *object_id, *gas, *to, signature_callback)
+                    .transfer_coin(*from, *object_id, *gas, *to, tx_signer)
                     .await?;
                 let time_total = time_start.elapsed().as_micros();
 
@@ -416,7 +416,14 @@ impl WalletCommands {
                     .get_single_owner_address()?;
                 let response = context
                     .address_manager
-                    .split_coin(*signer, *coin_id, amounts.clone(), *gas, *gas_budget)
+                    .split_coin(
+                        *signer,
+                        *coin_id,
+                        amounts.clone(),
+                        *gas,
+                        *gas_budget,
+                        tx_signer,
+                    )
                     .await?;
                 WalletCommandResult::SplitCoin(response)
             }
@@ -433,7 +440,14 @@ impl WalletCommands {
                     .get_single_owner_address()?;
                 let response = context
                     .address_manager
-                    .merge_coins(*signer, *primary_coin, *coin_to_merge, *gas, *gas_budget)
+                    .merge_coins(
+                        *signer,
+                        *primary_coin,
+                        *coin_to_merge,
+                        *gas,
+                        *gas_budget,
+                        tx_signer,
+                    )
                     .await?;
                 WalletCommandResult::MergeCoin(response)
             }

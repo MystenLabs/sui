@@ -729,7 +729,7 @@ impl Display for CertifiedTransaction {
             TransactionKind::Call(c) => {
                 writeln!(writer, "Transaction Kind : Call")?;
                 writeln!(writer, "Gas Budget : {}", c.gas_budget)?;
-                writeln!(writer, "Package ID : {}", c.package.0.to_hex())?;
+                writeln!(writer, "Package ID : {}", c.package.0.to_hex_literal())?;
                 writeln!(writer, "Module : {}", c.module)?;
                 writeln!(writer, "Function : {}", c.function)?;
                 writeln!(writer, "Object Arguments : {:?}", c.object_arguments)?;
