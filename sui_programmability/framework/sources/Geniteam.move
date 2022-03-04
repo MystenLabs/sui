@@ -1,45 +1,78 @@
 module Sui::Geniteam {
-    use Sui::ID::{Self, ID, VersionedID};
+    use Sui::Collection;
+    use Sui::ID::{Self, VersionedID, ID};
     use Sui::TxContext::{Self, TxContext};
+    use Std::Option::{Self, Option};
     use Sui::Transfer;
     use Std::ASCII::{Self, String};
-    use Std::Option::{Self, Option};
-    use Std::Vector::Self;
 
     /// Trying to add more than `total_monster_slots` monsters to a Farm
     const ETOO_MANY_MONSTERS: u64 = 0;
-    /// Can't find a monster with the given ID
+    /// Can't find a monster with the given VersionedID
     const EMONSTER_NOT_FOUND: u64 = 1;
+
+    /// Trying to add more than 1 farm to a Player
+    const ETOO_MANY_FARMS: u64 = 2;
+
+    /// Cosmetic not owned by the Player
+    const ECOSMETIC_NOT_OWNED_BY_PLAYER: u64 = 3;
+
+    /// Too many Cosmetics for the slot
+    const ETOO_MANY_COSMETICS: u64 = 4;
+
+    /// Monster collection not owned by farm
+    const EMONSTER_COLLECTION_NOT_OWNED_BY_FARM: u64 = 5;
+
+    /// Farm cosmetics inventory not owned by player
+    const EFARM_COSMETICS_INVENTORY_NOT_OWNED_BY_PLAYER: u64 = 6;
+
+    /// Monster cosmetics inventory not owned by player
+    const EMONSTER_COSMETICS_INVENTORY_NOT_OWNED_BY_PLAYER: u64 = 7;
+
+    /// Invalid cosmetic slot
+    const EINVALID_COSMETICS_SLOT: u64 = 8;
 
     struct Player has key {
         id: VersionedID,
+
         player_name: String,
-        farm: Farm,
+        
         water_runes_count: u64,
         fire_runes_count: u64,
         wind_runes_count: u64,
         earth_runes_count: u64,
-        owned_farm_cosmetics: vector<FarmCosmetic>,
-        owned_monster_cosmetics: vector<MonsterCosmetic>
-    }
+        
+        // ID of the Collection of owned farm: Farm
+        owned_farms_id: Option<ID>,
 
+        // Inventory of unassigned items: Inventory
+        // Collection of owned farm cosmetics: FarmCosmetic
+        farm_inventory_cosmetics_id: ID,
+        // Collection of owned monster cosmetics: MonsterCosmetic
+        monster_inventory_cosmetics_id: ID,
+    }
     struct Farm has key, store {
         id: VersionedID,
         farm_name: String,
-        farm_img_id: u64,
+        farm_img_index: u64,
         level: u64,
         current_xp: u64,
         total_monster_slots: u64,
         occupied_monster_slots: u64,
-        farm_cosmetic_slot1: Option<FarmCosmetic>,
-        farm_cosmetic_slot2: Option<FarmCosmetic>,
-        pet_monsters: vector<Monster>,
+
+        // Collection of Pet monsters owned by this Farm
+        pet_monsters_id: ID,
+
+        // ID of the applied cosmetic at this slot
+        applied_farm_cosmetic_0_id:  Option<ID>,
+        // ID of the applied cosmetic at this slot
+        applied_farm_cosmetic_1_id:  Option<ID>,        
     }
 
     struct Monster has key, store {
         id: VersionedID,
         monster_name: String,
-        monster_img_id: u64,
+        monster_img_index: u64,
         breed: u8,
         monster_affinity: u8,
         monster_description: String,
@@ -48,58 +81,100 @@ module Sui::Geniteam {
         hunger_level: u64,
         affection_level: u64,
         buddy_level: u8,
-        monster_cosmetic_slot1: Option<MonsterCosmetic>,
-        monster_cosmetic_slot2: Option<MonsterCosmetic>,
+
+
+        // ID of the applied cosmetic at this slot
+        applied_monster_cosmetic_0_id: Option<ID>,
+        // ID of the applied cosmetic at this slot
+        applied_monster_cosmetic_1_id: Option<ID>,    
+
     }
 
-    struct FarmCosmetic has store, drop {
+    struct FarmCosmetic has key, store {
+        id: VersionedID,
         cosmetic_type: u8,
-        cosmetic_id: u64
     }
 
-    struct MonsterCosmetic has store, drop {
+    struct MonsterCosmetic has key, store {
+        id: VersionedID,
         cosmetic_type: u8,
-        cosmetic_id: u64
     }
+
 
     // === Constructors. These create new Sui objects. ===
 
+    // Creates a basic player object
     public fun create_player_(
-        player_name: vector<u8>, farm: Farm, ctx: &mut TxContext
+        player_name: vector<u8>, ctx: &mut TxContext
     ): Player {
-        Player {
+        let player = Player {
             id: TxContext::new_id(ctx),
             player_name: ASCII::string(player_name),
-            farm,
             water_runes_count: 0,
             fire_runes_count: 0,
             wind_runes_count: 0,
             earth_runes_count: 0,
-            owned_farm_cosmetics: Vector::empty(),
-            owned_monster_cosmetics: Vector::empty()
-        }
+
+            owned_farms_id: Option::none(),
+            farm_inventory_cosmetics_id: ID::new(@0x0),
+            monster_inventory_cosmetics_id: ID::new(@0x0)
+        };
+
+        // Create the collections
+        //let owned_farms_c = Collection::new(&mut ctx);
+        let inventory_farm_cosmetics_c = Collection::new(ctx);
+        let inventory_monster_cosmetics_c = Collection::new(ctx);
+
+        // Set the fields
+        
+        // Destroy the old id
+
+
+        player.farm_inventory_cosmetics_id = *ID::id(&inventory_farm_cosmetics_c);
+        player.monster_inventory_cosmetics_id = *ID::id(&inventory_monster_cosmetics_c);
+
+        // Transfer ownership to the player
+        //Transfer::transfer_to_object(owned_farms_c, player);
+        Transfer::transfer_to_object(inventory_farm_cosmetics_c, &mut player);
+        Transfer::transfer_to_object(inventory_monster_cosmetics_c, &mut player);
+
+        player
     }
 
+    // Creates a basic farm object
     public fun create_farm_(
-        farm_name: vector<u8>, farm_img_id: u64, total_monster_slots: u64, ctx: &mut TxContext
+        farm_name: vector<u8>, farm_img_index: u64, total_monster_slots: u64, ctx: &mut TxContext
     ): Farm {
-        Farm {
+        let farm = Farm {
             id: TxContext::new_id(ctx),
             farm_name: ASCII::string(farm_name),
-            farm_img_id,
+            farm_img_index,
             level: 0,
             current_xp: 0,
             total_monster_slots,
             occupied_monster_slots: 0,
-            farm_cosmetic_slot1: Option::none(),
-            farm_cosmetic_slot2: Option::none(),
-            pet_monsters: Vector::empty(),
-        }
+            pet_monsters_id: ID::new(@0x0),
+            applied_farm_cosmetic_0_id: Option::none(),
+            applied_farm_cosmetic_1_id: Option::none(),
+        };
+
+
+        // Create the collections
+        let pet_monsters_c = Collection::new(ctx);
+
+        // Set the fields
+        farm.pet_monsters_id = *ID::id(&pet_monsters_c);
+
+        // Transfer ownership to the farm
+        Transfer::transfer_to_object(pet_monsters_c, &mut farm);
+
+        farm
     }
 
+    // Creates a basic Monster object
     public fun create_monster_(
         monster_name: vector<u8>,
-        monster_img_id: u64,
+        monster_img_index: u64,
         breed: u8,
         monster_affinity: u8,
         monster_description: vector<u8>,
@@ -109,7 +184,7 @@ module Sui::Geniteam {
         Monster {
             id: TxContext::new_id(ctx),
             monster_name: ASCII::string(monster_name),
-            monster_img_id,
+            monster_img_index,
             breed,
             monster_affinity,
             monster_description: ASCII::string(monster_description),
@@ -118,137 +193,169 @@ module Sui::Geniteam {
             hunger_level: 0,
             affection_level: 0,
             buddy_level: 0,
-            monster_cosmetic_slot1: Option::none(),
-            monster_cosmetic_slot2: Option::none(),
+            applied_monster_cosmetic_0_id: Option::none(),
+            applied_monster_cosmetic_1_id: Option::none(),
         }
     }
 
-    // === Mutators. These equip objects with other objects and update the attributes of objects. ===
-
-    /// Remove a monster from a farm.
-    /// Aborts if the monster with the given ID is not found
-    public fun remove_monster_(self: &mut Player, monster_id: &ID): Monster {
-        let farm = &mut self.farm;
-        let monsters = &mut farm.pet_monsters;
-        let num_monsters = Vector::length(monsters);
-        let i = 0;
-        while (i < num_monsters) {
-            let m = Vector::borrow(monsters, i);
-            if (ID::id(m) == monster_id) {
-                break
-            };
-            i = i + 1;
-        };
-        assert!(i != num_monsters, EMONSTER_NOT_FOUND);
-        farm.occupied_monster_slots = farm.occupied_monster_slots - 1;
-        Vector::remove(monsters, i)
-    }
-
-    // === Entrypoints. Each of these functions can be called from a Sui transaction, whereas functions above cannot. ===
+    // ================================================================================= Entry functions ================================================================================= 
+    // Constructors
 
     /// Create a player and transfer it to the transaction sender
     public fun create_player(
-        player_name: vector<u8>, farm_name: vector<u8>, farm_img_id: u64, total_monster_slots: u64, ctx: &mut TxContext
+        player_name: vector<u8>, ctx: &mut TxContext
     ) {
-        let farm = create_farm_(farm_name, farm_img_id, total_monster_slots, ctx);
-        let player = create_player_(player_name, farm, ctx);
+        // Create player simply and transfer to caller
+        let player = create_player_(player_name, ctx);
         Transfer::transfer(player, TxContext::sender(ctx))
+    }
+
+    /// Create a Farm and add it to the Player's collection of farms, which must be max 1
+    public fun create_farm(player: &mut Player, farm_img_index: u64,
+                            farm_name: vector<u8>, total_monster_slots: u64, ctx: &mut TxContext
+    ) {
+        // We only allow one farm for now
+        assert!(Option::is_none(&player.owned_farms_id), ETOO_MANY_FARMS);
+
+        let farm = create_farm_(farm_name, farm_img_index, total_monster_slots, ctx);
+
+        // Store the ID of the farm
+        player.owned_farms_id = Option::some(*ID::id(&farm));
+
+        // Transfer ownership ofr farm to player
+        Transfer::transfer_to_object(farm, player);
+    }
+
+    /// Create a Monster and add it to the Farm's collection of Monsters, which is unbounded
+    public fun create_monster(_player: &mut Player,
+                                farm: &mut Farm,
+                                pet_monsters_c: &mut Collection:: Collection,
+                                monster_name: vector<u8>,
+                                monster_img_index: u64,
+                                breed: u8,
+                                monster_affinity: u8,
+                                monster_description: vector<u8>,
+                                ctx: &mut TxContext
+    ) {
+
+        let monster = create_monster_(
+            monster_name,
+            monster_img_index,
+            breed,
+            monster_affinity,
+            monster_description,
+            ctx
+        );
+
+        // Check if this is the right collection
+        assert!(*&farm.pet_monsters_id == *ID::id(pet_monsters_c), EMONSTER_COLLECTION_NOT_OWNED_BY_FARM);
+
+
+        // Add it to the collection
+        Collection::add(pet_monsters_c, monster);
+    }
+
+    /// Create Monster cosmetic owned by player and add to its inventory
+    public fun create_farm_cosmetics(player: &mut Player, farm_cosmetics_inventory_c: &mut Collection::Collection, cosmetic_type: u8, ctx: &mut TxContext) {
+        
+        // Check if this is the right collection
+        assert!(*&player.farm_inventory_cosmetics_id
+                    == *ID::id(farm_cosmetics_inventory_c), EFARM_COSMETICS_INVENTORY_NOT_OWNED_BY_PLAYER);
+        
+        
+        // Create the farm cosmetic object
+        let farm_cosmetic = FarmCosmetic {id: TxContext::new_id(ctx), cosmetic_type };
+
+        // Add it to the player's inventory
+        Collection::add(farm_cosmetics_inventory_c, farm_cosmetic);
+    }
+    /// Create Monster cosmetic owned by player and add to its inventory
+    public fun create_monster_cosmetics(player: &mut Player, monster_cosmetics_inventory_c: &mut Collection::Collection, cosmetic_type: u8, ctx: &mut TxContext) {
+        
+        // Check if this is the right collection
+        assert!(*&player.monster_inventory_cosmetics_id
+                    == *ID::id(monster_cosmetics_inventory_c), EMONSTER_COSMETICS_INVENTORY_NOT_OWNED_BY_PLAYER);
+        
+        
+        // Create the farm cosmetic object
+        let monster_cosmetic = MonsterCosmetic {id: TxContext::new_id(ctx), cosmetic_type};
+
+        // Add it to the player's inventory
+        Collection::add(monster_cosmetics_inventory_c, monster_cosmetic);
     }
 
     /// Update the attributes of a player
     public fun update_player(
-        self: &mut Player,
+        player: &mut Player,
         water_runes_count: u64,
         fire_runes_count: u64,
         wind_runes_count: u64,
         earth_runes_count: u64,
         _ctx: &mut TxContext
     ) {
-        self.water_runes_count = water_runes_count;
-        self.fire_runes_count = fire_runes_count;
-        self.wind_runes_count = wind_runes_count;
-        self.earth_runes_count = earth_runes_count
+        player.water_runes_count = water_runes_count;
+        player.fire_runes_count = fire_runes_count;
+        player.wind_runes_count = wind_runes_count;
+        player.earth_runes_count = earth_runes_count
     }
 
-    /// Create a monster and transfer it to the transaction sender
-    public fun create_monster(
-        monster_name: vector<u8>,
-        monster_img_id: u64,
-        breed: u8,
-        monster_affinity: u8,
-        monster_description: vector<u8>,
-        ctx: &mut TxContext
-    ) {
-        let monster = create_monster_(
-            monster_name,
-            monster_img_id,
-            breed,
-            monster_affinity,
-            monster_description,
-            ctx
-        );
-        Transfer::transfer(monster, TxContext::sender(ctx))
+    /// Analog of Update_Farm
+    /// Need to pass in Player for ownership checks
+    public fun update_farm_stats(_player: &mut Player, farm: &mut Farm, level: u64, current_xp: u64, _ctx: &mut TxContext) {
+        farm.current_xp = current_xp;
+        farm.level = level;
     }
 
-    /// Add a monster to a farm
-    public fun add_monster(self: &mut Player, monster: Monster, _ctx: &mut TxContext) {
-        Vector::push_back(&mut self.farm.pet_monsters, monster);
-        self.farm.occupied_monster_slots = self.farm.occupied_monster_slots + 1;
-        assert!(self.farm.occupied_monster_slots <= self.farm.total_monster_slots, ETOO_MANY_MONSTERS)
+    /// Apply the cosmetics to the Farm from the inventory
+    public fun update_farm_cosmetics(_player: &mut Player, farm: &mut Farm, _farm_cosmetic_inventory: &mut Collection::Collection,
+                                        farm_cosmetic: FarmCosmetic,  cosmetic_slot_id: u64, _ctx: &mut TxContext) {
+
+        // Only 2 slots allowed
+        assert!(cosmetic_slot_id <= 1 , EINVALID_COSMETICS_SLOT);
+
+        // Assign by slot
+        if (cosmetic_slot_id == 0) {
+            // Check that the slot has no items
+            assert!(Option::is_none(&farm.applied_farm_cosmetic_0_id), ETOO_MANY_COSMETICS);
+
+            // Fill the slot ID
+            farm.applied_farm_cosmetic_0_id = Option::some(*ID::id(&farm_cosmetic));
+        } else {
+            // Check that the slot has no items
+            assert!(Option::is_none(&farm.applied_farm_cosmetic_1_id), ETOO_MANY_COSMETICS);
+
+            // Fill the slot ID
+            farm.applied_farm_cosmetic_1_id = Option::some(*ID::id(&farm_cosmetic));
+        };
+
+        // Transfer owner in this farm
+        Transfer::transfer_to_object(farm_cosmetic, farm);
     }
 
-    /// Remove a monster from a farm amd transfer it to the transaction sender
-    public fun remove_monster(self: &mut Player, monster_id: vector<u8>, ctx: &mut TxContext) {
-        // TODO: monster_id should be probably be `address`, but leaving this as-is to avoid breaking Geniteam
-        let monster = remove_monster_(self, &ID::new_from_bytes(monster_id));
-        Transfer::transfer(monster, TxContext::sender(ctx))
-    }
+    /// Apply the cosmetics to the Monster from the inventory
+    public fun update_monster_cosmetics(_player: &mut Player, _farm: &mut Farm, monster: &mut Monster, _monster_cosmetic_inventory: &mut Collection::Collection, 
+                                    monster_cosmetic: MonsterCosmetic, cosmetic_slot_id: u64,  _ctx: &mut TxContext) {
 
-    /// Update the attributes of a player's farm
-    public fun update_farm(self: &mut Player, level: u64, _ctx: &mut TxContext) {
-        self.farm.level = level;
-    }
+        // Only 2 slots allowed
+        assert!(cosmetic_slot_id <= 1 , EINVALID_COSMETICS_SLOT);
 
-    /// Add cosmetics to a farm's first slot
-    public fun update_farm_cosmetic_slot1(
-        self: &mut Player, cosmetic_type: u8, cosmetic_id: u64, _ctx: &mut TxContext
-    ) {
-        self.farm.farm_cosmetic_slot1 = Option::some(FarmCosmetic { cosmetic_type, cosmetic_id })
-    }
+        // Assign by slot
+        if (cosmetic_slot_id == 0) {
+            // Check that the slot has no items
+            assert!(Option::is_none(&monster.applied_monster_cosmetic_0_id), ETOO_MANY_COSMETICS);
 
-     /// Add cosmetics to a farm's second slot
-    public fun update_farm_cosmetic_slot2(
-        self: &mut Player, cosmetic_type: u8, cosmetic_id: u64, _ctx: &mut TxContext
-    ) {
-        self.farm.farm_cosmetic_slot2 = Option::some(FarmCosmetic { cosmetic_type, cosmetic_id })
-    }
+            // Fill the slot ID
+            monster.applied_monster_cosmetic_0_id = Option::some(*ID::id(&monster_cosmetic));
+        } else {
+            // Check that the slot has no items
+            assert!(Option::is_none(&monster.applied_monster_cosmetic_1_id), ETOO_MANY_COSMETICS);
 
-    /// Update the attributes of a monster
-    public fun update_monster(
-        self: &mut Monster,
-        monster_level: u64,
-        hunger_level: u64,
-        affection_level: u64,
-        buddy_level: u8,
-        _ctx: &mut TxContext
-    ) {
-        self.monster_level = monster_level;
-        self.hunger_level = hunger_level;
-        self.affection_level = affection_level;
-        self.buddy_level = buddy_level;
-    }
+            // Fill the slot ID
+            monster.applied_monster_cosmetic_1_id = Option::some(*ID::id(&monster_cosmetic));
+        };
 
-    /// Add cosmetics to a monster's second slot
-    public fun update_monster_cosmetic_slot1(
-        self: &mut Monster, cosmetic_type: u8, cosmetic_id: u64, _ctx: &mut TxContext
-    ) {
-        self.monster_cosmetic_slot1 = Option::some(MonsterCosmetic { cosmetic_type, cosmetic_id })
-    }
+        // Transfer owner in this monster
+        Transfer::transfer_to_object(monster_cosmetic, monster);
 
-    /// Add cosmetics to a monster's first slot
-    public fun update_monster_cosmetic_slot2(
-        self: &mut Monster, cosmetic_type: u8, cosmetic_id: u64, _ctx: &mut TxContext
-    ) {
-        self.monster_cosmetic_slot2 = Option::some(MonsterCosmetic { cosmetic_type, cosmetic_id })
     }
 }
