@@ -23,14 +23,11 @@ module Sui::Geniteam {
     /// Monster collection not owned by farm
     const EMONSTER_COLLECTION_NOT_OWNED_BY_FARM: u64 = 5;
 
-    /// Farm cosmetics inventory not owned by player
-    const EFARM_COSMETICS_INVENTORY_NOT_OWNED_BY_PLAYER: u64 = 6;
-
-    /// Monster cosmetics inventory not owned by player
-    const EMONSTER_COSMETICS_INVENTORY_NOT_OWNED_BY_PLAYER: u64 = 7;
+    /// Inventory not owned by player
+    const EINVENTORY_NOT_OWNED_BY_PLAYER: u64 = 6;
 
     /// Invalid cosmetic slot
-    const EINVALID_COSMETICS_SLOT: u64 = 8;
+    const EINVALID_COSMETICS_SLOT: u64 = 7;
 
     struct Player has key {
         id: VersionedID,
@@ -46,11 +43,9 @@ module Sui::Geniteam {
         owned_farms_id: Option<ID>,
 
         // Inventory of unassigned items: Inventory
-        // Collection of owned farm cosmetics: FarmCosmetic
-        farm_inventory_cosmetics_id: ID,
-        // Collection of owned monster cosmetics: MonsterCosmetic
-        monster_inventory_cosmetics_id: ID,
+        inventory_id: ID,
     }
+
     struct Farm has key, store {
         id: VersionedID,
         farm_name: String,
@@ -116,27 +111,17 @@ module Sui::Geniteam {
             earth_runes_count: 0,
 
             owned_farms_id: Option::none(),
-            farm_inventory_cosmetics_id: ID::new(@0x0),
-            monster_inventory_cosmetics_id: ID::new(@0x0)
+            inventory_id: ID::new(@0x0),
         };
 
         // Create the collections
-        //let owned_farms_c = Collection::new(&mut ctx);
-        let inventory_farm_cosmetics_c = Collection::new(ctx);
-        let inventory_monster_cosmetics_c = Collection::new(ctx);
+        let inventory = Collection::new(ctx);
 
         // Set the fields
-        
-        // Destroy the old id
-
-
-        player.farm_inventory_cosmetics_id = *ID::id(&inventory_farm_cosmetics_c);
-        player.monster_inventory_cosmetics_id = *ID::id(&inventory_monster_cosmetics_c);
+        player.inventory_id = *ID::id(&inventory);
 
         // Transfer ownership to the player
-        //Transfer::transfer_to_object(owned_farms_c, player);
-        Transfer::transfer_to_object(inventory_farm_cosmetics_c, &mut player);
-        Transfer::transfer_to_object(inventory_monster_cosmetics_c, &mut player);
+        Transfer::transfer_to_object(inventory, &mut player);
 
         player
     }
@@ -246,42 +231,39 @@ module Sui::Geniteam {
             monster_description,
             ctx
         );
-
         // Check if this is the right collection
         assert!(*&farm.pet_monsters_id == *ID::id(pet_monsters_c), EMONSTER_COLLECTION_NOT_OWNED_BY_FARM);
 
-
+        // TODO: Decouple adding monster to farm from creating a monster.
         // Add it to the collection
         Collection::add(pet_monsters_c, monster);
     }
 
-    /// Create Monster cosmetic owned by player and add to its inventory
-    public fun create_farm_cosmetics(player: &mut Player, farm_cosmetics_inventory_c: &mut Collection::Collection, cosmetic_type: u8, ctx: &mut TxContext) {
+    /// Create Farm cosmetic owned by player and add to its inventory
+    public fun create_farm_cosmetics(player: &mut Player, inventory: &mut Collection::Collection, cosmetic_type: u8, ctx: &mut TxContext) {
         
         // Check if this is the right collection
-        assert!(*&player.farm_inventory_cosmetics_id
-                    == *ID::id(farm_cosmetics_inventory_c), EFARM_COSMETICS_INVENTORY_NOT_OWNED_BY_PLAYER);
-        
+        assert!(*&player.inventory_id
+                    == *ID::id(inventory), EINVENTORY_NOT_OWNED_BY_PLAYER);
         
         // Create the farm cosmetic object
         let farm_cosmetic = FarmCosmetic {id: TxContext::new_id(ctx), cosmetic_type };
 
         // Add it to the player's inventory
-        Collection::add(farm_cosmetics_inventory_c, farm_cosmetic);
+        Collection::add(inventory, farm_cosmetic);
     }
     /// Create Monster cosmetic owned by player and add to its inventory
-    public fun create_monster_cosmetics(player: &mut Player, monster_cosmetics_inventory_c: &mut Collection::Collection, cosmetic_type: u8, ctx: &mut TxContext) {
+    public fun create_monster_cosmetics(player: &mut Player, inventory: &mut Collection::Collection, cosmetic_type: u8, ctx: &mut TxContext) {
         
         // Check if this is the right collection
-        assert!(*&player.monster_inventory_cosmetics_id
-                    == *ID::id(monster_cosmetics_inventory_c), EMONSTER_COSMETICS_INVENTORY_NOT_OWNED_BY_PLAYER);
-        
+        assert!(*&player.inventory_id
+                    == *ID::id(inventory), EINVENTORY_NOT_OWNED_BY_PLAYER);
         
         // Create the farm cosmetic object
         let monster_cosmetic = MonsterCosmetic {id: TxContext::new_id(ctx), cosmetic_type};
 
         // Add it to the player's inventory
-        Collection::add(monster_cosmetics_inventory_c, monster_cosmetic);
+        Collection::add(inventory, monster_cosmetic);
     }
 
     /// Update the attributes of a player
@@ -326,7 +308,7 @@ module Sui::Geniteam {
     }
 
     /// Apply the cosmetics to the Farm from the inventory
-    public fun update_farm_cosmetics(_player: &mut Player, farm: &mut Farm, _farm_cosmetic_inventory: &mut Collection::Collection,
+    public fun update_farm_cosmetics(_player: &mut Player, farm: &mut Farm, _inventory: &mut Collection::Collection,
                                         farm_cosmetic: FarmCosmetic,  cosmetic_slot_id: u64, _ctx: &mut TxContext) {
 
         // Only 2 slots allowed
@@ -352,7 +334,7 @@ module Sui::Geniteam {
     }
 
     /// Apply the cosmetics to the Monster from the inventory
-    public fun update_monster_cosmetics(_player: &mut Player, _farm: &mut Farm, monster: &mut Monster, _monster_cosmetic_inventory: &mut Collection::Collection, 
+    public fun update_monster_cosmetics(_player: &mut Player, _farm: &mut Farm, monster: &mut Monster, _inventory: &mut Collection::Collection, 
                                     monster_cosmetic: MonsterCosmetic, _pet_monsters: &mut Collection::Collection, cosmetic_slot_id: u64,  _ctx: &mut TxContext) {
 
         // Only 2 slots allowed
