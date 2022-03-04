@@ -4,8 +4,10 @@ use crate::config::{Config, WalletConfig};
 use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
 use core::fmt;
 use std::fmt::{Debug, Display, Formatter};
+use std::path::Path;
 use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{Client, ClientAddressManager};
+use sui_framework::build_move_package_to_bytes;
 use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::gas_coin::GasCoin;
@@ -167,9 +169,10 @@ impl WalletCommands {
                     .into_object()?
                     .to_object_reference();
 
+                let compiled_modules = build_move_package_to_bytes(Path::new(path))?;
                 let (cert, effects) = context
                     .address_manager
-                    .publish(*sender, path.clone(), gas_obj_ref, *gas_budget)
+                    .publish(*sender, compiled_modules, gas_obj_ref, *gas_budget)
                     .await?;
 
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
