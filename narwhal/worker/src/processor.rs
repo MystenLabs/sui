@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::worker::SerializedBatchDigestMessage;
+use crate::worker::SerializedWorkerPrimaryMessage;
 use config::WorkerId;
 use crypto::Digest;
 use ed25519_dalek::{Digest as _, Sha512};
@@ -29,7 +29,7 @@ impl Processor {
         // Input channel to receive batches.
         mut rx_batch: Receiver<SerializedBatchMessage>,
         // Output channel to send out batches' digests.
-        tx_digest: Sender<SerializedBatchDigestMessage>,
+        tx_digest: Sender<SerializedWorkerPrimaryMessage>,
         // Whether we are processing our own batches or the batches of other nodes.
         own_digest: bool,
     ) {

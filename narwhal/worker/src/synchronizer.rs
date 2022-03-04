@@ -3,14 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     processor::SerializedBatchMessage,
-    worker::{Round, WorkerMessage},
+    worker::{Round, SerializedWorkerPrimaryMessage, WorkerMessage},
 };
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::{traits::VerifyingKey, Digest};
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::SimpleSender;
-use primary::PrimaryWorkerMessage;
+use primary::{PrimaryWorkerMessage, WorkerPrimaryMessage};
 use std::{
     collections::HashMap,
     time::{SystemTime, UNIX_EPOCH},
@@ -56,6 +56,8 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// processing will resume when we get the missing batches in the store or we no longer need them.
     /// It also keeps the round number and a time stamp (`u128`) of each request we sent.
     pending: HashMap<Digest, (Round, Sender<()>, u128)>,
+    // Output channel to send out the batch requests.
+    tx_primary: Sender<SerializedWorkerPrimaryMessage>,
 }
 
 impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
@@ -68,6 +70,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         sync_retry_delay: u64,
         sync_retry_nodes: usize,
         rx_message: Receiver<PrimaryWorkerMessage<PublicKey>>,
+        tx_primary: Sender<SerializedWorkerPrimaryMessage>,
     ) {
         tokio::spawn(async move {
             Self {
@@ -82,6 +85,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                 network: SimpleSender::new(),
                 round: Round::default(),
                 pending: HashMap::new(),
+                tx_primary,
             }
             .run()
             .await;
@@ -181,8 +185,8 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                         }
                         self.pending.retain(|_, (r, _, _)| r > &mut gc_round);
                     },
-                    PrimaryWorkerMessage::RequestBatch(_) => {
-
+                    PrimaryWorkerMessage::RequestBatch(digest) => {
+                        self.handle_request_batch(digest).await;
                     }
                 },
 
@@ -231,6 +235,30 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                     timer.as_mut().reset(Instant::now() + Duration::from_millis(TIMER_RESOLUTION));
                 },
             }
+        }
+    }
+
+    async fn handle_request_batch(&mut self, digest: Digest) {
+        if let Ok(Some(batch_serialised)) = self.store.read(digest.clone()).await {
+            let batch = match bincode::deserialize(&batch_serialised).unwrap() {
+                WorkerMessage::<PublicKey>::Batch(batch) => batch,
+                _ => {
+                    panic!("Wrong type has been stored!");
+                }
+            };
+
+            // send batch response to primary
+            let message = WorkerPrimaryMessage::RequestedBatch(digest.clone(), batch.to_vec());
+            let serialised =
+                bincode::serialize(&message).expect("Failed to serialise the RequestBatch message");
+
+            self.tx_primary
+                .send(serialised)
+                .await
+                .expect("Failed to send message to primary channel");
+        } else {
+            // TODO: error case or if no batch has been found
+            // send to primary that no batch has been found
         }
     }
 }

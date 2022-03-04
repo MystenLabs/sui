@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     batch_maker::{Batch, Transaction},
+    processor::SerializedBatchMessage,
     worker::WorkerMessage,
 };
 use bytes::Bytes;
@@ -15,6 +16,7 @@ use ed25519_dalek::{Digest as _, Sha512};
 use futures::{sink::SinkExt as _, stream::StreamExt as _};
 use rand::{rngs::StdRng, SeedableRng as _};
 use std::{convert::TryInto as _, net::SocketAddr};
+use store::{rocks, Store};
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
@@ -23,6 +25,8 @@ pub fn temp_dir() -> std::path::PathBuf {
         .expect("Failed to open temporary directory")
         .into_path()
 }
+
+const BATCHES_CF: &str = "batches";
 
 // Fixture
 pub fn keys() -> Vec<(Ed25519PublicKey, Ed25519PrivateKey)> {
@@ -106,14 +110,23 @@ pub fn batch() -> Batch {
 
 // Fixture
 pub fn serialized_batch() -> Vec<u8> {
-    let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch());
+    serialise_batch(batch())
+}
+
+pub fn serialise_batch(batch: Batch) -> Vec<u8> {
+    let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch);
     bincode::serialize(&message).unwrap()
 }
 
 // Fixture
 pub fn batch_digest() -> Digest {
+    resolve_batch_digest(serialized_batch())
+}
+
+// Fixture
+pub fn resolve_batch_digest(batch_serialised: Vec<u8>) -> Digest {
     Digest::new(
-        Sha512::digest(&serialized_batch()).as_slice()[..32]
+        Sha512::digest(&batch_serialised).as_slice()[..32]
             .try_into()
             .unwrap(),
     )
@@ -136,4 +149,11 @@ pub fn listener(address: SocketAddr, expected: Option<Bytes>) -> JoinHandle<()> 
             _ => panic!("Failed to receive network message"),
         }
     })
+}
+
+pub fn open_batch_store() -> Store<Digest, SerializedBatchMessage> {
+    let db =
+        rocks::DBMap::<Digest, SerializedBatchMessage>::open(temp_dir(), None, Some(BATCHES_CF))
+            .unwrap();
+    Store::new(db)
 }
