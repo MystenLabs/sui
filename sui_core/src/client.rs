@@ -33,13 +33,51 @@ use std::{
 
 use self::client_responses::{MergeCoinResponse, SplitCoinResponse};
 
-/// a Trait object for `signature::Signer` that is:
-/// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
+/// A trait for supplying transaction signature asynchronously.
+///
+/// The transaction data can be validated inside [`Self::sign`] function before signing,
+/// return `signature::Error` if the transaction data is incorrect or unexpected.
+///
+/// # Example
+/// ```
+/// use signature::Error;
+/// use sui_core::client::AsyncTransactionSigner;
+/// use sui_types::base_types::SuiAddress;
+/// use sui_types::crypto::Signature;
+/// use sui_types::messages::TransactionData;
+/// use async_trait::async_trait;
+///
+/// struct ExampleTransactionSigner{
+///     signer: dyn signature::Signer<Signature> + Sync + Send
+/// }
+/// #[async_trait]
+/// impl AsyncTransactionSigner for ExampleTransactionSigner {
+///     async fn sign(&self, address: &SuiAddress, data: TransactionData) -> Result<Signature, Error> {
+///         // 1. Validate the transaction data
+///  
+///         // 2. Create a signature if the transaction data is valid
+///         let signature = Signature::new(&data, &self.signer);
+///         // 3. return the signature
+///         Ok(signature)
+///     }
+/// }
+/// ```
+/// This trait is typically use with [`StableSyncTransactionSigner`] to supply signature to the [`Client`] trait
+#[async_trait]
+pub trait AsyncTransactionSigner {
+    async fn sign(
+        &self,
+        address: &SuiAddress,
+        data: TransactionData,
+    ) -> Result<Signature, signature::Error>;
+}
+
+/// a Trait object for [`AsyncTransactionSigner`] that is:
+/// - Pin, i.e. confined to one place in memory.
 /// - Sync, i.e. can be safely shared between threads.
 ///
-/// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
-///
-pub type StableSyncSigner = Pin<Box<dyn signature::Signer<Signature> + Send + Sync>>;
+/// Typically instantiated with Box::pin(tx_signer) where tx_signer is a [`AsyncTransactionSigner`]
+pub type StableSyncTransactionSigner = Pin<Box<dyn AsyncTransactionSigner + Send + Sync>>;
 
 pub mod client_responses;
 pub mod client_store;
@@ -69,11 +107,7 @@ where
     }
 
     /// Create a new managed address state.
-    pub fn create_account_state(
-        &mut self,
-        address: SuiAddress,
-        secret: StableSyncSigner,
-    ) -> SuiResult {
+    pub fn create_account_state(&mut self, address: SuiAddress) -> SuiResult {
         fp_ensure!(
             !self.address_states.contains_key(&address),
             SuiError::AccountExists
@@ -83,10 +117,8 @@ where
             Some(store) => store,
             None => self.store.manage_new_address(address)?,
         };
-        self.address_states.insert(
-            address,
-            ClientState::new_for_manager(address, secret, single_store),
-        );
+        self.address_states
+            .insert(address, ClientState::new_for_manager(address, single_store));
         Ok(())
     }
 
@@ -127,8 +159,6 @@ where
 pub struct ClientState {
     /// Our Sui address.
     address: SuiAddress,
-    /// Our signature key.
-    secret: StableSyncSigner,
     /// Persistent store for client
     store: client_store::ClientSingleAddressStore,
 }
@@ -143,6 +173,7 @@ pub trait Client {
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: SuiAddress,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
     /// Synchronise client state with a random authorities, updates all object_ids and certificates
@@ -163,6 +194,7 @@ pub trait Client {
         shared_object_arguments: Vec<ObjectID>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
     /// Publish Move modules
@@ -172,6 +204,7 @@ pub trait Client {
         package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
     /// Split the coin object (identified by `coin_object_ref`) into
@@ -187,6 +220,7 @@ pub trait Client {
         split_amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<SplitCoinResponse, anyhow::Error>;
 
     /// Merge the `coin_to_merge` coin object into `primary_coin`.
@@ -204,6 +238,7 @@ pub trait Client {
         coin_to_merge: ObjectRef,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<MergeCoinResponse, anyhow::Error>;
 
     /// Get the object information
@@ -226,24 +261,18 @@ impl ClientState {
     /// TODO: client should manage multiple addresses instead of each addr having DBs
     /// https://github.com/MystenLabs/fastnft/issues/332
     #[cfg(test)]
-    pub fn new(path: PathBuf, address: SuiAddress, secret: StableSyncSigner) -> Self {
+    pub fn new(path: PathBuf, address: SuiAddress) -> Self {
         ClientState {
             address,
-            secret,
             store: client_store::ClientSingleAddressStore::new(path),
         }
     }
 
     pub fn new_for_manager(
         address: SuiAddress,
-        secret: StableSyncSigner,
         store: client_store::ClientSingleAddressStore,
     ) -> Self {
-        ClientState {
-            address,
-            secret,
-            store,
-        }
+        ClientState { address, store }
     }
 
     pub fn address(&self) -> SuiAddress {
@@ -384,10 +413,6 @@ impl ClientState {
     #[cfg(test)]
     pub fn store(&self) -> &client_store::ClientSingleAddressStore {
         &self.store
-    }
-
-    pub fn secret(&self) -> &dyn signature::Signer<Signature> {
-        &*self.secret
     }
 
     pub fn get_unique_pending_transactions(&self) -> HashSet<Transaction> {
@@ -648,15 +673,16 @@ where
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: SuiAddress,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         let account = self.get_account(&signer)?;
         let object_ref = account.latest_object_ref(&object_id)?;
-
         let gas_payment = account.latest_object_ref(&gas_payment)?;
-
-        let transaction =
-            Transaction::new_transfer(recipient, object_ref, signer, gas_payment, account.secret());
-        let (certificate, effects) = self.execute_transaction(transaction).await?;
+        let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_payment);
+        let signature = tx_signer.sign(&signer, data.clone()).await?;
+        let (certificate, effects) = self
+            .execute_transaction(Transaction::new(data, signature))
+            .await?;
 
         Ok((certificate, effects))
     }
@@ -690,8 +716,9 @@ where
         shared_object_arguments: Vec<ObjectID>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        let move_call_transaction = Transaction::new_move_call(
+        let data = TransactionData::new_move_call(
             signer,
             package_object_ref,
             module,
@@ -702,9 +729,10 @@ where
             shared_object_arguments,
             pure_arguments,
             gas_budget,
-            self.get_account(&signer)?.secret(),
         );
-        self.execute_transaction(move_call_transaction).await
+        let signature = tx_signer.sign(&signer, data.clone()).await?;
+        self.execute_transaction(Transaction::new(data, signature))
+            .await
     }
 
     async fn publish(
@@ -713,15 +741,13 @@ where
         package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        let move_publish_transaction = Transaction::new_module(
-            signer,
-            gas_object_ref,
-            package_bytes,
-            gas_budget,
-            self.get_account(&signer)?.secret(),
-        );
-        self.execute_transaction(move_publish_transaction).await
+        let data = TransactionData::new_module(signer, gas_object_ref, package_bytes, gas_budget);
+        let signature = tx_signer.sign(&signer, data.clone()).await?;
+
+        self.execute_transaction(Transaction::new(data, signature))
+            .await
     }
 
     async fn split_coin(
@@ -731,6 +757,7 @@ where
         split_amounts: Vec<u64>,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<SplitCoinResponse, anyhow::Error> {
         let coin_type = self
             .get_object_info(coin_object_ref.0)
@@ -738,7 +765,7 @@ where
             .object()?
             .get_move_template_type()?;
 
-        let move_call_transaction = Transaction::new_move_call(
+        let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
@@ -749,9 +776,13 @@ where
             vec![],
             vec![bcs::to_bytes(&split_amounts)?],
             gas_budget,
-            self.get_account(&signer)?.secret(),
         );
-        let (certificate, effects) = self.execute_transaction(move_call_transaction).await?;
+
+        let signature = tx_signer.sign(&signer, data.clone()).await?;
+
+        let (certificate, effects) = self
+            .execute_transaction(Transaction::new(data, signature))
+            .await?;
         if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
             return Err(error.into());
         }
@@ -786,6 +817,7 @@ where
         coin_to_merge: ObjectRef,
         gas_payment: ObjectRef,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<MergeCoinResponse, anyhow::Error> {
         let coin_type = self
             .get_object_info(primary_coin.0)
@@ -793,7 +825,7 @@ where
             .object()?
             .get_move_template_type()?;
 
-        let move_call_transaction = Transaction::new_move_call(
+        let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
@@ -804,9 +836,11 @@ where
             vec![],
             vec![],
             gas_budget,
-            self.get_account(&signer)?.secret(),
         );
-        let (certificate, effects) = self.execute_transaction(move_call_transaction).await?;
+        let signature = tx_signer.sign(&signer, data.clone()).await?;
+        let (certificate, effects) = self
+            .execute_transaction(Transaction::new(data, signature))
+            .await?;
         if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
             return Err(error.into());
         }

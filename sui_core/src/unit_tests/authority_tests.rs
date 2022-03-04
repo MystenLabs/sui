@@ -417,13 +417,15 @@ async fn test_publish_dependent_module_ok() {
     };
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
-    let transaction = Transaction::new_module(
+    let data = TransactionData::new_module(
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
         MAX_GAS,
-        &sender_key,
     );
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
+
     let dependent_module_id = TxContext::new(&sender, transaction.digest()).fresh_id();
 
     // Object does not exist
@@ -458,13 +460,9 @@ async fn test_publish_module_no_dependencies_ok() {
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
     let gas_cost = calculate_module_publish_cost(&module_bytes);
-    let transaction = Transaction::new_module(
-        sender,
-        gas_payment_object_ref,
-        module_bytes,
-        MAX_GAS,
-        &sender_key,
-    );
+    let data = TransactionData::new_module(sender, gas_payment_object_ref, module_bytes, MAX_GAS);
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
     let _module_object_id = TxContext::new(&sender, transaction.digest()).fresh_id();
     let response = send_and_confirm_transaction(&authority, transaction)
         .await
@@ -518,13 +516,14 @@ async fn test_publish_non_existing_dependent_module() {
     };
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
-    let transaction = Transaction::new_module(
+    let data = TransactionData::new_module(
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
         MAX_GAS,
-        &sender_key,
     );
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
 
     let response = authority.handle_transaction(transaction).await;
     assert!(response
@@ -564,13 +563,9 @@ async fn test_publish_module_insufficient_gas() {
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
-    let transaction = Transaction::new_module(
-        sender,
-        gas_payment_object_ref,
-        module_bytes,
-        10,
-        &sender_key,
-    );
+    let data = TransactionData::new_module(sender, gas_payment_object_ref, module_bytes, 10);
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
     let response = authority
         .handle_transaction(transaction.clone())
         .await
@@ -644,7 +639,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
     let authority_state = init_state_with_objects(vec![gas_payment_object]).await;
 
     let function = ident_str!("create").to_owned();
-    let transaction = Transaction::new_move_call(
+    let data = TransactionData::new_move_call(
         sender,
         package_object_ref,
         ident_str!("ObjectBasics").to_owned(),
@@ -658,8 +653,9 @@ async fn test_handle_move_transaction_insufficient_budget() {
             bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
         ],
         9,
-        &sender_key,
     );
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
     let response = authority_state
         .handle_transaction(transaction.clone())
         .await
@@ -1600,7 +1596,9 @@ fn init_transfer_transaction(
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Transaction {
-    Transaction::new_transfer(recipient, object_ref, sender, gas_object_ref, secret)
+    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object_ref);
+    let signature = Signature::new(&data, secret);
+    Transaction::new(data, signature)
 }
 
 #[cfg(test)]
@@ -1669,7 +1667,7 @@ async fn call_move(
                 .to_object_reference(),
         );
     }
-    let transaction = Transaction::new_move_call(
+    let data = TransactionData::new_move_call(
         *sender,
         *package,
         module,
@@ -1680,8 +1678,11 @@ async fn call_move(
         shared_object_args_ids,
         pure_args,
         MAX_GAS,
-        sender_key,
     );
+
+    let signature = Signature::new(&data, sender_key);
+    let transaction = Transaction::new(data, signature);
+
     let response = send_and_confirm_transaction(authority, transaction).await?;
     Ok(response.signed_effects.unwrap().effects)
 }
