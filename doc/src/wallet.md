@@ -39,16 +39,17 @@ customized with additional accounts, objects, code, etc. as described
 in [Genesis customization](#genesis-customization).
 
 The network configuration is stored in `network.conf` and
-can be used subsequently to start the network. A `wallet.conf` is
+can be used subsequently to start the network. `wallet.conf` and `wallet.key` are
 also created to be used by the Sui wallet to manage the
 newly created accounts.
 
 ### View created accounts
-The genesis process creates a configuration file `wallet.conf` for the
+The genesis process creates a configuration file `wallet.conf`, and a keystore file `wallet.key` for the
 Sui wallet.  The config file contains information of the accounts and
-the Sui network. Sui wallet uses the network information to communicate
+the Sui network. The keystore file contains all the public private key pair of the created accounts.
+Sui wallet uses the network information in `wallet.conf` to communicate
 with the Sui network authorities  and create transactions using the key
-pairs residing in the config file.
+pairs residing in the keystore file.
 
 Here is an example of `wallet.conf` showing the accounts and key pairs
 in the wallet configuration (with some values omitted):
@@ -57,8 +58,7 @@ in the wallet configuration (with some values omitted):
 {
   "accounts": [
     {
-      "address": "a4c0a493ce9879ea06bac93461810cf947823bb3",
-      "key_pair": "MTpXG/yJq0OLOknghzYRCS6D/Rz+97gpR7hZhUCUNT5pMCy49v7hZkCSHm38e+cp+sdxLgTrSAuCbDxqkF1MTg=="
+      "address": "a4c0a493ce9879ea06bac93461810cf947823bb3"
     },
     ...
   ],
@@ -79,25 +79,27 @@ in the wallet configuration (with some values omitted):
     "nanos": 0
   },
   "buffer_size": 65507,
-  "db_folder_path": "./client_db"
+  "db_folder_path": "./client_db",
+  "keystore": {
+    "File": "./wallet.key"
+  }
 }
 ```
-The `accounts` variable contains all of the account's address and key pairs.
-This will be used by the wallet to sign transactions. The `authorities`
-variable contains Sui network authorities' name, host and port information.
+The `accounts` variable contains account's address the wallet manages.
+The `authorities` variable contains Sui network authorities' name, host and port information.
 It is used to establish connections to the Sui network.
 
 Note `send_timeout`, `recv_timeout` and `buffer_size` are the network
 parameters and `db_folder_path` is the path to the account's client state
-database. This database stores all of the transaction data, certificates
+database. This database stores all the transaction data, certificates
 and object data belonging to the account.
 
 #### Key management
-As you might have noticed, the key pairs are stored as plain text in `wallet.conf`, 
-which is not secure and shouldn't be used in a production environment. We have plans to 
+The key pairs are stored in `wallet.key`, however, it is not secure 
+and shouldn't be used in a production environment. We have plans to 
 implement more secure key management and support hardware signing in a future release.
 
-:warning: **Do not use in production**: Keys are stored in plain text!
+:warning: **Do not use in production**: Keys are stored in file!
 
 ### Starting the network
 
@@ -203,16 +205,10 @@ Created new keypair for address : 3F8962C87474F8FB8BFB99151D5F83E677062078
   
 #### Add existing accounts to `wallet.conf` manually.
 
-If you have existing key pair from an old wallet config, you can copy the account data manually to the new `wallet.conf`'s accounts section.
+If you have existing key pair from an old wallet config, you can copy the account 
+address manually to the new `wallet.conf`'s accounts section, and add the keypair to the keystore file, 
+you won't be able to mutate objects if the account key is missing from the keystore. 
 
-The account data looks like this:
-
-```json
-    {
-      "address": "a4c0a493ce9879ea06bac93461810cf947823bb3",
-      "key_pair": "MTpXG/yJq0OLOknghzYRCS6D/Rz+97gpR7hZhUCUNT5pMCy49v7hZkCSHm38e+cp+sdxLgTrSAuCbDxqkF1MTg=="
-    }
-```
 Restart the Sui wallet after the modification; the new accounts will appear in the wallet if you query the addresses.
 
 ## Calling Move code
@@ -398,12 +394,10 @@ command just like we used `0x2` for built-in packages in the
 ## Customize genesis
 
 The genesis process can be customized by providing a genesis configuration
-file.
-
-TODO: Specify where this file should reside.
+file using the `--config` flag.
 
 ```shell
-./sui genesis --config genesis.conf
+./sui genesis --config <Path to genesis config file>
 ```
 Example `genesis.conf`:
 ```json
@@ -435,9 +429,10 @@ Example `genesis.conf`:
 ```
 
 All attributes in `genesis.conf` are optional, and default values
-will be used if the attributes are not provided. For example, the
+will be used if the attributes are not provided.  
+For example, the
 config shown below will create a network of four authorities, and
-pre-populate two gas objects for four accounts:
+pre-populate two gas objects for four newly generated accounts:
 
 ```json
 {

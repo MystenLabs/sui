@@ -76,7 +76,7 @@ async fn main() -> Result<(), anyhow::Error> {
         println!();
 
         let mut shell = Shell {
-            prompt: "sui>-$ ",
+            prompt: "sui>-$ ".bold().green(),
             state: context,
             handler: ClientCommandHandler,
             command: CommandStructure::from_clap(&install_shell_plugins(app)),

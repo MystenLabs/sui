@@ -216,9 +216,9 @@ pub trait Client {
     async fn split_coin(
         &mut self,
         signer: SuiAddress,
-        coin_object_ref: ObjectRef,
+        coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas_payment: ObjectRef,
+        gas_payment: ObjectID,
         gas_budget: u64,
         tx_signer: StableSyncTransactionSigner,
     ) -> Result<SplitCoinResponse, anyhow::Error>;
@@ -234,9 +234,9 @@ pub trait Client {
     async fn merge_coins(
         &mut self,
         signer: SuiAddress,
-        primary_coin: ObjectRef,
-        coin_to_merge: ObjectRef,
-        gas_payment: ObjectRef,
+        primary_coin: ObjectID,
+        coin_to_merge: ObjectID,
+        gas_payment: ObjectID,
         gas_budget: u64,
         tx_signer: StableSyncTransactionSigner,
     ) -> Result<MergeCoinResponse, anyhow::Error>;
@@ -758,12 +758,15 @@ where
     async fn split_coin(
         &mut self,
         signer: SuiAddress,
-        coin_object_ref: ObjectRef,
+        coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas_payment: ObjectRef,
+        gas_payment: ObjectID,
         gas_budget: u64,
         tx_signer: StableSyncTransactionSigner,
     ) -> Result<SplitCoinResponse, anyhow::Error> {
+        let account = self.get_account(&signer)?;
+        let coin_object_ref = account.latest_object_ref(&coin_object_id)?;
+        let gas_payment = account.latest_object_ref(&gas_payment)?;
         let coin_type = self
             .get_object_info(coin_object_ref.0)
             .await?
@@ -818,12 +821,17 @@ where
     async fn merge_coins(
         &mut self,
         signer: SuiAddress,
-        primary_coin: ObjectRef,
-        coin_to_merge: ObjectRef,
-        gas_payment: ObjectRef,
+        primary_coin: ObjectID,
+        coin_to_merge: ObjectID,
+        gas_payment: ObjectID,
         gas_budget: u64,
         tx_signer: StableSyncTransactionSigner,
     ) -> Result<MergeCoinResponse, anyhow::Error> {
+        let account = self.get_account(&signer)?;
+        let primary_coin = account.latest_object_ref(&primary_coin)?;
+        let coin_to_merge = account.latest_object_ref(&coin_to_merge)?;
+        let gas_payment = account.latest_object_ref(&gas_payment)?;
+
         let coin_type = self
             .get_object_info(primary_coin.0)
             .await?
