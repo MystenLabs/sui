@@ -90,6 +90,7 @@ struct ServerContext {
     wallet_config_path: String,
     network_config_path: String,
     authority_db_path: String,
+    wallet_ks_path: String,
     client_db_path: Arc<Mutex<String>>,
     // Server handles that will be used to restart authorities.
     authority_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -104,6 +105,7 @@ impl ServerContext {
             wallet_config_path: String::from("wallet.conf"),
             network_config_path: String::from("./network.conf"),
             authority_db_path: String::from("./authorities_db"),
+            wallet_ks_path: String::from("./wallet.ks"),
             client_db_path: Arc::new(Mutex::new(String::new())),
             authority_handles: Arc::new(Mutex::new(Vec::new())),
             wallet_context: Arc::new(Mutex::new(None)),
@@ -171,7 +173,7 @@ async fn genesis(
     if !network_config.authorities.is_empty() {
         return Err(custom_http_error(
             StatusCode::CONFLICT,
-            String::from("Cannot run genesis on a existing network, stop network to try again."),
+            String::from("Cannot run genesis on a existing network, please make a POST request to the `sui/stop` endpoint to reset."),
         ));
     }
 
@@ -252,7 +254,7 @@ async fn sui_start(
     if network_config.authorities.is_empty() {
         return Err(custom_http_error(
             StatusCode::CONFLICT,
-            String::from("No authority configured for the network, please run genesis."),
+            String::from("No authority configured for the network, please make a POST request to the `sui/genesis` endpoint."),
         ));
     }
 
@@ -382,6 +384,7 @@ async fn sui_stop(
     fs::remove_dir_all(&server_context.authority_db_path).ok();
     fs::remove_file(&server_context.network_config_path).ok();
     fs::remove_file(&server_context.wallet_config_path).ok();
+    fs::remove_file(&server_context.wallet_ks_path).ok();
 
     Ok(HttpResponseUpdatedNoContent())
 }
@@ -506,7 +509,8 @@ async fn get_objects(
     let wallet_context = wallet_context.as_mut().ok_or_else(|| {
         custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist.".to_string(),
+            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
+                .to_string(),
         )
     })?;
 
@@ -586,7 +590,8 @@ async fn object_info(
     let wallet_context = wallet_context.ok_or_else(|| {
         custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist.".to_string(),
+            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
+                .to_string(),
         )
     })?;
 
