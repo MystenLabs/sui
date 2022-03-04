@@ -315,7 +315,7 @@ impl WalletCommands {
 
                 let (cert, effects) = context
                     .address_manager
-                    .transfer_object(*from, *object_id, *gas, *to, signature_callback)
+                    .transfer_coin(*from, *object_id, *gas, *to, signature_callback)
                     .await?;
                 let time_total = time_start.elapsed().as_micros();
 

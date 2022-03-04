@@ -35,8 +35,12 @@ pub enum SuiError {
     // Object misuse issues
     #[error("Error acquiring lock for object(s): {:?}", errors)]
     LockErrors { errors: Vec<SuiError> },
-    #[error("Attempt to transfer read-only object.")]
-    CannotTransferReadOnlyObject,
+    #[error("Attempt to transfer a read-only object.")]
+    TransferImmutableError,
+    #[error("Attempt to transfer a shared object.")]
+    TransferSharedError,
+    #[error("Attempt to transfer an object that's not a coin.")]
+    TransferNonCoinError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
     MoveObjectAsPackage { object_id: ObjectID },
     #[error("Expecting a singler owner, shared ownership found")]
@@ -132,8 +136,6 @@ pub enum SuiError {
     DuplicateObjectRefInput,
     #[error("Network error while querying service: {:?}.", error)]
     ClientIoError { error: String },
-    #[error("Cannot transfer immutable object.")]
-    TransferImmutableError,
 
     // Move module publishing related errors
     #[error("Failed to load the Move module, reason: {error:?}.")]
