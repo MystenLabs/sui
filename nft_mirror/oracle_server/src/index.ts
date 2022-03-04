@@ -12,6 +12,10 @@ import morgan from 'morgan';
 import bodyParser from 'body-parser';
 import { RegisterRoutes } from '../build/routes';
 import swaggerUi from 'swagger-ui-express';
+import dotenv from 'dotenv';
+
+// initialize configuration
+dotenv.config();
 
 const PORT = process.env.PORT || 8000;
 

@@ -8,7 +8,14 @@ As shown in the graph below, the main job of the oracle is to validate the user 
 
 ![user flow](./docs/flow.png 'User Flow')
 
-## Development
+## Get Started
+
+1. Set up the `.env` file through `cp .env.sample .env`
+2. Install the dependencies through `npm i`
+3. Start the server through `npm run dev`
+4. The easiest way to test out an endpoint is through [http://localhost:8000/docs](http://localhost:8000/docs) by clicking on "Try it out". No need to manually write curl command or example data.
+
+## Useful Commands for Development
 
 **Requirements**: Node 14.0.0 or later version
 

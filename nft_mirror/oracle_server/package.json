@@ -27,6 +27,7 @@
     "description": "",
     "devDependencies": {
         "@types/body-parser": "^1.19.2",
+        "@types/dotenv": "^8.2.0",
         "@types/express": "^4.17.13",
         "@types/morgan": "^1.9.3",
         "@types/node": "^17.0.21",
@@ -43,6 +44,7 @@
     },
     "dependencies": {
         "body-parser": "^1.19.2",
+        "dotenv": "^16.0.0",
         "express": "^4.17.3",
         "morgan": "^1.10.0",
         "swagger-ui-express": "^4.3.0",
