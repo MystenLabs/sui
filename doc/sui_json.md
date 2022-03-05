@@ -200,7 +200,7 @@ U8 vectors represented as UTF-8 (and ASCII) strings.
    </td>
    <td><code>"√®ˆbo72 √∂†∆˚–œ∑π2ie"</code>: UTF-8
 
-   <code>abcdE738-2 _=?</code>: ASCII
+   <code>"abcdE738-2 _=?"</code>: ASCII
 
    </td>
    <td>TODO: Complete invalid example.
