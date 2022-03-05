@@ -34,6 +34,10 @@ use crate::authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender};
 #[path = "unit_tests/authority_tests.rs"]
 pub mod authority_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/move_integration_tests.rs"]
+pub mod move_integration_tests;
+
 mod temporary_store;
 use temporary_store::AuthorityTemporaryStore;
 

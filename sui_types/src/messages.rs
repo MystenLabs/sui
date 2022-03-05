@@ -330,6 +330,14 @@ impl ExecutionStatus {
         }
     }
 
+    pub fn is_ok(&self) -> bool {
+        matches!(self, ExecutionStatus::Success { .. })
+    }
+
+    pub fn is_err(&self) -> bool {
+        matches!(self, ExecutionStatus::Failure { .. })
+    }
+
     pub fn unwrap(self) -> u64 {
         match self {
             ExecutionStatus::Success { gas_used } => gas_used,

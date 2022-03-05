@@ -501,7 +501,7 @@ type MoveEvent = (Vec<u8>, u64, TypeTag, Vec<u8>);
 /// - Look for each input in `by_value_objects` to determine whether the object was transferred, frozen, or deleted
 /// - Update objects passed via a mutable reference in `mutable_refs` to their new values
 /// - Process creation of new objects and user-emittd events in `events`
-/// - Returns (amount of extra gas used, amount of gas refund)
+/// - Returns (amount of extra gas used, amount of gas refund, process result)
 #[allow(clippy::too_many_arguments)]
 fn process_successful_execution<
     E: Debug,
@@ -588,11 +588,19 @@ fn process_successful_execution<
     // (2) wrapped inside another object that is in the Sui object pool
     let mut gas_refund: u64 = 0;
     for (id, object) in by_value_objects.iter() {
+        // If an object is owned by another object, we are not allowed to delete the child
+        // object because this could lead to a dangling reference of the ownership. Such
+        // dangling reference can never be dropped. To delete this object, it must first
+        // be transferred to an account address.
+        if matches!(object.owner, Owner::ObjectOwner { .. }) {
+            return (gas_used, 0, Err(SuiError::DeleteObjectOwnedObject));
+        }
         if deleted_ids.contains_key(id) {
             state_view.delete_object(id, object.version(), DeleteKind::ExistInInput);
         } else {
             state_view.delete_object(id, object.version(), DeleteKind::Wrap);
         }
+
         gas_refund += gas::calculate_object_deletion_refund(object);
     }
     // The loop above may not cover all ids in deleted_ids, i.e. some of the deleted_ids

@@ -15,6 +15,8 @@ module Sui::Collection {
     // TODO: this is a placeholder number
     const DEFAULT_MAX_CAPACITY: u64 = 65536;
 
+    // TODO: We should create a sepratate type called "Bag" to hold heterogeneous objects.
+    // And keep Collection to take objects of the same type.
     struct Collection has key {
         id: VersionedID,
         objects: vector<ID>,
@@ -61,7 +63,7 @@ module Sui::Collection {
             abort EOBJECT_DOUBLE_ADD
         };
         Vector::push_back(&mut c.objects, *id);
-        Transfer::transfer_to_object(object, c);
+        Transfer::transfer_to_object_unsafe(object, c);
     }
 
     /// Check whether the collection contains a specific object,
