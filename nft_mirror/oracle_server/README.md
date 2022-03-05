@@ -10,7 +10,7 @@ As shown in the graph below, the main job of the oracle is to validate the user 
 
 ## Get Started
 
-1. Set up the `.env` file through `cp .env.sample .env`
+1. Set up the `.env` file through `cp .env.sample .env`. Rememeber to replace any placeholder value(e.g., ALCHEMY_API_KEY).
 2. Install the dependencies through `npm i`
 3. Start the server through `npm run dev`
 4. The easiest way to test out an endpoint is through [http://localhost:8000/docs](http://localhost:8000/docs) by clicking on "Try it out". No need to manually write curl command or example data.

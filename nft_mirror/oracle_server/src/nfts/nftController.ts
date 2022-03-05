@@ -11,7 +11,7 @@ export class NFTController extends Controller {
      * claim status on Sui.
      *
      * @param source_chain_owner_address The claimer's wallet address
-     * @example source_chain_owner_address "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D"
+     * @example source_chain_owner_address "0x95346AeB9979ec02b67904e6c3EbF7B7A0AC126D"
      */
     @Get('{source_chain_owner_address}')
     public async get(
