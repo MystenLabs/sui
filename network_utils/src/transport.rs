@@ -3,17 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future;
+use futures::{SinkExt, StreamExt};
 use std::io::ErrorKind;
 use std::{io, sync::Arc};
 use tokio::net::TcpSocket;
-use tokio::{
-    net::{TcpListener, TcpStream},
-};
-use futures::{StreamExt, SinkExt};
+use tokio::net::{TcpListener, TcpStream};
 
 use tracing::*;
 
-use  tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 #[cfg(test)]
 #[path = "unit_tests/transport_tests.rs"]
@@ -27,6 +25,16 @@ pub const DEFAULT_MAX_DATAGRAM_SIZE_STR: &str = "65507";
 pub trait MessageHandler {
     fn handle_message<'a>(&'a self, buffer: &'a [u8]) -> future::BoxFuture<'a, Option<Vec<u8>>>;
 }
+
+/*
+pub trait MessageHandlerNG {
+    fn handle_message<'a>(
+        &'a self,
+        input: &mut dyn Stream<Item = Vec<u8>>,
+        output: &mut dyn Sink<Item = Vec<u8>>,
+    ) -> future::BoxFuture<'a, ()>;
+}
+*/
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
 pub struct SpawnedServer {
@@ -99,22 +107,39 @@ impl TcpDataStream {
         socket.set_recv_buffer_size(max_data_size as u32)?;
 
         let stream = socket.connect(addr).await?;
-
-        let framed = Framed::new(stream, LengthDelimitedCodec::builder().max_frame_length(max_data_size).new_codec());
-
-        Ok(Self {
-            framed,
-        })
+        Ok(TcpDataStream::from_tcp_stream(stream, max_data_size))
     }
 
-    async fn tcp_write_data(stream: &mut Framed<TcpStream, LengthDelimitedCodec>, buffer: &[u8]) -> Result<(), std::io::Error>
-    {
-        stream.send(buffer.to_vec().into()).await.map_err(|_| std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))
+    fn from_tcp_stream(stream: TcpStream, max_data_size: usize) -> TcpDataStream {
+        let framed = Framed::new(
+            stream,
+            LengthDelimitedCodec::builder()
+                .max_frame_length(max_data_size)
+                .new_codec(),
+        );
+
+        Self { framed }
     }
 
-    async fn tcp_read_data(stream: &mut Framed<TcpStream, LengthDelimitedCodec>) -> Result<Vec<u8>, std::io::Error>
-    {
-        let result = stream.next().await.ok_or(std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))?;
+    // TODO: Eliminate vecs and use Byte, ByteBuf
+
+    async fn tcp_write_data(
+        stream: &mut Framed<TcpStream, LengthDelimitedCodec>,
+        buffer: &[u8],
+    ) -> Result<(), std::io::Error> {
+        stream
+            .send(buffer.to_vec().into())
+            .await
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))
+    }
+
+    async fn tcp_read_data(
+        stream: &mut Framed<TcpStream, LengthDelimitedCodec>,
+    ) -> Result<Vec<u8>, std::io::Error> {
+        let result = stream
+            .next()
+            .await
+            .ok_or(std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))?;
         result.map(|v| v.to_vec())
     }
 }
@@ -153,13 +178,10 @@ where
 
         let guarded_state = guarded_state.clone();
         tokio::spawn(async move {
-
-            let mut framed = Framed::new(stream, LengthDelimitedCodec::builder()
-            .max_frame_length(_buffer_size)
-            .new_codec());
+            let mut framed = TcpDataStream::from_tcp_stream(stream, _buffer_size);
 
             loop {
-                let buffer = match TcpDataStream::tcp_read_data(&mut framed).await {
+                let buffer = match framed.read_data().await {
                     Ok(buffer) => buffer,
                     Err(err) => {
                         // We expect some EOF or disconnect error at the end.
@@ -173,7 +195,7 @@ where
                 };
 
                 if let Some(reply) = guarded_state.handle_message(&buffer[..]).await {
-                    let status = TcpDataStream::tcp_write_data(&mut framed, &reply[..]).await;
+                    let status = framed.write_data(&reply[..]).await;
                     if let Err(error) = status {
                         error!("Failed to send query response: {}", error);
                     }

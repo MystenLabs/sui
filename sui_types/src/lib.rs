@@ -14,6 +14,7 @@ use move_core_types::account_address::AccountAddress;
 pub mod error;
 
 pub mod base_types;
+pub mod batch;
 pub mod coin;
 pub mod committee;
 pub mod crypto;
@@ -26,7 +27,6 @@ pub mod move_package;
 pub mod object;
 pub mod serialize;
 pub mod storage;
-pub mod batch;
 
 /// 0x1-- account address where Move stdlib modules are stored
 /// Same as the ObjectID

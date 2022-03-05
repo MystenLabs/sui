@@ -1,9 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-
+use crate::base_types::{AuthorityName, TransactionDigest};
 use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable};
-use crate::base_types::{TransactionDigest, AuthorityName};
 use serde::{Deserialize, Serialize};
 
 pub type TxSequenceNumber = u64;
@@ -14,7 +13,6 @@ pub enum UpdateItem {
     Transaction((TxSequenceNumber, TransactionDigest)),
     Batch(SignedBatch),
 }
-
 
 pub type BatchDigest = [u8; 32];
 
@@ -87,8 +85,6 @@ impl AuthorityBatch {
         }
     }
 }
-
-
 
 /// An transaction signed by a single authority
 #[derive(Eq, Clone, Debug, Serialize, Deserialize)]
