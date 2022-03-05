@@ -170,7 +170,7 @@ Which type we coerce depends on the expected Move type. For example, if the Move
    </td>
    <td>16 byte hex string prefixed with <code>0x</code>
    </td>
-   <td><code>0x2B1A39A1514E1D8A7CE45919CFEB4FEE</code>
+   <td><code>"0x2B1A39A1514E1D8A7CE45919CFEB4FEE"</code>
    </td>
    <td>Similar to above
    </td>
