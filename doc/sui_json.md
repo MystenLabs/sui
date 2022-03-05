@@ -198,7 +198,7 @@ Which type we coerce depends on the expected Move type. For example, if the Move
 U8 vectors represented as UTF-8 (and ASCII) strings.
 
    </td>
-   <td><code>√®ˆbo72 √∂†∆˚–œ∑π2ie</code>: UTF-8
+   <td><code>"√®ˆbo72 √∂†∆˚–œ∑π2ie"</code>: UTF-8
 
    <code>abcdE738-2 _=?</code>: ASCII
 
