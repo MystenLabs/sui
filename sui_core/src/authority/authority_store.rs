@@ -9,13 +9,11 @@ use std::path::Path;
 
 use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
+use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use typed_store::rocks::{open_cf, DBBatch, DBMap};
 
 use std::sync::atomic::Ordering;
 use typed_store::traits::Map;
-
-pub use crate::authority_batch::AuthorityBatch;
-use crate::authority_batch::{SignedBatch, TxSequenceNumber};
 
 pub struct AuthorityStore {
     /// This is a map between the object ID and the latest state of the object, namely the
