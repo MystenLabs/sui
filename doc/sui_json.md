@@ -158,7 +158,7 @@ Which type we coerce depends on the expected Move type. For example, if the Move
    </td>
    <td><code>"0x2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E011"</code>
    </td>
-   <td><code>0x2B1A39</code>: string too short
+   <td><code>"0x2B1A39"</code>: string too short
 
 <code>2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E011</code>: missing <code>0x</code> prefix
 
