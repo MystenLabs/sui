@@ -47,10 +47,6 @@ async fn test_server() -> Result<(usize, usize), std::io::Error> {
     client.write_data(b"abcd").await?;
     received += client.read_data().await?.len();
 
-    // Use a second connection (here pooled).
-    let mut pool = make_outgoing_connection_pool().await?;
-    pool.send_data_to(b"abc", &address).await?;
-
     // Try to read data on the first connection (should fail).
     received += timeout(Duration::from_millis(500), client.read_data())
         .await
@@ -76,6 +72,6 @@ fn tcp_server() {
     let rt = Runtime::new().unwrap();
     let (processed, received) = rt.block_on(test_server()).unwrap();
     // Active TCP connections are allowed to finish before the server is gracefully killed.
-    assert_eq!(processed, 17);
+    assert_eq!(processed, 14);
     assert_eq!(received, 14);
 }

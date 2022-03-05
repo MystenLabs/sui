@@ -4,14 +4,16 @@
 
 use futures::future;
 use std::io::ErrorKind;
-use std::{collections::HashMap, convert::TryInto, io, sync::Arc};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::{io, sync::Arc};
 use tokio::net::TcpSocket;
 use tokio::{
-    io::{AsyncRead, AsyncWrite},
     net::{TcpListener, TcpStream},
 };
+use futures::{StreamExt, SinkExt};
+
 use tracing::*;
+
+use  tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 #[cfg(test)]
 #[path = "unit_tests/transport_tests.rs"]
@@ -54,11 +56,6 @@ pub async fn connect(
     TcpDataStream::connect(address, max_data_size).await
 }
 
-/// Create a DataStreamPool for this protocol.
-pub async fn make_outgoing_connection_pool() -> Result<TcpDataStreamPool, std::io::Error> {
-    TcpDataStreamPool::new().await
-}
-
 /// Run a server for this protocol and the given message handler.
 pub async fn spawn_server<S>(
     address: &str,
@@ -89,8 +86,7 @@ where
 
 /// An implementation of DataStream based on TCP.
 pub struct TcpDataStream {
-    stream: TcpStream,
-    max_data_size: usize,
+    framed: Framed<TcpStream, LengthDelimitedCodec>,
 }
 
 impl TcpDataStream {
@@ -103,95 +99,33 @@ impl TcpDataStream {
         socket.set_recv_buffer_size(max_data_size as u32)?;
 
         let stream = socket.connect(addr).await?;
+
+        let framed = Framed::new(stream, LengthDelimitedCodec::builder().max_frame_length(max_data_size).new_codec());
+
         Ok(Self {
-            stream,
-            max_data_size,
+            framed,
         })
     }
 
-    async fn tcp_write_data<S>(stream: &mut S, buffer: &[u8]) -> Result<(), std::io::Error>
-    where
-        S: AsyncWrite + Unpin,
+    async fn tcp_write_data(stream: &mut Framed<TcpStream, LengthDelimitedCodec>, buffer: &[u8]) -> Result<(), std::io::Error>
     {
-        stream
-            .write_all(&u32::to_le_bytes(
-                buffer
-                    .len()
-                    .try_into()
-                    .expect("length must not exceed u32::MAX"),
-            ))
-            .await?;
-        stream.write_all(buffer).await
+        stream.send(buffer.to_vec().into()).await.map_err(|_| std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))
     }
 
-    async fn tcp_read_data<S>(stream: &mut S, max_size: usize) -> Result<Vec<u8>, std::io::Error>
-    where
-        S: AsyncRead + Unpin,
+    async fn tcp_read_data(stream: &mut Framed<TcpStream, LengthDelimitedCodec>) -> Result<Vec<u8>, std::io::Error>
     {
-        let mut size_buf = [0u8; 4];
-        stream.read_exact(&mut size_buf).await?;
-        let size = u32::from_le_bytes(size_buf);
-        if size as usize > max_size {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Message size exceeds buffer size",
-            ));
-        }
-        let mut buf = vec![0u8; size as usize];
-        stream.read_exact(&mut buf).await?;
-        Ok(buf)
+        let result = stream.next().await.ok_or(std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))?;
+        result.map(|v| v.to_vec())
     }
 }
 
 impl TcpDataStream {
     pub async fn write_data<'a>(&'a mut self, buffer: &'a [u8]) -> Result<(), std::io::Error> {
-        Self::tcp_write_data(&mut self.stream, buffer).await
+        Self::tcp_write_data(&mut self.framed, buffer).await
     }
 
     pub async fn read_data(&mut self) -> Result<Vec<u8>, std::io::Error> {
-        Self::tcp_read_data(&mut self.stream, self.max_data_size).await
-    }
-}
-
-/// An implementation of DataStreamPool based on TCP.
-pub struct TcpDataStreamPool {
-    streams: HashMap<String, TcpStream>,
-}
-
-impl TcpDataStreamPool {
-    async fn new() -> Result<Self, std::io::Error> {
-        let streams = HashMap::new();
-        Ok(Self { streams })
-    }
-
-    async fn get_stream(&mut self, address: &str) -> Result<&mut TcpStream, io::Error> {
-        if !self.streams.contains_key(address) {
-            match TcpStream::connect(address).await {
-                Ok(s) => {
-                    self.streams.insert(address.to_string(), s);
-                }
-                Err(error) => {
-                    error!("Failed to open connection to {}: {}", address, error);
-                    return Err(error);
-                }
-            };
-        };
-        Ok(self.streams.get_mut(address).unwrap())
-    }
-}
-
-impl TcpDataStreamPool {
-    pub async fn send_data_to<'a>(
-        &'a mut self,
-        buffer: &'a [u8],
-        address: &'a str,
-    ) -> Result<(), std::io::Error> {
-        let stream = self.get_stream(address).await?;
-        let result = TcpDataStream::tcp_write_data(stream, buffer).await;
-        if result.is_err() {
-            self.streams.remove(address);
-        }
-        result
+        Self::tcp_read_data(&mut self.framed).await
     }
 }
 
@@ -200,14 +134,14 @@ async fn run_tcp_server<S>(
     listener: TcpListener,
     state: S,
     mut exit_future: futures::channel::oneshot::Receiver<()>,
-    buffer_size: usize,
+    _buffer_size: usize,
 ) -> Result<(), std::io::Error>
 where
     S: MessageHandler + Send + Sync + 'static,
 {
     let guarded_state = Arc::new(state);
     loop {
-        let mut stream;
+        let stream;
 
         tokio::select! {
             _ = &mut exit_future => { break },
@@ -219,8 +153,13 @@ where
 
         let guarded_state = guarded_state.clone();
         tokio::spawn(async move {
+
+            let mut framed = Framed::new(stream, LengthDelimitedCodec::builder()
+            .max_frame_length(_buffer_size)
+            .new_codec());
+
             loop {
-                let buffer = match TcpDataStream::tcp_read_data(&mut stream, buffer_size).await {
+                let buffer = match TcpDataStream::tcp_read_data(&mut framed).await {
                     Ok(buffer) => buffer,
                     Err(err) => {
                         // We expect some EOF or disconnect error at the end.
@@ -234,7 +173,7 @@ where
                 };
 
                 if let Some(reply) = guarded_state.handle_message(&buffer[..]).await {
-                    let status = TcpDataStream::tcp_write_data(&mut stream, &reply[..]).await;
+                    let status = TcpDataStream::tcp_write_data(&mut framed, &reply[..]).await;
                     if let Err(error) = status {
                         error!("Failed to send query response: {}", error);
                     }

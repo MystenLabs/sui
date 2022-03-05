@@ -4,8 +4,8 @@
 use crate::authority::{AuthorityStore, StableSyncAuthoritySigner};
 use std::sync::Arc;
 use sui_types::base_types::*;
-use sui_types::error::{SuiError, SuiResult};
 use sui_types::batch::*;
+use sui_types::error::{SuiError, SuiResult};
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -39,7 +39,6 @@ The architecture is as follows:
   sequenced of a batch created this is sent out to them.
 
 */
-
 
 pub type BroadcastSender = tokio::sync::broadcast::Sender<UpdateItem>;
 pub type BroadcastReceiver = tokio::sync::broadcast::Receiver<UpdateItem>;
@@ -267,5 +266,3 @@ impl BatchManager {
     /// updates to clients.
     pub fn register_listener() {}
 }
-
-
