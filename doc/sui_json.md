@@ -162,7 +162,7 @@ Which type we coerce depends on the expected Move type. For example, if the Move
 
 <code>2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E011</code>: missing <code>0x</code> prefix
 
-<code>0xG2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E01</code>: invalid hex char <code>G</code>
+<code>"0xG2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E01"</code>: invalid hex char <code>G</code>
    </td>
   </tr>
   <tr>
