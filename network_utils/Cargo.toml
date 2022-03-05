@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 bytes = "1.1.0"
 futures = "0.3.21"
+async-trait = "0.1.52"
 log = "0.4.14"
 net2 = "0.2.37"
 tokio = { version = "1.17.0", features = ["full"] }

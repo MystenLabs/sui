@@ -2,17 +2,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::future;
 use futures::{Stream, Sink, SinkExt, StreamExt};
 use std::io::ErrorKind;
-use std::{io, sync::Arc};
+use std::sync::Arc;
 use tokio::net::TcpSocket;
 use tokio::net::{TcpListener, TcpStream};
-use sui_types::error::SuiError;
+
+use async_trait::async_trait;
 
 use tracing::*;
 
-use tokio_util::codec::{Framed, LengthDelimitedCodec, FramedRead, FramedWrite};
+use tokio_util::codec::{Framed, LengthDelimitedCodec, };
+use bytes::{Bytes, BytesMut};
 
 #[cfg(test)]
 #[path = "unit_tests/transport_tests.rs"]
@@ -23,19 +24,19 @@ pub const DEFAULT_MAX_DATAGRAM_SIZE: usize = 65507;
 pub const DEFAULT_MAX_DATAGRAM_SIZE_STR: &str = "65507";
 
 /// The handler required to create a service.
-pub trait MessageHandler {
-    fn handle_message<'a>(&'a self, buffer: &'a [u8]) -> future::BoxFuture<'a, Option<Vec<u8>>>;
+#[async_trait]
+pub trait MessageHandler<A> {
+    async fn handle_message(&self, channel: A) -> ();
 }
 
+pub trait RwChannel<'a> {
+    type R : 'a + Stream<Item=Result<BytesMut,std::io::Error>> + Unpin + Send;
+    type W : 'a + Sink<Bytes, Error = std::io::Error> + Unpin + Send;
 
-pub trait MessageHandlerNG {
-    fn handle_message<'a>(
-        &'a self,
-        input: &mut dyn Stream<Item = Vec<u8>>,
-        output: &mut dyn Sink<Vec<u8>, Error = SuiError>,
-    ) -> future::BoxFuture<'a, ()>;
+
+    fn sink(&mut self) -> &mut Self::W;
+    fn stream(&mut self) ->  &mut Self::R;
 }
-
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
 pub struct SpawnedServer {
@@ -72,7 +73,7 @@ pub async fn spawn_server<S>(
     buffer_size: usize,
 ) -> Result<SpawnedServer, std::io::Error>
 where
-    S: MessageHandler + Send + Sync + 'static,
+    S: MessageHandler<TcpDataStream> + Send + Sync + 'static,
 {
     let (complete, receiver) = futures::channel::oneshot::channel();
     let handle = {
@@ -140,6 +141,18 @@ impl TcpDataStream {
     }
 }
 
+impl<'a> RwChannel<'a> for TcpDataStream {
+    type W = Framed<TcpStream, LengthDelimitedCodec>;
+    type R = Framed<TcpStream, LengthDelimitedCodec>;
+
+    fn sink(&mut self) -> &mut Self::W{
+        &mut self.framed
+    }
+    fn stream(&mut self) -> &mut Self::R{
+        &mut self.framed
+    }
+}
+
 // Server implementation for TCP.
 async fn run_tcp_server<S>(
     listener: TcpListener,
@@ -148,7 +161,7 @@ async fn run_tcp_server<S>(
     _buffer_size: usize,
 ) -> Result<(), std::io::Error>
 where
-    S: MessageHandler + Send + Sync + 'static,
+    S: MessageHandler<TcpDataStream> + Send + Sync + 'static,
 {
     let guarded_state = Arc::new(state);
     loop {
@@ -164,7 +177,9 @@ where
 
         let guarded_state = guarded_state.clone();
         tokio::spawn(async move {
-            let mut framed = TcpDataStream::from_tcp_stream(stream, _buffer_size);
+            let framed = TcpDataStream::from_tcp_stream(stream, _buffer_size);
+            guarded_state.handle_message(framed).await
+            /*
 
             loop {
                 let buffer = match framed.read_data().await {
@@ -179,13 +194,15 @@ where
                     }
                 };
 
-                if let Some(reply) = guarded_state.handle_message(&buffer[..]).await {
+                if let Some(reply) = guarded_state.handle_message(&buffer[..], ).await {
                     let status = framed.write_data(&reply[..]).await;
                     if let Err(error) = status {
                         error!("Failed to send query response: {}", error);
                     }
                 };
             }
+
+            */
         });
     }
     Ok(())

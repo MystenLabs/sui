@@ -24,14 +24,47 @@ impl TestService {
     fn new(counter: Arc<AtomicUsize>) -> Self {
         TestService { counter }
     }
+
+    async fn handle_one_message<'a>(&'a self, buffer: &'a [u8]) -> Option<Vec<u8>> {
+        self.counter.fetch_add(buffer.len(), Ordering::Relaxed);
+        Some(Vec::from(buffer))
+    }
+
 }
 
-impl MessageHandler for TestService {
-    fn handle_message<'a>(&'a self, buffer: &'a [u8]) -> future::BoxFuture<'a, Option<Vec<u8>>> {
-        self.counter.fetch_add(buffer.len(), Ordering::Relaxed);
-        Box::pin(async move { Some(Vec::from(buffer)) })
-    }
+#[async_trait]
+impl<'a, A> MessageHandler<A> for TestService where 
+    A : 'static + RwChannel<'a> + Unpin + Send {
+
+        async fn handle_message(
+            &self,
+            mut channel : A,
+        ) -> () {
+
+                loop {
+                    let buffer = match channel.stream().next().await {
+                        Some(Ok(buffer)) => buffer,
+                        Some(Err(err)) => {
+                            // We expect some EOF or disconnect error at the end.
+                            error!("Error while reading TCP stream: {}", err);
+                            break;
+                        },
+                        None => {
+                            break;
+                        }
+                    };
+    
+                    if let Some(reply) = self.handle_one_message(&buffer[..], ).await {
+                        let status = channel.sink().send(reply.into()).await;
+                        if let Err(error) = status {
+                            error!("Failed to send query response: {}", error);
+                        }
+                    };
+                }
+
+        }
 }
+
 
 async fn test_server() -> Result<(usize, usize), std::io::Error> {
     let address = get_new_local_address().await.unwrap();

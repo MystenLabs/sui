@@ -6,10 +6,15 @@ use crate::authority::AuthorityState;
 use std::io;
 use sui_network::{
     network::NetworkServer,
-    transport::{spawn_server, MessageHandler, SpawnedServer},
+    transport::{spawn_server, MessageHandler, SpawnedServer, RwChannel},
 };
 use sui_types::{error::*, messages::*, serialize::*};
+
+use futures::{StreamExt, SinkExt};
+
 use tracing::*;
+
+use async_trait::async_trait;
 
 pub struct AuthorityServer {
     server: NetworkServer,
@@ -36,10 +41,8 @@ impl AuthorityServer {
         // Launch server for the appropriate protocol.
         spawn_server(&address, self, buffer_size).await
     }
-}
 
-impl MessageHandler for AuthorityServer {
-    fn handle_message<'a>(
+    fn handle_one_message<'a>(
         &'a self,
         buffer: &'a [u8],
     ) -> futures::future::BoxFuture<'a, Option<Vec<u8>>> {
@@ -111,4 +114,37 @@ impl MessageHandler for AuthorityServer {
             }
         })
     }
+}
+
+#[async_trait]
+impl<'a, A> MessageHandler<A> for AuthorityServer where 
+    A : 'static + RwChannel<'a> + Unpin + Send {
+
+        async fn handle_message(
+            &self,
+            mut channel : A,
+        ) -> () {
+
+                loop {
+                    let buffer = match channel.stream().next().await {
+                        Some(Ok(buffer)) => buffer,
+                        Some(Err(err)) => {
+                            // We expect some EOF or disconnect error at the end.
+                            error!("Error while reading TCP stream: {}", err);
+                            break;
+                        },
+                        None => {
+                            break;
+                        }
+                    };
+    
+                    if let Some(reply) = self.handle_one_message(&buffer[..], ).await {
+                        let status = channel.sink().send(reply.into()).await;
+                        if let Err(error) = status {
+                            error!("Failed to send query response: {}", error);
+                        }
+                    };
+                }
+
+        }
 }
