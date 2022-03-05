@@ -49,6 +49,8 @@ pub fn get_move_stdlib_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>>
         ident_str!("Capability").to_owned(),
         ident_str!("Event").to_owned(),
         ident_str!("GUID").to_owned(),
+        #[cfg(not(test))]
+        ident_str!("Debug").to_owned(),
     ];
     let modules: Vec<CompiledModule> = build_framework(lib_dir)?
         .into_iter()
