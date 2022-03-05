@@ -84,8 +84,9 @@ export interface AirdropClaimResponse {
 }
 
 export class AirdropService {
-    public claim(claimMessage: AirdropClaimRequest): AirdropClaimResponse {
-        // TODO: implement this function
+    public async claim(
+        claimMessage: AirdropClaimRequest
+    ): Promise<AirdropClaimResponse> {
         const message = claimMessage.message;
         return {
             source_chain: message.source_chain,

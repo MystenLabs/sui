@@ -13,6 +13,7 @@ import bodyParser from 'body-parser';
 import { RegisterRoutes } from '../build/routes';
 import swaggerUi from 'swagger-ui-express';
 import dotenv from 'dotenv';
+import './polyfills/fetch-polyfill';
 
 // initialize configuration
 dotenv.config();
