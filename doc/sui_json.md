@@ -156,7 +156,7 @@ Which type we coerce depends on the expected Move type. For example, if the Move
    </td>
     <td>20 byte hex string prefixed with <code>0x</code>
    </td>
-   <td><code>0x2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E011</code>
+   <td><code>"0x2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E011"</code>
    </td>
    <td><code>0x2B1A39</code>: string too short
 
