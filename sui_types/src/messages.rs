@@ -188,8 +188,6 @@ pub struct AccountInfoRequest {
     pub account: SuiAddress,
 }
 
-
-
 /// An information Request for batches, and their associated transactions
 /// 
 /// This reads historic data and sends the batch and transactions in the

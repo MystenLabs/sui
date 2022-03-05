@@ -24,6 +24,8 @@ pub enum SerializedMessage {
     ObjectInfoResp(Box<ObjectInfoResponse>),
     TransactionResp(Box<TransactionInfoResponse>),
     TransactionInfoReq(Box<TransactionInfoRequest>),
+    BatchInfoReq(Box<BatchInfoRequest>),
+    BatchInfoResp(Box<BatchInfoResponseItem>),
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.
@@ -42,6 +44,8 @@ enum ShallowSerializedMessage<'a> {
     ObjectInfoResp(&'a ObjectInfoResponse),
     TransactionResp(&'a TransactionInfoResponse),
     TransactionInfoReq(&'a TransactionInfoRequest),
+    BatchInfoReq(&'a BatchInfoRequest),
+    BatchInfoResp(&'a BatchInfoResponseItem),
 }
 
 fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), anyhow::Error>
