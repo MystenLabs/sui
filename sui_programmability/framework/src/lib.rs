@@ -7,7 +7,6 @@ use move_package::BuildConfig;
 use num_enum::TryFromPrimitive;
 use std::collections::HashSet;
 use std::path::Path;
-use sui_bytecode_verifier::VerifyFlag;
 use sui_types::error::{SuiError, SuiResult};
 use sui_verifier::verifier as sui_bytecode_verifier;
 
@@ -41,7 +40,7 @@ pub enum EventType {
 
 pub fn get_sui_framework_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
     let modules = build_framework(lib_dir)?;
-    verify_modules(&modules, VerifyFlag::ForPublish)?;
+    verify_modules(&modules)?;
     Ok(modules)
 }
 
@@ -50,12 +49,14 @@ pub fn get_move_stdlib_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>>
         ident_str!("Capability").to_owned(),
         ident_str!("Event").to_owned(),
         ident_str!("GUID").to_owned(),
+        #[cfg(not(test))]
+        ident_str!("Debug").to_owned(),
     ];
     let modules: Vec<CompiledModule> = build_framework(lib_dir)?
         .into_iter()
         .filter(|m| !denylist.contains(&m.self_id().name().to_owned()))
         .collect();
-    verify_modules(&modules, VerifyFlag::ForPublish)?;
+    verify_modules(&modules)?;
     Ok(modules)
 }
 
@@ -148,22 +149,17 @@ pub fn build_and_verify_user_package(path: &Path, dev_mode: bool) -> SuiResult {
         ..Default::default()
     };
     let modules = build_move_package(path, build_config, false)?;
-    let flag = if dev_mode {
-        VerifyFlag::ForDev
-    } else {
-        VerifyFlag::ForPublish
-    };
-    verify_modules(&modules, flag)
+    verify_modules(&modules)
 }
 
-fn verify_modules(modules: &[CompiledModule], flag: VerifyFlag) -> SuiResult {
+fn verify_modules(modules: &[CompiledModule]) -> SuiResult {
     for m in modules {
         move_bytecode_verifier::verify_module(m).map_err(|err| {
             SuiError::ModuleVerificationFailure {
                 error: err.to_string(),
             }
         })?;
-        sui_bytecode_verifier::verify_module(m, flag)?;
+        sui_bytecode_verifier::verify_module(m)?;
     }
     Ok(())
     // TODO(https://github.com/MystenLabs/fastnft/issues/69): Run Move linker
