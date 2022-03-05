@@ -31,6 +31,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
+use sui_core::client::client_responses::{MergeCoinResponse, SplitCoinResponse};
 use sui_types::crypto::{Signable, Signature};
 use sui_types::object::ObjectRead;
 use tracing::info;
@@ -41,7 +42,7 @@ use tracing::info;
 pub struct WalletOpts {
     #[structopt(subcommand)]
     pub command: WalletCommands,
-    /// Return command outputs in json format.
+    /// Returns command outputs in JSON format.
     #[structopt(long, global = true)]
     pub json: bool,
 }
@@ -146,6 +147,38 @@ pub enum WalletCommands {
         #[structopt(long, parse(try_from_str = decode_bytes_hex))]
         address: SuiAddress,
     },
+
+    /// Split a coin object into multiple coins.
+    SplitCoin {
+        /// Coin to Split, in 20 bytes Hex string
+        #[structopt(long)]
+        coin_id: ObjectID,
+        /// Amount to split out from the coin
+        #[structopt(long)]
+        amounts: Vec<u64>,
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        #[structopt(long)]
+        gas: ObjectID,
+        /// Gas budget for this call
+        #[structopt(long)]
+        gas_budget: u64,
+    },
+
+    /// Merge two coin objects into one coin
+    MergeCoin {
+        /// Coin to merge into, in 20 bytes Hex string
+        #[structopt(long)]
+        primary_coin: ObjectID,
+        /// Coin to be merged, in 20 bytes Hex string
+        #[structopt(long)]
+        coin_to_merge: ObjectID,
+        /// ID of the gas object for gas payment, in 20 bytes Hex string
+        #[structopt(long)]
+        gas: ObjectID,
+        /// Gas budget for this call
+        #[structopt(long)]
+        gas_budget: u64,
+    },
 }
 
 struct SimpleTransactionSigner {
@@ -171,7 +204,7 @@ impl WalletCommands {
         &mut self,
         context: &mut WalletContext,
     ) -> Result<WalletCommandResult, anyhow::Error> {
-        let signature_callback = Box::pin(SimpleTransactionSigner {
+        let tx_signer = Box::pin(SimpleTransactionSigner {
             keystore: context.keystore.clone(),
         });
 
@@ -202,7 +235,7 @@ impl WalletCommands {
                         compiled_modules,
                         gas_obj_ref,
                         *gas_budget,
-                        signature_callback,
+                        tx_signer,
                     )
                     .await?;
 
@@ -296,7 +329,7 @@ impl WalletCommands {
                         vec![],
                         pure_args,
                         *gas_budget,
-                        signature_callback,
+                        tx_signer,
                     )
                     .await?;
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
@@ -315,7 +348,7 @@ impl WalletCommands {
 
                 let (cert, effects) = context
                     .address_manager
-                    .transfer_coin(*from, *object_id, *gas, *to, signature_callback)
+                    .transfer_coin(*from, *object_id, *gas, *to, tx_signer)
                     .await?;
                 let time_total = time_start.elapsed().as_micros();
 
@@ -369,6 +402,54 @@ impl WalletCommands {
                     }
                 }
                 WalletCommandResult::Gas(coins)
+            }
+            WalletCommands::SplitCoin {
+                coin_id,
+                amounts,
+                gas,
+                gas_budget,
+            } => {
+                let signer = &context
+                    .address_manager
+                    .get_object_owner(*gas)
+                    .await?
+                    .get_single_owner_address()?;
+                let response = context
+                    .address_manager
+                    .split_coin(
+                        *signer,
+                        *coin_id,
+                        amounts.clone(),
+                        *gas,
+                        *gas_budget,
+                        tx_signer,
+                    )
+                    .await?;
+                WalletCommandResult::SplitCoin(response)
+            }
+            WalletCommands::MergeCoin {
+                primary_coin,
+                coin_to_merge,
+                gas,
+                gas_budget,
+            } => {
+                let signer = &context
+                    .address_manager
+                    .get_object_owner(*gas)
+                    .await?
+                    .get_single_owner_address()?;
+                let response = context
+                    .address_manager
+                    .merge_coins(
+                        *signer,
+                        *primary_coin,
+                        *coin_to_merge,
+                        *gas,
+                        *gas_budget,
+                        tx_signer,
+                    )
+                    .await?;
+                WalletCommandResult::MergeCoin(response)
             }
         })
     }
@@ -460,6 +541,12 @@ impl Display for WalletCommandResult {
                     )?;
                 }
             }
+            WalletCommandResult::SplitCoin(response) => {
+                write!(writer, "{}", response)?;
+            }
+            WalletCommandResult::MergeCoin(response) => {
+                write!(writer, "{}", response)?;
+            }
         }
         write!(f, "{}", writer)
     }
@@ -525,4 +612,6 @@ pub enum WalletCommandResult {
     SyncClientState,
     NewAddress(SuiAddress),
     Gas(Vec<GasCoin>),
+    SplitCoin(SplitCoinResponse),
+    MergeCoin(MergeCoinResponse),
 }
