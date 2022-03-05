@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::{Stream, Sink, SinkExt, StreamExt};
+use futures::{Sink, SinkExt, Stream, StreamExt};
 use std::io::ErrorKind;
 use std::sync::Arc;
 use tokio::net::TcpSocket;
@@ -12,8 +12,8 @@ use async_trait::async_trait;
 
 use tracing::*;
 
-use tokio_util::codec::{Framed, LengthDelimitedCodec, };
 use bytes::{Bytes, BytesMut};
+use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 #[cfg(test)]
 #[path = "unit_tests/transport_tests.rs"]
@@ -30,12 +30,11 @@ pub trait MessageHandler<A> {
 }
 
 pub trait RwChannel<'a> {
-    type R : 'a + Stream<Item=Result<BytesMut,std::io::Error>> + Unpin + Send;
-    type W : 'a + Sink<Bytes, Error = std::io::Error> + Unpin + Send;
-
+    type R: 'a + Stream<Item = Result<BytesMut, std::io::Error>> + Unpin + Send;
+    type W: 'a + Sink<Bytes, Error = std::io::Error> + Unpin + Send;
 
     fn sink(&mut self) -> &mut Self::W;
-    fn stream(&mut self) ->  &mut Self::R;
+    fn stream(&mut self) -> &mut Self::R;
 }
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
@@ -126,18 +125,14 @@ impl TcpDataStream {
     // TODO: Eliminate vecs and use Byte, ByteBuf
 
     pub async fn write_data<'a>(&'a mut self, buffer: &'a [u8]) -> Result<(), std::io::Error> {
-        self.framed
-        .send(buffer.to_vec().into())
-        .await
+        self.framed.send(buffer.to_vec().into()).await
         // .map_err(|_| std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))
     }
 
     pub async fn read_data(&mut self) -> Option<Result<Vec<u8>, std::io::Error>> {
-        let result = self.framed
-        .next()
-        .await;
+        let result = self.framed.next().await;
         // .ok_or(std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))?;
-        result.map(|v| v.map(|w|w.to_vec()))
+        result.map(|v| v.map(|w| w.to_vec()))
     }
 }
 
@@ -145,10 +140,10 @@ impl<'a> RwChannel<'a> for TcpDataStream {
     type W = Framed<TcpStream, LengthDelimitedCodec>;
     type R = Framed<TcpStream, LengthDelimitedCodec>;
 
-    fn sink(&mut self) -> &mut Self::W{
+    fn sink(&mut self) -> &mut Self::W {
         &mut self.framed
     }
-    fn stream(&mut self) -> &mut Self::R{
+    fn stream(&mut self) -> &mut Self::R {
         &mut self.framed
     }
 }

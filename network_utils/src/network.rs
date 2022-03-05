@@ -45,18 +45,16 @@ impl NetworkClient {
         let address = format!("{}:{}", self.base_address, self.base_port);
         let mut stream = connect(address, self.buffer_size).await?;
         // Send message
-        time::timeout(self.send_timeout, 
-            stream.write_data(&buf)
-        ).await??;
+        time::timeout(self.send_timeout, stream.write_data(&buf)).await??;
         // Wait for reply
-        time::timeout(self.recv_timeout, 
-            async { match stream.read_data().await {
+        time::timeout(self.recv_timeout, async {
+            match stream.read_data().await {
                 Some(Ok(vec)) => Ok(Some(vec)),
                 Some(Err(err)) => Err(err),
                 None => Ok(None),
             }
-        }
-        ).await?
+        })
+        .await?
     }
 
     pub async fn send_recv_bytes(&self, buf: Vec<u8>) -> Result<SerializedMessage, SuiError> {
@@ -72,9 +70,9 @@ impl NetworkClient {
                     Err(_) => Err(SuiError::InvalidDecoding),
                     // _ => Err(SuiError::UnexpectedMessage),
                 }
-            },
+            }
             Ok(None) => Err(SuiError::ClientIoError {
-                error: format!("Empty response from authority."),
+                error: "Empty response from authority.".to_string(),
             }),
         }
     }

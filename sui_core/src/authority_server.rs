@@ -6,11 +6,11 @@ use crate::authority::AuthorityState;
 use std::io;
 use sui_network::{
     network::NetworkServer,
-    transport::{spawn_server, MessageHandler, SpawnedServer, RwChannel},
+    transport::{spawn_server, MessageHandler, RwChannel, SpawnedServer},
 };
 use sui_types::{error::*, messages::*, serialize::*};
 
-use futures::{StreamExt, SinkExt};
+use futures::{SinkExt, StreamExt};
 
 use tracing::*;
 
@@ -117,34 +117,30 @@ impl AuthorityServer {
 }
 
 #[async_trait]
-impl<'a, A> MessageHandler<A> for AuthorityServer where 
-    A : 'static + RwChannel<'a> + Unpin + Send {
-
-        async fn handle_message(
-            &self,
-            mut channel : A,
-        ) -> () {
-
-                loop {
-                    let buffer = match channel.stream().next().await {
-                        Some(Ok(buffer)) => buffer,
-                        Some(Err(err)) => {
-                            // We expect some EOF or disconnect error at the end.
-                            error!("Error while reading TCP stream: {}", err);
-                            break;
-                        },
-                        None => {
-                            break;
-                        }
-                    };
-    
-                    if let Some(reply) = self.handle_one_message(&buffer[..], ).await {
-                        let status = channel.sink().send(reply.into()).await;
-                        if let Err(error) = status {
-                            error!("Failed to send query response: {}", error);
-                        }
-                    };
+impl<'a, A> MessageHandler<A> for AuthorityServer
+where
+    A: 'static + RwChannel<'a> + Unpin + Send,
+{
+    async fn handle_message(&self, mut channel: A) -> () {
+        loop {
+            let buffer = match channel.stream().next().await {
+                Some(Ok(buffer)) => buffer,
+                Some(Err(err)) => {
+                    // We expect some EOF or disconnect error at the end.
+                    error!("Error while reading TCP stream: {}", err);
+                    break;
                 }
+                None => {
+                    break;
+                }
+            };
 
+            if let Some(reply) = self.handle_one_message(&buffer[..]).await {
+                let status = channel.sink().send(reply.into()).await;
+                if let Err(error) = status {
+                    error!("Failed to send query response: {}", error);
+                }
+            };
         }
+    }
 }

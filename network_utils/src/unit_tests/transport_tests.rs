@@ -29,42 +29,36 @@ impl TestService {
         self.counter.fetch_add(buffer.len(), Ordering::Relaxed);
         Some(Vec::from(buffer))
     }
-
 }
 
 #[async_trait]
-impl<'a, A> MessageHandler<A> for TestService where 
-    A : 'static + RwChannel<'a> + Unpin + Send {
-
-        async fn handle_message(
-            &self,
-            mut channel : A,
-        ) -> () {
-
-                loop {
-                    let buffer = match channel.stream().next().await {
-                        Some(Ok(buffer)) => buffer,
-                        Some(Err(err)) => {
-                            // We expect some EOF or disconnect error at the end.
-                            error!("Error while reading TCP stream: {}", err);
-                            break;
-                        },
-                        None => {
-                            break;
-                        }
-                    };
-    
-                    if let Some(reply) = self.handle_one_message(&buffer[..], ).await {
-                        let status = channel.sink().send(reply.into()).await;
-                        if let Err(error) = status {
-                            error!("Failed to send query response: {}", error);
-                        }
-                    };
+impl<'a, A> MessageHandler<A> for TestService
+where
+    A: 'static + RwChannel<'a> + Unpin + Send,
+{
+    async fn handle_message(&self, mut channel: A) -> () {
+        loop {
+            let buffer = match channel.stream().next().await {
+                Some(Ok(buffer)) => buffer,
+                Some(Err(err)) => {
+                    // We expect some EOF or disconnect error at the end.
+                    error!("Error while reading TCP stream: {}", err);
+                    break;
                 }
+                None => {
+                    break;
+                }
+            };
 
+            if let Some(reply) = self.handle_one_message(&buffer[..]).await {
+                let status = channel.sink().send(reply.into()).await;
+                if let Err(error) = status {
+                    error!("Failed to send query response: {}", error);
+                }
+            };
         }
+    }
 }
-
 
 async fn test_server() -> Result<(usize, usize), std::io::Error> {
     let address = get_new_local_address().await.unwrap();
@@ -83,7 +77,8 @@ async fn test_server() -> Result<(usize, usize), std::io::Error> {
     // Try to read data on the first connection (should fail).
     received += timeout(Duration::from_millis(500), client.read_data())
         .await
-        .unwrap_or_else(|_| Some(Ok(Vec::new()))).unwrap()?
+        .unwrap_or_else(|_| Some(Ok(Vec::new())))
+        .unwrap()?
         .len();
 
     // Attempt to gracefully kill server.
@@ -94,7 +89,8 @@ async fn test_server() -> Result<(usize, usize), std::io::Error> {
         .unwrap_or(Ok(()))?;
     received += timeout(Duration::from_millis(500), client.read_data())
         .await
-        .unwrap_or_else(|_| Some(Ok(Vec::new()))).unwrap()?
+        .unwrap_or_else(|_| Some(Ok(Vec::new())))
+        .unwrap()?
         .len();
 
     Ok((counter.load(Ordering::Relaxed), received))
