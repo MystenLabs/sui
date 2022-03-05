@@ -30,6 +30,6 @@ export class AirdropController extends Controller {
         @Body() requestBody: AirdropClaimRequest
     ): Promise<AirdropClaimResponse> {
         this.setStatus(201);
-        return new AirdropService().claim(requestBody);
+        return await new AirdropService().claim(requestBody);
     }
 }
