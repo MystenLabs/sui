@@ -3,15 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future;
-use futures::{SinkExt, StreamExt};
+use futures::{Stream, Sink, SinkExt, StreamExt};
 use std::io::ErrorKind;
 use std::{io, sync::Arc};
 use tokio::net::TcpSocket;
 use tokio::net::{TcpListener, TcpStream};
+use sui_types::error::SuiError;
 
 use tracing::*;
 
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tokio_util::codec::{Framed, LengthDelimitedCodec, FramedRead, FramedWrite};
 
 #[cfg(test)]
 #[path = "unit_tests/transport_tests.rs"]
@@ -26,15 +27,15 @@ pub trait MessageHandler {
     fn handle_message<'a>(&'a self, buffer: &'a [u8]) -> future::BoxFuture<'a, Option<Vec<u8>>>;
 }
 
-/*
+
 pub trait MessageHandlerNG {
     fn handle_message<'a>(
         &'a self,
         input: &mut dyn Stream<Item = Vec<u8>>,
-        output: &mut dyn Sink<Item = Vec<u8>>,
+        output: &mut dyn Sink<Vec<u8>, Error = SuiError>,
     ) -> future::BoxFuture<'a, ()>;
 }
-*/
+
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
 pub struct SpawnedServer {
@@ -123,34 +124,19 @@ impl TcpDataStream {
 
     // TODO: Eliminate vecs and use Byte, ByteBuf
 
-    async fn tcp_write_data(
-        stream: &mut Framed<TcpStream, LengthDelimitedCodec>,
-        buffer: &[u8],
-    ) -> Result<(), std::io::Error> {
-        stream
-            .send(buffer.to_vec().into())
-            .await
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))
-    }
-
-    async fn tcp_read_data(
-        stream: &mut Framed<TcpStream, LengthDelimitedCodec>,
-    ) -> Result<Vec<u8>, std::io::Error> {
-        let result = stream
-            .next()
-            .await
-            .ok_or(std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))?;
-        result.map(|v| v.to_vec())
-    }
-}
-
-impl TcpDataStream {
     pub async fn write_data<'a>(&'a mut self, buffer: &'a [u8]) -> Result<(), std::io::Error> {
-        Self::tcp_write_data(&mut self.framed, buffer).await
+        self.framed
+        .send(buffer.to_vec().into())
+        .await
+        // .map_err(|_| std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))
     }
 
-    pub async fn read_data(&mut self) -> Result<Vec<u8>, std::io::Error> {
-        Self::tcp_read_data(&mut self.framed).await
+    pub async fn read_data(&mut self) -> Option<Result<Vec<u8>, std::io::Error>> {
+        let result = self.framed
+        .next()
+        .await;
+        // .ok_or(std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))?;
+        result.map(|v| v.map(|w|w.to_vec()))
     }
 }
 
@@ -182,14 +168,13 @@ where
 
             loop {
                 let buffer = match framed.read_data().await {
-                    Ok(buffer) => buffer,
-                    Err(err) => {
+                    Some(Ok(buffer)) => buffer,
+                    Some(Err(err)) => {
                         // We expect some EOF or disconnect error at the end.
-                        if err.kind() != io::ErrorKind::UnexpectedEof
-                            && err.kind() != io::ErrorKind::ConnectionReset
-                        {
-                            error!("Error while reading TCP stream: {}", err);
-                        }
+                        error!("Error while reading TCP stream: {}", err);
+                        break;
+                    },
+                    None => {
                         break;
                     }
                 };

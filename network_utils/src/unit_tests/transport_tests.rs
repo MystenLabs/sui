@@ -43,14 +43,14 @@ async fn test_server() -> Result<(usize, usize), std::io::Error> {
 
     let mut client = connect(address.clone(), 1000).await?;
     client.write_data(b"abcdef").await?;
-    received += client.read_data().await?.len();
+    received += client.read_data().await.unwrap()?.len();
     client.write_data(b"abcd").await?;
-    received += client.read_data().await?.len();
+    received += client.read_data().await.unwrap()?.len();
 
     // Try to read data on the first connection (should fail).
     received += timeout(Duration::from_millis(500), client.read_data())
         .await
-        .unwrap_or_else(|_| Ok(Vec::new()))?
+        .unwrap_or_else(|_| Some(Ok(Vec::new()))).unwrap()?
         .len();
 
     // Attempt to gracefully kill server.
@@ -61,7 +61,7 @@ async fn test_server() -> Result<(usize, usize), std::io::Error> {
         .unwrap_or(Ok(()))?;
     received += timeout(Duration::from_millis(500), client.read_data())
         .await
-        .unwrap_or_else(|_| Ok(Vec::new()))?
+        .unwrap_or_else(|_| Some(Ok(Vec::new()))).unwrap()?
         .len();
 
     Ok((counter.load(Ordering::Relaxed), received))
