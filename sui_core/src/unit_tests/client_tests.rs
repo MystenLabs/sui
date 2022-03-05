@@ -2516,9 +2516,9 @@ async fn test_coin_split() {
     let response = client
         .split_coin(
             addr1,
-            coin_object.to_object_reference(),
+            coin_object.id(),
             split_amounts.clone(),
-            gas_object.to_object_reference(),
+            gas_object.id(),
             GAS_VALUE_FOR_TESTING,
             signature_callback(&key1),
         )
@@ -2573,9 +2573,9 @@ async fn test_coin_merge() {
     let response = client
         .merge_coins(
             addr1,
-            coin_object1.to_object_reference(),
-            coin_object2.to_object_reference(),
-            gas_object.to_object_reference(),
+            coin_object1.id(),
+            coin_object2.id(),
+            gas_object.id(),
             GAS_VALUE_FOR_TESTING,
             signature_callback(&key1),
         )

@@ -9,6 +9,7 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
+use std::fmt::{Display, Formatter};
 
 use crate::{
     base_types::{ObjectID, SequenceNumber},
@@ -102,5 +103,11 @@ impl TryFrom<&Object> for GasCoin {
                 error: format!("Gas object type is not a gas coin: {:?}", value),
             }),
         }
+    }
+}
+
+impl Display for GasCoin {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Coin {{ id: {}, value: {} }}", self.id(), self.value())
     }
 }
