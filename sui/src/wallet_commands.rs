@@ -42,7 +42,7 @@ use tracing::info;
 pub struct WalletOpts {
     #[structopt(subcommand)]
     pub command: WalletCommands,
-    /// Return command outputs in json format.
+    /// Returns command outputs in JSON format.
     #[structopt(long, global = true)]
     pub json: bool,
 }

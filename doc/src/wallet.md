@@ -46,7 +46,7 @@ newly created accounts.
 ### View created accounts
 The genesis process creates a configuration file `wallet.conf`, and a keystore file `wallet.key` for the
 Sui wallet.  The config file contains information of the accounts and
-the Sui network. The keystore file contains all the public private key pair of the created accounts.
+the Sui network. The keystore file contains all the public-private key pair of the created accounts.
 Sui wallet uses the network information in `wallet.conf` to communicate
 with the Sui network authorities  and create transactions using the key
 pairs residing in the keystore file.
@@ -85,7 +85,7 @@ in the wallet configuration (with some values omitted):
   }
 }
 ```
-The `accounts` variable contains account's address the wallet manages.
+The `accounts` variable contains the account's address the wallet manages.
 The `authorities` variable contains Sui network authorities' name, host and port information.
 It is used to establish connections to the Sui network.
 
@@ -95,7 +95,7 @@ database. This database stores all the transaction data, certificates
 and object data belonging to the account.
 
 #### Key management
-The key pairs are stored in `wallet.key`, however, it is not secure 
+The key pairs are stored in `wallet.key`. However, this is not secure 
 and shouldn't be used in a production environment. We have plans to 
 implement more secure key management and support hardware signing in a future release.
 
@@ -205,8 +205,8 @@ Created new keypair for address : 3F8962C87474F8FB8BFB99151D5F83E677062078
   
 #### Add existing accounts to `wallet.conf` manually.
 
-If you have existing key pair from an old wallet config, you can copy the account 
-address manually to the new `wallet.conf`'s accounts section, and add the keypair to the keystore file, 
+If you have an existing key pair from an old wallet config, you can copy the account 
+address manually to the new `wallet.conf`'s accounts section, and add the key pair to the keystore file; 
 you won't be able to mutate objects if the account key is missing from the keystore. 
 
 Restart the Sui wallet after the modification; the new accounts will appear in the wallet if you query the addresses.
@@ -222,17 +222,17 @@ USAGE:
 
 FLAGS:
     -h, --help       Prints help information
-        --json       Return command outputs in json format
+        --json       Returns command outputs in JSON format
     -V, --version    Prints version information
 
 OPTIONS:
         --address <address>    Address owning the objects
 ```
-To view the objects owned by the accounts created in genesis, run the following command in the Sui interactive console (substitute the address with one of the genesis address in your wallet): 
+To view the objects owned by the accounts created in genesis, run the following command in the Sui interactive console (substitute the address with one of the genesis addresses in your wallet): 
 ```shell
 sui>-$ objects --address 0DC70EA8CA82FE6966900C697B73A235B8E2346F
 ```
-The result should look similar to the following, which shows the object in the format of (`object_id`, `sequence_number`, `object_hash`).
+The result should resemble the following, which shows the object in the format of (`object_id`, `sequence_number`, `object_hash`).
 ```shell
 Showing 5 results.
 (0E4260A6AA1DF29790E76128DC094C030C2D1819, SequenceNumber(0), o#a4ab81b926bb51b64c33fd56fad24a5a33ea4ff8c244349a985c61c7d1a94570)
@@ -250,7 +250,7 @@ USAGE:
 
 FLAGS:
     -h, --help       Prints help information
-        --json       Return command outputs in json format
+        --json       Returns command outputs in JSON format
     -V, --version    Prints version information
 
 OPTIONS:
@@ -269,9 +269,9 @@ Readonly: false
 Type: 0x2::Coin::Coin<0x2::GAS::GAS>
 ```
 The result shows some basic information about the object, the owner, 
-version, id, if the object is immutable and the type of the object.
+version, ID, if the object is immutable and the type of the object.
 If you need a deeper look into the object, you can use the `--json`
-flag to view the raw json representation of the object.
+flag to view the raw JSON representation of the object.
 
 Here is an example:
 ```json
@@ -286,8 +286,8 @@ Created new keypair for address : 830F66EA8EA867DDCA479535BC12CE2852E571F2
 sui>-$ objects --address 830F66EA8EA867DDCA479535BC12CE2852E571F2
 Showing 0 results.
 ```
-To add objects to the account, you can invoke a move function (see [Calling Move code](#calling-move-code) for more information), 
-or you can transfer one of the existing object from the genesis account to the new account. 
+To add objects to the account, you can [invoke a move function](#calling-move-code), 
+or you can transfer one of the existing objects from the genesis account to the new account. 
 We will explore how to transfer objects using the wallet in this section.
 
 `transfer` command usage:
@@ -297,7 +297,7 @@ USAGE:
 
 FLAGS:
     -h, --help       Prints help information
-        --json       Return command outputs in json format
+        --json       Returns command outputs in JSON format
     -V, --version    Prints version information
 
 OPTIONS:
@@ -306,10 +306,10 @@ OPTIONS:
         --to <to>                  Recipient address
 ```
 To transfer an object to a recipient, you will need the recipient's address, 
-the object id of the object that you want to transfer, 
-and the gas object' id for the transaction fee payment.
+the object ID of the object that you want to transfer, 
+and the gas object' ID for the transaction fee payment.
 
-Here is an example of a transfer of object to account `830F66EA8EA867DDCA479535BC12CE2852E571F2`.
+Here is an example transfer of an object to account `830F66EA8EA867DDCA479535BC12CE2852E571F2`.
 ```shell
 sui>-$ transfer --to 830F66EA8EA867DDCA479535BC12CE2852E571F2 --object-id 1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE --gas 27073453E1B556D1B6C2E4BE94FF2A3928D788BF
 Transfer confirmed after 10500 us
@@ -338,11 +338,11 @@ Showing 1 results.
 ```
 
 ## Merging and splitting coin objects
-Overtime, the account might receive coins from other account and will become unmanageable when 
-the number of coins grows; contrarily the account might need to split the coin for payment or 
-for transfer to other account.
+Overtime, the account might receive coins from other accounts and will become unmanageable when 
+the number of coins grows; contrarily, the account might need to split the coins for payment or 
+for transfer to another account.
 
-We can use the `merge-coin` command and `split-coin` command to consolidate or split coins.
+We can use the `merge-coin` command and `split-coin` command to consolidate or split coins, respectivly.
 
 ### Merge coins
 Usage of `merge-coin`:
@@ -352,7 +352,7 @@ USAGE:
 
 FLAGS:
     -h, --help       Prints help information
-        --json       Return command outputs in json format
+        --json       Returns command outputs in JSON format
     -V, --version    Prints version information
 
 OPTIONS:
@@ -361,7 +361,7 @@ OPTIONS:
         --gas-budget <gas-budget>          Gas budget for this call
         --primary-coin <primary-coin>      Coin to merge into, in 20 bytes Hex string
 ```
-Here is an example of how to merge coins, to merge coins, you will need at lease three coin objects - 
+Here is an example of how to merge coins. To merge coins, you will need at lease three coin objects - 
 two coin objects for merging, and one for the gas payment.
 ```shell
 sui>-$ objects --address 830F66EA8EA867DDCA479535BC12CE2852E571F2
@@ -386,7 +386,7 @@ Updated Coin : Coin { id: 1E1D62BDE28964F6FC0CE3503B5058C4DC04F1DE, value: 20000
 Updated Gas : Coin { id: B7FD91A802DAF5523CAAB69FF4652FAFA6FF4ADF, value: 99996 }
 ```
 
-### Split coin
+### Split coins
 Usage of `split-coin`:
 ```shell
 USAGE:
@@ -394,7 +394,7 @@ USAGE:
 
 FLAGS:
     -h, --help       Prints help information
-        --json       Return command outputs in json format
+        --json       Returns command outputs in JSON format
     -V, --version    Prints version information
 
 OPTIONS:
@@ -406,8 +406,8 @@ OPTIONS:
 For splitting coins, you will need at lease two coins to execute the `split-coin` command, 
 one coin to split, one for the gas payment.
 
-Here is an example of splitting coin, we are splitting out three new coins from the original coin, 
-with values of 1000, 5000 and 3000 respectively, note that the `--amounts` accepts list of values.
+Here is an example of splitting coins, we are splitting out three new coins from the original coin, 
+with values of 1000, 5000 and 3000 respectively; note that the `--amounts` argument accepts list of values.
 ```shell
 sui>-$ objects --address 830F66EA8EA867DDCA479535BC12CE2852E571F2
 Showing 2 results.
@@ -440,7 +440,7 @@ Showing 5 results.
 (B7FD91A802DAF5523CAAB69FF4652FAFA6FF4ADF, SequenceNumber(3), o#839e98b33b3de62bc84c36c35b9fd6cdf3383f9d7c4f760c398cbbc7bef8c932)
 (BFA8BAB64ED8F74BA3731C9220FD7462456BC601, SequenceNumber(1), o#6748854128a8b4746fb5bd124eddafc4f9129bae36a8a34af85a8f29b07ee124)
 ```
-From the result we can see three new coins got created in the transaction.
+From the result we can see three new coins were created in the transaction.
 
 ## Calling Move code
 
