@@ -566,9 +566,8 @@ fn test_publish_module_insufficient_gas() {
 }
 
 #[test]
-fn test_transfer_and_freeze() {
+fn test_freeze() {
     let addr1 = base_types::get_new_address();
-    let addr2 = base_types::get_new_address();
 
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
@@ -606,18 +605,17 @@ fn test_transfer_and_freeze() {
     let obj1 = storage.read_object(&id1).unwrap();
     assert!(!obj1.is_read_only());
 
-    // 2. Call transfer_and_freeze.
-    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(addr2)).unwrap()];
+    // 2. Call freeze_object.
     call(
         &mut storage,
         &native_functions,
         "ObjectBasics",
-        "transfer_and_freeze",
+        "freeze_object",
         gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         vec![obj1],
-        pure_args,
+        vec![],
     )
     .unwrap()
     .unwrap();

@@ -25,10 +25,10 @@ pub const DEFAULT_FRAMEWORK_PATH: &str = env!("CARGO_MANIFEST_DIR");
 pub enum EventType {
     /// System event: transfer between addresses
     TransferToAddress,
-    /// System event: freeze, then transfer between addresses
-    TransferToAddressAndFreeze,
     /// System event: transfer object to another object
     TransferToObject,
+    /// System event: freeze object
+    FreezeObject,
     /// System event: an object ID is deleted. This does not necessarily
     /// mean an object is being deleted. However whenever an object is being
     /// deleted, the object ID must be deleted and this event will be

@@ -261,6 +261,20 @@ impl Owner {
             Self::SharedMutable | Self::SharedImmutable => Err(SuiError::UnexpectedOwnerType),
         }
     }
+
+    pub fn is_read_only(&self) -> bool {
+        match self {
+            Owner::SingleOwner(_) | Owner::SharedMutable => false,
+            Owner::SharedImmutable => true,
+        }
+    }
+
+    pub fn is_shared(&self) -> bool {
+        match self {
+            Owner::SingleOwner(_) => false,
+            Owner::SharedMutable | Owner::SharedImmutable => true,
+        }
+    }
 }
 
 impl std::cmp::PartialEq<SuiAddress> for Owner {
@@ -306,10 +320,11 @@ impl Object {
     }
 
     pub fn is_read_only(&self) -> bool {
-        match &self.owner {
-            Owner::SingleOwner(_) | Owner::SharedMutable => false,
-            Owner::SharedImmutable => true,
-        }
+        self.owner.is_read_only()
+    }
+
+    pub fn is_shared(&self) -> bool {
+        self.owner.is_shared()
     }
 
     pub fn get_single_owner(&self) -> Option<SuiAddress> {
@@ -326,11 +341,6 @@ impl Object {
             Owner::SingleOwner(owner) => Some((*owner, self.id())),
             Owner::SharedMutable | Owner::SharedImmutable => None,
         }
-    }
-
-    // TODO: Support shared object type from the Move/Executor side.
-    pub fn is_shared(&self) -> bool {
-        false
     }
 
     /// Return true if this object is a Move package, false if it is a Move value
@@ -465,7 +475,6 @@ impl Object {
     }
 
     pub fn is_transfer_elegible(&self) -> SuiResult {
-        fp_ensure!(!self.is_read_only(), SuiError::TransferImmutableError);
         fp_ensure!(!self.is_shared(), SuiError::TransferSharedError);
         let is_coin = match &self.data {
             Data::Move(m) => bcs::from_bytes::<Coin>(&m.contents).is_ok(),
