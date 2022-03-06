@@ -10,8 +10,10 @@ use sui_network::{
 };
 use sui_types::{error::*, messages::*, serialize::*};
 
+use crate::authority_batch::BatchManager;
 use futures::{SinkExt, StreamExt};
 
+use std::{time::Duration};
 use tracing::*;
 
 use async_trait::async_trait;
@@ -34,6 +36,30 @@ impl AuthorityServer {
         }
     }
 
+    /// Create a batch subsystem, register it with the authority state, and
+    /// launch a task that manages it. Return the join handle of this task.
+    pub async fn spawn_batch_subsystem(
+        &mut self,
+        min_batch_size: u64,
+        max_delay: Duration,
+    ) -> Result<tokio::task::JoinHandle<()>, SuiError> {
+        // Start the batching subsystem, and register the handles with the authority.
+        let (tx_sender, manager, (batch_sender, _batch_receiver)) =
+            BatchManager::new(self.state.db(), 1000);
+
+        let _batch_join_handle = manager
+            .start_service(
+                self.state.name,
+                self.state.secret.clone(),
+                min_batch_size,
+                max_delay,
+            )
+            .await?;
+        self.state.set_batch_sender(tx_sender, batch_sender)?;
+
+        Ok(_batch_join_handle)
+    }
+
     pub async fn spawn(self) -> Result<SpawnedServer, io::Error> {
         let address = format!("{}:{}", self.server.base_address, self.server.base_port);
         let buffer_size = self.server.buffer_size;
@@ -42,77 +68,72 @@ impl AuthorityServer {
         spawn_server(&address, self, buffer_size).await
     }
 
-    fn handle_one_message<'a>(
-        &'a self,
-        buffer: &'a [u8],
-    ) -> futures::future::BoxFuture<'a, Option<Vec<u8>>> {
-        Box::pin(async move {
-            let result = deserialize_message(buffer);
-            let reply = match result {
-                Err(_) => Err(SuiError::InvalidDecoding),
-                Ok(result) => {
-                    match result {
-                        SerializedMessage::Transaction(message) => self
+    async fn handle_one_message<'a>(&'a self, buffer: &'a [u8]) -> Option<Vec<u8>> {
+        let result = deserialize_message(buffer);
+        let reply = match result {
+            Err(_) => Err(SuiError::InvalidDecoding),
+            Ok(result) => {
+                match result {
+                    SerializedMessage::Transaction(message) => self
+                        .state
+                        .handle_transaction(*message)
+                        .await
+                        .map(|info| Some(serialize_transaction_info(&info))),
+                    SerializedMessage::Cert(message) => {
+                        let confirmation_transaction = ConfirmationTransaction {
+                            certificate: message.as_ref().clone(),
+                        };
+                        match self
                             .state
-                            .handle_transaction(*message)
+                            .handle_confirmation_transaction(confirmation_transaction)
                             .await
-                            .map(|info| Some(serialize_transaction_info(&info))),
-                        SerializedMessage::Cert(message) => {
-                            let confirmation_transaction = ConfirmationTransaction {
-                                certificate: message.as_ref().clone(),
-                            };
-                            match self
-                                .state
-                                .handle_confirmation_transaction(confirmation_transaction)
-                                .await
-                            {
-                                Ok(info) => {
-                                    // Response
-                                    Ok(Some(serialize_transaction_info(&info)))
-                                }
-                                Err(error) => Err(error),
+                        {
+                            Ok(info) => {
+                                // Response
+                                Ok(Some(serialize_transaction_info(&info)))
                             }
+                            Err(error) => Err(error),
                         }
-                        SerializedMessage::AccountInfoReq(message) => self
-                            .state
-                            .handle_account_info_request(*message)
-                            .await
-                            .map(|info| Some(serialize_account_info_response(&info))),
-                        SerializedMessage::ObjectInfoReq(message) => self
-                            .state
-                            .handle_object_info_request(*message)
-                            .await
-                            .map(|info| Some(serialize_object_info_response(&info))),
-                        SerializedMessage::TransactionInfoReq(message) => self
-                            .state
-                            .handle_transaction_info_request(*message)
-                            .await
-                            .map(|info| Some(serialize_transaction_info(&info))),
-                        _ => Err(SuiError::UnexpectedMessage),
                     }
-                }
-            };
-
-            self.server.increment_packets_processed();
-
-            if self.server.packets_processed() % 5000 == 0 {
-                info!(
-                    "{}:{} has processed {} packets",
-                    self.server.base_address,
-                    self.server.base_port,
-                    self.server.packets_processed()
-                );
-            }
-
-            match reply {
-                Ok(x) => x,
-                Err(error) => {
-                    warn!("User query failed: {}", error);
-                    self.server.increment_user_errors();
-                    Some(serialize_error(&error))
+                    SerializedMessage::AccountInfoReq(message) => self
+                        .state
+                        .handle_account_info_request(*message)
+                        .await
+                        .map(|info| Some(serialize_account_info_response(&info))),
+                    SerializedMessage::ObjectInfoReq(message) => self
+                        .state
+                        .handle_object_info_request(*message)
+                        .await
+                        .map(|info| Some(serialize_object_info_response(&info))),
+                    SerializedMessage::TransactionInfoReq(message) => self
+                        .state
+                        .handle_transaction_info_request(*message)
+                        .await
+                        .map(|info| Some(serialize_transaction_info(&info))),
+                    _ => Err(SuiError::UnexpectedMessage),
                 }
             }
-        })
+        };
+
+        self.server.increment_packets_processed();
+
+        if self.server.packets_processed() % 5000 == 0 {
+            info!(
+                "{}:{} has processed {} packets",
+                self.server.base_address,
+                self.server.base_port,
+                self.server.packets_processed()
+            );
+        }
+
+        match reply {
+            Ok(x) => x,
+            Err(error) => {
+                warn!("User query failed: {}", error);
+                self.server.increment_user_errors();
+                Some(serialize_error(&error))
+            }
+        }
     }
 }
 

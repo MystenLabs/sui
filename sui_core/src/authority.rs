@@ -678,8 +678,7 @@ impl AuthorityState {
         state
     }
 
-    #[cfg(test)]
-    pub fn db(&self) -> Arc<AuthorityStore> {
+    pub(crate) fn db(&self) -> Arc<AuthorityStore> {
         self._database.clone()
     }
 
