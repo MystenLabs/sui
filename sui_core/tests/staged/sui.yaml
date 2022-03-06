@@ -213,12 +213,16 @@ ObjectResponse:
 Owner:
   ENUM:
     0:
-      SingleOwner:
+      AddressOwner:
         NEWTYPE:
           TYPENAME: SuiAddress
     1:
-      SharedMutable: UNIT
+      ObjectOwner:
+        NEWTYPE:
+          TYPENAME: SuiAddress
     2:
+      SharedMutable: UNIT
+    3:
       SharedImmutable: UNIT
 PublicKeyBytes:
   NEWTYPESTRUCT: BYTES

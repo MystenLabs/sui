@@ -585,7 +585,8 @@ where
                     account.remove_object_info(&object_id)?;
                     // TODO: Could potentially add this object_ref to the relevant account store
                 }
-            } else if old_seq == seq && owner == Owner::SingleOwner(address) {
+            } else if old_seq == seq && owner == Owner::AddressOwner(address) {
+                // TODO: Store objects owned by objects as well.
                 // ObjectRef can be 1 version behind because it's only updated after confirmation.
                 account.update_object_ref(&object_ref)?;
             }
@@ -798,7 +799,7 @@ where
         fp_ensure!(
             effects.mutated.len() == 2     // coin and gas
                && created.len() == split_amounts.len()
-               && created.iter().all(|(_, owner)| owner == &Owner::SingleOwner(signer)),
+               && created.iter().all(|(_, owner)| owner == &signer),
             SuiError::IncorrectGasSplit.into()
         );
         let updated_coin = self

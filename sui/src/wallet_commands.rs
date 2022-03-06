@@ -219,7 +219,7 @@ impl WalletCommands {
                     .address_manager
                     .get_object_owner(*gas)
                     .await?
-                    .get_single_owner_address()?;
+                    .get_owner_address()?;
                 let gas_obj_ref = context
                     .address_manager
                     .get_object_info(*gas)
@@ -263,7 +263,7 @@ impl WalletCommands {
                     .address_manager
                     .get_object_owner(*gas)
                     .await?
-                    .get_single_owner_address()?;
+                    .get_owner_address()?;
 
                 let package_obj_info = context.address_manager.get_object_info(*package).await?;
                 let package_obj = package_obj_info.object().clone()?;
@@ -343,7 +343,7 @@ impl WalletCommands {
                     .address_manager
                     .get_object_owner(*gas)
                     .await?
-                    .get_single_owner_address()?;
+                    .get_owner_address()?;
                 let time_start = Instant::now();
 
                 let (cert, effects) = context
@@ -413,7 +413,7 @@ impl WalletCommands {
                     .address_manager
                     .get_object_owner(*gas)
                     .await?
-                    .get_single_owner_address()?;
+                    .get_owner_address()?;
                 let response = context
                     .address_manager
                     .split_coin(
@@ -437,7 +437,7 @@ impl WalletCommands {
                     .address_manager
                     .get_object_owner(*gas)
                     .await?
-                    .get_single_owner_address()?;
+                    .get_owner_address()?;
                 let response = context
                     .address_manager
                     .merge_coins(

@@ -241,13 +241,13 @@ impl Data {
     }
 }
 
-// TODO: We don't distinguish between an account owner and an object owner.
-// They are both represented as SingleOwner. We should cosnider adding a variant
-// since it can be useful to tell whether an object is owned by object or address.
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash)]
 pub enum Owner {
-    /// Object is excluslive owned by a single address, and is mutable.
-    SingleOwner(SuiAddress),
+    /// Object is exclusively owned by a single address, and is mutable.
+    AddressOwner(SuiAddress),
+    /// Object is exclusively owned by a single object, and is mutable.
+    /// The object ID is converted to SuiAddress as SuiAddress is universal.
+    ObjectOwner(SuiAddress),
     /// Object is shared, can be used by any address, and is mutable.
     SharedMutable,
     /// Object is immutable, and hence ownership doesn't matter.
@@ -255,23 +255,23 @@ pub enum Owner {
 }
 
 impl Owner {
-    pub fn get_single_owner_address(&self) -> SuiResult<SuiAddress> {
+    pub fn get_owner_address(&self) -> SuiResult<SuiAddress> {
         match self {
-            Self::SingleOwner(address) => Ok(*address),
+            Self::AddressOwner(address) | Self::ObjectOwner(address) => Ok(*address),
             Self::SharedMutable | Self::SharedImmutable => Err(SuiError::UnexpectedOwnerType),
         }
     }
 
     pub fn is_read_only(&self) -> bool {
         match self {
-            Owner::SingleOwner(_) | Owner::SharedMutable => false,
+            Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::SharedMutable => false,
             Owner::SharedImmutable => true,
         }
     }
 
     pub fn is_shared(&self) -> bool {
         match self {
-            Owner::SingleOwner(_) => false,
+            Owner::AddressOwner(_) | Owner::ObjectOwner(_) => false,
             Owner::SharedMutable | Owner::SharedImmutable => true,
         }
     }
@@ -280,8 +280,18 @@ impl Owner {
 impl std::cmp::PartialEq<SuiAddress> for Owner {
     fn eq(&self, other: &SuiAddress) -> bool {
         match self {
-            Self::SingleOwner(address) => address == other,
-            Self::SharedMutable | Self::SharedImmutable => false,
+            Self::AddressOwner(address) => address == other,
+            Self::ObjectOwner(_) | Self::SharedMutable | Self::SharedImmutable => false,
+        }
+    }
+}
+
+impl std::cmp::PartialEq<ObjectID> for Owner {
+    fn eq(&self, other: &ObjectID) -> bool {
+        let other_id: SuiAddress = (*other).into();
+        match self {
+            Self::ObjectOwner(id) => id == &other_id,
+            Self::AddressOwner(_) | Self::SharedMutable | Self::SharedImmutable => false,
         }
     }
 }
@@ -328,19 +338,13 @@ impl Object {
     }
 
     pub fn get_single_owner(&self) -> Option<SuiAddress> {
-        match &self.owner {
-            Owner::SingleOwner(owner) => Some(*owner),
-            Owner::SharedMutable | Owner::SharedImmutable => None,
-        }
+        self.owner.get_owner_address().ok()
     }
 
     // It's a common pattern to retrieve both the owner and object ID
     // together, if it's owned by a singler owner.
     pub fn get_single_owner_and_id(&self) -> Option<(SuiAddress, ObjectID)> {
-        match &self.owner {
-            Owner::SingleOwner(owner) => Some((*owner, self.id())),
-            Owner::SharedMutable | Owner::SharedImmutable => None,
-        }
+        self.get_single_owner().map(|owner| (owner, self.id()))
     }
 
     /// Return true if this object is a Move package, false if it is a Move value
@@ -382,7 +386,7 @@ impl Object {
     pub fn transfer(&mut self, new_owner: SuiAddress) -> SuiResult {
         self.is_transfer_elegible()?;
         // unwrap safe as the above check guarantees it.
-        self.owner = Owner::SingleOwner(new_owner);
+        self.owner = Owner::AddressOwner(new_owner);
         let data = self.data.try_as_move_mut().unwrap();
         data.increment_version();
         Ok(())
@@ -399,7 +403,7 @@ impl Object {
             contents: GasCoin::new(id, version, gas).to_bcs_bytes(),
         });
         Self {
-            owner: Owner::SingleOwner(owner),
+            owner: Owner::AddressOwner(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
         }
@@ -424,7 +428,7 @@ impl Object {
             contents: bcs::to_bytes(&obj).unwrap(),
         });
         Self {
-            owner: Owner::SingleOwner(owner),
+            owner: Owner::AddressOwner(owner),
             data,
             previous_transaction: TransactionDigest::genesis(),
         }

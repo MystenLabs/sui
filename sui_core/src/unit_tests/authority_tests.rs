@@ -1414,7 +1414,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.mutated.len(), 3);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
-        SuiAddress::from(obj2),
+        obj2,
     );
 
     // Try to transfer obj1 to obj3, this time it will fail since obj1 is now owned by obj2,
@@ -1515,7 +1515,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.mutated.len(), 3);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
-        SuiAddress::from(obj2),
+        obj2,
     );
 }
 
