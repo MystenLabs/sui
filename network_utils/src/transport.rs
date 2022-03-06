@@ -26,7 +26,7 @@ pub const DEFAULT_MAX_DATAGRAM_SIZE_STR: &str = "65507";
 /// The handler required to create a service.
 #[async_trait]
 pub trait MessageHandler<A> {
-    async fn handle_message(&self, channel: A) -> ();
+    async fn handle_messages(&self, channel: A) -> ();
 }
 
 pub trait RwChannel<'a> {
@@ -173,31 +173,7 @@ where
         let guarded_state = guarded_state.clone();
         tokio::spawn(async move {
             let framed = TcpDataStream::from_tcp_stream(stream, _buffer_size);
-            guarded_state.handle_message(framed).await
-            /*
-
-            loop {
-                let buffer = match framed.read_data().await {
-                    Some(Ok(buffer)) => buffer,
-                    Some(Err(err)) => {
-                        // We expect some EOF or disconnect error at the end.
-                        error!("Error while reading TCP stream: {}", err);
-                        break;
-                    },
-                    None => {
-                        break;
-                    }
-                };
-
-                if let Some(reply) = guarded_state.handle_message(&buffer[..], ).await {
-                    let status = framed.write_data(&reply[..]).await;
-                    if let Err(error) = status {
-                        error!("Failed to send query response: {}", error);
-                    }
-                };
-            }
-
-            */
+            guarded_state.handle_messages(framed).await
         });
     }
     Ok(())

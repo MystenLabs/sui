@@ -13,10 +13,14 @@ use sui_types::{error::*, messages::*, serialize::*};
 use crate::authority_batch::BatchManager;
 use futures::{SinkExt, StreamExt};
 
-use std::{time::Duration};
+use std::time::Duration;
 use tracing::*;
 
 use async_trait::async_trait;
+
+#[cfg(test)]
+#[path = "unit_tests/server_tests.rs"]
+mod server_tests;
 
 pub struct AuthorityServer {
     server: NetworkServer,
@@ -142,7 +146,7 @@ impl<'a, A> MessageHandler<A> for AuthorityServer
 where
     A: 'static + RwChannel<'a> + Unpin + Send,
 {
-    async fn handle_message(&self, mut channel: A) -> () {
+    async fn handle_messages(&self, mut channel: A) -> () {
         loop {
             let buffer = match channel.stream().next().await {
                 Some(Ok(buffer)) => buffer,

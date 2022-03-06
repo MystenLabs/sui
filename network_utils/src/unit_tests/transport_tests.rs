@@ -36,7 +36,7 @@ impl<'a, A> MessageHandler<A> for TestService
 where
     A: 'static + RwChannel<'a> + Unpin + Send,
 {
-    async fn handle_message(&self, mut channel: A) -> () {
+    async fn handle_messages(&self, mut channel: A) -> () {
         loop {
             let buffer = match channel.stream().next().await {
                 Some(Ok(buffer)) => buffer,
