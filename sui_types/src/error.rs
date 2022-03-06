@@ -134,6 +134,14 @@ pub enum SuiError {
     DuplicateObjectRefInput,
     #[error("Network error while querying service: {:?}.", error)]
     ClientIoError { error: String },
+    #[error("Cannot transfer immutable object.")]
+    TransferImmutableError,
+    #[error("The number of items requested exceeds defined limits of {0}.")]
+    TooManyItemsError(u64),
+    #[error("The range specified is invalid.")]
+    InvalidSequenceRangeError,
+    #[error("No batches mached the range requested.")]
+    NoBatchesFoundError,
 
     // Move module publishing related errors
     #[error("Failed to load the Move module, reason: {error:?}.")]

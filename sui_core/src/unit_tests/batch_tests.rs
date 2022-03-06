@@ -277,3 +277,99 @@ async fn test_handle_move_order_with_batch() {
 
     _join.await.expect("No issues ending task.");
 }
+
+#[tokio::test]
+async fn test_batch_store_retrieval() {
+    // Create a random directory to store the DB
+    let dir = env::temp_dir();
+    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+
+    // Create an authority
+    let mut opts = rocksdb::Options::default();
+    opts.set_max_open_files(max_files_authority_tests());
+    let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
+
+    // Make a test key pair
+    let (_, key_pair) = get_key_pair();
+    let key_pair = Arc::pin(key_pair);
+    let address = *key_pair.public_key_bytes();
+
+    // TEST 1: init from an empty database should return to a zero block
+    let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
+    let _join = manager
+        .start_service(address, key_pair, 10, Duration::from_secs(60))
+        .await
+        .expect("Start service with no issues.");
+
+    // Send transactions out of order
+    let tx_zero = TransactionDigest::new([0; 32]);
+
+    let inner_store = store.clone();
+    for i in 0u64..105 {
+        inner_store
+            .executed_sequence
+            .insert(&i, &tx_zero)
+            .expect("Failed to write.");
+
+        _send
+            .send_item(i, tx_zero)
+            .await
+            .expect("Send to the channel.");
+    }
+
+    // TEST 1: Get batches across boundaries
+
+    let (batches, transactions) = store
+        .batches_and_transactions(12, 34)
+        .expect("Retrieval failed!");
+
+    assert_eq!(4, batches.len());
+    assert_eq!(10, batches.first().unwrap().batch.next_sequence_number);
+    assert_eq!(40, batches.last().unwrap().batch.next_sequence_number);
+
+    assert_eq!(30, transactions.len());
+
+    // TEST 2: Get with range wihin batch
+    let (batches, transactions) = store
+        .batches_and_transactions(54, 56)
+        .expect("Retrieval failed!");
+
+    assert_eq!(2, batches.len());
+    assert_eq!(50, batches.first().unwrap().batch.next_sequence_number);
+    assert_eq!(60, batches.last().unwrap().batch.next_sequence_number);
+
+    assert_eq!(10, transactions.len());
+
+    // TEST 3: Get on boundary
+    let (batches, transactions) = store
+        .batches_and_transactions(30, 50)
+        .expect("Retrieval failed!");
+
+    println!("{:?}", batches);
+
+    assert_eq!(3, batches.len());
+    assert_eq!(30, batches.first().unwrap().batch.next_sequence_number);
+    assert_eq!(50, batches.last().unwrap().batch.next_sequence_number);
+
+    assert_eq!(20, transactions.len());
+
+    // TEST 4: Get past the end
+    let (batches, transactions) = store
+        .batches_and_transactions(94, 120)
+        .expect("Retrieval failed!");
+
+    println!("{:?}", batches);
+
+    assert_eq!(2, batches.len());
+    assert_eq!(90, batches.first().unwrap().batch.next_sequence_number);
+    assert_eq!(100, batches.last().unwrap().batch.next_sequence_number);
+
+    assert_eq!(15, transactions.len());
+
+    // When we close the sending channel we also also end the service task
+    drop(_send);
+    drop(_pair);
+
+    _join.await.expect("No errors in task");
+}

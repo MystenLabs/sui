@@ -17,6 +17,7 @@ use std::{
 use sui_adapter::adapter;
 use sui_types::{
     base_types::*,
+    batch::{SignedBatch, TxSequenceNumber},
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
@@ -41,6 +42,7 @@ pub use authority_store::AuthorityStore;
 
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
+const MAX_ITEMS_LIMIT: u64 = 1000;
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -646,6 +648,27 @@ impl AuthorityState {
             requested_object_reference,
             object_and_lock,
         })
+    }
+
+    /// Handles a request for a batch info. It returns a sequence of items in the database
+    /// related to this request, and then indicates whether the request leads to being
+    /// subscribed to updates, and up to what point.
+    pub async fn handle_batch_info_request(
+        &self,
+        request: BatchInfoRequest,
+    ) -> Result<(Vec<SignedBatch>, Vec<(TxSequenceNumber, TransactionDigest)>), SuiError> {
+        // Ensure the range contains some elements and end > start
+        if request.end <= request.start {
+            return Err(SuiError::InvalidSequenceRangeError);
+        };
+
+        // Ensure we are not doing too much work per request
+        if request.end - request.start > MAX_ITEMS_LIMIT {
+            return Err(SuiError::TooManyItemsError(MAX_ITEMS_LIMIT));
+        }
+
+        self._database
+            .batches_and_transactions(request.start, request.end)
     }
 
     pub async fn new(

@@ -633,6 +633,57 @@ impl AuthorityStore {
         write_batch = write_batch.insert_batch(&self.schedule, schedule_to_write)?;
         write_batch.write().map_err(SuiError::from)
     }
+
+    /// This is the function that retrieves batches including transactions within a range.
+    ///
+    /// NOTE: the tail end of the sequence of transaction, namely the ones that are not
+    ///       entirely enclosed in a batch may not be complete, since different threads
+    ///       may write transactions into the sequence out of order.
+    pub fn batches_and_transactions(
+        &self,
+        start: u64,
+        end: u64,
+    ) -> Result<(Vec<SignedBatch>, Vec<(TxSequenceNumber, TransactionDigest)>), SuiError> {
+        // Get all batches that include requested transactions
+        let batches: Vec<SignedBatch> = self
+            .batches
+            .iter()
+            .skip_prior_to(&start)?
+            .take_while(|(_seq, batch)| batch.batch.initial_sequence_number < end)
+            .map(|(_, batch)| batch)
+            .collect();
+
+        // Get transactions in the retrieved batches. The first batch is included
+        // without transactions, so get transactions of all subsequent batches, or
+        // until the end of the sequence if the last batch does not contain the
+        // requested end sequence number.
+
+        let first_seq = batches
+            .first()
+            .ok_or(SuiError::NoBatchesFoundError)?
+            .batch
+            .next_sequence_number;
+        let mut last_seq = batches
+            .last()
+            .unwrap() // if the first exists the last exists too
+            .batch
+            .next_sequence_number;
+
+        if last_seq < end {
+            // This means that the request needs items beyond the end of the
+            // last batch, so we include all items.
+            last_seq = TxSequenceNumber::MAX;
+        }
+
+        let transactions: Vec<(TxSequenceNumber, TransactionDigest)> = self
+            .executed_sequence
+            .iter()
+            .skip_to(&first_seq)?
+            .take_while(|(seq, _tx)| *seq < last_seq)
+            .collect();
+
+        Ok((batches, transactions))
+    }
 }
 
 impl ModuleResolver for AuthorityStore {
