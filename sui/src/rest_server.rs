@@ -726,7 +726,7 @@ async fn transfer_object(
     });
 
     let (cert, effects, gas_used) = match wallet_context
-        .address_manager
+        .gateway
         .transfer_coin(owner, object_id, gas_object_id, to_address, tx_signer)
         .await
     {
@@ -914,15 +914,7 @@ async fn sync(
     })?;
 
     // Attempt to create a new account state, but continue if it already exists.
-    if let Err(error) = wallet_context.address_manager.create_account_state(address) {
-        info!("{:?}", error);
-    }
-
-    if let Err(err) = wallet_context
-        .address_manager
-        .sync_client_state(address)
-        .await
-    {
+    if let Err(err) = wallet_context.gateway.sync_client_state(address).await {
         *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
         return Err(custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
