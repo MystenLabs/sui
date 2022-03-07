@@ -300,11 +300,11 @@ impl AuthorityState {
             for object_id in transaction.shared_input_objects() {
                 // Check whether the shared objects have already been assigned a sequence number by
                 // the consensus. Bail if the transaction contains even one shared object that either:
-                // (i) was not assigned a sequence number, or 
-                // (ii) has a different sequence number than the current one. 
+                // (i) was not assigned a sequence number, or
+                // (ii) has a different sequence number than the current one.
                 //
-                // Note that if the shared object is not in storage (it has been destroyed), we keep 
-                // processing the transaction to unlock all single-writer objects. The execution engine 
+                // Note that if the shared object is not in storage (it has been destroyed), we keep
+                // processing the transaction to unlock all single-writer objects. The execution engine
                 // will simply execute no-op.
                 match self._database.sequenced(transaction_digest, *object_id)? {
                     Some(lock) => {
@@ -326,7 +326,7 @@ impl AuthorityState {
 
             // Now let's process the certificate as usual: this executes the transaction and
             // unlock all single-writer objects. Since transactions with shared objects always
-            // have at least one owner objects, it is not necessary to re-check the locks on 
+            // have at least one owner objects, it is not necessary to re-check the locks on
             // shared objects as we do wit owned objects.
             let result = self
                 .process_certificate(confirmation_transaction.clone())
