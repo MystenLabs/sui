@@ -334,7 +334,7 @@ impl AuthorityState {
             // Now let's process the certificate as usual: this executes the transaction and
             // unlock all single-writer objects. Since transactions with shared objects always
             // have at least one owner objects, it is not necessary to re-check the locks on
-            // shared objects as we do wit owned objects.
+            // shared objects as we do with owned objects.
             let result = self
                 .process_certificate(confirmation_transaction.clone())
                 .await;
@@ -356,6 +356,12 @@ impl AuthorityState {
         }
         // In case there are no shared objects, we simply process the certificate.
         else {
+            // Ensure an idempotent answer
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+            if transaction_info.certified_transaction.is_some() {
+                return Ok(transaction_info);
+            }
+
             self.process_certificate(confirmation_transaction).await
         }
     }

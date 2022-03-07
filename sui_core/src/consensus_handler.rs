@@ -1,10 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::AuthorityState;
+use crate::authority_server::AuthorityServer;
 use bytes::Bytes;
 use std::sync::Arc;
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::ConfirmationTransaction;
 use sui_types::serialize::{deserialize_message, SerializedMessage};
 use tokio::sync::broadcast::Receiver;
@@ -15,25 +15,28 @@ use tokio::task::JoinHandle;
 pub struct ConsensusHandler {
     /// Receive sequenced certificates from consensus.
     rx_consensus: Receiver<Bytes>,
-    /// The (global) authority state to update the locks.
-    state: Arc<AuthorityState>,
+    /// The (global) authority server to update the locks.
+    server: Arc<AuthorityServer>,
 }
 
 impl ConsensusHandler {
     /// Spawn a new `ConsensusHandler` in a separate tokio task.
-    pub fn spawn(rx_consensus: Receiver<Bytes>, state: Arc<AuthorityState>) -> JoinHandle<()> {
+    pub fn spawn(
+        rx_consensus: Receiver<Bytes>,
+        server: Arc<AuthorityServer>,
+    ) -> JoinHandle<SuiResult<()>> {
         tokio::spawn(async move {
             Self {
                 rx_consensus,
-                state,
+                server,
             }
             .run()
-            .await;
+            .await
         })
     }
 
     /// Main reactor loop receiving certificates from consensus.
-    async fn run(&mut self) {
+    async fn run(&mut self) -> SuiResult<()> {
         while let Ok(bytes) = self.rx_consensus.recv().await {
             // The consensus simply orders bytes, so we first need to deserialize the
             // certificate. If the deserialization fail it is safe to ignore the
@@ -54,7 +57,12 @@ impl ConsensusHandler {
 
             // Process the certificate to set the locks on the shared objects.
             let certificate = &confirmation.certificate;
-            match self.state.handle_consensus_certificate(certificate).await {
+            let result = self
+                .server
+                .state
+                .handle_consensus_certificate(certificate)
+                .await;
+            match &result {
                 // Log the errors that are our faults (not the client's).
                 Err(SuiError::StorageError(e)) => {
                     log::error!("{}", e);
@@ -62,7 +70,7 @@ impl ConsensusHandler {
                     // If we have a store error we cannot continue processing other
                     // outputs from consensus. We may otherwise attribute locks to
                     // shared objects that are different from other authorities.
-                    panic!("{}", e);
+                    return result;
                 }
                 // Log the errors that are the client's fault (not ours). This is
                 // only for debug purposes: all correct authorities will do the same.
@@ -73,5 +81,6 @@ impl ConsensusHandler {
                 Ok(()) => (),
             }
         }
+        Ok(())
     }
 }
