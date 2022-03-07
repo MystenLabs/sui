@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    block_waiter::{BatchMessage, BlockWaiter, Transaction},
+    block_waiter::{BatchMessage, BatchMessageError, BatchResult, BlockWaiter, Transaction},
     certificate_waiter::CertificateWaiter,
     core::Core,
     error::DagError,
@@ -30,6 +30,7 @@ use std::{
     sync::{atomic::AtomicU64, Arc},
 };
 use store::Store;
+use thiserror::Error;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::info;
 
@@ -68,6 +69,14 @@ pub enum WorkerPrimaryMessage {
     OthersBatch(Digest, WorkerId),
     /// The worker sends a requested batch
     RequestedBatch(Digest, Vec<Transaction>),
+    /// An error has been returned by worker
+    Error(WorkerPrimaryError),
+}
+
+#[derive(Debug, Serialize, Deserialize, Error, Clone, PartialEq)]
+pub enum WorkerPrimaryError {
+    #[error("Batch with id {0} has not been found")]
+    RequestedBatchNotFound(Digest),
 }
 
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
@@ -290,7 +299,7 @@ impl<PublicKey: VerifyingKey> MessageHandler for PrimaryReceiverHandler<PublicKe
 struct WorkerReceiverHandler {
     tx_our_digests: Sender<(Digest, WorkerId)>,
     tx_others_digests: Sender<(Digest, WorkerId)>,
-    tx_batches: Sender<BatchMessage>,
+    tx_batches: Sender<BatchResult>,
 }
 
 #[async_trait]
@@ -314,12 +323,19 @@ impl MessageHandler for WorkerReceiverHandler {
                 .expect("Failed to send workers' digests"),
             WorkerPrimaryMessage::RequestedBatch(digest, transactions) => self
                 .tx_batches
-                .send(BatchMessage {
+                .send(Ok(BatchMessage {
                     id: digest,
                     transactions,
-                })
+                }))
                 .await
-                .expect("Failed to send batches"),
+                .expect("Failed to send batch result"),
+            WorkerPrimaryMessage::Error(error) => match error.clone() {
+                WorkerPrimaryError::RequestedBatchNotFound(digest) => self
+                    .tx_batches
+                    .send(Err(BatchMessageError { id: digest }))
+                    .await
+                    .expect("Failed to send batch result"),
+            },
         }
         Ok(())
     }

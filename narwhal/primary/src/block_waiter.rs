@@ -56,10 +56,19 @@ pub struct GetBlockResponse {
     batches: Vec<BatchMessage>,
 }
 
+pub type BatchResult = Result<BatchMessage, BatchMessageError>;
+
 #[derive(Clone, Default, Debug)]
 pub struct BatchMessage {
     pub id: Digest,
     pub transactions: Vec<Transaction>,
+}
+
+#[derive(Clone, Default, Debug)]
+// If worker couldn't send us a batch, this error message
+// should be passed to BlockWaiter.
+pub struct BatchMessageError {
+    pub id: Digest,
 }
 
 type BlockResult<T> = Result<T, BlockError>;
@@ -160,7 +169,7 @@ impl fmt::Display for BlockErrorType {
 ///
 ///     // Dummy - we expect to receive the requested batches via another component
 ///     // and get fed via the tx_batches channel.
-///     tx_batches.send(BatchMessage{ id: Digest::default(), transactions: vec![] }).await;
+///     tx_batches.send(Ok(BatchMessage{ id: Digest::default(), transactions: vec![] })).await;
 ///
 ///     // Wait to receive the block output to the provided sender channel
 ///     match rx_get_block.recv().await {
@@ -201,13 +210,13 @@ pub struct BlockWaiter<PublicKey: VerifyingKey> {
 
     /// The batch receive channel is listening for received
     /// messages for batches that have been requested
-    rx_batch_receiver: Receiver<BatchMessage>,
+    rx_batch_receiver: Receiver<BatchResult>,
 
     /// Maps batch ids to channels that "listen" for arrived batch messages.
     /// On the key we hold the batch id (we assume it's globally unique).
     /// On the value we hold a tuple of the channel to communicate the result
     /// to and also a timestamp of when the request was sent.
-    tx_pending_batch: HashMap<Digest, (oneshot::Sender<BatchMessage>, u128)>,
+    tx_pending_batch: HashMap<Digest, (oneshot::Sender<BatchResult>, u128)>,
 
     /// A map that holds the channels we should notify with the
     /// GetBlock responses.
@@ -222,7 +231,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
         committee: Committee<PublicKey>,
         certificate_store: Store<Digest, Certificate<PublicKey>>,
         rx_commands: Receiver<BlockCommand>,
-        batch_receiver: Receiver<BatchMessage>,
+        batch_receiver: Receiver<BatchResult>,
     ) {
         tokio::spawn(async move {
             Self {
@@ -374,7 +383,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
     async fn send_batch_requests(
         &mut self,
         header: Header<PublicKey>,
-    ) -> Vec<(Digest, oneshot::Receiver<BatchMessage>)> {
+    ) -> Vec<(Digest, oneshot::Receiver<BatchResult>)> {
         // Get the "now" time
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -416,16 +425,18 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
         batch_receivers
     }
 
-    async fn handle_batch_message(&mut self, message: BatchMessage) {
-        match self.tx_pending_batch.remove(&message.id) {
+    async fn handle_batch_message(&mut self, result: BatchResult) {
+        let batch_id = result.clone().map_or_else(|e| e.id, |r| r.id);
+
+        match self.tx_pending_batch.remove(&batch_id) {
             Some((sender, _)) => {
-                debug!("Sending batch message with id {}", &message.id);
+                debug!("Sending BatchResult with id {}", &batch_id);
                 sender
-                    .send(message.clone())
-                    .expect("Couldn't send BatchMessage for pending batch");
+                    .send(result)
+                    .expect("Couldn't send BatchResult for pending batch");
             }
             None => {
-                debug!("Couldn't find pending batch with id {}", message.id);
+                debug!("Couldn't find pending batch with id {}", &batch_id);
             }
         }
     }
@@ -435,7 +446,7 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
     /// to be sent back to the request.
     async fn wait_for_all_batches(
         block_id: Digest,
-        batches_receivers: Vec<(Digest, oneshot::Receiver<BatchMessage>)>,
+        batches_receivers: Vec<(Digest, oneshot::Receiver<BatchResult>)>,
     ) -> BlockResult<GetBlockResponse> {
         let waiting: Vec<_> = batches_receivers
             .into_iter()
@@ -453,21 +464,18 @@ impl<PublicKey: VerifyingKey> BlockWaiter<PublicKey> {
     /// then a timeout is yielded and an error is returned.
     async fn wait_for_batch(
         block_id: Digest,
-        batch_receiver: oneshot::Receiver<BatchMessage>,
+        batch_receiver: oneshot::Receiver<BatchResult>,
     ) -> BlockResult<BatchMessage> {
         // ensure that we won't wait forever for a batch result to come
-        return match timeout(BATCH_RETRIEVE_TIMEOUT, batch_receiver).await {
-            Ok(Ok(result)) => BlockResult::Ok(result),
-            Ok(Err(_)) => BlockError {
-                id: block_id,
-                error: BlockErrorType::BatchError,
-            }
-            .into(),
-            Err(_) => BlockError {
-                id: block_id,
-                error: BlockErrorType::BatchTimeout,
-            }
-            .into(),
+        let r = match timeout(BATCH_RETRIEVE_TIMEOUT, batch_receiver).await {
+            Ok(Ok(result)) => result.or(Err(BlockErrorType::BatchError)),
+            Ok(Err(_)) => Err(BlockErrorType::BatchError),
+            Err(_) => Err(BlockErrorType::BatchTimeout),
         };
+
+        r.map_err(|e| BlockError {
+            id: block_id,
+            error: e,
+        })
     }
 }

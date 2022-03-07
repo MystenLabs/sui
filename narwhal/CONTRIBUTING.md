@@ -16,7 +16,7 @@ We actively welcome your pull requests.
 The codebase uses the [Clippy](https://github.com/rust-lang/rust-clippy) linter to ensure that common mistakes are caught.
 To install follow the instructions on the Clippy repository. To run the linter locally use with the following properties:
 ```
-cargo clippy --all -- -D clippy::all -D warnings -D clippy::disallowed_method
+cargo clippy --tests --all -- -D clippy::all -D warnings -D clippy::disallowed_method
 ```
 
 ## Run the formatter

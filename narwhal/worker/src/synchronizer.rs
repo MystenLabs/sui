@@ -10,7 +10,7 @@ use config::{Committee, WorkerId};
 use crypto::{traits::VerifyingKey, Digest};
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::SimpleSender;
-use primary::{PrimaryWorkerMessage, WorkerPrimaryMessage};
+use primary::{PrimaryWorkerMessage, WorkerPrimaryError, WorkerPrimaryMessage};
 use std::{
     collections::HashMap,
     time::{SystemTime, UNIX_EPOCH},
@@ -239,26 +239,25 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
     }
 
     async fn handle_request_batch(&mut self, digest: Digest) {
-        if let Ok(Some(batch_serialised)) = self.store.read(digest.clone()).await {
-            let batch = match bincode::deserialize(&batch_serialised).unwrap() {
-                WorkerMessage::<PublicKey>::Batch(batch) => batch,
-                _ => {
-                    panic!("Wrong type has been stored!");
-                }
-            };
+        let message = match self.store.read(digest.clone()).await {
+            Ok(Some(batch_serialised)) => {
+                let batch = match bincode::deserialize(&batch_serialised).unwrap() {
+                    WorkerMessage::<PublicKey>::Batch(batch) => batch,
+                    _ => {
+                        panic!("Wrong type has been stored!");
+                    }
+                };
+                WorkerPrimaryMessage::RequestedBatch(digest.clone(), batch.to_vec())
+            }
+            _ => WorkerPrimaryMessage::Error(WorkerPrimaryError::RequestedBatchNotFound(
+                digest.clone(),
+            )),
+        };
 
-            // send batch response to primary
-            let message = WorkerPrimaryMessage::RequestedBatch(digest.clone(), batch.to_vec());
-            let serialised =
-                bincode::serialize(&message).expect("Failed to serialise the RequestBatch message");
-
-            self.tx_primary
-                .send(serialised)
-                .await
-                .expect("Failed to send message to primary channel");
-        } else {
-            // TODO: error case or if no batch has been found
-            // send to primary that no batch has been found
-        }
+        let serialised = bincode::serialize(&message).expect("Failed to serialise message");
+        self.tx_primary
+            .send(serialised)
+            .await
+            .expect("Failed to send message to primary channel");
     }
 }

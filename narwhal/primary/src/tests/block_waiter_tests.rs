@@ -16,6 +16,7 @@ use crypto::{
     Digest, Hash,
 };
 
+use crate::block_waiter::BatchResult;
 use futures::StreamExt;
 use network::SimpleSender;
 use std::{collections::HashMap, net::SocketAddr};
@@ -380,7 +381,7 @@ fn resolve_name_and_committee() -> (Ed25519PublicKey, Committee<Ed25519PublicKey
 pub fn worker_listener<PublicKey: VerifyingKey>(
     address: SocketAddr,
     expected_batches: HashMap<Digest, BatchMessage>,
-    tx_batch_messages: Sender<BatchMessage>,
+    tx_batch_messages: Sender<BatchResult>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let listener = TcpListener::bind(&address).await.unwrap();
@@ -399,7 +400,7 @@ pub fn worker_listener<PublicKey: VerifyingKey>(
                         Ok(PrimaryWorkerMessage::<PublicKey>::RequestBatch(id)) => {
                             if expected_batches.contains_key(&id) {
                                 tx_batch_messages
-                                    .send(expected_batches.get(&id).cloned().unwrap())
+                                    .send(Ok(expected_batches.get(&id).cloned().unwrap()))
                                     .await
                                     .unwrap();
 

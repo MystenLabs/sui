@@ -106,3 +106,56 @@ async fn test_successful_request_batch() {
         panic!("Expected to successfully received a request batch");
     }
 }
+
+#[tokio::test]
+async fn test_request_batch_not_found() {
+    let (tx_message, rx_message) = channel(1);
+    let (tx_primary, mut rx_primary) = channel(1);
+
+    let mut keys = keys();
+    let (name, _) = keys.pop().unwrap();
+    let id = 0;
+    let committee = committee_with_base_port(9_000);
+
+    // Create a new test store.
+    let store = open_batch_store();
+
+    // Spawn a `Synchronizer` instance.
+    Synchronizer::spawn(
+        name.clone(),
+        id,
+        committee.clone(),
+        store.clone(),
+        /* gc_depth */ 50, // Not used in this test.
+        /* sync_retry_delay */ 1_000_000, // Ensure it is not triggered.
+        /* sync_retry_nodes */ 3, // Not used in this test.
+        rx_message,
+        tx_primary,
+    );
+
+    // The non existing batch id
+    let expected_batch_id = Digest::default();
+
+    // WHEN we send a message to retrieve the batch that doesn't exist
+    let message = PrimaryWorkerMessage::<Ed25519PublicKey>::RequestBatch(expected_batch_id.clone());
+
+    tx_message
+        .send(message)
+        .await
+        .expect("Should be able to send message");
+
+    // THEN we should receive batch the batch
+    if let Ok(Some(message)) = timeout(Duration::from_secs(5), rx_primary.recv()).await {
+        match bincode::deserialize(&message).unwrap() {
+            WorkerPrimaryMessage::Error(error) => {
+                assert_eq!(
+                    error,
+                    WorkerPrimaryError::RequestedBatchNotFound(expected_batch_id)
+                );
+            }
+            _ => panic!("Unexpected message"),
+        }
+    } else {
+        panic!("Expected to successfully received a request batch");
+    }
+}
