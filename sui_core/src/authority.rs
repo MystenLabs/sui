@@ -287,24 +287,31 @@ impl AuthorityState {
         &self,
         confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
-        // Check the certificate and retrieve the transfer data.
         let certificate = &confirmation_transaction.certificate;
+        let transaction = &certificate.transaction;
+        let transaction_digest = transaction.digest();
+
+        // Ensure an idempotent answer.
+        let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+        if transaction_info.signed_effects.is_some() {
+            return Ok(transaction_info);
+        }
+
+        // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
         // If the transaction contains shared objects, we need to ensure they have been scheduled
         // for processing by the consensus protocol.
-        let transaction = &certificate.transaction;
-        let transaction_digest = transaction.digest();
         if transaction.contains_shared_object() {
             let mut lock_errors = Vec::new();
             for object_id in transaction.shared_input_objects() {
                 // Check whether the shared objects have already been assigned a sequence number by
                 // the consensus. Bail if the transaction contains even one shared object that either:
-                // (i) was not assigned a sequence number, or 
-                // (ii) has a different sequence number than the current one. 
+                // (i) was not assigned a sequence number, or
+                // (ii) has a different sequence number than the current one.
                 //
-                // Note that if the shared object is not in storage (it has been destroyed), we keep 
-                // processing the transaction to unlock all single-writer objects. The execution engine 
+                // Note that if the shared object is not in storage (it has been destroyed), we keep
+                // processing the transaction to unlock all single-writer objects. The execution engine
                 // will simply execute no-op.
                 match self._database.sequenced(transaction_digest, *object_id)? {
                     Some(lock) => {
@@ -326,7 +333,7 @@ impl AuthorityState {
 
             // Now let's process the certificate as usual: this executes the transaction and
             // unlock all single-writer objects. Since transactions with shared objects always
-            // have at least one owner objects, it is not necessary to re-check the locks on 
+            // have at least one owner objects, it is not necessary to re-check the locks on
             // shared objects as we do wit owned objects.
             let result = self
                 .process_certificate(confirmation_transaction.clone())
@@ -349,12 +356,6 @@ impl AuthorityState {
         }
         // In case there are no shared objects, we simply process the certificate.
         else {
-            // Ensure an idempotent answer
-            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-            if transaction_info.certified_transaction.is_some() {
-                return Ok(transaction_info);
-            }
-
             self.process_certificate(confirmation_transaction).await
         }
     }

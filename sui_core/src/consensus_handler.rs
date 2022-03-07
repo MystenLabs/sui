@@ -60,7 +60,7 @@ impl ConsensusHandler {
                     log::error!("{}", e);
 
                     // If we have a store error we cannot continue processing other
-                    // outputs from consensus. We may otherwise attribute locks to 
+                    // outputs from consensus. We may otherwise attribute locks to
                     // shared objects that are different from other authorities.
                     panic!("{}", e);
                 }
