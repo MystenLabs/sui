@@ -1776,7 +1776,7 @@ async fn shared_object() {
     let genesis_package_objects = genesis::clone_genesis_packages();
     let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
 
-    let transaction = Transaction::new_move_call(
+    let data = TransactionData::new_move_call(
         sender,
         package_object_ref,
         ident_str!(module).to_owned(),
@@ -1791,8 +1791,9 @@ async fn shared_object() {
             bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
         ],
         MAX_GAS,
-        &keypair,
     );
+    let signature = Signature::new(&data, &keypair);
+    let transaction = Transaction::new(data, signature);
     let transaction_digest = transaction.digest();
 
     // Submit the transaction and assemble a certificate.
