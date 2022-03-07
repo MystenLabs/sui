@@ -4,7 +4,6 @@
 
 pub mod config;
 pub mod keystore;
-pub mod sequencer;
 pub mod shell;
 pub mod sui_commands;
 pub mod sui_json;

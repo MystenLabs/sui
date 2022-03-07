@@ -4,28 +4,23 @@ use crate::config::{
     AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, WalletConfig,
 };
 use crate::keystore::KeystoreType;
-use crate::sequencer::MockSequencer;
 use anyhow::anyhow;
-use bytes::Bytes;
 use futures::future::join_all;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 use structopt::StructOpt;
 use sui_adapter::adapter::generate_package_id;
 use sui_adapter::genesis;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
-use sui_core::consensus_handler::ConsensusHandler;
 use sui_types::base_types::{SequenceNumber, TxContext};
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
-use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info};
 
 #[derive(StructOpt)]
@@ -83,22 +78,8 @@ async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
             .collect(),
     );
 
-    // TODO: Expose a way for clients to submit certificates to the consensus.
-    let mock_latency = Duration::from_millis(50);
-    let (_tx_consensus_input, rx_consensus_input) = mpsc::channel(1_000);
-    let (tx_consensus_output, _rx_consensus_output) = broadcast::channel(1_000);
-
     for authority in &config.authorities {
-        let rx = tx_consensus_output.subscribe();
-        let server = make_server(
-            authority,
-            &committee,
-            vec![],
-            &[],
-            config.buffer_size,
-            Some(rx),
-        )
-        .await?;
+        let server = make_server(authority, &committee, vec![], &[], config.buffer_size).await?;
 
         handles.push(async move {
             let spawned_server = match server.spawn().await {
@@ -113,8 +94,6 @@ async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
             }
         });
     }
-
-    MockSequencer::spawn(mock_latency, rx_consensus_input, tx_consensus_output);
 
     info!("Started {} authorities", handles.len());
     join_all(handles).await;
@@ -232,7 +211,6 @@ pub async fn genesis(
             &preload_objects,
             config.buffer_size,
             &mut genesis_ctx.clone(),
-            None,
         )
         .await?;
     }
@@ -259,7 +237,6 @@ pub async fn make_server(
     preload_modules: Vec<Vec<CompiledModule>>,
     preload_objects: &[Object],
     buffer_size: usize,
-    rx_consensus_output: Option<broadcast::Receiver<Bytes>>,
 ) -> SuiResult<AuthorityServer> {
     let mut genesis_ctx = genesis::get_genesis_context();
     make_server_with_genesis_ctx(
@@ -269,7 +246,6 @@ pub async fn make_server(
         preload_objects,
         buffer_size,
         &mut genesis_ctx,
-        rx_consensus_output,
     )
     .await
 }
@@ -281,7 +257,6 @@ async fn make_server_with_genesis_ctx(
     preload_objects: &[Object],
     buffer_size: usize,
     genesis_ctx: &mut TxContext,
-    rx_consensus_output: Option<broadcast::Receiver<Bytes>>,
 ) -> SuiResult<AuthorityServer> {
     let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
     let name = *authority.key_pair.public_key_bytes();
@@ -303,15 +278,10 @@ async fn make_server_with_genesis_ctx(
         state.insert_object(object.clone()).await;
     }
 
-    let guarded_state = Arc::new(state);
-    if let Some(rx) = rx_consensus_output {
-        ConsensusHandler::spawn(rx, guarded_state.clone());
-    }
-
     Ok(AuthorityServer::new(
         authority.host.clone(),
         authority.port,
         buffer_size,
-        guarded_state,
+        Arc::new(state),
     ))
 }

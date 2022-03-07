@@ -312,6 +312,8 @@ impl AuthorityState {
                 .await;
 
             // If the execution is successfully, we cleanup some data structures.
+            // TODO [#676]: What if we crash here (line 315)? The cleanup should be done atomically
+            // within `process_certificate`. It is not safety-critical but cleanup won't happen.
             if result.is_ok() {
                 for object_id in transaction.shared_input_objects() {
                     self._database
@@ -459,12 +461,12 @@ impl AuthorityState {
 
         // Persist the certificate. We are about to lock one or more shared object.
         // We thus need to make sure someone (if not the client) can continue the protocol.
-        self._database
-            .persist_certificate(&transaction_digest, certificate)?;
-
-        // Lock the shared object for this particular transaction.
-        self._database
-            .lock_shared_objects(transaction_digest, transaction)
+        // Also atomically lock the shared objects for this particular transaction.
+        self._database.persist_certificate_and_lock_shared_objects(
+            transaction_digest,
+            transaction,
+            certificate.clone(),
+        )
     }
 
     fn transfer(
