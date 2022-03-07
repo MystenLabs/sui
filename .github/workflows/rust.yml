@@ -34,6 +34,7 @@ jobs:
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
+    - uses: actions/checkout@v2
     - name: Detect Changes
       uses: dorny/paths-filter@v2.10.2
       id: diff
