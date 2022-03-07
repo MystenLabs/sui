@@ -833,11 +833,6 @@ impl AuthorityState {
             .collect();
         Ok(filtered)
     }
-
-    #[cfg(test)]
-    pub fn database(&self) -> &Arc<AuthorityStore> {
-        &self._database
-    }
 }
 
 impl ModuleResolver for AuthorityState {
