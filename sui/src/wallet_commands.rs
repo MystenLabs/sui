@@ -181,8 +181,8 @@ pub enum WalletCommands {
     },
 }
 
-struct SimpleTransactionSigner {
-    keystore: Arc<RwLock<Box<dyn Keystore>>>,
+pub struct SimpleTransactionSigner {
+    pub keystore: Arc<RwLock<Box<dyn Keystore>>>,
 }
 // A simple signer callback implementation, which signs the content without validation.
 #[async_trait]
