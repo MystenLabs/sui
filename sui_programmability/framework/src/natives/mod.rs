@@ -46,11 +46,7 @@ pub fn all_natives(
             test_scenario::transferred_object_ids,
         ),
         ("Transfer", "transfer_internal", transfer::transfer_internal),
-        (
-            "Transfer",
-            "transfer_to_object_id",
-            transfer::transfer_to_object_id,
-        ),
+        ("Transfer", "freeze_object", transfer::freeze_object),
         ("TxContext", "fresh_id", tx_context::fresh_id),
         (
             "TxContext",
