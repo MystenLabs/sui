@@ -4,9 +4,10 @@
 use std::sync::Arc;
 
 use crate::authority::authority_tests::init_state_with_object_id;
-use sui_types::base_types::{dbg_addr, dbg_object_id};
+use sui_types::base_types::{dbg_addr, dbg_object_id, TransactionDigest};
 use sui_types::object::ObjectFormatOptions;
-use sui_types::serialize::serialize_object_info_request;
+use sui_types::serialize::{deserialize_message, serialize_object_info_request};
+use typed_store::Map;
 
 use super::*;
 
@@ -104,4 +105,134 @@ async fn test_channel_infra() {
 
     drop(tx);
     handle.await.expect("Problem closing task");
+}
+
+#[tokio::test]
+async fn test_subscription() {
+    let sender = dbg_addr(1);
+    let object_id = dbg_object_id(1);
+    let authority_state = init_state_with_object_id(sender, object_id).await;
+
+    // Start the batch server
+    let mut server = AuthorityServer::new("127.0.0.1".to_string(), 998, 65000, authority_state);
+
+    let db = server.state.db().clone();
+    let db2 = server.state.db().clone();
+
+    let _join = server
+        .spawn_batch_subsystem(10, Duration::from_secs(500))
+        .await
+        .expect("Problem launching subsystem.");
+
+    let tx_zero = TransactionDigest::new([0; 32]);
+    for i in 0u64..105 {
+        db.executed_sequence
+            .insert(&i, &tx_zero)
+            .expect("Failed to write.");
+
+        server
+            .state
+            .batch_sender()
+            .send_item(i, tx_zero)
+            .await
+            .expect("Send to the channel.");
+    }
+
+    let (channel, (mut tx, mut rx)) = TestChannel::new();
+
+    let server = Arc::new(server);
+
+    let inner_server1 = server.clone();
+    let handle1 = tokio::spawn(async move {
+        inner_server1.handle_messages(channel).await;
+    });
+
+    // TEST 1: Get historical data
+
+    let req = BatchInfoRequest { start: 12, end: 34 };
+
+    let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
+    tx.send(Ok(bytes)).await.expect("Problem sending");
+
+    let mut num_batches = 0;
+    let mut num_transactions = 0;
+
+    while let Some(data) = rx.next().await {
+        match deserialize_message(&data[..]).expect("Bad response") {
+            SerializedMessage::BatchInfoResp(resp) => match *resp {
+                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                    num_batches += 1;
+                    if signed_batch.batch.next_sequence_number >= 34 {
+                        break;
+                    }
+                }
+                BatchInfoResponseItem(UpdateItem::Transaction((_seq, _digest))) => {
+                    num_transactions += 1;
+                }
+            },
+            _ => {
+                panic!("Bad response");
+            }
+        }
+    }
+
+    assert_eq!(4, num_batches);
+    assert_eq!(30, num_transactions);
+
+    // Test 2: Get subscription data
+
+    // Add data in real time
+    let inner_server2 = server.clone();
+    let _handle2 = tokio::spawn(async move {
+        for i in 105..150 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            db2.executed_sequence
+                .insert(&i, &tx_zero)
+                .expect("Failed to write.");
+            println!("Send item {}", i);
+            inner_server2
+                .state
+                .batch_sender()
+                .send_item(i, tx_zero)
+                .await
+                .expect("Send to the channel.");
+        }
+    });
+
+    let req = BatchInfoRequest {
+        start: 101,
+        end: 112,
+    };
+
+    let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
+    tx.send(Ok(bytes)).await.expect("Problem sending");
+
+    let mut num_batches = 0;
+    let mut num_transactions = 0;
+
+    while let Some(data) = rx.next().await {
+        match deserialize_message(&data[..]).expect("Bad response") {
+            SerializedMessage::BatchInfoResp(resp) => match *resp {
+                BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
+                    num_batches += 1;
+                    if signed_batch.batch.next_sequence_number >= 112 {
+                        break;
+                    }
+                }
+                BatchInfoResponseItem(UpdateItem::Transaction((seq, _digest))) => {
+                    println!("Received {}", seq);
+                    num_transactions += 1;
+                }
+            },
+            _ => {
+                panic!("Bad response");
+            }
+        }
+    }
+
+    assert_eq!(3, num_batches);
+    assert_eq!(20, num_transactions);
+
+    drop(tx);
+    handle1.await.expect("Problem closing task");
 }

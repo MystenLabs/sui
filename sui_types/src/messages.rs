@@ -201,7 +201,7 @@ pub struct BatchInfoRequest {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct BatchInfoResponseItem(UpdateItem);
+pub struct BatchInfoResponseItem(pub UpdateItem);
 
 impl From<SuiAddress> for AccountInfoRequest {
     fn from(account: SuiAddress) -> Self {

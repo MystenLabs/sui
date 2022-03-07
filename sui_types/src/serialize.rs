@@ -123,6 +123,14 @@ pub fn serialize_vote(value: &SignedTransaction) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Vote(value))
 }
 
+pub fn serialize_batch_request(request: &BatchInfoRequest) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::BatchInfoReq(request))
+}
+
+pub fn serialize_batch_item(item: &BatchInfoResponseItem) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::BatchInfoResp(item))
+}
+
 pub fn serialize_vote_into<W>(writer: W, value: &SignedTransaction) -> Result<(), anyhow::Error>
 where
     W: std::io::Write,

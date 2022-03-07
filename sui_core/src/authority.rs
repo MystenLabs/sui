@@ -10,14 +10,14 @@ use move_core_types::{
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
     pin::Pin,
     sync::Arc,
 };
 use sui_adapter::adapter;
 use sui_types::{
     base_types::*,
-    batch::{SignedBatch, TxSequenceNumber},
+    batch::UpdateItem,
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
@@ -42,7 +42,7 @@ pub use authority_store::AuthorityStore;
 
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
-const MAX_ITEMS_LIMIT: u64 = 1000;
+const MAX_ITEMS_LIMIT: u64 = 10_000;
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -650,13 +650,13 @@ impl AuthorityState {
         })
     }
 
-    /// Handles a request for a batch info. It returns a sequence of items in the database
-    /// related to this request, and then indicates whether the request leads to being
-    /// subscribed to updates, and up to what point.
+    /// Handles a request for a batch info. It returns a sequence of
+    /// [batches, transactions, batches, transactions] as UpdateItems, and a flag
+    /// that is true if the request implies subscribing to live updates.
     pub async fn handle_batch_info_request(
         &self,
         request: BatchInfoRequest,
-    ) -> Result<(Vec<SignedBatch>, Vec<(TxSequenceNumber, TransactionDigest)>), SuiError> {
+    ) -> Result<(VecDeque<UpdateItem>, bool), SuiError> {
         // Ensure the range contains some elements and end > start
         if request.end <= request.start {
             return Err(SuiError::InvalidSequenceRangeError);
@@ -667,8 +667,50 @@ impl AuthorityState {
             return Err(SuiError::TooManyItemsError(MAX_ITEMS_LIMIT));
         }
 
-        self._database
-            .batches_and_transactions(request.start, request.end)
+        let (batches, transactions) = self
+            ._database
+            .batches_and_transactions(request.start, request.end)?;
+
+        let mut dq_batches = std::collections::VecDeque::from(batches);
+        let mut dq_transactions = std::collections::VecDeque::from(transactions);
+        let mut items = VecDeque::with_capacity(dq_batches.len() + dq_transactions.len());
+        let mut last_batch_next_seq = 0;
+
+        // Send full historical data as [Batch - Transactions - Batch - Transactions - Batch].
+        while !dq_batches.is_empty() {
+            // Get head of batches
+            // NOTE: safe to unwrap because of check above.
+            let current_batch = dq_batches.pop_front().unwrap();
+
+            // Get all transactions belonging to this batch and send them
+            loop {
+                // No more items or item too large for this batch
+                if dq_transactions.is_empty()
+                    || dq_transactions[0].0 >= current_batch.batch.next_sequence_number
+                {
+                    break;
+                }
+
+                let current_transaction = dq_transactions.pop_front().unwrap();
+                items.push_back(UpdateItem::Transaction(current_transaction));
+            }
+
+            // Now send the batch
+            last_batch_next_seq = current_batch.batch.next_sequence_number;
+            items.push_back(UpdateItem::Batch(current_batch));
+        }
+
+        // whether we have sent everything requested, or need to start
+        // live notifications.
+        let should_subscribe = request.end > last_batch_next_seq;
+
+        // If any transactions are left they must be outside a batch
+        while let Some(current_transaction) = dq_transactions.pop_front() {
+            // Remember the last sequence sent
+            items.push_back(UpdateItem::Transaction(current_transaction));
+        }
+
+        Ok((items, should_subscribe))
     }
 
     pub async fn new(
@@ -703,6 +745,11 @@ impl AuthorityState {
 
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {
         self._database.clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn batch_sender(&self) -> &BatchSender {
+        &self.batch_channels.as_ref().unwrap().0
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {

@@ -318,6 +318,20 @@ async fn test_batch_store_retrieval() {
             .expect("Send to the channel.");
     }
 
+    // Add a few out of order transactions that should be ignored
+    // NOTE: gap between 104 and 110
+    for i in 110u64..120 {
+        inner_store
+            .executed_sequence
+            .insert(&i, &tx_zero)
+            .expect("Failed to write.");
+
+        _send
+            .send_item(i, tx_zero)
+            .await
+            .expect("Send to the channel.");
+    }
+
     // TEST 1: Get batches across boundaries
 
     let (batches, transactions) = store
@@ -366,6 +380,18 @@ async fn test_batch_store_retrieval() {
     assert_eq!(100, batches.last().unwrap().batch.next_sequence_number);
 
     assert_eq!(15, transactions.len());
+
+    // TEST 5: Both past the end
+    let (batches, transactions) = store
+        .batches_and_transactions(123, 222)
+        .expect("Retrieval failed!");
+
+    println!("{:?}", batches);
+
+    assert_eq!(1, batches.len());
+    assert_eq!(100, batches.first().unwrap().batch.next_sequence_number);
+
+    assert_eq!(5, transactions.len());
 
     // When we close the sending channel we also also end the service task
     drop(_send);

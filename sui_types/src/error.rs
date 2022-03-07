@@ -136,12 +136,18 @@ pub enum SuiError {
     ClientIoError { error: String },
     #[error("Cannot transfer immutable object.")]
     TransferImmutableError,
+
+    // Errors related to batches
     #[error("The number of items requested exceeds defined limits of {0}.")]
     TooManyItemsError(u64),
     #[error("The range specified is invalid.")]
     InvalidSequenceRangeError,
     #[error("No batches mached the range requested.")]
     NoBatchesFoundError,
+    #[error("The channel to repond to the client returned an error.")]
+    CannotSendClientMessageError,
+    #[error("Subscription error, possibly due to connection being too slow to consume items.")]
+    SubscriptionServiceError,
 
     // Move module publishing related errors
     #[error("Failed to load the Move module, reason: {error:?}.")]

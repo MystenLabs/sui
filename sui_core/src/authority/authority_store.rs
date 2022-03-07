@@ -635,10 +635,7 @@ impl AuthorityStore {
     }
 
     /// This is the function that retrieves batches including transactions within a range.
-    ///
-    /// NOTE: the tail end of the sequence of transaction, namely the ones that are not
-    ///       entirely enclosed in a batch may not be complete, since different threads
-    ///       may write transactions into the sequence out of order.
+    #[allow(clippy::type_complexity)]
     pub fn batches_and_transactions(
         &self,
         start: u64,
@@ -669,17 +666,39 @@ impl AuthorityStore {
             .batch
             .next_sequence_number;
 
+        let mut in_sequence = last_seq;
+        let in_sequence_ptr = &mut in_sequence;
+
         if last_seq < end {
             // This means that the request needs items beyond the end of the
             // last batch, so we include all items.
             last_seq = TxSequenceNumber::MAX;
         }
 
+        /* Since the database writes are asynchronous it may be the case that the tail end of the
+        sequence misses items. This will confuse calling logic, so we filter them out and allow
+        callers to use the subscription API to catch the latest items in order. */
+
         let transactions: Vec<(TxSequenceNumber, TransactionDigest)> = self
             .executed_sequence
             .iter()
             .skip_to(&first_seq)?
-            .take_while(|(seq, _tx)| *seq < last_seq)
+            .take_while(|(seq, _tx)| {
+                // Before the end of the last batch we want everything.
+                if *seq < *in_sequence_ptr {
+                    return true;
+                };
+
+                // After the end of the last batch we only take items in sequence.
+                if *seq < last_seq && *seq == *in_sequence_ptr {
+                    *in_sequence_ptr += 1;
+                    return true;
+                }
+
+                // If too large or out of sequence after the last batch
+                // we stop taking items.
+                false
+            })
             .collect();
 
         Ok((batches, transactions))

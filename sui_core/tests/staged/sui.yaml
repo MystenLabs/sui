@@ -18,11 +18,32 @@ AccountInfoResponse:
             - TYPENAME: ObjectDigest
     - owner:
         TYPENAME: SuiAddress
+AuthorityBatch:
+  STRUCT:
+    - next_sequence_number: U64
+    - initial_sequence_number: U64
+    - size: U64
+    - previous_digest:
+        OPTION:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 32
+    - transactions_digest:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 32
 AuthoritySignature:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 64
+BatchInfoRequest:
+  STRUCT:
+    - start: U64
+    - end: U64
+BatchInfoResponseItem:
+  NEWTYPESTRUCT:
+    TYPENAME: UpdateItem
 CertifiedTransaction:
   STRUCT:
     - transaction:
@@ -270,8 +291,24 @@ SerializedMessage:
       TransactionInfoReq:
         NEWTYPE:
           TYPENAME: TransactionInfoRequest
+    10:
+      BatchInfoReq:
+        NEWTYPE:
+          TYPENAME: BatchInfoRequest
+    11:
+      BatchInfoResp:
+        NEWTYPE:
+          TYPENAME: BatchInfoResponseItem
 Signature:
   NEWTYPESTRUCT: BYTES
+SignedBatch:
+  STRUCT:
+    - batch:
+        TYPENAME: AuthorityBatch
+    - authority:
+        TYPENAME: PublicKeyBytes
+    - signature:
+        TYPENAME: AuthoritySignature
 SignedTransaction:
   STRUCT:
     - transaction:
@@ -431,82 +468,95 @@ SuiError:
         STRUCT:
           - error: STR
     39:
+      TransferImmutableError: UNIT
+    40:
+      TooManyItemsError:
+        NEWTYPE: U64
+    41:
+      InvalidSequenceRangeError: UNIT
+    42:
+      NoBatchesFoundError: UNIT
+    43:
+      CannotSendClientMessageError: UNIT
+    44:
+      SubscriptionServiceError: UNIT
+    45:
       ModuleLoadFailure:
         STRUCT:
           - error: STR
-    40:
+    46:
       ModuleVerificationFailure:
         STRUCT:
           - error: STR
-    41:
+    47:
       ModuleDeserializationFailure:
         STRUCT:
           - error: STR
-    42:
+    48:
       ModulePublishFailure:
         STRUCT:
           - error: STR
-    43:
+    49:
       ModuleBuildFailure:
         STRUCT:
           - error: STR
-    44:
+    50:
       DependentPackageNotFound:
         STRUCT:
           - package_id:
               TYPENAME: ObjectID
-    45:
+    51:
       MoveUnitTestFailure:
         STRUCT:
           - error: STR
-    46:
+    52:
       FunctionNotFound:
         STRUCT:
           - error: STR
-    47:
+    53:
       ModuleNotFound:
         STRUCT:
           - module_name: STR
-    48:
+    54:
       InvalidFunctionSignature:
         STRUCT:
           - error: STR
-    49:
+    55:
       TypeError:
         STRUCT:
           - error: STR
-    50:
+    56:
       AbortedExecution:
         STRUCT:
           - error: STR
-    51:
+    57:
       InvalidMoveEvent:
         STRUCT:
           - error: STR
-    52:
+    58:
       CircularObjectOwnership: UNIT
-    53:
+    59:
       GasBudgetTooHigh:
         STRUCT:
           - error: STR
-    54:
+    60:
       InsufficientGas:
         STRUCT:
           - error: STR
-    55:
+    61:
       InvalidTxUpdate: UNIT
-    56:
+    62:
       TransactionLockExists: UNIT
-    57:
+    63:
       TransactionLockDoesNotExist: UNIT
-    58:
+    64:
       TransactionLockReset: UNIT
-    59:
+    65:
       ObjectNotFound:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
-    60:
+    66:
       ObjectDeleted:
         STRUCT:
           - object_ref:
@@ -514,26 +564,26 @@ SuiError:
                 - TYPENAME: ObjectID
                 - TYPENAME: SequenceNumber
                 - TYPENAME: ObjectDigest
-    61:
+    67:
       BadObjectType:
         STRUCT:
           - error: STR
-    62:
+    68:
       MoveExecutionFailure: UNIT
-    63:
+    69:
       ObjectInputArityViolation: UNIT
-    64:
+    70:
       ExecutionInvariantViolation: UNIT
-    65:
+    71:
       AuthorityInformationUnavailable: UNIT
-    66:
+    72:
       AuthorityUpdateFailure: UNIT
-    67:
+    73:
       ByzantineAuthoritySuspicion:
         STRUCT:
           - authority:
               TYPENAME: PublicKeyBytes
-    68:
+    74:
       PairwiseSyncFailed:
         STRUCT:
           - xsource:
@@ -544,33 +594,33 @@ SuiError:
               TYPENAME: TransactionDigest
           - error:
               TYPENAME: SuiError
-    69:
+    75:
       StorageError:
         NEWTYPE:
           TYPENAME: TypedStoreError
-    70:
+    76:
       BatchErrorSender: UNIT
-    71:
+    77:
       GenericAuthorityError:
         STRUCT:
           - error: STR
-    72:
+    78:
       QuorumNotReached:
         STRUCT:
           - errors:
               SEQ:
                 TYPENAME: SuiError
-    73:
+    79:
       ObjectSerializationError: UNIT
-    74:
+    80:
       ConcurrentTransactionError: UNIT
-    75:
+    81:
       IncorrectRecipientError: UNIT
-    76:
+    82:
       TooManyIncorrectAuthorities: UNIT
-    77:
+    83:
       IncorrectGasSplit: UNIT
-    78:
+    84:
       IncorrectGasMerge: UNIT
 Transaction:
   STRUCT:
@@ -719,4 +769,16 @@ TypedStoreError:
         NEWTYPE: STR
     3:
       CrossDBBatch: UNIT
+UpdateItem:
+  ENUM:
+    0:
+      Transaction:
+        NEWTYPE:
+          TUPLE:
+            - U64
+            - TYPENAME: TransactionDigest
+    1:
+      Batch:
+        NEWTYPE:
+          TYPENAME: SignedBatch
 
