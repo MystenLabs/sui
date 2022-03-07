@@ -37,11 +37,14 @@ use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::sink::SinkMapErr;
 use futures::{Sink, SinkExt};
 
+type SinkSenderErr = SinkMapErr<Sender<Bytes>, fn(<Sender<Bytes> as Sink<Bytes>>::Error) -> std::io::Error>;
+
 struct TestChannel {
     reader: Receiver<Result<BytesMut, std::io::Error>>,
-    writer: SinkMapErr<Sender<Bytes>, fn(<Sender<Bytes> as Sink<Bytes>>::Error) -> std::io::Error>,
+    writer: SinkSenderErr,
 }
 
+#[allow(clippy::type_complexity)] // appease clippy, in the tests!
 impl TestChannel {
     pub fn new() -> (
         TestChannel,
@@ -62,7 +65,7 @@ impl TestChannel {
 
 impl<'a> RwChannel<'a> for TestChannel {
     type R = Receiver<Result<BytesMut, std::io::Error>>;
-    type W = SinkMapErr<Sender<Bytes>, fn(<Sender<Bytes> as Sink<Bytes>>::Error) -> std::io::Error>;
+    type W = SinkSenderErr;
 
     fn sink(&mut self) -> &mut Self::W {
         &mut self.writer
@@ -101,7 +104,7 @@ async fn test_channel_infra() {
     let bytes: BytesMut = BytesMut::from(&serialize_object_info_request(&req)[..]);
     tx.send(Ok(bytes)).await.expect("Problem sending");
     let resp = rx.next().await;
-    assert!(resp.unwrap().len() > 0);
+    assert!(!resp.unwrap().is_empty());
 
     drop(tx);
     handle.await.expect("Problem closing task");
