@@ -1,20 +1,20 @@
 
 # SuiJSON
 
-## **Intro:**
+## Introduction
 
-**SuiJSON** is a JSON based format with restrictions which allow us to align inputs more closely with Move Call arguments.
+*SuiJSON* is a JSON-based format with restrictions that allow Sui to align JSON inputs more closely with Move Call arguments.
 
-The table below shows the restrictions placed on JSON types to make them SuiJSON compatible.
+This table shows the restrictions placed on JSON types to make them SuiJSON compatible:
 
 <table>
   <tr>
-   <td><strong>JSON</strong>
-   </td>
-   <td><strong>SuiJSON Restrictions</strong>
-   </td>
-   <td><strong>Move Type Mapping</strong>
-   </td>
+   <th>JSON
+   </th>
+   <th>SuiJSON Restrictions
+   </th>
+   <th>Move Type Mapping
+   </th>
   </tr>
   <tr>
    <td>Number
@@ -84,32 +84,32 @@ TypeTag
   </tr>
 </table>
 
-## **Type Coercion**
+## Type coercion reasoning
 
-Due to the loosely typed nature of JSON/SuiJSON and the strongly typed nature of Move Types, we sometimes need to overload SuiJSON types to represent multiple Move Types. \
-For example _SuiJSON::Number_ can represent both _U8_ and _U64_. This means we have to coerce and sometimes convert types.
+Due to the loosely typed nature of JSON/SuiJSON and the strongly typed nature of Move types, we sometimes need to overload SuiJSON types to represent multiple Move types. \
+For example `SuiJSON::Number` can represent both _U8_ and _U64_. This means we have to coerce and sometimes convert types.
 
-Which type we coerce to depends on the expected Move Type. For example if the Move function expects a U8, we must have received a _SuiJSON::Number_with a value less than 256. More importantly, we have no way to easily express Move Addresses in JSON, so we encode them as Hex Strings prefixed by “0x”.
+Which type we coerce depends on the expected Move type. For example, if the Move function expects a U8, we must have received a `SuiJSON::Number` with a value less than 256. More importantly, we have no way to easily express Move addresses in JSON, so we encode them as hex strings prefixed by `0x`.
 
-**Summary of Type Coercion Rules**
+## Type coercion rules
 
 <table>
   <tr>
-   <td><strong>Move Type </strong>
-   </td>
-   <td><strong>SuiJSON</strong>
-   </td>
-   <td><strong>Valid Examples</strong>
-   </td>
-   <td><strong>Invalid Examples</strong>
-   </td>
+   <th>Move Type
+   </th>
+   <th>SuiJSON
+   </th>
+   <th>Valid Examples
+   </th>
+   <th>Invalid Examples
+   </th>
   </tr>
   <tr>
    <td>Bool
    </td>
    <td>Bool
    </td>
-   <td>true, false
+   <td><code>true</code>, <code>false</code>
    </td>
    <td>
    </td>
@@ -117,28 +117,28 @@ Which type we coerce to depends on the expected Move Type. For example if the Mo
   <tr>
    <td>U8
    </td>
-   <td>Unsigned Number &lt; 256
+   <td>Unsigned number &lt; 256
    </td>
    <td>7
    </td>
-   <td><strong>-5</strong>: negative not allowed
+   <td><code>-5</code>: negative not allowed
 
-<strong>3.9</strong>: float now allowed
+<code>3.9</code>: float now allowed
 
-<strong>NaN</strong>: not allowed
+<code>NaN</code>: not allowed
 
-<strong>300</strong>: U8 must be less than 256
+<code>300</code>: U8 must be less than 256
 
    </td>
   </tr>
   <tr>
    <td>U64
    </td>
-   <td>Unsigned Number &lt; U64::MAX
+   <td>Unsigned number &lt; U64::MAX
    </td>
-   <td>12345
+   <td><code>12345</code>
    </td>
-   <td><strong>184467440737095516159</strong>: must be less than U64::MAX
+   <td><code>184467440737095516159</code>: must be less than U64::MAX
    </td>
   </tr>
   <tr>
@@ -154,23 +154,23 @@ Which type we coerce to depends on the expected Move Type. For example if the Mo
   <tr>
    <td>Address
    </td>
-   <td>20 byte hex string prefixed with 0x
+    <td>20 byte hex string prefixed with <code>0x</code>
    </td>
-   <td>"0x2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E011"
+   <td><code>0x2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E011</code>
    </td>
-   <td><strong>"0x2B1A39"</strong>: string too short
+   <td><code>0x2B1A39</code>: string too short
 
-<strong>"2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E011"</strong>: missing <strong>“0x”</strong> prefix
+<code>2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E011</code>: missing <code>0x</code> prefix
 
-<strong>"0xG2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E01"</strong>: invalid hex char <strong>“G”</strong>
+<code>0xG2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E01</code>: invalid hex char <code>G</code>
    </td>
   </tr>
   <tr>
    <td>ObjectID
    </td>
-   <td>16 byte hex string prefixed with 0x
+   <td>16 byte hex string prefixed with <code>0x</code>
    </td>
-   <td>“0x2B1A39A1514E1D8A7CE45919CFEB4FEE”
+   <td><code>0x2B1A39A1514E1D8A7CE45919CFEB4FEE</code>
    </td>
    <td>Similar to above
    </td>
@@ -180,14 +180,14 @@ Which type we coerce to depends on the expected Move Type. For example if the Mo
    </td>
    <td>Homogeneous vector of aforementioned types including nested vectors
    </td>
-   <td><strong>[1,2,3,4]</strong>: simple U8 vector
+   <td><code>[1,2,3,4]</code>: simple U8 vector
 
-<strong>[[3,600],[],[0,7,4]]</strong>: nested U64 vector
+<code>[[3,600],[],[0,7,4]]</code>: nested U64 vector
 
    </td>
-   <td><strong>[1,2,3,false]</strong>: not homogenous
+   <td><code>[1,2,3,false]</code>: not homogenous
 
-<strong>[1,2,null,4]</strong>: invalid elements
+<code>[1,2,null,4]</code>: invalid elements
    </td>
   </tr>
   <tr>
@@ -198,24 +198,16 @@ Which type we coerce to depends on the expected Move Type. For example if the Mo
 U8 vectors represented as UTF-8 (and ASCII) strings.
 
    </td>
-   <td><strong>“√®ˆbo72 √∂†∆˚–œ∑π2ie”</strong>: UTF-8
+   <td><code>√®ˆbo72 √∂†∆˚–œ∑π2ie</code>: UTF-8
 
-   <strong>“abcdE738-2 _=?”</strong>: ASCII
+   <code>abcdE738-2 _=?</code>: ASCII
 
    </td>
-   <td>
-   </td>
-  </tr>
-  <tr>
-   <td>
-   </td>
-   <td>
-   </td>
-   <td>
-   </td>
-   <td>
+   <td>TODO: Complete invalid example.
    </td>
   </tr>
 </table>
 
 For practical examples, see _Anatomy Of A Move Call From REST & CLI_
+
+TODO: Fix Anatomy link above.
