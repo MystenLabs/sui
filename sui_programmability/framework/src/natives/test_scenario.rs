@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::EventType;
+use core::panic;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, value::MoveTypeLayout};
 use move_vm_runtime::native_functions::NativeContext;
@@ -61,7 +62,13 @@ fn get_global_inventory(events: &[Event]) -> Inventory {
                     .expect("This will always succeed on an object from a system transfer event");
                 let owner = match event_type {
                     EventType::FreezeObject => Owner::SharedImmutable,
-                    _ => Owner::SingleOwner(SuiAddress::try_from(recipient.clone()).unwrap()),
+                    EventType::TransferToAddress => {
+                        Owner::AddressOwner(SuiAddress::try_from(recipient.clone()).unwrap())
+                    }
+                    EventType::TransferToObject => {
+                        Owner::ObjectOwner(SuiAddress::try_from(recipient.clone()).unwrap())
+                    }
+                    _ => panic!("Unrecognized event_type"),
                 };
                 // note; may overwrite older values of the object, which is intended
                 inventory.insert(
@@ -99,7 +106,10 @@ fn get_inventory_for(
     inventory
         .into_iter()
         .filter_map(|(_, obj)| {
-            if (obj.owner == Owner::SingleOwner(sui_addr) || obj.owner.is_shared())
+            // TODO: We should also be able to include objects indirectly owned by the
+            // requested address through owning other objects.
+            // https://github.com/MystenLabs/fastnft/issues/673
+            if (obj.owner == Owner::AddressOwner(sui_addr) || obj.owner.is_shared())
                 && &obj.type_ == type_
             {
                 Some(obj.value)
