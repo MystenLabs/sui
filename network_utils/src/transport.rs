@@ -29,6 +29,17 @@ pub trait MessageHandler<A> {
     async fn handle_messages(&self, channel: A) -> ();
 }
 
+/*
+    The RwChannel connects the low-level networking code here, that handles
+    TCP streams, ports, accept/connect, and sockets that provide AsyncRead /
+    AsyncWrite on byte streams, with the higher level logic in AuthorityServer
+    that handles sequences of Bytes / BytesMut, as framed messages, through
+    exposing a standard Stream and Sink trait.
+
+    This separation allows us to change the details of the network, transport
+    and framing, without changing the authority code. It also allows us to test
+    the authority without using a real network.
+*/
 pub trait RwChannel<'a> {
     type R: 'a + Stream<Item = Result<BytesMut, std::io::Error>> + Unpin + Send;
     type W: 'a + Sink<Bytes, Error = std::io::Error> + Unpin + Send;
@@ -126,12 +137,10 @@ impl TcpDataStream {
 
     pub async fn write_data<'a>(&'a mut self, buffer: &'a [u8]) -> Result<(), std::io::Error> {
         self.framed.send(buffer.to_vec().into()).await
-        // .map_err(|_| std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))
     }
 
     pub async fn read_data(&mut self) -> Option<Result<Vec<u8>, std::io::Error>> {
         let result = self.framed.next().await;
-        // .ok_or(std::io::Error::new(std::io::ErrorKind::ConnectionReset, ""))?;
         result.map(|v| v.map(|w| w.to_vec()))
     }
 }

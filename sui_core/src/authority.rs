@@ -652,7 +652,8 @@ impl AuthorityState {
 
     /// Handles a request for a batch info. It returns a sequence of
     /// [batches, transactions, batches, transactions] as UpdateItems, and a flag
-    /// that is true if the request implies subscribing to live updates.
+    /// that if true indicates the request goes beyond the last batch in the
+    /// database.
     pub async fn handle_batch_info_request(
         &self,
         request: BatchInfoRequest,
@@ -677,11 +678,7 @@ impl AuthorityState {
         let mut last_batch_next_seq = 0;
 
         // Send full historical data as [Batch - Transactions - Batch - Transactions - Batch].
-        while !dq_batches.is_empty() {
-            // Get head of batches
-            // NOTE: safe to unwrap because of check above.
-            let current_batch = dq_batches.pop_front().unwrap();
-
+        while let Some(current_batch) = dq_batches.pop_front() {
             // Get all transactions belonging to this batch and send them
             loop {
                 // No more items or item too large for this batch

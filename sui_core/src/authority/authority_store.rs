@@ -634,7 +634,7 @@ impl AuthorityStore {
         write_batch.write().map_err(SuiError::from)
     }
 
-    /// This is the function that retrieves batches including transactions within a range.
+    /// Retrieves batches including transactions within a range.
     #[allow(clippy::type_complexity)]
     pub fn batches_and_transactions(
         &self,

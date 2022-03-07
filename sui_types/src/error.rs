@@ -146,8 +146,10 @@ pub enum SuiError {
     NoBatchesFoundError,
     #[error("The channel to repond to the client returned an error.")]
     CannotSendClientMessageError,
-    #[error("Subscription error, possibly due to connection being too slow to consume items.")]
-    SubscriptionServiceError,
+    #[error("Subscription service had to drop {0} items")]
+    SubscriptionItemsDropedError(u64),
+    #[error("Subscription service closed.")]
+    SubscriptionServiceClosed,
 
     // Move module publishing related errors
     #[error("Failed to load the Move module, reason: {error:?}.")]

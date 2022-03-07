@@ -18,6 +18,7 @@ use tracing::*;
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use tokio::sync::broadcast::error::RecvError;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -111,39 +112,45 @@ impl AuthorityServer {
 
         // Now we read from the live updates.
         loop {
-            if let Ok(item) = subscriber.recv().await {
-                let seq = match &item {
-                    UpdateItem::Transaction((seq, _)) => *seq,
-                    UpdateItem::Batch(signed_batch) => signed_batch.batch.next_sequence_number,
-                };
+            match subscriber.recv().await {
+                Ok(item) => {
+                    let seq = match &item {
+                        UpdateItem::Transaction((seq, _)) => *seq,
+                        UpdateItem::Batch(signed_batch) => signed_batch.batch.next_sequence_number,
+                    };
 
-                // Do not re-send transactions already sent from the database
-                if seq <= last_seq_sent {
-                    continue;
-                }
+                    // Do not re-send transactions already sent from the database
+                    if seq <= last_seq_sent {
+                        continue;
+                    }
 
-                let response = BatchInfoResponseItem(item);
+                    let response = BatchInfoResponseItem(item);
 
-                // Send back the item from the subscription
-                let resp = serialize_batch_item(&response);
-                channel
-                    .sink()
-                    .send(Bytes::from(resp))
-                    .await
-                    .map_err(|_| SuiError::CannotSendClientMessageError)?;
+                    // Send back the item from the subscription
+                    let resp = serialize_batch_item(&response);
+                    channel
+                        .sink()
+                        .send(Bytes::from(resp))
+                        .await
+                        .map_err(|_| SuiError::CannotSendClientMessageError)?;
 
-                // We always stop sending at batch boundaries, so that we try to always
-                // start with a batch and end with a batch to allow signature verification.
-                if let BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) = &response {
-                    if message_end < signed_batch.batch.next_sequence_number {
-                        break;
+                    // We always stop sending at batch boundaries, so that we try to always
+                    // start with a batch and end with a batch to allow signature verification.
+                    if let BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) = &response {
+                        if message_end < signed_batch.batch.next_sequence_number {
+                            break;
+                        }
                     }
                 }
-            } else {
-                // There was an error from the subscription service.
-                // Note : this may be due to gaps due to the client being too
-                //        slow to consume the items.
-                return Err(SuiError::SubscriptionServiceError);
+                Err(RecvError::Closed) => {
+                    // The service closed the channel, so we tell the client.
+                    return Err(SuiError::SubscriptionServiceClosed);
+                }
+                Err(RecvError::Lagged(number_skipped)) => {
+                    // We tell the client they are too slow to consume, and
+                    // stop.
+                    return Err(SuiError::SubscriptionItemsDropedError(number_skipped));
+                }
             }
         }
 

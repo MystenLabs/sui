@@ -48,11 +48,7 @@ impl NetworkClient {
         time::timeout(self.send_timeout, stream.write_data(&buf)).await??;
         // Wait for reply
         time::timeout(self.recv_timeout, async {
-            match stream.read_data().await {
-                Some(Ok(vec)) => Ok(Some(vec)),
-                Some(Err(err)) => Err(err),
-                None => Ok(None),
-            }
+            stream.read_data().await.transpose()
         })
         .await?
     }

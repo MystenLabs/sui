@@ -479,84 +479,87 @@ SuiError:
     43:
       CannotSendClientMessageError: UNIT
     44:
-      SubscriptionServiceError: UNIT
+      SubscriptionItemsDropedError:
+        NEWTYPE: U64
     45:
+      SubscriptionServiceClosed: UNIT
+    46:
       ModuleLoadFailure:
         STRUCT:
           - error: STR
-    46:
+    47:
       ModuleVerificationFailure:
         STRUCT:
           - error: STR
-    47:
+    48:
       ModuleDeserializationFailure:
         STRUCT:
           - error: STR
-    48:
+    49:
       ModulePublishFailure:
         STRUCT:
           - error: STR
-    49:
+    50:
       ModuleBuildFailure:
         STRUCT:
           - error: STR
-    50:
+    51:
       DependentPackageNotFound:
         STRUCT:
           - package_id:
               TYPENAME: ObjectID
-    51:
+    52:
       MoveUnitTestFailure:
         STRUCT:
           - error: STR
-    52:
+    53:
       FunctionNotFound:
         STRUCT:
           - error: STR
-    53:
+    54:
       ModuleNotFound:
         STRUCT:
           - module_name: STR
-    54:
+    55:
       InvalidFunctionSignature:
         STRUCT:
           - error: STR
-    55:
+    56:
       TypeError:
         STRUCT:
           - error: STR
-    56:
+    57:
       AbortedExecution:
         STRUCT:
           - error: STR
-    57:
+    58:
       InvalidMoveEvent:
         STRUCT:
           - error: STR
-    58:
-      CircularObjectOwnership: UNIT
     59:
+      CircularObjectOwnership: UNIT
+    60:
       GasBudgetTooHigh:
         STRUCT:
           - error: STR
-    60:
+    61:
       InsufficientGas:
         STRUCT:
           - error: STR
-    61:
-      InvalidTxUpdate: UNIT
     62:
-      TransactionLockExists: UNIT
+      InvalidTxUpdate: UNIT
     63:
-      TransactionLockDoesNotExist: UNIT
+      TransactionLockExists: UNIT
     64:
-      TransactionLockReset: UNIT
+      TransactionLockDoesNotExist: UNIT
     65:
+      TransactionLockReset: UNIT
+    66:
       ObjectNotFound:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
-    66:
+    67:
       ObjectDeleted:
         STRUCT:
           - object_ref:
@@ -564,26 +567,26 @@ SuiError:
                 - TYPENAME: ObjectID
                 - TYPENAME: SequenceNumber
                 - TYPENAME: ObjectDigest
-    67:
+    68:
       BadObjectType:
         STRUCT:
           - error: STR
-    68:
-      MoveExecutionFailure: UNIT
     69:
-      ObjectInputArityViolation: UNIT
+      MoveExecutionFailure: UNIT
     70:
-      ExecutionInvariantViolation: UNIT
+      ObjectInputArityViolation: UNIT
     71:
-      AuthorityInformationUnavailable: UNIT
+      ExecutionInvariantViolation: UNIT
     72:
-      AuthorityUpdateFailure: UNIT
+      AuthorityInformationUnavailable: UNIT
     73:
+      AuthorityUpdateFailure: UNIT
+    74:
       ByzantineAuthoritySuspicion:
         STRUCT:
           - authority:
               TYPENAME: PublicKeyBytes
-    74:
+    75:
       PairwiseSyncFailed:
         STRUCT:
           - xsource:
@@ -594,33 +597,33 @@ SuiError:
               TYPENAME: TransactionDigest
           - error:
               TYPENAME: SuiError
-    75:
+    76:
       StorageError:
         NEWTYPE:
           TYPENAME: TypedStoreError
-    76:
-      BatchErrorSender: UNIT
     77:
+      BatchErrorSender: UNIT
+    78:
       GenericAuthorityError:
         STRUCT:
           - error: STR
-    78:
+    79:
       QuorumNotReached:
         STRUCT:
           - errors:
               SEQ:
                 TYPENAME: SuiError
-    79:
-      ObjectSerializationError: UNIT
     80:
-      ConcurrentTransactionError: UNIT
+      ObjectSerializationError: UNIT
     81:
-      IncorrectRecipientError: UNIT
+      ConcurrentTransactionError: UNIT
     82:
-      TooManyIncorrectAuthorities: UNIT
+      IncorrectRecipientError: UNIT
     83:
-      IncorrectGasSplit: UNIT
+      TooManyIncorrectAuthorities: UNIT
     84:
+      IncorrectGasSplit: UNIT
+    85:
       IncorrectGasMerge: UNIT
 Transaction:
   STRUCT:
