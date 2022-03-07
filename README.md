@@ -48,3 +48,4 @@ See the [Move Quick Start](https://github.com/MystenLabs/fastnft/tree/main/doc/m
 ## Wallet quick start
 See the [Wallet Quick Start](https://github.com/MystenLabs/fastnft/tree/main/doc/wallet.md) for installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
 <!--- Then deeper: wallet CLI vs client service vs forwarder architecture, how to integrate your code (wallet, indexer, ...) with the client service or forwarder components. --->
+**TEST**

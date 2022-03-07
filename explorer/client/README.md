@@ -6,6 +6,7 @@
 
 In the project directory, you can run:
 
+**TEST**
 ### `npm i`
 
 Before running any of the following scripts `npm i` must run in order to install the necessary dependencies.
