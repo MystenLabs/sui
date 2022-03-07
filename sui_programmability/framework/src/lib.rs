@@ -25,10 +25,10 @@ pub const DEFAULT_FRAMEWORK_PATH: &str = env!("CARGO_MANIFEST_DIR");
 pub enum EventType {
     /// System event: transfer between addresses
     TransferToAddress,
-    /// System event: freeze, then transfer between addresses
-    TransferToAddressAndFreeze,
     /// System event: transfer object to another object
     TransferToObject,
+    /// System event: freeze object
+    FreezeObject,
     /// System event: an object ID is deleted. This does not necessarily
     /// mean an object is being deleted. However whenever an object is being
     /// deleted, the object ID must be deleted and this event will be
@@ -49,6 +49,8 @@ pub fn get_move_stdlib_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>>
         ident_str!("Capability").to_owned(),
         ident_str!("Event").to_owned(),
         ident_str!("GUID").to_owned(),
+        #[cfg(not(test))]
+        ident_str!("Debug").to_owned(),
     ];
     let modules: Vec<CompiledModule> = build_framework(lib_dir)?
         .into_iter()

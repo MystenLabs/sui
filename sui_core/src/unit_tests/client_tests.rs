@@ -6,7 +6,9 @@
 use super::*;
 use crate::authority::{AuthorityState, AuthorityStore};
 use crate::client::client_store::ClientSingleAddressStore;
-use crate::client::{Client, ClientAddressManager, ClientState};
+use crate::client::{
+    AsyncTransactionSigner, Client, ClientAddressManager, ClientState, StableSyncTransactionSigner,
+};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
@@ -16,15 +18,19 @@ use std::{
     sync::Arc,
 };
 use sui_adapter::genesis;
-use sui_types::crypto::get_key_pair;
+use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
+use sui_types::crypto::{get_key_pair, KeyPair};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use typed_store::Map;
 
+use signature::{Error, Signer};
 use std::env;
 use std::fs;
+use std::path::Path;
 use sui_types::error::SuiError::ObjectNotFound;
+use sui_types::messages::Transaction;
 
 // Only relevant in a ser/de context : the `CertifiedTransaction` for a transaction is not unique
 fn compare_certified_transactions(o1: &CertifiedTransaction, o2: &CertifiedTransaction) {
@@ -162,17 +168,19 @@ fn transaction_create(
         bcs::to_bytes(&AccountAddress::from(dest)).unwrap(),
     ];
 
-    Transaction::new_move_call(
-        src,
-        framework_obj_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        ident_str!("create").to_owned(),
-        Vec::new(),
-        gas_object_ref,
-        Vec::new(),
-        vec![],
-        pure_arguments,
-        GAS_VALUE_FOR_TESTING / 2,
+    to_transaction(
+        TransactionData::new_move_call(
+            src,
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("create").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            Vec::new(),
+            vec![],
+            pure_arguments,
+            GAS_VALUE_FOR_TESTING / 2,
+        ),
         &*secret,
     )
 }
@@ -188,17 +196,19 @@ fn transaction_transfer(
 ) -> Transaction {
     let pure_args = vec![bcs::to_bytes(&AccountAddress::from(dest)).unwrap()];
 
-    Transaction::new_move_call(
-        src,
-        framework_obj_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        ident_str!("transfer").to_owned(),
-        Vec::new(),
-        gas_object_ref,
-        vec![object_ref],
-        vec![],
-        pure_args,
-        GAS_VALUE_FOR_TESTING / 2,
+    to_transaction(
+        TransactionData::new_move_call(
+            src,
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("transfer").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            vec![object_ref],
+            vec![],
+            pure_args,
+            GAS_VALUE_FOR_TESTING / 2,
+        ),
         secret,
     )
 }
@@ -214,17 +224,19 @@ fn transaction_set(
 ) -> Transaction {
     let pure_args = vec![bcs::to_bytes(&value).unwrap()];
 
-    Transaction::new_move_call(
-        src,
-        framework_obj_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        ident_str!("set_value").to_owned(),
-        Vec::new(),
-        gas_object_ref,
-        vec![object_ref],
-        vec![],
-        pure_args,
-        GAS_VALUE_FOR_TESTING / 2,
+    to_transaction(
+        TransactionData::new_move_call(
+            src,
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("set_value").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            vec![object_ref],
+            vec![],
+            pure_args,
+            GAS_VALUE_FOR_TESTING / 2,
+        ),
         secret,
     )
 }
@@ -237,17 +249,19 @@ fn transaction_delete(
     framework_obj_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Transaction {
-    Transaction::new_move_call(
-        src,
-        framework_obj_ref,
-        ident_str!("ObjectBasics").to_owned(),
-        ident_str!("delete").to_owned(),
-        Vec::new(),
-        gas_object_ref,
-        vec![object_ref],
-        Vec::new(),
-        vec![],
-        GAS_VALUE_FOR_TESTING / 2,
+    to_transaction(
+        TransactionData::new_move_call(
+            src,
+            framework_obj_ref,
+            ident_str!("ObjectBasics").to_owned(),
+            ident_str!("delete").to_owned(),
+            Vec::new(),
+            gas_object_ref,
+            vec![object_ref],
+            Vec::new(),
+            vec![],
+            GAS_VALUE_FOR_TESTING / 2,
+        ),
         secret,
     )
 }
@@ -301,7 +315,7 @@ async fn init_local_authorities(
         let state = AuthorityState::new(
             committee.clone(),
             authority_name,
-            Box::pin(secret),
+            Arc::pin(secret),
             store,
             genesis::clone_genesis_compiled_modules(),
             &mut genesis::get_genesis_context(),
@@ -348,7 +362,7 @@ async fn init_local_authorities_bad(
         let state = AuthorityState::new(
             committee.clone(),
             address,
-            Box::pin(secret),
+            Arc::pin(secret),
             store,
             genesis::clone_genesis_compiled_modules(),
             &mut genesis::get_genesis_context(),
@@ -392,7 +406,7 @@ async fn fund_account_with_same_objects(
     fund_account(authorities, client, address, objs).await
 }
 
-async fn make_client(
+async fn make_address_manager(
     authority_count: usize,
 ) -> (
     ClientAddressManager<LocalAuthorityClient>,
@@ -404,14 +418,15 @@ async fn make_client(
     (client, authority_clients.into_values().collect())
 }
 
-fn make_account(client: &mut ClientAddressManager<LocalAuthorityClient>) -> SuiAddress {
+fn make_account(client: &mut ClientAddressManager<LocalAuthorityClient>) -> (SuiAddress, KeyPair) {
     let (address, secret) = get_key_pair();
-    let pb_secret = Box::pin(secret);
-    client.create_account_state(address, pb_secret).unwrap();
-    address
+    client.create_account_state(address).unwrap();
+    (address, secret)
 }
 
-fn make_admin_account(client: &mut ClientAddressManager<LocalAuthorityClient>) -> SuiAddress {
+fn make_admin_account(
+    client: &mut ClientAddressManager<LocalAuthorityClient>,
+) -> (SuiAddress, KeyPair) {
     use sui_types::crypto::get_key_pair_from_bytes;
 
     let (admin, admin_key) = get_key_pair_from_bytes(&[
@@ -420,27 +435,28 @@ fn make_admin_account(client: &mut ClientAddressManager<LocalAuthorityClient>) -
         90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
         105, 254, 59, 163,
     ]);
-    let pb_secret = Box::pin(admin_key);
-    client.create_account_state(admin, pb_secret).unwrap();
-    admin
+    client.create_account_state(admin).unwrap();
+    (admin, admin_key)
 }
 
 async fn init_local_client_and_fund_account(
+    address: SuiAddress,
     object_ids: Vec<Vec<ObjectID>>,
-) -> (ClientAddressManager<LocalAuthorityClient>, SuiAddress) {
-    let (mut client, authority_clients) = make_client(object_ids.len()).await;
-    let address = make_account(&mut client);
+) -> ClientAddressManager<LocalAuthorityClient> {
+    let (mut client, authority_clients) = make_address_manager(object_ids.len()).await;
+    client.create_account_state(address).unwrap();
     fund_account(authority_clients, &mut client, address, object_ids).await;
-    (client, address)
+    client
 }
 
 async fn init_local_client_and_fund_account_bad(
+    address: SuiAddress,
     object_ids: Vec<Vec<ObjectID>>,
-) -> (ClientAddressManager<LocalAuthorityClient>, SuiAddress) {
+) -> ClientAddressManager<LocalAuthorityClient> {
     let (authority_clients, committee) = init_local_authorities_bad(object_ids.len()).await;
     let path = tempfile::tempdir().unwrap().into_path();
     let mut client = ClientAddressManager::new(path, committee, authority_clients.clone());
-    let address = make_account(&mut client);
+    client.create_account_state(address).unwrap();
     fund_account(
         authority_clients.into_values().collect(),
         &mut client,
@@ -448,7 +464,7 @@ async fn init_local_client_and_fund_account_bad(
         object_ids,
     )
     .await;
-    (client, address)
+    client
 }
 
 fn get_account(
@@ -471,7 +487,8 @@ async fn test_initiating_valid_transfer() {
         vec![object_id_1, object_id_2, gas_object],
     ];
 
-    let (mut client, sender) = init_local_client_and_fund_account(authority_objects).await;
+    let (sender, sender_key) = get_key_pair();
+    let mut client = init_local_client_and_fund_account(sender, authority_objects).await;
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id_1).await,
         (sender, SequenceNumber::from(0))
@@ -481,7 +498,13 @@ async fn test_initiating_valid_transfer() {
         (sender, SequenceNumber::from(0))
     );
     let (certificate, _) = client
-        .transfer_object(sender, object_id_1, gas_object, recipient)
+        .transfer_coin(
+            sender,
+            object_id_1,
+            gas_object,
+            recipient,
+            signature_callback(&sender_key),
+        )
         .await
         .unwrap();
     let account = get_account(&client, sender);
@@ -522,9 +545,16 @@ async fn test_initiating_valid_transfer_despite_bad_authority() {
         vec![object_id, gas_object],
         vec![object_id, gas_object],
     ];
-    let (mut client, sender) = init_local_client_and_fund_account_bad(authority_objects).await;
+    let (sender, sender_key) = get_key_pair();
+    let mut client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
     let (certificate, _) = client
-        .transfer_object(sender, object_id, gas_object, recipient)
+        .transfer_coin(
+            sender,
+            object_id,
+            gas_object,
+            recipient,
+            signature_callback(&sender_key),
+        )
         .await
         .unwrap();
     let account = get_account(&client, sender);
@@ -560,9 +590,16 @@ async fn test_initiating_transfer_low_funds() {
         vec![object_id_1, object_id_2, gas_object],
         vec![object_id_1, object_id_2, gas_object],
     ];
-    let (mut client, sender) = init_local_client_and_fund_account_bad(authority_objects).await;
+    let (sender, sender_key) = get_key_pair();
+    let mut client = init_local_client_and_fund_account_bad(sender, authority_objects).await;
     assert!(client
-        .transfer_object(sender, object_id_2, gas_object, recipient)
+        .transfer_coin(
+            sender,
+            object_id_2,
+            gas_object,
+            recipient,
+            signature_callback(&sender_key),
+        )
         .await
         .is_err());
     let account = get_account(&client, sender);
@@ -588,9 +625,9 @@ async fn test_initiating_transfer_low_funds() {
 
 #[tokio::test]
 async fn test_bidirectional_transfer() {
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_account(&mut client);
-    let addr2 = make_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_account(&mut client);
+    let (addr2, key2) = make_account(&mut client);
 
     let object_id = ObjectID::random();
     let gas_object1 = ObjectID::random();
@@ -612,7 +649,13 @@ async fn test_bidirectional_transfer() {
     );
     // Transfer object to client.
     let (certificate, _) = client
-        .transfer_object(addr1, object_id, gas_object1, addr2)
+        .transfer_coin(
+            addr1,
+            object_id,
+            gas_object1,
+            addr2,
+            signature_callback(&key1),
+        )
         .await
         .unwrap();
 
@@ -651,7 +694,13 @@ async fn test_bidirectional_transfer() {
 
     // Transfer the object back to Client1
     client
-        .transfer_object(addr2, object_id, gas_object2, addr1)
+        .transfer_coin(
+            addr2,
+            object_id,
+            gas_object2,
+            addr1,
+            signature_callback(&key2),
+        )
         .await
         .unwrap();
 
@@ -678,7 +727,13 @@ async fn test_bidirectional_transfer() {
 
     // Should fail if Client 2 double spend the object
     assert!(client
-        .transfer_object(addr2, object_id, gas_object2, addr1)
+        .transfer_coin(
+            addr2,
+            object_id,
+            gas_object2,
+            addr1,
+            signature_callback(&key2),
+        )
         .await
         .is_err());
 }
@@ -690,7 +745,8 @@ async fn test_client_state_sync() {
         .collect::<Vec<ObjectID>>();
     let authority_objects = (0..10).map(|_| object_ids.clone()).collect();
 
-    let (mut client, sender) = init_local_client_and_fund_account(authority_objects).await;
+    let sender = get_new_address();
+    let mut client = init_local_client_and_fund_account(sender, authority_objects).await;
 
     let account = get_account(&client, sender);
     let old_object_refs: BTreeMap<_, _> = account.store().object_refs.iter().collect();
@@ -727,9 +783,9 @@ async fn test_client_state_sync() {
 
 #[tokio::test]
 async fn test_client_state_sync_with_transferred_object() {
-    let (mut client, authority_clients) = make_client(1).await;
-    let addr1 = make_account(&mut client);
-    let addr2 = make_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(1).await;
+    let (addr1, key1) = make_account(&mut client);
+    let (addr2, _) = make_account(&mut client);
 
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -740,7 +796,13 @@ async fn test_client_state_sync_with_transferred_object() {
 
     // Transfer object to client.
     client
-        .transfer_object(addr1, object_id, gas_object_id, addr2)
+        .transfer_coin(
+            addr1,
+            object_id,
+            gas_object_id,
+            addr2,
+            signature_callback(&key1),
+        )
         .await
         .unwrap();
 
@@ -768,8 +830,8 @@ async fn test_client_state_sync_with_transferred_object() {
 
 #[tokio::test]
 async fn test_move_calls_object_create() {
-    let (mut client, authority_clients) = make_client(4).await;
-    let sender = make_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (sender, sender_key) = make_account(&mut client);
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
@@ -802,6 +864,7 @@ async fn test_move_calls_object_create() {
             vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+            signature_callback(&sender_key),
         )
         .await;
 
@@ -827,9 +890,9 @@ async fn test_move_calls_object_create() {
 
 #[tokio::test]
 async fn test_move_calls_object_transfer() {
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_account(&mut client);
-    let addr2 = make_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_account(&mut client);
+    let (addr2, _) = make_account(&mut client);
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
@@ -862,6 +925,7 @@ async fn test_move_calls_object_transfer() {
             vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+            signature_callback(&key1),
         )
         .await;
 
@@ -886,6 +950,7 @@ async fn test_move_calls_object_transfer() {
             vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING / 2,
+            signature_callback(&key1),
         )
         .await;
 
@@ -915,10 +980,9 @@ async fn test_move_calls_object_transfer() {
 }
 
 #[tokio::test]
-async fn test_move_calls_object_transfer_and_freeze() {
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_account(&mut client);
-    let addr2 = make_account(&mut client);
+async fn test_move_calls_freeze_object() {
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_account(&mut client);
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
@@ -951,6 +1015,7 @@ async fn test_move_calls_object_transfer_and_freeze() {
             vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+            signature_callback(&key1),
         )
         .await;
 
@@ -961,19 +1026,19 @@ async fn test_move_calls_object_transfer_and_freeze() {
     let new_obj_ref = client_object(&mut client, new_obj_ref.0).await.0;
     gas_object_ref = client_object(&mut client, gas_object_ref.0).await.0;
 
-    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(addr2)).unwrap()];
     let call_response = client
         .move_call(
             addr1,
             framework_obj_ref,
             ident_str!("ObjectBasics").to_owned(),
-            ident_str!("transfer_and_freeze").to_owned(),
+            ident_str!("freeze_object").to_owned(),
             Vec::new(),
             gas_object_ref,
             vec![new_obj_ref],
             vec![],
-            pure_args,
+            vec![],
             GAS_VALUE_FOR_TESTING / 2,
+            signature_callback(&key1),
         )
         .await;
 
@@ -1005,8 +1070,8 @@ async fn test_move_calls_object_transfer_and_freeze() {
 
 #[tokio::test]
 async fn test_move_calls_object_delete() {
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_account(&mut client);
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
@@ -1039,6 +1104,7 @@ async fn test_move_calls_object_delete() {
             vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+            signature_callback(&key1),
         )
         .await;
 
@@ -1060,6 +1126,7 @@ async fn test_move_calls_object_delete() {
             vec![],
             Vec::new(),
             GAS_VALUE_FOR_TESTING / 2,
+            signature_callback(&key1),
         )
         .await;
 
@@ -1105,8 +1172,8 @@ async fn get_package_obj(
 #[tokio::test]
 async fn test_module_publish_and_call_good() {
     // Init the states
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_admin_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_admin_account(&mut client);
 
     let gas_object_id = ObjectID::random();
 
@@ -1124,8 +1191,15 @@ async fn test_module_publish_and_call_good() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/src/unit_tests/data/hero/");
 
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
     let pub_res = client
-        .publish(addr1, hero_path, gas_object_ref, GAS_VALUE_FOR_TESTING / 2)
+        .publish(
+            addr1,
+            compiled_modules,
+            gas_object_ref,
+            GAS_VALUE_FOR_TESTING / 2,
+            signature_callback(&key1),
+        )
         .await;
 
     let (_, published_effects) = pub_res.unwrap();
@@ -1197,6 +1271,7 @@ async fn test_module_publish_and_call_good() {
             vec![],
             vec![42u64.to_le_bytes().to_vec()],
             1000,
+            signature_callback(&key1),
         )
         .await
         .unwrap();
@@ -1223,8 +1298,8 @@ async fn test_module_publish_and_call_good() {
 #[tokio::test]
 async fn test_module_publish_file_path() {
     // Init the states
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_admin_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_admin_account(&mut client);
 
     let gas_object_id = ObjectID::random();
 
@@ -1244,8 +1319,15 @@ async fn test_module_publish_file_path() {
     // Use a path pointing to a different file
     hero_path.push_str("/src/unit_tests/data/hero/Hero.move");
 
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
     let pub_resp = client
-        .publish(addr1, hero_path, gas_object_ref, GAS_VALUE_FOR_TESTING / 2)
+        .publish(
+            addr1,
+            compiled_modules,
+            gas_object_ref,
+            GAS_VALUE_FOR_TESTING / 2,
+            signature_callback(&key1),
+        )
         .await;
 
     let (_, published_effects) = pub_resp.unwrap();
@@ -1288,66 +1370,6 @@ async fn test_module_publish_file_path() {
 }
 
 #[tokio::test]
-async fn test_module_publish_bad_path() {
-    // Init the states
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_admin_account(&mut client);
-
-    let gas_object_id = ObjectID::random();
-
-    // Populate authorities with gas obj data
-    let gas_object_ref =
-        fund_account_with_same_objects(authority_clients, &mut client, addr1, vec![gas_object_id])
-            .await
-            .iter()
-            .next()
-            .unwrap()
-            .1
-            .to_object_reference();
-
-    // Compile
-    let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
-
-    // Use a bad path
-    hero_path.push_str("/src/unit____________tests/data/hero/");
-
-    let pub_resp = client.publish(addr1, hero_path, gas_object_ref, 1000).await;
-    // Has to fail
-    assert!(pub_resp.is_err());
-}
-
-#[tokio::test]
-async fn test_module_publish_naughty_path() {
-    // Init the states
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_admin_account(&mut client);
-
-    let gas_object_id = ObjectID::random();
-
-    // Populate authorities with gas obj data
-    let gas_object_ref =
-        fund_account_with_same_objects(authority_clients, &mut client, addr1, vec![gas_object_id])
-            .await
-            .iter()
-            .next()
-            .unwrap()
-            .1
-            .to_object_reference();
-
-    for ns in naughty_strings::BLNS {
-        // Compile
-        let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
-
-        // Use a bad path
-        hero_path.push_str(&format!("/../{}", ns));
-
-        let pub_resp = client.publish(addr1, hero_path, gas_object_ref, 1000).await;
-        // Has to fail
-        assert!(pub_resp.is_err());
-    }
-}
-
-#[tokio::test]
 async fn test_transfer_object_error() {
     let recipient = get_new_address();
 
@@ -1361,18 +1383,31 @@ async fn test_transfer_object_error() {
         .map(|_| all_objects.clone())
         .collect();
 
-    let (mut client, sender) = init_local_client_and_fund_account(authority_objects).await;
+    let (sender, sender_key) = get_key_pair();
+    let mut client = init_local_client_and_fund_account(sender, authority_objects).await;
 
     let mut objects = objects.iter();
 
     // Test 1: Double spend
     let object_id = *objects.next().unwrap();
     client
-        .transfer_object(sender, object_id, gas_object, recipient)
+        .transfer_coin(
+            sender,
+            object_id,
+            gas_object,
+            recipient,
+            signature_callback(&sender_key),
+        )
         .await
         .unwrap();
     let result = client
-        .transfer_object(sender, object_id, gas_object, recipient)
+        .transfer_coin(
+            sender,
+            object_id,
+            gas_object,
+            recipient,
+            signature_callback(&sender_key),
+        )
         .await;
 
     assert!(result.is_err());
@@ -1390,7 +1425,13 @@ async fn test_transfer_object_error() {
         .unwrap();
 
     let result = client
-        .transfer_object(sender, obj.id(), gas_object, recipient)
+        .transfer_coin(
+            sender,
+            obj.id(),
+            gas_object,
+            recipient,
+            signature_callback(&sender_key),
+        )
         .await;
     assert!(result.is_err());
 
@@ -1408,7 +1449,13 @@ async fn test_transfer_object_error() {
         .unwrap();
 
     let result = client
-        .transfer_object(sender, object_id, gas_object, recipient)
+        .transfer_coin(
+            sender,
+            object_id,
+            gas_object,
+            recipient,
+            signature_callback(&sender_key),
+        )
         .await;
     assert!(result.is_err());
 
@@ -1420,17 +1467,25 @@ async fn test_transfer_object_error() {
     let object_id = *objects.next().unwrap();
     // Fabricate a fake pending transfer
     get_account(&client, sender)
-        .lock_pending_transaction_objects(&Transaction::new_transfer(
-            SuiAddress::random_for_testing_only(),
-            (object_id, Default::default(), ObjectDigest::new([0; 32])),
-            sender,
-            (gas_object, Default::default(), ObjectDigest::new([0; 32])),
+        .lock_pending_transaction_objects(&to_transaction(
+            TransactionData::new_transfer(
+                SuiAddress::random_for_testing_only(),
+                (object_id, Default::default(), ObjectDigest::new([0; 32])),
+                sender,
+                (gas_object, Default::default(), ObjectDigest::new([0; 32])),
+            ),
             &get_key_pair().1,
         ))
         .unwrap();
 
     let result = client
-        .transfer_object(sender, object_id, gas_object, recipient)
+        .transfer_coin(
+            sender,
+            object_id,
+            gas_object,
+            recipient,
+            signature_callback(&sender_key),
+        )
         .await;
     assert!(result.is_err());
 }
@@ -1477,8 +1532,8 @@ async fn test_object_store() {
     // We need admin account as we will be calling initializers on
     // modules which check if the caller/publisher is the admin
     // account.
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_admin_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_admin_account(&mut client);
 
     let gas_object_id = ObjectID::random();
 
@@ -1524,8 +1579,15 @@ async fn test_object_store() {
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/src/unit_tests/data/hero/");
 
+    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
     let pub_res = client
-        .publish(addr1, hero_path, gas_object_ref, GAS_VALUE_FOR_TESTING / 2)
+        .publish(
+            addr1,
+            compiled_modules,
+            gas_object_ref,
+            GAS_VALUE_FOR_TESTING / 2,
+            signature_callback(&key1),
+        )
         .await;
 
     let (_, published_effects) = pub_res.as_ref().unwrap();
@@ -1564,9 +1626,9 @@ async fn test_object_store() {
 
 #[tokio::test]
 async fn test_object_store_transfer() {
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_account(&mut client);
-    let addr2 = make_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_account(&mut client);
+    let (addr2, key2) = make_account(&mut client);
 
     let object_id = ObjectID::random();
     let gas_object1 = ObjectID::random();
@@ -1621,7 +1683,13 @@ async fn test_object_store_transfer() {
 
     // Transfer object to client.
     let _certificate = client
-        .transfer_object(addr1, object_id, gas_object1, addr2)
+        .transfer_coin(
+            addr1,
+            object_id,
+            gas_object1,
+            addr2,
+            signature_callback(&key1),
+        )
         .await
         .unwrap();
 
@@ -1642,7 +1710,13 @@ async fn test_object_store_transfer() {
 
     // Transfer the object back to Client1
     let _certificate = client
-        .transfer_object(addr2, object_id, gas_object2, addr1)
+        .transfer_coin(
+            addr2,
+            object_id,
+            gas_object2,
+            addr1,
+            signature_callback(&key2),
+        )
         .await
         .unwrap();
 
@@ -1684,7 +1758,7 @@ async fn auth_object(authority: &LocalAuthorityClient, object_id: ObjectID) -> (
 
 #[tokio::test]
 async fn test_map_reducer() {
-    let (mut client, _) = make_client(4).await;
+    let (mut client, _) = make_address_manager(4).await;
     let _ = make_admin_account(&mut client);
 
     // Test: reducer errors get propagated up
@@ -1818,9 +1892,9 @@ async fn get_latest_ref(authority: &LocalAuthorityClient, object_id: ObjectID) -
 
 #[tokio::test]
 async fn test_get_all_owned_objects() {
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_account(&mut client);
-    let addr2 = make_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_account(&mut client);
+    let (addr2, _) = make_account(&mut client);
 
     let framework_obj_ref = client.get_framework_object_ref().await.unwrap();
 
@@ -1844,14 +1918,7 @@ async fn test_get_all_owned_objects() {
 
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(&authority_clients[0], gas_object1).await;
-    let create1 = transaction_create(
-        addr1,
-        get_account(&client, addr1).secret(),
-        addr1,
-        100,
-        framework_obj_ref,
-        gas_ref_1,
-    );
+    let create1 = transaction_create(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref_1);
 
     // Submit to 3 authorities, but not 4th
     do_transaction(&authority_clients[0], &create1).await;
@@ -1898,13 +1965,7 @@ async fn test_get_all_owned_objects() {
 
     // Make a delete transaction
     let gas_ref_del = get_latest_ref(&authority_clients[0], gas_object1).await;
-    let delete1 = transaction_delete(
-        addr1,
-        get_account(&client, addr1).secret(),
-        created_ref,
-        framework_obj_ref,
-        gas_ref_del,
-    );
+    let delete1 = transaction_delete(addr1, &key1, created_ref, framework_obj_ref, gas_ref_del);
 
     // Get cert for delete transaction, and submit to first authority
     do_transaction(&authority_clients[0], &delete1).await;
@@ -1946,9 +2007,9 @@ async fn test_get_all_owned_objects() {
 
 #[tokio::test]
 async fn test_sync_all_owned_objects() {
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_account(&mut client);
-    let addr2 = make_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_account(&mut client);
+    let (addr2, _) = make_account(&mut client);
 
     let framework_obj_ref = client.get_framework_object_ref().await.unwrap();
 
@@ -1965,24 +2026,10 @@ async fn test_sync_all_owned_objects() {
 
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(&authority_clients[0], gas_object1).await;
-    let create1 = transaction_create(
-        addr1,
-        get_account(&client, addr1).secret(),
-        addr1,
-        100,
-        framework_obj_ref,
-        gas_ref_1,
-    );
+    let create1 = transaction_create(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref_1);
 
     let gas_ref_2 = get_latest_ref(&authority_clients[0], gas_object2).await;
-    let create2 = transaction_create(
-        addr1,
-        get_account(&client, addr1).secret(),
-        addr1,
-        101,
-        framework_obj_ref,
-        gas_ref_2,
-    );
+    let create2 = transaction_create(addr1, &key1, addr1, 101, framework_obj_ref, gas_ref_2);
 
     // Submit to 3 authorities, but not 4th
     do_transaction(&authority_clients[0], &create1).await;
@@ -2032,19 +2079,13 @@ async fn test_sync_all_owned_objects() {
 
     // Make a delete transaction
     let gas_ref_del = get_latest_ref(&authority_clients[0], gas_object1).await;
-    let delete1 = transaction_delete(
-        addr1,
-        get_account(&client, addr1).secret(),
-        new_ref_1,
-        framework_obj_ref,
-        gas_ref_del,
-    );
+    let delete1 = transaction_delete(addr1, &key1, new_ref_1, framework_obj_ref, gas_ref_del);
 
     // Make a transfer transaction
     let gas_ref_trans = get_latest_ref(&authority_clients[0], gas_object2).await;
     let transfer1 = transaction_transfer(
         addr1,
-        get_account(&client, addr1).secret(),
+        &key1,
         addr2,
         new_ref_2,
         framework_obj_ref,
@@ -2101,8 +2142,8 @@ async fn test_sync_all_owned_objects() {
 
 #[tokio::test]
 async fn test_process_transaction() {
-    let (mut client, auth_vec) = make_client(4).await;
-    let addr1 = make_account(&mut client);
+    let (mut client, auth_vec) = make_address_manager(4).await;
+    let (addr1, key1) = make_account(&mut client);
 
     let framework_obj_ref = client.get_framework_object_ref().await.unwrap();
 
@@ -2119,14 +2160,7 @@ async fn test_process_transaction() {
 
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
-    let create1 = transaction_create(
-        addr1,
-        get_account(&client, addr1).secret(),
-        addr1,
-        100,
-        framework_obj_ref,
-        gas_ref_1,
-    );
+    let create1 = transaction_create(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref_1);
 
     do_transaction(&auth_vec[0], &create1).await;
     do_transaction(&auth_vec[1], &create1).await;
@@ -2145,14 +2179,7 @@ async fn test_process_transaction() {
 
     // Make a schedule of transactions
     let gas_ref_set = get_latest_ref(&auth_vec[0], gas_object1).await;
-    let create2 = transaction_set(
-        addr1,
-        get_account(&client, addr1).secret(),
-        new_ref_1,
-        100,
-        framework_obj_ref,
-        gas_ref_set,
-    );
+    let create2 = transaction_set(addr1, &key1, new_ref_1, 100, framework_obj_ref, gas_ref_set);
 
     // Test 1: When we call process transaction on the second transaction, the process_transaction
     // updates all authorities with latest objects, and then the transaction goes through
@@ -2176,8 +2203,8 @@ async fn test_process_transaction() {
 
 #[tokio::test]
 async fn test_process_certificate() {
-    let (mut client, auth_vec) = make_client(4).await;
-    let addr1 = make_account(&mut client);
+    let (mut client, auth_vec) = make_address_manager(4).await;
+    let (addr1, key1) = make_account(&mut client);
 
     let framework_obj_ref = client.get_framework_object_ref().await.unwrap();
 
@@ -2194,14 +2221,7 @@ async fn test_process_certificate() {
 
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(&auth_vec[0], gas_object1).await;
-    let create1 = transaction_create(
-        addr1,
-        get_account(&client, addr1).secret(),
-        addr1,
-        100,
-        framework_obj_ref,
-        gas_ref_1,
-    );
+    let create1 = transaction_create(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref_1);
 
     do_transaction(&auth_vec[0], &create1).await;
     do_transaction(&auth_vec[1], &create1).await;
@@ -2221,14 +2241,7 @@ async fn test_process_certificate() {
 
     // Make a schedule of transactions
     let gas_ref_set = get_latest_ref(&auth_vec[0], gas_object1).await;
-    let create2 = transaction_set(
-        addr1,
-        get_account(&client, addr1).secret(),
-        new_ref_1,
-        100,
-        framework_obj_ref,
-        gas_ref_set,
-    );
+    let create2 = transaction_set(addr1, &key1, new_ref_1, 100, framework_obj_ref, gas_ref_set);
 
     do_transaction(&auth_vec[0], &create2).await;
     do_transaction(&auth_vec[1], &create2).await;
@@ -2269,15 +2282,22 @@ async fn test_transfer_pending_transactions() {
         .map(|_| all_objects.clone())
         .collect();
 
-    let (mut client, sender) = init_local_client_and_fund_account(authority_objects).await;
-    let recipient = make_account(&mut client);
+    let (sender, sender_key) = get_key_pair();
+    let mut client = init_local_client_and_fund_account(sender, authority_objects).await;
+    let (recipient, _) = make_account(&mut client);
 
     let mut objects = objects.iter();
 
     // Test 1: Normal transfer
     let object_id = *objects.next().unwrap();
     client
-        .transfer_object(sender, object_id, gas_object, recipient)
+        .transfer_coin(
+            sender,
+            object_id,
+            gas_object,
+            recipient,
+            signature_callback(&sender_key),
+        )
         .await
         .unwrap();
     // Pending transaction should be cleared
@@ -2295,7 +2315,13 @@ async fn test_transfer_pending_transactions() {
         .unwrap();
 
     let result = client
-        .transfer_object(sender, obj.id(), gas_object, recipient)
+        .transfer_coin(
+            sender,
+            obj.id(),
+            gas_object,
+            recipient,
+            signature_callback(&sender_key),
+        )
         .await;
     assert!(result.is_err());
     // assert!(matches!(result.unwrap_err().downcast_ref(),
@@ -2320,7 +2346,13 @@ async fn test_transfer_pending_transactions() {
         .unwrap();
 
     let result = client
-        .transfer_object(sender, object_id, gas_object, recipient)
+        .transfer_coin(
+            sender,
+            object_id,
+            gas_object,
+            recipient,
+            signature_callback(&sender_key),
+        )
         .await;
     assert!(result.is_err());
     //assert!(matches!(result.unwrap_err().downcast_ref(),
@@ -2336,17 +2368,25 @@ async fn test_transfer_pending_transactions() {
     let object_id = *objects.next().unwrap();
     // Fabricate a fake pending transfer and simulate locking some objects
     get_account(&client, sender)
-        .lock_pending_transaction_objects(&Transaction::new_transfer(
-            SuiAddress::random_for_testing_only(),
-            (object_id, Default::default(), ObjectDigest::new([0; 32])),
-            sender,
-            (gas_object, Default::default(), ObjectDigest::new([0; 32])),
+        .lock_pending_transaction_objects(&to_transaction(
+            TransactionData::new_transfer(
+                SuiAddress::random_for_testing_only(),
+                (object_id, Default::default(), ObjectDigest::new([0; 32])),
+                sender,
+                (gas_object, Default::default(), ObjectDigest::new([0; 32])),
+            ),
             &get_key_pair().1,
         ))
         .unwrap();
     // Try to use those objects in another transaction
     let result = client
-        .transfer_object(sender, object_id, gas_object, recipient)
+        .transfer_coin(
+            sender,
+            object_id,
+            gas_object,
+            recipient,
+            signature_callback(&sender_key),
+        )
         .await;
     assert!(result.is_err());
     assert!(matches!(
@@ -2371,7 +2411,7 @@ async fn test_transfer_pending_transactions() {
 
 #[tokio::test]
 async fn test_address_manager() {
-    let (mut address_manager, authority_clients) = make_client(4).await;
+    let (mut address_manager, authority_clients) = make_address_manager(4).await;
 
     // Ensure nothing being managed
     assert!(address_manager.get_managed_address_states().is_empty());
@@ -2379,12 +2419,9 @@ async fn test_address_manager() {
     // Try adding new addresses to manage
     let (address, secret) = get_key_pair();
     let _secret2 = secret.copy();
-    let secret = Box::pin(secret);
     let gas_object1 = ObjectID::random();
     let gas_object2 = ObjectID::random();
-    address_manager
-        .create_account_state(address, secret)
-        .unwrap();
+    address_manager.create_account_state(address).unwrap();
     fund_account_with_same_objects(
         authority_clients.clone(),
         &mut address_manager,
@@ -2429,6 +2466,7 @@ async fn test_address_manager() {
             vec![],
             pure_args,
             GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
+            signature_callback(&secret),
         )
         .await;
 
@@ -2453,8 +2491,8 @@ async fn test_address_manager() {
 
 #[tokio::test]
 async fn test_coin_split() {
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_account(&mut client);
 
     let coin_object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -2476,10 +2514,11 @@ async fn test_coin_split() {
     let response = client
         .split_coin(
             addr1,
-            coin_object.to_object_reference(),
+            coin_object.id(),
             split_amounts.clone(),
-            gas_object.to_object_reference(),
+            gas_object.id(),
             GAS_VALUE_FOR_TESTING,
+            signature_callback(&key1),
         )
         .await
         .unwrap();
@@ -2510,8 +2549,8 @@ async fn test_coin_split() {
 
 #[tokio::test]
 async fn test_coin_merge() {
-    let (mut client, authority_clients) = make_client(4).await;
-    let addr1 = make_account(&mut client);
+    let (mut client, authority_clients) = make_address_manager(4).await;
+    let (addr1, key1) = make_account(&mut client);
 
     let coin_object_id1 = ObjectID::random();
     let coin_object_id2 = ObjectID::random();
@@ -2532,10 +2571,11 @@ async fn test_coin_merge() {
     let response = client
         .merge_coins(
             addr1,
-            coin_object1.to_object_reference(),
-            coin_object2.to_object_reference(),
-            gas_object.to_object_reference(),
+            coin_object1.id(),
+            coin_object2.id(),
+            gas_object.id(),
             GAS_VALUE_FOR_TESTING,
+            signature_callback(&key1),
         )
         .await
         .unwrap();
@@ -2549,4 +2589,29 @@ async fn test_coin_merge() {
     );
     let update_coin = GasCoin::try_from(response.updated_coin.data.try_as_move().unwrap()).unwrap();
     assert_eq!(update_coin.value(), GAS_VALUE_FOR_TESTING * 2);
+}
+
+fn to_transaction(data: TransactionData, signer: &dyn Signer<Signature>) -> Transaction {
+    let signature = Signature::new(&data, signer);
+    Transaction::new(data, signature)
+}
+
+fn signature_callback(signer: &KeyPair) -> StableSyncTransactionSigner {
+    struct Callback {
+        keypair: KeyPair,
+    }
+    #[async_trait]
+    impl AsyncTransactionSigner for Callback {
+        async fn sign(
+            &self,
+            _address: &SuiAddress,
+            data: TransactionData,
+        ) -> Result<Signature, Error> {
+            Ok(Signature::new(&data, &self.keypair))
+        }
+    }
+
+    Box::pin(Callback {
+        keypair: signer.copy(),
+    })
 }

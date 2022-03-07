@@ -2,6 +2,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+extern crate core;
+
 pub mod config;
 pub mod keystore;
 pub mod shell;

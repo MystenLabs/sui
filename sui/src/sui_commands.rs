@@ -18,7 +18,6 @@ use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
 use sui_types::base_types::{SequenceNumber, TxContext};
 use sui_types::committee::Committee;
-use sui_types::crypto::get_key_pair;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
 use tracing::{error, info};
@@ -149,9 +148,8 @@ pub async fn genesis(
         let address = if let Some(address) = account.address {
             address
         } else {
-            let (address, key_pair) = get_key_pair();
+            let address = keystore.add_random_key()?;
             new_addresses.push(address);
-            keystore.add_key(key_pair)?;
             address
         };
         for object_conf in account.gas_objects {
@@ -264,7 +262,7 @@ async fn make_server_with_genesis_ctx(
     let state = AuthorityState::new(
         committee.clone(),
         name,
-        Box::pin(authority.key_pair.copy()),
+        Arc::pin(authority.key_pair.copy()),
         store,
         preload_modules,
         genesis_ctx,

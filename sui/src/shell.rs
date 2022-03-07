@@ -11,9 +11,9 @@ use rustyline::validate::Validator;
 use rustyline::{Config, Context, Editor};
 use rustyline_derive::Helper;
 use std::fmt::Display;
-use std::io;
 use std::io::Write;
-use structopt::clap::App;
+use std::{env, io};
+use structopt::clap::{App, SubCommand};
 use unescape::unescape;
 
 /// A interactive command line shell with history and completion support
@@ -21,7 +21,6 @@ pub struct Shell<P: Display, S, H> {
     pub prompt: P,
     pub state: S,
     pub handler: H,
-    pub description: String,
     pub command: CommandStructure,
 }
 
@@ -42,17 +41,11 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
             children: vec![],
         };
         command.children.push(help);
-        command.completions.extend([
-            "help".to_string(),
-            "exit".to_string(),
-            "quit".to_string(),
-            "clear".to_string(),
-        ]);
+        command.completions.extend(["help".to_string()]);
 
         rl.set_helper(Some(ShellHelper { command }));
 
         let mut stdout = io::stdout();
-
         'shell: loop {
             print!("{}", self.prompt);
             stdout.flush()?;
@@ -65,28 +58,42 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                 Err(err) => return Err(err.into()),
             };
 
+            let line = Self::substitution_env_variables(line);
+
             // Runs the line
             match Self::split_and_unescape(line.trim()) {
                 Ok(line) => {
-                    // do nothing if line is empty
-                    if line.is_empty() {
+                    if let Some(s) = line.first() {
+                        // These are shell only commands.
+                        match s.as_str() {
+                            "quit" | "exit" => {
+                                println!("Bye!");
+                                break 'shell;
+                            }
+                            "clear" => {
+                                // Clear screen and move cursor to top left
+                                print!("\x1B[2J\x1B[1;1H");
+                                continue 'shell;
+                            }
+                            "echo" => {
+                                let out = line.as_slice()[1..line.len()].join(" ");
+                                println!("{}", out);
+                                continue 'shell;
+                            }
+                            "env" => {
+                                for (key, var) in env::vars() {
+                                    println!("{}={}", key, var);
+                                }
+                                continue 'shell;
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        // do nothing if line is empty
                         continue 'shell;
-                    };
-                    // safe to unwrap with the above is_empty check.
-                    if *line.first().unwrap() == "quit" || *line.first().unwrap() == "exit" {
-                        println!("Bye!");
-                        break 'shell;
-                    };
-                    if *line.first().unwrap() == "clear" {
-                        // Clear screen and move cursor to top left
-                        print!("\x1B[2J\x1B[1;1H");
-                        continue 'shell;
-                    };
-                    if self
-                        .handler
-                        .handle_async(line, &mut self.state, &self.description)
-                        .await
-                    {
+                    }
+
+                    if self.handler.handle_async(line, &mut self.state).await {
                         break 'shell;
                     };
                 }
@@ -94,6 +101,28 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
             }
         }
         Ok(())
+    }
+
+    fn substitution_env_variables(s: String) -> String {
+        if !s.contains('$') {
+            return s;
+        }
+        let mut env = env::vars().collect::<Vec<_>>();
+        // Sort variable name by the length in descending order, to prevent wrong substitution by variable with partial same name.
+        env.sort_by(|(k1, _), (k2, _)| Ord::cmp(&k2.len(), &k1.len()));
+
+        for (key, value) in env {
+            let var = format!("${}", key);
+            if s.contains(&var) {
+                let result = s.replace(var.as_str(), value.as_str());
+                return if result.contains('$') {
+                    Self::substitution_env_variables(result)
+                } else {
+                    result
+                };
+            }
+        }
+        s
     }
 
     fn split_and_unescape(line: &str) -> Result<Vec<String>, String> {
@@ -105,6 +134,17 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
         }
         Ok(commands)
     }
+}
+
+pub fn install_shell_plugins<'a>(clap: App<'a, 'a>) -> App<'a, 'a> {
+    clap.subcommand(
+        SubCommand::with_name("exit")
+            .alias("quit")
+            .about("Exit the interactive shell"),
+    )
+    .subcommand(SubCommand::with_name("clear").about("Clear screen"))
+    .subcommand(SubCommand::with_name("echo").about("Write arguments to the console output"))
+    .subcommand(SubCommand::with_name("env").about("Print environment"))
 }
 
 #[derive(Helper)]
@@ -217,5 +257,5 @@ impl CommandStructure {
 
 #[async_trait]
 pub trait AsyncHandler<T: Send> {
-    async fn handle_async(&self, args: Vec<String>, state: &mut T, description: &str) -> bool;
+    async fn handle_async(&self, args: Vec<String>, state: &mut T) -> bool;
 }

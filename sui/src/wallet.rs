@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
 use sui::config::{Config, WalletConfig};
-use sui::shell::{AsyncHandler, CommandStructure, Shell};
+use sui::shell::{install_shell_plugins, AsyncHandler, CommandStructure, Shell};
 use sui::wallet_commands::*;
 use tracing::error;
 
@@ -67,7 +67,7 @@ async fn main() -> Result<(), anyhow::Error> {
     if !options.no_shell {
         let app: App = WalletCommands::clap();
         println!("{}", SUI.cyan().bold());
-        print!("--- Sui");
+        print!("--- ");
         app.write_long_version(&mut io::stdout())?;
         println!(" ---");
         println!("{}", context.config);
@@ -76,12 +76,12 @@ async fn main() -> Result<(), anyhow::Error> {
         println!();
 
         let mut shell = Shell {
-            prompt: "sui>-$ ",
+            prompt: "sui>-$ ".bold().green(),
             state: context,
             handler: ClientCommandHandler,
-            description: String::new(),
-            command: CommandStructure::from_clap(&app),
+            command: CommandStructure::from_clap(&install_shell_plugins(app)),
         };
+
         shell.run_async().await?;
     } else if let Some(mut cmd) = options.cmd {
         cmd.execute(&mut context).await?.print(!options.json);
@@ -93,17 +93,21 @@ struct ClientCommandHandler;
 
 #[async_trait]
 impl AsyncHandler<WalletContext> for ClientCommandHandler {
-    async fn handle_async(&self, args: Vec<String>, context: &mut WalletContext, _: &str) -> bool {
-        let command: Result<WalletOpts, _> = WalletOpts::from_iter_safe(args);
-        if let Err(e) = handle_command(command, context).await {
+    async fn handle_async(&self, args: Vec<String>, context: &mut WalletContext) -> bool {
+        if let Err(e) = handle_command(get_command(args), context).await {
             error!("{}", e.to_string().red());
         }
         false
     }
 }
 
+fn get_command(args: Vec<String>) -> Result<WalletOpts, anyhow::Error> {
+    let app: App = install_shell_plugins(WalletOpts::clap());
+    Ok(WalletOpts::from_clap(&app.get_matches_from_safe(args)?))
+}
+
 async fn handle_command(
-    wallet_opts: Result<WalletOpts, structopt::clap::Error>,
+    wallet_opts: Result<WalletOpts, anyhow::Error>,
     context: &mut WalletContext,
 ) -> Result<(), anyhow::Error> {
     let mut wallet_opts = wallet_opts?;
