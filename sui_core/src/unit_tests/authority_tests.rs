@@ -1757,10 +1757,10 @@ async fn shared_object() {
         use sui_types::object::MoveObject;
 
         let content = GasCoin::new(shared_object_id, SequenceNumber::new(), 10);
-        let data = Data::Move(MoveObject {
-            type_: GasCoin::type_(),
-            contents: content.to_bcs_bytes(),
-        });
+        let data = Data::Move(MoveObject::new(
+            /* type */ GasCoin::type_(),
+            content.to_bcs_bytes(),
+        ));
         Object {
             data,
             owner: Owner::SharedMutable,
@@ -1822,7 +1822,7 @@ async fn shared_object() {
         .unwrap();
 
     let shared_object_version = authority
-        .database()
+        .db()
         .sequenced(transaction_digest, shared_object_id)
         .unwrap()
         .unwrap();
@@ -1836,7 +1836,7 @@ async fn shared_object() {
         .unwrap();
 
     let shared_object_lock = authority
-        .database()
+        .db()
         .sequenced(transaction_digest, shared_object_id)
         .unwrap();
     assert!(shared_object_lock.is_none());

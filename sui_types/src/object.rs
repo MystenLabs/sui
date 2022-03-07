@@ -34,7 +34,7 @@ pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 pub struct MoveObject {
     pub type_: StructTag,
     #[serde_as(as = "Bytes")]
-    pub contents: Vec<u8>,
+    contents: Vec<u8>,
 }
 
 /// Byte encoding of a 64 byte unsigned integer in BCS

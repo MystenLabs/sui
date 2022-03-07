@@ -605,7 +605,7 @@ impl AuthorityStore {
         transaction: &Transaction,
         certificate: CertifiedTransaction,
     ) -> Result<(), SuiError> {
-        let certificate_to_write = vec![(transaction_digest, certificate)];
+        let certificate_to_write = std::iter::once((transaction_digest, certificate));
 
         let mut sequenced_to_write = Vec::new();
         let mut schedule_to_write = Vec::new();

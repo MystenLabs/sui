@@ -280,6 +280,6 @@ async fn make_server_with_genesis_ctx(
         authority.host.clone(),
         authority.port,
         buffer_size,
-        Arc::new(state),
+        state,
     ))
 }

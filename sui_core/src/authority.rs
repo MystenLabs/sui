@@ -327,7 +327,7 @@ impl AuthorityState {
             // Now let's process the certificate as usual: this executes the transaction and
             // unlock all single-writer objects. Since transactions with shared objects always
             // have at least one owner objects, it is not necessary to re-check the locks on
-            // shared objects as we do wit owned objects.
+            // shared objects as we do with owned objects.
             let result = self
                 .process_certificate(confirmation_transaction.clone())
                 .await;
@@ -825,11 +825,6 @@ impl AuthorityState {
             .filter_map(|((object_id, _object), d)| d.map(|_| *object_id))
             .collect();
         Ok(filtered)
-    }
-
-    #[cfg(test)]
-    pub fn database(&self) -> &Arc<AuthorityStore> {
-        &self._database
     }
 }
 
