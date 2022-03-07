@@ -36,7 +36,8 @@ impl ConsensusHandler {
     async fn run(&mut self) {
         while let Ok(bytes) = self.rx_consensus.recv().await {
             // The consensus simply orders bytes, so we first need to deserialize the
-            // certificate.
+            // certificate. If the deserialization fail it is safe to ignore the
+            // certificate since all correct authorities will do the same.
             let confirmation = match deserialize_message(&*bytes) {
                 Ok(SerializedMessage::Cert(certificate)) => ConfirmationTransaction {
                     certificate: *certificate,
@@ -57,8 +58,14 @@ impl ConsensusHandler {
                 // Log the errors that are our faults (not the client's).
                 Err(SuiError::StorageError(e)) => {
                     log::error!("{}", e);
-                    continue;
+
+                    // If we have a store error we cannot continue processing other
+                    // outputs from consensus. We may otherwise attribute locks to 
+                    // shared objects that are different from other authorities.
+                    panic!("{}", e);
                 }
+                // Log the errors that are the client's fault (not ours). This is
+                // only for debug purposes: all correct authorities will do the same.
                 Err(e) => {
                     log::debug!("{}", e);
                     continue;

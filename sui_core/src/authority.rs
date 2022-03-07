@@ -300,10 +300,12 @@ impl AuthorityState {
             for object_id in transaction.shared_input_objects() {
                 // Check whether the shared objects have already been assigned a sequence number by
                 // the consensus. Bail if the transaction contains even one shared object that either:
-                // (i) was not assigned a sequence number, or (ii) has a different sequence number
-                // than the current one. Note that if the shared object is not in storage (it has been
-                // destroyed), we keep processing the transaction to unlock all single-writer objects
-                // (the execution engine will simply execute no-op).
+                // (i) was not assigned a sequence number, or 
+                // (ii) has a different sequence number than the current one. 
+                //
+                // Note that if the shared object is not in storage (it has been destroyed), we keep 
+                // processing the transaction to unlock all single-writer objects. The execution engine 
+                // will simply execute no-op.
                 match self._database.sequenced(transaction_digest, *object_id)? {
                     Some(lock) => {
                         if let Some(object) = self._database.get_object(object_id)? {
@@ -323,14 +325,17 @@ impl AuthorityState {
             );
 
             // Now let's process the certificate as usual: this executes the transaction and
-            // unlock all single-writer objects.
+            // unlock all single-writer objects. Since transactions with shared objects always
+            // have at least one owner objects, it is not necessary to re-check the locks on 
+            // shared objects as we do wit owned objects.
             let result = self
                 .process_certificate(confirmation_transaction.clone())
                 .await;
 
-            // If the execution is successfully, we cleanup some data structures.
-            // TODO [#676]: What if we crash here (line 315)? The cleanup should be done atomically
+            // TODO [#676]: What if we crash right here? The cleanup should be done atomically
             // within `process_certificate`. It is not safety-critical but cleanup won't happen.
+
+            // If the execution is successfully, we cleanup some data structures.
             if result.is_ok() {
                 for object_id in transaction.shared_input_objects() {
                     self._database
@@ -468,7 +473,8 @@ impl AuthorityState {
         Ok((temporary_store, status))
     }
 
-    /// Process certificates coming from the consensus.
+    /// Process certificates coming from the consensus. It is crucial that this function is only
+    /// called by a single task (ie. the task handling consensus outputs).
     pub async fn handle_consensus_certificate(
         &self,
         certificate: &CertifiedTransaction,
