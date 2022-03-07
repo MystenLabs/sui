@@ -20,13 +20,15 @@ Here is a summary of key differences:
 
 Find a detailed description of each change below.
 
-TODO: Explain *why* each of these differences exist.
-
 ## Object-centric global storage
 
 In core Move, global storage is part of the programming model and can be accessed through special operations, such as _move_to_, _move_from and_ many more[ global storage operators](https://diem.github.io/move/global-storage-operators.html). Both resources and modules are stored in the core Move global storage. When you publish a module, it’s stored into a newly generated module address inside Move. When a new object (a.k.a. resource) is created, it's usually stored into some account’s address, as well.
 
-However, there is no global storage in Sui Move. None of the global storage-related operations are allowed in Sui Move. (We have a bytecode verifier for this to detect violations.) Instead, storage happens exclusively within Sui. When we publish a module, the newly published module is stored in Sui storage, instead of Move storage. Similarly, newly created objects are stored in Sui storage. _This also means that when we need to read an object in Move, we cannot rely on global storage operations but instead Sui must explicitly pass all objects that need to be accessed into Move._
+But on-chain storage is expensive and limited (not optimized for storage and indexing). Current blockchains cannot scale to handle storage-heavy applications such as marketplaces and social apps.
+
+TODO: Review/edit the impetus above and include similar reasoning for each item below.
+
+So there is no global storage in Sui Move. None of the global storage-related operations are allowed in Sui Move. (We have a bytecode verifier for this to detect violations.) Instead, storage happens exclusively within Sui. When we publish a module, the newly published module is stored in Sui storage, instead of Move storage. Similarly, newly created objects are stored in Sui storage. _This also means that when we need to read an object in Move, we cannot rely on global storage operations but instead Sui must explicitly pass all objects that need to be accessed into Move._
 
 ## Addresses represent Object IDs
 
@@ -42,7 +44,7 @@ We take advantage of the _key_ ability in Move to annotate a Sui object. In core
 
 ## Module initializers
 
-As described in [Object-centric global storage](#bookmark=id.dq5ivuwmx1i8), Move modules are published into Sui storage. A special initializer function optionally defined in a module is executed (once) at the time of module publication by the Sui runtime for the purpose of pre-initializing module-specific data (e.g., creating singleton objects). The initializer function must have the following properties in order to be executed at publication:
+As described in [Object-centric global storage](#object-centric-global-storage), Move modules are published into Sui storage. A special initializer function optionally defined in a module is executed (once) at the time of module publication by the Sui runtime for the purpose of pre-initializing module-specific data (e.g., creating singleton objects). The initializer function must have the following properties in order to be executed at publication:
 
 * Name `init`
 * Single parameter of `&mut TxContext` type
