@@ -568,10 +568,6 @@ SuiError:
       IncorrectGasSplit: UNIT
     77:
       IncorrectGasMerge: UNIT
-    78:
-      AccountNotFound: UNIT
-    79:
-      AccountExists: UNIT
 Transaction:
   STRUCT:
     - data:

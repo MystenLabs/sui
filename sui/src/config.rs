@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::gateway::{GatewayType, LocalGatewayConfig};
 use crate::keystore::KeystoreType;
 use anyhow::anyhow;
 use once_cell::sync::Lazy;
@@ -10,19 +11,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::hex::Hex;
 use serde_with::serde_as;
-use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::Duration;
-use sui_core::authority_client::AuthorityClient;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_network::network::{NetworkClient, PortAllocator};
+use sui_network::network::PortAllocator;
 use sui_network::transport;
 use sui_types::base_types::*;
-use sui_types::committee::Committee;
 use sui_types::crypto::{get_key_pair, KeyPair};
 use tracing::log::trace;
 
@@ -107,12 +104,8 @@ impl<'de> Deserialize<'de> for AuthorityPrivateInfo {
 pub struct WalletConfig {
     #[serde_as(as = "Vec<Hex>")]
     pub accounts: Vec<SuiAddress>,
-    pub authorities: Vec<AuthorityInfo>,
-    pub send_timeout: Duration,
-    pub recv_timeout: Duration,
-    pub buffer_size: usize,
-    pub db_folder_path: PathBuf,
     pub keystore: KeystoreType,
+    pub gateway: GatewayType,
 
     #[serde(skip)]
     config_path: PathBuf,
@@ -125,12 +118,11 @@ impl Config for WalletConfig {
             .ok_or(anyhow!("Cannot determine parent directory."))?;
         Ok(WalletConfig {
             accounts: Vec::new(),
-            authorities: Vec::new(),
-            send_timeout: Duration::from_micros(4000000),
-            recv_timeout: Duration::from_micros(4000000),
-            buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE.to_string().parse()?,
-            db_folder_path: working_dir.join("client_db"),
             keystore: KeystoreType::File(working_dir.join("wallet.ks")),
+            gateway: GatewayType::Local(LocalGatewayConfig {
+                db_folder_path: working_dir.join("client_db"),
+                ..Default::default()
+            }),
             config_path: path.to_path_buf(),
         })
     }
@@ -144,39 +136,12 @@ impl Config for WalletConfig {
     }
 }
 
-impl WalletConfig {
-    pub fn make_committee(&self) -> Committee {
-        let voting_rights = self
-            .authorities
-            .iter()
-            .map(|authority| (authority.name, 1))
-            .collect();
-        Committee::new(voting_rights)
-    }
-
-    pub fn make_authority_clients(&self) -> BTreeMap<AuthorityName, AuthorityClient> {
-        let mut authority_clients = BTreeMap::new();
-        for authority in &self.authorities {
-            let client = AuthorityClient::new(NetworkClient::new(
-                authority.host.clone(),
-                authority.base_port,
-                self.buffer_size,
-                self.send_timeout,
-                self.recv_timeout,
-            ));
-            authority_clients.insert(authority.name, client);
-        }
-        authority_clients
-    }
-}
-
 impl Display for WalletConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Config path : {:?}\nClient state DB folder path : {:?}\nManaged addresses : {}",
+            "Config path : {:?}\nManaged addresses : {}",
             self.config_path,
-            self.db_folder_path,
             self.accounts.len()
         )
     }

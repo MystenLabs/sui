@@ -237,11 +237,6 @@ pub enum SuiError {
     IncorrectGasSplit,
     #[error("Inconsistent gas coin merge result.")]
     IncorrectGasMerge,
-
-    #[error("Account not found.")]
-    AccountNotFound,
-    #[error("Account already exists.")]
-    AccountExists,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

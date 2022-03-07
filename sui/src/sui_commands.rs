@@ -17,6 +17,10 @@ use sui_adapter::genesis;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
 use sui_types::base_types::{SequenceNumber, TxContext};
+
+use crate::gateway::{GatewayType, LocalGatewayConfig};
+use crate::keystore::KeystoreType;
+use sui_adapter::adapter::generate_package_id;
 use sui_types::committee::Committee;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
@@ -49,8 +53,11 @@ impl SuiCommand {
                 };
                 let wallet_path = working_dir.join("wallet.conf");
                 let mut wallet_config = WalletConfig::create(&wallet_path)?;
-                wallet_config.db_folder_path = working_dir.join("client_db");
                 wallet_config.keystore = KeystoreType::File(working_dir.join("wallet.key"));
+                wallet_config.gateway = GatewayType::Local(LocalGatewayConfig {
+                    db_folder_path: working_dir.join("client_db"),
+                    ..Default::default()
+                });
                 genesis(config, genesis_conf, &mut wallet_config).await
             }
         }
@@ -212,7 +219,15 @@ pub async fn genesis(
         )
         .await?;
     }
-    wallet_config.authorities = authority_info;
+
+    if let GatewayType::Local(config) = &wallet_config.gateway {
+        wallet_config.gateway = GatewayType::Local(LocalGatewayConfig {
+            db_folder_path: config.db_folder_path.clone(),
+            authorities: authority_info,
+            ..Default::default()
+        });
+    }
+
     wallet_config.accounts = new_addresses;
 
     info!("Network genesis completed.");
