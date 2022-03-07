@@ -271,6 +271,14 @@ impl ExecutionStatus {
             ExecutionStatus::Failure { gas_used, error } => (gas_used, *error),
         }
     }
+
+    /// Returns the gas used from the status
+    pub fn gas_used(&self) -> u64 {
+        match &self {
+            ExecutionStatus::Success { gas_used } => *gas_used,
+            ExecutionStatus::Failure { gas_used, .. } => *gas_used,
+        }
+    }
 }
 
 /// The response from processing a transaction or a certified transaction

@@ -39,13 +39,16 @@ Example output which shows both context (tx digests) and key-value pairs enhanci
 Spans capture not a single event but an entire block of time, so start, end, duration, etc. can be captured
 and analyzed for tracing, performance analysis, etc.
 
-|     Name     |       Place        |                                 Meaning                                 |
-| ------------ | ------------------ | ----------------------------------------------------------------------- |
-| process_tx   | Gateway, Authority | Send transaction request, get back 2f+1 signatures and make certificate |
-| process_cert | Gateway            | Send certificate to authorities to execute transaction                  |
-| handle_cert  | Gateway, Authority | Handle certificate processing and Move execution                        |
-| sync_cert    | Gateway, Authority | Gateway-initiated sync of data to authority                             |
-|              |                    |                                                                         |
+|           Name          |       Place        |                                    Meaning                                     |
+| ----------------------- | ------------------ | ------------------------------------------------------------------------------ |
+| process_tx              | Gateway, Authority | Send transaction request, get back 2f+1 signatures and make certificate        |
+| process_cert            | Gateway            | Send certificate to authorities to execute transaction                         |
+| handle_cert             | Gateway, Authority | Handle certificate processing and Move execution                               |
+| sync_cert               | Gateway, Authority | Gateway-initiated sync of data to authority                                    |
+| tx_check_locks          | Authority          | Check locks on input objects of incoming transaction request                   |
+| db_set_transaction_lock | Authority          | Database set transaction locks on new transaction                              |
+| db_update_state         | Authority          | Update the database with certificate, effects after transaction Move execution |
+|                         |                    |                                                                                |
 
 ### Tags - Keys
 
@@ -54,17 +57,20 @@ These tags represent "fields" that can be analyzed and filtered by.  For example
 
 TODO: see if keys need to be scoped by contexts
 
-|        Key         |      Place(s)      |                                  Meaning                                   |
-| ------------------ | ------------------ | -------------------------------------------------------------------------- |
-| tx_digest          | Gateway, Authority | Hex digest of transaction                                                  |
-| quorum_threshold   | Gateway            | Numeric threshold of quorum stake needed for a transaction                 |
-| validity_threshold | Gateway            | Numeric threshold of maximum "bad stake" from errors that can be tolerated |
-| num_errors         | Gateway            | Number of errors from authorities broadcast                                |
-| good_stake         | Gateway            | Total amount of good stake from authorities who answered a broadcast       |
-| bad_stake          | Gateway            | Total amount of bad stake from authorities, including errors               |
-| num_signatures     | Gateway            | Number of signatures received from authorities broadcast                   |
-| num_unique_effects | Gateway            | Number of unique effects responses from authorities                        |
-|                    |                    |                                                                            |
+|         Key         |      Place(s)      |                                  Meaning                                   |
+| ------------------- | ------------------ | -------------------------------------------------------------------------- |
+| tx_digest           | Gateway, Authority | Hex digest of transaction                                                  |
+| quorum_threshold    | Gateway            | Numeric threshold of quorum stake needed for a transaction                 |
+| validity_threshold  | Gateway            | Numeric threshold of maximum "bad stake" from errors that can be tolerated |
+| num_errors          | Gateway            | Number of errors from authorities broadcast                                |
+| good_stake          | Gateway            | Total amount of good stake from authorities who answered a broadcast       |
+| bad_stake           | Gateway            | Total amount of bad stake from authorities, including errors               |
+| num_signatures      | Gateway            | Number of signatures received from authorities broadcast                   |
+| num_unique_effects  | Gateway            | Number of unique effects responses from authorities                        |
+| num_inputs          | Authority          | Number of inputs for transaction processing                                |
+| num_mutable_objects | Authority          | Number of mutable objects for transaction processing                       |
+| gas_used            | Authority          | Amount of gas used by the transaction                                      |
+|                     |                    |                                                                            |
 
 ## Logging Levels
 

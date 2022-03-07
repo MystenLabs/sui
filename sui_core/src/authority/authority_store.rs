@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
 use sui_types::base_types::SequenceNumber;
+use tracing::{warn, Instrument};
 use typed_store::rocks::{open_cf, DBBatch, DBMap};
 use typed_store::traits::Map;
 
@@ -292,6 +293,7 @@ impl AuthorityStore {
         // new locks must be atomic, and not writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
+            // MutexGuards are unlocked on drop (ie end of this block)
             let _mutexes = self.acquire_locks(mutable_input_objects);
 
             let locks = self.transaction_lock.multi_get(mutable_input_objects)?;
@@ -306,6 +308,9 @@ impl AuthorityStore {
                             .get_transaction_lock(obj_ref)?
                             .expect("If we have a lock we should have a transaction.");
 
+                        warn!(prev_tx_digest =? previous_tx_digest,
+                              cur_tx_digest =? tx_digest,
+                              "Conflicting transaction!  Lock state changed in unexpected way");
                         // TODO: modify ConflictingTransaction to only return the transaction digest here.
                         return Err(SuiError::ConflictingTransaction {
                             pending_transaction: prev_transaction.transaction,
