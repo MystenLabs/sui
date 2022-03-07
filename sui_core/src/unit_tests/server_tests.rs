@@ -37,7 +37,8 @@ use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::sink::SinkMapErr;
 use futures::{Sink, SinkExt};
 
-type SinkSenderErr = SinkMapErr<Sender<Bytes>, fn(<Sender<Bytes> as Sink<Bytes>>::Error) -> std::io::Error>;
+type SinkSenderErr =
+    SinkMapErr<Sender<Bytes>, fn(<Sender<Bytes> as Sink<Bytes>>::Error) -> std::io::Error>;
 
 struct TestChannel {
     reader: Receiver<Result<BytesMut, std::io::Error>>,
