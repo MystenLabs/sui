@@ -62,7 +62,10 @@ pub struct AuthorityStore {
     /// the same response for any call after the first (ie. make certificate processing idempotent).
     signed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
 
-    /// Hold the lock for shared objects. These two maps should eventually be merged into a single one.
+    /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
+    /// certified transaction from consensus, the authority assigns a lock to each shared objects of the
+    /// transaction. Note that all authorities are guaranteed to assign the same lock to these objects.
+    /// TODO: These two maps should be merged into a single one (no reason to have two).
     sequenced: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
     schedule: DBMap<ObjectID, SequenceNumber>,
 
@@ -596,11 +599,14 @@ impl AuthorityStore {
     }
 
     /// Lock a sequence number for the shared objects of the input transaction.
-    pub fn lock_shared_objects(
+    pub fn persist_certificate_and_lock_shared_objects(
         &self,
         transaction_digest: TransactionDigest,
         transaction: &Transaction,
+        certificate: CertifiedTransaction,
     ) -> Result<(), SuiError> {
+        let certificate_to_write = std::iter::once((transaction_digest, certificate));
+
         let mut sequenced_to_write = Vec::new();
         let mut schedule_to_write = Vec::new();
         for id in transaction.shared_input_objects() {
@@ -610,9 +616,9 @@ impl AuthorityStore {
             schedule_to_write.push((id, next_version));
         }
 
-        // TODO: Writing into `sequenced` and `schedule` should be atomic. Should we merge
-        // them into a single DB?
+        // TODO [#676]: The writes below should be atomic.
         let mut write_batch = self.sequenced.batch();
+        write_batch = write_batch.insert_batch(&self.certificates, certificate_to_write)?;
         write_batch = write_batch.insert_batch(&self.sequenced, sequenced_to_write)?;
         write_batch = write_batch.insert_batch(&self.schedule, schedule_to_write)?;
         write_batch.write().map_err(SuiError::from)

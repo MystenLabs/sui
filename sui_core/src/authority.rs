@@ -300,10 +300,12 @@ impl AuthorityState {
             for object_id in transaction.shared_input_objects() {
                 // Check whether the shared objects have already been assigned a sequence number by
                 // the consensus. Bail if the transaction contains even one shared object that either:
-                // (i) was not assigned a sequence number, or (ii) has a different sequence number
-                // than the current one. Note that if the shared object is not in storage (it has been
-                // destroyed), we keep processing the transaction to unlock all single-writer objects
-                // (the execution engine will simply execute no-op).
+                // (i) was not assigned a sequence number, or
+                // (ii) has a different sequence number than the current one.
+                //
+                // Note that if the shared object is not in storage (it has been destroyed), we keep
+                // processing the transaction to unlock all single-writer objects. The execution engine
+                // will simply execute no-op.
                 match self._database.sequenced(transaction_digest, *object_id)? {
                     Some(lock) => {
                         if let Some(object) = self._database.get_object(object_id)? {
@@ -323,10 +325,15 @@ impl AuthorityState {
             );
 
             // Now let's process the certificate as usual: this executes the transaction and
-            // unlock all single-writer objects.
+            // unlock all single-writer objects. Since transactions with shared objects always
+            // have at least one owner objects, it is not necessary to re-check the locks on
+            // shared objects as we do with owned objects.
             let result = self
                 .process_certificate(confirmation_transaction.clone())
                 .await;
+
+            // TODO [#676]: What if we crash right here? The cleanup should be done atomically
+            // within `process_certificate`. It is not safety-critical but cleanup won't happen.
 
             // If the execution is successfully, we cleanup some data structures.
             if result.is_ok() {
@@ -342,6 +349,12 @@ impl AuthorityState {
         }
         // In case there are no shared objects, we simply process the certificate.
         else {
+            // Ensure an idempotent answer
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+            if transaction_info.certified_transaction.is_some() {
+                return Ok(transaction_info);
+            }
+
             self.process_certificate(confirmation_transaction).await
         }
     }
@@ -353,12 +366,6 @@ impl AuthorityState {
         let certificate = confirmation_transaction.certificate;
         let transaction = certificate.transaction.clone();
         let transaction_digest = transaction.digest();
-
-        // Ensure an idempotent answer
-        let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-        if transaction_info.certified_transaction.is_some() {
-            return Ok(transaction_info);
-        }
 
         let mut inputs: Vec<_> = self
             .check_locks(&transaction)
@@ -466,13 +473,14 @@ impl AuthorityState {
         Ok((temporary_store, status))
     }
 
-    /// Handle sequenced certificates from the consensus protocol.
-    pub fn handle_commit(
-        &mut self,
-        confirmation_transaction: ConfirmationTransaction,
+    /// Process certificates coming from the consensus. It is crucial that this function is only
+    /// called by a single task (ie. the task handling consensus outputs).
+    pub async fn handle_consensus_certificate(
+        &self,
+        certificate: &CertifiedTransaction,
     ) -> SuiResult<()> {
         // Ensure it is the first time we see this certificate.
-        let transaction = &confirmation_transaction.certificate.transaction;
+        let transaction = &certificate.transaction;
         let transaction_digest = transaction.digest();
         for id in transaction.shared_input_objects() {
             if self._database.sequenced(transaction_digest, *id)?.is_some() {
@@ -481,17 +489,16 @@ impl AuthorityState {
         }
 
         // Check the certificate.
-        let certificate = &confirmation_transaction.certificate;
         certificate.check(&self.committee)?;
 
         // Persist the certificate. We are about to lock one or more shared object.
         // We thus need to make sure someone (if not the client) can continue the protocol.
-        self._database
-            .persist_certificate(&transaction_digest, certificate)?;
-
-        // Lock the shared object for this particular transaction.
-        self._database
-            .lock_shared_objects(transaction_digest, transaction)
+        // Also atomically lock the shared objects for this particular transaction.
+        self._database.persist_certificate_and_lock_shared_objects(
+            transaction_digest,
+            transaction,
+            certificate.clone(),
+        )
     }
 
     fn transfer(

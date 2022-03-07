@@ -22,6 +22,8 @@ tracing = { version = "0.1.31", features = ["log"] }
 signature = "1.5.0"
 ed25519-dalek = "1.0.1"
 structopt = "0.3.26"
+bytes = "1.1.0"
+log = "0.4.14"
 
 sui-adapter = { path = "../sui_programmability/adapter" }
 sui-framework = { path = "../sui_programmability/framework" }

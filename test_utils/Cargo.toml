@@ -1,0 +1,21 @@
+[package]
+name = "test_utils"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+version = "0.1.0"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.16.1", features = ["sync", "rt"] }
+rand = "0.7.3"
+rocksdb = "0.17.0"
+fdlimit = "0.2.1"
+portpicker = "0.1.1"
+bytes = "1.1.0"
+futures = "0.3.21"
+
+sui-types = { path = "../sui_types" }
+sui_core = { path = "../sui_core" }
+sui-adapter = { path = "../sui_programmability/adapter" }
+sui = { path = "../sui" }
