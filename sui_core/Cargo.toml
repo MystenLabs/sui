@@ -30,11 +30,11 @@ sui-framework = { path = "../sui_programmability/framework" }
 sui-network = { path = "../network_utils" }
 sui-types = { path = "../sui_types" }
 
-move-binary-format = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
-move-bytecode-utils = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
-move-core-types = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940", features = ["address20"] }
-move-package = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
-move-vm-runtime = { git = "https://github.com/diem/move", rev = "b5146b4fb4ecc71fc98ab8ea56d139d0b9f8d940" }
+move-binary-format = { git = "https://github.com/diem/move", rev = "b4162e11ebcd6e33571f12737120309ab835fdfe" }
+move-bytecode-utils = { git = "https://github.com/diem/move", rev = "b4162e11ebcd6e33571f12737120309ab835fdfe" }
+move-core-types = { git = "https://github.com/diem/move", rev = "b4162e11ebcd6e33571f12737120309ab835fdfe", features = ["address20"] }
+move-package = { git = "https://github.com/diem/move", rev = "b4162e11ebcd6e33571f12737120309ab835fdfe" }
+move-vm-runtime = { git = "https://github.com/diem/move", rev = "b4162e11ebcd6e33571f12737120309ab835fdfe" }
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a36c852c30729a16ee3c8a6a863f654887f0c30e"}
 

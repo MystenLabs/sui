@@ -182,7 +182,10 @@ pub fn run_move_unit_tests(path: &Path) -> SuiResult {
     let result = cli::run_move_unit_tests(
         path,
         BuildConfig::default(),
-        UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)),
+        UnitTestingConfig {
+            report_stacktrace_on_abort: true,
+            ..UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS))
+        },
         natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
         /* compute_coverage */ false,
     )
