@@ -71,11 +71,11 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     // Check wallet.conf
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
 
-    if let GatewayType::Local(config) = wallet_conf.gateway {
+    if let GatewayType::Embedded(config) = wallet_conf.gateway {
         assert_eq!(4, config.authorities.len());
         assert_eq!(working_dir.path().join("client_db"), config.db_folder_path);
     } else {
-        assert!(false)
+        panic!()
     }
 
     assert_eq!(5, wallet_conf.accounts.len());
@@ -314,7 +314,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let object_refs = context.gateway.get_owned_objects(address);
 
     // Check log output contains all object ids.
-    let object_id = object_refs.iter().next().unwrap().0;
+    let object_id = object_refs.first().unwrap().0;
 
     WalletCommands::Object { id: object_id }
         .execute(&mut context)

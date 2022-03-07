@@ -28,7 +28,7 @@ use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
 
 use std::sync::{Arc, Mutex};
-use sui::gateway::{GatewayType, LocalGatewayConfig};
+use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -196,8 +196,8 @@ async fn genesis(
     // IO Error when a restart is attempted.
     let client_db_path = format!("client_db_{:?}", ObjectID::random());
 
-    if let GatewayType::Local(config) = wallet_config.gateway {
-        wallet_config.gateway = GatewayType::Local(LocalGatewayConfig {
+    if let GatewayType::Embedded(config) = wallet_config.gateway {
+        wallet_config.gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
             db_folder_path: working_dir.join(&client_db_path),
             ..config
         })

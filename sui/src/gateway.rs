@@ -1,9 +1,15 @@
-use crate::config::AuthorityInfo;
-use serde::Deserialize;
-use serde::Serialize;
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use std::collections::BTreeMap;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::time::Duration;
+
+use serde::Deserialize;
+use serde::Serialize;
+
 use sui_core::authority_client::AuthorityClient;
 use sui_core::client::{ClientAddressManager, GatewayClient};
 use sui_network::network::NetworkClient;
@@ -11,16 +17,50 @@ use sui_network::transport;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::Committee;
 
+use crate::config::AuthorityInfo;
+
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum GatewayType {
-    Local(LocalGatewayConfig),
+    Embedded(EmbeddedGatewayConfig),
     Rest(String),
+}
+
+impl Display for GatewayType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+
+        match self {
+            GatewayType::Embedded(config) => {
+                writeln!(writer, "Gateway Type : Embedded")?;
+                writeln!(
+                    writer,
+                    "Client state DB folder path : {:?}",
+                    config.db_folder_path
+                )?;
+                let authorities = config
+                    .authorities
+                    .iter()
+                    .map(|info| format!("{}:{}", info.host, info.base_port));
+                writeln!(
+                    writer,
+                    "Authorities : {:?}",
+                    authorities.collect::<Vec<_>>()
+                )?;
+            }
+            GatewayType::Rest(url) => {
+                writeln!(writer, "Gateway Type : RestAPI")?;
+                writeln!(writer, "Gateway URL : {}", url)?;
+            }
+        }
+        write!(f, "{}", writer)
+    }
 }
 
 impl GatewayType {
     pub fn init(&self) -> GatewayClient {
         match self {
-            GatewayType::Local(config) => {
+            GatewayType::Embedded(config) => {
                 let path = config.db_folder_path.clone();
                 let committee = config.make_committee();
                 let authority_clients = config.make_authority_clients();
@@ -31,14 +71,14 @@ impl GatewayType {
                 ))
             }
             _ => {
-                panic!("Unsupported gatway type")
+                panic!("Unsupported gateway type")
             }
         }
     }
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct LocalGatewayConfig {
+pub struct EmbeddedGatewayConfig {
     pub authorities: Vec<AuthorityInfo>,
     pub send_timeout: Duration,
     pub recv_timeout: Duration,
@@ -46,7 +86,7 @@ pub struct LocalGatewayConfig {
     pub db_folder_path: PathBuf,
 }
 
-impl LocalGatewayConfig {
+impl EmbeddedGatewayConfig {
     pub fn make_committee(&self) -> Committee {
         let voting_rights = self
             .authorities
@@ -72,7 +112,7 @@ impl LocalGatewayConfig {
     }
 }
 
-impl Default for LocalGatewayConfig {
+impl Default for EmbeddedGatewayConfig {
     fn default() -> Self {
         Self {
             authorities: vec![],

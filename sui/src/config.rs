@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::gateway::{GatewayType, LocalGatewayConfig};
+use crate::gateway::{EmbeddedGatewayConfig, GatewayType};
 use crate::keystore::KeystoreType;
 use anyhow::anyhow;
 use once_cell::sync::Lazy;
@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::hex::Hex;
 use serde_with::serde_as;
+use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::fs::{self, File};
 use std::io::BufReader;
@@ -119,7 +120,7 @@ impl Config for WalletConfig {
         Ok(WalletConfig {
             accounts: Vec::new(),
             keystore: KeystoreType::File(working_dir.join("wallet.ks")),
-            gateway: GatewayType::Local(LocalGatewayConfig {
+            gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
                 db_folder_path: working_dir.join("client_db"),
                 ..Default::default()
             }),
@@ -138,12 +139,13 @@ impl Config for WalletConfig {
 
 impl Display for WalletConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Config path : {:?}\nManaged addresses : {}",
-            self.config_path,
-            self.accounts.len()
-        )
+        let mut writer = String::new();
+
+        writeln!(writer, "Config path : {:?}", self.config_path)?;
+        writeln!(writer, "Managed addresses : {}", self.accounts.len())?;
+        writeln!(writer, "{}", self.gateway)?;
+
+        write!(f, "{}", writer)
     }
 }
 
