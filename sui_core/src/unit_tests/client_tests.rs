@@ -980,10 +980,9 @@ async fn test_move_calls_object_transfer() {
 }
 
 #[tokio::test]
-async fn test_move_calls_object_transfer_and_freeze() {
+async fn test_move_calls_freeze_object() {
     let (mut client, authority_clients) = make_address_manager(4).await;
     let (addr1, key1) = make_account(&mut client);
-    let (addr2, _) = make_account(&mut client);
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
@@ -1027,18 +1026,17 @@ async fn test_move_calls_object_transfer_and_freeze() {
     let new_obj_ref = client_object(&mut client, new_obj_ref.0).await.0;
     gas_object_ref = client_object(&mut client, gas_object_ref.0).await.0;
 
-    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(addr2)).unwrap()];
     let call_response = client
         .move_call(
             addr1,
             framework_obj_ref,
             ident_str!("ObjectBasics").to_owned(),
-            ident_str!("transfer_and_freeze").to_owned(),
+            ident_str!("freeze_object").to_owned(),
             Vec::new(),
             gas_object_ref,
             vec![new_obj_ref],
             vec![],
-            pure_args,
+            vec![],
             GAS_VALUE_FOR_TESTING / 2,
             signature_callback(&key1),
         )

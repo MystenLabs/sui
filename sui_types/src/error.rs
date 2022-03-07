@@ -35,8 +35,6 @@ pub enum SuiError {
     // Object misuse issues
     #[error("Error acquiring lock for object(s): {:?}", errors)]
     LockErrors { errors: Vec<SuiError> },
-    #[error("Attempt to transfer a read-only object.")]
-    TransferImmutableError,
     #[error("Attempt to transfer a shared object.")]
     TransferSharedError,
     #[error("Attempt to transfer an object that's not a coin.")]

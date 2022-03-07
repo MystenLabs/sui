@@ -301,7 +301,7 @@ async fn test_transfer_immutable() {
     assert_eq!(
         result.unwrap_err(),
         SuiError::LockErrors {
-            errors: vec![SuiError::TransferImmutableError]
+            errors: vec![SuiError::TransferSharedError]
         }
     );
 }

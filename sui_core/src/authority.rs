@@ -149,7 +149,7 @@ impl AuthorityState {
                     if object_kind.object_id() == t.object_ref.0 {
                         fp_ensure!(
                             matches!(object.owner, Owner::SingleOwner(..)),
-                            SuiError::TransferImmutableError
+                            SuiError::TransferSharedError
                         );
                     }
                 }

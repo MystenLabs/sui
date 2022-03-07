@@ -532,21 +532,19 @@ fn process_successful_execution<
             .expect("Safe because event_type is derived from an EventType enum")
         {
             EventType::TransferToAddress => handle_transfer(
-                SuiAddress::try_from(recipient.as_slice()).unwrap(),
+                Owner::SingleOwner(SuiAddress::try_from(recipient.as_slice()).unwrap()),
                 type_,
                 event_bytes,
-                false, /* should_freeze */
                 tx_digest,
                 &mut by_value_objects,
                 &mut gas_used,
                 state_view,
                 &mut object_owner_map,
             ),
-            EventType::TransferToAddressAndFreeze => handle_transfer(
-                SuiAddress::try_from(recipient.as_slice()).unwrap(),
+            EventType::FreezeObject => handle_transfer(
+                Owner::SharedImmutable,
                 type_,
                 event_bytes,
-                true, /* should_freeze */
                 tx_digest,
                 &mut by_value_objects,
                 &mut gas_used,
@@ -554,10 +552,9 @@ fn process_successful_execution<
                 &mut object_owner_map,
             ),
             EventType::TransferToObject => handle_transfer(
-                ObjectID::try_from(recipient.borrow()).unwrap().into(),
+                Owner::SingleOwner(ObjectID::try_from(recipient.borrow()).unwrap().into()),
                 type_,
                 event_bytes,
-                false, /* should_freeze */
                 tx_digest,
                 &mut by_value_objects,
                 &mut gas_used,
@@ -601,10 +598,9 @@ fn handle_transfer<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
-    recipient: SuiAddress,
+    recipient: Owner,
     type_: TypeTag,
     contents: Vec<u8>,
-    should_freeze: bool,
     tx_digest: TransactionDigest,
     by_value_objects: &mut BTreeMap<ObjectID, Object>,
     gas_used: &mut u64,
@@ -625,32 +621,29 @@ fn handle_transfer<
             // freshly created, this means that its version will now be 1.
             // thus, all objects in the global object pool have version > 0
             move_obj.increment_version();
-            let new_owner = if should_freeze {
-                Owner::SharedImmutable
-            } else {
-                Owner::SingleOwner(recipient)
-            };
-            let obj = Object::new_move(move_obj, new_owner, tx_digest);
+            let obj = Object::new_move(move_obj, recipient, tx_digest);
             if old_object.is_none() {
                 // Charge extra gas based on object size if we are creating a new object.
                 *gas_used += gas::calculate_object_creation_cost(&obj);
             }
             let obj_address: SuiAddress = obj.id().into();
-            // Below we check whether the transfer introduced any circular ownership.
-            // We know that for any mutable object, all its ancenstors (if it was owned by another object)
-            // must be in the input as well. Prior to this we have recored the original ownership mapping
-            // in object_owner_map. For any new transfer, we trace the new owner through the ownership
-            // chain to see if a cycle is detected.
-            // TODO: Set a constant upper bound to the depth of the new ownership chain.
             object_owner_map.remove(&obj_address);
-            let mut parent = recipient;
-            while parent != obj_address && object_owner_map.contains_key(&parent) {
-                parent = *object_owner_map.get(&parent).unwrap();
+            if let Ok(new_owner) = recipient.get_single_owner_address() {
+                // Below we check whether the transfer introduced any circular ownership.
+                // We know that for any mutable object, all its ancenstors (if it was owned by another object)
+                // must be in the input as well. Prior to this we have recored the original ownership mapping
+                // in object_owner_map. For any new transfer, we trace the new owner through the ownership
+                // chain to see if a cycle is detected.
+                // TODO: Set a constant upper bound to the depth of the new ownership chain.
+                let mut parent = new_owner;
+                while parent != obj_address && object_owner_map.contains_key(&parent) {
+                    parent = *object_owner_map.get(&parent).unwrap();
+                }
+                if parent == obj_address {
+                    return Err(SuiError::CircularObjectOwnership);
+                }
+                object_owner_map.insert(obj_address, new_owner);
             }
-            if parent == obj_address {
-                return Err(SuiError::CircularObjectOwnership);
-            }
-            object_owner_map.insert(obj_address, recipient);
 
             state_view.write_object(obj);
         }
