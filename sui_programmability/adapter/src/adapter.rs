@@ -75,17 +75,15 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     mut gas_object: Object,
     ctx: &mut TxContext,
 ) -> SuiResult<ExecutionStatus> {
-    // object_owner_map maps from object ID to its exclusive owner.
-    // objects that are not exclusively owned won't be in this map.
+    // object_owner_map maps from object ID to its exclusive object owner.
     // This map will be used for detecting circular ownership among
     // objects, which can only happen to objects exclusively owned
     // by objects.
     let mut object_owner_map = HashMap::new();
-    for (owner, id) in object_args
-        .iter()
-        .filter_map(|obj| obj.get_single_owner_and_id())
-    {
-        object_owner_map.insert(id.into(), owner);
+    for obj in &object_args {
+        if let Owner::ObjectOwner(owner) = obj.owner {
+            object_owner_map.insert(obj.id().into(), owner);
+        }
     }
     let TypeCheckSuccess {
         module_id,
@@ -532,7 +530,7 @@ fn process_successful_execution<
             .expect("Safe because event_type is derived from an EventType enum")
         {
             EventType::TransferToAddress => handle_transfer(
-                Owner::SingleOwner(SuiAddress::try_from(recipient.as_slice()).unwrap()),
+                Owner::AddressOwner(SuiAddress::try_from(recipient.as_slice()).unwrap()),
                 type_,
                 event_bytes,
                 tx_digest,
@@ -552,7 +550,7 @@ fn process_successful_execution<
                 &mut object_owner_map,
             ),
             EventType::TransferToObject => handle_transfer(
-                Owner::SingleOwner(ObjectID::try_from(recipient.borrow()).unwrap().into()),
+                Owner::ObjectOwner(ObjectID::try_from(recipient.borrow()).unwrap().into()),
                 type_,
                 event_bytes,
                 tx_digest,
@@ -628,7 +626,7 @@ fn handle_transfer<
             }
             let obj_address: SuiAddress = obj.id().into();
             object_owner_map.remove(&obj_address);
-            if let Ok(new_owner) = recipient.get_single_owner_address() {
+            if let Owner::ObjectOwner(new_owner) = recipient {
                 // Below we check whether the transfer introduced any circular ownership.
                 // We know that for any mutable object, all its ancenstors (if it was owned by another object)
                 // must be in the input as well. Prior to this we have recored the original ownership mapping

@@ -132,15 +132,9 @@ impl AuthorityState {
                     }
                 );
 
-                // If the object is the gas object, check that it is not shared object
+                // If the object is the gas object, check that it is an owned object
                 // and there is enough gas.
                 if object_kind.object_id() == transaction.gas_payment_object_ref().0 {
-                    fp_ensure!(
-                        matches!(object.owner, Owner::SingleOwner(..)),
-                        SuiError::InsufficientGas {
-                            error: "Gas object cannot be shared object".to_string()
-                        }
-                    );
                     gas::check_gas_requirement(transaction, object)?;
                 }
 
@@ -148,7 +142,7 @@ impl AuthorityState {
                 if let TransactionKind::Transfer(t) = &transaction.data.kind {
                     if object_kind.object_id() == t.object_ref.0 {
                         fp_ensure!(
-                            matches!(object.owner, Owner::SingleOwner(..)),
+                            matches!(object.owner, Owner::AddressOwner(..)),
                             SuiError::TransferSharedError
                         );
                     }
@@ -158,12 +152,17 @@ impl AuthorityState {
                     Owner::SharedImmutable => {
                         // Nothing else to check for SharedImmutable.
                     }
-                    Owner::SingleOwner(owner) => {
-                        // Check the object owner is either the transaction sender, or
-                        // another mutable object in the input.
+                    Owner::AddressOwner(owner) => {
+                        // Check the owner is the transaction sender.
                         fp_ensure!(
-                            transaction.sender_address() == owner
-                                || mutable_object_addresses.contains(&owner),
+                            transaction.sender_address() == owner,
+                            SuiError::IncorrectSigner
+                        );
+                    }
+                    Owner::ObjectOwner(owner) => {
+                        // Check that the object owner is another mutable object in the input.
+                        fp_ensure!(
+                            mutable_object_addresses.contains(&owner),
                             SuiError::IncorrectSigner
                         );
                     }
