@@ -43,10 +43,10 @@ can be used subsequently to start the network. `wallet.conf` and `wallet.key` ar
 also created to be used by the Sui wallet to manage the
 newly created accounts.
 
-### View created accounts
+### Wallet configuration
 The genesis process creates a configuration file `wallet.conf`, and a keystore file `wallet.key` for the
 Sui wallet.  The config file contains information of the accounts and
-the Sui network. The keystore file contains all the public-private key pair of the created accounts.
+the Sui network gateway. The keystore file contains all the public-private key pair of the created accounts.
 Sui wallet uses the network information in `wallet.conf` to communicate
 with the Sui network authorities  and create transactions using the key
 pairs residing in the keystore file.
@@ -57,42 +57,56 @@ in the wallet configuration (with some values omitted):
 ```json
 {
   "accounts": [
-    {
-      "address": "a4c0a493ce9879ea06bac93461810cf947823bb3"
-    },
+    "48cf013a76d583c027720f7f9852deac7c84b923",
     ...
   ],
-  "authorities": [
-    {
-      "name": "d72e7bd8f435fa56af47c8d0a0b8738c48f446762d620863ac328605325692f7",
-      "host": "127.0.0.1",
-      "base_port": 10000
-    },
-    ...
-  ],
-  "send_timeout": {
-    "secs": 4,
-    "nanos": 0
-  },
-  "recv_timeout": {
-    "secs": 4,
-    "nanos": 0
-  },
-  "buffer_size": 65507,
-  "db_folder_path": "./client_db",
   "keystore": {
     "File": "./wallet.key"
+  },
+  "gateway": {
+    "embedded": {
+      "authorities": [
+        {
+          "name": "5f9701f4bd2cd7c2f1f23ac6d05515407879f0acf2611517ff188e59c5f61743",
+          "host": "127.0.0.1",
+          "base_port": 10000
+        },
+        ...
+      ],
+      "send_timeout": {
+        "secs": 4,
+        "nanos": 0
+      },
+      "recv_timeout": {
+        "secs": 4,
+        "nanos": 0
+      },
+      "buffer_size": 65507,
+      "db_folder_path": "./client_db"
+    }
   }
 }
 ```
 The `accounts` variable contains the account's address the wallet manages.
-The `authorities` variable contains Sui network authorities' name, host and port information.
-It is used to establish connections to the Sui network.
+`gateway` contains the information of the Sui network that the wallet will be connecting to, 
+currently only `Embedded` gateway type is supported.
+
+The `authorities` variable is part of the embedded gateway configuration, it contains Sui network 
+authorities' name, host and port information. It is used to establish connections to the Sui network.
 
 Note `send_timeout`, `recv_timeout` and `buffer_size` are the network
 parameters and `db_folder_path` is the path to the account's client state
 database. This database stores all the transaction data, certificates
 and object data belonging to the account.
+
+#### Sui Network Gateway
+The Sui network gateway is an abstraction layer that acts as the entry point to the Sui network. 
+Different gateway implementation can be use by the application layer base on their use cases.
+
+##### Embedded Gateway
+As the name suggests, embedded gateway embeds the gateway logic into the application; 
+all data will be stored locally and the application will make direct 
+connection to the authorities.
 
 #### Key management
 The key pairs are stored in `wallet.key`. However, this is not secure 
