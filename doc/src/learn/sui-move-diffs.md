@@ -12,16 +12,15 @@ In general, Move code written for other systems will work in Sui with these exce
 
 Here is a summary of key differences:
 
-1. Sui uses its own object-centric global storage
+1. Sui uses its own [object-centric global storage](#object-centric-global-storage)
 2. Addresses represent Object IDs
-3. Sui objects have globally unique IDs
-4. Sui has module initializers (init)
-5. Sui entry points take object references as input
+3. Sui objects have [globally unique IDs](#addresses-represent-object-ids)
+4. Sui has [module initializers (init)](#module-initializers)
+5. Sui [entry points take object references as input](#entry-points-take-object-references-as-input)
 
-Find a detailed description of each difference below.
+Find a detailed description of each change below.
 
 TODO: Explain *why* each of these differences exist.
-
 
 ## Object-centric global storage
 
@@ -29,13 +28,11 @@ In core Move, global storage is part of the programming model and can be accesse
 
 However, there is no global storage in Sui Move. None of the global storage-related operations are allowed in Sui Move. (We have a bytecode verifier for this to detect violations.) Instead, storage happens exclusively within Sui. When we publish a module, the newly published module is stored in Sui storage, instead of Move storage. Similarly, newly created objects are stored in Sui storage. _This also means that when we need to read an object in Move, we cannot rely on global storage operations but instead Sui must explicitly pass all objects that need to be accessed into Move._
 
-
 ## Addresses represent Object IDs
 
 In Move, there is a special _address_ type. This type is used to represent account addresses in core Move. Core Move needs to know the address of an account when dealing with the global storage. The _address_ type is 16 bytes, which is sufficient for the core Move security model.
 
 In Sui, since we don’t support global storage in Move, we don’t need the _address_ type to represent user accounts. Instead, we use the _address_ type to represent the Object ID. Refer to the [ID.move](https://github.com/MystenLabs/fastnft/blob/main/sui_programmability/framework/sources/ID.move) file in Sui framework for an understanding of address use.
-
 
 ## Object with key ability, globally unique IDs
 
@@ -43,28 +40,22 @@ We need a way to distinguish between objects that are internal to Move and objec
 
 We take advantage of the _key_ ability in Move to annotate a Sui object. In core Move, the [key ability](https://github.com/diem/move/blob/main/language/documentation/book/src/abilities.md#key) is used to tell that the type can be used as a key for global storage. Since we don’t touch global storage in Sui Move, we are able to repurpose this ability. We require that any struct with key ability must start with an _id_ field with the _ID_ type. The ID type contains both the ObjectID and the sequence number (a.k.a. version). We have bytecode verifiers in place to make sure that the ID field is immutable and cannot be transferred to other objects (as each object must have a unique ID).
 
-
 ## Module initializers
 
 As described in [Object-centric global storage](#bookmark=id.dq5ivuwmx1i8), Move modules are published into Sui storage. A special initializer function optionally defined in a module is executed (once) at the time of module publication by the Sui runtime for the purpose of pre-initializing module-specific data (e.g., creating singleton objects). The initializer function must have the following properties in order to be executed at publication:
-
-
 
 * Name `init`
 * Single parameter of `&mut TxContext` type
 * No return values
 
-
 ## Entry points take object references as input
 
 Sui offers entry functions that can be called directly from Sui, in addition to functions callable from other functions. See [Entry functions](https://github.com/MystenLabs/fastnft/blob/main/doc/move.md#entry-functions).
-
 
 ## Conclusion
 
 In summary, Sui takes advantage of Move’s security and flexibility and enhances it with the features described above to vastly improve throughput, reduce delays in finality, and make Move programming easier.
 
- \
 TODO: Team to review Clay’s little summary here. Pulled from Marketing presentation FastNFT Comparison:
 
 https://docs.google.com/presentation/d/1D-bLcMo_YCZbTysZIzc67zjKyutwL7INi5VZx7LhTZs/edit#slide=id.gcb6f301ce0_2_21
