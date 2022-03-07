@@ -49,6 +49,7 @@ As described in [Object-centric global storage](#object-centric-global-storage),
 * Name `init`
 * Single parameter of `&mut TxContext` type
 * No return values
+* Private
 
 ## Entry points take object references as input
 
