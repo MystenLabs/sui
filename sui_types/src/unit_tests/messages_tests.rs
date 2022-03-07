@@ -34,10 +34,14 @@ fn test_signed_values() {
     );
     let committee = Committee::new(authorities);
 
-    let transaction =
-        Transaction::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec1);
-    let bad_transaction =
-        Transaction::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec2);
+    let transaction = Transaction::from_data(
+        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref()),
+        &sec1,
+    );
+    let bad_transaction = Transaction::from_data(
+        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref()),
+        &sec2,
+    );
 
     let v = SignedTransaction::new(transaction.clone(), *sec1.public_key_bytes(), &sec1);
     assert!(v.check(&committee).is_ok());
@@ -69,10 +73,14 @@ fn test_certificates() {
     );
     let committee = Committee::new(authorities);
 
-    let transaction =
-        Transaction::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec1);
-    let bad_transaction =
-        Transaction::new_transfer(a2, random_object_ref(), a1, random_object_ref(), &sec2);
+    let transaction = Transaction::from_data(
+        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref()),
+        &sec1,
+    );
+    let bad_transaction = Transaction::from_data(
+        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref()),
+        &sec2,
+    );
 
     let v1 = SignedTransaction::new(transaction.clone(), *sec1.public_key_bytes(), &sec1);
     let v2 = SignedTransaction::new(transaction.clone(), *sec2.public_key_bytes(), &sec2);

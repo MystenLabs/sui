@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::EventType;
+use core::panic;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, value::MoveTypeLayout};
 use move_vm_runtime::native_functions::NativeContext;
@@ -15,20 +16,20 @@ use move_vm_types::{
 use num_enum::TryFromPrimitive;
 use smallvec::smallvec;
 use std::collections::{BTreeMap, VecDeque};
-use sui_types::base_types::ObjectID;
+use sui_types::{
+    base_types::{ObjectID, SuiAddress},
+    object::Owner,
+};
 
 type Event = (Vec<u8>, u64, Type, MoveTypeLayout, Value);
 
 const WRAPPED_OBJECT_EVENT: u64 = 255;
 
-type SuiAddressBytes = Vec<u8>;
-
 #[derive(Debug)]
 struct OwnedObj {
     value: Value,
     type_: Type,
-    owner: SuiAddressBytes,
-    is_read_only: bool,
+    owner: Owner,
 }
 
 /// Set of all live objects in the current test scenario
@@ -53,21 +54,29 @@ fn get_global_inventory(events: &[Event]) -> Inventory {
         match event_type {
             EventType::TransferToAddress
             | EventType::TransferToObject
-            | EventType::TransferToAddressAndFreeze => {
+            | EventType::FreezeObject => {
                 let obj_bytes = val
                     .simple_serialize(layout)
                     .expect("This will always succeed for a well-structured event log");
                 let obj_id = ObjectID::try_from(&obj_bytes[0..ObjectID::LENGTH])
                     .expect("This will always succeed on an object from a system transfer event");
-                let is_read_only = event_type == EventType::TransferToAddressAndFreeze;
+                let owner = match event_type {
+                    EventType::FreezeObject => Owner::SharedImmutable,
+                    EventType::TransferToAddress => {
+                        Owner::AddressOwner(SuiAddress::try_from(recipient.clone()).unwrap())
+                    }
+                    EventType::TransferToObject => {
+                        Owner::ObjectOwner(SuiAddress::try_from(recipient.clone()).unwrap())
+                    }
+                    _ => panic!("Unrecognized event_type"),
+                };
                 // note; may overwrite older values of the object, which is intended
                 inventory.insert(
                     obj_id,
                     OwnedObj {
                         value: Value::copy_value(val).unwrap(),
                         type_: type_.clone(),
-                        owner: recipient.clone(),
-                        is_read_only,
+                        owner,
                     },
                 );
             }
@@ -93,10 +102,16 @@ fn get_inventory_for(
     events: &[Event],
 ) -> Vec<Value> {
     let inventory = get_global_inventory(&events[..tx_end_index]);
+    let sui_addr = SuiAddress::try_from(addr.to_vec()).unwrap();
     inventory
         .into_iter()
         .filter_map(|(_, obj)| {
-            if (obj.owner == addr.to_vec() || obj.is_read_only) && &obj.type_ == type_ {
+            // TODO: We should also be able to include objects indirectly owned by the
+            // requested address through owning other objects.
+            // https://github.com/MystenLabs/fastnft/issues/673
+            if (obj.owner == Owner::AddressOwner(sui_addr) || obj.owner.is_shared())
+                && &obj.type_ == type_
+            {
                 Some(obj.value)
             } else {
                 None
