@@ -19,9 +19,11 @@ use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
+use sui_types::messages::{ExecutionStatus, TransactionEffects};
 use sui_types::object::ObjectRead;
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
@@ -386,7 +388,6 @@ struct GetAddressResponse {
 /**
 Retrieve all managed addresses for this client.
  */
-#[allow(unused_variables)]
 #[endpoint {
     method = GET,
     path = "/addresses",
@@ -474,7 +475,6 @@ struct GetObjectsResponse {
 /**
 Returns list of objects owned by an address.
  */
-#[allow(unused_variables)]
 #[endpoint {
     method = GET,
     path = "/objects",
@@ -556,7 +556,6 @@ struct ObjectInfoResponse {
 /**
 Returns the object information for a specified object.
  */
-#[allow(unused_variables)]
 #[endpoint {
     method = GET,
     path = "/object_info",
@@ -665,6 +664,8 @@ associated with the transaction that verifies the transaction.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct TransactionResponse {
+    /** Integer representing the acutal cost of the transaction */
+    gas_used: u64,
     /** JSON representation of the list of resulting effects on the object */
     object_effects_summary: serde_json::Value,
     /** JSON representation of the certificate verifying the transaction */
@@ -687,7 +688,6 @@ Example TransferTransactionRequest
     "gas_object_id": "96ABE602707B343B571AAAA23E3A4594934159A5"
 }
  */
-#[allow(unused_variables)]
 #[endpoint {
     method = POST,
     path = "/transfer",
@@ -697,12 +697,74 @@ async fn transfer_object(
     rqctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<TransferTransactionRequest>,
 ) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
-    let transaction_response = TransactionResponse {
-        object_effects_summary: json!(""),
-        certificate: json!(""),
+    let server_context = rqctx.context();
+    let transfer_order_params = request.into_inner();
+    let to_address =
+        decode_bytes_hex(transfer_order_params.to_address.as_str()).map_err(|error| {
+            custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Could not decode to address from hex {error}"),
+            )
+        })?;
+    let object_id = ObjectID::try_from(transfer_order_params.object_id)
+        .map_err(|error| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{error}")))?;
+    let gas_object_id = ObjectID::try_from(transfer_order_params.gas_object_id)
+        .map_err(|error| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{error}")))?;
+    let owner = decode_bytes_hex(transfer_order_params.from_address.as_str()).map_err(|error| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            format!("Could not decode address from hex {error}"),
+        )
+    })?;
+
+    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
+    let wallet_context = server_context.wallet_context.lock().unwrap().take();
+    let mut wallet_context = wallet_context.ok_or_else(|| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist.".to_string(),
+        )
+    })?;
+
+    let (cert, effects, gas_used) = match wallet_context
+        .address_manager
+        .transfer_object(owner, object_id, gas_object_id, to_address)
+        .await
+    {
+        Ok((cert, effects)) => {
+            let gas_used = match effects.status {
+                ExecutionStatus::Success { gas_used } => gas_used,
+                ExecutionStatus::Failure { gas_used, error } => {
+                    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+                    return Err(custom_http_error(
+                        StatusCode::FAILED_DEPENDENCY,
+                        format!(
+                            "Error transferring object: {:#?}, gas used {}",
+                            error, gas_used
+                        ),
+                    ));
+                }
+            };
+            (cert, effects, gas_used)
+        }
+        Err(err) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Transfer error: {err}"),
+            ));
+        }
     };
 
-    Ok(HttpResponseOk(transaction_response))
+    let object_effects_summary = get_object_effects(effects);
+
+    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+
+    Ok(HttpResponseOk(TransactionResponse {
+        gas_used,
+        object_effects_summary: json!(object_effects_summary),
+        certificate: json!(cert),
+    }))
 }
 
 /**
@@ -741,6 +803,7 @@ async fn publish(
     request: TypedBody<PublishRequest>,
 ) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
     let transaction_response = TransactionResponse {
+        gas_used: 0,
         object_effects_summary: json!(""),
         certificate: json!(""),
     };
@@ -801,6 +864,7 @@ async fn call(
     request: TypedBody<CallRequest>,
 ) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
     let transaction_response = TransactionResponse {
+        gas_used: 0,
         object_effects_summary: json!(""),
         certificate: json!(""),
     };
@@ -828,12 +892,88 @@ on all objects owned by each address that is managed by this client state.
     path = "/sync",
     tags = [ "wallet" ],
 }]
-#[allow(unused_variables)]
 async fn sync(
     rqctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<SyncRequest>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-    unimplemented!()
+    let server_context = rqctx.context();
+    let sync_params = request.into_inner();
+    let address = decode_bytes_hex(sync_params.address.as_str()).map_err(|error| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            format!("Could not decode to address from hex {error}"),
+        )
+    })?;
+
+    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
+    let wallet_context = server_context.wallet_context.lock().unwrap().take();
+    let mut wallet_context = wallet_context.ok_or_else(|| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist.".to_string(),
+        )
+    })?;
+
+    // Attempt to create a new account state, but continue if it already exists.
+    if let Err(error) = wallet_context.create_account_state(&address) {
+        info!("{:?}", error);
+    }
+
+    if let Err(err) = wallet_context
+        .address_manager
+        .sync_client_state(address)
+        .await
+    {
+        *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+        return Err(custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            format!("Can't create client state: {err}"),
+        ));
+    }
+
+    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+
+    Ok(HttpResponseUpdatedNoContent())
+}
+
+fn get_object_effects(
+    transaction_effects: TransactionEffects,
+) -> HashMap<String, Vec<HashMap<String, String>>> {
+    let mut object_effects_summary = HashMap::new();
+    if !transaction_effects.created.is_empty() {
+        let mut effects = Vec::new();
+        for (obj, _) in transaction_effects.created {
+            let mut effect = HashMap::new();
+            effect.insert("id".to_string(), obj.0.to_string());
+            effect.insert("version".to_string(), format!("{:?}", obj.1));
+            effect.insert("object_digest".to_string(), format!("{:?}", obj.2));
+            effects.push(effect);
+        }
+        object_effects_summary.insert(String::from("created_objects"), effects);
+    }
+    if !transaction_effects.mutated.is_empty() {
+        let mut effects = Vec::new();
+        for (obj, _) in transaction_effects.mutated {
+            let mut effect = HashMap::new();
+            effect.insert("id".to_string(), obj.0.to_string());
+            effect.insert("version".to_string(), format!("{:?}", obj.1));
+            effect.insert("object_digest".to_string(), format!("{:?}", obj.2));
+            effects.push(effect);
+        }
+        object_effects_summary.insert(String::from("mutated_objects"), effects);
+    }
+    if !transaction_effects.deleted.is_empty() {
+        let mut effects = Vec::new();
+        for obj in transaction_effects.deleted {
+            let mut effect = HashMap::new();
+            effect.insert("id".to_string(), obj.0.to_string());
+            effect.insert("version".to_string(), format!("{:?}", obj.1));
+            effect.insert("object_digest".to_string(), format!("{:?}", obj.2));
+            effects.push(effect);
+        }
+        object_effects_summary.insert(String::from("deleted_objects"), effects);
+    }
+    object_effects_summary
 }
 
 fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpError {
