@@ -1168,3 +1168,48 @@ fn test_publish_init_param() {
     // only a package object should have been crated
     assert_eq!(storage.created().len(), 1);
 }
+
+#[test]
+/// Tests calls to entry functions returning values.
+fn test_call_ret() {
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_packages();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
+
+    // publish modules at a given path
+    publish_from_src(
+        &mut storage,
+        &native_functions,
+        "src/unit_tests/data/call_ret",
+        gas_object.clone(),
+        GAS_BUDGET,
+    );
+    // TODO: to be honest I am not sure why this flush is needed but
+    // without it, the following assertion below fails:
+    // assert!(obj.owner.is_address(&addr));
+    storage.flush();
+
+    // call published module function
+    let obj_val = 42u64;
+
+    let pure_args = vec![obj_val.to_le_bytes().to_vec()];
+
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "identity_u64",
+        gas_object,
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        pure_args,
+    );
+    println!("RESP: {:?}", response);
+    assert!(matches!(response.unwrap(), ExecutionStatus::Success { .. }));
+}

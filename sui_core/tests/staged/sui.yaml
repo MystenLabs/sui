@@ -44,6 +44,25 @@ BatchInfoRequest:
 BatchInfoResponseItem:
   NEWTYPESTRUCT:
     TYPENAME: UpdateItem
+CallResult:
+  ENUM:
+    0:
+      Bool:
+        NEWTYPE: BOOL
+    1:
+      U8:
+        NEWTYPE: U8
+    2:
+      U64:
+        NEWTYPE: U64
+    3:
+      U128:
+        NEWTYPE: U128
+    4:
+      Vector:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: CallResult
 CertifiedTransaction:
   STRUCT:
     - transaction:
@@ -74,6 +93,9 @@ ExecutionStatus:
       Success:
         STRUCT:
           - gas_used: U64
+          - results:
+              SEQ:
+                TYPENAME: CallResult
     1:
       Failure:
         STRUCT:

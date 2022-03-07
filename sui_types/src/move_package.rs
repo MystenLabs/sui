@@ -33,6 +33,7 @@ pub struct TypeCheckSuccess {
     pub args: Vec<Vec<u8>>,
     pub by_value_objects: BTreeMap<ObjectID, Object>,
     pub mutable_ref_objects: Vec<Object>,
+    pub return_types: Vec<Type>, // to validate return types after the call
 }
 
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
@@ -110,11 +111,13 @@ impl MovePackage {
             });
         }
 
-        // Function cannot return a value
-        if !function_signature.return_.is_empty() {
-            return Err(SuiError::InvalidFunctionSignature {
-                error: "Invoked function must not return a value".to_string(),
-            });
+        // Entry function can only return primitive values
+        for (idx, r) in function_signature.return_.iter().enumerate() {
+            if !is_primitive(r) {
+                return Err(SuiError::InvalidFunctionSignature {
+                    error: format!("Incorrect type of the return value at index ({})", idx),
+                });
+            }
         }
 
         // Last arg must be `&mut TxContext`
@@ -292,6 +295,7 @@ pub fn resolve_and_type_check(
         args,
         by_value_objects,
         mutable_ref_objects,
+        return_types: function_signature.return_,
     })
 }
 
