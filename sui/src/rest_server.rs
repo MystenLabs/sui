@@ -10,7 +10,7 @@ use hyper::StatusCode;
 use serde_json::json;
 use sui::config::{Config, GenesisConfig, NetworkConfig, WalletConfig};
 use sui::sui_commands;
-use sui::wallet_commands::WalletContext;
+use sui::wallet_commands::{SimpleTransactionSigner, WalletContext};
 use sui_core::client::Client;
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
@@ -726,9 +726,13 @@ async fn transfer_object(
         )
     })?;
 
+    let tx_signer = Box::pin(SimpleTransactionSigner {
+        keystore: wallet_context.keystore.clone(),
+    });
+
     let (cert, effects, gas_used) = match wallet_context
         .address_manager
-        .transfer_object(owner, object_id, gas_object_id, to_address)
+        .transfer_coin(owner, object_id, gas_object_id, to_address, tx_signer)
         .await
     {
         Ok((cert, effects)) => {
@@ -915,7 +919,7 @@ async fn sync(
     })?;
 
     // Attempt to create a new account state, but continue if it already exists.
-    if let Err(error) = wallet_context.create_account_state(&address) {
+    if let Err(error) = wallet_context.address_manager.create_account_state(address) {
         info!("{:?}", error);
     }
 
