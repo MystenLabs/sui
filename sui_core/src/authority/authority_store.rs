@@ -635,13 +635,36 @@ impl AuthorityStore {
     }
 
     /// Retrieves batches including transactions within a range.
+    /// 
+    /// This function returns all signed batches that enclose the requested transaction
+    /// including the batch preceeding the first requested transaction, the batch including 
+    /// the last requested transaction (if there is one) and all batches in between. 
+    /// 
+    /// Transactions returned include all transactions within the batch that include the
+    /// first requested transaction, all the way to at least all the transactions that are 
+    /// included in the last batch returned. If the last requested transaction is outside a
+    /// batch (one has not yet been generated) the function returns all transactions at the 
+    /// end of the sequence that are in TxSequenceOrder (and ignores any that are out of 
+    /// order.)
     #[allow(clippy::type_complexity)]
     pub fn batches_and_transactions(
         &self,
         start: u64,
         end: u64,
     ) -> Result<(Vec<SignedBatch>, Vec<(TxSequenceNumber, TransactionDigest)>), SuiError> {
-        // Get all batches that include requested transactions
+
+        /*
+        Get all batches that include requested transactions. This includes the signed batch
+        prior to the first requested transaction, the batch including the last requested 
+        transaction and all batches in between.
+
+        So for example if we got a request for start: 3 end: 9 and we have:
+        B0 T0 T1 B2 T2 T3 B3 T3 T4 T5 B6 T6 T8 T9
+
+        This will return B2, B3, B6
+
+
+        */
         let batches: Vec<SignedBatch> = self
             .batches
             .iter()
@@ -650,10 +673,20 @@ impl AuthorityStore {
             .map(|(_, batch)| batch)
             .collect();
 
-        // Get transactions in the retrieved batches. The first batch is included
-        // without transactions, so get transactions of all subsequent batches, or
-        // until the end of the sequence if the last batch does not contain the
-        // requested end sequence number.
+        /*
+        Get transactions in the retrieved batches. The first batch is included
+        without transactions, so get transactions of all subsequent batches, or
+        until the end of the sequence if the last batch does not contain the
+        requested end sequence number.
+
+        So for example if we got a request for start: 3 end: 9 and we have:
+        B0 T0 T1 B2 T2 T3 B3 T3 T4 T5 B6 T6 T8 T9
+
+        The code below will return T2 .. T6
+
+        Note: T8 is out of order so the sequence returned ends at T6.
+
+        */
 
         let first_seq = batches
             .first()
