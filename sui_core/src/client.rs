@@ -245,7 +245,7 @@ impl ClientState {
     /// It is recommended that one call sync and download_owned_objects
     /// right after constructor to fetch missing info form authorities
     /// TODO: client should manage multiple addresses instead of each addr having DBs
-    /// https://github.com/MystenLabs/fastnft/issues/332
+    /// https://github.com/MystenLabs/sui/issues/332
     #[cfg(test)]
     pub fn new(path: PathBuf, address: SuiAddress) -> Self {
         ClientState {
@@ -413,7 +413,7 @@ impl ClientState {
     /// We use this to ensure that a transaction can indeed unlock or lock certain objects in the transaction
     /// This means either exactly all the objects are owned by this transaction, or by no transaction
     /// The caller has to explicitly find which objects are locked
-    /// TODO: always return true for immutable objects https://github.com/MystenLabs/fastnft/issues/305
+    /// TODO: always return true for immutable objects https://github.com/MystenLabs/sui/issues/305
     fn can_lock_or_unlock(&self, transaction: &Transaction) -> Result<bool, SuiError> {
         let iter_matches = self.store.pending_transactions.multi_get(
             &transaction
@@ -438,7 +438,7 @@ impl ClientState {
     /// One should call can_lock_or_unlock before locking as this overwites the previous lock
     /// If the object is already locked, ensure it is unlocked by calling unlock_pending_transaction_objects
     /// Client runs sequentially right now so access to this is safe
-    /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/fastnft/issues/335
+    /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/sui/issues/335
     pub fn lock_pending_transaction_objects(
         &self,
         transaction: &Transaction,
@@ -506,7 +506,7 @@ where
     /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
     /// This functions locks all the input objects if possible, and unlocks at the end of confirmation or if an error occurs
     /// TODO: define other situations where we can unlock objects after authority error
-    /// https://github.com/MystenLabs/fastnft/issues/346
+    /// https://github.com/MystenLabs/sui/issues/346
     async fn execute_transaction(
         &mut self,
         transaction: Transaction,
@@ -534,9 +534,9 @@ where
 
         // How do we handle errors on authority which lock objects?
         // Currently VM crash can keep objects locked, but we would like to avoid this.
-        // TODO: https://github.com/MystenLabs/fastnft/issues/349
-        // https://github.com/MystenLabs/fastnft/issues/211
-        // https://github.com/MystenLabs/fastnft/issues/346
+        // TODO: https://github.com/MystenLabs/sui/issues/349
+        // https://github.com/MystenLabs/sui/issues/211
+        // https://github.com/MystenLabs/sui/issues/346
 
         let account = self.get_or_create_account(transaction.sender_address())?;
         account.unlock_pending_transaction_objects(&transaction)?;
@@ -586,7 +586,7 @@ where
         }
 
         // TODO: decide what to do with failed object downloads
-        // https://github.com/MystenLabs/fastnft/issues/331
+        // https://github.com/MystenLabs/sui/issues/331
         let _failed = self
             .download_objects_not_in_db(address, objs_to_download)
             .await?;
@@ -638,7 +638,7 @@ where
         let unique_pending_transactions = account.get_unique_pending_transactions();
         // Transactions are idempotent so no need to prevent multiple executions
         // Need some kind of timeout or max_trials here?
-        // TODO: https://github.com/MystenLabs/fastnft/issues/330
+        // TODO: https://github.com/MystenLabs/sui/issues/330
         for transaction in unique_pending_transactions {
             self.execute_transaction(transaction.clone())
                 .await

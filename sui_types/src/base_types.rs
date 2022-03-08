@@ -206,7 +206,7 @@ impl TransactionDigest {
     /// A digest we use to signify the parent transaction was the genesis,
     /// ie. for an object there is no parent digest.
     ///
-    /// TODO(https://github.com/MystenLabs/fastnft/issues/65): we can pick anything here
+    /// TODO(https://github.com/MystenLabs/sui/issues/65): we can pick anything here
     pub fn genesis() -> Self {
         Self::new([0; 32])
     }
@@ -214,7 +214,7 @@ impl TransactionDigest {
     /// Create an ObjectID from `self` and `creation_num`.
     /// Caller is responsible for ensuring that `creation_num` is fresh
     pub fn derive_id(&self, creation_num: u64) -> ObjectID {
-        // TODO(https://github.com/MystenLabs/fastnft/issues/58):audit ID derivation
+        // TODO(https://github.com/MystenLabs/sui/issues/58):audit ID derivation
 
         let mut hasher = Sha3_256::default();
         hasher.update(self.0);

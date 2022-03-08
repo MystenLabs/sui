@@ -174,7 +174,7 @@ pub struct CertifiedTransaction {
 // maintain the invariant that valid certificates with distinct signatures are equivalent, but yet-unchecked
 // certificates that differ on signers aren't.
 //
-// see also https://github.com/MystenLabs/fastnft/issues/266
+// see also https://github.com/MystenLabs/sui/issues/266
 //
 static_assertions::assert_not_impl_any!(CertifiedTransaction: Hash, Eq, PartialEq);
 
