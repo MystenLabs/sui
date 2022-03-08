@@ -1,6 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::env;
+use std::fmt::Display;
+use std::io::Write;
+use std::sync::{Arc, RwLock};
+
 use async_trait::async_trait;
 use colored::Colorize;
 use rustyline::completion::{Completer, Pair};
@@ -10,31 +17,24 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Config, Context, Editor};
 use rustyline_derive::Helper;
-use std::fmt::Display;
-use std::io::Write;
-use std::{env, io};
 use structopt::clap::{App, SubCommand};
 use unescape::unescape;
 
+#[cfg(test)]
+#[path = "unit_tests/shell_tests.rs"]
+mod shell_tests;
+
 /// A interactive command line shell with history and completion support
 pub struct Shell<P: Display, S, H> {
-    pub prompt: P,
-    pub state: S,
-    pub handler: H,
-    pub command: CommandStructure,
+    prompt: P,
+    state: S,
+    handler: H,
+    command: CommandStructure,
 }
 
 impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
-    pub async fn run_async(&mut self) -> Result<(), anyhow::Error> {
-        let config = Config::builder()
-            .auto_add_history(true)
-            .history_ignore_space(true)
-            .history_ignore_dups(true)
-            .build();
-
-        let mut rl = Editor::with_config(config);
-
-        let mut command = self.command.clone();
+    pub fn new(prompt: P, state: S, handler: H, mut command: CommandStructure) -> Self {
+        // Add help to auto complete
         let help = CommandStructure {
             name: "help".to_string(),
             completions: command.completions.clone(),
@@ -43,12 +43,37 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
         command.children.push(help);
         command.completions.extend(["help".to_string()]);
 
-        rl.set_helper(Some(ShellHelper { command }));
+        Self {
+            prompt,
+            state,
+            handler,
+            command,
+        }
+    }
 
-        let mut stdout = io::stdout();
+    pub async fn run_async(
+        &mut self,
+        out: &mut dyn Write,
+        err: &mut dyn Write,
+    ) -> Result<(), anyhow::Error> {
+        let config = Config::builder()
+            .auto_add_history(true)
+            .history_ignore_space(true)
+            .history_ignore_dups(true)
+            .build();
+
+        let mut rl = Editor::with_config(config);
+
+        let completion_cache = Arc::new(RwLock::new(BTreeMap::new()));
+
+        rl.set_helper(Some(ShellHelper {
+            command: self.command.clone(),
+            completion_cache: completion_cache.clone(),
+        }));
+
         'shell: loop {
-            print!("{}", self.prompt);
-            stdout.flush()?;
+            write!(out, "{}", self.prompt)?;
+            out.flush()?;
 
             // Read a line
             let readline = rl.readline(&self.prompt.to_string());
@@ -67,22 +92,22 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                         // These are shell only commands.
                         match s.as_str() {
                             "quit" | "exit" => {
-                                println!("Bye!");
+                                writeln!(out, "Bye!")?;
                                 break 'shell;
                             }
                             "clear" => {
                                 // Clear screen and move cursor to top left
-                                print!("\x1B[2J\x1B[1;1H");
+                                write!(out, "\x1B[2J\x1B[1;1H")?;
                                 continue 'shell;
                             }
                             "echo" => {
-                                let out = line.as_slice()[1..line.len()].join(" ");
-                                println!("{}", out);
+                                let line = line.as_slice()[1..line.len()].join(" ");
+                                writeln!(out, "{}", line)?;
                                 continue 'shell;
                             }
                             "env" => {
                                 for (key, var) in env::vars() {
-                                    println!("{}={}", key, var);
+                                    writeln!(out, "{}={}", key, var)?;
                                 }
                                 continue 'shell;
                             }
@@ -93,11 +118,15 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                         continue 'shell;
                     }
 
-                    if self.handler.handle_async(line, &mut self.state).await {
+                    if self
+                        .handler
+                        .handle_async(line, &mut self.state, completion_cache.clone())
+                        .await
+                    {
                         break 'shell;
                     };
                 }
-                Err(e) => eprintln!("{}", e.red()),
+                Err(e) => writeln!(err, "{}", e.red())?,
             }
         }
         Ok(())
@@ -150,6 +179,7 @@ pub fn install_shell_plugins<'a>(clap: App<'a, 'a>) -> App<'a, 'a> {
 #[derive(Helper)]
 struct ShellHelper {
     pub command: CommandStructure,
+    pub completion_cache: CompletionCache,
 }
 
 impl Hinter for ShellHelper {
@@ -184,11 +214,22 @@ impl Completer for ShellHelper {
             previous_tokens.push(tok.to_string());
         }
 
-        let candidates = command
-            .completions
-            .iter()
-            .filter(|string| string.starts_with(&last_token) && !previous_tokens.contains(*string))
-            .cloned()
+        let completions = command.completions.clone();
+        let cache_key = CacheKey::new(
+            &command.name,
+            &previous_tokens.last().cloned().unwrap_or_default(),
+        );
+        let mut completion_from_cache = self
+            .completion_cache
+            .read()
+            .map(|cache| cache.get(&cache_key).cloned().unwrap_or_default())
+            .unwrap_or_default();
+
+        completion_from_cache.extend(completions);
+
+        let candidates = completion_from_cache
+            .into_iter()
+            .filter(|string| string.starts_with(&last_token) && !previous_tokens.contains(string))
             .collect::<Vec<_>>();
 
         Ok((
@@ -218,15 +259,18 @@ impl CommandStructure {
             .p
             .subcommands
             .iter()
-            .map(|it| CommandStructure {
-                name: it.get_name().to_string(),
-                completions: it
-                    .p
-                    .opts
-                    .iter()
-                    .map(|it| format!("--{}", it.b.name))
-                    .collect::<Vec<_>>(),
-                children: vec![],
+            .map(|it| {
+                let name = it.get_name();
+                CommandStructure {
+                    name: name.to_string(),
+                    completions: it
+                        .p
+                        .opts
+                        .iter()
+                        .map(|it| format!("--{}", it.b.name))
+                        .collect::<Vec<_>>(),
+                    children: vec![],
+                }
             })
             .collect::<Vec<_>>();
 
@@ -257,5 +301,65 @@ impl CommandStructure {
 
 #[async_trait]
 pub trait AsyncHandler<T: Send> {
-    async fn handle_async(&self, args: Vec<String>, state: &mut T) -> bool;
+    async fn handle_async(
+        &self,
+        args: Vec<String>,
+        state: &mut T,
+        completion_cache: CompletionCache,
+    ) -> bool;
+}
+
+pub type CompletionCache = Arc<RwLock<BTreeMap<CacheKey, Vec<String>>>>;
+
+#[derive(PartialEq)]
+pub struct CacheKey {
+    command: String,
+    flag: String,
+}
+impl CacheKey {
+    pub fn new(command: &str, flag: &str) -> Self {
+        Self {
+            command: command.to_string(),
+            flag: flag.to_string(),
+        }
+    }
+}
+impl Eq for CacheKey {}
+
+impl PartialOrd<Self> for CacheKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let cmd_eq = if self.command == "*" || other.command == "*" {
+            Some(Ordering::Equal)
+        } else {
+            self.command.partial_cmp(&other.command)
+        };
+
+        if cmd_eq != Some(Ordering::Equal) {
+            return cmd_eq;
+        }
+        if self.flag == "*" || other.flag == "*" {
+            Some(Ordering::Equal)
+        } else {
+            self.flag.partial_cmp(&other.flag)
+        }
+    }
+}
+
+impl Ord for CacheKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let cmd_eq = if self.command == "*" || other.command == "*" {
+            Ordering::Equal
+        } else {
+            self.command.cmp(&other.command)
+        };
+
+        if cmd_eq != Ordering::Equal {
+            return cmd_eq;
+        }
+        if self.flag == "*" || other.flag == "*" {
+            Ordering::Equal
+        } else {
+            self.flag.cmp(&other.flag)
+        }
+    }
 }
