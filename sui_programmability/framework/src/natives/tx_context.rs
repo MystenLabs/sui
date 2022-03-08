@@ -26,7 +26,7 @@ pub fn fresh_id(
     let ids_created = pop_arg!(args, u64);
     let tx_hash = pop_arg!(args, Vec<u8>);
 
-    // TODO(https://github.com/MystenLabs/fastnft/issues/58): finalize digest format
+    // TODO(https://github.com/MystenLabs/sui/issues/58): finalize digest format
     // unwrap safe because all digests in Move are serialized from the Rust `TransactionDigest`
     let digest = TransactionDigest::try_from(tx_hash.as_slice()).unwrap();
     let id = Value::address(AccountAddress::from(digest.derive_id(ids_created)));

@@ -162,7 +162,7 @@ fn verify_modules(modules: &[CompiledModule]) -> SuiResult {
         sui_bytecode_verifier::verify_module(m)?;
     }
     Ok(())
-    // TODO(https://github.com/MystenLabs/fastnft/issues/69): Run Move linker
+    // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
 }
 
 fn build_framework(framework_dir: &Path) -> SuiResult<Vec<CompiledModule>> {

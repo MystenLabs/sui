@@ -4,7 +4,7 @@ TODO: Define basic system requirements for a reliable environment: recommended O
 
 To contribute, ensure you have the latest version of the codebase. To clone the repository, run the following:
 ```bash
-git clone https://github.com/mystenlabs/fastnft.git
+git clone https://github.com/mystenlabs/sui.git
 cd sui
 cargo build --all --all-targets
 cargo test

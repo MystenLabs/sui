@@ -30,7 +30,7 @@ Transactions (and thus, certificates) take objects as input, read/write/mutate t
 To construct this graph, we add a node for each committed transaction and draw a directed edge labeled with object reference `O` from transaction `A` to transaction `B` if `A` produced object `O` (i.e., created or mutated `O`) and transaction `B` takes object `O` as an input.
 
 EDITORIAL NOTE: A diagram would be useful here. Can we use Mermaid as now seen in the [Summary](SUMMARY.md) thanks to Evan? Tracked in:
-https://github.com/MystenLabs/fastnft/issues/564
+https://github.com/MystenLabs/sui/issues/564
 
 The root of this DAG is a *genesis* transaction that takes no inputs and produces the objects that exist in the initial state of the system. The DAG can be extended by identifying mutable transaction outputs that have not yet been consumed by any committed transaction and sending a new transaction that takes these outputs (and optionally, immutable transaction outputs) as inputs.
 
