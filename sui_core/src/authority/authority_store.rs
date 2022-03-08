@@ -15,11 +15,23 @@ use typed_store::rocks::{open_cf, DBBatch, DBMap};
 use std::sync::atomic::Ordering;
 use typed_store::traits::Map;
 
-pub struct AuthorityStore {
+pub type AuthorityStore = SuiDataStore<true>;
+#[allow(dead_code)]
+pub type ReplicaStore = SuiDataStore<false>;
+
+/// ALL_OBJ_VER determines whether we want to store all past
+/// versions of every object in the store. Authority doesn't store
+/// them, but other entities such as replicas will.
+pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// This is a map between the object ID and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
     objects: DBMap<ObjectID, Object>,
+
+    /// Stores all history versions of all objects.
+    /// This is not needed by an authority, but is needed by a replica.
+    #[allow(dead_code)]
+    all_object_versions: DBMap<(ObjectID, SequenceNumber), Object>,
 
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the transaction that they are lock on for use by this specific authority. Where an object
@@ -81,7 +93,7 @@ pub struct AuthorityStore {
     pub next_sequence_number: AtomicU64,
 }
 
-impl AuthorityStore {
+impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> AuthorityStore {
         let db = open_cf(
@@ -89,6 +101,7 @@ impl AuthorityStore {
             db_options,
             &[
                 "objects",
+                "all_object_versions",
                 "owner_index",
                 "transaction_lock",
                 "signed_transactions",
@@ -120,6 +133,8 @@ impl AuthorityStore {
 
         AuthorityStore {
             objects: DBMap::reopen(&db, Some("objects")).expect("Cannot open CF."),
+            all_object_versions: DBMap::reopen(&db, Some("all_object_versions"))
+                .expect("Cannot open CF."),
             owner_index: DBMap::reopen(&db, Some("owner_index")).expect("Cannot open CF."),
             transaction_lock: DBMap::reopen(&db, Some("transaction_lock"))
                 .expect("Cannot open CF."),
@@ -502,6 +517,16 @@ impl AuthorityStore {
                 }
             }),
         )?;
+
+        if ALL_OBJ_VER {
+            // Keep all versions of every object if ALL_OBJ_VER is true.
+            write_batch = write_batch.insert_batch(
+                &self.all_object_versions,
+                written
+                    .iter()
+                    .map(|(id, object)| ((*id, object.version()), object)),
+            )?;
+        }
 
         // Update the indexes of the objects written
         write_batch = write_batch.insert_batch(
