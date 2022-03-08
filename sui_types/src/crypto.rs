@@ -106,13 +106,13 @@ impl TryInto<PublicKey> for PublicKeyBytes {
     type Error = SuiError;
 
     fn try_into(self) -> Result<PublicKey, Self::Error> {
-        // TODO(https://github.com/MystenLabs/fastnft/issues/101): Do better key validation
+        // TODO(https://github.com/MystenLabs/sui/issues/101): Do better key validation
         // to ensure the bytes represent a point on the curve.
         PublicKey::from_bytes(self.as_ref()).map_err(|_| SuiError::InvalidAuthenticator)
     }
 }
 
-// TODO(https://github.com/MystenLabs/fastnft/issues/101): more robust key validation
+// TODO(https://github.com/MystenLabs/sui/issues/101): more robust key validation
 impl TryFrom<&[u8]> for PublicKeyBytes {
     type Error = SuiError;
 
@@ -220,7 +220,7 @@ impl Signature {
         }
 
         // is this a cryptographically correct public key?
-        // TODO: perform stricter key validation, sp. small order points, see https://github.com/MystenLabs/fastnft/issues/101
+        // TODO: perform stricter key validation, sp. small order points, see https://github.com/MystenLabs/sui/issues/101
         let public_key =
             ed25519_dalek::PublicKey::from_bytes(self.public_key_bytes()).map_err(|err| {
                 SuiError::InvalidSignature {

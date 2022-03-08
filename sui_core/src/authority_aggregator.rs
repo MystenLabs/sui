@@ -1116,29 +1116,13 @@ where
             } else if cert_map.contains_key(&tx_digest) {
                 // If we have less stake telling us about the latest state of an object
                 // we re-run the certificate on all authorities to ensure it is correct.
-                if let Ok(_effects) = self
+                if let Ok(effects) = self
                     .process_certificate(cert_map[&tx_digest].clone(), AUTHORITY_REQUEST_TIMEOUT)
                     .await
                 {
-                    // The mutated or created case
-                    if _effects
-                        .mutated_and_created()
-                        .any(|(oref, _)| *oref == obj_ref)
-                    {
+                    if effects.is_object_mutated_here(obj_ref) {
                         is_ok = true;
-                    }
-
-                    // The deleted case
-                    if obj_ref.2 == OBJECT_DIGEST_DELETED
-                        && _effects
-                            .deleted
-                            .iter()
-                            .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
-                    {
-                        is_ok = true;
-                    }
-
-                    if !is_ok {
+                    } else {
                         // TODO: Report a byzantine fault here
                         continue;
                     }
@@ -1198,7 +1182,7 @@ where
 
         // For now assume all authorities. Assume they're all honest
         // This assumption is woeful, and should be fixed
-        // TODO: https://github.com/MystenLabs/fastnft/issues/320
+        // TODO: https://github.com/MystenLabs/sui/issues/320
         let results = future::join_all(authority_clients.iter().map(|(_, ac)| {
             tokio::time::timeout(timeout, ac.handle_object_info_request(request.clone()))
         }))

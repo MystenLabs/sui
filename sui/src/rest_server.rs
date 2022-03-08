@@ -11,7 +11,6 @@ use serde_json::json;
 use sui::config::{Config, GenesisConfig, NetworkConfig, WalletConfig};
 use sui::sui_commands;
 use sui::wallet_commands::{SimpleTransactionSigner, WalletContext};
-use sui_core::client::Client;
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
 
@@ -29,6 +28,7 @@ use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
 
 use std::sync::{Arc, Mutex};
+use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -183,6 +183,7 @@ async fn genesis(
         })?;
 
     let wallet_path = working_dir.join(wallet_config_path);
+    // TODO: Rest service should use `ClientAddressManager` directly instead of using the wallet context.
     let mut wallet_config =
         WalletConfig::create(&working_dir.join(wallet_path)).map_err(|error| {
             custom_http_error(
@@ -194,7 +195,14 @@ async fn genesis(
     // means even if the directory is deleted the lock will remain causing an
     // IO Error when a restart is attempted.
     let client_db_path = format!("client_db_{:?}", ObjectID::random());
-    wallet_config.db_folder_path = working_dir.join(&client_db_path);
+
+    if let GatewayType::Embedded(config) = wallet_config.gateway {
+        wallet_config.gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
+            db_folder_path: working_dir.join(&client_db_path),
+            ..config
+        })
+    }
+
     *server_context.client_db_path.lock().unwrap() = client_db_path;
 
     sui_commands::genesis(&mut network_config, genesis_conf, &mut wallet_config)
@@ -326,7 +334,7 @@ async fn sui_start(
     // Sync all accounts.
     for address in addresses.iter() {
         wallet_context
-            .address_manager
+            .gateway
             .sync_client_state(*address)
             .await
             .map_err(|err| {
@@ -406,21 +414,12 @@ async fn get_addresses(
         )
     })?;
 
-    let addresses: Vec<SuiAddress> = wallet_context
-        .address_manager
-        .get_managed_address_states()
-        .keys()
-        .copied()
-        .collect();
+    let addresses: Vec<SuiAddress> = wallet_context.config.accounts.clone();
 
     // TODO: Speed up sync operations by kicking them off concurrently.
     // Also need to investigate if this should be an automatic sync or manually triggered.
     for address in addresses.iter() {
-        if let Err(err) = wallet_context
-            .address_manager
-            .sync_client_state(*address)
-            .await
-        {
+        if let Err(err) = wallet_context.gateway.sync_client_state(*address).await {
             *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
@@ -505,7 +504,7 @@ async fn get_objects(
         )
     })?;
 
-    let object_refs = wallet_context.address_manager.get_owned_objects(*address);
+    let object_refs = wallet_context.gateway.get_owned_objects(*address);
 
     Ok(HttpResponseOk(GetObjectsResponse {
         objects: object_refs
@@ -589,11 +588,7 @@ async fn object_info(
         }
     };
 
-    let (object, layout) = match wallet_context
-        .address_manager
-        .get_object_info(object_id)
-        .await
-    {
+    let (object, layout) = match wallet_context.gateway.get_object_info(object_id).await {
         Ok(ObjectRead::Exists(_, object, layout)) => (object, layout),
         Ok(ObjectRead::Deleted(_)) => {
             *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
@@ -731,7 +726,7 @@ async fn transfer_object(
     });
 
     let (cert, effects, gas_used) = match wallet_context
-        .address_manager
+        .gateway
         .transfer_coin(owner, object_id, gas_object_id, to_address, tx_signer)
         .await
     {
@@ -919,15 +914,7 @@ async fn sync(
     })?;
 
     // Attempt to create a new account state, but continue if it already exists.
-    if let Err(error) = wallet_context.address_manager.create_account_state(address) {
-        info!("{:?}", error);
-    }
-
-    if let Err(err) = wallet_context
-        .address_manager
-        .sync_client_state(address)
-        .await
-    {
+    if let Err(err) = wallet_context.gateway.sync_client_state(address).await {
         *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
         return Err(custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
