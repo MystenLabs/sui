@@ -24,12 +24,39 @@ impl TestService {
     fn new(counter: Arc<AtomicUsize>) -> Self {
         TestService { counter }
     }
+
+    async fn handle_one_message<'a>(&'a self, buffer: &'a [u8]) -> Option<Vec<u8>> {
+        self.counter.fetch_add(buffer.len(), Ordering::Relaxed);
+        Some(Vec::from(buffer))
+    }
 }
 
-impl MessageHandler for TestService {
-    fn handle_message<'a>(&'a self, buffer: &'a [u8]) -> future::BoxFuture<'a, Option<Vec<u8>>> {
-        self.counter.fetch_add(buffer.len(), Ordering::Relaxed);
-        Box::pin(async move { Some(Vec::from(buffer)) })
+#[async_trait]
+impl<'a, A> MessageHandler<A> for TestService
+where
+    A: 'static + RwChannel<'a> + Unpin + Send,
+{
+    async fn handle_messages(&self, mut channel: A) -> () {
+        loop {
+            let buffer = match channel.stream().next().await {
+                Some(Ok(buffer)) => buffer,
+                Some(Err(err)) => {
+                    // We expect some EOF or disconnect error at the end.
+                    error!("Error while reading TCP stream: {}", err);
+                    break;
+                }
+                None => {
+                    break;
+                }
+            };
+
+            if let Some(reply) = self.handle_one_message(&buffer[..]).await {
+                let status = channel.sink().send(reply.into()).await;
+                if let Err(error) = status {
+                    error!("Failed to send query response: {}", error);
+                }
+            };
+        }
     }
 }
 
@@ -43,18 +70,15 @@ async fn test_server() -> Result<(usize, usize), std::io::Error> {
 
     let mut client = connect(address.clone(), 1000).await?;
     client.write_data(b"abcdef").await?;
-    received += client.read_data().await?.len();
+    received += client.read_data().await.unwrap()?.len();
     client.write_data(b"abcd").await?;
-    received += client.read_data().await?.len();
-
-    // Use a second connection (here pooled).
-    let mut pool = make_outgoing_connection_pool().await?;
-    pool.send_data_to(b"abc", &address).await?;
+    received += client.read_data().await.unwrap()?.len();
 
     // Try to read data on the first connection (should fail).
     received += timeout(Duration::from_millis(500), client.read_data())
         .await
-        .unwrap_or_else(|_| Ok(Vec::new()))?
+        .unwrap_or_else(|_| Some(Ok(Vec::new())))
+        .unwrap()?
         .len();
 
     // Attempt to gracefully kill server.
@@ -65,7 +89,8 @@ async fn test_server() -> Result<(usize, usize), std::io::Error> {
         .unwrap_or(Ok(()))?;
     received += timeout(Duration::from_millis(500), client.read_data())
         .await
-        .unwrap_or_else(|_| Ok(Vec::new()))?
+        .unwrap_or_else(|_| Some(Ok(Vec::new())))
+        .unwrap()?
         .len();
 
     Ok((counter.load(Ordering::Relaxed), received))
@@ -76,6 +101,6 @@ fn tcp_server() {
     let rt = Runtime::new().unwrap();
     let (processed, received) = rt.block_on(test_server()).unwrap();
     // Active TCP connections are allowed to finish before the server is gracefully killed.
-    assert_eq!(processed, 17);
+    assert_eq!(processed, 14);
     assert_eq!(received, 14);
 }

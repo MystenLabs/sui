@@ -12,6 +12,7 @@ anyhow = "1.0.55"
 bcs = "0.1.3"
 futures = "0.3.21"
 rand = "0.7.3"
+bytes = "1.1.0"
 serde = { version = "1.0.136", features = ["derive"] }
 tokio = { version = "1.17.0", features = ["full"] }
 parking_lot = "0.12.0"
@@ -22,7 +23,6 @@ tracing = { version = "0.1.31", features = ["log"] }
 signature = "1.5.0"
 ed25519-dalek = "1.0.1"
 structopt = "0.3.26"
-bytes = "1.1.0"
 log = "0.4.14"
 
 sui-adapter = { path = "../sui_programmability/adapter" }

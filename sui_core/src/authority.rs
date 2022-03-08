@@ -10,13 +10,14 @@ use move_core_types::{
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
     pin::Pin,
     sync::Arc,
 };
 use sui_adapter::adapter;
 use sui_types::{
     base_types::*,
+    batch::UpdateItem,
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
@@ -27,7 +28,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::authority_batch::BatchSender;
+use crate::authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -41,6 +42,7 @@ pub use authority_store::AuthorityStore;
 
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
+const MAX_ITEMS_LIMIT: u64 = 10_000;
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -67,10 +69,11 @@ pub struct AuthorityState {
     /// The database
     _database: Arc<AuthorityStore>,
 
+    // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
     /// and create batches for this authority.
     /// Keep as None if there is no need for this.
-    batch_sender: Option<BatchSender>,
+    batch_channels: Option<(BatchSender, BroadcastSender)>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -82,12 +85,26 @@ pub struct AuthorityState {
 impl AuthorityState {
     /// Set a listener for transaction certificate updates. Returns an
     /// error if a listener is already registered.
-    pub fn set_batch_sender(&mut self, batch_sender: BatchSender) -> SuiResult {
-        if self.batch_sender.is_some() {
+    pub fn set_batch_sender(
+        &mut self,
+        batch_sender: BatchSender,
+        broadcast_sender: BroadcastSender,
+    ) -> SuiResult {
+        if self.batch_channels.is_some() {
             return Err(SuiError::AuthorityUpdateFailure);
         }
-        self.batch_sender = Some(batch_sender);
+        self.batch_channels = Some((batch_sender, broadcast_sender));
         Ok(())
+    }
+
+    /// Get a broadcast receiver for updates
+    pub fn subscribe(&self) -> Result<BroadcastReceiver, SuiError> {
+        self.batch_channels
+            .as_ref()
+            .map(|(_, tx)| tx.subscribe())
+            .ok_or(SuiError::GenericAuthorityError {
+                error: "No broadcast subscriptions allowed for this authority.".to_string(),
+            })
     }
 
     /// The logic to check one object against a reference, and return the object if all is well
@@ -415,7 +432,7 @@ impl AuthorityState {
             .await?; // Returns the OrderInfoResponse
 
         // If there is a notifier registered, notify:
-        if let Some(sender) = &self.batch_sender {
+        if let Some((sender, _)) = &self.batch_channels {
             sender.send_item(seq, transaction_digest).await?;
         }
 
@@ -633,6 +650,66 @@ impl AuthorityState {
         })
     }
 
+    /// Handles a request for a batch info. It returns a sequence of
+    /// [batches, transactions, batches, transactions] as UpdateItems, and a flag
+    /// that if true indicates the request goes beyond the last batch in the
+    /// database.
+    pub async fn handle_batch_info_request(
+        &self,
+        request: BatchInfoRequest,
+    ) -> Result<(VecDeque<UpdateItem>, bool), SuiError> {
+        // Ensure the range contains some elements and end > start
+        if request.end <= request.start {
+            return Err(SuiError::InvalidSequenceRangeError);
+        };
+
+        // Ensure we are not doing too much work per request
+        if request.end - request.start > MAX_ITEMS_LIMIT {
+            return Err(SuiError::TooManyItemsError(MAX_ITEMS_LIMIT));
+        }
+
+        let (batches, transactions) = self
+            ._database
+            .batches_and_transactions(request.start, request.end)?;
+
+        let mut dq_batches = std::collections::VecDeque::from(batches);
+        let mut dq_transactions = std::collections::VecDeque::from(transactions);
+        let mut items = VecDeque::with_capacity(dq_batches.len() + dq_transactions.len());
+        let mut last_batch_next_seq = 0;
+
+        // Send full historical data as [Batch - Transactions - Batch - Transactions - Batch].
+        while let Some(current_batch) = dq_batches.pop_front() {
+            // Get all transactions belonging to this batch and send them
+            loop {
+                // No more items or item too large for this batch
+                if dq_transactions.is_empty()
+                    || dq_transactions[0].0 >= current_batch.batch.next_sequence_number
+                {
+                    break;
+                }
+
+                let current_transaction = dq_transactions.pop_front().unwrap();
+                items.push_back(UpdateItem::Transaction(current_transaction));
+            }
+
+            // Now send the batch
+            last_batch_next_seq = current_batch.batch.next_sequence_number;
+            items.push_back(UpdateItem::Batch(current_batch));
+        }
+
+        // whether we have sent everything requested, or need to start
+        // live notifications.
+        let should_subscribe = request.end > last_batch_next_seq;
+
+        // If any transactions are left they must be outside a batch
+        while let Some(current_transaction) = dq_transactions.pop_front() {
+            // Remember the last sequence sent
+            items.push_back(UpdateItem::Transaction(current_transaction));
+        }
+
+        Ok((items, should_subscribe))
+    }
+
     pub async fn new(
         committee: Committee,
         name: AuthorityName,
@@ -651,7 +728,7 @@ impl AuthorityState {
             move_vm: adapter::new_move_vm(native_functions)
                 .expect("We defined natives to not fail here"),
             _database: store,
-            batch_sender: None,
+            batch_channels: None,
         };
 
         for genesis_modules in genesis_packages {
@@ -663,9 +740,13 @@ impl AuthorityState {
         state
     }
 
-    #[cfg(test)]
-    pub fn db(&self) -> Arc<AuthorityStore> {
+    pub(crate) fn db(&self) -> Arc<AuthorityStore> {
         self._database.clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn batch_sender(&self) -> &BatchSender {
+        &self.batch_channels.as_ref().unwrap().0
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {

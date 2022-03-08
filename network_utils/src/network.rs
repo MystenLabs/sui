@@ -41,13 +41,16 @@ impl NetworkClient {
         }
     }
 
-    async fn send_recv_bytes_internal(&self, buf: Vec<u8>) -> Result<Vec<u8>, io::Error> {
+    async fn send_recv_bytes_internal(&self, buf: Vec<u8>) -> Result<Option<Vec<u8>>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port);
         let mut stream = connect(address, self.buffer_size).await?;
         // Send message
         time::timeout(self.send_timeout, stream.write_data(&buf)).await??;
         // Wait for reply
-        time::timeout(self.recv_timeout, stream.read_data()).await?
+        time::timeout(self.recv_timeout, async {
+            stream.read_data().await.transpose()
+        })
+        .await?
     }
 
     pub async fn send_recv_bytes(&self, buf: Vec<u8>) -> Result<SerializedMessage, SuiError> {
@@ -55,7 +58,7 @@ impl NetworkClient {
             Err(error) => Err(SuiError::ClientIoError {
                 error: format!("{}", error),
             }),
-            Ok(response) => {
+            Ok(Some(response)) => {
                 // Parse reply
                 match deserialize_message(&response[..]) {
                     Ok(SerializedMessage::Error(error)) => Err(*error),
@@ -64,6 +67,9 @@ impl NetworkClient {
                     // _ => Err(SuiError::UnexpectedMessage),
                 }
             }
+            Ok(None) => Err(SuiError::ClientIoError {
+                error: "Empty response from authority.".to_string(),
+            }),
         }
     }
 
@@ -101,16 +107,16 @@ impl NetworkClient {
                 info!("In flight {} Remaining {}", in_flight, requests.len());
             }
             match time::timeout(self.recv_timeout, stream.read_data()).await {
-                Ok(Ok(buffer)) => {
+                Ok(Some(Ok(buffer))) => {
                     in_flight -= 1;
                     responses.push(Bytes::from(buffer));
                 }
-                Ok(Err(error)) => {
-                    if error.kind() == io::ErrorKind::UnexpectedEof {
-                        info!("Socket closed by server");
-                        return Ok(responses);
-                    }
+                Ok(Some(Err(error))) => {
                     error!("Received error response: {}", error);
+                }
+                Ok(None) => {
+                    info!("Socket closed by server");
+                    return Ok(responses);
                 }
                 Err(error) => {
                     error!(

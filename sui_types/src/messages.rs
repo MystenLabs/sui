@@ -5,7 +5,7 @@
 use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
-use super::{base_types::*, committee::Committee, error::*, event::Event};
+use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -187,6 +187,21 @@ pub struct ConfirmationTransaction {
 pub struct AccountInfoRequest {
     pub account: SuiAddress,
 }
+
+/// An information Request for batches, and their associated transactions
+///
+/// This reads historic data and sends the batch and transactions in the
+/// database starting at the batch that includes `start`,
+/// and then listens to new transactions until a batch equal or
+/// is over the batch end marker.  
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct BatchInfoRequest {
+    pub start: TxSequenceNumber,
+    pub end: TxSequenceNumber,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct BatchInfoResponseItem(pub UpdateItem);
 
 impl From<SuiAddress> for AccountInfoRequest {
     fn from(account: SuiAddress) -> Self {

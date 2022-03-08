@@ -24,6 +24,8 @@ pub enum SerializedMessage {
     ObjectInfoResp(Box<ObjectInfoResponse>),
     TransactionResp(Box<TransactionInfoResponse>),
     TransactionInfoReq(Box<TransactionInfoRequest>),
+    BatchInfoReq(Box<BatchInfoRequest>),
+    BatchInfoResp(Box<BatchInfoResponseItem>),
 }
 
 // This helper structure is only here to avoid cloning while serializing commands.
@@ -42,6 +44,8 @@ enum ShallowSerializedMessage<'a> {
     ObjectInfoResp(&'a ObjectInfoResponse),
     TransactionResp(&'a TransactionInfoResponse),
     TransactionInfoReq(&'a TransactionInfoRequest),
+    BatchInfoReq(&'a BatchInfoRequest),
+    BatchInfoResp(&'a BatchInfoResponseItem),
 }
 
 fn serialize_into<T, W>(writer: W, msg: &T) -> Result<(), anyhow::Error>
@@ -117,6 +121,14 @@ pub fn serialize_transaction_info_request(value: &TransactionInfoRequest) -> Vec
 
 pub fn serialize_vote(value: &SignedTransaction) -> Vec<u8> {
     serialize(&ShallowSerializedMessage::Vote(value))
+}
+
+pub fn serialize_batch_request(request: &BatchInfoRequest) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::BatchInfoReq(request))
+}
+
+pub fn serialize_batch_item(item: &BatchInfoResponseItem) -> Vec<u8> {
+    serialize(&ShallowSerializedMessage::BatchInfoResp(item))
 }
 
 pub fn serialize_vote_into<W>(writer: W, value: &SignedTransaction) -> Result<(), anyhow::Error>
