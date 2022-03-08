@@ -5,6 +5,8 @@ title: Sui Developer Guides
 Welcome to the documentation for the Sui platform. Since Sui is built upon the core [Move](https://github.com/MystenLabs/awesome-move) programming language,
 you should familiarize yourself with it and use this content to apply the differences. For a summary of these differences, see [Why Sui?](learn/sui-move-diffs.md)
 
+For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](paper/sui.pdf) white paper.
+
 ## Kickstart development
 
 ### Move quick start
