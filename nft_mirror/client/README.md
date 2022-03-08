@@ -1,11 +1,17 @@
 # Sui Mirror Frontend
 Demonstrates the use of the Sui Mirror Frontend.
 Supports MetaMask wallet only.
+
+Mock data is used to simulate the real response from the Sui Mirror API.
+To use the real data, change config.demo to true.
 API endpoint configuration in [index.ts](/src/store/index.ts)
 API is mocked in [demoAPi.ts](/src/store/demoAPi.ts)
+
+```npm run dev`` for development
 Runing on  [http://localhost:3000/](http://localhost:3000/)
-npm run dev for development
-npm run build for production
+
+```npm run start``` to start production build server
+view production [http://localhost:4173/](http://localhost:4173/)
   
   []: # Language: TypeScript
   []: # Path: src/store/demoAPi.ts
