@@ -5,6 +5,7 @@
 extern crate core;
 
 pub mod config;
+pub mod gateway;
 pub mod keystore;
 pub mod shell;
 pub mod sui_commands;

@@ -18,7 +18,8 @@ use tracing::*;
 mod transport_tests;
 
 /// Suggested buffer size
-pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
+pub const DEFAULT_MAX_DATAGRAM_SIZE: usize = 65507;
+pub const DEFAULT_MAX_DATAGRAM_SIZE_STR: &str = "65507";
 
 /// The handler required to create a service.
 pub trait MessageHandler {

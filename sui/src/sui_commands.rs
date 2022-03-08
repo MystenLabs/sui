@@ -1,17 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::{
-    AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, WalletConfig,
-};
-use crate::keystore::KeystoreType;
+
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use anyhow::anyhow;
 use futures::future::join_all;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::sync::Arc;
 use structopt::StructOpt;
+use tracing::{error, info};
+
 use sui_adapter::adapter::generate_package_id;
 use sui_adapter::genesis;
 use sui_core::authority::{AuthorityState, AuthorityStore};
@@ -20,7 +20,12 @@ use sui_types::base_types::{SequenceNumber, TxContext};
 use sui_types::committee::Committee;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
-use tracing::{error, info};
+
+use crate::config::{
+    AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, WalletConfig,
+};
+use crate::gateway::{EmbeddedGatewayConfig, GatewayType};
+use crate::keystore::KeystoreType;
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
@@ -49,8 +54,11 @@ impl SuiCommand {
                 };
                 let wallet_path = working_dir.join("wallet.conf");
                 let mut wallet_config = WalletConfig::create(&wallet_path)?;
-                wallet_config.db_folder_path = working_dir.join("client_db");
                 wallet_config.keystore = KeystoreType::File(working_dir.join("wallet.key"));
+                wallet_config.gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
+                    db_folder_path: working_dir.join("client_db"),
+                    ..Default::default()
+                });
                 genesis(config, genesis_conf, &mut wallet_config).await
             }
         }
@@ -212,7 +220,15 @@ pub async fn genesis(
         )
         .await?;
     }
-    wallet_config.authorities = authority_info;
+
+    if let GatewayType::Embedded(config) = &wallet_config.gateway {
+        wallet_config.gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
+            db_folder_path: config.db_folder_path.clone(),
+            authorities: authority_info,
+            ..Default::default()
+        });
+    }
+
     wallet_config.accounts = new_addresses;
 
     info!("Network genesis completed.");
