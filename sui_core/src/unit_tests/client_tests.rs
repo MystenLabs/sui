@@ -418,15 +418,7 @@ async fn make_address_manager(
     (client, authority_clients.into_values().collect())
 }
 
-fn make_account(client: &mut ClientAddressManager<LocalAuthorityClient>) -> (SuiAddress, KeyPair) {
-    let (address, secret) = get_key_pair();
-    client.create_account_state(address).unwrap();
-    (address, secret)
-}
-
-fn make_admin_account(
-    client: &mut ClientAddressManager<LocalAuthorityClient>,
-) -> (SuiAddress, KeyPair) {
+fn make_admin_account() -> (SuiAddress, KeyPair) {
     use sui_types::crypto::get_key_pair_from_bytes;
 
     let (admin, admin_key) = get_key_pair_from_bytes(&[
@@ -435,7 +427,6 @@ fn make_admin_account(
         90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
         105, 254, 59, 163,
     ]);
-    client.create_account_state(admin).unwrap();
     (admin, admin_key)
 }
 
@@ -444,7 +435,6 @@ async fn init_local_client_and_fund_account(
     object_ids: Vec<Vec<ObjectID>>,
 ) -> ClientAddressManager<LocalAuthorityClient> {
     let (mut client, authority_clients) = make_address_manager(object_ids.len()).await;
-    client.create_account_state(address).unwrap();
     fund_account(authority_clients, &mut client, address, object_ids).await;
     client
 }
@@ -456,7 +446,6 @@ async fn init_local_client_and_fund_account_bad(
     let (authority_clients, committee) = init_local_authorities_bad(object_ids.len()).await;
     let path = tempfile::tempdir().unwrap().into_path();
     let mut client = ClientAddressManager::new(path, committee, authority_clients.clone());
-    client.create_account_state(address).unwrap();
     fund_account(
         authority_clients.into_values().collect(),
         &mut client,
@@ -626,8 +615,8 @@ async fn test_initiating_transfer_low_funds() {
 #[tokio::test]
 async fn test_bidirectional_transfer() {
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_account(&mut client);
-    let (addr2, key2) = make_account(&mut client);
+    let (addr1, key1) = get_key_pair();
+    let (addr2, key2) = get_key_pair();
 
     let object_id = ObjectID::random();
     let gas_object1 = ObjectID::random();
@@ -784,8 +773,8 @@ async fn test_client_state_sync() {
 #[tokio::test]
 async fn test_client_state_sync_with_transferred_object() {
     let (mut client, authority_clients) = make_address_manager(1).await;
-    let (addr1, key1) = make_account(&mut client);
-    let (addr2, _) = make_account(&mut client);
+    let (addr1, key1) = get_key_pair();
+    let (addr2, _) = get_key_pair();
 
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -813,6 +802,8 @@ async fn test_client_state_sync_with_transferred_object() {
     );
 
     // Client 2's local object_id and cert should be empty before sync
+    // Query `addr2` once so the client state is created internally in the account manager
+    assert!(client.get_owned_objects(addr2).is_empty());
     let account2 = get_account(&client, addr2);
     assert!(account2.get_owned_objects().is_empty());
     assert!(account2.store().object_refs.is_empty());
@@ -831,7 +822,7 @@ async fn test_client_state_sync_with_transferred_object() {
 #[tokio::test]
 async fn test_move_calls_object_create() {
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (sender, sender_key) = make_account(&mut client);
+    let (sender, sender_key) = get_key_pair();
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
@@ -891,8 +882,8 @@ async fn test_move_calls_object_create() {
 #[tokio::test]
 async fn test_move_calls_object_transfer() {
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_account(&mut client);
-    let (addr2, _) = make_account(&mut client);
+    let (addr1, key1) = get_key_pair();
+    let (addr2, _) = get_key_pair();
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
@@ -982,7 +973,7 @@ async fn test_move_calls_object_transfer() {
 #[tokio::test]
 async fn test_move_calls_freeze_object() {
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_account(&mut client);
+    let (addr1, key1) = get_key_pair();
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
@@ -1071,7 +1062,7 @@ async fn test_move_calls_freeze_object() {
 #[tokio::test]
 async fn test_move_calls_object_delete() {
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_account(&mut client);
+    let (addr1, key1) = get_key_pair();
 
     let object_value: u64 = 100;
     let gas_object_id = ObjectID::random();
@@ -1173,7 +1164,7 @@ async fn get_package_obj(
 async fn test_module_publish_and_call_good() {
     // Init the states
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_admin_account(&mut client);
+    let (addr1, key1) = make_admin_account();
 
     let gas_object_id = ObjectID::random();
 
@@ -1299,7 +1290,7 @@ async fn test_module_publish_and_call_good() {
 async fn test_module_publish_file_path() {
     // Init the states
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_admin_account(&mut client);
+    let (addr1, key1) = make_admin_account();
 
     let gas_object_id = ObjectID::random();
 
@@ -1533,7 +1524,7 @@ async fn test_object_store() {
     // modules which check if the caller/publisher is the admin
     // account.
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_admin_account(&mut client);
+    let (addr1, key1) = make_admin_account();
 
     let gas_object_id = ObjectID::random();
 
@@ -1627,8 +1618,8 @@ async fn test_object_store() {
 #[tokio::test]
 async fn test_object_store_transfer() {
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_account(&mut client);
-    let (addr2, key2) = make_account(&mut client);
+    let (addr1, key1) = get_key_pair();
+    let (addr2, key2) = get_key_pair();
 
     let object_id = ObjectID::random();
     let gas_object1 = ObjectID::random();
@@ -1758,8 +1749,8 @@ async fn auth_object(authority: &LocalAuthorityClient, object_id: ObjectID) -> (
 
 #[tokio::test]
 async fn test_map_reducer() {
-    let (mut client, _) = make_address_manager(4).await;
-    let _ = make_admin_account(&mut client);
+    let (client, _) = make_address_manager(4).await;
+    let _ = make_admin_account();
 
     // Test: reducer errors get propagated up
     let res = client
@@ -1893,8 +1884,8 @@ async fn get_latest_ref(authority: &LocalAuthorityClient, object_id: ObjectID) -
 #[tokio::test]
 async fn test_get_all_owned_objects() {
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_account(&mut client);
-    let (addr2, _) = make_account(&mut client);
+    let (addr1, key1) = get_key_pair();
+    let (addr2, _) = get_key_pair();
 
     let framework_obj_ref = client.get_framework_object_ref().await.unwrap();
 
@@ -2008,8 +1999,8 @@ async fn test_get_all_owned_objects() {
 #[tokio::test]
 async fn test_sync_all_owned_objects() {
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_account(&mut client);
-    let (addr2, _) = make_account(&mut client);
+    let (addr1, key1) = get_key_pair();
+    let (addr2, _) = get_key_pair();
 
     let framework_obj_ref = client.get_framework_object_ref().await.unwrap();
 
@@ -2143,7 +2134,7 @@ async fn test_sync_all_owned_objects() {
 #[tokio::test]
 async fn test_process_transaction() {
     let (mut client, auth_vec) = make_address_manager(4).await;
-    let (addr1, key1) = make_account(&mut client);
+    let (addr1, key1) = get_key_pair();
 
     let framework_obj_ref = client.get_framework_object_ref().await.unwrap();
 
@@ -2204,7 +2195,7 @@ async fn test_process_transaction() {
 #[tokio::test]
 async fn test_process_certificate() {
     let (mut client, auth_vec) = make_address_manager(4).await;
-    let (addr1, key1) = make_account(&mut client);
+    let (addr1, key1) = get_key_pair();
 
     let framework_obj_ref = client.get_framework_object_ref().await.unwrap();
 
@@ -2284,7 +2275,7 @@ async fn test_transfer_pending_transactions() {
 
     let (sender, sender_key) = get_key_pair();
     let mut client = init_local_client_and_fund_account(sender, authority_objects).await;
-    let (recipient, _) = make_account(&mut client);
+    let (recipient, _) = get_key_pair();
 
     let mut objects = objects.iter();
 
@@ -2421,7 +2412,7 @@ async fn test_address_manager() {
     let _secret2 = secret.copy();
     let gas_object1 = ObjectID::random();
     let gas_object2 = ObjectID::random();
-    address_manager.create_account_state(address).unwrap();
+
     fund_account_with_same_objects(
         authority_clients.clone(),
         &mut address_manager,
@@ -2492,7 +2483,7 @@ async fn test_address_manager() {
 #[tokio::test]
 async fn test_coin_split() {
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_account(&mut client);
+    let (addr1, key1) = get_key_pair();
 
     let coin_object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -2550,7 +2541,7 @@ async fn test_coin_split() {
 #[tokio::test]
 async fn test_coin_merge() {
     let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_account(&mut client);
+    let (addr1, key1) = get_key_pair();
 
     let coin_object_id1 = ObjectID::random();
     let coin_object_id2 = ObjectID::random();

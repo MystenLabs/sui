@@ -3,7 +3,6 @@
 use super::*;
 use move_core_types::identifier::Identifier;
 use serde_json::json;
-use std::collections::BTreeSet;
 use std::fs::read_dir;
 use std::ops::Add;
 use std::path::Path;
@@ -12,10 +11,11 @@ use sui::config::{
     AccountConfig, AuthorityPrivateInfo, GenesisConfig, NetworkConfig, ObjectConfig, WalletConfig,
     AUTHORITIES_DB_NAME,
 };
+use sui::gateway::GatewayType;
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_network::network::PortAllocator;
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::TransactionEffects;
 use sui_types::object::{Data, MoveObject, Object, ObjectRead, GAS_VALUE_FOR_TESTING};
@@ -70,12 +70,15 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 
     // Check wallet.conf
     let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    assert_eq!(4, wallet_conf.authorities.len());
+
+    if let GatewayType::Embedded(config) = wallet_conf.gateway {
+        assert_eq!(4, config.authorities.len());
+        assert_eq!(working_dir.path().join("client_db"), config.db_folder_path);
+    } else {
+        panic!()
+    }
+
     assert_eq!(5, wallet_conf.accounts.len());
-    assert_eq!(
-        working_dir.path().join("client_db"),
-        wallet_conf.db_folder_path
-    );
 
     // Genesis 2nd time should fail
     let result = SuiCommand::Genesis { config: None }
@@ -146,14 +149,10 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let state = context
-        .address_manager
-        .get_managed_address_states()
-        .get(&address)
-        .unwrap();
+    let object_refs = context.gateway.get_owned_objects(address);
 
     // Check log output contains all object ids.
-    for (object_id, _) in state.object_refs() {
+    for (object_id, _, _) in object_refs {
         assert!(logs_contain(format!("{}", object_id).as_str()))
     }
 
@@ -312,14 +311,10 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let state = context
-        .address_manager
-        .get_managed_address_states()
-        .get(&address)
-        .unwrap();
+    let object_refs = context.gateway.get_owned_objects(address);
 
     // Check log output contains all object ids.
-    let object_id = state.object_refs().next().unwrap().0;
+    let object_id = object_refs.first().unwrap().0;
 
     WalletCommands::Object { id: object_id }
         .execute(&mut context)
@@ -360,14 +355,10 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
         .execute(&mut context)
         .await?;
 
-    let state = context
-        .address_manager
-        .get_managed_address_states()
-        .get(&address)
-        .unwrap();
+    let object_refs = context.gateway.get_owned_objects(address);
 
-    let object_id = state.object_refs().next().unwrap().0;
-    let object_to_send = state.object_refs().nth(1).unwrap().0;
+    let object_id = object_refs.first().unwrap().0;
+    let object_to_send = object_refs.get(1).unwrap().0;
 
     WalletCommands::Gas { address }
         .execute(&mut context)
@@ -588,18 +579,10 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         .print(true);
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
-    let state1 = context
-        .address_manager
-        .get_managed_address_states()
-        .get(&address1)
-        .unwrap();
+    let object_refs = context.gateway.get_owned_objects(address1);
 
-    let object_refs = state1
-        .object_refs()
-        .collect::<BTreeSet<(ObjectID, ObjectRef)>>()
-        .clone();
     // Check log output contains all object ids.
-    for (object_id, _) in object_refs.clone() {
+    for (object_id, _, _) in &object_refs {
         assert!(logs_contain(format!("{}", object_id).as_str()))
     }
 
@@ -607,8 +590,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Certain prep work
     // Get a gas object
-    let gas = *state1.get_owned_objects().first().unwrap();
-    let obj = *state1.get_owned_objects().get(1).unwrap();
+    let gas = object_refs.first().unwrap().0;
+    let obj = object_refs.get(1).unwrap().0;
 
     // Create the args
     let addr1_str = format!("0x{:02x}", address1);
@@ -767,14 +750,10 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let state = context
-        .address_manager
-        .get_managed_address_states()
-        .get(&address)
-        .unwrap();
+    let object_refs = context.gateway.get_owned_objects(address);
 
     // Check log output contains all object ids.
-    let gas_obj_id = state.object_refs().next().unwrap().0;
+    let gas_obj_id = object_refs.first().unwrap().0;
 
     // Provide path to well formed package sources
     let mut path = TEST_DATA_DIR.to_owned();
@@ -886,15 +865,11 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         .await?
         .print(true);
 
-    let state = context
-        .address_manager
-        .get_managed_address_states()
-        .get(&address)
-        .unwrap();
+    let object_refs = context.gateway.get_owned_objects(address);
 
     // Check log output contains all object ids.
-    let gas_obj_id = state.object_refs().next().unwrap().0;
-    let obj_id = state.object_refs().nth(1).unwrap().0;
+    let gas_obj_id = object_refs.first().unwrap().0;
+    let obj_id = object_refs.get(1).unwrap().0;
 
     let resp = WalletCommands::Transfer {
         gas: gas_obj_id,

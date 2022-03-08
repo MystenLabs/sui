@@ -62,7 +62,7 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "4000000")]
     recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
-    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
+    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR)]
     buffer_size: usize,
     /// Which execution path to track. TransactionsAndCerts or TransactionsOnly or CertsOnly
     #[structopt(long, default_value = "TransactionsAndCerts")]
