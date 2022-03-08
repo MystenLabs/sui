@@ -139,11 +139,10 @@ module Sui::ID {
     // `VersionedID`. The implementation of this function emits a deleted
     // system event so Sui knows to process the object deletion
     public fun delete(versioned_id: VersionedID) {
-        let VersionedID { id, version: _ } = versioned_id;
-        delete_id(id)
+        delete_id(versioned_id)
     }
 
-    native fun delete_id(id: UniqueID);
+    native fun delete_id<VersionedID>(id: VersionedID);
 
     // === internal functions ===
 

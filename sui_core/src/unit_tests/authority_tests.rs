@@ -12,7 +12,7 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
 };
-
+use move_package::BuildConfig;
 use sui_adapter::genesis;
 use sui_types::{
     base_types::dbg_addr,
@@ -24,7 +24,7 @@ use sui_types::{
 };
 
 use std::fs;
-
+use std::path::PathBuf;
 use std::{convert::TryInto, env};
 
 pub fn system_maxfiles() -> usize {
@@ -1280,7 +1280,7 @@ async fn test_get_latest_parent_entry() {
         .unwrap();
     assert_eq!(obj_ref.0, new_object_id1);
     assert_eq!(obj_ref.1, SequenceNumber::from(3));
-    assert_eq!(obj_ref.2, ObjectDigest::deleted());
+    assert_eq!(obj_ref.2, ObjectDigest::OBJECT_DIGEST_DELETED);
     assert_eq!(effects.transaction_digest, tx);
 }
 
@@ -1519,7 +1519,235 @@ async fn test_object_owning_another_object() {
     );
 }
 
+#[tokio::test]
+async fn test_object_wrapping_unwrapping() {
+    let (sender, sender_key) = get_key_pair();
+    let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+    let gas_object_ref = gas_object.to_object_reference();
+    let authority = init_state_with_objects(vec![gas_object]).await;
+
+    // Compile the ObjectWrapping Move code.
+    let build_config = BuildConfig::default();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/object_wrapping/");
+    let modules = sui_framework::build_move_package(&path, build_config, false).unwrap();
+
+    // Publish the modules
+    let all_module_bytes = modules
+        .iter()
+        .map(|m| {
+            let mut module_bytes = Vec::new();
+            m.serialize(&mut module_bytes).unwrap();
+            module_bytes
+        })
+        .collect();
+    let data = TransactionData::new_module(sender, gas_object_ref, all_module_bytes, MAX_GAS);
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
+    let effects = send_and_confirm_transaction(&authority, transaction)
+        .await
+        .unwrap()
+        .signed_effects
+        .unwrap()
+        .effects;
+
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let package_ref = effects.created[0].0;
+
+    // Create a Child object.
+    let effects = call_move(
+        &authority,
+        &gas_object_ref.0,
+        &sender,
+        &sender_key,
+        &package_ref,
+        ident_str!("ObjectWrapping").to_owned(),
+        ident_str!("create_child").to_owned(),
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let child_object_ref = effects.created[0].0;
+    assert_eq!(child_object_ref.1, OBJECT_START_VERSION);
+
+    // Create a Parent object, by wrapping the child object.
+    let effects = call_move(
+        &authority,
+        &gas_object_ref.0,
+        &sender,
+        &sender_key,
+        &package_ref,
+        ident_str!("ObjectWrapping").to_owned(),
+        ident_str!("create_parent").to_owned(),
+        vec![],
+        vec![child_object_ref.0],
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    // Child object is wrapped, Parent object is created.
+    assert_eq!(
+        (
+            effects.created.len(),
+            effects.deleted.len(),
+            effects.wrapped.len()
+        ),
+        (1, 0, 1)
+    );
+    let new_child_object_ref = effects.wrapped[0];
+    let expected_child_object_ref = (
+        child_object_ref.0,
+        child_object_ref.1.increment(),
+        ObjectDigest::OBJECT_DIGEST_WRAPPED,
+    );
+    // Make sure that the child's version gets increased after wrapped.
+    assert_eq!(new_child_object_ref, expected_child_object_ref);
+    check_latest_object_ref(&authority, &expected_child_object_ref).await;
+    let child_object_ref = new_child_object_ref;
+
+    let parent_object_ref = effects.created[0].0;
+    assert_eq!(parent_object_ref.1, OBJECT_START_VERSION);
+
+    // Extract the child out of the parent.
+    println!("before this call");
+    let effects = call_move(
+        &authority,
+        &gas_object_ref.0,
+        &sender,
+        &sender_key,
+        &package_ref,
+        ident_str!("ObjectWrapping").to_owned(),
+        ident_str!("extract_child").to_owned(),
+        vec![],
+        vec![parent_object_ref.0],
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    // Check that the child shows up in unwrapped, not created.
+    // mutated contains parent and gas.
+    assert_eq!(
+        (
+            effects.mutated.len(),
+            effects.created.len(),
+            effects.unwrapped.len()
+        ),
+        (2, 0, 1)
+    );
+    // Make sure that version increments again when unwrapped.
+    assert_eq!(effects.unwrapped[0].0 .1, child_object_ref.1.increment());
+    check_latest_object_ref(&authority, &effects.unwrapped[0].0).await;
+    let child_object_ref = effects.unwrapped[0].0;
+
+    // Wrap the child to the parent again.
+    let effects = call_move(
+        &authority,
+        &gas_object_ref.0,
+        &sender,
+        &sender_key,
+        &package_ref,
+        ident_str!("ObjectWrapping").to_owned(),
+        ident_str!("set_child").to_owned(),
+        vec![],
+        vec![parent_object_ref.0, child_object_ref.0],
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    // Check that child object showed up in wrapped.
+    // mutated contains parent and gas.
+    assert_eq!((effects.mutated.len(), effects.wrapped.len()), (2, 1));
+    let expected_child_object_ref = (
+        child_object_ref.0,
+        child_object_ref.1.increment(),
+        ObjectDigest::OBJECT_DIGEST_WRAPPED,
+    );
+    assert_eq!(effects.wrapped[0], expected_child_object_ref);
+    check_latest_object_ref(&authority, &expected_child_object_ref).await;
+    let child_object_ref = effects.wrapped[0];
+    let parent_object_ref = effects.mutated_excluding_gas().next().unwrap().0;
+
+    // Now delete the parent object, which will in turn delete the child object.
+    let effects = call_move(
+        &authority,
+        &gas_object_ref.0,
+        &sender,
+        &sender_key,
+        &package_ref,
+        ident_str!("ObjectWrapping").to_owned(),
+        ident_str!("delete_parent").to_owned(),
+        vec![],
+        vec![parent_object_ref.0],
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    assert_eq!(effects.deleted.len(), 2);
+    // Check that both objects are marked as wrapped in the authority.
+    let expected_child_object_ref = (
+        child_object_ref.0,
+        child_object_ref.1.increment(),
+        ObjectDigest::OBJECT_DIGEST_DELETED,
+    );
+    assert!(effects.deleted.contains(&expected_child_object_ref));
+    check_latest_object_ref(&authority, &expected_child_object_ref).await;
+    let expected_parent_object_ref = (
+        parent_object_ref.0,
+        parent_object_ref.1.increment(),
+        ObjectDigest::OBJECT_DIGEST_DELETED,
+    );
+    assert!(effects.deleted.contains(&expected_parent_object_ref));
+    check_latest_object_ref(&authority, &expected_parent_object_ref).await;
+}
+
 // helpers
+
+async fn check_latest_object_ref(authority: &AuthorityState, object_ref: &ObjectRef) {
+    let response = authority
+        .handle_object_info_request(ObjectInfoRequest {
+            object_id: object_ref.0,
+            request_kind: ObjectInfoRequestKind::LatestObjectInfo(None),
+        })
+        .await
+        .unwrap();
+    assert_eq!(&response.requested_object_reference.unwrap(), object_ref,);
+}
 
 #[cfg(test)]
 fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStore>) {
