@@ -1,12 +1,13 @@
 <script lang="ts">
     import NftImage from "./NftImage.svelte"
     import { createEventDispatcher } from "svelte"
-    import {walletAddress } from '../store'
+    import { walletAddress } from '../store'
     import { startMinting, startSigning } from '../store/ApiEndPoints'
 
     import Loader from "./Loader.svelte"
     import Error from "./Error.svelte"
     import BgOject from "./BgOject.svelte"
+    import ResponseCheckMark from "./ResponseCheckMark.svelte";
 
     export let data:any;
     let suiWalletAddress:string = ""
@@ -23,6 +24,9 @@
       dispatch('selectNFT', false)
     }
 
+    const changeWalletAddress = () => {
+      dispatch('changeWalletAddr', false)
+    }
 
     const signSignatureAndMint = () => {
         error = false
@@ -63,6 +67,7 @@
     const mintSuiNFTFn = async (signature:string) => {
         console.log(signature)
         try {
+            /// TODO: martch data to the format 
             const reqObj = {
                 "message": {
                     "source_chain": "ethereum",
@@ -115,26 +120,22 @@
                             {:then response}
                                 <div class="container">
                                     <div class="section-heading heading-light">
-                                        <div class="checkmark">
-                                            <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-                                               viewBox="0 0 161.2 161.2" enable-background="new 0 0 161.2 161.2" xml:space="preserve">
-                                                  <circle class="circle" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-miterlimit="10" cx="80.6" cy="80.6" r="62.1"></circle>
-                                                  <polyline class="icon" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" stroke-miterlimit="10" points="113,52.8 74.1,108.4 48.2,86.4"></polyline>
-                                              </svg>
-                                        </div>
+                                        <ResponseCheckMark responsetype="success" />
                                         <h2 class="title"> Minted on Sui network</h2>
                                         <a href="{response.sui_explorer_link}" target="_blank" class="axil-btn btn-large btn-fill-white">View in Explorer</a>
                                         <button  class="axil-btn btn-fill-white btn-large err-btn" on:click="{changeSelectedNFT}">Mint another NFT</button>
                                     </div>
                                 </div>
                             {:catch err}
+                                <ResponseCheckMark responsetype="error" />
                                 <Error errmessage={`${err.message} - ${err.details.requestBody.message}`} /> 
                                 <button  class="axil-btn btn-fill-white btn-large err-btn" on:click="{changeSelectedNFT}">Select another NFT</button>
                             {/await}  
                     {:catch err}
-                    <div class="section section-padding bg-color-light pb--70 error ">
+                    <div class="error ">
+                        <ResponseCheckMark responsetype="error" />
                         <Error errmessage={err.message} />     
-                        <button  class="axil-btn btn-fill-white btn-large" >Change Address </button>
+                        <button  class="axil-btn btn-fill-white btn-large" on:click="{changeWalletAddress}">Change Address </button>
                     </div>
                 {/await}
             </div>
@@ -212,57 +213,6 @@
         width: 300px;
         margin: 0 auto;
     }
-.checkmark {
-  width: 100px;
-  margin: 0 auto;
-  padding-top: 20px;
-}
 
-.circle {
-  -moz-animation-name: circle-animation;
-  -webkit-animation-name: circle-animation;
-  animation-name: circle-animation;
-  -moz-animation-duration: 2s;
-  -webkit-animation-duration: 2s;
-  animation-duration: 2s;
-  -moz-animation-timing-function: ease-in-out;
-  -webkit-animation-timing-function: ease-in-out;
-  animation-timing-function: ease-in-out;
-  stroke-dasharray: 1000;
-  stroke-dashoffset: 0;
-}
-
-.icon {
-  -moz-animation-name: icon-animation;
-  -webkit-animation-name: icon-animation;
-  animation-name: icon-animation;
-  -moz-animation-duration: 1s;
-  -webkit-animation-duration: 1s;
-  animation-duration: 1s;
-  -moz-animation-timing-function: ease-in-out;
-  -webkit-animation-timing-function: ease-in-out;
-  animation-timing-function: ease-in-out;
-  opacity: 1;
-}
-
-@keyframes circle-animation {
-  0% {
-    stroke-dashoffset: 1000;
-  }
-  100% {
-    stroke-dashoffset: 0;
-  }
-}
-@keyframes icon-animation {
-  0% {
-    opacity: 0;
-  }
-  50% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
-}
 
 </style>

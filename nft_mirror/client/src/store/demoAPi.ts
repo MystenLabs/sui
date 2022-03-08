@@ -230,26 +230,33 @@ export const fetchDataNFTDemo = async (wallectAddress:string) => {
 
 export const signNFTDemo = async (suiWalletAddress) => {
     console.log(suiWalletAddress)
-    await resolveAfter2Seconds();
-    return"0x21fbf0696d5e0aa2ef41a2b4ffb623bcaf070461d61cf7251c74161f82fec3a4370854bc0a34b3ab487c1bc021cd318c734c51ae29374f2beb0e6f2dd49b4bf41c"
+  
+    try {
+        console.log(suiWalletAddress)
+        await resolveAfter2Seconds();
+        /// ramdomly throw error! to test error handling 
+        if([true, false][Math.round(Math.random())]){
+            throw new Error("Signing failed")
+        }
+        return"0x21fbf0696d5e0aa2ef41a2b4ffb623bcaf070461d61cf7251c74161f82fec3a4370854bc0a34b3ab487c1bc021cd318c734c51ae29374f2beb0e6f2dd49b4bf41c"
+    } catch (error) {
+        throw error
+    }
+    
 }
 
 
   
 
 export const mintSuiNFTDemo = async (signature) => {
-    console.log("mintSuiNFTDemo", signature)
-     await resolveAfter2Seconds();
-
+    await resolveAfter2Seconds();
     const success = {
             "source_chain": "ethereum",
             "source_contract_address": "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D",
             "source_token_id": "101",
             "sui_explorer_link": "http:127.0.0.1:8000/BC4CA0EdA7647A8a"
         }
-
     try {
-
         /// ramdomly throw error! to test error handling
         if([true, false][Math.round(Math.random())]){
             throw new Error("Validation failed")

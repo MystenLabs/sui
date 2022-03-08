@@ -1,11 +1,13 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte"
     import { fetchNFTDataByAddress } from '../store/ApiEndPoints'
+    import { walletAddress } from '../store'
+
     import Loader from "./Loader.svelte"
     import Error from "./Error.svelte"
     import NftImage from "./NftImage.svelte"
-
-    import { walletAddress } from '../store'
+    import BgOject from "./BgOject.svelte"
+   
     import AddSuiWallet from './AddSuiWallet.svelte';
 
    
@@ -18,12 +20,13 @@
         selectedNFT = nftObj
     }
 
-    const selectAnotherNFT = (data: any) => {
-        console.log('called')
+    const selectAnotherNFT = () => {
         selectedNFT = false;
-   };
+    }
+
 
     const switchWalletAddress = () => {
+        console.log('switchWalletAddress')
         $walletAddress = ''
         dispatch('pageFn', {page:'landing'});
     }
@@ -64,22 +67,13 @@
                         <div class="section section-padding bg-color-light pb--70 error ">
                             <Error errmessage={err.message} />     
                             <button  class="axil-btn btn-fill-white btn-large" on:click="{switchWalletAddress}">Change Address <img class="metamask-logo" src="assets/logos/metamask-fox.svg" alt="metamask logo"/> </button>
-                            <ul class="list-unstyled shape-group-9">
-                                <li class="shape shape-1"><img src="assets/bubble-12.png" alt="Shapes"></li>
-            
-                                <li class="shape shape-2"><img src="assets/bubble-16.png" alt="Comments"></li>
-                                <li class="shape shape-3"><img src="assets/bubble-13.png" alt="Comments"></li>
-                                <li class="shape shape-4"><img src="assets/bubble-14.png" alt="Comments"></li>
-                                <li class="shape shape-5"><img src="assets/bubble-16.png" alt="Comments"></li>
-                                <li class="shape shape-6"><img src="assets/bubble-15.png" alt="Comments"></li>
-                                <li class="shape shape-7"><img src="assets/bubble-16.png" alt="Comments"></li>
-                            </ul>
+                            <BgOject />
                         </div>
                     {/await}
                 </div>
             {/if}  
             {#if selectedNFT}        
-                <AddSuiWallet data={selectedNFT} on:selectNFT={ selectAnotherNFT} />
+                <AddSuiWallet data={selectedNFT} on:selectNFT={selectAnotherNFT}  on:changeWalletAddr={switchWalletAddress}/>
             {/if}
         </div>
         <ul class="shape-group-7 list-unstyled">
