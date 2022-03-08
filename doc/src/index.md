@@ -7,17 +7,23 @@ you should familiarize yourself with it and use this content to apply the differ
 
 ## Kickstart development
 
-* To jump right into building smart contract applications on top of Sui, go to [Move Quick Start](https://github.com/MystenLabs/fastnft/tree/main/doc/src/move.md).
-* To experiment with a sample Sui wallet, check out [Wallet Quick Start](https://github.com/MystenLabs/fastnft/tree/main/doc/src/wallet.md).
-<!---* To understand what's possible by browsing examples of full-fledged applications and games built on top of Sui, review the [Demos](TODO).--->
-* To understand what's possible by browsing Move code built on top of Sui, review the [examples](https://github.com/MystenLabs/fastnft/tree/main/sui_programmability/examples/sources)
-* To start coding against Sui's REST APIs, start with the [Sui API Reference](https://app.swaggerhub.com/apis/arun-koshy/sui-api)
-* To go deep on how Sui works, understand [Key Concepts](https://github.com/MystenLabs/fastnft/tree/main/doc/src/key-concepts.md).
-* To learn what distinguishes Sui from other blockchain systems, see [What Makes Sui Different?](https://github.com/MystenLabs/fastnft/tree/main/doc/src/what-makes-sui-different.md).
-<!---* To experience Sui's speed and scalability for yourself, try [Benchmarking](TODO).--->
-<!---* To see the current status of the Sui software/network and preview what's coming next, read through our [Roadmap](TODO).--->
+### Move quick start
+See the [Move Quick Start](move.md) for installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, and invoking your published code.
+<!--- Then deeper: Sui standard library, design patterns, examples. --->
 
-<!---TODO: Populate and link to the missing pages above or strike the links and references.--->
+### Wallet quick start
+See the [Wallet Quick Start](wallet.md) for installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
+<!--- Then deeper: wallet CLI vs client service vs forwarder architecture, how to integrate your code (wallet, indexer, ...) with the client service or forwarder components. --->
+
+## Navigate this site
+
+Navigate and search this site however you see fit. Here is the order we recommend if you are new to Sui:
+
+1. [Learn](learn/index.md) about Sui, how it differs from Move, and why you should employ it.
+1. [Build](build/index.md) smart contracts, wallets, authorities, transactions, and more.
+1. [Explore](explore/index.md) NFTs, make transfers, and see the Sui API.
+1. [Contribute]contribute/index.md) to Sui by joining the community, making enhancements, and learning about Mysten Labs.
+
 
 ## Use supporting sites
 
@@ -29,12 +35,3 @@ Take note of these related repositories of information to make best use of the k
   * [Examples](https://github.com/diem/move/tree/main/language/documentation/examples/experimental) - A set of samples, such as for [defining a coin](https://github.com/diem/move/tree/main/language/documentation/examples/experimental/basic-coin) and [swapping it](https://github.com/diem/move/tree/main/language/documentation/examples/experimental/coin-swap).
 * [Awesome Move](https://github.com/MystenLabs/awesome-move/blob/main/README.md) - A summary of resources related to Move, from blockchains through code samples.
 * [Sui API Reference](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1 ) - The reference files for the Sui Rest API.
-
-## Navigate this site
-
-Navigate and search this site however you see fit. Here is the order we recommend if you are new to Sui:
-
-1. [Learn](learn/index.md) about Sui, how it differs from Move, and why you should employ it.
-1. [Build](build/index.md) smart contracts, wallets, authorities, transactions, and more.
-1. [Explore](explore/index.md) NFTs, make transfers, and see the Sui API.
-1. [Contribute]contribute/index.md) to Sui by joining the community, making enhancements, and learning about Mysten Labs.
