@@ -635,16 +635,16 @@ impl AuthorityStore {
     }
 
     /// Retrieves batches including transactions within a range.
-    /// 
+    ///
     /// This function returns all signed batches that enclose the requested transaction
-    /// including the batch preceeding the first requested transaction, the batch including 
-    /// the last requested transaction (if there is one) and all batches in between. 
-    /// 
+    /// including the batch preceeding the first requested transaction, the batch including
+    /// the last requested transaction (if there is one) and all batches in between.
+    ///
     /// Transactions returned include all transactions within the batch that include the
-    /// first requested transaction, all the way to at least all the transactions that are 
+    /// first requested transaction, all the way to at least all the transactions that are
     /// included in the last batch returned. If the last requested transaction is outside a
-    /// batch (one has not yet been generated) the function returns all transactions at the 
-    /// end of the sequence that are in TxSequenceOrder (and ignores any that are out of 
+    /// batch (one has not yet been generated) the function returns all transactions at the
+    /// end of the sequence that are in TxSequenceOrder (and ignores any that are out of
     /// order.)
     #[allow(clippy::type_complexity)]
     pub fn batches_and_transactions(
@@ -652,10 +652,9 @@ impl AuthorityStore {
         start: u64,
         end: u64,
     ) -> Result<(Vec<SignedBatch>, Vec<(TxSequenceNumber, TransactionDigest)>), SuiError> {
-
         /*
         Get all batches that include requested transactions. This includes the signed batch
-        prior to the first requested transaction, the batch including the last requested 
+        prior to the first requested transaction, the batch including the last requested
         transaction and all batches in between.
 
         So for example if we got a request for start: 3 end: 9 and we have:
