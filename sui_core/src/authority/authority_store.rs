@@ -429,14 +429,22 @@ impl AuthorityStore {
         // Archive the old lock.
         write_batch = write_batch.delete_batch(&self.transaction_lock, active_inputs.iter())?;
 
-        // Delete objects
-        write_batch = write_batch.delete_batch(&self.objects, deleted.iter())?;
+        // Delete objects.
+        // Wrapped objects need to be deleted as well because we can no longer track their
+        // content nor use them directly.
+        write_batch = write_batch.delete_batch(&self.objects, deleted.iter().map(|(id, _)| *id))?;
 
         // Make an iterator over all objects that are either deleted or have changed owner,
         // along with their old owner.  This is used to update the owner index.
+        // For wrapped objects, although their owners technically didn't change, we will lose track
+        // of them and there is no guarantee on their owner in the future. Hence we treat them
+        // the same as deleted.
         let old_object_owners = deleted
             .iter()
-            .filter_map(|id| objects[id].get_single_owner_and_id())
+            // We need to call get() on objects because some object that were just deleted may not
+            // be in the objects list. This can happen if these deleted objects were wrapped in the past,
+            // and hence will not show up in the input objects.
+            .filter_map(|(id, _)| objects.get(id).and_then(Object::get_single_owner_and_id))
             .chain(
                 written
                     .iter()
@@ -462,12 +470,16 @@ impl AuthorityStore {
         // Index the certificate by the objects deleted
         write_batch = write_batch.insert_batch(
             &self.parent_sync,
-            deleted.iter().map(|object_id| {
+            deleted.iter().map(|(object_id, (version, kind))| {
                 (
                     (
                         *object_id,
-                        objects[object_id].version().increment(),
-                        ObjectDigest::deleted(),
+                        *version,
+                        if kind == &DeleteKind::Wrap {
+                            ObjectDigest::OBJECT_DIGEST_WRAPPED
+                        } else {
+                            ObjectDigest::OBJECT_DIGEST_DELETED
+                        },
                     ),
                     transaction_digest,
                 )
@@ -560,7 +572,7 @@ impl AuthorityStore {
             .parent_sync
             .iter()
             // Make the max possible entry for this object ID.
-            .skip_prior_to(&(object_id, SequenceNumber::MAX, OBJECT_DIGEST_MAX))?;
+            .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
 
         Ok(iterator.next().and_then(|(obj_ref, tx_digest)| {
             if obj_ref.0 == object_id {

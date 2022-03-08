@@ -23,7 +23,7 @@ use sui_types::{
     fp_bail, fp_ensure, gas,
     messages::*,
     object::{Data, Object, Owner},
-    storage::Storage,
+    storage::{DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -394,8 +394,11 @@ impl AuthorityState {
         // Remove from dependencies the generic hash
         transaction_dependencies.remove(&TransactionDigest::genesis());
 
-        let unwrapped_object_ids = self.get_unwrapped_object_ids(temporary_store.written())?;
-        temporary_store.patch_unwrapped_object_version(unwrapped_object_ids);
+        // Objects that were wrapped in the past and just got unwrapped
+        // require special patch up. It also affects how signed effects are generated.
+        // See detailed comments in the implementation of [`AuthorityTemporaryStore::patch_unwrapped_objects`].
+        let unwrapped_object_ids = self.get_unwrapped_object_ids(&temporary_store)?;
+        temporary_store.patch_unwrapped_objects(&unwrapped_object_ids);
         let to_signed_effects = temporary_store.to_signed_effects(
             &self.name,
             &*self.secret,
@@ -403,6 +406,7 @@ impl AuthorityState {
             transaction_dependencies.into_iter().collect(),
             status,
             &gas_object_id,
+            unwrapped_object_ids,
         );
         // Update the database in an atomic manner
 
@@ -803,28 +807,41 @@ impl AuthorityState {
         self._database.get_latest_parent_entry(object_id)
     }
 
-    /// Given all mutated objects during a transaction, return the list of objects
-    /// that were unwrapped (i.e. re-appeared after being deleted).
+    /// Find all objects that were wrapped in the past and got unwrapped in this
+    /// transaction. An unwrapped object can either show up after this transaction
+    /// (i.e. in written), or gets deleted in this transaction (in deleted).
     fn get_unwrapped_object_ids(
         &self,
-        written: &BTreeMap<ObjectID, Object>,
-    ) -> Result<Vec<ObjectID>, SuiError> {
+        temporary_store: &AuthorityTemporaryStore,
+    ) -> SuiResult<HashSet<ObjectID>> {
+        // mutated will contain all objects from this transaction that were
+        // written or deleted. We include deleted objects because it's possible
+        // to unwrap a wrapped object and immediately delete it in the same transaction.
+        let mutated = temporary_store
+            .written()
+            .iter()
+            .map(|(id, obj)| (*id, obj.version()))
+            .chain(
+                temporary_store
+                    .deleted()
+                    .iter()
+                    .map(|(id, (version, _))| (*id, *version)),
+            );
         // For each mutated object, we first find out whether there was a transaction
-        // that deleted this object in the past.
+        // that wrapped this object in the past.
         let parents = self._database.multi_get_parents(
-            &written
-                .iter()
-                .map(|(object_id, object)| (*object_id, object.version(), OBJECT_DIGEST_DELETED))
+            &mutated
+                .clone()
+                .map(|(object_id, version)| {
+                    (object_id, version, ObjectDigest::OBJECT_DIGEST_WRAPPED)
+                })
                 .collect::<Vec<_>>(),
         )?;
-        // Filter the list of mutated objects based on whether they were deleted in the past.
-        // These objects are the unwrapped ones.
-        let filtered = written
-            .iter()
+        let unwrapped_object_ids = mutated
             .zip(parents.iter())
-            .filter_map(|((object_id, _object), d)| d.map(|_| *object_id))
+            .filter_map(|((object_id, _), d)| d.map(|_| object_id))
             .collect();
-        Ok(filtered)
+        Ok(unwrapped_object_ids)
     }
 }
 

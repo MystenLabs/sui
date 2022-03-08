@@ -609,7 +609,21 @@ TransactionEffects:
                 - TYPENAME: SequenceNumber
                 - TYPENAME: ObjectDigest
             - TYPENAME: Owner
+    - unwrapped:
+        SEQ:
+          TUPLE:
+            - TUPLE:
+                - TYPENAME: ObjectID
+                - TYPENAME: SequenceNumber
+                - TYPENAME: ObjectDigest
+            - TYPENAME: Owner
     - deleted:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - wrapped:
         SEQ:
           TUPLE:
             - TYPENAME: ObjectID

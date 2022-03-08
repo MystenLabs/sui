@@ -345,8 +345,14 @@ pub struct TransactionEffects {
     pub created: Vec<(ObjectRef, Owner)>,
     // ObjectRef and owner of mutated objects, including gas object.
     pub mutated: Vec<(ObjectRef, Owner)>,
+    // ObjectRef and owner of objects that are unwrapped in this transaction.
+    // Unwrapped objects are objects that were wrapped into other objects in the past,
+    // and just got extracted out.
+    pub unwrapped: Vec<(ObjectRef, Owner)>,
     // Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
+    // Object refs of objects now wrapped in other objects.
+    pub wrapped: Vec<ObjectRef>,
     // The updated gas object reference. Have a dedicated field for convenient access.
     // It's also included in mutated.
     pub gas_object: (ObjectRef, Owner),
@@ -367,6 +373,34 @@ impl TransactionEffects {
     /// Return an iterator of mutated objects, but excluding the gas object.
     pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> {
         self.mutated.iter().filter(|o| *o != &self.gas_object)
+    }
+
+    pub fn is_object_mutated_here(&self, obj_ref: ObjectRef) -> bool {
+        // The mutated or created case
+        if self.mutated_and_created().any(|(oref, _)| *oref == obj_ref) {
+            return true;
+        }
+
+        // The deleted case
+        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_DELETED
+            && self
+                .deleted
+                .iter()
+                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
+        {
+            return true;
+        }
+
+        // The wrapped case
+        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_WRAPPED
+            && self
+                .wrapped
+                .iter()
+                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
+        {
+            return true;
+        }
+        false
     }
 }
 
