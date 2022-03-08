@@ -61,13 +61,14 @@
         }
     });
 
+    // Handle wallet address change
     const listenForAddress = () => {
         window.ethereum.on('accountsChanged', (accounts) => {
             error = false
             $walletAddress  = accounts[0]
         })
     }
-    // Handle wallet address change
+    
     
         
     
