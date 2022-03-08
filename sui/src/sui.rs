@@ -26,7 +26,7 @@ struct SuiOpt {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    tracing_subscriber::fmt().init();
+    tracing_subscriber::fmt::init();
 
     let options: SuiOpt = SuiOpt::from_args();
     let network_conf_path = options.config;
