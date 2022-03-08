@@ -380,7 +380,7 @@ name = "MyMovePackage"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../fastnft/sui_programmability/framework/" }
+Sui = { local = "../sui/sui_programmability/framework/" }
 
 [addresses]
 MyMovePackage = "0x0"
@@ -554,7 +554,7 @@ little to do with Sui beyond using some Sui packages, such as
 already very useful for developers writing Move code for Sui, they may
 also want to test additional Sui-specific features. In particular, a
 Move call in Sui is encapsulated in a Sui
-[transaction](https://github.com/MystenLabs/fastnft/blob/main/doc/transactions.md),
+[transaction](https://github.com/MystenLabs/sui/blob/main/doc/transactions.md),
 and a developer may wish to test interactions between different
 transactions within a single test (e.g. one transaction creating an
 object and the other one transferring it).

@@ -428,7 +428,7 @@ pub fn verify_and_link<
     let mut gas_status = get_gas_status(cost_table, None)
         .expect("Can only fail if gas budget is too high, and we didn't supply one");
     let mut session = vm.new_session(state_view);
-    // TODO(https://github.com/MystenLabs/fastnft/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
+    // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
     let new_module_bytes = modules
         .iter()
         .map(|m| {
