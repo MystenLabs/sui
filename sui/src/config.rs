@@ -116,7 +116,7 @@ impl Config for WalletConfig {
     fn create(path: &Path) -> Result<Self, anyhow::Error> {
         let working_dir = path
             .parent()
-            .ok_or(anyhow!("Cannot determine parent directory."))?;
+            .ok_or_else(|| anyhow!("Cannot determine parent directory."))?;
         Ok(WalletConfig {
             accounts: Vec::new(),
             keystore: KeystoreType::File(working_dir.join("wallet.ks")),
@@ -245,7 +245,9 @@ impl GenesisConfig {
         num_accounts: usize,
         num_objects_per_account: usize,
     ) -> Result<Self, anyhow::Error> {
-        let working_dir = path.parent().ok_or(anyhow!("Cannot resolve file path."))?;
+        let working_dir = path
+            .parent()
+            .ok_or_else(|| anyhow!("Cannot resolve file path."))?;
         let mut authorities = Vec::new();
         for _ in 0..num_authorities {
             // Get default authority config from deserialization logic.
