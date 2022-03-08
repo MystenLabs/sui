@@ -4,10 +4,10 @@ Welcome to Sui, a next generation smart contract platform with high throughput, 
 
 * To jump right into building smart contract applications on top of Sui, go to [Move Quick Start](https://github.com/MystenLabs/fastnft/tree/main/doc/src/move.md).
 * To experiment with a sample Sui wallet, check out [Wallet Quick Start](https://github.com/MystenLabs/fastnft/tree/main/doc/src/wallet.md).
+* To go deep on how Sui works, read the Sui [white paper](https://github.com/MystenLabs/fastnft/tree/main/doc/paper/sui.pdf) and check out [Key Concepts](https://github.com/MystenLabs/fastnft/tree/main/doc/src/key-concepts.md).
 <!---* To understand what's possible by browsing examples of full-fledged applications and games built on top of Sui, review the [Demos](TODO).--->
 * To understand what's possible by browsing Move code built on top of Sui, review the [examples](https://github.com/MystenLabs/fastnft/tree/main/sui_programmability/examples/sources)
-* To start coding against Sui's REST API's, start [here](https://app.swaggerhub.com/apis/arun-koshy/sui-api)
-* To go deep on how Sui works, understand [Key Concepts](https://github.com/MystenLabs/fastnft/tree/main/doc/src/key-concepts.md).
+* To start coding against Sui's REST API's, start [here](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1)
 * To learn what distinguishes Sui from other blockchain systems, see [What Makes Sui Different?](https://github.com/MystenLabs/fastnft/tree/main/doc/src/what-makes-sui-different.md).
 <!---* To experience Sui's speed and scalability for yourself, try [Benchmarking](TODO).--->
 <!---* To see the current status of the Sui software/network and preview what's coming next, read through our [Roadmap](TODO).--->
