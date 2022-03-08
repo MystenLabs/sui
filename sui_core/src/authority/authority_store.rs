@@ -387,6 +387,13 @@ impl AuthorityStore {
             std::iter::once((transaction_digest, &signed_effects)),
         )?;
 
+        // Cleanup the lock of the shared objects.
+        let write_batch = self.remove_shared_objects_locks(
+            write_batch,
+            transaction_digest,
+            &certificate.transaction,
+        )?;
+
         // Safe to unwrap since the "true" flag ensures we get a sequence value back.
         let seq: TxSequenceNumber = self
             .batch_update_objects(write_batch, temporary_store, transaction_digest, true)?
@@ -581,31 +588,24 @@ impl AuthorityStore {
         }))
     }
 
-    /// Delete a lock of a shared object.
-    pub fn delete_sequence_lock(
+    /// Remove the shared objects locks. This function is not safety-critical and is only need to cleanup the store.
+    pub fn remove_shared_objects_locks(
         &self,
+        mut write_batch: DBBatch,
         transaction_digest: TransactionDigest,
-        object_id: ObjectID,
-    ) -> Result<(), SuiError> {
-        self.sequenced
-            .remove(&(transaction_digest, object_id))
-            .map_err(SuiError::from)
-    }
-
-    /// Free the schedule data structure.
-    pub fn delete_schedule(&self, object_id: &ObjectID) -> Result<(), SuiError> {
-        self.schedule.remove(object_id).map_err(SuiError::from)
-    }
-
-    /// Persist a certificate.
-    pub fn persist_certificate(
-        &self,
-        transaction_digest: &TransactionDigest,
-        certificate: &CertifiedTransaction,
-    ) -> Result<(), SuiError> {
-        self.certificates
-            .insert(transaction_digest, certificate)
-            .map_err(SuiError::from)
+        transaction: &Transaction,
+    ) -> SuiResult<DBBatch> {
+        let mut sequenced_to_delete = Vec::new();
+        let mut schedule_to_delete = Vec::new();
+        for object_id in transaction.shared_input_objects() {
+            sequenced_to_delete.push((transaction_digest, *object_id));
+            if self.get_object(object_id)?.is_none() {
+                schedule_to_delete.push(object_id);
+            }
+        }
+        write_batch = write_batch.delete_batch(&self.sequenced, sequenced_to_delete)?;
+        write_batch = write_batch.delete_batch(&self.schedule, schedule_to_delete)?;
+        Ok(write_batch)
     }
 
     /// Lock a sequence number for the shared objects of the input transaction.
@@ -626,7 +626,6 @@ impl AuthorityStore {
             schedule_to_write.push((id, next_version));
         }
 
-        // TODO [#676]: The writes below should be atomic.
         let mut write_batch = self.sequenced.batch();
         write_batch = write_batch.insert_batch(&self.certificates, certificate_to_write)?;
         write_batch = write_batch.insert_batch(&self.sequenced, sequenced_to_write)?;
