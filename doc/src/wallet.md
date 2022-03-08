@@ -118,6 +118,8 @@ or
 The network config file path defaults to `./network.conf` if not
 specified.
 
+NOTE: For logs, set `RUST_LOG=debug` before invoking `./sui start`.
+
 
 ### Running interactive wallet
 
