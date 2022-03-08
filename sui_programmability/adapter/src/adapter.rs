@@ -600,14 +600,13 @@ fn process_successful_execution<
     // This can happen for two reasons:
     //  1. The call to ID::delete_id() was not a result of deleting a pre-existing object.
     //    This can happen either because we were deleting an object that just got created
-    //    in this same transaction, and hence we don't need to care about them; or we have
-    //    an ID that's created but not associated with a real object.
+    //    in this same transaction; or we have an ID that's created but not associated with
+    //    a real object. In either case, we don't care about this id.
     //  2. This object was wrapped in the past, and now is getting deleted. It won't show up
     //    in the input, but the deletion is also real.
     // We cannot distinguish the above two cases here just yet. So we just add it with
-    // the kind NotExistInInput. Once we get back to authorities, we can remove ids from case (1)
-    // by finding out which ID was wrapped in the past.
-    // This is done in AuthorityTemporaryStore::patch_unwrapped_objects.
+    // the kind NotExistInInput. They will be eventually filtered out in
+    // [`AuthorityTemporaryStore::patch_unwrapped_objects`].
     for (id, version) in deleted_ids {
         if !by_value_objects.contains_key(&id) {
             state_view.delete_object(&id, version, DeleteKind::NotExistInInput);

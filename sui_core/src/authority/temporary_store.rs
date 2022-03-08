@@ -162,9 +162,6 @@ impl AuthorityTemporaryStore {
                 .iter()
                 .filter_map(|(id, (version, kind))| {
                     if kind != &DeleteKind::Wrap {
-                        // For both deleted and wrapped, we try to make the returned ref
-                        // consistent with what we store on the authorities, which is
-                        // version + 1 with a special digest.
                         Some((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED))
                     } else {
                         None

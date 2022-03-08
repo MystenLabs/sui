@@ -396,7 +396,7 @@ impl AuthorityState {
 
         // Objects that were wrapped in the past and just got unwrapped
         // require special patch up. It also affects how signed effects are generated.
-        // See detailed comments in the implementations.
+        // See detailed comments in the implementation of [`AuthorityTemporaryStore::patch_unwrapped_objects`].
         let unwrapped_object_ids = self.get_unwrapped_object_ids(&temporary_store)?;
         temporary_store.patch_unwrapped_objects(&unwrapped_object_ids);
         let to_signed_effects = temporary_store.to_signed_effects(
@@ -808,7 +808,8 @@ impl AuthorityState {
     }
 
     /// Find all objects that were wrapped in the past and got unwrapped in this
-    /// transaction.
+    /// transaction. An unwrapped object can either show up after this transaction
+    /// (i.e. in written), or gets deleted in this transaction (in deleted).
     fn get_unwrapped_object_ids(
         &self,
         temporary_store: &AuthorityTemporaryStore,
