@@ -1541,13 +1541,14 @@ async fn test_object_wrapping_unwrapping() {
             module_bytes
         })
         .collect();
-    let transaction = Transaction::new_module(
+    let data = TransactionData::new_module(
         sender,
         gas_object_ref,
         all_module_bytes,
         MAX_GAS,
-        &sender_key,
     );
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
     let effects = send_and_confirm_transaction(&authority, transaction)
         .await
         .unwrap()
