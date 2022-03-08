@@ -20,7 +20,7 @@
 
 
 <style lang="scss">
-    @import "../styles/app.scss";
+    @import "../styles/variables.scss";
     ._nft-img {
         margin: auto;
         .thumbnail {
@@ -38,16 +38,10 @@
                 color: $sui__black;
             }
         }
-        .project-grid{
-            border: none;
-        }
 
         @media only screen and (max-width: 767px) {
             width: 80%;
             margin: auto;
-        }
-        a{
-            border: none;
         }
     }
     :global( ._nft-item .thumbnail){

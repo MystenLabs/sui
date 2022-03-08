@@ -105,7 +105,6 @@
         {/if}
         {#if activeSections === 'mint'}
             <div class="sui-content ">
-               
                 {#await signNTFSign(suiWalletAddress)}
                     <h3 class="title">Signing Address</h3>
                      <Loader state={true} />
@@ -132,15 +131,12 @@
                                 <Error errmessage={`${err.message} - ${err.details.requestBody.message}`} /> 
                                 <button  class="axil-btn btn-fill-white btn-large err-btn" on:click="{changeSelectedNFT}">Select another NFT</button>
                             {/await}  
-
                     {:catch err}
                     <div class="section section-padding bg-color-light pb--70 error ">
                         <Error errmessage={err.message} />     
                         <button  class="axil-btn btn-fill-white btn-large" >Change Address </button>
                     </div>
                 {/await}
-
-
             </div>
         {/if}
         <BgOject />
@@ -148,7 +144,8 @@
     <BgOject />
 </div>
 <style lang="scss">
-    @import "../styles/app.scss";
+    // @import "../styles/app.scss";
+    @import "../styles/variables.scss";
     .section{
         display: flex;
         justify-content: center;
@@ -215,8 +212,7 @@
         width: 300px;
         margin: 0 auto;
     }
-
-    .checkmark {
+.checkmark {
   width: 100px;
   margin: 0 auto;
   padding-top: 20px;

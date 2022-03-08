@@ -26,8 +26,8 @@
   {/if}
 
 </main>
-<style type="text/scss" lang="scss">
-@import "./styles/app.scss";
+<style type="text/scss" lang="scss" global>
+@import "./styles/variables.scss";
 .sui-logo{
   height: auto;
   width: 100px;

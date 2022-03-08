@@ -1,0 +1,19 @@
+$sui__blue: #6FBCF0;
+$sui__light_blue: #E1F3FF;
+$sui__black: #111111;
+$sui__white: #FEFEFE;
+
+$font__family: 'Inter', sans-serif;
+
+@mixin font-style($font-size:17, $line-height:150%, $weight:400, $style:normal, $letter-spacing:0) {
+    font-size: $font-size * 1px;
+    line-height: $line-height;
+    font-weight: $weight;
+    font-style: $style;
+    letter-spacing: $letter-spacing;
+  }
+  
+  @mixin title($font-size:30, $line-height:150%, $weight:600, $style:normal, $letter-spacing:0) {
+    font-family: $font__family;
+    @include font-style($font-size, $line-height, $weight, $style, $letter-spacing);
+  }

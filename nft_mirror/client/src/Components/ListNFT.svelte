@@ -46,6 +46,7 @@
                                 <div class="row row-35 isotope-list">
                                     {#each item as itm, ir (ir)}
                                         <div class="col-md-3 project _nft-item {itm.claim_status === 'none' ? '' : 'claimed'}">
+                                            <!-- svelte-ignore a11y-invalid-attribute -->
                                             <a href="javascript:void(0)" on:click={()=>enterSuiAddress(itm)}>
                                                 <NftImage nftData="{itm}" />
                                             </a>
@@ -58,11 +59,11 @@
                                     <h2 class="title text-center">No NFT found on this address</h2>
                                 </div>
                             {/if}
-                            <button  class="axil-btn btn-fill-white btn-large" on:click="{switchWalletAddress}">Change Address <img class="metamask-logo" src="assets/logos/metamask-fox.svg" /> </button>
+                            <button  class="axil-btn btn-fill-white btn-large" on:click="{switchWalletAddress}">Change Address <img class="metamask-logo" src="assets/logos/metamask-fox.svg" alt="metamask logo" /> </button>
                         {:catch err}
                         <div class="section section-padding bg-color-light pb--70 error ">
                             <Error errmessage={err.message} />     
-                            <button  class="axil-btn btn-fill-white btn-large" on:click="{switchWalletAddress}">Change Address <img class="metamask-logo" src="assets/logos/metamask-fox.svg" /> </button>
+                            <button  class="axil-btn btn-fill-white btn-large" on:click="{switchWalletAddress}">Change Address <img class="metamask-logo" src="assets/logos/metamask-fox.svg" alt="metamask logo"/> </button>
                             <ul class="list-unstyled shape-group-9">
                                 <li class="shape shape-1"><img src="assets/bubble-12.png" alt="Shapes"></li>
             
@@ -90,8 +91,7 @@
 </section>
 
 <style lang="scss">
-    @import "../styles/app.scss";
-
+    @import "../styles/variables.scss";
     ._sui-nfts{
         .container{
             max-width: 1260px;
@@ -106,30 +106,16 @@
         h2.title{
             font-size: 40px;
         }
-        h4.title{
-            font-size: 20px;
-            color:$sui__black;
-        }
         ._nft-item{
             cursor: pointer;
-            .content { 
-                background-color: #f7f7f7;
-            }
         }
         
-        .claimedNFT{
-            font-size: 12px;
-            font-weight: 600;
-            color: #900202;
-        }
+        
     }
     .error{
         background-color: $sui__blue;
         width: 1200px;
         margin: 0 auto;
-        p{
-            color: #900202 !important;
-        }
         text-align: center;
     }
     .axil-btn {
@@ -141,4 +127,9 @@
             color:#E1F3FF
         }
     }
+    :global(.claimedNFT){
+        font-size: 12px;
+        font-weight: 600;
+        color: #900202;
+     }
 </style>

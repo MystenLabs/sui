@@ -82,7 +82,7 @@
                                     {#if $walletAddress}
                                         <button  class="axil-btn btn-fill-white btn-large" on:click="{selectedAddress}">See NFTs</button>
                                     {/if}
-                                    <button  class="axil-btn btn-fill-white btn-large" on:click="{$walletAddress ? switchMTWalletAddress : connectToWallet }">{$walletAddress ? 'Change Address' : `Connet Wallet`  } <img class="metamask-logo" src="assets/logos/metamask-fox.svg" atr="metamask" /> </button>
+                                    <button  class="axil-btn btn-fill-white btn-large" on:click="{$walletAddress ? switchMTWalletAddress : connectToWallet }">{$walletAddress ? 'Change Address' : `Connet Wallet`  } <img class="metamask-logo" src="assets/logos/metamask-fox.svg" alt="metamask" /> </button>
                                 {/if}
 
                                 {#if !isweb3Enabled} 
@@ -108,7 +108,7 @@
 
 </section>
 <style lang="scss">
-@import "../styles/app.scss";
+@import "../styles/variables.scss"; 
 ._sui_landing_page {
     background-color: $sui__white;
     min-height: 90vh;
@@ -142,11 +142,7 @@
         font-size: 18px;
         
     }
-    .shape-8{
-        transform: rotate(180deg);
-        bottom: -120px;
-        left: -160px;
-    } 
+
     .shape-1{
         top: -90px;
         right: -55%;

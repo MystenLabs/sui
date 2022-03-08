@@ -8,6 +8,3 @@
     <li class="shape shape-6"><img src="./../assets//bubble-15.png" alt="Comments"></li>
     <li class="shape shape-7"><img src="./../assets//bubble-16.png" alt="Comments"></li>
 </ul>
-<style lang="scss">
-    @import "../styles/app.scss";
-</style>

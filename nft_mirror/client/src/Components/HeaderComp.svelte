@@ -15,7 +15,7 @@
     </div>
 </header>
 <style lang="scss">
-   @import "../styles/app.scss";
+    @import "../styles/variables.scss";
    .header{
        background-color: $sui__blue;
    }
