@@ -54,13 +54,23 @@
     onMount(async ()=> {
         isweb3Enabled = typeof window.ethereum !== 'undefined'
         $walletAddress = isweb3Enabled ? window.ethereum.selectedAddress : false
+
+        /// trigger if metamask is installed
+        if(typeof window.ethereum !== 'undefined'){
+            listenForAddress()
+        }
     });
 
+    const listenForAddress = () => {
+        window.ethereum.on('accountsChanged', (accounts) => {
+            error = false
+            $walletAddress  = accounts[0]
+        })
+    }
     // Handle wallet address change
-    window.ethereum.on('accountsChanged', (accounts) => {
-        error = false
-        $walletAddress  = accounts[0]
-    })
+    
+        
+    
 </script>
 <!-- svelte-ignore non-top-level-reactive-declaration -->
 <section class="_sui_landing_page section ">
