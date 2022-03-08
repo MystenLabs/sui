@@ -28,9 +28,11 @@ use sui_types::{
 };
 use tracing::{field::debug, *};
 
+use crate::authority_batch::BatchSender;
+
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
-mod authority_tests;
+pub mod authority_tests;
 
 mod temporary_store;
 use temporary_store::AuthorityTemporaryStore;
@@ -47,7 +49,8 @@ const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
 ///
 /// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
 ///
-type StableSyncAuthoritySigner = Pin<Box<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
+pub type StableSyncAuthoritySigner =
+    Pin<Arc<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
 
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
@@ -64,6 +67,11 @@ pub struct AuthorityState {
 
     /// The database
     _database: Arc<AuthorityStore>,
+
+    /// The sender to notify of new transactions
+    /// and create batches for this authority.
+    /// Keep as None if there is no need for this.
+    batch_sender: Option<BatchSender>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -73,6 +81,16 @@ pub struct AuthorityState {
 ///
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
+    /// Set a listener for transaction certificate updates. Returns an
+    /// error if a listener is already registered.
+    pub fn set_batch_sender(&mut self, batch_sender: BatchSender) -> SuiResult {
+        if self.batch_sender.is_some() {
+            return Err(SuiError::AuthorityUpdateFailure);
+        }
+        self.batch_sender = Some(batch_sender);
+        Ok(())
+    }
+
     /// The logic to check one object against a reference, and return the object if all is well
     /// or an error if not.
     fn check_one_lock(
@@ -115,15 +133,9 @@ impl AuthorityState {
                     }
                 );
 
-                // If the object is the gas object, check that it is not shared object
+                // If the object is the gas object, check that it is an owned object
                 // and there is enough gas.
                 if object_kind.object_id() == transaction.gas_payment_object_ref().0 {
-                    fp_ensure!(
-                        matches!(object.owner, Owner::SingleOwner(..)),
-                        SuiError::InsufficientGas {
-                            error: "Gas object cannot be shared object".to_string()
-                        }
-                    );
                     gas::check_gas_requirement(transaction, object)?;
                 }
 
@@ -131,8 +143,8 @@ impl AuthorityState {
                 if let TransactionKind::Transfer(t) = &transaction.data.kind {
                     if object_kind.object_id() == t.object_ref.0 {
                         fp_ensure!(
-                            matches!(object.owner, Owner::SingleOwner(..)),
-                            SuiError::TransferImmutableError
+                            matches!(object.owner, Owner::AddressOwner(..)),
+                            SuiError::TransferSharedError
                         );
                     }
                 }
@@ -141,12 +153,17 @@ impl AuthorityState {
                     Owner::SharedImmutable => {
                         // Nothing else to check for SharedImmutable.
                     }
-                    Owner::SingleOwner(owner) => {
-                        // Check the object owner is either the transaction sender, or
-                        // another mutable object in the input.
+                    Owner::AddressOwner(owner) => {
+                        // Check the owner is the transaction sender.
                         fp_ensure!(
-                            transaction.sender_address() == owner
-                                || mutable_object_addresses.contains(&owner),
+                            transaction.sender_address() == owner,
+                            SuiError::IncorrectSigner
+                        );
+                    }
+                    Owner::ObjectOwner(owner) => {
+                        // Check that the object owner is another mutable object in the input.
+                        fp_ensure!(
+                            mutable_object_addresses.contains(&owner),
                             SuiError::IncorrectSigner
                         );
                     }
@@ -292,10 +309,12 @@ impl AuthorityState {
             for object_id in transaction.shared_input_objects() {
                 // Check whether the shared objects have already been assigned a sequence number by
                 // the consensus. Bail if the transaction contains even one shared object that either:
-                // (i) was not assigned a sequence number, or (ii) has a different sequence number
-                // than the current one. Note that if the shared object is not in storage (it has been
-                // destroyed), we keep processing the transaction to unlock all single-writer objects
-                // (the execution engine will simply execute no-op).
+                // (i) was not assigned a sequence number, or
+                // (ii) has a different sequence number than the current one.
+                //
+                // Note that if the shared object is not in storage (it has been destroyed), we keep
+                // processing the transaction to unlock all single-writer objects. The execution engine
+                // will simply execute no-op.
                 match self._database.sequenced(transaction_digest, *object_id)? {
                     Some(lock) => {
                         if let Some(object) = self._database.get_object(object_id)? {
@@ -318,12 +337,17 @@ impl AuthorityState {
             );
 
             // Now let's process the certificate as usual: this executes the transaction and
-            // unlock all single-writer objects.
+            // unlock all single-writer objects. Since transactions with shared objects always
+            // have at least one owner objects, it is not necessary to re-check the locks on
+            // shared objects as we do with owned objects.
             let result = self
                 .process_certificate(confirmation_transaction.clone())
                 .await;
 
-            // If the execution is successful, we cleanup some data structures.
+            // TODO [#676]: What if we crash right here? The cleanup should be done atomically
+            // within `process_certificate`. It is not safety-critical but cleanup won't happen.
+
+            // If the execution is successfully, we cleanup some data structures.
             if result.is_ok() {
                 for object_id in transaction.shared_input_objects() {
                     self._database
@@ -337,6 +361,12 @@ impl AuthorityState {
         }
         // In case there are no shared objects, we simply process the certificate.
         else {
+            // Ensure an idempotent answer
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+            if transaction_info.certified_transaction.is_some() {
+                return Ok(transaction_info);
+            }
+
             self.process_certificate(confirmation_transaction).await
         }
     }
@@ -348,12 +378,6 @@ impl AuthorityState {
         let certificate = confirmation_transaction.certificate;
         let transaction = certificate.transaction.clone();
         let transaction_digest = transaction.digest();
-
-        // Ensure an idempotent answer
-        let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-        if transaction_info.certified_transaction.is_some() {
-            return Ok(transaction_info);
-        }
 
         let mut inputs: Vec<_> = self
             .check_locks(&transaction)
@@ -401,9 +425,17 @@ impl AuthorityState {
             &gas_object_id,
         );
         // Update the database in an atomic manner
-        self.update_state(temporary_store, certificate, to_signed_effects)
+        let (seq, resp) = self
+            .update_state(temporary_store, certificate, to_signed_effects)
             .instrument(tracing::debug_span!("db_update_state"))
-            .await // Returns the TransactionInfoResponse
+            .await?; // Returns the OrderInfoResponse
+
+        // If there is a notifier registered, notify:
+        if let Some(sender) = &self.batch_sender {
+            sender.send_item(seq, transaction_digest).await?;
+        }
+
+        Ok(resp)
     }
 
     fn execute_transaction(
@@ -461,13 +493,14 @@ impl AuthorityState {
         Ok((temporary_store, status))
     }
 
-    /// Handle sequenced certificates from the consensus protocol.
-    pub fn handle_commit(
-        &mut self,
-        confirmation_transaction: ConfirmationTransaction,
+    /// Process certificates coming from the consensus. It is crucial that this function is only
+    /// called by a single task (ie. the task handling consensus outputs).
+    pub async fn handle_consensus_certificate(
+        &self,
+        certificate: &CertifiedTransaction,
     ) -> SuiResult<()> {
         // Ensure it is the first time we see this certificate.
-        let transaction = &confirmation_transaction.certificate.transaction;
+        let transaction = &certificate.transaction;
         let transaction_digest = transaction.digest();
         for id in transaction.shared_input_objects() {
             if self._database.sequenced(transaction_digest, *id)?.is_some() {
@@ -476,17 +509,16 @@ impl AuthorityState {
         }
 
         // Check the certificate.
-        let certificate = &confirmation_transaction.certificate;
         certificate.check(&self.committee)?;
 
         // Persist the certificate. We are about to lock one or more shared object.
         // We thus need to make sure someone (if not the client) can continue the protocol.
-        self._database
-            .persist_certificate(&transaction_digest, certificate)?;
-
-        // Lock the shared object for this particular transaction.
-        self._database
-            .lock_shared_objects(transaction_digest, transaction)
+        // Also atomically lock the shared objects for this particular transaction.
+        self._database.persist_certificate_and_lock_shared_objects(
+            transaction_digest,
+            transaction,
+            certificate.clone(),
+        )
     }
 
     fn transfer(
@@ -514,14 +546,12 @@ impl AuthorityState {
         }
         temporary_store.write_object(gas_object);
 
-        if output_object.is_read_only() {
+        if let Err(err) = output_object.transfer(recipient) {
             return Ok(ExecutionStatus::Failure {
                 gas_used: gas::MIN_OBJ_TRANSFER_GAS,
-                error: Box::new(SuiError::CannotTransferReadOnlyObject),
+                error: Box::new(err),
             });
         }
-
-        output_object.transfer(recipient);
         temporary_store.write_object(output_object);
         Ok(ExecutionStatus::Success { gas_used })
     }
@@ -637,6 +667,7 @@ impl AuthorityState {
             move_vm: adapter::new_move_vm(native_functions)
                 .expect("We defined natives to not fail here"),
             _database: store,
+            batch_sender: None,
         };
 
         for genesis_modules in genesis_packages {
@@ -646,6 +677,11 @@ impl AuthorityState {
                 .expect("We expect publishing the Genesis packages to not fail");
         }
         state
+    }
+
+    #[cfg(test)]
+    pub fn db(&self) -> Arc<AuthorityStore> {
+        self._database.clone()
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
@@ -729,9 +765,10 @@ impl AuthorityState {
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
+
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
-    ) -> Result<TransactionInfoResponse, SuiError> {
+    ) -> Result<(u64, TransactionInfoResponse), SuiError> {
         self._database
             .update_state(temporary_store, certificate, signed_effects)
     }

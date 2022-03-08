@@ -10,7 +10,7 @@ use hyper::StatusCode;
 use serde_json::json;
 use sui::config::{Config, GenesisConfig, NetworkConfig, WalletConfig};
 use sui::sui_commands;
-use sui::wallet_commands::WalletContext;
+use sui::wallet_commands::{SimpleTransactionSigner, WalletContext};
 use sui_core::client::Client;
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
@@ -19,9 +19,11 @@ use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
+use sui_types::messages::{ExecutionStatus, TransactionEffects};
 use sui_types::object::ObjectRead;
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
@@ -81,6 +83,7 @@ struct ServerContext {
     wallet_config_path: String,
     network_config_path: String,
     authority_db_path: String,
+    wallet_ks_path: String,
     client_db_path: Arc<Mutex<String>>,
     // Server handles that will be used to restart authorities.
     authority_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -95,6 +98,7 @@ impl ServerContext {
             wallet_config_path: String::from("wallet.conf"),
             network_config_path: String::from("./network.conf"),
             authority_db_path: String::from("./authorities_db"),
+            wallet_ks_path: String::from("./wallet.ks"),
             client_db_path: Arc::new(Mutex::new(String::new())),
             authority_handles: Arc::new(Mutex::new(Vec::new())),
             wallet_context: Arc::new(Mutex::new(None)),
@@ -165,7 +169,7 @@ async fn genesis(
     if !network_config.authorities.is_empty() {
         return Err(custom_http_error(
             StatusCode::CONFLICT,
-            String::from("Cannot run genesis on a existing network, stop network to try again."),
+            String::from("Cannot run genesis on a existing network, please make a POST request to the `sui/stop` endpoint to reset."),
         ));
     }
 
@@ -236,7 +240,7 @@ async fn sui_start(
     if network_config.authorities.is_empty() {
         return Err(custom_http_error(
             StatusCode::CONFLICT,
-            String::from("No authority configured for the network, please run genesis."),
+            String::from("No authority configured for the network, please make a POST request to the `sui/genesis` endpoint."),
         ));
     }
 
@@ -311,11 +315,7 @@ async fn sui_start(
             )
         })?;
 
-    let addresses = wallet_config
-        .accounts
-        .iter()
-        .map(|info| info.address)
-        .collect::<Vec<_>>();
+    let addresses = wallet_config.accounts.clone();
     let mut wallet_context = WalletContext::new(wallet_config).map_err(|error| {
         custom_http_error(
             StatusCode::CONFLICT,
@@ -325,15 +325,6 @@ async fn sui_start(
 
     // Sync all accounts.
     for address in addresses.iter() {
-        wallet_context
-            .create_account_state(address)
-            .map_err(|error| {
-                custom_http_error(
-                    StatusCode::CONFLICT,
-                    format!("Can't create client state: {error}"),
-                )
-            })?;
-
         wallet_context
             .address_manager
             .sync_client_state(*address)
@@ -379,6 +370,7 @@ async fn sui_stop(
     fs::remove_dir_all(&server_context.authority_db_path).ok();
     fs::remove_file(&server_context.network_config_path).ok();
     fs::remove_file(&server_context.wallet_config_path).ok();
+    fs::remove_file(&server_context.wallet_ks_path).ok();
 
     Ok(HttpResponseUpdatedNoContent())
 }
@@ -396,7 +388,6 @@ struct GetAddressResponse {
 /**
 Retrieve all managed addresses for this client.
  */
-#[allow(unused_variables)]
 #[endpoint {
     method = GET,
     path = "/addresses",
@@ -425,14 +416,6 @@ async fn get_addresses(
     // TODO: Speed up sync operations by kicking them off concurrently.
     // Also need to investigate if this should be an automatic sync or manually triggered.
     for address in addresses.iter() {
-        if let Err(err) = wallet_context.create_account_state(address) {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Can't create client state: {err}"),
-            ));
-        }
-
         if let Err(err) = wallet_context
             .address_manager
             .sync_client_state(*address)
@@ -492,7 +475,6 @@ struct GetObjectsResponse {
 /**
 Returns list of objects owned by an address.
  */
-#[allow(unused_variables)]
 #[endpoint {
     method = GET,
     path = "/objects",
@@ -511,7 +493,8 @@ async fn get_objects(
     let wallet_context = wallet_context.as_mut().ok_or_else(|| {
         custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist.".to_string(),
+            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
+                .to_string(),
         )
     })?;
 
@@ -522,14 +505,6 @@ async fn get_objects(
         )
     })?;
 
-    wallet_context
-        .create_account_state(address)
-        .map_err(|error| {
-            custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Could not get or create client state: {error}"),
-            )
-        })?;
     let object_refs = wallet_context.address_manager.get_owned_objects(*address);
 
     Ok(HttpResponseOk(GetObjectsResponse {
@@ -553,9 +528,6 @@ otherwise we look for it in the shared object store.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GetObjectInfoRequest {
-    // TODO: Refactor client state code so that owner can be an optional field.
-    /** Required; Hex code as string representing the owner's address */
-    owner: String,
     /** Required; Hex code as string representing the object id */
     object_id: String,
 }
@@ -584,7 +556,6 @@ struct ObjectInfoResponse {
 /**
 Returns the object information for a specified object.
  */
-#[allow(unused_variables)]
 #[endpoint {
     method = GET,
     path = "/object_info",
@@ -599,10 +570,11 @@ async fn object_info(
 
     // TODO: Find a better way to utilize wallet context here that does not require 'take()'
     let wallet_context = server_context.wallet_context.lock().unwrap().take();
-    let mut wallet_context = wallet_context.ok_or_else(|| {
+    let wallet_context = wallet_context.ok_or_else(|| {
         custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist.".to_string(),
+            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
+                .to_string(),
         )
     })?;
 
@@ -616,29 +588,6 @@ async fn object_info(
             ));
         }
     };
-
-    let owner = match decode_bytes_hex(object_info_params.owner.as_str()) {
-        Ok(owner) => owner,
-        Err(error) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Could not decode address from hex {error}"),
-            ));
-        }
-    };
-
-    // Fetch the object ref
-    if let Err(error) = wallet_context.create_account_state(&owner) {
-        *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-        return Err(custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            format!(
-                "Could not get client state for account {:?}: {error}",
-                owner
-            ),
-        ));
-    }
 
     let (object, layout) = match wallet_context
         .address_manager
@@ -715,6 +664,8 @@ associated with the transaction that verifies the transaction.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct TransactionResponse {
+    /** Integer representing the acutal cost of the transaction */
+    gas_used: u64,
     /** JSON representation of the list of resulting effects on the object */
     object_effects_summary: serde_json::Value,
     /** JSON representation of the certificate verifying the transaction */
@@ -737,7 +688,6 @@ Example TransferTransactionRequest
     "gas_object_id": "96ABE602707B343B571AAAA23E3A4594934159A5"
 }
  */
-#[allow(unused_variables)]
 #[endpoint {
     method = POST,
     path = "/transfer",
@@ -747,12 +697,78 @@ async fn transfer_object(
     rqctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<TransferTransactionRequest>,
 ) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
-    let transaction_response = TransactionResponse {
-        object_effects_summary: json!(""),
-        certificate: json!(""),
+    let server_context = rqctx.context();
+    let transfer_order_params = request.into_inner();
+    let to_address =
+        decode_bytes_hex(transfer_order_params.to_address.as_str()).map_err(|error| {
+            custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Could not decode to address from hex {error}"),
+            )
+        })?;
+    let object_id = ObjectID::try_from(transfer_order_params.object_id)
+        .map_err(|error| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{error}")))?;
+    let gas_object_id = ObjectID::try_from(transfer_order_params.gas_object_id)
+        .map_err(|error| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{error}")))?;
+    let owner = decode_bytes_hex(transfer_order_params.from_address.as_str()).map_err(|error| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            format!("Could not decode address from hex {error}"),
+        )
+    })?;
+
+    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
+    let wallet_context = server_context.wallet_context.lock().unwrap().take();
+    let mut wallet_context = wallet_context.ok_or_else(|| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist.".to_string(),
+        )
+    })?;
+
+    let tx_signer = Box::pin(SimpleTransactionSigner {
+        keystore: wallet_context.keystore.clone(),
+    });
+
+    let (cert, effects, gas_used) = match wallet_context
+        .address_manager
+        .transfer_coin(owner, object_id, gas_object_id, to_address, tx_signer)
+        .await
+    {
+        Ok((cert, effects)) => {
+            let gas_used = match effects.status {
+                ExecutionStatus::Success { gas_used } => gas_used,
+                ExecutionStatus::Failure { gas_used, error } => {
+                    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+                    return Err(custom_http_error(
+                        StatusCode::FAILED_DEPENDENCY,
+                        format!(
+                            "Error transferring object: {:#?}, gas used {}",
+                            error, gas_used
+                        ),
+                    ));
+                }
+            };
+            (cert, effects, gas_used)
+        }
+        Err(err) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Transfer error: {err}"),
+            ));
+        }
     };
 
-    Ok(HttpResponseOk(transaction_response))
+    let object_effects_summary = get_object_effects(effects);
+
+    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+
+    Ok(HttpResponseOk(TransactionResponse {
+        gas_used,
+        object_effects_summary: json!(object_effects_summary),
+        certificate: json!(cert),
+    }))
 }
 
 /**
@@ -791,6 +807,7 @@ async fn publish(
     request: TypedBody<PublishRequest>,
 ) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
     let transaction_response = TransactionResponse {
+        gas_used: 0,
         object_effects_summary: json!(""),
         certificate: json!(""),
     };
@@ -851,6 +868,7 @@ async fn call(
     request: TypedBody<CallRequest>,
 ) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
     let transaction_response = TransactionResponse {
+        gas_used: 0,
         object_effects_summary: json!(""),
         certificate: json!(""),
     };
@@ -878,12 +896,88 @@ on all objects owned by each address that is managed by this client state.
     path = "/sync",
     tags = [ "wallet" ],
 }]
-#[allow(unused_variables)]
 async fn sync(
     rqctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<SyncRequest>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
-    unimplemented!()
+    let server_context = rqctx.context();
+    let sync_params = request.into_inner();
+    let address = decode_bytes_hex(sync_params.address.as_str()).map_err(|error| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            format!("Could not decode to address from hex {error}"),
+        )
+    })?;
+
+    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
+    let wallet_context = server_context.wallet_context.lock().unwrap().take();
+    let mut wallet_context = wallet_context.ok_or_else(|| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist.".to_string(),
+        )
+    })?;
+
+    // Attempt to create a new account state, but continue if it already exists.
+    if let Err(error) = wallet_context.address_manager.create_account_state(address) {
+        info!("{:?}", error);
+    }
+
+    if let Err(err) = wallet_context
+        .address_manager
+        .sync_client_state(address)
+        .await
+    {
+        *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+        return Err(custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            format!("Can't create client state: {err}"),
+        ));
+    }
+
+    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+
+    Ok(HttpResponseUpdatedNoContent())
+}
+
+fn get_object_effects(
+    transaction_effects: TransactionEffects,
+) -> HashMap<String, Vec<HashMap<String, String>>> {
+    let mut object_effects_summary = HashMap::new();
+    if !transaction_effects.created.is_empty() {
+        let mut effects = Vec::new();
+        for (obj, _) in transaction_effects.created {
+            let mut effect = HashMap::new();
+            effect.insert("id".to_string(), obj.0.to_string());
+            effect.insert("version".to_string(), format!("{:?}", obj.1));
+            effect.insert("object_digest".to_string(), format!("{:?}", obj.2));
+            effects.push(effect);
+        }
+        object_effects_summary.insert(String::from("created_objects"), effects);
+    }
+    if !transaction_effects.mutated.is_empty() {
+        let mut effects = Vec::new();
+        for (obj, _) in transaction_effects.mutated {
+            let mut effect = HashMap::new();
+            effect.insert("id".to_string(), obj.0.to_string());
+            effect.insert("version".to_string(), format!("{:?}", obj.1));
+            effect.insert("object_digest".to_string(), format!("{:?}", obj.2));
+            effects.push(effect);
+        }
+        object_effects_summary.insert(String::from("mutated_objects"), effects);
+    }
+    if !transaction_effects.deleted.is_empty() {
+        let mut effects = Vec::new();
+        for obj in transaction_effects.deleted {
+            let mut effect = HashMap::new();
+            effect.insert("id".to_string(), obj.0.to_string());
+            effect.insert("version".to_string(), format!("{:?}", obj.1));
+            effect.insert("object_digest".to_string(), format!("{:?}", obj.2));
+            effects.push(effect);
+        }
+        object_effects_summary.insert(String::from("deleted_objects"), effects);
+    }
+    object_effects_summary
 }
 
 fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpError {

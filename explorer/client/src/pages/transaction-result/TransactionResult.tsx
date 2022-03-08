@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 
 import mockTransactionData from '../../utils/transaction_mock.json';
+
 import styles from './TransactionResult.module.css';
 
 type DataType = {

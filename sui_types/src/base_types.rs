@@ -87,6 +87,16 @@ impl From<ObjectID> for SuiAddress {
     }
 }
 
+impl TryFrom<Vec<u8>> for SuiAddress {
+    type Error = SuiError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, SuiError> {
+        let arr: [u8; SUI_ADDRESS_LENGTH] =
+            bytes.try_into().map_err(|_| SuiError::InvalidAddress)?;
+        Ok(Self(arr))
+    }
+}
+
 impl From<&PublicKeyBytes> for SuiAddress {
     fn from(key: &PublicKeyBytes) -> SuiAddress {
         use sha2::Digest;

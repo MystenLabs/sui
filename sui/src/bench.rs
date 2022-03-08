@@ -14,7 +14,7 @@ use structopt::StructOpt;
 use sui_adapter::genesis;
 use sui_core::{authority::*, authority_server::AuthorityServer};
 use sui_network::{network::NetworkClient, transport};
-use sui_types::crypto::{get_key_pair, AuthoritySignature};
+use sui_types::crypto::{get_key_pair, AuthoritySignature, Signature};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use tokio::runtime::Runtime;
@@ -167,7 +167,7 @@ impl ClientServerBenchmark {
             let state = AuthorityState::new(
                 committee.clone(),
                 public_auth0,
-                Box::pin(secret_auth0),
+                Arc::pin(secret_auth0),
                 store,
                 genesis::clone_genesis_compiled_modules(),
                 &mut genesis::get_genesis_context(),
@@ -214,7 +214,7 @@ impl ClientServerBenchmark {
             let object_ref = object.to_object_reference();
             let gas_object_ref = gas_obj.to_object_reference();
 
-            let transaction = if self.use_move {
+            let data = if self.use_move {
                 // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
                 let framework_obj_ref = (
                     ObjectID::from(SUI_FRAMEWORK_ADDRESS),
@@ -222,7 +222,7 @@ impl ClientServerBenchmark {
                     ObjectDigest::new([0; 32]),
                 );
 
-                Transaction::new_move_call(
+                TransactionData::new_move_call(
                     *account_addr,
                     framework_obj_ref,
                     ident_str!("GAS").to_owned(),
@@ -233,17 +233,17 @@ impl ClientServerBenchmark {
                     vec![],
                     vec![bcs::to_bytes(&next_recipient.to_vec()).unwrap()],
                     1000,
-                    secret,
                 )
             } else {
-                Transaction::new_transfer(
+                TransactionData::new_transfer(
                     next_recipient,
                     object_ref,
                     *account_addr,
                     gas_object_ref,
-                    secret,
                 )
             };
+            let signature = Signature::new(&data, secret);
+            let transaction = Transaction::new(data, signature);
 
             // Set the next recipient to current
             next_recipient = *account_addr;

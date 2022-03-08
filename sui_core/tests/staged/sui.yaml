@@ -213,12 +213,16 @@ ObjectResponse:
 Owner:
   ENUM:
     0:
-      SingleOwner:
+      AddressOwner:
         NEWTYPE:
           TYPENAME: SuiAddress
     1:
-      SharedMutable: UNIT
+      ObjectOwner:
+        NEWTYPE:
+          TYPENAME: SuiAddress
     2:
+      SharedMutable: UNIT
+    3:
       SharedImmutable: UNIT
 PublicKeyBytes:
   NEWTYPESTRUCT: BYTES
@@ -306,126 +310,126 @@ SuiError:
               SEQ:
                 TYPENAME: SuiError
     1:
-      CannotTransferReadOnlyObject: UNIT
+      TransferSharedError: UNIT
     2:
+      TransferNonCoinError: UNIT
+    3:
       MoveObjectAsPackage:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
-    3:
-      UnexpectedOwnerType: UNIT
     4:
-      UnsupportedSharedObjectError: UNIT
+      UnexpectedOwnerType: UNIT
     5:
+      UnsupportedSharedObjectError: UNIT
+    6:
       InvalidSignature:
         STRUCT:
           - error: STR
-    6:
-      IncorrectSigner: UNIT
     7:
-      UnknownSigner: UNIT
+      IncorrectSigner: UNIT
     8:
-      CertificateRequiresQuorum: UNIT
+      UnknownSigner: UNIT
     9:
+      CertificateRequiresQuorum: UNIT
+    10:
       UnexpectedSequenceNumber:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - expected_sequence:
               TYPENAME: SequenceNumber
-    10:
+    11:
       ConflictingTransaction:
         STRUCT:
           - pending_transaction:
               TYPENAME: Transaction
-    11:
-      ErrorWhileProcessingTransaction: UNIT
     12:
+      ErrorWhileProcessingTransaction: UNIT
+    13:
       ErrorWhileProcessingTransactionTransaction:
         STRUCT:
           - err: STR
-    13:
+    14:
       ErrorWhileProcessingConfirmationTransaction:
         STRUCT:
           - err: STR
-    14:
-      ErrorWhileRequestingCertificate: UNIT
     15:
+      ErrorWhileRequestingCertificate: UNIT
+    16:
       ErrorWhileProcessingPublish:
         STRUCT:
           - err: STR
-    16:
+    17:
       ErrorWhileProcessingMoveCall:
         STRUCT:
           - err: STR
-    17:
-      ErrorWhileRequestingInformation: UNIT
     18:
+      ErrorWhileRequestingInformation: UNIT
+    19:
       ObjectFetchFailed:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - err: STR
-    19:
+    20:
       MissingEalierConfirmations:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - current_sequence_number:
               TYPENAME: SequenceNumber
-    20:
-      UnexpectedTransactionIndex: UNIT
     21:
+      UnexpectedTransactionIndex: UNIT
+    22:
       CertificateNotfound:
         STRUCT:
           - certificate_digest:
               TYPENAME: TransactionDigest
-    22:
+    23:
       ParentNotfound:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - sequence:
               TYPENAME: SequenceNumber
-    23:
-      UnknownSenderAccount: UNIT
     24:
-      CertificateAuthorityReuse: UNIT
+      UnknownSenderAccount: UNIT
     25:
-      InvalidSequenceNumber: UNIT
+      CertificateAuthorityReuse: UNIT
     26:
-      SequenceOverflow: UNIT
+      InvalidSequenceNumber: UNIT
     27:
-      SequenceUnderflow: UNIT
+      SequenceOverflow: UNIT
     28:
-      WrongShard: UNIT
+      SequenceUnderflow: UNIT
     29:
-      InvalidCrossShardUpdate: UNIT
+      WrongShard: UNIT
     30:
-      InvalidAuthenticator: UNIT
+      InvalidCrossShardUpdate: UNIT
     31:
-      InvalidAddress: UNIT
+      InvalidAuthenticator: UNIT
     32:
-      InvalidTransactionDigest: UNIT
+      InvalidAddress: UNIT
     33:
+      InvalidTransactionDigest: UNIT
+    34:
       InvalidObjectDigest:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
           - expected_digest:
               TYPENAME: ObjectDigest
-    34:
-      InvalidDecoding: UNIT
     35:
-      UnexpectedMessage: UNIT
+      InvalidDecoding: UNIT
     36:
-      DuplicateObjectRefInput: UNIT
+      UnexpectedMessage: UNIT
     37:
+      DuplicateObjectRefInput: UNIT
+    38:
       ClientIoError:
         STRUCT:
           - error: STR
-    38:
-      TransferImmutableError: UNIT
     39:
       ModuleLoadFailure:
         STRUCT:
@@ -545,26 +549,28 @@ SuiError:
         NEWTYPE:
           TYPENAME: TypedStoreError
     70:
+      BatchErrorSender: UNIT
+    71:
       QuorumNotReached:
         STRUCT:
           - errors:
               SEQ:
                 TYPENAME: SuiError
-    71:
-      ObjectSerializationError: UNIT
     72:
-      ConcurrentTransactionError: UNIT
+      ObjectSerializationError: UNIT
     73:
-      IncorrectRecipientError: UNIT
+      ConcurrentTransactionError: UNIT
     74:
-      TooManyIncorrectAuthorities: UNIT
+      IncorrectRecipientError: UNIT
     75:
-      IncorrectGasSplit: UNIT
+      TooManyIncorrectAuthorities: UNIT
     76:
-      IncorrectGasMerge: UNIT
+      IncorrectGasSplit: UNIT
     77:
-      AccountNotFound: UNIT
+      IncorrectGasMerge: UNIT
     78:
+      AccountNotFound: UNIT
+    79:
       AccountExists: UNIT
 Transaction:
   STRUCT:

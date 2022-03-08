@@ -19,7 +19,7 @@ use sui_types::{
     crypto::KeyPair,
     crypto::{get_key_pair, Signature},
     gas::{calculate_module_publish_cost, get_gas_balance},
-    messages::ExecutionStatus,
+    messages::{ExecutionStatus, Transaction},
     object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
 };
 
@@ -31,7 +31,7 @@ pub fn system_maxfiles() -> usize {
     fdlimit::raise_fd_limit().unwrap_or(256u64) as usize
 }
 
-fn max_files_authority_tests() -> i32 {
+pub fn max_files_authority_tests() -> i32 {
     (system_maxfiles() / 8).try_into().unwrap()
 }
 
@@ -301,7 +301,7 @@ async fn test_transfer_immutable() {
     assert_eq!(
         result.unwrap_err(),
         SuiError::LockErrors {
-            errors: vec![SuiError::TransferImmutableError]
+            errors: vec![SuiError::TransferSharedError]
         }
     );
 }
@@ -383,7 +383,7 @@ fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
 }
 
 #[cfg(test)]
-fn check_gas_object(
+pub fn check_gas_object(
     gas_object: &Object,
     expected_balance: u64,
     expected_sequence_number: SequenceNumber,
@@ -417,13 +417,15 @@ async fn test_publish_dependent_module_ok() {
     };
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
-    let transaction = Transaction::new_module(
+    let data = TransactionData::new_module(
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
         MAX_GAS,
-        &sender_key,
     );
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
+
     let dependent_module_id = TxContext::new(&sender, transaction.digest()).fresh_id();
 
     // Object does not exist
@@ -458,13 +460,9 @@ async fn test_publish_module_no_dependencies_ok() {
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
     let gas_cost = calculate_module_publish_cost(&module_bytes);
-    let transaction = Transaction::new_module(
-        sender,
-        gas_payment_object_ref,
-        module_bytes,
-        MAX_GAS,
-        &sender_key,
-    );
+    let data = TransactionData::new_module(sender, gas_payment_object_ref, module_bytes, MAX_GAS);
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
     let _module_object_id = TxContext::new(&sender, transaction.digest()).fresh_id();
     let response = send_and_confirm_transaction(&authority, transaction)
         .await
@@ -518,13 +516,14 @@ async fn test_publish_non_existing_dependent_module() {
     };
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
-    let transaction = Transaction::new_module(
+    let data = TransactionData::new_module(
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
         MAX_GAS,
-        &sender_key,
     );
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
 
     let response = authority.handle_transaction(transaction).await;
     assert!(response
@@ -564,13 +563,9 @@ async fn test_publish_module_insufficient_gas() {
     let mut module_bytes = Vec::new();
     module.serialize(&mut module_bytes).unwrap();
     let module_bytes = vec![module_bytes];
-    let transaction = Transaction::new_module(
-        sender,
-        gas_payment_object_ref,
-        module_bytes,
-        10,
-        &sender_key,
-    );
+    let data = TransactionData::new_module(sender, gas_payment_object_ref, module_bytes, 10);
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
     let response = authority
         .handle_transaction(transaction.clone())
         .await
@@ -644,7 +639,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
     let authority_state = init_state_with_objects(vec![gas_payment_object]).await;
 
     let function = ident_str!("create").to_owned();
-    let transaction = Transaction::new_move_call(
+    let data = TransactionData::new_move_call(
         sender,
         package_object_ref,
         ident_str!("ObjectBasics").to_owned(),
@@ -658,8 +653,9 @@ async fn test_handle_move_transaction_insufficient_budget() {
             bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
         ],
         9,
-        &sender_key,
     );
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
     let response = authority_state
         .handle_transaction(transaction.clone())
         .await
@@ -1336,7 +1332,7 @@ async fn test_authority_persist() {
         committee.clone(),
         *authority_key.public_key_bytes(),
         // we assume that the node runner is in charge for its key -> it's ok to reopen a copy below.
-        Box::pin(authority_key.copy()),
+        Arc::pin(authority_key.copy()),
         store,
         vec![],
         &mut genesis::get_genesis_context(),
@@ -1364,7 +1360,7 @@ async fn test_authority_persist() {
     let authority2 = AuthorityState::new(
         committee,
         *authority_key.public_key_bytes(),
-        Box::pin(authority_key),
+        Arc::pin(authority_key),
         store,
         vec![],
         &mut genesis::get_genesis_context(),
@@ -1418,7 +1414,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.mutated.len(), 3);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
-        SuiAddress::from(obj2),
+        obj2,
     );
 
     // Try to transfer obj1 to obj3, this time it will fail since obj1 is now owned by obj2,
@@ -1519,7 +1515,7 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.mutated.len(), 3);
     assert_eq!(
         authority.get_object(&obj1).await.unwrap().unwrap().owner,
-        SuiAddress::from(obj2),
+        obj2,
     );
 }
 
@@ -1553,7 +1549,7 @@ async fn init_state() -> AuthorityState {
     AuthorityState::new(
         committee,
         *authority_key.public_key_bytes(),
-        Box::pin(authority_key),
+        Arc::pin(authority_key),
         store,
         genesis::clone_genesis_compiled_modules(),
         &mut genesis::get_genesis_context(),
@@ -1576,7 +1572,7 @@ async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
     state
 }
 
-async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
+pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
     let state = init_state().await;
 
     for o in objects {
@@ -1600,7 +1596,9 @@ fn init_transfer_transaction(
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
 ) -> Transaction {
-    Transaction::new_transfer(recipient, object_ref, sender, gas_object_ref, secret)
+    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object_ref);
+    let signature = Signature::new(&data, secret);
+    Transaction::new(data, signature)
 }
 
 #[cfg(test)]
@@ -1669,7 +1667,7 @@ async fn call_move(
                 .to_object_reference(),
         );
     }
-    let transaction = Transaction::new_move_call(
+    let data = TransactionData::new_move_call(
         *sender,
         *package,
         module,
@@ -1680,8 +1678,11 @@ async fn call_move(
         shared_object_args_ids,
         pure_args,
         MAX_GAS,
-        sender_key,
     );
+
+    let signature = Signature::new(&data, sender_key);
+    let transaction = Transaction::new(data, signature);
+
     let response = send_and_confirm_transaction(authority, transaction).await?;
     Ok(response.signed_effects.unwrap().effects)
 }
@@ -1717,7 +1718,7 @@ async fn call_framework_code(
     .await
 }
 
-async fn create_move_object(
+pub async fn create_move_object(
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
@@ -1739,4 +1740,112 @@ async fn create_move_object(
         ],
     )
     .await
+}
+
+#[tokio::test]
+async fn shared_object() {
+    let (sender, keypair) = get_key_pair();
+
+    // Initialize an authority with a (owned) gas object and a shared object.
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let gas_object_ref = gas_object.to_object_reference();
+
+    let shared_object_id = ObjectID::random();
+    let shared_object = {
+        use sui_types::gas_coin::GasCoin;
+        use sui_types::object::MoveObject;
+
+        let content = GasCoin::new(shared_object_id, SequenceNumber::new(), 10);
+        let data = Data::Move(MoveObject::new(
+            /* type */ GasCoin::type_(),
+            content.to_bcs_bytes(),
+        ));
+        Object {
+            data,
+            owner: Owner::SharedMutable,
+            previous_transaction: TransactionDigest::genesis(),
+        }
+    };
+
+    let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
+
+    // Make a sample transaction.
+    let module = "ObjectBasics";
+    let function = "create";
+    let genesis_package_objects = genesis::clone_genesis_packages();
+    let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
+
+    let data = TransactionData::new_move_call(
+        sender,
+        package_object_ref,
+        ident_str!(module).to_owned(),
+        ident_str!(function).to_owned(),
+        /* type_args */ vec![],
+        gas_object_ref,
+        /* object_args */ vec![],
+        vec![shared_object_id],
+        /* pure_args */
+        vec![
+            16u64.to_le_bytes().to_vec(),
+            bcs::to_bytes(&AccountAddress::from(sender)).unwrap(),
+        ],
+        MAX_GAS,
+    );
+    let signature = Signature::new(&data, &keypair);
+    let transaction = Transaction::new(data, signature);
+    let transaction_digest = transaction.digest();
+
+    // Submit the transaction and assemble a certificate.
+    let response = authority
+        .handle_transaction(transaction.clone())
+        .await
+        .unwrap();
+    let vote = response.signed_transaction.unwrap();
+    let certificate = SignatureAggregator::try_new(transaction, &authority.committee)
+        .unwrap()
+        .append(vote.authority, vote.signature)
+        .unwrap()
+        .unwrap();
+    let confirmation_transaction = ConfirmationTransaction::new(certificate.clone());
+
+    // Sending the certificate now fails since it was not sequenced.
+    let result = authority
+        .handle_confirmation_transaction(confirmation_transaction.clone())
+        .await;
+    assert!(matches!(result, Err(SuiError::LockErrors { .. })));
+
+    // Sequence the certificate to assign a sequence number to the shared object.
+    authority
+        .handle_consensus_certificate(&certificate)
+        .await
+        .unwrap();
+
+    let shared_object_version = authority
+        .db()
+        .sequenced(transaction_digest, shared_object_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(shared_object_version, SequenceNumber::new());
+
+    // Finally process the certificate and execute the contract. Ensure that the
+    // shared object lock is cleaned up and that its sequence number increased.
+    authority
+        .handle_confirmation_transaction(confirmation_transaction)
+        .await
+        .unwrap();
+
+    let shared_object_lock = authority
+        .db()
+        .sequenced(transaction_digest, shared_object_id)
+        .unwrap();
+    assert!(shared_object_lock.is_none());
+
+    let shared_object_version = authority
+        .get_object(&shared_object_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .version();
+    assert_eq!(shared_object_version, SequenceNumber::from(1));
 }
