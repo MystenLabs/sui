@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::io::Write;
 use std::io::{stderr, stdout};
 use std::path::PathBuf;
@@ -10,7 +9,6 @@ use async_trait::async_trait;
 use colored::Colorize;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
-use tokio::runtime::Runtime;
 use tracing::error;
 
 use sui::config::{Config, WalletConfig};
@@ -18,8 +16,6 @@ use sui::shell::{
     install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
 };
 use sui::wallet_commands::*;
-use sui_types::base_types::encode_bytes_hex;
-use tracing_subscriber::EnvFilter;
 
 const SUI: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
@@ -95,21 +91,6 @@ async fn main() -> Result<(), anyhow::Error> {
         writeln!(out, "Welcome to the Sui interactive shell.")?;
         writeln!(out)?;
 
-        let mut completion_providers: BTreeMap<&str, fn(&mut WalletContext) -> Vec<String>> =
-            BTreeMap::new();
-        completion_providers.insert("addresses", |context| {
-            let rt = Runtime::new().unwrap();
-            let result = rt
-                .block_on(WalletCommands::Addresses.execute(context))
-                .unwrap();
-
-            if let WalletCommandResult::Addresses(addresses) = result {
-                addresses.iter().map(encode_bytes_hex).collect()
-            } else {
-                Vec::new()
-            }
-        });
-
         let mut shell = Shell::new(
             "sui>-$ ".bold().green(),
             context,
@@ -155,6 +136,7 @@ async fn handle_command(
     let result = wallet_opts.command.execute(context).await?;
 
     // Update completion cache
+    // TODO: Completion data are keyed by strings, are there ways to make it more error proof?
     if let Ok(mut cache) = completion_cache.write() {
         match result {
             WalletCommandResult::Addresses(ref addresses) => {
@@ -162,8 +144,8 @@ async fn handle_command(
                     .iter()
                     .map(|addr| format!("{}", addr))
                     .collect::<Vec<_>>();
-                cache.insert(CacheKey::new("*", "--address"), addresses.clone());
-                cache.insert(CacheKey::new("*", "--to"), addresses);
+                cache.insert(CacheKey::flag("--address"), addresses.clone());
+                cache.insert(CacheKey::flag("--to"), addresses);
             }
             WalletCommandResult::Objects(ref objects) => {
                 let objects = objects
@@ -171,8 +153,8 @@ async fn handle_command(
                     .map(|(object_id, _, _)| format!("{}", object_id))
                     .collect::<Vec<_>>();
                 cache.insert(CacheKey::new("object", "--id"), objects.clone());
-                cache.insert(CacheKey::new("*", "--gas"), objects.clone());
-                cache.insert(CacheKey::new("*", "--object-id"), objects);
+                cache.insert(CacheKey::flag("--gas"), objects.clone());
+                cache.insert(CacheKey::flag("--object-id"), objects);
             }
             _ => {}
         }

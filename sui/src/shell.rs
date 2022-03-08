@@ -20,8 +20,8 @@ use rustyline_derive::Helper;
 use structopt::clap::{App, SubCommand};
 use unescape::unescape;
 
-#[cfg(test)]
 #[path = "unit_tests/shell_tests.rs"]
+#[cfg(test)]
 mod shell_tests;
 
 /// A interactive command line shell with history and completion support
@@ -83,7 +83,7 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                 Err(err) => return Err(err.into()),
             };
 
-            let line = Self::substitution_env_variables(line);
+            let line = substitute_env_variables(line);
 
             // Runs the line
             match Self::split_and_unescape(line.trim()) {
@@ -132,28 +132,6 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
         Ok(())
     }
 
-    fn substitution_env_variables(s: String) -> String {
-        if !s.contains('$') {
-            return s;
-        }
-        let mut env = env::vars().collect::<Vec<_>>();
-        // Sort variable name by the length in descending order, to prevent wrong substitution by variable with partial same name.
-        env.sort_by(|(k1, _), (k2, _)| Ord::cmp(&k2.len(), &k1.len()));
-
-        for (key, value) in env {
-            let var = format!("${}", key);
-            if s.contains(&var) {
-                let result = s.replace(var.as_str(), value.as_str());
-                return if result.contains('$') {
-                    Self::substitution_env_variables(result)
-                } else {
-                    result
-                };
-            }
-        }
-        s
-    }
-
     fn split_and_unescape(line: &str) -> Result<Vec<String>, String> {
         let mut commands = Vec::new();
         for word in line.split_whitespace() {
@@ -163,6 +141,28 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
         }
         Ok(commands)
     }
+}
+
+fn substitute_env_variables(s: String) -> String {
+    if !s.contains('$') {
+        return s;
+    }
+    let mut env = env::vars().collect::<Vec<_>>();
+    // Sort variable name by the length in descending order, to prevent wrong substitution by variable with partial same name.
+    env.sort_by(|(k1, _), (k2, _)| Ord::cmp(&k2.len(), &k1.len()));
+
+    for (key, value) in env {
+        let var = format!("${}", key);
+        if s.contains(&var) {
+            let result = s.replace(var.as_str(), value.as_str());
+            return if result.contains('$') {
+                substitute_env_variables(result)
+            } else {
+                result
+            };
+        }
+    }
+    s
 }
 
 pub fn install_shell_plugins<'a>(clap: App<'a, 'a>) -> App<'a, 'a> {
@@ -215,10 +215,10 @@ impl Completer for ShellHelper {
         }
 
         let completions = command.completions.clone();
-        let cache_key = CacheKey::new(
-            &command.name,
-            &previous_tokens.last().cloned().unwrap_or_default(),
-        );
+        let cache_key = CacheKey {
+            command: Some(command.name.clone()),
+            flag: previous_tokens.last().cloned().unwrap_or_default(),
+        };
         let mut completion_from_cache = self
             .completion_cache
             .read()
@@ -312,14 +312,22 @@ pub trait AsyncHandler<T: Send> {
 pub type CompletionCache = Arc<RwLock<BTreeMap<CacheKey, Vec<String>>>>;
 
 #[derive(PartialEq)]
+/// A special key for `CompletionCache` which will perform wildcard key matching.
+/// Command field is optional and it will be treated as wildcard if `None`
 pub struct CacheKey {
-    command: String,
+    command: Option<String>,
     flag: String,
 }
 impl CacheKey {
     pub fn new(command: &str, flag: &str) -> Self {
         Self {
-            command: command.to_string(),
+            command: Some(command.to_string()),
+            flag: flag.to_string(),
+        }
+    }
+    pub fn flag(flag: &str) -> Self {
+        Self {
+            command: None,
             flag: flag.to_string(),
         }
     }
@@ -328,36 +336,20 @@ impl Eq for CacheKey {}
 
 impl PartialOrd<Self> for CacheKey {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let cmd_eq = if self.command == "*" || other.command == "*" {
-            Some(Ordering::Equal)
-        } else {
-            self.command.partial_cmp(&other.command)
-        };
-
-        if cmd_eq != Some(Ordering::Equal) {
-            return cmd_eq;
-        }
-        if self.flag == "*" || other.flag == "*" {
-            Some(Ordering::Equal)
-        } else {
-            self.flag.partial_cmp(&other.flag)
-        }
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for CacheKey {
     fn cmp(&self, other: &Self) -> Ordering {
-        let cmd_eq = if self.command == "*" || other.command == "*" {
+        let cmd_eq = if self.command.is_none() || other.command.is_none() {
             Ordering::Equal
         } else {
             self.command.cmp(&other.command)
         };
 
         if cmd_eq != Ordering::Equal {
-            return cmd_eq;
-        }
-        if self.flag == "*" || other.flag == "*" {
-            Ordering::Equal
+            cmd_eq
         } else {
             self.flag.cmp(&other.flag)
         }
