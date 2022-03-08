@@ -1,6 +1,6 @@
 
 ---
-title: Sui Deltas from Move
+title: How Sui Move differs from Core Move
 ---
 
 This document describes the Sui programming model and highlights the differences between the core (previously Diem) Move language and the Move we use in Sui. First remember, Move is a language and Sui a platform.
