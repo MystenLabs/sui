@@ -12,6 +12,7 @@ use std::{fs::File, io::Write};
 use structopt::{clap::arg_enum, StructOpt};
 use sui_types::{
     base_types::{self, ObjectDigest, ObjectID, TransactionDigest},
+    batch::UpdateItem,
     crypto::{get_key_pair, AuthoritySignature, Signature},
     error::SuiError,
     messages::{ExecutionStatus, ObjectInfoRequestKind, TransactionKind},
@@ -64,6 +65,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<MoveStructLayout>(&samples)?;
     tracer.trace_type::<MoveTypeLayout>(&samples)?;
     tracer.trace_type::<base_types::SuiAddress>(&samples)?;
+    tracer.trace_type::<UpdateItem>(&samples)?;
 
     // The final and main entry point that we must document
     tracer.trace_type::<serialize::SerializedMessage>(&samples)?;

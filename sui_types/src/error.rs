@@ -134,6 +134,22 @@ pub enum SuiError {
     DuplicateObjectRefInput,
     #[error("Network error while querying service: {:?}.", error)]
     ClientIoError { error: String },
+    #[error("Cannot transfer immutable object.")]
+    TransferImmutableError,
+
+    // Errors related to batches
+    #[error("The number of items requested exceeds defined limits of {0}.")]
+    TooManyItemsError(u64),
+    #[error("The range specified is invalid.")]
+    InvalidSequenceRangeError,
+    #[error("No batches mached the range requested.")]
+    NoBatchesFoundError,
+    #[error("The channel to repond to the client returned an error.")]
+    CannotSendClientMessageError,
+    #[error("Subscription service had to drop {0} items")]
+    SubscriptionItemsDropedError(u64),
+    #[error("Subscription service closed.")]
+    SubscriptionServiceClosed,
 
     // Move module publishing related errors
     #[error("Failed to load the Move module, reason: {error:?}.")]
@@ -215,6 +231,8 @@ pub enum SuiError {
     StorageError(#[from] typed_store::rocks::TypedStoreError),
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
+    #[error("Authority Error: {error:?}")]
+    GenericAuthorityError { error: String },
 
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",

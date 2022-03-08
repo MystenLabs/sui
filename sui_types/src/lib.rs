@@ -14,6 +14,7 @@ use move_core_types::account_address::AccountAddress;
 pub mod error;
 
 pub mod base_types;
+pub mod batch;
 pub mod coin;
 pub mod committee;
 pub mod crypto;
