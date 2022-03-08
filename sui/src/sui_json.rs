@@ -306,7 +306,7 @@ pub fn resolve_move_function_args(
     let function_signature = package
         .data
         .try_as_package()
-        .ok_or(anyhow!("Cannot get package from object"))?
+        .ok_or_else(|| anyhow!("Cannot get package from object"))?
         .get_function_signature(&module, &function)?;
 
     // Lengths have to match, less one, due to TxContext
