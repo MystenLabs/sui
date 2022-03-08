@@ -1,0 +1,112 @@
+$sui__blue: #6FBCF0;
+$sui__light_blue: #E1F3FF;
+$sui__black: #111111;
+$sui__white: #FEFEFE;
+
+
+$font__family: 'Inter', sans-serif;
+
+@mixin font-style($font-size:17, $line-height:150%, $weight:400, $style:normal, $letter-spacing:0) {
+    font-size: $font-size * 1px;
+    line-height: $line-height;
+    font-weight: $weight;
+    font-style: $style;
+    letter-spacing: $letter-spacing;
+  }
+  
+  @mixin title($font-size:30, $line-height:150%, $weight:600, $style:normal, $letter-spacing:0) {
+    font-family: $font__family;
+    @include font-style($font-size, $line-height, $weight, $style, $letter-spacing);
+  }
+
+ 
+
+  h1 {
+    @include title(30, 150%, 600);
+    margin-top: 36px;
+    margin-bottom: 36px;
+    color: $sui__black;
+  }
+
+  h2 {
+    @include title(25, 150%, 600);
+    margin-top: 24px;
+    margin-bottom: 24px;
+    color: $sui__black;
+  }
+
+  h3 {
+    @include title(16, 150%, 600);
+    margin-top: 16px;
+    margin-bottom: 16px;
+    color: $sui__black;
+  }
+
+  p {
+    @include font-style(16, 150%, 400);
+    margin-top: 24px;
+    margin-bottom: 24px;
+    color: $sui__white;
+  }
+  
+  ._sui_main {
+    @include font-style(16, 150%, 400);
+  }
+  
+  .metamask-logo{
+    height: 30px;
+    margin-left: 5px;
+  }
+
+  a{
+      color: $sui__white;
+      font-size: 16px;
+      border-bottom: 1px solid $sui__white;
+      &:hover {
+        color: $sui__light_blue;
+      }
+  }
+
+  .sui-nftImg {
+    .thumbnail{
+      height: 150px;
+    }
+  }
+
+  .sui-nftImg {
+    margin: auto;
+    .thumbnail{
+        height: 150px !important;
+    }
+    .content{
+        padding: 20px;
+        text-align: left;
+        .title {
+            font-size: 20px;
+            color: $sui__black;
+        }
+    }
+   }
+   .header-logo{
+     img{
+       height: 32px;
+       width: 100%;
+     }
+   }
+  .truncate {
+    width: 300px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+ .shape-group-9{
+  .shape-8{
+    transform: rotate(180deg);
+    bottom: -120px;
+    left: -160px;
+} 
+  .shape-1{
+      top: -90px;
+      right: -55%;
+  }
+ }
