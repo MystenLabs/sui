@@ -294,7 +294,7 @@ Here is an example:
 ```
 
 ## Transferring objects
-If you inspect a newly created account, you would expect the account does not own any object. Let us inspect the fresh account we create in an earlier [section](#generating-a-new-account) (`F456EBEF195E4A231488DF56B762AC90695BE2DD`):
+If you inspect a newly created account, you would expect the account does not own any object. Let us inspect the fresh account we create in the [Generating a new account](#generating-a-new-account) section (`F456EBEF195E4A231488DF56B762AC90695BE2DD`):
 
 ```shell
 ./wallet --no-shell objects --address F456EBEF195E4A231488DF56B762AC90695BE2DD
@@ -503,7 +503,7 @@ Showing 5 results.
 
 Now that we know which objects are owned by the address starting with,
 we can transfer one of them to another address, say one the fresh one
-we created in an earlier [section](#generating-a-new0account)
+we created in the [Generating a new account](#generating-a-new-account) section
 (`F456EBEF195E4A231488DF56B762AC90695BE2DD`). We can try any object,
 but for the sake of this exercise, let's choose the last one on the
 list.
@@ -605,8 +605,8 @@ requires us to specify a directory where the user-defined package lives.
 It's the path to the `my_move_package` as per the
 [package creation description](move.md#writing-a-package)), a gas
 object that will be used to pay for publishing the package (we use the
-same gas object we used to pay for the function call in the previous
-[calling Move code](#calling-move-code)) section, and gas budget to put
+same gas object we used to pay for the function call in the
+[Calling Move code](#calling-move-code)) section, and gas budget to put
 an upper limit (we use 1000 as our gas budget. 
 
 Let us use the same address for publishing that we used for calling Move code in the previous [section](#calling-move-code) (`E7EFB976F10753666C821400FD9554B766363317`) which now has 4 objecst left:
@@ -621,7 +621,7 @@ Showing 4 results.
 ```
 
 The whole command to publish a package for address
-`E7EFB976F10753666C821400FD9554B766363317` looks as follows (assume
+`E7EFB976F10753666C821400FD9554B766363317` resembles the following (assuming
 that the location of the package's sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
@@ -660,7 +660,7 @@ command just like we used `0x2` for built-in packages in the
 [Calling Move code](#calling-move-code) section.
 
 The updated object is the gas object that was used to pay for
-publishing, but what is the second create object? The answer to this
+publishing But what is the second create object? The answer to this
 question is that the (only) module included in the published package
 has an initializer function defined which creates a single
 user-defined object (of type `Forge`), as described in the part of

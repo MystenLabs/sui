@@ -631,7 +631,7 @@ function:
     public fun test_sword_transactions() {
         use Sui::TestScenario;
 
-        let admin = @0xBABE;
+        let admin = @0xABBA;
         let initial_owner = @0xCAFE;
         let final_owner = @0xFACE;
 
@@ -750,7 +750,7 @@ one can simply dedicate the first transaction to executing the
 initializer function. Let us use a concrete example to illustrate
 this.
 
-Let us continue our fantasy game example, and let us introduce a
+Continuing our fantasy game example, let's introduce a
 concept of a forge that will be involved in the process of creating
 swords - for starters let it keep track of how many swords have been
 created. Let us define the `Forge` struct and a function returning the
@@ -768,8 +768,8 @@ number of created swords as follows and put into the `M1.move` file:
 ```
 
 In order to keep track of the number of created swords we must
-initialize the forge object and set its `sword_create` counts to 0,
-and module initializer is the perfect place to do it:
+initialize the forge object and set its `sword_create` counts to 0.
+And module initializer is the perfect place to do it:
 
 ``` rust
     // module initializer to be executed when this module is published
@@ -805,7 +805,7 @@ We can now create a function to test the module initialization:
         use Sui::TestScenario;
 
         // create test address representing game admin
-        let admin = @0xBABE;
+        let admin = @0xABBA;
 
         // first transaction to emulate module initialization
         let scenario = &mut TestScenario::begin(&admin);        
@@ -828,13 +828,13 @@ We can now create a function to test the module initialization:
 ```
 
 As we can see in the test function defined above, in the first
-transaction we (explicitly) call the initializer, and in the following
+transaction we (explicitly) call the initializer, and in the next
 transaction we check if the forge object has been created and properly
 initialized.
 
 If we try to run tests on the whole package at this point, we will
 encounter compilation errors in the existing tests due to the
-`sword_crate` function signature change. We will leave the changes
+`sword_create` function signature change. We will leave the changes
 required for the tests to run again as an exercise for the reader. The
 entire source code for the package we have developed (with all the
 tests properly adjusted) can be found
