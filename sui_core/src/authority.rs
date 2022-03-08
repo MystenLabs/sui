@@ -304,14 +304,21 @@ impl AuthorityState {
         &self,
         confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
-        // Check the certificate and retrieve the transfer data.
         let certificate = &confirmation_transaction.certificate;
+        let transaction = &certificate.transaction;
+        let transaction_digest = transaction.digest();
+
+        // Ensure an idempotent answer.
+        let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+        if transaction_info.signed_effects.is_some() {
+            return Ok(transaction_info);
+        }
+
+        // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
         // If the transaction contains shared objects, we need to ensure they have been scheduled
         // for processing by the consensus protocol.
-        let transaction = &certificate.transaction;
-        let transaction_digest = transaction.digest();
         if transaction.contains_shared_object() {
             let mut lock_errors = Vec::new();
             for object_id in transaction.shared_input_objects() {
