@@ -333,7 +333,7 @@ is a `Coin` struct type. Let us put the following module and struct
 definitions in the `M1.move` file:
 
 ``` rust
-module MyMovePackage::M1 {
+module MyFirstPackage::M1 {
     use Sui::ID::VersionedID;
 
     struct Sword has key, store {
@@ -631,7 +631,7 @@ function:
     public fun test_sword_transactions() {
         use Sui::TestScenario;
 
-        let admin = @0xBABE;
+        let admin = @0xABBA;
         let initial_owner = @0xCAFE;
         let final_owner = @0xFACE;
 
@@ -728,3 +728,125 @@ testing framework. Instead, one can use a sample Sui wallet to
 [wallet documentation](wallet.md) for a description of how
 to publish the package we have [written](#writing-a-package) as as
 part of this tutorial.
+
+### Module initializers
+
+There is, however, an important aspect of publishing packages that
+affects Move code development in Sui - each module in a package can
+include a special _initializer function_ that will be run at the
+publication time. The goal of an initializer function is to
+pre-initialize module-specific data (e.g., to create singleton
+objects). The initializer function must have the following properties
+in order to be executed at publication:
+
+- name `init`
+- single parameter of `&mut TxContext` type
+- no return values
+- private visibility
+
+While the `sui-move` command does not support publishing explicitly,
+we can still test module initializers using our testing framework -
+one can simply dedicate the first transaction to executing the
+initializer function. Let us use a concrete example to illustrate
+this.
+
+Continuing our fantasy game example, let's introduce a
+concept of a forge that will be involved in the process of creating
+swords - for starters let it keep track of how many swords have been
+created. Let us define the `Forge` struct and a function returning the
+number of created swords as follows and put into the `M1.move` file:
+
+``` rust
+    struct Forge has key, store {
+        id: VersionedID,
+        swords_created: u64,
+    }
+    
+    public fun swords_created(self: &Forge): u64 {
+        self.swords_created
+    }
+```
+
+In order to keep track of the number of created swords we must
+initialize the forge object and set its `sword_create` counts to 0.
+And module initializer is the perfect place to do it:
+
+``` rust
+    // module initializer to be executed when this module is published
+    fun init(ctx: &mut TxContext) {
+        use Sui::Transfer;
+        use Sui::TxContext;
+        let admin = Forge {
+            id: TxContext::new_id(ctx),
+            swords_created: 0,
+        };
+        // transfer the forge object to the module/package publisher
+        // (presumably the game admin)
+        Transfer::transfer(admin, TxContext::sender(ctx));
+    }
+```
+
+In order to use the forge, we need to modify the `sword_crate`
+function to take the forge as a parameter and to update the number of
+created swords at the end of the function:
+
+``` rust
+    public fun sword_create(forge: &mut Forge, magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
+        ...
+        forge.swords_created = forge.swords_created + 1;
+    }
+```
+
+We can now create a function to test the module initialization:
+
+``` rust
+    #[test]
+    public fun test_module_init() {
+        use Sui::TestScenario;
+
+        // create test address representing game admin
+        let admin = @0xABBA;
+
+        // first transaction to emulate module initialization
+        let scenario = &mut TestScenario::begin(&admin);        
+        {
+            init(TestScenario::ctx(scenario));
+        };
+        // second transaction to check if the forge has been created
+        // and has initial value of zero swords created
+        TestScenario::next_tx(scenario, &admin);
+        {
+            // extract the Forge object
+            let forge = TestScenario::remove_object<Forge>(scenario);
+            // verify number of created swords
+            assert!(swords_created(&forge) == 0, 1);
+            // return the Forge object to the object pool
+            TestScenario::return_object(scenario, forge)
+        }
+    }
+
+```
+
+As we can see in the test function defined above, in the first
+transaction we (explicitly) call the initializer, and in the next
+transaction we check if the forge object has been created and properly
+initialized.
+
+If we try to run tests on the whole package at this point, we will
+encounter compilation errors in the existing tests due to the
+`sword_create` function signature change. We will leave the changes
+required for the tests to run again as an exercise for the reader. The
+entire source code for the package we have developed (with all the
+tests properly adjusted) can be found
+[here](../../sui_programmability/tutorial/sources/M1.move).
+
+## Next steps
+
+Now that you are familiar with the Move language, as well as with how
+to develop and test Move code, you are ready to start looking at and
+playing with some larger
+[examples](../../sui_programmability/examples/sources) of Move
+programs, such as implementation of the tic-tac-toe game or a more
+fleshed out variant of a fantasy game similar to the one we have been
+developing during this tutorial.
+
