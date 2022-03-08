@@ -136,7 +136,7 @@ fn get_inventory_for(
         .filter_map(|(_, obj)| {
             // TODO: We should also be able to include objects indirectly owned by the
             // requested address through owning other objects.
-            // https://github.com/MystenLabs/fastnft/issues/673
+            // https://github.com/MystenLabs/sui/issues/673
             if (obj.owner == Owner::AddressOwner(sui_addr) || obj.owner.is_shared())
                 && &obj.type_ == type_
             {
