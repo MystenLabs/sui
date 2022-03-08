@@ -352,24 +352,8 @@ impl AuthorityState {
             // unlock all single-writer objects. Since transactions with shared objects always
             // have at least one owner objects, it is not necessary to re-check the locks on
             // shared objects as we do with owned objects.
-            let result = self
-                .process_certificate(confirmation_transaction.clone())
-                .await;
-
-            // TODO [#676]: What if we crash right here? The cleanup should be done atomically
-            // within `process_certificate`. It is not safety-critical but cleanup won't happen.
-
-            // If the execution is successfully, we cleanup some data structures.
-            if result.is_ok() {
-                for object_id in transaction.shared_input_objects() {
-                    self._database
-                        .delete_sequence_lock(transaction_digest, *object_id)?;
-                    if self._database.get_object(object_id)?.is_none() {
-                        self._database.delete_schedule(object_id)?;
-                    }
-                }
-            }
-            result
+            self.process_certificate(confirmation_transaction.clone())
+                .await
         }
         // In case there are no shared objects, we simply process the certificate.
         else {
