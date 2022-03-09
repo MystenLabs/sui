@@ -1119,7 +1119,7 @@ where
 
         // For now assume all authorities. Assume they're all honest
         // This assumption is woeful, and should be fixed
-        // TODO: https://github.com/MystenLabs/fastnft/issues/320
+        // TODO: https://github.com/MystenLabs/sui/issues/320
         let results = future::join_all(authority_clients.iter().map(|(_, ac)| {
             tokio::time::timeout(timeout, ac.handle_object_info_request(request.clone()))
         }))

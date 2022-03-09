@@ -706,7 +706,7 @@ fn test_move_call_args_type_mismatch() {
         .contains("Expected 3 arguments calling function 'create', but found 2"));
 
     /*
-    // Need to fix https://github.com/MystenLabs/fastnft/issues/211
+    // Need to fix https://github.com/MystenLabs/sui/issues/211
     // in order to enable the following test.
     let pure_args = vec![
         10u64.to_le_bytes().to_vec(),
