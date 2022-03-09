@@ -1,7 +1,7 @@
 [package]
 name = "sui"
 version = "0.1.0"
-authors = ["Libra <oncall+libra@xmail.facebook.com>"]
+authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
@@ -27,7 +27,8 @@ hex = "0.4.3"
 async-trait = "0.1.52"
 serde_with = { version = "1.12.0", features = ["hex"] }
 tracing = { version = "0.1.31", features = ["log"] }
-tracing-subscriber = { version = "0.3.9", features = ["time", "env-filter"] }
+tracing-subscriber = { version = "0.3.9", features = ["time", "registry", "env-filter"] }
+tracing-bunyan-formatter = "0.3"
 serde-value = "0.7.0"
 log = "0.4.14"
 
