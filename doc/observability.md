@@ -67,6 +67,7 @@ TODO: see if keys need to be scoped by contexts
 |         Key         |      Place(s)      |                                  Meaning                                   |
 | ------------------- | ------------------ | -------------------------------------------------------------------------- |
 | tx_digest           | Gateway, Authority | Hex digest of transaction                                                  |
+| tx_kind             | Gateway, Authority | Kind of transaction: Transfer/Publish/Call                                 |
 | quorum_threshold    | Gateway            | Numeric threshold of quorum stake needed for a transaction                 |
 | validity_threshold  | Gateway            | Numeric threshold of maximum "bad stake" from errors that can be tolerated |
 | num_errors          | Gateway            | Number of errors from authorities broadcast                                |

@@ -18,6 +18,7 @@ use sui_types::{
 use tracing::{debug, info, trace, Instrument};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::string::ToString;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::timeout;
@@ -1082,11 +1083,19 @@ where
         let tx_digest = transaction.digest();
         let new_certificate = self
             .process_transaction(transaction.clone(), Duration::from_secs(60))
-            .instrument(tracing::debug_span!("process_tx", ?tx_digest))
+            .instrument(tracing::debug_span!(
+                "process_tx",
+                ?tx_digest,
+                tx_kind = transaction.data.kind_as_str()
+            ))
             .await?;
         let response = self
             .process_certificate(new_certificate.clone(), Duration::from_secs(60))
-            .instrument(tracing::debug_span!("process_cert", ?tx_digest))
+            .instrument(tracing::debug_span!(
+                "process_cert",
+                ?tx_digest,
+                tx_kind = transaction.data.kind_as_str()
+            ))
             .await?;
 
         Ok((new_certificate, response))
