@@ -134,12 +134,7 @@ async fn test_subscription() {
             .insert(&i, &tx_zero)
             .expect("Failed to write.");
 
-        server
-            .state
-            .batch_sender()
-            .next_ticket().send(tx_zero)
-            .await;
-            // .expect("Send to the channel.");
+        server.state.batch_sender().ticket().send(tx_zero);
     }
 
     let (channel, (mut tx, mut rx)) = TestChannel::new();
@@ -194,13 +189,7 @@ async fn test_subscription() {
                 .insert(&i, &tx_zero)
                 .expect("Failed to write.");
             println!("Send item {}", i);
-            inner_server2
-                .state
-                .batch_sender()
-                .next_ticket()
-                .send(tx_zero)
-                .await;
-                // .expect("Send to the channel.");
+            inner_server2.state.batch_sender().ticket().send(tx_zero);
         }
     });
 

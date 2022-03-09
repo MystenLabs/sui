@@ -46,7 +46,6 @@ mod authority_store;
 pub use authority_store::AuthorityStore;
 
 pub mod authority_autoinc_channel;
-use authority_autoinc_channel::AutoIncSender;
 
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
@@ -81,7 +80,7 @@ pub struct AuthorityState {
     /// The sender to notify of new transactions
     /// and create batches for this authority.
     /// Keep as None if there is no need for this.
-    batch_channels: Option<(AutoIncSender<TransactionDigest>, BroadcastSender)>,
+    batch_channels: Option<(BatchSender, BroadcastSender)>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -102,13 +101,7 @@ impl AuthorityState {
             return Err(SuiError::AuthorityUpdateFailure);
         }
 
-        // Initialize an auto incrementing sender channel
-        let autoinc = authority_autoinc_channel::AutoIncSender::new(
-            batch_sender.tx_send,
-            self._database.next_sequence_number(),
-        );
-
-        self.batch_channels = Some((autoinc, broadcast_sender));
+        self.batch_channels = Some((batch_sender, broadcast_sender));
         Ok(())
     }
 
@@ -451,7 +444,6 @@ impl AuthorityState {
             unwrapped_object_ids,
         );
         // Update the database in an atomic manner
-
         self
             .update_state(temporary_store, certificate, to_signed_effects)
             .instrument(tracing::debug_span!("db_update_state"))
@@ -764,7 +756,7 @@ impl AuthorityState {
     }
 
     #[cfg(test)]
-    pub(crate) fn batch_sender(&self) -> &AutoIncSender<TransactionDigest> {
+    pub(crate) fn batch_sender(&self) -> &BatchSender {
         &self.batch_channels.as_ref().unwrap().0
     }
 
@@ -855,9 +847,10 @@ impl AuthorityState {
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
     ) -> Result<TransactionInfoResponse, SuiError> {
-
-
-        let ticket_opt = self.batch_channels.as_ref().map(|(autoinc, _) | autoinc.next_ticket());
+        let ticket_opt = self
+            .batch_channels
+            .as_ref()
+            .map(|(sender, _)| sender.ticket());
         let seq_opt = ticket_opt.as_ref().map(|ticket| ticket.ticket());
 
         let transaction_digest = signed_effects.effects.transaction_digest;
@@ -867,7 +860,7 @@ impl AuthorityState {
 
         // If there is a notifier registered, notify:
         if let Some(mut ticket) = ticket_opt {
-            ticket.send(transaction_digest).await;
+            ticket.send(transaction_digest);
         }
 
         Ok(response)
