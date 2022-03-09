@@ -8,7 +8,6 @@ use sui_types::base_types::*;
 use sui_types::batch::*;
 use sui_types::error::{SuiError, SuiResult};
 
-use std::collections::BTreeMap;
 use std::time::Duration;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::time::interval;
@@ -186,9 +185,6 @@ impl BatchManager {
         // of transactions in order, following the last batch. The loose transactions holds
         // transactions we may have received out of order.
         let mut current_batch: Vec<(TxSequenceNumber, TransactionDigest)> = Vec::new();
-        let mut loose_transactions: BTreeMap<TxSequenceNumber, TransactionDigest> = BTreeMap::new();
-
-        let mut next_sequence_number = prev_batch.next_sequence_number;
 
         while !exit {
             // Reset the flags.
@@ -209,14 +205,9 @@ impl BatchManager {
                     exit = true;
                   },
                   Some((seq, tx_digest)) => {
-                    loose_transactions.insert(seq, tx_digest);
-                    while loose_transactions.contains_key(&next_sequence_number) {
-                      let next_item = (next_sequence_number, loose_transactions.remove(&next_sequence_number).unwrap());
-                      // Send the update
-                      let _ = self.tx_broadcast.send(UpdateItem::Transaction(next_item));
-                      current_batch.push(next_item);
-                      next_sequence_number += 1;
-                    }
+                    // Add to batch and broadcast
+                    current_batch.push((seq, tx_digest));
+                    let _ = self.tx_broadcast.send(UpdateItem::Transaction((seq, tx_digest)));
 
                     if current_batch.len() as TxSequenceNumber >= min_batch_size {
                       make_batch = true;
@@ -260,8 +251,4 @@ impl BatchManager {
 
         Ok(())
     }
-
-    /// Register a sending channel used to send streaming
-    /// updates to clients.
-    pub fn register_listener() {}
 }
