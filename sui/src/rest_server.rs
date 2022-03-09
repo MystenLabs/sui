@@ -1005,6 +1005,7 @@ async fn call(
             type_args.clone(),
             gas_obj_ref,
             object_args_refs,
+            // TODO: Populate shared object args. sui/issue#719
             vec![],
             pure_args,
             gas_budget,
