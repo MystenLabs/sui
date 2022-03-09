@@ -27,7 +27,7 @@ use sui_types::{
     storage::{DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
-use tracing::{field::debug, *};
+use tracing::*;
 
 use crate::authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender};
 

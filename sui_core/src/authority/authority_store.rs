@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
-use tracing::{warn, Instrument};
+use tracing::warn;
 use typed_store::rocks::{open_cf, DBBatch, DBMap};
 
 use std::sync::atomic::Ordering;
