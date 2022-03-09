@@ -71,7 +71,7 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
             completion_cache: completion_cache.clone(),
         }));
 
-        'shell: loop {
+        loop {
             write!(out, "{}", self.prompt)?;
             out.flush()?;
 
@@ -79,7 +79,7 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
             let readline = rl.readline(&self.prompt.to_string());
             let line = match readline {
                 Ok(rl_line) => rl_line,
-                Err(ReadlineError::Interrupted | ReadlineError::Eof) => break 'shell,
+                Err(ReadlineError::Interrupted | ReadlineError::Eof) => break,
                 Err(err) => return Err(err.into()),
             };
 
@@ -93,29 +93,29 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                         match s.as_str() {
                             "quit" | "exit" => {
                                 writeln!(out, "Bye!")?;
-                                break 'shell;
+                                break;
                             }
                             "clear" => {
                                 // Clear screen and move cursor to top left
                                 write!(out, "\x1B[2J\x1B[1;1H")?;
-                                continue 'shell;
+                                continue;
                             }
                             "echo" => {
                                 let line = line.as_slice()[1..line.len()].join(" ");
                                 writeln!(out, "{}", line)?;
-                                continue 'shell;
+                                continue;
                             }
                             "env" => {
                                 for (key, var) in env::vars() {
                                     writeln!(out, "{}={}", key, var)?;
                                 }
-                                continue 'shell;
+                                continue;
                             }
                             _ => {}
                         }
                     } else {
                         // do nothing if line is empty
-                        continue 'shell;
+                        continue;
                     }
 
                     if self
@@ -123,7 +123,7 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                         .handle_async(line, &mut self.state, completion_cache.clone())
                         .await
                     {
-                        break 'shell;
+                        break;
                     };
                 }
                 Err(e) => writeln!(err, "{}", e.red())?,

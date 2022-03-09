@@ -10,6 +10,7 @@ use colored::Colorize;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
 use tracing::error;
+use tracing_subscriber::EnvFilter;
 
 use sui::config::{Config, WalletConfig};
 use sui::shell::{
