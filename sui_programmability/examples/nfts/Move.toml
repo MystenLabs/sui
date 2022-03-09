@@ -1,0 +1,12 @@
+[package]
+name = "NFTs"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../framework" }
+
+[addresses]
+NFTs = "0x0"
+
+[dev-addresses]
+NFTs = "0x0"

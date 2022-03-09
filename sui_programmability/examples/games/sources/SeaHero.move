@@ -5,23 +5,16 @@
 /// earns RUM tokens for hero's owner.
 /// Note that this mod does not require special permissions from `Hero` module;
 /// anyone is free to create a mod like this.
-module Examples::HeroMod {
-    use Examples::Hero::{Self, Hero};
+module Games::SeaHero {
+    use Games::Hero::{Self, Hero};
     use Sui::ID::{Self, VersionedID};
     use Sui::Coin::{Self, Coin, TreasuryCap };
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
 
-    /// A new kind of monster for the hero to fight
-    struct SeaMonster has key, store {
-        id: VersionedID,
-        /// Tokens that the user will earn for slaying this monster
-        reward: Coin<RUM>
-    }
-
     /// Admin capability granting permission to mint RUM tokens and
     /// create monsters
-    struct SeaScapeAdmin has key {
+    struct SeaHeroAdmin has key {
         id: VersionedID,
         /// Permission to mint RUM
         treasury_cap: TreasuryCap<RUM>,
@@ -31,6 +24,13 @@ module Examples::HeroMod {
         token_supply_max: u64,
         /// cap on the number of monsters that can be created
         monster_max: u64
+    }
+
+    /// A new kind of monster for the hero to fight
+    struct SeaMonster has key, store {
+        id: VersionedID,
+        /// Tokens that the user will earn for slaying this monster
+        reward: Coin<RUM>
     }
 
     /// Type of the sea game token
@@ -56,7 +56,7 @@ module Examples::HeroMod {
         assert!(monster_max > 0, EINVALID_MONSTER_SUPPLY);
 
         Transfer::transfer(
-            SeaScapeAdmin {
+            SeaHeroAdmin {
                 id: TxContext::new_id(ctx),
                 treasury_cap: Coin::create_currency<RUM>(RUM{}, ctx),
                 monsters_created: 0,
@@ -90,7 +90,7 @@ module Examples::HeroMod {
     /// Game admin can reate a monster wrapping a coin worth `reward` and send
     /// it to `recipient`
     public fun create_monster(
-        admin: &mut SeaScapeAdmin,
+        admin: &mut SeaHeroAdmin,
         reward_amount: u64,
         recipient: address,
         ctx: &mut TxContext

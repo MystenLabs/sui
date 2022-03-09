@@ -37,10 +37,13 @@ use tracing::{error, info};
 use std::sync::{Arc, Mutex};
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 
+const REST_SERVER_PORT: u16 = 5000;
+const REST_SERVER_ADDR_IPV4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
+
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let config_dropshot: ConfigDropshot = ConfigDropshot {
-        bind_address: SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 5000)),
+        bind_address: SocketAddr::from((REST_SERVER_ADDR_IPV4, REST_SERVER_PORT)),
         ..Default::default()
     };
 
@@ -63,6 +66,7 @@ async fn main() -> Result<(), String> {
     // [WALLET]
     api.register(get_addresses).unwrap();
     api.register(get_objects).unwrap();
+    api.register(object_schema).unwrap();
     api.register(object_info).unwrap();
     api.register(transfer_object).unwrap();
     api.register(publish).unwrap();
@@ -520,6 +524,100 @@ async fn get_objects(
             })
             .collect::<Vec<Object>>(),
     }))
+}
+
+/**
+Request containing the object schema for which info is to be retrieved.
+
+If owner is specified we look for this object in that address's account store,
+otherwise we look for it in the shared object store.
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct GetObjectSchemaRequest {
+    /** Required; Hex code as string representing the object id */
+    object_id: String,
+}
+
+/**
+Response containing the information of an object schema if found, otherwise an error
+is returned.
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct ObjectSchemaResponse {
+    /** JSON representation of the object schema */
+    schema: serde_json::Value,
+}
+
+/**
+Returns the schema for a specified object.
+ */
+#[endpoint {
+    method = GET,
+    path = "/object_schema",
+    tags = [ "wallet" ],
+}]
+async fn object_schema(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    query: Query<GetObjectSchemaRequest>,
+) -> Result<HttpResponseOk<ObjectSchemaResponse>, HttpError> {
+    let server_context = rqctx.context();
+    let object_info_params = query.into_inner();
+
+    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
+    let wallet_context = server_context.wallet_context.lock().unwrap().take();
+    let wallet_context = wallet_context.ok_or_else(|| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
+                .to_string(),
+        )
+    })?;
+
+    let object_id = match ObjectID::try_from(object_info_params.object_id) {
+        Ok(object_id) => object_id,
+        Err(error) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("{error}"),
+            ));
+        }
+    };
+
+    let layout = match wallet_context.gateway.get_object_info(object_id).await {
+        Ok(ObjectRead::Exists(_, _, layout)) => layout,
+        Ok(ObjectRead::Deleted(_)) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({object_id}) was deleted."),
+            ));
+        }
+        Ok(ObjectRead::NotExists(_)) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({object_id}) does not exist."),
+            ));
+        }
+        Err(error) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Error while getting object info: {:?}", error),
+            ));
+        }
+    };
+
+    match serde_json::to_value(layout) {
+        Ok(schema) => Ok(HttpResponseOk(ObjectSchemaResponse { schema })),
+        Err(e) => Err(custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            format!("Error while getting object info: {:?}", e),
+        )),
+    }
 }
 
 /**

@@ -1,11 +1,11 @@
 /// Example of a game character with basic attributes, inventory, and
 /// associated logic.
-module Examples::Hero {
-    use Examples::TrustedCoin::EXAMPLE;
+module Games::Hero {
     use Sui::Coin::{Self, Coin};
     use Sui::Event;
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::Math;
+    use Sui::GAS::GAS;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
     use Std::Option::{Self, Option};
@@ -200,7 +200,7 @@ module Examples::Hero {
     /// to the admin. Amount of magic in the sword depends on how much you pay
     /// for it.
     public fun create_sword(
-        payment: Coin<EXAMPLE>,
+        payment: Coin<GAS>,
         ctx: &mut TxContext
     ): Sword {
         let value = Coin::value(&payment);
@@ -219,7 +219,7 @@ module Examples::Hero {
         }
     }
 
-    public fun acquire_hero(payment: Coin<EXAMPLE>, ctx: &mut TxContext) {
+    public fun acquire_hero(payment: Coin<GAS>, ctx: &mut TxContext) {
         let sword = create_sword(payment, ctx);
         let hero = create_hero(sword, ctx);
         Transfer::transfer(hero, TxContext::sender(ctx))
@@ -293,8 +293,7 @@ module Examples::Hero {
 
     #[test]
     public fun slay_boar_test() {
-        use Examples::TrustedCoin::{Self, EXAMPLE};
-        use Sui::Coin::{Self, TreasuryCap};
+        use Sui::Coin;
         use Sui::TestScenario;
 
         let admin = ADMIN;
@@ -303,23 +302,12 @@ module Examples::Hero {
         let scenario = &mut TestScenario::begin(&admin);
         // Run the module initializers
         {
-            let ctx = TestScenario::ctx(scenario);
-            TrustedCoin::test_init(ctx);
-            init(ctx);
-        };
-        // Admin mints 500 coins and sends them to the Player so they can buy game items
-        TestScenario::next_tx(scenario, &admin);
-        {
-            let treasury_cap = TestScenario::remove_object<TreasuryCap<EXAMPLE>>(scenario);
-            let ctx = TestScenario::ctx(scenario);
-            let coins = Coin::mint(500, &mut treasury_cap, ctx);
-            Coin::transfer(coins, copy player);
-            TestScenario::return_object(scenario, treasury_cap);
+            init(TestScenario::ctx(scenario));
         };
         // Player purchases a hero with the coins
         TestScenario::next_tx(scenario, &player);
         {
-            let coin = TestScenario::remove_object<Coin<EXAMPLE>>(scenario);
+            let coin = Coin::mint_for_testing(500, TestScenario::ctx(scenario));
             acquire_hero(coin, TestScenario::ctx(scenario));
         };
         // Admin sends a boar to the Player

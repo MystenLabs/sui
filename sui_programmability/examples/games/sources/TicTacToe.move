@@ -1,4 +1,4 @@
-module Examples::TicTacToe {
+module Games::TicTacToe {
     use Std::Option::{Self, Option};
     use Std::Vector;
 
