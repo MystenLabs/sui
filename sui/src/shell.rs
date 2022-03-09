@@ -339,7 +339,22 @@ impl PartialOrd<Self> for CacheKey {
         Some(self.cmp(other))
     }
 }
-
+/// This custom ordering for `CacheKey` enable wildcard matching,
+/// the command field for `CacheKey` is optional and can be used as a wildcard when equal `None`
+/// # Examples
+/// ```
+/// use std::cmp::Ordering;
+/// use std::collections::BTreeMap;
+/// use sui::shell::CacheKey;
+///
+/// assert_eq!(Ordering::Equal, CacheKey::flag("--flag").cmp(&CacheKey::new("any command", "--flag")));
+///
+/// let mut data = BTreeMap::new();
+/// data.insert(CacheKey::flag("--flag"), "Some Data");
+///
+/// assert_eq!(Some(&"Some Data"), data.get(&CacheKey::new("This can be anything", "--flag")));
+/// assert_eq!(Some(&"Some Data"), data.get(&CacheKey::flag("--flag")));
+/// ```
 impl Ord for CacheKey {
     fn cmp(&self, other: &Self) -> Ordering {
         let cmd_eq = if self.command.is_none() || other.command.is_none() {
