@@ -4,23 +4,22 @@ use super::*;
 
 use parking_lot::Mutex;
 use std::collections::HashMap;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::UnboundedSender;
 
 pub struct AutoIncSenderInner<T> {
     pub next_available_sequence_number: u64,
     pub next_expected_sequence_number: u64,
-    pub sender: Sender<(u64, T)>,
+    pub sender: UnboundedSender<(u64, T)>,
     pub waiting: HashMap<u64, Option<T>>,
 }
 
 impl<T> AutoIncSenderInner<T> {
-    pub async fn send_all_waiting(&mut self) {
+    pub fn send_all_waiting(&mut self) {
         while let Some(item_opt) = self.waiting.remove(&self.next_expected_sequence_number) {
             if let Some(item) = item_opt {
                 let _ = self
                     .sender
-                    .send((self.next_expected_sequence_number, item))
-                    .await;
+                    .send((self.next_expected_sequence_number, item));
 
                 /*
                     An error here indicates the other side of the channel is closed.
@@ -44,7 +43,7 @@ pub struct AutoIncSender<T>(pub Arc<Mutex<AutoIncSenderInner<T>>>);
 
 impl<T> AutoIncSender<T> {
     // Creates a new auto-incrementing sender
-    pub fn new(sender: Sender<(u64, T)>, next_sequence_number: u64) -> AutoIncSender<T> {
+    pub fn new(sender: UnboundedSender<(u64, T)>, next_sequence_number: u64) -> AutoIncSender<T> {
         AutoIncSender(Arc::new(Mutex::new(AutoIncSenderInner {
             // TODO: next_available_sequence_number could be an AtomicU64 instead.
             next_available_sequence_number: next_sequence_number,
@@ -89,7 +88,7 @@ where
         aic.waiting.insert(self.sequence_number, Some(item));
         println!("SEND {:?}", aic.waiting);
         self.sent = true;
-        aic.send_all_waiting().await;
+        aic.send_all_waiting();
     }
 
     /// Get the ticket sequence number
@@ -105,6 +104,7 @@ impl<T> Drop for Ticket<T> {
         if !self.sent {
             let mut aic = self.autoinc_sender.lock();
             aic.waiting.insert(self.sequence_number, None);
+            aic.send_all_waiting();
         }
     }
 }
@@ -115,7 +115,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ticketing() {
-        let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let autoinc = AutoIncSender::new(tx, 10);
 
         let mut t1 = autoinc.next_ticket();

@@ -332,6 +332,9 @@ async fn test_batch_store_retrieval() {
             .expect("Send to the channel.");
     }
 
+    // Give a change to the channels to send.
+    tokio::task::yield_now().await;
+
     // TEST 1: Get batches across boundaries
 
     let (batches, transactions) = store

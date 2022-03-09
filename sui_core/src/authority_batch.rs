@@ -9,7 +9,7 @@ use sui_types::error::{SuiError, SuiResult};
 
 use std::collections::BTreeMap;
 use std::time::Duration;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::time::interval;
 
 use typed_store::Map;
@@ -47,12 +47,12 @@ pub type BroadcastPair = (BroadcastSender, BroadcastReceiver);
 
 pub struct BatchSender {
     /// Channel for sending updates.
-    tx_send: Sender<(TxSequenceNumber, TransactionDigest)>,
+    pub(crate) tx_send: UnboundedSender<(TxSequenceNumber, TransactionDigest)>,
 }
 
 pub struct BatchManager {
     /// Channel for receiving updates
-    tx_recv: Receiver<(TxSequenceNumber, TransactionDigest)>,
+    tx_recv: UnboundedReceiver<(TxSequenceNumber, TransactionDigest)>,
     /// The sender end of the broadcast channel used to send updates to listeners
     tx_broadcast: BroadcastSender,
     /// Copy of the database to write batches and read transactions.
@@ -68,7 +68,6 @@ impl BatchSender {
     ) -> Result<(), SuiError> {
         self.tx_send
             .send((transaction_sequence, transaction_digest))
-            .await
             .map_err(|_| SuiError::BatchErrorSender)
     }
 }
@@ -78,7 +77,7 @@ impl BatchManager {
         db: Arc<AuthorityStore>,
         capacity: usize,
     ) -> (BatchSender, BatchManager, BroadcastPair) {
-        let (tx_send, tx_recv) = channel(capacity);
+        let (tx_send, tx_recv) = unbounded_channel();
         let (tx_broadcast, rx_broadcast) = tokio::sync::broadcast::channel(capacity);
         let sender = BatchSender { tx_send };
         let manager = BatchManager {

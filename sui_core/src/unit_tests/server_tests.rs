@@ -137,9 +137,9 @@ async fn test_subscription() {
         server
             .state
             .batch_sender()
-            .send_item(i, tx_zero)
-            .await
-            .expect("Send to the channel.");
+            .next_ticket().send(tx_zero)
+            .await;
+            // .expect("Send to the channel.");
     }
 
     let (channel, (mut tx, mut rx)) = TestChannel::new();
@@ -197,9 +197,10 @@ async fn test_subscription() {
             inner_server2
                 .state
                 .batch_sender()
-                .send_item(i, tx_zero)
-                .await
-                .expect("Send to the channel.");
+                .next_ticket()
+                .send(tx_zero)
+                .await;
+                // .expect("Send to the channel.");
         }
     });
 
