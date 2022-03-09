@@ -66,4 +66,12 @@ module ObjectOwner::ObjectOwner {
         let Child { id } = child;
         ID::delete(id);
     }
+
+    public fun delete_parent_and_child(parent: Parent, child: Child, _ctx: &mut TxContext) {
+        let Parent { id, child: child_ref_opt } = parent;
+        let child_ref = Option::extract(&mut child_ref_opt);
+        Option::destroy_none(child_ref_opt);
+        Transfer::delete_child_object(child, child_ref);
+        ID::delete(id);
+    }
 }

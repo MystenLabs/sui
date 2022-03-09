@@ -21,7 +21,7 @@ use sui_types::{
     object::Owner,
 };
 
-use super::get_nested_struct_field;
+use super::{get_nested_struct_field, get_nth_struct_field};
 
 type Event = (Vec<u8>, u64, Type, MoveTypeLayout, Value);
 
@@ -85,6 +85,11 @@ fn get_global_inventory(events: &[Event]) -> Inventory {
             EventType::DeleteObjectID => {
                 // note: obj_id may or may not be present in `inventory`--a useer can create an ID and delete it without associating it with a transferred object
                 inventory.remove(&get_deleted_id_bytes(val).into());
+            }
+            EventType::DeleteChildObject => {
+                // val is an Sui object, with the first field as the versioned id.
+                let versioned_id = get_nth_struct_field(val.copy_value().unwrap(), 0);
+                inventory.remove(&get_deleted_id_bytes(&versioned_id).into());
             }
             EventType::User => (),
         }

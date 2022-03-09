@@ -30,7 +30,7 @@ use move_vm_runtime::{native_functions::NativeFunctionTable, session::ExecutionR
 use std::{
     borrow::Borrow,
     cmp,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     convert::TryFrom,
     fmt::Debug,
     sync::Arc,
@@ -526,6 +526,7 @@ fn process_successful_execution<
     let mut gas_used = 0;
     let tx_digest = ctx.digest();
     let mut deleted_ids = HashMap::new();
+    let mut deleted_child_ids = HashSet::new();
     for e in events {
         let (recipient, event_type, type_, event_bytes) = e;
         let result = match EventType::try_from(event_type as u8)
@@ -569,6 +570,19 @@ fn process_successful_execution<
                 Ok(())
             }
             EventType::ShareObject => Err(SuiError::UnsupportedSharedObjectError),
+            EventType::DeleteChildObject => {
+                match type_ {
+                    TypeTag::Struct(s) => {
+                        let obj = MoveObject::new(s, event_bytes);
+                        deleted_ids.insert(obj.id(), obj.version());
+                        deleted_child_ids.insert(obj.id());
+                    },
+                    _ => unreachable!(
+                        "Native function delete_child_object_internal<T> ensures that T is always bound to structs"
+                    ),
+                }
+                Ok(())
+            }
             EventType::User => {
                 match type_ {
                     TypeTag::Struct(s) => state_view.log_event(Event::new(s, event_bytes)),
@@ -589,11 +603,13 @@ fn process_successful_execution<
     // (2) wrapped inside another object that is in the Sui object pool
     let mut gas_refund: u64 = 0;
     for (id, object) in by_value_objects.iter() {
-        // If an object is owned by another object, we are not allowed to delete the child
+        // If an object is owned by another object, we are not allowed to directly delete the child
         // object because this could lead to a dangling reference of the ownership. Such
-        // dangling reference can never be dropped. To delete this object, it must first
-        // be transferred to an account address.
-        if matches!(object.owner, Owner::ObjectOwner { .. }) {
+        // dangling reference can never be dropped. To delete this object, one must either first transfer
+        // the child object to an account address, or call through Transfer::delete_child_object(),
+        // which would consume both the child object and the ChildRef ownership reference,
+        // and emit the DeleteChildObject event. These child objects can be safely deleted.
+        if matches!(object.owner, Owner::ObjectOwner { .. }) && !deleted_child_ids.contains(id) {
             return (gas_used, 0, Err(SuiError::DeleteObjectOwnedObject));
         }
         if deleted_ids.contains_key(id) {
