@@ -13,7 +13,6 @@ use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use tracing::warn;
 use typed_store::rocks::{open_cf, DBBatch, DBMap};
 
-use std::sync::atomic::Ordering;
 use typed_store::traits::Map;
 
 pub type AuthorityStore = SuiDataStore<true>;
@@ -154,6 +153,16 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             batches: DBMap::reopen(&db, Some("batches")).expect("Cannot open CF."),
             next_sequence_number,
         }
+    }
+
+    pub fn next_sequence_number(&self) -> TxSequenceNumber {
+        self.executed_sequence
+            .iter()
+            .skip_prior_to(&TxSequenceNumber::MAX)
+            .expect("Error reading table.")
+            .next()
+            .map(|(v, _)| v + 1u64)
+            .unwrap_or(0)
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
@@ -389,7 +398,8 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         temporary_store: AuthorityTemporaryStore,
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
-    ) -> Result<(TxSequenceNumber, TransactionInfoResponse), SuiError> {
+        sequence_number: Option<TxSequenceNumber>,
+    ) -> Result<TransactionInfoResponse, SuiError> {
         // Extract the new state from the execution
         // TODO: events are already stored in the TxDigest -> TransactionEffects store. Is that enough?
         let mut write_batch = self.transaction_lock.batch();
@@ -415,18 +425,21 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         )?;
 
         // Safe to unwrap since the "true" flag ensures we get a sequence value back.
-        let seq: TxSequenceNumber = self
-            .batch_update_objects(write_batch, temporary_store, transaction_digest, true)?
-            .unwrap();
+        self
+            .batch_update_objects(
+                write_batch,
+                temporary_store,
+                transaction_digest,
+                sequence_number,
+            )?;
 
-        Ok((
-            seq,
+        Ok(
             TransactionInfoResponse {
                 signed_transaction: self.signed_transactions.get(&transaction_digest)?,
                 certified_transaction: Some(certificate),
                 signed_effects: Some(signed_effects),
             },
-        ))
+        )
     }
 
     /// Persist temporary storage to DB for genesis modules
@@ -437,8 +450,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
         let write_batch = self.transaction_lock.batch();
-        self.batch_update_objects(write_batch, temporary_store, transaction_digest, false)
-            .map(|_| ())
+        self.batch_update_objects(write_batch, temporary_store, transaction_digest, None)
     }
 
     /// Helper function for updating the objects in the state
@@ -447,8 +459,8 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         mut write_batch: DBBatch,
         temporary_store: AuthorityTemporaryStore,
         transaction_digest: TransactionDigest,
-        should_sequence: bool,
-    ) -> Result<Option<TxSequenceNumber>, SuiError> {
+        should_sequence: Option<TxSequenceNumber>,
+    ) -> Result<(), SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
 
         // Archive the old lock.
@@ -550,7 +562,6 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
 
         // This is the critical region: testing the locks and writing the
         // new locks must be atomic, and no writes should happen in between.
-        let mut return_seq = None;
         {
             // Acquire the lock to ensure no one else writes when we are in here.
             let _mutexes = self.acquire_locks(&active_inputs[..]);
@@ -562,7 +573,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
                 object_lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
             }
 
-            if should_sequence {
+            if let Some(next_seq) = should_sequence {
                 // Now we are sure we are going to execute, add to the sequence
                 // number and insert into authority sequence.
                 //
@@ -570,13 +581,10 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
                 //       out of order with respect to their sequence number. It is also
                 //       possible for the authority to crash without committing the
                 //       full sequence, and the batching logic needs to deal with this.
-                let next_seq = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
                 write_batch = write_batch.insert_batch(
                     &self.executed_sequence,
                     std::iter::once((next_seq, transaction_digest)),
                 )?;
-
-                return_seq = Some(next_seq);
             }
 
             // Atomic write of all locks & other data
@@ -585,7 +593,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             // implicit: drop(_mutexes);
         } // End of critical region
 
-        Ok(return_seq)
+        Ok(())
     }
 
     /// Returns the last entry we have for this object in the parents_sync index used

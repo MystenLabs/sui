@@ -46,6 +46,7 @@ mod authority_store;
 pub use authority_store::AuthorityStore;
 
 pub mod authority_autoinc_channel;
+use authority_autoinc_channel::AutoIncSender;
 
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
@@ -80,7 +81,7 @@ pub struct AuthorityState {
     /// The sender to notify of new transactions
     /// and create batches for this authority.
     /// Keep as None if there is no need for this.
-    batch_channels: Option<(BatchSender, BroadcastSender)>,
+    batch_channels: Option<(AutoIncSender<TransactionDigest>, BroadcastSender)>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -100,7 +101,14 @@ impl AuthorityState {
         if self.batch_channels.is_some() {
             return Err(SuiError::AuthorityUpdateFailure);
         }
-        self.batch_channels = Some((batch_sender, broadcast_sender));
+
+        // Initialize an auto incrementing sender channel
+        let autoinc = authority_autoinc_channel::AutoIncSender::new(
+            batch_sender.tx_send,
+            self._database.next_sequence_number(),
+        );
+
+        self.batch_channels = Some((autoinc, broadcast_sender));
         Ok(())
     }
 
@@ -443,12 +451,11 @@ impl AuthorityState {
             unwrapped_object_ids,
         );
         // Update the database in an atomic manner
-        let (seq, resp) = self
+
+        self
             .update_state(temporary_store, certificate, to_signed_effects)
             .instrument(tracing::debug_span!("db_update_state"))
-            .await?; // Returns the OrderInfoResponse
-
-        Ok(resp)
+            .await // Returns the OrderInfoResponse
     }
 
     fn execute_transaction(
@@ -757,7 +764,7 @@ impl AuthorityState {
     }
 
     #[cfg(test)]
-    pub(crate) fn batch_sender(&self) -> &BatchSender {
+    pub(crate) fn batch_sender(&self) -> &AutoIncSender<TransactionDigest> {
         &self.batch_channels.as_ref().unwrap().0
     }
 
@@ -847,18 +854,23 @@ impl AuthorityState {
 
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
-    ) -> Result<(u64, TransactionInfoResponse), SuiError> {
+    ) -> Result<TransactionInfoResponse, SuiError> {
+
+
+        let ticket_opt = self.batch_channels.as_ref().map(|(autoinc, _) | autoinc.next_ticket());
+        let seq_opt = ticket_opt.as_ref().map(|ticket| ticket.ticket());
+
         let transaction_digest = signed_effects.effects.transaction_digest;
-        let (seq, response) =
+        let response =
             self._database
-                .update_state(temporary_store, certificate, signed_effects)?;
+                .update_state(temporary_store, certificate, signed_effects, seq_opt)?;
 
         // If there is a notifier registered, notify:
-        if let Some((sender, _)) = &self.batch_channels {
-            sender.send_item(seq, transaction_digest).await?;
+        if let Some(mut ticket) = ticket_opt {
+            ticket.send(transaction_digest).await;
         }
 
-        Ok((seq, response))
+        Ok(response)
     }
 
     /// Get a read reference to an object/seq lock
