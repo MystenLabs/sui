@@ -493,14 +493,18 @@ impl AuthorityState {
     /// called by a single task (ie. the task handling consensus outputs).
     pub async fn handle_consensus_certificate(
         &self,
-        certificate: &CertifiedTransaction,
-    ) -> SuiResult<()> {
+        certificate: CertifiedTransaction,
+    ) -> SuiResult<TransactionInfoResponse> {
         // Ensure it is the first time we see this certificate.
         let transaction = &certificate.transaction;
         let transaction_digest = transaction.digest();
         for id in transaction.shared_input_objects() {
             if self._database.sequenced(transaction_digest, *id)?.is_some() {
-                return Ok(());
+                return Ok(TransactionInfoResponse {
+                    signed_transaction: None,
+                    certified_transaction: Some(certificate),
+                    signed_effects: None,
+                });
             }
         }
 
@@ -514,7 +518,14 @@ impl AuthorityState {
             transaction_digest,
             transaction,
             certificate.clone(),
-        )
+        )?;
+
+        // Return an acknowledgement to the consensus node.
+        Ok(TransactionInfoResponse {
+            signed_transaction: None,
+            certified_transaction: Some(certificate),
+            signed_effects: None,
+        })
     }
 
     fn transfer(

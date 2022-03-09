@@ -1,86 +1,117 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority_server::AuthorityServer;
+use crate::authority::AuthorityState;
+use async_trait::async_trait;
 use bytes::Bytes;
+use futures::SinkExt;
+use futures::StreamExt;
+use std::net::SocketAddr;
 use std::sync::Arc;
+use sui_network::network::NetworkServer;
+use sui_network::transport::{MessageHandler, RwChannel, SpawnedServer};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::ConfirmationTransaction;
-use sui_types::serialize::{deserialize_message, SerializedMessage};
-use tokio::sync::broadcast::Receiver;
-use tokio::task::JoinHandle;
+use sui_types::messages::{ConfirmationTransaction, TransactionInfoResponse};
+use sui_types::serialize::{deserialize_message, serialize_message, SerializedMessage};
 
 /// The `ConsensusHandler` receives certificates sequenced by the consensus and updates
 /// the authority's database
 pub struct ConsensusHandler {
     /// Receive sequenced certificates from consensus.
-    rx_consensus: Receiver<Bytes>,
-    /// The (global) authority server to update the locks.
-    server: Arc<AuthorityServer>,
+    server: NetworkServer,
+    /// The (global) authority state to update the locks of shared objects.
+    state: Arc<AuthorityState>,
 }
 
 impl ConsensusHandler {
-    /// Spawn a new `ConsensusHandler` in a separate tokio task.
-    pub fn spawn(
-        rx_consensus: Receiver<Bytes>,
-        server: Arc<AuthorityServer>,
-    ) -> JoinHandle<SuiResult<()>> {
-        tokio::spawn(async move {
-            Self {
-                rx_consensus,
-                server,
-            }
-            .run()
-            .await
-        })
+    /// Create a new consensus handler instance.
+    pub fn new(address: SocketAddr, buffer_size: usize, state: Arc<AuthorityState>) -> Self {
+        Self {
+            server: NetworkServer::new(address.ip().to_string(), address.port(), buffer_size),
+            state,
+        }
     }
 
-    /// Main reactor loop receiving certificates from consensus.
-    async fn run(&mut self) -> SuiResult<()> {
-        while let Ok(bytes) = self.rx_consensus.recv().await {
-            // The consensus simply orders bytes, so we first need to deserialize the
-            // certificate. If the deserialization fail it is safe to ignore the
-            // certificate since all correct authorities will do the same.
-            let confirmation = match deserialize_message(&*bytes) {
-                Ok(SerializedMessage::Cert(certificate)) => ConfirmationTransaction {
-                    certificate: *certificate,
-                },
-                Ok(_) => {
-                    log::debug!("{}", SuiError::UnexpectedMessage);
-                    continue;
+    /// Spawn the consensus handler in a new task.
+    pub async fn spawn(self) -> Result<SpawnedServer, std::io::Error> {
+        let address = format!("{}:{}", self.server.base_address, self.server.base_port);
+        let buffer_size = self.server.buffer_size;
+        sui_network::transport::spawn_server(&address, self, buffer_size).await
+    }
+
+    async fn handle_one_message(&self, bytes: Bytes) -> SuiResult<TransactionInfoResponse> {
+        // The consensus simply orders bytes, so we first need to deserialize the
+        // certificate. If the deserialization fail it is safe to ignore the
+        // certificate since all correct authorities will do the same.
+        let confirmation = match deserialize_message(&*bytes) {
+            Ok(SerializedMessage::Cert(certificate)) => ConfirmationTransaction {
+                certificate: *certificate,
+            },
+            Ok(_) => {
+                log::debug!("{}", SuiError::UnexpectedMessage);
+                return Err(SuiError::UnexpectedMessage);
+            }
+            Err(e) => {
+                log::debug!("Failed to deserialize certificate {}", e);
+                return Err(SuiError::InvalidDecoding);
+            }
+        };
+
+        // Process the certificate to set the locks on the shared objects.
+        let certificate = confirmation.certificate;
+        let result = self.state.handle_consensus_certificate(certificate).await;
+        match &result {
+            // Log the errors that are our faults (not the client's).
+            Err(SuiError::StorageError(e)) => {
+                log::error!("{}", e);
+
+                // If we have a store error we cannot continue processing other
+                // outputs from consensus. We may otherwise attribute locks to
+                // shared objects that are different from other authorities.
+                //panic!("{}", e); // Alberto is tempted to panic here
+            }
+            // Log the errors that are the client's fault (not ours). This is
+            // only for debug purposes: all correct authorities will do the same.
+            Err(e) => log::debug!("{}", e),
+            Ok(_) => (),
+        }
+
+        // Make a reply for the end user.
+        result
+    }
+}
+
+#[async_trait]
+impl<'a, A> MessageHandler<A> for ConsensusHandler
+where
+    A: 'static + RwChannel<'a> + Unpin + Send,
+{
+    async fn handle_messages(&self, mut channel: A) -> () {
+        loop {
+            // Read the consensus' output sequence.
+            let buffer = match channel.stream().next().await {
+                Some(Ok(buffer)) => buffer,
+                Some(Err(err)) => {
+                    // We expect some EOF or disconnect error at the end.
+                    log::error!("Error while reading TCP stream: {}", err);
+                    break;
                 }
-                Err(e) => {
-                    log::debug!("Failed to deserialize certificate {}", e);
-                    continue;
-                }
+                None => break,
             };
 
-            // Process the certificate to set the locks on the shared objects.
-            let certificate = &confirmation.certificate;
-            let result = self
-                .server
-                .state
-                .handle_consensus_certificate(certificate)
-                .await;
-            match &result {
-                // Log the errors that are our faults (not the client's).
-                Err(SuiError::StorageError(e)) => {
-                    log::error!("{}", e);
+            // Handle the message (update the state).
+            let reply = match self.handle_one_message(Bytes::from(buffer)).await {
+                Ok(x) => SerializedMessage::TransactionResp(Box::new(x)),
+                Err(e) => SerializedMessage::Error(Box::new(e)),
+            };
 
-                    // If we have a store error we cannot continue processing other
-                    // outputs from consensus. We may otherwise attribute locks to
-                    // shared objects that are different from other authorities.
-                    return result;
-                }
-                // Log the errors that are the client's fault (not ours). This is
-                // only for debug purposes: all correct authorities will do the same.
-                Err(e) => {
-                    log::debug!("{}", e);
-                    continue;
-                }
-                Ok(()) => (),
+            // Reply to the consensus. The consensus will then decide what to do with this
+            // reply; it can either forward it to the client or simply use it as ack for its
+            // internal cleanup operations.
+            let bytes = serialize_message(&reply);
+            if let Err(error) = channel.sink().send(bytes.into()).await {
+                log::error!("Failed to send query response: {}", error);
             }
         }
-        Ok(())
     }
 }
