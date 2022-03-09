@@ -14,8 +14,10 @@ fdlimit = "0.2.1"
 portpicker = "0.1.1"
 bytes = "1.1.0"
 futures = "0.3.21"
+async-trait = "0.1.52"
 
 sui-types = { path = "../sui_types" }
 sui_core = { path = "../sui_core" }
 sui-adapter = { path = "../sui_programmability/adapter" }
 sui = { path = "../sui" }
+network_utils = { path = "../network_utils" }
