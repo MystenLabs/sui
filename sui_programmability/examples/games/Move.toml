@@ -1,0 +1,12 @@
+[package]
+name = "Games"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../framework" }
+
+[addresses]
+Games = "0x0"
+
+[dev-addresses]
+Games = "0x0"

@@ -1,4 +1,4 @@
-module Sui::Geniteam {
+module NFTs::Geniteam {
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::TxContext::{Self, TxContext};
     use Sui::Transfer;
