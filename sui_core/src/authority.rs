@@ -45,6 +45,8 @@ use temporary_store::AuthorityTemporaryStore;
 mod authority_store;
 pub use authority_store::AuthorityStore;
 
+pub mod authority_autoinc_channel;
+
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
 const MAX_ITEMS_LIMIT: u64 = 10_000;
@@ -446,11 +448,6 @@ impl AuthorityState {
             .instrument(tracing::debug_span!("db_update_state"))
             .await?; // Returns the OrderInfoResponse
 
-        // If there is a notifier registered, notify:
-        if let Some((sender, _)) = &self.batch_channels {
-            sender.send_item(seq, transaction_digest).await?;
-        }
-
         Ok(resp)
     }
 
@@ -842,6 +839,8 @@ impl AuthorityState {
             .set_transaction_lock(mutable_input_objects, signed_transaction)
     }
 
+    /// Update state and signals that a new transactions has been processed
+    /// to the batch maker service.
     async fn update_state(
         &self,
         temporary_store: AuthorityTemporaryStore,
@@ -849,8 +848,17 @@ impl AuthorityState {
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
     ) -> Result<(u64, TransactionInfoResponse), SuiError> {
-        self._database
-            .update_state(temporary_store, certificate, signed_effects)
+        let transaction_digest = signed_effects.effects.transaction_digest;
+        let (seq, response) =
+            self._database
+                .update_state(temporary_store, certificate, signed_effects)?;
+
+        // If there is a notifier registered, notify:
+        if let Some((sender, _)) = &self.batch_channels {
+            sender.send_item(seq, transaction_digest).await?;
+        }
+
+        Ok((seq, response))
     }
 
     /// Get a read reference to an object/seq lock
