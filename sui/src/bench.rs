@@ -6,6 +6,7 @@
 
 use bytes::Bytes;
 use futures::stream::StreamExt;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use rand::rngs::StdRng;
 use rand::Rng;
@@ -231,7 +232,7 @@ impl ClientServerBenchmark {
                     gas_object_ref,
                     vec![object_ref],
                     vec![],
-                    vec![bcs::to_bytes(&next_recipient.to_vec()).unwrap()],
+                    vec![bcs::to_bytes(&AccountAddress::from(next_recipient)).unwrap()],
                     1000,
                 )
             } else {
