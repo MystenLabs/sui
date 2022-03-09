@@ -185,6 +185,7 @@ impl BatchManager {
         // of transactions in order, following the last batch. The loose transactions holds
         // transactions we may have received out of order.
         let mut current_batch: Vec<(TxSequenceNumber, TransactionDigest)> = Vec::new();
+        let mut next_expected_sequence_number = prev_batch.next_sequence_number;
 
         while !exit {
             // Reset the flags.
@@ -205,9 +206,34 @@ impl BatchManager {
                     exit = true;
                   },
                   Some((seq, tx_digest)) => {
+
+                    if seq > next_expected_sequence_number {
+                        /* We are missing a transaction sequence number, which may be due to
+                           an AuthorityState instance crashing AFTER it stored a batch. This is
+                           not common, but we go to the DB to see if we can recover the Txs.
+
+                           If the store is dead (which could be the cause of the out of sequence)
+                           we simply stop the batch maker. And hope someone restarts it eventually.
+                        */
+
+                        self.db.executed_sequence
+                            .iter()
+                            .skip_to(&next_expected_sequence_number)?
+                            .take_while(|(store_seq, _)| store_seq < &seq)
+                            .for_each(|(store_seq, store_digest)|
+                        {
+                                                // Add to batch and broadcast
+                            current_batch.push((store_seq, store_digest));
+                            let _ = self.tx_broadcast.send(UpdateItem::Transaction((store_seq, store_digest)));
+
+                        });
+
+                    }
+
                     // Add to batch and broadcast
                     current_batch.push((seq, tx_digest));
                     let _ = self.tx_broadcast.send(UpdateItem::Transaction((seq, tx_digest)));
+                    next_expected_sequence_number = seq + 1;
 
                     if current_batch.len() as TxSequenceNumber >= min_batch_size {
                       make_batch = true;
