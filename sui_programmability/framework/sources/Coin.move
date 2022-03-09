@@ -142,7 +142,15 @@ module Sui::Coin {
 
     /// Send `amount` units of `c` to `recipient
     /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
-    public fun transfer_<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {        
+    public fun transfer_<T>(c: &mut Coin<T>, amount: u64, recipient: address, ctx: &mut TxContext) {
         Transfer::transfer(withdraw(c, amount, ctx), recipient)
+    }
+
+    // ---Test-only code---
+
+    #[test_only]
+    /// Mint coins of any type for (obviously!) testing purposes only
+    public fun mint_for_testing<T>(value: u64, ctx: &mut TxContext): Coin<T> {
+        Coin { id: TxContext::new_id(ctx), value }
     }
 }

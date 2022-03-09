@@ -1,0 +1,12 @@
+[package]
+name = "Basics"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../framework" }
+
+[addresses]
+Basics = "0x0"
+
+[dev-addresses]
+Basics = "0x0"
