@@ -30,10 +30,13 @@ use tracing::{error, info};
 use std::sync::{Arc, Mutex};
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 
+const REST_SERVER_PORT: u16 = 5000;
+const REST_SERVER_ADDR_IPV4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
+
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let config_dropshot: ConfigDropshot = ConfigDropshot {
-        bind_address: SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 5001)),
+        bind_address: SocketAddr::from((REST_SERVER_ADDR_IPV4, REST_SERVER_PORT)),
         ..Default::default()
     };
 
