@@ -31,6 +31,7 @@ struct SuiOpt {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    // See [[dev-docs/observability.md]] for more information on span logging.
     if std::env::var("SUI_JSON_SPAN_LOGS").is_ok() {
         // Code to add logging/tracing config from environment, including RUST_LOG
         // See https://www.lpalmieri.com/posts/2020-09-27-zero-to-production-4-are-we-observable-yet/#5-7-tracing-bunyan-formatter

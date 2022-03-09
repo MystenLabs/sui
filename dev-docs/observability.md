@@ -1,14 +1,18 @@
 # Logging, Tracing, Metrics, and Observability
 
-Good observability facilities will be key to the development and productionization of Sui.  This is made
+Good observability facilities are key to the development and growth of Sui.  This is made
 more challenging by the distributed and asynchronous nature of Sui, with multiple client and authority
 processes distributed over a potentially global network.
 
-The observability stack in Sui is based on the Tokio [tracing](https://tokio.rs/blog/2019-08-tracing) library.
-The rest of this document highlights specific aspects of achieving good observability such as useful logging
+The observability stack in Sui is based on the [Tokio tracing](https://tokio.rs/blog/2019-08-tracing) library.
+The rest of this document highlights specific aspects of achieving good observability through useful logging
 and metrics in Sui.
 
-## Contexts, Scopes, and Tracing Transaction Flow
+NOTE: The output here is largely for the consumption of Sui operators, administrators, and developers.  The
+content of logs and traces do not represent the authoritative, certified output of authorities and are subject
+to potentially byzantine behavior.
+
+## Contexts, scopes, and tracing transaction flow
 
 The main idea of logging and tracing in a distributed and asynchronous context, where you cannot rely on looking
 at individual logs over time in a single thread, is to assign context to logging/tracing so that we can trace,
@@ -39,11 +43,11 @@ and tracing a transaction across the gateway (`authority_aggregator`) as well as
 2022-03-05T01:35:03.395917Z DEBUG test_move_call_args_linter_command:process_cert{tx_digest=t#7e5f08ab09ec80e3372c101c5858c96965a25326c21af27ab7774d1f7bd40848}: sui_core::authority: Finished execution of transaction with status Success { gas_used: 7 } gas_used=7
 ```
 
-## Key-Value Pairs Schema
+## Key-value pairs schema
 
 ### Span names
 
-Spans capture not a single event but an entire block of time, so start, end, duration, etc. can be captured
+Spans capture not a single event but an entire block of time; so start, end, duration, etc. can be captured
 and analyzed for tracing, performance analysis, etc.
 
 |           Name          |       Place        |                                    Meaning                                     |
@@ -57,10 +61,10 @@ and analyzed for tracing, performance analysis, etc.
 | db_update_state         | Authority          | Update the database with certificate, effects after transaction Move execution |
 |                         |                    |                                                                                |
 
-### Tags - Keys
+### Tags - keys
 
-The idea is that every event and span would get tagged with key/value pairs.  Events/logs that log within any context or nested contexts would also inherit the context-level tags.
-These tags represent "fields" that can be analyzed and filtered by.  For example, one could filter out broadcasts and see the errors for all instances where the bad stake exceeded a certain amount, but not enough for an error.
+The idea is that every event and span would get tagged with key-value pairs.  Events that log within any context or nested contexts would also inherit the context-level tags.
+These tags represent *fields* that can be analyzed and filtered by.  For example, one could filter out broadcasts and see the errors for all instances where the bad stake exceeded a certain amount, but not enough for an error.
 
 TODO: see if keys need to be scoped by contexts
 
@@ -80,16 +84,16 @@ TODO: see if keys need to be scoped by contexts
 | gas_used            | Authority          | Amount of gas used by the transaction                                      |
 |                     |                    |                                                                            |
 
-## Logging Levels
+## Logging levels
 
-This is always tricky, to balance the right amount of verbosity especially by default, but keeping in mind this is a high performance system.
+This is always tricky, to balance the right amount of verbosity especially by default -- while keeping in mind this is a high performance system.
 
 | Level |                                              Type of Messages                                              |
 | ----- | ---------------------------------------------------------------------------------------------------------- |
 | Error | Process-level faults (not transaction-level errors, there could be a ton of those)                         |
 | Warn  | Unusual or byzantine activity                                                                              |
-| Info  | High level aggregate stats. Major events related to data sync, epoch changes.                              |
-| Debug | High level tracing for individual transactions. Eg Gateway/client side -> authority -> Move execution etc. |
+| Info  | High level aggregate stats, major events related to data sync, epoch changes.                              |
+| Debug | High level tracing for individual transactions, eg Gateway/client side -> authority -> Move execution etc. |
 | Trace | Extremely detailed tracing for individual transactions                                                     |
 |       |                                                                                                            |
 
@@ -99,7 +103,7 @@ The `RUST_LOG` environment variable can be used to set both the overall logging 
 individual components, and even filtering down to specific spans or tags within spans are possible too.
 For more details, please see the [EnvFilter](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) docs.
 
-## Tracing and Span Output
+## Tracing and span output
 
 By default, only output from logging events (eg `info!`, `debug!`, etc) are output, and not span information.
 However, detailed span start and end logs can be generated by defining the `SUI_JSON_SPAN_LOGS` environment variable.  Note that this causes all output to be in JSON format, which is not as human-readable, so it is not enabled by default.
@@ -117,13 +121,15 @@ Also notice `elapsed_milliseconds` which logs the duration of each span.
 {"v":0,"name":"sui","msg":"[PROCESS_CERT - END]","level":20,"hostname":"Evan-MLbook.lan","pid":51425,"time":"2022-03-08T22:48:11.248688Z","target":"sui_core::authority_server","line":67,"file":"sui_core/src/authority_server.rs","tx_digest":"t#d1385064287c2ad67e4019dd118d487a39ca91a40e0fd8e678dbc32e112a1493","elapsed_milliseconds":2}
 ```
 
-## Observability of MOVE programs, Events, etc.
+## Observability of MOVE programs, events, etc.
 
-TODO
+TODO.
+
+We need to provide means to authenticate the events etc (by linking them to signed effects).
 
 ## Metrics
 
-## Ways to View Logs, Traces, Metrics
+## Ways to view logs, traces, metrics
 
 TODO: add architecture diagram
 
@@ -133,8 +139,8 @@ The idea here is to enable the viewing of logging, traces, and metrics with indu
 - OpenTelemetry output could allow the use of Yaeger and similar tracing backends
 
 
-## Live Async Inspection / Tokio Console
+## Live async inspection / Tokio Console
 
 ## (Re)Configuration
 
-## Viewing Logs, Traces, Metrics
+## Viewing logs, traces, metrics
