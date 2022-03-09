@@ -106,9 +106,9 @@ module Games::RockPaperScissors {
         }
     }
 
-    /// Start a new game.
-    /// Create a prize fund, set up account so others can play.
-    /// First come, first serve. Only two slots per game.
+    /// Start a new game at sender address. The only arguments needed are players, the rest
+    /// is initiated with default/empty values which will be filled later in the game.
+    ///
     /// todo: extend with generics + T as prize
     public fun new_game(player_one: address, player_two: address, ctx: &mut TxContext) {
         Transfer::transfer(Game {
