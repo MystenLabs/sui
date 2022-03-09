@@ -17,15 +17,15 @@ impl<T> AutoIncSenderInner<T> {
     pub fn send_all_waiting(&mut self) {
         while let Some(item_opt) = self.waiting.remove(&self.next_expected_sequence_number) {
             if let Some(item) = item_opt {
-                let _ = self
-                    .sender
-                    .send((self.next_expected_sequence_number, item));
+                if let Err(_err) = self.sender.send((self.next_expected_sequence_number, item)) {
+                    /*
+                        An error here indicates the other side of the channel is closed.
+                        There is not very much we can do, as if the batcher is closed we
+                        will write to the DB and the recover when we recover.
+                    */
 
-                /*
-                    An error here indicates the other side of the channel is closed.
-                    There is not very much we can do, as if the batcher is closed we
-                    will write to the DB and the recover when we recover.
-                */
+                    self.waiting.clear();
+                }
             }
             self.next_expected_sequence_number += 1;
         }
@@ -36,6 +36,9 @@ impl<T> AutoIncSenderInner<T> {
     A wrapper around a channel sender that ensures items sent are associated with
     integer tickets and sent in increasing ticket order. When a ticket is dropped
     its ticket value is skipped and the subsequent tickets are sent.
+
+    If the receiver end of the channel is closed, the autoinc sender simply drops
+    all the items sent.
 */
 
 #[derive(Clone)]
@@ -57,9 +60,9 @@ impl<T> AutoIncSender<T> {
     pub fn next_ticket(&self) -> Ticket<T> {
         let ticket_number = {
             // Keep the critical region as small as possible
-            let mut inc_sender = self.0.lock();
-            let ticket_number_inner = inc_sender.next_available_sequence_number;
-            inc_sender.next_available_sequence_number += 1;
+            let mut aic = self.0.lock();
+            let ticket_number_inner = aic.next_available_sequence_number;
+            aic.next_available_sequence_number += 1;
             ticket_number_inner
         };
 
@@ -83,10 +86,13 @@ where
     T: std::fmt::Debug,
 {
     /// Send an item at that sequence in the channel.
-    pub async fn send(&mut self, item: T) {
+    pub fn send(&mut self, item: T) {
         let mut aic = self.autoinc_sender.lock();
+        if aic.sender.is_closed() {
+            // To ensure we do not fill our memory
+            return;
+        }
         aic.waiting.insert(self.sequence_number, Some(item));
-        println!("SEND {:?}", aic.waiting);
         self.sent = true;
         aic.send_all_waiting();
     }
@@ -103,6 +109,9 @@ impl<T> Drop for Ticket<T> {
     fn drop(&mut self) {
         if !self.sent {
             let mut aic = self.autoinc_sender.lock();
+            if aic.sender.is_closed() {
+                return;
+            }
             aic.waiting.insert(self.sequence_number, None);
             aic.send_all_waiting();
         }
@@ -124,7 +133,7 @@ mod tests {
         let mut t4 = autoinc.next_ticket();
 
         // Send a value out of order
-        t4.send(1010).await;
+        t4.send(1010);
 
         // Drop a ticket
         drop(t2);
@@ -140,7 +149,7 @@ mod tests {
         assert!(handle.await.is_err());
 
         // Send the initial ticket
-        t1.send(1040).await;
+        t1.send(1040);
 
         // Try to read
         let (s1, v1) = rx.recv().await.unwrap();

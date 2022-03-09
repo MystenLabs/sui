@@ -112,10 +112,7 @@ async fn test_batch_manager_happy_path() {
 
     // Send a transaction.
     let tx_zero = TransactionDigest::new([0; 32]);
-    _send
-        .send_item(0, tx_zero)
-        .await
-        .expect("Send to the channel.");
+    _send.ticket().send(tx_zero);
 
     // First we get a transaction update
     let (_tx, mut rx) = _pair;
@@ -127,10 +124,7 @@ async fn test_batch_manager_happy_path() {
     // Then we (eventually) get a batch
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
-    _send
-        .send_item(1, tx_zero)
-        .await
-        .expect("Send to the channel.");
+    _send.ticket().send(tx_zero);
 
     // When we close the sending channel we also also end the service task
     drop(_send);
@@ -173,25 +167,18 @@ async fn test_batch_manager_out_of_order() {
 
     // Send transactions out of order
     let tx_zero = TransactionDigest::new([0; 32]);
-    _send
-        .send_item(1, tx_zero)
-        .await
-        .expect("Send to the channel.");
 
-    _send
-        .send_item(3, tx_zero)
-        .await
-        .expect("Send to the channel.");
+    {
+        let mut ticket0 = _send.ticket();
+        let mut ticket1 = _send.ticket();
+        let mut ticket2 = _send.ticket();
+        let mut ticket3 = _send.ticket();
 
-    _send
-        .send_item(2, tx_zero)
-        .await
-        .expect("Send to the channel.");
-
-    _send
-        .send_item(0, tx_zero)
-        .await
-        .expect("Send to the channel.");
+        ticket1.send(tx_zero);
+        ticket3.send(tx_zero);
+        ticket2.send(tx_zero);
+        ticket0.send(tx_zero);
+    }
 
     // Get transactions in order then batch.
     let (_tx, mut rx) = _pair;
@@ -312,24 +299,22 @@ async fn test_batch_store_retrieval() {
             .insert(&i, &tx_zero)
             .expect("Failed to write.");
 
-        _send
-            .send_item(i, tx_zero)
-            .await
-            .expect("Send to the channel.");
+        _send.ticket().send(tx_zero);
     }
 
     // Add a few out of order transactions that should be ignored
-    // NOTE: gap between 104 and 110
+    // NOTE: gap between 105 and 110
+
+    // Gather (don't drop) tickets 105 .. 110
+    let _hold_tickets: Vec<_> = (105u64..110).into_iter().map(|_| _send.ticket()).collect();
+
     for i in 110u64..120 {
         inner_store
             .executed_sequence
             .insert(&i, &tx_zero)
             .expect("Failed to write.");
 
-        _send
-            .send_item(i, tx_zero)
-            .await
-            .expect("Send to the channel.");
+        _send.ticket().send(tx_zero);
     }
 
     // Give a change to the channels to send.
@@ -363,8 +348,6 @@ async fn test_batch_store_retrieval() {
         .batches_and_transactions(30, 50)
         .expect("Retrieval failed!");
 
-    println!("{:?}", batches);
-
     assert_eq!(3, batches.len());
     assert_eq!(30, batches.first().unwrap().batch.next_sequence_number);
     assert_eq!(50, batches.last().unwrap().batch.next_sequence_number);
@@ -375,8 +358,6 @@ async fn test_batch_store_retrieval() {
     let (batches, transactions) = store
         .batches_and_transactions(94, 120)
         .expect("Retrieval failed!");
-
-    println!("{:?}", batches);
 
     assert_eq!(2, batches.len());
     assert_eq!(90, batches.first().unwrap().batch.next_sequence_number);
@@ -389,8 +370,6 @@ async fn test_batch_store_retrieval() {
         .batches_and_transactions(123, 222)
         .expect("Retrieval failed!");
 
-    println!("{:?}", batches);
-
     assert_eq!(1, batches.len());
     assert_eq!(100, batches.first().unwrap().batch.next_sequence_number);
 
@@ -399,6 +378,7 @@ async fn test_batch_store_retrieval() {
     // When we close the sending channel we also also end the service task
     drop(_send);
     drop(_pair);
+    drop(_hold_tickets);
 
     _join.await.expect("No errors in task");
 }

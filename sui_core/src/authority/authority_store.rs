@@ -15,7 +15,7 @@ use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use tracing::warn;
 use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
 
-use std::sync::atomic::Ordering;
+// use std::sync::atomic::Ordering;
 use typed_store::{reopen, traits::Map};
 
 pub type AuthorityStore = SuiDataStore<false>;
@@ -596,21 +596,18 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         )?;
 
         // Safe to unwrap since the "true" flag ensures we get a sequence value back.
-        self
-            .batch_update_objects(
-                write_batch,
-                temporary_store,
-                transaction_digest,
-                sequence_number,
-            )?;
+        self.batch_update_objects(
+            write_batch,
+            temporary_store,
+            *transaction_digest,
+            sequence_number,
+        )?;
 
-        Ok(
-            TransactionInfoResponse {
-                signed_transaction: self.signed_transactions.get(transaction_digest)?,
-                certified_transaction: Some(certificate),
-                signed_effects: Some(signed_effects),
-            },
-        )
+        Ok(TransactionInfoResponse {
+            signed_transaction: self.signed_transactions.get(&transaction_digest)?,
+            certified_transaction: Some(certificate),
+            signed_effects: Some(signed_effects),
+        })
     }
 
     /// Persist temporary storage to DB for genesis modules

@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_autoinc_channel::Ticket;
 use crate::authority::{AuthorityStore, StableSyncAuthoritySigner};
 use std::sync::Arc;
 use sui_types::base_types::*;
@@ -9,10 +10,12 @@ use sui_types::error::{SuiError, SuiResult};
 
 use std::collections::BTreeMap;
 use std::time::Duration;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::time::interval;
 
 use typed_store::Map;
+
+use crate::authority::authority_autoinc_channel::AutoIncSender;
 
 #[cfg(test)]
 #[path = "unit_tests/batch_tests.rs"]
@@ -47,7 +50,7 @@ pub type BroadcastPair = (BroadcastSender, BroadcastReceiver);
 
 pub struct BatchSender {
     /// Channel for sending updates.
-    pub(crate) tx_send: UnboundedSender<(TxSequenceNumber, TransactionDigest)>,
+    pub(crate) autoinc: AutoIncSender<TransactionDigest>,
 }
 
 pub struct BatchManager {
@@ -61,14 +64,8 @@ pub struct BatchManager {
 
 impl BatchSender {
     /// Send a new event to the batch manager
-    pub async fn send_item(
-        &self,
-        transaction_sequence: TxSequenceNumber,
-        transaction_digest: TransactionDigest,
-    ) -> Result<(), SuiError> {
-        self.tx_send
-            .send((transaction_sequence, transaction_digest))
-            .map_err(|_| SuiError::BatchErrorSender)
+    pub fn ticket(&self) -> Ticket<TransactionDigest> {
+        self.autoinc.next_ticket()
     }
 }
 
@@ -79,7 +76,10 @@ impl BatchManager {
     ) -> (BatchSender, BatchManager, BroadcastPair) {
         let (tx_send, tx_recv) = unbounded_channel();
         let (tx_broadcast, rx_broadcast) = tokio::sync::broadcast::channel(capacity);
-        let sender = BatchSender { tx_send };
+        let latest_sequence_number = db.next_sequence_number();
+        let sender = BatchSender {
+            autoinc: AutoIncSender::new(tx_send, latest_sequence_number),
+        };
         let manager = BatchManager {
             tx_recv,
             tx_broadcast: tx_broadcast.clone(),
