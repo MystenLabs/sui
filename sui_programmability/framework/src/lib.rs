@@ -129,7 +129,7 @@ pub fn build_move_package(
                         && m.self_id().address() == &AccountAddress::ZERO
                 })
             {
-                return Err(SuiError::ModulePublishFailure { error: format!("Denpendent modules must have been published on-chain with non-0 addresses, unlike module {:?}", m.self_id()) });
+                return Err(SuiError::ModulePublishFailure { error: format!("Dependent modules must have been published on-chain with non-0 addresses, unlike module {:?}", m.self_id()) });
             }
             Ok(package
                 .transitive_compiled_modules()
@@ -209,7 +209,12 @@ fn run_framework_move_unit_tests() {
 
 #[test]
 fn run_examples_move_unit_tests() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples");
-    build_and_verify_user_package(&path, true).unwrap();
-    run_move_unit_tests(&path).unwrap();
+    let examples = vec!["basics", "defi", "fungible_tokens", "games", "nfts"];
+    for example in examples {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../examples")
+            .join(example);
+        build_and_verify_user_package(&path, true).unwrap();
+        run_move_unit_tests(&path).unwrap();
+    }
 }

@@ -1,7 +1,7 @@
 #[test_only]
-module Examples::TicTacToeTests {
+module Games::TicTacToeTests {
     use Sui::TestScenario::{Self, Scenario};
-    use Examples::TicTacToe::{Self, Mark, MarkMintCap, TicTacToe, Trophy};
+    use Games::TicTacToe::{Self, Mark, MarkMintCap, TicTacToe, Trophy};
 
     const SEND_MARK_FAILED: u64 = 0;
     const UNEXPECTED_WINNER: u64 = 1;

@@ -1,5 +1,5 @@
 /// An example of a custom object with comments explaining the relevant bits
-module Examples::CustomObjectTemplate {
+module Basics::Object {
     use Sui::ID::VersionedID;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
