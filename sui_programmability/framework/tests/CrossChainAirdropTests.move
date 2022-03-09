@@ -17,7 +17,6 @@ module Sui::CrossChainAirdropTests {
     const SOURCE_CONTRACT_ADDRESS: vector<u8> = x"BC4CA0EdA7647A8aB7C2061c2E118A18a936f13D";
     const SOURCE_TOKEN_ID: u64 = 101;
     const NAME: vector<u8> = b"BoredApeYachtClub";
-    const SYMBOL: vector<u8> = b"BAYC";
     const TOKEN_URI: vector<u8> = b"ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/101";
 
     struct Object has key {
@@ -68,7 +67,6 @@ module Sui::CrossChainAirdropTests {
                 SOURCE_CONTRACT_ADDRESS,
                 token_id,
                 NAME,
-                SYMBOL,
                 TOKEN_URI,
                 ctx,
             );

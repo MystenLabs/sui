@@ -2,28 +2,35 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use move_core_types::identifier::Identifier;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::fs::read_dir;
 use std::ops::Add;
 use std::path::Path;
+use std::str;
 use std::time::Duration;
 use sui::config::{
     AccountConfig, AuthorityPrivateInfo, GenesisConfig, NetworkConfig, ObjectConfig, WalletConfig,
     AUTHORITIES_DB_NAME,
 };
 use sui::gateway::GatewayType;
+use sui::keystore::{KeystoreType, SuiKeystore};
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_network::network::PortAllocator;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::TransactionEffects;
-use sui_types::object::{Data, MoveObject, Object, ObjectRead, GAS_VALUE_FOR_TESTING};
+use sui_types::object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING};
+use tempfile::TempDir;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tracing_test::traced_test;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
+const AIRDROP_SOURCE_CONTRACT_ADDRESS: &str = "bc4ca0eda7647a8ab7c2061c2e118a18a936f13d";
+const AIRDROP_SOURCE_TOKEN_ID: u64 = 101u64;
+const AIRDROP_TOKEN_NAME: &str = "BoredApeYachtClub";
+const AIRDROP_TOKEN_URI: &str = "ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/101";
 
 macro_rules! retry_assert {
     ($test:expr, $timeout:expr) => {{
@@ -118,6 +125,152 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     }
 
     Ok(())
+}
+
+#[traced_test]
+#[tokio::test]
+// TODO<https://github.com/MystenLabs/sui/issues/505> move this function to a standalone file
+async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
+    let working_dir = tempfile::tempdir()?;
+
+    let network = start_network(working_dir.path(), 10101, None).await?;
+    // Wait for authorities to come alive.
+    retry_assert!(
+        logs_contain("Listening to TCP traffic on 127.0.0.1"),
+        Duration::from_millis(5000)
+    );
+
+    // Create Wallet context with the oracle account
+    let (oracle_address, mut context) = airdrop_get_wallet_context_with_oracle(working_dir).await?;
+    let recipient_address = *context.config.accounts.first().unwrap();
+
+    // Assemble the move call to claim the airdrop
+    let oracle_obj_str = format!(
+        "0x{:02x}",
+        airdrop_get_oracle_object(oracle_address, &mut context).await?
+    );
+    let args_json = json!([
+        oracle_obj_str,
+        format!("0x{:02x}", recipient_address),
+        AIRDROP_SOURCE_CONTRACT_ADDRESS.to_string(),
+        json!(AIRDROP_SOURCE_TOKEN_ID),
+        AIRDROP_TOKEN_NAME.to_string(),
+        AIRDROP_TOKEN_URI.to_string()
+    ]);
+    let mut args = vec![];
+    for a in args_json.as_array().unwrap() {
+        args.push(SuiJsonValue::new(a.clone()).unwrap());
+    }
+
+    // Claim the airdrop
+    let gas_object_id = transfer_gas(recipient_address, oracle_address, &mut context).await?;
+    let token = airdrop_call_move_and_get_created_object(args, gas_object_id, &mut context).await?;
+
+    // Verify the airdrop token
+    assert_eq!(token["contents"]["type"], ("0x2::CrossChainAirdrop::NFT"));
+    let fields = &token["contents"]["fields"];
+    assert_eq!(
+        fields["source_token_id"]["fields"]["id"],
+        AIRDROP_SOURCE_TOKEN_ID
+    );
+
+    // TODO: verify the other string fields once SuiJSON has better support for rendering
+    // string fields
+
+    network.abort();
+    Ok(())
+}
+
+async fn airdrop_get_wallet_context_with_oracle(
+    working_dir: TempDir,
+) -> Result<(SuiAddress, WalletContext), anyhow::Error> {
+    use sui_types::crypto::get_key_pair_from_bytes;
+
+    let (oracle_address, keypair) = get_key_pair_from_bytes(&[
+        143, 102, 49, 171, 56, 173, 188, 83, 154, 218, 98, 200, 173, 252, 53, 239, 131, 210, 147,
+        14, 4, 24, 132, 151, 178, 0, 167, 89, 176, 90, 106, 176, 208, 47, 8, 58, 177, 56, 246, 192,
+        244, 88, 202, 115, 9, 82, 3, 184, 18, 236, 128, 199, 22, 37, 255, 146, 103, 34, 0, 240,
+        255, 163, 60, 174,
+    ]);
+    let mut wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let path = match &wallet_conf.keystore {
+        KeystoreType::File(path) => path,
+        _ => panic!("Unexpected KeystoreType"),
+    };
+    let mut store = SuiKeystore::load_or_create(path)?;
+    store.add_key(oracle_address, keypair)?;
+    Vec::push(&mut wallet_conf.accounts, oracle_address);
+    Ok((oracle_address, WalletContext::new(wallet_conf)?))
+}
+
+async fn airdrop_get_oracle_object(
+    address: SuiAddress,
+    context: &mut WalletContext,
+) -> Result<ObjectID, anyhow::Error> {
+    WalletCommands::SyncClientState { address }
+        .execute(context)
+        .await?
+        .print(true);
+    let object_refs = context.gateway.get_owned_objects(address);
+    assert_eq!(object_refs.len(), 1);
+    Ok(object_refs.first().unwrap().0)
+}
+
+async fn airdrop_call_move_and_get_created_object(
+    args: Vec<SuiJsonValue>,
+    gas: ObjectID,
+    context: &mut WalletContext,
+) -> Result<Value, anyhow::Error> {
+    let resp = WalletCommands::Call {
+        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        module: Identifier::new("CrossChainAirdrop").unwrap(),
+        function: Identifier::new("claim").unwrap(),
+        type_args: vec![],
+        args: args.to_vec(),
+        gas,
+        gas_budget: 1000,
+    }
+    .execute(context)
+    .await?;
+
+    let minted_token_id = match resp {
+        WalletCommandResult::Call(
+            _,
+            TransactionEffects {
+                created: new_objs, ..
+            },
+        ) => {
+            assert_eq!(new_objs.len(), 1);
+            new_objs[0].0 .0
+        }
+        _ => panic!("unexpected WalletCommandResult"),
+    };
+
+    get_move_object(context, minted_token_id).await
+}
+
+async fn transfer_gas(
+    from: SuiAddress,
+    to: SuiAddress,
+    context: &mut WalletContext,
+) -> Result<ObjectID, anyhow::Error> {
+    let gas_objects_result = WalletCommands::Gas { address: from }
+        .execute(context)
+        .await?;
+
+    let gas_objects = match gas_objects_result {
+        WalletCommandResult::Gas(objs) => objs,
+        _ => panic!("unexpected WalletCommandResult"),
+    };
+
+    WalletCommands::Transfer {
+        to,
+        object_id: *gas_objects[0].id(),
+        gas: *gas_objects[1].id(),
+    }
+    .execute(context)
+    .await?;
+    Ok(*gas_objects[0].id())
 }
 
 #[traced_test]
@@ -282,7 +435,9 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     // Make sure init() is executed correctly for custom_genesis_package_2::M1
     let move_objects = get_move_objects(&mut context, address).await?;
     assert_eq!(move_objects.len(), 1);
-    assert_eq!(move_objects[0].type_.module.as_str(), "M1");
+    assert!(move_objects[0]["contents"]["type"]
+        .to_string()
+        .contains("M1::Object"));
 
     network.abort();
     Ok(())
@@ -460,7 +615,7 @@ fn extract_gas_info(s: &str) -> Option<(ObjectID, SequenceNumber, u64)> {
 async fn get_move_objects(
     context: &mut WalletContext,
     address: SuiAddress,
-) -> Result<Vec<MoveObject>, anyhow::Error> {
+) -> Result<Vec<Value>, anyhow::Error> {
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
         .execute(context)
@@ -488,18 +643,16 @@ async fn get_move_objects(
 async fn get_move_object(
     context: &mut WalletContext,
     id: ObjectID,
-) -> Result<MoveObject, anyhow::Error> {
+) -> Result<Value, anyhow::Error> {
     let obj = WalletCommands::Object { id }.execute(context).await?;
 
     match obj {
-        WalletCommandResult::Object(ObjectRead::Exists(
-            _,
-            Object {
-                data: Data::Move(m),
-                ..
-            },
-            ..,
-        )) => Ok(m),
+        WalletCommandResult::Object(obj) => match obj {
+            ObjectRead::Exists(_, obj, layout) => {
+                Ok(obj.to_json(&layout).unwrap_or_else(|_| json!("")))
+            }
+            _ => panic!("WalletCommands::Object returns wrong type"),
+        },
         _ => panic!("WalletCommands::Object returns wrong type {}", obj),
     }
 }
