@@ -1,12 +1,12 @@
 ## What makes Sui different?
 
-TODO: WIP
-
 Here are Sui's key features:
 
 - High throughput and low latency (enables low cost with fixed hardware)
 - Causal order vs total order (enables massively parallel execution)
 - Move and object-centric data model (enables composable objects/NFTs)
+- Asset-centric programming model
+- Easier developer experience
 
 ### Authorities vs Validators/Miners
 An authority plays a role similar to "validators" or "miners" in other blockchain systems. The key distinction between these roles (and the reason we insist on using a separate term) is that validators/miners are *active*, whereas authorities are *passive*. Broadly speaking:
