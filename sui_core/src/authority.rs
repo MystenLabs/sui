@@ -541,6 +541,7 @@ impl AuthorityState {
             &gas_object_id,
         );
         // Update the database in an atomic manner
+
         self
             .update_state(temporary_store, certificate, signed_effects)
             .instrument(tracing::debug_span!("db_update_state"))
