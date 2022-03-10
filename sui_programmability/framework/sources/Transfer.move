@@ -10,7 +10,7 @@ module Sui::Transfer {
 
     /// Represents a reference to a child object, whose type is T.
     /// This is used to track ownership between objects.
-    /// Whenver an object is transferred to another object (and hence owned by object),
+    /// Whenever an object is transferred to another object (and hence owned by object),
     /// a ChildRef is created. A ChildRef cannot be dropped. When a child object is
     /// transferred to a new parent object, the original ChildRef is dropped but a new
     /// one will be created. The only way to fully destroy a ChildRef is to transfer the
@@ -78,8 +78,19 @@ module Sui::Transfer {
     }
 
     /// Freeze `obj`. After freezing `obj` becomes immutable and can no
-    /// longer be transfered or mutated.
+    /// longer be transferred or mutated.
     public native fun freeze_object<T: key>(obj: T);
+
+    /// Turn the given object into a mutable shared object that everyone
+    /// can access and mutate. This is irreversible, i.e. once an object
+    /// is shared, it will stay shared forever.
+    /// Shared mutable object is not yet fully supported in Sui, which is being
+    /// actively worked on and should be supported very soon.
+    /// https://github.com/MystenLabs/sui/issues/633
+    /// https://github.com/MystenLabs/sui/issues/681
+    /// This API is exposed to demonstrate how we may be able to use it to program
+    /// Move contracts that use shared mutable objects.
+    public native fun share_object<T: key>(obj: T);
 
     native fun transfer_internal<T: key>(obj: T, recipient: address, to_object: bool);
 }
