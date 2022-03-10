@@ -435,6 +435,31 @@ async fn test_object_owning_another_object() {
     .await
     .unwrap();
     assert!(effects.status.is_ok());
+
+    // Create a parent and a child together. This tests the
+    // Transfer::transfer_to_object_id() API.
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "ObjectOwner",
+        "create_parent_and_child",
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    assert_eq!(effects.created.len(), 2);
+    // Check that one of them is the parent and the other is the child.
+    assert!(
+        (effects.created[0].1 == sender && effects.created[1].1 == effects.created[0].0 .0)
+            || (effects.created[1].1 == sender && effects.created[0].1 == effects.created[1].0 .0)
+    );
 }
 
 async fn build_and_publish_test_package(

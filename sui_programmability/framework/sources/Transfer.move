@@ -1,5 +1,5 @@
 module Sui::Transfer {
-    use Sui::ID::{Self, ID};
+    use Sui::ID::{Self, ID, VersionedID};
 
     // To allow access to transfer_to_object_unsafe.
     friend Sui::Collection;
@@ -43,12 +43,31 @@ module Sui::Transfer {
     /// Returns a non-droppable struct ChildRef that represents the ownership.
     public fun transfer_to_object<T: key, R: key>(obj: T, owner: &mut R): ChildRef<T> {
         let obj_id = *ID::id(&obj);
-        let owner_id = ID::id_address(owner);
+        let owner_id = ID::id_address(ID::id(owner));
         transfer_internal(obj, owner_id, true);
         ChildRef {
             parent_id: ID::new(owner_id),
             child_id: obj_id,
         }
+    }
+
+    /// Similar to transfer_to_object where we want to transfer an object to another object.
+    /// However, in the case when we haven't yet created the parent object (typically during
+    /// parent object construction), and all we have is just a parent object ID, we could
+    /// use this function to transfer an object to the parent object identified by its id.
+    /// The child object is specified in `obj`, and the parent object id is specified in `owner_id`.
+    /// The function consumes `owner_id` to make sure that the caller actually owns the id.
+    /// The `owner_id` will be returned (so that it can be used to continue creating the parent object),
+    /// along returned is the ChildRef as a reference to the ownership.
+    public fun transfer_to_object_id<T: key>(obj: T, owner_id: VersionedID): (VersionedID, ChildRef<T>) {
+        let obj_id = *ID::id(&obj);
+        let inner_owner_id = *ID::inner(&owner_id);
+        transfer_internal(obj, ID::id_address(&inner_owner_id), true);
+        let child_ref = ChildRef {
+            parent_id: inner_owner_id,
+            child_id: obj_id,
+        };
+        (owner_id, child_ref)
     }
 
     /// Similar to transfer_to_object, to transfer an object to another object.
