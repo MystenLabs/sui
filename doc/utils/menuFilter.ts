@@ -61,7 +61,7 @@ const generateAllMenuItemsFromList = () => {
         menuItemIndex: index + 1,
         external: element.link ? true : false,
         title: element.label,
-        path: '/' + element.fileName || element.link,
+        path:  element.link || '/' + element.fileName ,
       }
     })
   })
@@ -69,7 +69,9 @@ const generateAllMenuItemsFromList = () => {
   return menuOrderData.flat(3)
 }
 
+// TODO remove any broken links from the menu
 export const menuFilter = (menuItems1: Array<MenuFilter>): any => {
+
   if (!menuItems1 || menuItems1.length === 0) return {}
   /// Primary menu items
   const primaryMenu = menuItems1.filter((item) => item[primaryMenufilterName])
@@ -77,12 +79,12 @@ export const menuFilter = (menuItems1: Array<MenuFilter>): any => {
   // return only non-topMenu items and items with categoryName
   const menuItems = generateAllMenuItemsFromList()
 
+  // Remove any menu item from nav.congig without a corresponding page in the docs folder or that isnt a external link
+  // Avoiding broken links
+  const listOfInternalLinks = menuItems1.filter((item:any) => !item.external).map((item:any) => item.path)
   const secondaryMenu = menuItems
     .filter(
-      (item: any) =>
-        !item[primaryMenufilterName] ||
-        (item[primaryMenufilterName] &&
-          !item[primaryMenufilterName].categoryOrder)
+      (item: any) => item.external || listOfInternalLinks.includes(item.path)
     )
     .sort((a: any, b: any) => (a.categoryOrder > b.categoryOrder ? 1 : -1))
 
@@ -129,10 +131,11 @@ export const menuFilter = (menuItems1: Array<MenuFilter>): any => {
   }
 }
 
+  // TODO: Redo this
+  /// Auto Generate Front Matter infomation for each page in docs folder
+  /// search for a page buy title and return the front matter information
 export const menuOrderGenerator = (menuName: string, path: string): any => {
   const pathName = path ? path.substring(1) : menuName.toLowerCase()
-  // TODO: Make path name dynamic
-  //: menuName.toLowerCase() path ? path.substring(1)
 
   /// get Category order from config file
   const catOrder = Object.keys(navConfig.docs)
