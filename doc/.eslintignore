@@ -1,0 +1,14 @@
+build/Release
+suibuild/**
+./suibuild/**
+.github/**
+.firenase/**
+.nuxt/**
+.vscode/**
+.src/**
+.test
+static
+.firebase
+.*
+*.md
+*.spec.js

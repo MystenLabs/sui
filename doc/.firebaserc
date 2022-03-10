@@ -1,0 +1,20 @@
+{
+  "projects": {
+    "default": "devportal-30dd0"
+  },
+  "targets": {
+    "devportal-30dd0": {
+      "hosting": {
+        "prod": [
+          "devportal-30dd0"
+        ],
+        "dev": [
+          "devportal-dev"
+        ],
+        "qa": [
+          "devportal-qa"
+        ]
+      }
+    }
+  }
+}
