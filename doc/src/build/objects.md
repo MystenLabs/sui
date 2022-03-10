@@ -1,4 +1,6 @@
-# Objects
+---
+title: Build Objects
+---
 
 Sui has programmable objects created and managed by [Move](https://github.com/diem/move) packages (a.k.a. *smart contracts*). Move packages themselves are also objects. Thus, Sui objects can be partitioned into two categories:
 * *Mutable data values*: typed data governed by a particular Move [*module*](https://github.com/diem/move/blob/main/language/documentation/book/src/modules-and-scripts.md). Each object value is a [struct](https://github.com/diem/move/blob/main/language/documentation/book/src/structs-and-resources.md) with fields that can contain primitive types (e.g. integers, addresses), other objects, and non-object structs. Each object value is mutable at the time of its creation but can subsequently be *frozen* and become permanently immutable.
