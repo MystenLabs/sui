@@ -1133,7 +1133,6 @@ async fn handle_move_call(
         .unwrap_or_default()
         .iter()
         .map(|type_arg| parse_type_tag(type_arg))
-        .into_iter()
         .collect::<Result<Vec<_>, _>>()?;
     let gas_budget = call_params.gas_budget;
     let gas_object_id = ObjectID::try_from(call_params.gas_object_id)?;
