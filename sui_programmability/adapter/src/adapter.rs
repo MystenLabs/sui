@@ -155,7 +155,7 @@ fn execute_internal<
     object_owner_map: HashMap<SuiAddress, SuiAddress>,
     gas_budget: u64, // gas budget for the current call operation
     ctx: &mut TxContext,
-    for_publish: bool,
+    _for_publish: bool,
 ) -> ExecutionStatus {
     // TODO: Update Move gas constants to reflect the gas fee on sui.
     let cost_table = &move_vm_types::gas_schedule::INITIAL_COST_SCHEDULE;
@@ -189,20 +189,19 @@ fn execute_internal<
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
             debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
             debug_assert!(gas_used <= gas_budget);
-            if for_publish {
-                // When this function is used during publishing, it
-                // may be executed several times, with objects being
-                // created in the Move VM in each Move call. In such
-                // case, we need to update TxContext value so that it
-                // reflects what happened each time we call into the
-                // Move VM (e.g. to account for the number of created
-                // objects). We guard it with a flag to avoid
-                // serialization cost for non-publishing calls.
-                let ctx_bytes = mutable_ref_values.pop().unwrap();
-                let updated_ctx: TxContext = bcs::from_bytes(ctx_bytes.as_slice()).unwrap();
-                if let Err(err) = ctx.update_state(updated_ctx) {
-                    return ExecutionStatus::new_failure(gas_used, err);
-                }
+
+            // When this function is used during publishing, it
+            // may be executed several times, with objects being
+            // created in the Move VM in each Move call. In such
+            // case, we need to update TxContext value so that it
+            // reflects what happened each time we call into the
+            // Move VM (e.g. to account for the number of created
+            // objects). We guard it with a flag to avoid
+            // serialization cost for non-publishing calls.
+            let ctx_bytes = mutable_ref_values.pop().unwrap();
+            let updated_ctx: TxContext = bcs::from_bytes(ctx_bytes.as_slice()).unwrap();
+            if let Err(err) = ctx.update_state(updated_ctx) {
+                return ExecutionStatus::new_failure(gas_used, err);
             }
 
             let mutable_refs = mutable_ref_objects
