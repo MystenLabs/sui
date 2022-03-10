@@ -72,10 +72,10 @@ impl BatchManager {
     pub fn new(
         db: Arc<AuthorityStore>,
         capacity: usize,
-    ) -> (BatchSender, BatchManager, BroadcastPair) {
+    ) -> Result<(BatchSender, BatchManager, BroadcastPair), SuiError> {
         let (tx_send, tx_recv) = unbounded_channel();
         let (tx_broadcast, rx_broadcast) = tokio::sync::broadcast::channel(capacity);
-        let latest_sequence_number = db.next_sequence_number();
+        let latest_sequence_number = db.next_sequence_number()?;
         let sender = BatchSender {
             autoinc: AutoIncSender::new(tx_send, latest_sequence_number),
         };
@@ -85,7 +85,7 @@ impl BatchManager {
             db,
         };
 
-        (sender, manager, (tx_broadcast, rx_broadcast))
+        Ok((sender, manager, (tx_broadcast, rx_broadcast)))
     }
 
     /// Starts the manager service / tokio task

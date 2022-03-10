@@ -155,14 +155,14 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         }
     }
 
-    pub fn next_sequence_number(&self) -> TxSequenceNumber {
-        self.executed_sequence
+    pub fn next_sequence_number(&self) -> Result<TxSequenceNumber, SuiError> {
+        Ok(self
+            .executed_sequence
             .iter()
-            .skip_prior_to(&TxSequenceNumber::MAX)
-            .expect("Error reading table.")
+            .skip_prior_to(&TxSequenceNumber::MAX)?
             .next()
             .map(|(v, _)| v + 1u64)
-            .unwrap_or(0)
+            .unwrap_or(0))
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
@@ -456,7 +456,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         mut write_batch: DBBatch,
         temporary_store: AuthorityTemporaryStore,
         transaction_digest: TransactionDigest,
-        should_sequence: Option<TxSequenceNumber>,
+        seq_opt: Option<TxSequenceNumber>,
     ) -> Result<(), SuiError> {
         let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
 
@@ -570,7 +570,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
                 object_lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
             }
 
-            if let Some(next_seq) = should_sequence {
+            if let Some(next_seq) = seq_opt {
                 // Now we are sure we are going to execute, add to the sequence
                 // number and insert into authority sequence.
                 //

@@ -51,7 +51,7 @@ impl AuthorityServer {
     ) -> Result<tokio::task::JoinHandle<()>, SuiError> {
         // Start the batching subsystem, and register the handles with the authority.
         let (tx_sender, manager, (batch_sender, _batch_receiver)) =
-            BatchManager::new(self.state.db(), 1000);
+            BatchManager::new(self.state.db(), 1000)?;
 
         let _batch_join_handle = manager
             .start_service(
