@@ -58,6 +58,9 @@ async fn main() -> Result<(), String> {
 
     let mut api = ApiDescription::new();
 
+    // [DOCS]
+    api.register(docs).unwrap();
+
     // [DEBUG]
     api.register(genesis).unwrap();
     api.register(sui_start).unwrap();
@@ -73,11 +76,12 @@ async fn main() -> Result<(), String> {
     api.register(call).unwrap();
     api.register(sync).unwrap();
 
-    api.openapi("Sui API", "0.1")
-        .write(&mut std::io::stdout())
+    let documentation = api
+        .openapi("Sui API", "0.1")
+        .json()
         .map_err(|e| e.to_string())?;
 
-    let api_context = ServerContext::new();
+    let api_context = ServerContext::new(documentation);
 
     let server = HttpServerStarter::new(&config_dropshot, api, api_context, &log)
         .map_err(|error| format!("failed to create server: {}", error))?
@@ -90,6 +94,7 @@ async fn main() -> Result<(), String> {
  * Server context (state shared by handler functions)
  */
 struct ServerContext {
+    documentation: serde_json::Value,
     genesis_config_path: String,
     wallet_config_path: String,
     network_config_path: String,
@@ -102,8 +107,9 @@ struct ServerContext {
 }
 
 impl ServerContext {
-    pub fn new() -> ServerContext {
+    pub fn new(documentation: serde_json::Value) -> ServerContext {
         ServerContext {
+            documentation,
             genesis_config_path: String::from("genesis.conf"),
             wallet_config_path: String::from("wallet.conf"),
             network_config_path: String::from("./network.conf"),
@@ -113,6 +119,35 @@ impl ServerContext {
             wallet_context: Arc::new(Mutex::new(None)),
         }
     }
+}
+
+/**
+Response containing the API documentation.
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct DocumentationResponse {
+    /** A JSON object containing the OpenAPI definition for this API. */
+    documentation: serde_json::Value,
+}
+
+/**
+Generate OpenAPI documentation.
+ */
+#[endpoint {
+    method = GET,
+    path = "/docs",
+    tags = [ "docs" ],
+}]
+async fn docs(
+    rqctx: Arc<RequestContext<ServerContext>>,
+) -> Result<HttpResponseOk<DocumentationResponse>, HttpError> {
+    let server_context = rqctx.context();
+    let documentation = &server_context.documentation;
+
+    Ok(HttpResponseOk(DocumentationResponse {
+        documentation: documentation.clone(),
+    }))
 }
 
 /**
