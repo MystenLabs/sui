@@ -28,7 +28,8 @@ async fn test_open_manager() {
         let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
         // TEST 1: init from an empty database should return to a zero block
-        let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
+        let (_send, manager, _pair) =
+            BatchManager::new(store.clone(), 100).expect("Problem opening batch manager");
         let last_block = manager
             .init_from_database(address, key_pair.clone())
             .await
@@ -51,7 +52,8 @@ async fn test_open_manager() {
         opts.set_max_open_files(max_files_authority_tests());
         let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
-        let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
+        let (_send, manager, _pair) =
+            BatchManager::new(store.clone(), 100).expect("Problem opening batch manager");
         let last_block = manager
             .init_from_database(address, key_pair.clone())
             .await
@@ -72,7 +74,8 @@ async fn test_open_manager() {
         opts.set_max_open_files(max_files_authority_tests());
         let store = Arc::new(AuthorityStore::open(&path, Some(opts)));
 
-        let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
+        let (_send, manager, _pair) =
+            BatchManager::new(store.clone(), 100).expect("Problem opening batch manager");
         let last_block = manager
             .init_from_database(address, key_pair.clone())
             .await
@@ -104,7 +107,8 @@ async fn test_batch_manager_happy_path() {
     let address = *key_pair.public_key_bytes();
 
     // TEST 1: init from an empty database should return to a zero block
-    let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
+    let (_send, manager, _pair) =
+        BatchManager::new(store.clone(), 100).expect("Problem opening batch manager");
     let _join = manager
         .start_service(address, key_pair, 1000, Duration::from_millis(500))
         .await
@@ -159,7 +163,8 @@ async fn test_batch_manager_out_of_order() {
     let address = *key_pair.public_key_bytes();
 
     // TEST 1: init from an empty database should return to a zero block
-    let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
+    let (_send, manager, _pair) =
+        BatchManager::new(store.clone(), 100).expect("Problem opening batch manager");
     let _join = manager
         .start_service(address, key_pair, 4, Duration::from_millis(5000))
         .await
@@ -222,7 +227,8 @@ async fn test_handle_move_order_with_batch() {
     let mut authority_state = init_state_with_objects(vec![gas_payment_object]).await;
 
     // Create a listening infrastrucure.
-    let (_send, manager, _pair) = BatchManager::new(authority_state.db(), 100);
+    let (_send, manager, _pair) =
+        BatchManager::new(authority_state.db(), 100).expect("Problem opening batch manager");
     let _join = manager
         .start_service(
             authority_state.name,
@@ -283,7 +289,8 @@ async fn test_batch_store_retrieval() {
     let address = *key_pair.public_key_bytes();
 
     // TEST 1: init from an empty database should return to a zero block
-    let (_send, manager, _pair) = BatchManager::new(store.clone(), 100);
+    let (_send, manager, _pair) =
+        BatchManager::new(store.clone(), 100).expect("Problem opening batch manager");
     let _join = manager
         .start_service(address, key_pair, 10, Duration::from_secs(60))
         .await
