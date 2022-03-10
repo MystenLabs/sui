@@ -127,7 +127,9 @@ module Games::RockPaperScissors {
         }, TxContext::sender(ctx));
     }
 
-    /// Transfer [`PlayerTurn`] to the game owner. 
+    /// Transfer [`PlayerTurn`] to the game owner. Nobody at this point knows what move
+    /// is encoded inside the [`hash`] argument.
+    ///
     /// Currently there's no check on whether the game exists.
     public fun player_turn(at: address, hash: vector<u8>, ctx: &mut TxContext) {
         Transfer::transfer(PlayerTurn {
