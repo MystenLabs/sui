@@ -40,6 +40,7 @@
 
     const switchWalletAddress = () => {
         $walletAddress = ''
+        nft_list = []
         dispatch('pageFn', {page:'landing'});
     }
 
