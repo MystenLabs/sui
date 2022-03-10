@@ -1,4 +1,6 @@
 export const mapDatafromApi = (data) => {
+  // return empty array if data is not available
+  if (!data) return [];
   return data.map(item => {
       return {
           claim_status: item.claim_status,
