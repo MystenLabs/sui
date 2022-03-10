@@ -27,6 +27,17 @@ module ObjectOwner::ObjectOwner {
         );
     }
 
+    public fun create_parent_and_child(ctx: &mut TxContext) {
+        let parent_id = TxContext::new_id(ctx);
+        let child = Child { id: TxContext::new_id(ctx) };
+        let (parent_id, child_ref) = Transfer::transfer_to_object_id(child, parent_id);
+        let parent = Parent {
+            id: parent_id,
+            child: Option::some(child_ref),
+        };
+        Transfer::transfer(parent, TxContext::sender(ctx));
+    }
+
     public fun add_child(parent: &mut Parent, child: Child, _ctx: &mut TxContext) {
         let child_ref = Transfer::transfer_to_object(child, parent);
         Option::fill(&mut parent.child, child_ref);

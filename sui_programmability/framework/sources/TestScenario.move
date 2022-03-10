@@ -25,7 +25,7 @@ module Sui::TestScenario {
     /// transfer the object to the user.
     const EEMPTY_INVENTORY: u64 = 3;
 
-    /// Expected 1 object of this type in the tx sender's inventory, but found >1. 
+    /// Expected 1 object of this type in the tx sender's inventory, but found >1.
     /// Consider using TestScenario::remove_object_by_id to select a specific object
     const EINVENTORY_AMBIGUITY: u64 = 4;
 
@@ -34,7 +34,7 @@ module Sui::TestScenario {
     const EALREADY_REMOVED_OBJECT: u64 = 5;
 
     /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.
-    /// A `Scenario` maintains a view of the global object pool built up by the execution. 
+    /// A `Scenario` maintains a view of the global object pool built up by the execution.
     /// These objects can be accessed via functions like `remove_object`, which gives the
     /// transaction sender access to (only) objects in their inventory.
     /// Example usage:
@@ -49,12 +49,12 @@ module Sui::TestScenario {
     ///     Transfer::transfer(some_object, copy addr2)
     /// };
     /// // end the first transaction and begin a new one where addr2 is the sender
-    /// TestScenario::next_tx(scenario, &addr2)        
+    /// TestScenario::next_tx(scenario, &addr2)
     /// {
     ///     // remove the SomeObject value from addr2's inventory
     ///     let obj = TestScenario::remove_object<SomeObject>(scenario);
     ///     // use it to test some function that needs this value
-    ///     SomeObject::some_function(obj)         
+    ///     SomeObject::some_function(obj)
     /// }
     /// ... // more txes
     /// ```
@@ -70,7 +70,7 @@ module Sui::TestScenario {
 
     /// Begin a new multi-transaction test scenario in a context where `sender` is the tx sender
     public fun begin(sender: &address): Scenario {
-        Scenario { 
+        Scenario {
             ctx: TxContext::new_from_address(*sender, 0),
             removed: Vector::empty(),
             event_start_indexes: vector[0],
@@ -102,7 +102,7 @@ module Sui::TestScenario {
         };
         // reset `removed` for the next tx
         scenario.removed = Vector::empty();
-       
+
         // start index for the next tx is the end index for the current one
         let new_total_events = num_events();
         let tx_event_count = new_total_events - old_total_events;
@@ -122,7 +122,7 @@ module Sui::TestScenario {
     /// - If the object was previously removed, it was subsequently replaced via a call to `return_object`.
     /// Aborts if there is no object of type `T` in the inventory of the tx sender
     /// Aborts if there is >1 object of type `T` in the inventory of the tx sender--this function
-    /// only succeeds when the object to choose is unambiguous. In cases where there are multiple `T`'s, 
+    /// only succeeds when the object to choose is unambiguous. In cases where there are multiple `T`'s,
     /// the caller should resolve the ambiguity by using `remove_object_by_id`.
     public fun remove_object<T: key>(scenario: &mut Scenario): T {
         let sender = sender(scenario);
@@ -137,7 +137,7 @@ module Sui::TestScenario {
     public fun remove_nested_object<T1: key, T2: key>(
         scenario: &mut Scenario, parent_obj: &T1
     ): T2 {
-        remove_unique_object(scenario, ID::id_address(parent_obj))        
+        remove_unique_object(scenario, ID::id_address(ID::id(parent_obj)))
     }
 
     /// Same as `remove_object`, but returns the object of type `T` with object ID `id`.
@@ -152,7 +152,7 @@ module Sui::TestScenario {
     /// Should only be used in cases where the parent object has more than one child of type `T`.
     public fun remove_nested_object_by_id<T1: key, T2: key>(
         _scenario: &mut Scenario, _parent_obj: &T1, _child_id: ID
-    ): T2 {  
+    ): T2 {
         // TODO: implement me
         abort(200)
     }
@@ -170,7 +170,7 @@ module Sui::TestScenario {
         assert!(is_mem, ECANT_RETURN_OBJECT);
         Vector::remove(removed, idx);
 
-        // Model object return as a self transfer. Because the events are the source of truth for all object values 
+        // Model object return as a self transfer. Because the events are the source of truth for all object values
         // in the inventory, we must put any state change future txes want to see in an event. It would not be safe
         // to do (e.g.) `delete_object_for_testing(t)` instead.
         // TODO: do this with a special test-only event to enable writing tests that look directly at system events
@@ -189,7 +189,7 @@ module Sui::TestScenario {
         res
     }
 
-    /// Return the `TxContext` asociated with this `scenario`
+    /// Return the `TxContext` associated with this `scenario`
     public fun ctx(scenario: &mut Scenario): &mut TxContext {
         &mut scenario.ctx
     }
@@ -264,7 +264,7 @@ module Sui::TestScenario {
     native fun get_inventory<T: key>(signer_address: address, tx_end_index: u64): vector<T>;
 
     /// Test-only function for deleting an arbitrary object. Useful for eliminating objects without the `drop` ability.
-    native fun delete_object_for_testing<T>(t: T); 
+    native fun delete_object_for_testing<T>(t: T);
 
     /// Return the total number of events emitted by all txes in the current VM execution, including both user-defined events and system events
     native fun num_events(): u64;
