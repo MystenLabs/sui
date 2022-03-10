@@ -444,8 +444,7 @@ impl AuthorityState {
             unwrapped_object_ids,
         );
         // Update the database in an atomic manner
-        self
-            .update_state(temporary_store, certificate, to_signed_effects)
+        self.update_state(temporary_store, certificate, to_signed_effects)
             .instrument(tracing::debug_span!("db_update_state"))
             .await // Returns the OrderInfoResponse
     }
