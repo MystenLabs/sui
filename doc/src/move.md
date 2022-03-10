@@ -623,7 +623,7 @@ struct available for function definitions:
 ```
 
 We can now build the module extended with the new functions but still
-have only one test defined. Let use change that by adding another test
+have only one test defined. Let us change that by adding another test
 function:
 
 ``` rust
