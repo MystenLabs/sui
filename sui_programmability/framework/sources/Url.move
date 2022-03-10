@@ -5,7 +5,7 @@ module Sui::Url {
     use Std::ASCII::String;
     use Std::Vector;
 
-    /// Lenght of the vector<u8> representing a resource hash
+    /// Length of the vector<u8> representing a resource hash
     const HASH_VECTOR_LENGTH: u64 = 32;
     const HASH_LENGTH_MISMATCH: u64 = 0;
 
