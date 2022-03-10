@@ -304,11 +304,14 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     pub fn sequenced(
         &self,
         transaction_digest: TransactionDigest,
-        object_id: ObjectID,
-    ) -> Result<Option<SequenceNumber>, SuiError> {
-        self.sequenced
-            .get(&(transaction_digest, object_id))
-            .map_err(SuiError::from)
+        object_ids: &[ObjectID],
+    ) -> Result<Vec<Option<SequenceNumber>>, SuiError> {
+        let keys: Vec<_> = object_ids
+            .iter()
+            .map(|objid| (transaction_digest, *objid))
+            .collect();
+
+        self.sequenced.multi_get(&keys[..]).map_err(SuiError::from)
     }
 
     // Methods to mutate the store

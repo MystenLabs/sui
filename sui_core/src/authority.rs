@@ -329,12 +329,27 @@ impl AuthorityState {
         // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
+        self.process_certificate(confirmation_transaction).await
+    }
+
+    async fn check_shared_locks(
+        &self,
+        transaction_digest: TransactionDigest,
+        transaction: &Transaction,
+    ) -> Result<Vec<Object>, SuiError> {
         // If the transaction contains shared objects, we need to ensure they have been scheduled
         // for processing by the consensus protocol.
         if transaction.contains_shared_object() {
             debug!("Validating shared object sequence numbers from consensus...");
             let mut lock_errors = Vec::new();
-            for object_id in transaction.shared_input_objects() {
+
+            let shared_ids = transaction.shared_input_objects();
+            let shared_locks = self._database.sequenced(transaction_digest, shared_ids)?;
+            let shared_objects = self.get_objects(shared_ids).await?;
+
+            let mut inputs = Vec::with_capacity(shared_ids.len());
+
+            for (lock, object) in shared_locks.into_iter().zip(shared_objects.into_iter()) {
                 // Check whether the shared objects have already been assigned a sequence number by
                 // the consensus. Bail if the transaction contains even one shared object that either:
                 // (i) was not assigned a sequence number, or
@@ -343,18 +358,24 @@ impl AuthorityState {
                 // Note that if the shared object is not in storage (it has been destroyed), we keep
                 // processing the transaction to unlock all single-writer objects. The execution engine
                 // will simply execute no-op.
-                match self._database.sequenced(transaction_digest, *object_id)? {
-                    Some(lock) => {
-                        if let Some(object) = self._database.get_object(object_id)? {
-                            if object.version() != lock {
-                                warn!(object_version =? object.version(),
-                                      locked_version =? lock,
-                                      "Unexpected version number in locked shared object");
-                                lock_errors.push(SuiError::InvalidSequenceNumber);
-                            }
+
+                match (lock, object) {
+                    (Some(seq), Some(object)) => {
+                        if object.version() != seq {
+                            warn!(object_version =? object.version(),
+                                  locked_version =? seq,
+                                  "Unexpected version number in locked shared object");
+                            // TODO: Send a more informative error message here, stating
+                            // that we are waiting for the execution.
+                            lock_errors.push(SuiError::InvalidSequenceNumber);
+                            continue;
                         }
+
+                        inputs.push(object);
                     }
-                    None => lock_errors.push(SuiError::InvalidSequenceNumber),
+                    _ => {
+                        lock_errors.push(SuiError::InvalidSequenceNumber);
+                    }
                 }
             }
             fp_ensure!(
@@ -364,23 +385,10 @@ impl AuthorityState {
                 }
             );
 
-            // Now let's process the certificate as usual: this executes the transaction and
-            // unlock all single-writer objects. Since transactions with shared objects always
-            // have at least one owner objects, it is not necessary to re-check the locks on
-            // shared objects as we do with owned objects.
-            self.process_certificate(confirmation_transaction.clone())
-                .await
+            return Ok(inputs);
         }
-        // In case there are no shared objects, we simply process the certificate.
-        else {
-            // Ensure an idempotent answer
-            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-            if transaction_info.certified_transaction.is_some() {
-                return Ok(transaction_info);
-            }
 
-            self.process_certificate(confirmation_transaction).await
-        }
+        Ok(Vec::new())
     }
 
     async fn process_certificate(
@@ -397,11 +405,12 @@ impl AuthorityState {
             .into_iter()
             .map(|(_, object)| object)
             .collect();
-        for object_id in transaction.shared_input_objects() {
-            if let Some(object) = self._database.get_object(object_id)? {
-                inputs.push(object);
-            }
-        }
+
+        let shared_objects = self
+            .check_shared_locks(transaction_digest, &transaction)
+            .await?;
+        inputs.extend(shared_objects);
+
         debug!(
             num_inputs = inputs.len(),
             "Read inputs for transaction from DB"
@@ -515,13 +524,23 @@ impl AuthorityState {
         &self,
         certificate: &CertifiedTransaction,
     ) -> SuiResult<()> {
-        // Ensure it is the first time we see this certificate.
         let transaction = &certificate.transaction;
+
+        // Ensure it is a shared object certificate
+        if !transaction.contains_shared_object() {
+            // TODO: Maybe add a warning here, no respectable authority should
+            // have sequenced this.
+            return Ok(());
+        }
+
+        // Ensure it is the first time we see this certificate.
         let transaction_digest = transaction.digest();
-        for id in transaction.shared_input_objects() {
-            if self._database.sequenced(transaction_digest, *id)?.is_some() {
-                return Ok(());
-            }
+        if self
+            ._database
+            .sequenced(transaction_digest, transaction.shared_input_objects())?[0]
+            .is_some()
+        {
+            return Ok(());
         }
 
         // Check the certificate.
