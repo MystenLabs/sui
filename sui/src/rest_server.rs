@@ -1129,7 +1129,8 @@ async fn handle_move_call(
     let function = Identifier::from_str(&call_params.function.to_owned())?;
     let args = call_params.args;
     let type_args = call_params
-        .type_args.unwrap_or_default()
+        .type_args
+        .unwrap_or_default()
         .iter()
         .map(|type_arg| parse_type_tag(type_arg))
         .into_iter()
