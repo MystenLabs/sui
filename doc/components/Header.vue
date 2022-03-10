@@ -157,6 +157,7 @@ export default class Header extends Vue {
 <style lang="scss" scoped>
 .header_light.header_sticky {
   background-color: #fefefe;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08) ;
   .menu > li > a {
     color: #000;
   }
@@ -165,6 +166,9 @@ export default class Header extends Vue {
 ._sui-menu {
   span {
     text-transform: capitalize;
+  }
+  @media (max-width: 960px) {
+    width: 100%;
   }
 }
 ._sui__light {
@@ -176,5 +180,14 @@ export default class Header extends Vue {
 }
 .header ._search {
   color: #111111;
+  text-align: center;
+}
+.header_dark {
+  &.header_sticky {
+      box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08) ;
+  }
+  .burger__line{
+    background-color: #111111;
+  }
 }
 </style>

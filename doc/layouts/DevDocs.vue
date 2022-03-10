@@ -1,8 +1,9 @@
 <template>
   <div class="page-wrapper sui-light">
     <SearchOverlay v-if="seachState" />
-    <!--<Header class="header_dark" :showsearchbtn="true" />-->
+    <Header class="header_dark" :showsearchbtn="true" />
     <nuxt class="site-main _dev_docs section_doc" />
+    <Footer />
   </div>
 </template>
 

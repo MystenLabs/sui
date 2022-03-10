@@ -95,6 +95,9 @@ export default class ApiReferenceMenuvue extends Vue {
     left: 12px;
   }
   &.activeList {
+     ._devTopMenu {
+       color:#6fbcf0;
+    }
     &::before {
       margin-top: 20px;
       right: 0px;

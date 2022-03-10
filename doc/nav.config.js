@@ -11,11 +11,11 @@ module.exports = {
     items: [
       {
         label: 'Selections',
-        link: '/key-concepts/',
+        link: 'learn/how-sui-works',
       },
       {
         label: 'Dynamic properties',
-        link: '/key-concepts/dynamic-properties/',
+        link: 'key-concepts/dynamic-properties',
       },
       {
         label: 'Events',
@@ -29,7 +29,7 @@ module.exports = {
     learn: [
       {
         label: 'About Sui',
-        fileName: 'what-makes-sui-different',
+        fileName: 'learn/how-sui-works',
       },
       {
         label: 'Terminology',
@@ -108,7 +108,7 @@ module.exports = {
           },
           {
             label: 'Use Ethereum NFTs in Sui?',
-            fileName: 'sui-json',
+            fileName: 'sui-json1',
           },
         ],
       },

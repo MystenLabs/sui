@@ -2,10 +2,8 @@
   <section class="row">
     <div class="_side-doc-menu col-lg-4">
       <aside class="sidebar widget-area sticky">
-        <div class="col-auto">
-          <NuxtLink class="logo" to="/" aria-label="Home">
-            <div class="logo sui-logo"></div>
-          </NuxtLink>
+        <div class="col-auto _sue__spacer" >
+
         </div>
         <button
           class="_search button _s_t"

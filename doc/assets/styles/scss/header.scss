@@ -62,7 +62,9 @@
 .header_dark .logo {
   color: $sui__black;
 }
-
+.header_dark .overlay-menu__item-counter {
+  color: $sui__black;
+}
 .header_dark .sub-menu {
   background-color: #fff;
 }
@@ -579,7 +581,7 @@ a.logo:hover {
   }
   &.header_dark {
     .sui-logo {
-      background: url('/img/Sui-logo-blue.png');
+      background: url('/img/Sui-logo-dark.png');
       background-size: contain;
       background-repeat: no-repeat;
       background-position: left center;

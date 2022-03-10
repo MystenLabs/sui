@@ -81,7 +81,7 @@ export default class BaseFooter extends Vue {
   }
 }
 .site-footer {
-  background-color: #fefefe;
+  background-color: #e1f3ff;
   ._sui-footer-logo {
     background: url('/img/Sui-logo-dark.png');
     background-size: contain;

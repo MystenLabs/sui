@@ -40,7 +40,7 @@ import { MetaInfo } from 'vue-meta'
       return {
         title: page.title,
         page_meta: {},
-        editLink: `https://github.com/MystenLabs/fastx_dev_portal/tree/content/content/docs/${editUrl}.md`,
+        editLink: `https://github.com/MystenLabs/sui/tree/main/content/docs/${editUrl}.md`,
         document: page,
         prev,
         next,
