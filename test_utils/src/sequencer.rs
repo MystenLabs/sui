@@ -164,7 +164,7 @@ where
 
             // Send the transaction to the sequencer.
             let (sender, receiver) = oneshot::channel();
-            self.tx_input.send((buffer.freeze(), sender)).await.is_err() {
+            if self.tx_input.send((buffer.freeze(), sender)).await.is_err() {
                 panic!("Failed to sequence input bytes");
             }
 

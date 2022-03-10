@@ -135,13 +135,19 @@ impl std::fmt::Debug for PublicKeyBytes {
 // TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
 // TODO: rename to random_key_pair
 pub fn get_key_pair() -> (SuiAddress, KeyPair) {
-    let mut csprng = OsRng;
-    let kp = dalek::Keypair::generate(&mut csprng);
+    get_key_pair_from_rng(&mut OsRng)
+}
+
+/// Generate a keypair from the specified RNG (useful for testing).
+pub fn get_key_pair_from_rng<R>(csprng: &mut R) -> (SuiAddress, KeyPair)
+where
+    R: rand::CryptoRng + rand::RngCore,
+{
+    let kp = dalek::Keypair::generate(csprng);
     let keypair = KeyPair {
         key_pair: kp,
         public_key_cell: OnceCell::new(),
     };
-
     (SuiAddress::from(keypair.public_key_bytes()), keypair)
 }
 
