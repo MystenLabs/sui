@@ -10,6 +10,7 @@ use sui::config::{Config, WalletConfig};
 use sui::shell::{install_shell_plugins, AsyncHandler, CommandStructure, Shell};
 use sui::wallet_commands::*;
 use tracing::error;
+use tracing_subscriber::EnvFilter;
 
 const SUI: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
@@ -46,7 +47,12 @@ async fn main() -> Result<(), anyhow::Error> {
         .with_thread_names(false)
         .without_time()
         .compact();
-    tracing_subscriber::fmt().event_format(format).init();
+
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::fmt()
+        .event_format(format)
+        .with_env_filter(env_filter)
+        .init();
 
     let mut app: App = ClientOpt::clap();
     app = app.unset_setting(AppSettings::NoBinaryName);

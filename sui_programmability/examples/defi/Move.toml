@@ -1,0 +1,12 @@
+[package]
+name = "DeFi"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../framework" }
+
+[addresses]
+DeFi = "0x0"
+
+[dev-addresses]
+DeFi = "0x0"

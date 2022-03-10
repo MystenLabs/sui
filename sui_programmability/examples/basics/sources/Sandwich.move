@@ -1,9 +1,9 @@
 /// Example of objects that can be combined to create
 /// new objects
-module Examples::CombinableObjects {
-    use Examples::TrustedCoin::EXAMPLE;
+module Basics::Sandwich {
     use Sui::Coin::{Self, Coin};
     use Sui::ID::{Self, VersionedID};
+    use Sui::GAS::GAS;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
 
@@ -30,16 +30,16 @@ module Examples::CombinableObjects {
     const EINSUFFICIENT_FUNDS: u64 = 0;
 
     /// Exchange `c` for some ham
-    public fun buy_ham(c: Coin<EXAMPLE>, ctx: &mut TxContext): Ham {
+    public fun buy_ham(c: Coin<GAS>, ctx: &mut TxContext): Ham {
         assert!(Coin::value(&c) == HAM_PRICE, EINSUFFICIENT_FUNDS);
-        Transfer::transfer(c, admin());
+        Transfer::transfer(c, GROCERY);
         Ham { id: TxContext::new_id(ctx) }
     }
 
     /// Exchange `c` for some bread
-    public fun buy_bread(c: Coin<EXAMPLE>, ctx: &mut TxContext): Bread {
+    public fun buy_bread(c: Coin<GAS>, ctx: &mut TxContext): Bread {
         assert!(Coin::value(&c) == BREAD_PRICE, EINSUFFICIENT_FUNDS);
-        Transfer::transfer(c, admin());
+        Transfer::transfer(c, GROCERY);
         Bread { id: TxContext::new_id(ctx) }
     }
 
@@ -52,9 +52,5 @@ module Examples::CombinableObjects {
         ID::delete(ham_id);
         ID::delete(bread_id);
         Transfer::transfer(Sandwich { id: TxContext::new_id(ctx) }, TxContext::sender(ctx))
-    }
-
-    fun admin(): address {
-        GROCERY
     }
 }

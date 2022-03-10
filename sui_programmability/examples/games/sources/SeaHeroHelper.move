@@ -1,10 +1,12 @@
-/// Mod of the economics of the SeaScape game. In the game, a `Hero` can onAly
+/// Mod of the economics of the SeaHero game. In the game, a `Hero` can onAly
 /// slay a `SeaMonster` if they have sufficient strength. This mod allows a
 /// player with a weak `Hero` to ask a player with a stronger `Hero` to slay
 /// the monster for them in exchange for some of the reward.
-module Examples::EconMod {
-    use Examples::HeroMod::{Self, SeaMonster, RUM};
-    use Examples::Hero::Hero;
+/// Anyone can create a mod like this--the permission of the `SeaHero` game
+/// is not required.
+module Games::SeaHeroHelper {
+    use Games::SeaHero::{Self, SeaMonster, RUM};
+    use Games::Hero::Hero;
     use Sui::Coin::{Self, Coin};
     use Sui::ID::{Self, VersionedID};
     use Sui::Transfer;
@@ -40,7 +42,7 @@ module Examples::EconMod {
         // make sure the advertised reward is not too large + that the owner
         // gets a nonzero reward
         assert!(
-            HeroMod::monster_reward(&monster) > helper_reward,
+            SeaHero::monster_reward(&monster) > helper_reward,
             EINVALID_HELPER_REWARD
         );
         Transfer::transfer(
@@ -66,7 +68,7 @@ module Examples::EconMod {
             helper_reward
         } = wrapper;
         ID::delete(id);
-        let owner_reward = HeroMod::slay(hero, monster);
+        let owner_reward = SeaHero::slay(hero, monster);
         let helper_reward = Coin::withdraw(&mut owner_reward, helper_reward, ctx);
         Transfer::transfer(owner_reward, monster_owner);
         helper_reward
@@ -82,12 +84,12 @@ module Examples::EconMod {
             helper_reward: _
         } = wrapper;
         ID::delete(id);
-        HeroMod::transfer_monster(monster, monster_owner)
+        SeaHero::transfer_monster(monster, monster_owner)
     }
 
     /// Return the number of coins that `wrapper.owner` will earn if the
     /// the helper slays the monster in `wrapper.
     public fun owner_reward(wrapper: &HelpMeSlayThisMonster): u64 {
-        HeroMod::monster_reward(&wrapper.monster) - wrapper.helper_reward
+        SeaHero::monster_reward(&wrapper.monster) - wrapper.helper_reward
     }
 }

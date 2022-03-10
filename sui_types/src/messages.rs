@@ -22,6 +22,7 @@ use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
+use strum::VariantNames;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Transfer {
@@ -52,7 +53,9 @@ pub struct MoveModulePublish {
     pub gas_budget: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, strum_macros::EnumVariantNames,
+)]
 pub enum TransactionKind {
     /// Initiate an object transfer between addresses
     Transfer(Transfer),
@@ -128,6 +131,20 @@ impl TransactionData {
             gas_budget,
         });
         Self::new(kind, sender, gas_payment)
+    }
+
+    /// Returns the transaction kind as a &str (variant name, no fields)
+    pub fn kind_as_str(&self) -> &'static str {
+        // NOTE: Ideally we could have used something like https://docs.rs/strum/latest/strum/derive.AsRefStr.html
+        // The problem is that it doesn't actually return &'static ref due to &self above
+        // and we really want 'static for common situations, such as authority_server dispatch where
+        // by the time we instrument the transaction kind, the message or Transaction might have been moved
+        // and so the lifetime and Kind is out of scope and we cannot borrow it.
+        match self.kind {
+            TransactionKind::Transfer(_) => TransactionKind::VARIANTS[0],
+            TransactionKind::Publish(_) => TransactionKind::VARIANTS[1],
+            TransactionKind::Call(_) => TransactionKind::VARIANTS[2],
+        }
     }
 }
 
@@ -330,6 +347,14 @@ impl ExecutionStatus {
         }
     }
 
+    pub fn is_ok(&self) -> bool {
+        matches!(self, ExecutionStatus::Success { .. })
+    }
+
+    pub fn is_err(&self) -> bool {
+        matches!(self, ExecutionStatus::Failure { .. })
+    }
+
     pub fn unwrap(self) -> u64 {
         match self {
             ExecutionStatus::Success { gas_used } => gas_used,
@@ -345,6 +370,14 @@ impl ExecutionStatus {
                 panic!("Unable to unwrap() on {:?}", self);
             }
             ExecutionStatus::Failure { gas_used, error } => (gas_used, *error),
+        }
+    }
+
+    /// Returns the gas used from the status
+    pub fn gas_used(&self) -> u64 {
+        match &self {
+            ExecutionStatus::Success { gas_used } => *gas_used,
+            ExecutionStatus::Failure { gas_used, .. } => *gas_used,
         }
     }
 }

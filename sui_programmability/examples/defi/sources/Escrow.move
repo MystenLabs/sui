@@ -1,7 +1,5 @@
-/// An escrow for atomic swap of objects that
-/// trusts a third party for liveness, but not
-/// safety.
-module Sui::Escrow {
+/// An escrow for atomic swap of objects that trusts a third party for liveness, but not safety.
+module DeFi::Escrow {
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
