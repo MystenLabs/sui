@@ -6,6 +6,11 @@
     import BgOject from "./BgOject.svelte"
     import { walletAddress } from '../store'
     
+    export const changeWalleFn = {
+        changeWallet () {
+            return switchMTWalletAddress()
+        }
+    }
 
     //Check if metamask is installed 
     let isweb3Enabled = typeof window.ethereum !== 'undefined'
@@ -93,7 +98,10 @@
                                     {#if $walletAddress}
                                         <button  class="axil-btn btn-fill-white btn-large" on:click="{selectedAddress}">See NFTs</button>
                                     {/if}
-                                    <button  class="axil-btn btn-fill-white btn-large" on:click="{$walletAddress ? switchMTWalletAddress : connectToWallet }">{$walletAddress ? 'Change Address' : `Connet Wallet`  } <img class="metamask-logo" src="assets/logos/metamask-fox.svg" alt="metamask" /> </button>
+                                    {#if !$walletAddress}
+                                        <button  class="axil-btn btn-fill-white btn-large" on:click="{switchMTWalletAddress}">Connect to Wallet <img class="metamask-logo" src="assets/logos/metamask-fox.svg" alt="metamask" /> </button>
+                                    {/if}
+                                 
                                 {/if}
 
                                 {#if !isweb3Enabled} 

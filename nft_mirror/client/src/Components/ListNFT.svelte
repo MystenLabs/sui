@@ -24,9 +24,21 @@
         selectedNFT = false;
     }
 
+    let nft_list:any = []
+    const getNFTDataByAddress = async (address:string) => {
+        try {
+            /// chack if the list is empty or not return the list
+            if(nft_list.length > 0) {
+                return nft_list
+            }
+            nft_list = await fetchNFTDataByAddress(address)
+            return nft_list
+        } catch (error) {
+            throw error
+        }
+    }
 
     const switchWalletAddress = () => {
-        console.log('switchWalletAddress')
         $walletAddress = ''
         dispatch('pageFn', {page:'landing'});
     }
@@ -38,12 +50,11 @@
         <div class="container">
             {#if !selectedNFT}
                 <div class="axil-isotope-wrapper">
-                    {#await fetchNFTDataByAddress(address)}
+                    {#await getNFTDataByAddress(address)}
                         Loading <Loader state={true} blueloading={true}/>
                         {:then item}
                             {#if item.length}
                                 <div class="section-heading heading-left mb--40">
-                                    <span class="subtitle">Token on Address</span>
                                     <h2 class="title">Select Token to mint on Sui</h2>
                                 </div>
                                 <div class="row row-35 isotope-list">

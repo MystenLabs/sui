@@ -12,13 +12,18 @@
       pageState.page = data.detail.page;
       // pageState.walletAdress = data.detail.walletAdress;
    }
+
+   let changeWalletAddres;
+   const changeWalletAdress = (data: any) => {
+    return changeWalletAddres.changeWallet()
+   }
 </script>
 
 <main class="_sui_main main-wrapper">
-  <Header />
-
+  <Header on:changeWallet={ changeWalletAdress}/>
+  
   {#if pageState.page === "landing"}
-    <LandingPage on:pageFn={changePageState} />
+    <LandingPage on:pageFn={changePageState} bind:changeWalleFn={changeWalletAddres}/>
   {/if}
 
   {#if pageState.page === "NFTlist"}
