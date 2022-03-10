@@ -164,7 +164,6 @@ impl TxContext {
     /// Derive a globally unique object ID by hashing self.digest | self.ids_created
     pub fn fresh_id(&mut self) -> ObjectID {
         let id = self.digest().derive_id(self.ids_created);
-        println!("FRESH{:?}", id);
 
         self.ids_created += 1;
         id
