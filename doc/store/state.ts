@@ -9,5 +9,6 @@ const state = () => ({
   homeData: {} as any,
   sideMenu: [] as any,
   apiReference: { } as any,
+  copyRight: {} as any,
 })
 export default state

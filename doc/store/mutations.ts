@@ -11,5 +11,6 @@ const mutations: MutationTree<RootState> = {
   setHomeData: (state: RootState, post: any) => (state.homeData = post),
   setSideMenu: (state: RootState, post: any) => (state.sideMenu = post),
   setApiReference: (state: RootState, post: any) => (state.apiReference = post),
+  setCopyRight: (state: RootState, post: any) => (state.copyRight = post),
 }
 export default mutations

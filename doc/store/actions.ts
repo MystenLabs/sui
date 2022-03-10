@@ -44,6 +44,7 @@ const actions: ActionTree<RootState, RootState> = {
     commit('setCore', groupedMenu.primaryMenu)
     commit('setSideMenu', navConfig.sideMenu)
     commit('setFooter', siteConfig.footerData)
+    commit('setCopyRight', siteConfig.footerData.copyRight)
     commit('setMenuState', siteConfig.headerData.menu)
     commit('setHomeData', siteConfig.HomePage)
     return commit('setDevDocMenuState', groupedMenu.devDocMenu)

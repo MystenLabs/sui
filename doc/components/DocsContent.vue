@@ -32,6 +32,10 @@
         <ApiReferenceMenu class="_sue__spacer" />
         <!--<TableOfContent class="_sue__spacer" :toc="document.toc" /> -->
         <SideMenuSocial />
+        <div class="_sue__spacer">
+          {{copyright}}
+
+        </div>
       </aside>
     </div>
     <div class="_doc-content col-lg-8">
@@ -72,6 +76,7 @@
 </template>
 <script lang="ts">
 import { Component, Vue, Prop } from 'nuxt-property-decorator'
+import { RootState } from '~/store'
 
 @Component
 export default class DocsContent extends Vue {
@@ -79,6 +84,10 @@ export default class DocsContent extends Vue {
   @Prop({ required: true }) readonly editLink!: string
   @Prop() readonly prev!: object
   @Prop() readonly next!: object
+
+  get copyright(): Array<any> {
+    return (this.$store.state as RootState).copyRight
+  }
 
   scrollTo(refName: string) {
     this.$scrollToElment(refName)

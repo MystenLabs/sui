@@ -5,11 +5,11 @@ export const siteConfig = {
   URL: 'https://devportal-30dd0.web.app/',
   baseUrl: '/',
   favIcon: '/favicon2.png',
-  organizationName: 'MySten Labs',
+  organizationName: 'Mysten Labs',
   projectName: 'Dev Portal',
 
   footerData: {
-    copyRight: 'Copyright © 2022 Mysten labs',
+    copyRight: '© 2022 Mysten labs',
     menu: [
       {
         title: 'Docs',

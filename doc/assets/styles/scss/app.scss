@@ -30,6 +30,10 @@ select:focus {
 
 ._dev_docs {
   padding: 5px;
+  h2 {
+    font-family: $font-family-code;
+    font-weight: 700;
+  }
 }
 
 ._sui-networks {
