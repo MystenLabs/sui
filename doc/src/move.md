@@ -786,7 +786,7 @@ And module initializer is the perfect place to do it:
     }
 ```
 
-In order to use the forge, we need to modify the `sword_crate`
+In order to use the forge, we need to modify the `sword_create`
 function to take the forge as a parameter and to update the number of
 created swords at the end of the function:
 

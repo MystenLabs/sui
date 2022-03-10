@@ -8,7 +8,7 @@ module Sui::ID {
 
     #[test_only]
     friend Sui::TestScenario;
-    
+
     /// Version of an object ID created by the current transaction.
     const INITIAL_VERSION: u64 = 0;
 
@@ -67,7 +67,7 @@ module Sui::ID {
         };
         ID { bytes: bytes_to_address(bytes) }
     }
-   
+
     /// Create a new `VersionedID`. Only callable by `TxContext`.
     /// This is the only way to create either a `VersionedID` or a `UniqueID`.
     public(friend) fun new_versioned_id(bytes: address): VersionedID {
@@ -76,18 +76,18 @@ module Sui::ID {
 
     // === reads ===
 
-    /// Get the underyling `ID` of `obj`
+    /// Get the underlying `ID` of `obj`
     public fun id<T: key>(obj: &T): &ID {
         let versioned_id = get_versioned_id(obj);
         inner(versioned_id)
     }
 
-    /// Get raw bytes for the underyling `ID` of `obj`
+    /// Get raw bytes for the underlying `ID` of `obj`
     public fun id_bytes<T: key>(obj: &T): vector<u8> {
         let versioned_id = get_versioned_id(obj);
         inner_bytes(versioned_id)
     }
- 
+
     /// Get the raw bytes of `id`
     public fun bytes(id: &ID): vector<u8> {
         BCS::to_bytes(&id.bytes)
@@ -103,14 +103,13 @@ module Sui::ID {
         bytes(inner(versioned_id))
     }
 
-    /// Get the id of `obj` as an address.
+    /// Get the inner bytes of `id` as an address.
     // Only used by `Transfer` and `TestSecnario`, but may expose in the future
-    public(friend) fun id_address<T: key>(obj: &T): address {
-        let id = id(obj);
+    public(friend) fun id_address(id: &ID): address {
         id.bytes
     }
 
-    /// Get the `version` of `obj`. 
+    /// Get the `version` of `obj`.
     // Private and unused for now, but may expose in the future
     fun version<T: key>(obj: &T): u64 {
         let versioned_id = get_versioned_id(obj);
@@ -118,13 +117,13 @@ module Sui::ID {
     }
 
     /// Return `true` if `obj` was created by the current transaction,
-    /// `false` otherwise. 
+    /// `false` otherwise.
     // Private and unused for now, but may expose in the future
     fun created_by_current_tx<T: key>(obj: &T): bool {
         version(obj) == INITIAL_VERSION
     }
 
-    /// Get the VersionedID for `obj`. 
+    /// Get the VersionedID for `obj`.
     // Safe because Sui has an extra
     // bytecode verifier pass that forces every struct with
     // the `key` ability to have a distinguished `VersionedID` field.
@@ -147,5 +146,5 @@ module Sui::ID {
     // === internal functions ===
 
     /// Convert raw bytes into an address
-    native fun bytes_to_address(bytes: vector<u8>): address;   
+    native fun bytes_to_address(bytes: vector<u8>): address;
 }

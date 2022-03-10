@@ -1,5 +1,5 @@
 module Sui::Transfer {
-    use Sui::ID::{Self, ID};
+    use Sui::ID::{Self, ID, VersionedID};
 
     // To allow access to transfer_to_object_unsafe.
     friend Sui::Collection;
@@ -10,7 +10,7 @@ module Sui::Transfer {
 
     /// Represents a reference to a child object, whose type is T.
     /// This is used to track ownership between objects.
-    /// Whenver an object is transferred to another object (and hence owned by object),
+    /// Whenever an object is transferred to another object (and hence owned by object),
     /// a ChildRef is created. A ChildRef cannot be dropped. When a child object is
     /// transferred to a new parent object, the original ChildRef is dropped but a new
     /// one will be created. The only way to fully destroy a ChildRef is to transfer the
@@ -43,12 +43,31 @@ module Sui::Transfer {
     /// Returns a non-droppable struct ChildRef that represents the ownership.
     public fun transfer_to_object<T: key, R: key>(obj: T, owner: &mut R): ChildRef<T> {
         let obj_id = *ID::id(&obj);
-        let owner_id = ID::id_address(owner);
+        let owner_id = ID::id_address(ID::id(owner));
         transfer_internal(obj, owner_id, true);
         ChildRef {
             parent_id: ID::new(owner_id),
             child_id: obj_id,
         }
+    }
+
+    /// Similar to transfer_to_object where we want to transfer an object to another object.
+    /// However, in the case when we haven't yet created the parent object (typically during
+    /// parent object construction), and all we have is just a parent object ID, we could
+    /// use this function to transfer an object to the parent object identified by its id.
+    /// The child object is specified in `obj`, and the parent object id is specified in `owner_id`.
+    /// The function consumes `owner_id` to make sure that the caller actually owns the id.
+    /// The `owner_id` will be returned (so that it can be used to continue creating the parent object),
+    /// along returned is the ChildRef as a reference to the ownership.
+    public fun transfer_to_object_id<T: key>(obj: T, owner_id: VersionedID): (VersionedID, ChildRef<T>) {
+        let obj_id = *ID::id(&obj);
+        let inner_owner_id = *ID::inner(&owner_id);
+        transfer_internal(obj, ID::id_address(&inner_owner_id), true);
+        let child_ref = ChildRef {
+            parent_id: inner_owner_id,
+            child_id: obj_id,
+        };
+        (owner_id, child_ref)
     }
 
     /// Similar to transfer_to_object, to transfer an object to another object.
@@ -78,8 +97,19 @@ module Sui::Transfer {
     }
 
     /// Freeze `obj`. After freezing `obj` becomes immutable and can no
-    /// longer be transfered or mutated.
+    /// longer be transferred or mutated.
     public native fun freeze_object<T: key>(obj: T);
+
+    /// Turn the given object into a mutable shared object that everyone
+    /// can access and mutate. This is irreversible, i.e. once an object
+    /// is shared, it will stay shared forever.
+    /// Shared mutable object is not yet fully supported in Sui, which is being
+    /// actively worked on and should be supported very soon.
+    /// https://github.com/MystenLabs/sui/issues/633
+    /// https://github.com/MystenLabs/sui/issues/681
+    /// This API is exposed to demonstrate how we may be able to use it to program
+    /// Move contracts that use shared mutable objects.
+    public native fun share_object<T: key>(obj: T);
 
     native fun transfer_internal<T: key>(obj: T, recipient: address, to_object: bool);
 }

@@ -64,22 +64,14 @@ fn get_global_inventory(events: &[Event]) -> Inventory {
         match event_type {
             EventType::TransferToAddress
             | EventType::TransferToObject
-            | EventType::FreezeObject => {
+            | EventType::FreezeObject
+            | EventType::ShareObject => {
                 let obj_bytes = val
                     .simple_serialize(layout)
                     .expect("This will always succeed for a well-structured event log");
                 let obj_id = ObjectID::try_from(&obj_bytes[0..ObjectID::LENGTH])
                     .expect("This will always succeed on an object from a system transfer event");
-                let owner = match event_type {
-                    EventType::FreezeObject => Owner::SharedImmutable,
-                    EventType::TransferToAddress => {
-                        Owner::AddressOwner(SuiAddress::try_from(recipient.clone()).unwrap())
-                    }
-                    EventType::TransferToObject => {
-                        Owner::ObjectOwner(SuiAddress::try_from(recipient.clone()).unwrap())
-                    }
-                    _ => panic!("Unrecognized event_type"),
-                };
+                let owner = get_new_owner(&inventory, &obj_id, event_type, recipient.clone());
                 // note; may overwrite older values of the object, which is intended
                 inventory.insert(
                     obj_id,
@@ -98,6 +90,32 @@ fn get_global_inventory(events: &[Event]) -> Inventory {
         }
     }
     inventory
+}
+
+fn get_new_owner(
+    inventory: &Inventory,
+    obj_id: &ObjectID,
+    event_type: EventType,
+    recipient: Vec<u8>,
+) -> Owner {
+    if let Some(existing) = inventory.get(obj_id) {
+        if existing.owner.is_shared() {
+            // Shared objects are not allowed to be transferred anymore.
+            // This (transfer after sharing) can happen because the current
+            // way of returning an object back to the inventory is through a transfer.
+            // In that case, we need to keep the ownership unchanged.
+            return existing.owner;
+        }
+    }
+    match event_type {
+        EventType::FreezeObject => Owner::SharedImmutable,
+        EventType::ShareObject => Owner::SharedMutable,
+        EventType::TransferToAddress => {
+            Owner::AddressOwner(SuiAddress::try_from(recipient).unwrap())
+        }
+        EventType::TransferToObject => Owner::ObjectOwner(SuiAddress::try_from(recipient).unwrap()),
+        _ => panic!("Unrecognized event_type"),
+    }
 }
 
 /// Get the objects of type `type_` that can be spent by `addr`
