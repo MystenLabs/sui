@@ -15,8 +15,10 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
+use tracing::{debug, trace, Instrument};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::string::ToString;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::timeout;
@@ -740,6 +742,13 @@ where
         // Now broadcast the transaction to all authorities.
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
+        debug!(
+            quorum_threshold = threshold,
+            validity_threshold = validity,
+            ?timeout_after_quorum,
+            "Broadcasting transaction request to authorities"
+        );
+        trace!("Transaction data: {:?}", transaction.data);
 
         struct ProcessTransactionState {
             // The list of signatures gathered at any point
@@ -780,6 +789,7 @@ where
                                 certified_transaction: Some(inner_certificate),
                                 ..
                             }) => {
+                                trace!(?name, weight, "Received prev certificate from authority");
                                 state.certificate = Some(inner_certificate);
                             }
 
@@ -813,6 +823,12 @@ where
                                 state.bad_stake += weight; // This is the bad stake counter
                                 if state.bad_stake > validity {
                                     // Too many errors
+                                    debug!(
+                                        num_errors = state.errors.len(),
+                                        bad_stake = state.bad_stake,
+                                        "Too many errors, validity threshold exceeded. Errors={:?}",
+                                        state.errors
+                                    );
                                     return Err(SuiError::QuorumNotReached {
                                         errors: state.errors,
                                     });
@@ -824,6 +840,12 @@ where
                                 state.bad_stake += weight; // This is the bad stake counter
                                 if state.bad_stake > validity {
                                     // Too many errors
+                                    debug!(
+                                        num_errors = state.errors.len(),
+                                        bad_stake = state.bad_stake,
+                                        "Too many errors, validity threshold exceeded. Errors={:?}",
+                                        state.errors
+                                    );
                                     return Err(SuiError::QuorumNotReached {
                                         errors: state.errors,
                                     });
@@ -844,6 +866,18 @@ where
             )
             .await?;
 
+        debug!(
+            num_errors = state.errors.len(),
+            good_stake = state.good_stake,
+            bad_stake = state.bad_stake,
+            num_signatures = state.signatures.len(),
+            has_certificate = state.certificate.is_some(),
+            "Received signatures response from authorities for transaction req broadcast"
+        );
+        if !state.errors.is_empty() {
+            trace!("Errors received: {:?}", state.errors);
+        }
+
         // If we have some certificate return it, or return an error.
         state
             .certificate
@@ -862,6 +896,9 @@ where
         timeout_after_quorum: Duration,
     ) -> Result<TransactionEffects, SuiError> {
         struct ProcessCertificateState {
+            // Different authorities could return different effects.  We want at least one effect to come
+            // from 2f+1 authorities, which meets quorum and can be considered the approved effect.
+            // The map here allows us to count the stake for each unique effect.
             effects_map: HashMap<[u8; 32], (usize, TransactionEffects)>,
             bad_stake: usize,
         }
@@ -874,6 +911,13 @@ where
         let cert_ref = &certificate;
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
+        debug!(
+            quorum_threshold = threshold,
+            validity_threshold = validity,
+            ?timeout_after_quorum,
+            "Broadcasting certificate to authorities"
+        );
+
         let state = self
             .quorum_map_then_reduce_with_timeout(
                 state,
@@ -888,6 +932,7 @@ where
                             .handle_confirmation_transaction(ConfirmationTransaction::new(
                                 cert_ref.clone(),
                             ))
+                            .instrument(tracing::trace_span!("handle_cert", authority =? _name))
                             .await;
 
                         if res.is_ok() {
@@ -900,6 +945,7 @@ where
                         // We only attempt to update authority and retry if we are seeing LockErrors.
                         // For any other error, we stop here and return.
                         if !matches!(res, Err(SuiError::LockErrors { .. })) {
+                            debug!("Error from handle_confirmation_transaction(): {:?}", res);
                             return res;
                         }
 
@@ -911,6 +957,7 @@ where
                                 timeout_after_quorum,
                                 DEFAULT_RETRIES,
                             )
+                            .instrument(tracing::trace_span!("sync_cert", authority =? _name))
                             .await?;
 
                         // Now try again
@@ -918,6 +965,7 @@ where
                             .handle_confirmation_transaction(ConfirmationTransaction::new(
                                 cert_ref.clone(),
                             ))
+                            .instrument(tracing::trace_span!("handle_cert", authority =? _name, retry = true))
                             .await
                     })
                 },
@@ -946,9 +994,12 @@ where
                             }
                         }
 
+                        // Evan: couldn't we get here if entry.0 above is < threshold but response was valid? wtf??
                         // If instead we have more than f bad responses, then we fail.
                         state.bad_stake += weight;
                         if state.bad_stake > validity {
+                            debug!(bad_stake = state.bad_stake,
+                                   "Too many bad responses from cert processing, validity threshold exceeded.");
                             return Err(SuiError::ErrorWhileRequestingCertificate);
                         }
 
@@ -960,10 +1011,20 @@ where
             )
             .await?;
 
+        debug!(
+            num_unique_effects = state.effects_map.len(),
+            bad_stake = state.bad_stake,
+            "Received effects responses from authorities"
+        );
+
         // Check that one effects structure has more than 2f votes,
         // and return it.
         for (stake, effects) in state.effects_map.into_values() {
             if stake >= threshold {
+                debug!(
+                    good_stake = stake,
+                    "Found an effect with good stake over threshold"
+                );
                 return Ok(effects);
             }
         }
@@ -1019,11 +1080,22 @@ where
         &self,
         transaction: &Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+        let tx_digest = transaction.digest();
         let new_certificate = self
             .process_transaction(transaction.clone(), Duration::from_secs(60))
+            .instrument(tracing::debug_span!(
+                "process_tx",
+                ?tx_digest,
+                tx_kind = transaction.data.kind_as_str()
+            ))
             .await?;
         let response = self
             .process_certificate(new_certificate.clone(), Duration::from_secs(60))
+            .instrument(tracing::debug_span!(
+                "process_cert",
+                ?tx_digest,
+                tx_kind = transaction.data.kind_as_str()
+            ))
             .await?;
 
         Ok((new_certificate, response))
