@@ -8,8 +8,8 @@ members = [
 ]
 
 [profile.release]
-debug = true
-# strip = "debuginfo"
+debug = false
+strip = "debuginfo"
 
 [profile.bench]
 debug = true
