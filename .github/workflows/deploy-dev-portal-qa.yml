@@ -1,0 +1,27 @@
+name: Generate and Deploy QA Dev Portal
+
+on:
+  push:
+    branches:
+      - dev-content
+    paths:
+      - doc/**
+
+jobs:
+  firebase-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: doc
+      - uses: actions/setup-node@master
+        with:
+          node-version: '14'
+      - run: yarn
+      - run: yarn generate
+      - uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only hosting:qa
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
