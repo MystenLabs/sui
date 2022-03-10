@@ -414,13 +414,8 @@ async fn get_addresses(
 ) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
     let server_context = rqctx.context();
     // TODO: Find a better way to utilize wallet context here that does not require 'take()'
-    let wallet_context = server_context.wallet_context.lock().unwrap().take();
-    let mut wallet_context = wallet_context.ok_or_else(|| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist.".to_string(),
-        )
-    })?;
+    let mut wallet_context =
+        get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
 
     let addresses: Vec<SuiAddress> = wallet_context.config.accounts.clone();
 
@@ -566,14 +561,7 @@ async fn object_schema(
     let object_info_params = query.into_inner();
 
     // TODO: Find a better way to utilize wallet context here that does not require 'take()'
-    let wallet_context = server_context.wallet_context.lock().unwrap().take();
-    let wallet_context = wallet_context.ok_or_else(|| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
-                .to_string(),
-        )
-    })?;
+    let wallet_context = get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
 
     let object_id = match ObjectID::try_from(object_info_params.object_id) {
         Ok(object_id) => object_id,
@@ -670,14 +658,7 @@ async fn object_info(
     let object_info_params = query.into_inner();
 
     // TODO: Find a better way to utilize wallet context here that does not require 'take()'
-    let wallet_context = server_context.wallet_context.lock().unwrap().take();
-    let wallet_context = wallet_context.ok_or_else(|| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
-                .to_string(),
-        )
-    })?;
+    let wallet_context = get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
 
     let object_id = match ObjectID::try_from(object_info_params.object_id) {
         Ok(object_id) => object_id,
@@ -707,16 +688,10 @@ async fn object_info(
         version: format!("{:?}", object.version().value()),
         id: format!("{:?}", object.id()),
         readonly: format!("{:?}", object.is_read_only()),
-        obj_type: format!(
-            "{:?}",
-            object
-                .data
-                .type_()
-                .map_or("Type Unwrap Failed".to_owned(), |type_| type_
-                    .module
-                    .as_ident_str()
-                    .to_string())
-        ),
+        obj_type: object
+            .data
+            .type_()
+            .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
         data: object_data,
     }))
 }
@@ -798,13 +773,8 @@ async fn transfer_object(
     })?;
 
     // TODO: Find a better way to utilize wallet context here that does not require 'take()'
-    let wallet_context = server_context.wallet_context.lock().unwrap().take();
-    let mut wallet_context = wallet_context.ok_or_else(|| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist.".to_string(),
-        )
-    })?;
+    let mut wallet_context =
+        get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
 
     let tx_signer = Box::pin(SimpleTransactionSigner {
         keystore: wallet_context.keystore.clone(),
@@ -956,201 +926,20 @@ async fn call(
     let server_context = rqctx.context();
     let call_params = request.into_inner();
 
-    let module = Identifier::from_str(&call_params.module.to_owned()).map_err(|error| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            format!("Could not parse module name: {:?}", error),
-        )
-    })?;
-    let function = Identifier::from_str(&call_params.function.to_owned()).map_err(|error| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            format!("Could not parse function name: {:?}", error),
-        )
-    })?;
-    let args = call_params.args;
-    // TODO: Figure out the fancier way to do this with iter/map/collect but also handle the error.
-    let type_arg_strings: Vec<String> = match call_params.type_args {
-        Some(args) => args,
-        None => {
-            let empty_vec: Vec<String> = vec![];
-            empty_vec
-        }
-    };
-    let mut type_args = vec![];
-    for type_arg in type_arg_strings {
-        type_args.push(parse_type_tag(&type_arg).map_err(|error| {
-            custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Could not parse arg type: {:?}", error),
-            )
-        })?);
-    }
-    let gas_budget = call_params.gas_budget;
+    let mut wallet_context =
+        get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
 
-    let gas_object_id = ObjectID::try_from(call_params.gas_object_id)
-        .map_err(|error| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{error}")))?;
-    let package_object_id = ObjectID::from_hex_literal(&call_params.package_object_id)
-        .map_err(|error| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{error}")))?;
-
-    let wallet_context = server_context.wallet_context.lock().unwrap().take();
-    if wallet_context.is_none() {
-        return Err(HttpError::for_client_error(
-            None,
-            StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist".to_string(),
-        ));
-    }
-    let mut wallet_context = wallet_context.unwrap();
-
-    let sender: SuiAddress = match decode_bytes_hex(call_params.sender.as_str()) {
-        Ok(sender) => sender,
-        Err(error) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(HttpError::for_client_error(
-                None,
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Could not decode address from hex {error}"),
-            ));
-        }
-    };
-
-    let (package_object_ref, package_object) =
-        match get_object_info(&wallet_context, package_object_id).await {
-            Ok((object_ref, object, _)) => (object_ref, object),
-            Err(error) => {
-                *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-                return Err(error);
-            }
-        };
-
-    // Extract the input args
-    let (object_ids, pure_args) =
-        match resolve_move_function_args(&package_object, module.clone(), function.clone(), args) {
-            Ok(r) => r,
-            Err(err) => {
-                *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-                return Err(HttpError::for_client_error(
-                    None,
-                    StatusCode::FAILED_DEPENDENCY,
-                    format!("Move call error {}.", err),
-                ));
-            }
-        };
-
-    info!("Resolved fn to: \n {:?} & {:?}", object_ids, pure_args);
-
-    // Fetch all the objects needed for this call
-    let mut input_objs = vec![];
-    for obj_id in object_ids.clone() {
-        input_objs.push(match get_object_info(&wallet_context, obj_id).await {
-            Ok((_, object, _)) => object,
-            Err(error) => {
-                *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-                return Err(error);
-            }
-        });
-    }
-
-    // Pass in the objects for a deeper check
-    if let Err(error) = resolve_and_type_check(
-        package_object.clone(),
-        &module,
-        &function,
-        &type_args,
-        input_objs,
-        pure_args.clone(),
-    ) {
-        *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-        return Err(custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            format!("Error while resolving and type checking: {:?}", error),
-        ));
-    };
-
-    // Fetch the object info for the gas obj
-    let gas_obj_ref = match get_object_info(&wallet_context, gas_object_id).await {
-        Ok((obj_ref, _, _)) => obj_ref,
-        Err(error) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(error);
-        }
-    };
-
-    // Fetch the objects for the object args
-    let mut object_args_refs = Vec::new();
-    for obj_id in object_ids {
-        object_args_refs.push(match get_object_info(&wallet_context, obj_id).await {
-            Ok((obj_ref, _, _)) => obj_ref,
-            Err(error) => {
-                *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-                return Err(error);
-            }
-        });
-    }
-
-    let tx_signer = Box::pin(SimpleTransactionSigner {
-        keystore: wallet_context.keystore.clone(),
-    });
-
-    let (cert, effects, gas_used) = match wallet_context
-        .gateway
-        .move_call(
-            sender,
-            package_object_ref,
-            module.to_owned(),
-            function.to_owned(),
-            type_args.clone(),
-            gas_obj_ref,
-            object_args_refs,
-            // TODO: Populate shared object args. sui/issue#719
-            vec![],
-            pure_args,
-            gas_budget,
-            tx_signer,
-        )
-        .await
-    {
-        Ok((cert, effects)) => {
-            let gas_used = match effects.status {
-                ExecutionStatus::Success { gas_used } => gas_used,
-                ExecutionStatus::Failure { gas_used, error } => {
-                    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-                    return Err(custom_http_error(
-                        StatusCode::FAILED_DEPENDENCY,
-                        format!(
-                            "Error calling move function: {:#?}, gas used {}",
-                            error, gas_used
-                        ),
-                    ));
-                }
-            };
-            (cert, effects, gas_used)
-        }
+    let transaction_response = match handle_move_call(call_params, &mut wallet_context).await {
+        Ok(transaction_response) => transaction_response,
         Err(err) => {
             *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Move call error: {err}"),
-            ));
-        }
-    };
-
-    let object_effects_summary = match get_object_effects(&wallet_context, effects).await {
-        Ok(effects) => effects,
-        Err(err) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(err);
+            return Err(custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")));
         }
     };
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
-    Ok(HttpResponseOk(TransactionResponse {
-        gas_used,
-        object_effects_summary: json!(object_effects_summary),
-        certificate: json!(cert),
-    }))
+    Ok(HttpResponseOk(transaction_response))
 }
 
 /**
@@ -1187,13 +976,8 @@ async fn sync(
     })?;
 
     // TODO: Find a better way to utilize wallet context here that does not require 'take()'
-    let wallet_context = server_context.wallet_context.lock().unwrap().take();
-    let mut wallet_context = wallet_context.ok_or_else(|| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist.".to_string(),
-        )
-    })?;
+    let mut wallet_context =
+        get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
 
     // Attempt to create a new account state, but continue if it already exists.
     if let Err(err) = wallet_context.gateway.sync_client_state(address).await {
@@ -1300,6 +1084,117 @@ async fn get_object_info(
         }
     };
     Ok((object_ref, object, layout))
+}
+
+async fn handle_move_call(
+    call_params: CallRequest,
+    wallet_context: &mut WalletContext,
+) -> Result<TransactionResponse, anyhow::Error> {
+    let module = Identifier::from_str(&call_params.module.to_owned())?;
+    let function = Identifier::from_str(&call_params.function.to_owned())?;
+    let args = call_params.args;
+    let type_args = call_params
+        .type_args.unwrap_or_default()
+        .iter()
+        .map(|type_arg| parse_type_tag(type_arg))
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+    let gas_budget = call_params.gas_budget;
+    let gas_object_id = ObjectID::try_from(call_params.gas_object_id)?;
+    let package_object_id = ObjectID::from_hex_literal(&call_params.package_object_id)?;
+
+    let sender: SuiAddress = decode_bytes_hex(call_params.sender.as_str())?;
+
+    let (package_object_ref, package_object, _) =
+        get_object_info(wallet_context, package_object_id).await?;
+
+    // Extract the input args
+    let (object_ids, pure_args) =
+        resolve_move_function_args(&package_object, module.clone(), function.clone(), args)?;
+
+    info!("Resolved fn to: \n {:?} & {:?}", object_ids, pure_args);
+
+    // Fetch all the objects needed for this call
+    let mut input_objs = vec![];
+    for obj_id in object_ids.clone() {
+        let (_, object, _) = get_object_info(wallet_context, obj_id).await?;
+        input_objs.push(object);
+    }
+
+    // Pass in the objects for a deeper check
+    resolve_and_type_check(
+        package_object.clone(),
+        &module,
+        &function,
+        &type_args,
+        input_objs,
+        pure_args.clone(),
+    )?;
+
+    // Fetch the object info for the gas obj
+    let (gas_obj_ref, _, _) = get_object_info(wallet_context, gas_object_id).await?;
+
+    // Fetch the objects for the object args
+    let mut object_args_refs = Vec::new();
+    for obj_id in object_ids {
+        let (object_ref, _, _) = get_object_info(wallet_context, obj_id).await?;
+        object_args_refs.push(object_ref);
+    }
+
+    let tx_signer = Box::pin(SimpleTransactionSigner {
+        keystore: wallet_context.keystore.clone(),
+    });
+
+    let (cert, effects, gas_used) = match wallet_context
+        .gateway
+        .move_call(
+            sender,
+            package_object_ref,
+            module.to_owned(),
+            function.to_owned(),
+            type_args.clone(),
+            gas_obj_ref,
+            object_args_refs,
+            // TODO: Populate shared object args. sui/issue#719
+            vec![],
+            pure_args,
+            gas_budget,
+            tx_signer,
+        )
+        .await
+    {
+        Ok((cert, effects)) => {
+            let gas_used = match effects.status {
+                ExecutionStatus::Success { gas_used } => gas_used,
+                ExecutionStatus::Failure { gas_used, error } => {
+                    let context = format!("Error calling move function, gas used {gas_used}");
+                    return Err(anyhow::Error::new(error).context(context));
+                }
+            };
+            (cert, effects, gas_used)
+        }
+        Err(err) => {
+            return Err(err);
+        }
+    };
+
+    let object_effects_summary = get_object_effects(wallet_context, effects).await?;
+
+    Ok(TransactionResponse {
+        gas_used,
+        object_effects_summary: json!(object_effects_summary),
+        certificate: json!(cert),
+    })
+}
+
+fn get_wallet_context(wallet_context: Option<WalletContext>) -> Result<WalletContext, HttpError> {
+    wallet_context.ok_or_else(|| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
+                .to_string(),
+        )
+    })
 }
 
 fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpError {
