@@ -73,15 +73,19 @@ export const siteConfig = {
   headerData: {
     menu: [
       {
-        title: 'Authorities',
+        title: 'Learn',
         link: '/authorities/',
       },
       {
-        title: 'Move',
+        title: 'Build',
         link: '/move/',
       },
       {
-        title: 'Key Concepts',
+        title: 'Explore',
+        link: '/key-concepts/',
+      },
+      {
+        title: 'Contribute',
         link: '/key-concepts/',
       },
       {

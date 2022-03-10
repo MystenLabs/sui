@@ -89,9 +89,6 @@ export default class DevDocsMenu extends Vue {
   isActive(path: any, subMenuTitle?: string) {
     this.selectecMenu = { topmenu: path, sub: subMenuTitle || '' }
   }
-  mounted() {
-    console.log(this.activeLink)
-  }
 }
 </script>
 
