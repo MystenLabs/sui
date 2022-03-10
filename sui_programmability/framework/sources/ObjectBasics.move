@@ -30,12 +30,8 @@ module Sui::ObjectBasics {
         Transfer::transfer(o, recipient)
     }
 
-    public fun transfer_and_freeze(o: Object, recipient: address, _ctx: &mut TxContext) {
-        Transfer::transfer_and_freeze(o, recipient)
-    }
-
-    public fun transfer_to_object(o: Object, owner: &mut Object, _ctx: &mut TxContext) {
-        Transfer::transfer_to_object(o, owner)
+    public fun freeze_object(o: Object, _ctx: &mut TxContext) {
+        Transfer::freeze_object(o)
     }
 
     public fun set_value(o: &mut Object, value: u64, _ctx: &mut TxContext) {

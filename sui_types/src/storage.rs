@@ -1,7 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{base_types::ObjectID, event::Event, object::Object};
+use crate::{
+    base_types::{ObjectID, SequenceNumber},
+    event::Event,
+    object::Object,
+};
+
+#[derive(Debug, PartialEq)]
+pub enum DeleteKind {
+    ExistInInput,
+    NotExistInInput,
+    Wrap,
+}
 
 /// An abstraction of the (possibly distributed) store for objects, and (soon) events and transactions
 pub trait Storage {
@@ -14,5 +25,5 @@ pub trait Storage {
     /// Record an event that happened during execution  
     fn log_event(&mut self, event: Event);
 
-    fn delete_object(&mut self, id: &ObjectID);
+    fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind);
 }

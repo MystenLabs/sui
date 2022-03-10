@@ -11,10 +11,11 @@ use sui_types::{
     error::{SuiError, SuiResult},
     event::Event,
     gas,
+    id::VersionedID,
     messages::ExecutionStatus,
     move_package::*,
     object::{MoveObject, Object, Owner},
-    storage::Storage,
+    storage::{DeleteKind, Storage},
 };
 use sui_verifier::verifier;
 
@@ -75,17 +76,15 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     mut gas_object: Object,
     ctx: &mut TxContext,
 ) -> SuiResult<ExecutionStatus> {
-    // object_owner_map maps from object ID to its exclusive owner.
-    // objects that are not exclusively owned won't be in this map.
+    // object_owner_map maps from object ID to its exclusive object owner.
     // This map will be used for detecting circular ownership among
     // objects, which can only happen to objects exclusively owned
     // by objects.
     let mut object_owner_map = HashMap::new();
-    for (owner, id) in object_args
-        .iter()
-        .filter_map(|obj| obj.get_single_owner_and_id())
-    {
-        object_owner_map.insert(id.into(), owner);
+    for obj in &object_args {
+        if let Owner::ObjectOwner(owner) = obj.owner {
+            object_owner_map.insert(obj.id().into(), owner);
+        }
     }
     let TypeCheckSuccess {
         module_id,
@@ -429,7 +428,7 @@ pub fn verify_and_link<
     let mut gas_status = get_gas_status(cost_table, None)
         .expect("Can only fail if gas budget is too high, and we didn't supply one");
     let mut session = vm.new_session(state_view);
-    // TODO(https://github.com/MystenLabs/fastnft/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
+    // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
     let new_module_bytes = modules
         .iter()
         .map(|m| {
@@ -502,7 +501,7 @@ type MoveEvent = (Vec<u8>, u64, TypeTag, Vec<u8>);
 /// - Look for each input in `by_value_objects` to determine whether the object was transferred, frozen, or deleted
 /// - Update objects passed via a mutable reference in `mutable_refs` to their new values
 /// - Process creation of new objects and user-emittd events in `events`
-/// - Returns (amount of extra gas used, amount of gas refund)
+/// - Returns (amount of extra gas used, amount of gas refund, process result)
 #[allow(clippy::too_many_arguments)]
 fn process_successful_execution<
     E: Debug,
@@ -526,27 +525,26 @@ fn process_successful_execution<
     // process events to identify transfers, freezes
     let mut gas_used = 0;
     let tx_digest = ctx.digest();
+    let mut deleted_ids = HashMap::new();
     for e in events {
         let (recipient, event_type, type_, event_bytes) = e;
         let result = match EventType::try_from(event_type as u8)
             .expect("Safe because event_type is derived from an EventType enum")
         {
             EventType::TransferToAddress => handle_transfer(
-                SuiAddress::try_from(recipient.as_slice()).unwrap(),
+                Owner::AddressOwner(SuiAddress::try_from(recipient.as_slice()).unwrap()),
                 type_,
                 event_bytes,
-                false, /* should_freeze */
                 tx_digest,
                 &mut by_value_objects,
                 &mut gas_used,
                 state_view,
                 &mut object_owner_map,
             ),
-            EventType::TransferToAddressAndFreeze => handle_transfer(
-                SuiAddress::try_from(recipient.as_slice()).unwrap(),
+            EventType::FreezeObject => handle_transfer(
+                Owner::SharedImmutable,
                 type_,
                 event_bytes,
-                true, /* should_freeze */
                 tx_digest,
                 &mut by_value_objects,
                 &mut gas_used,
@@ -554,10 +552,9 @@ fn process_successful_execution<
                 &mut object_owner_map,
             ),
             EventType::TransferToObject => handle_transfer(
-                ObjectID::try_from(recipient.borrow()).unwrap().into(),
+                Owner::ObjectOwner(ObjectID::try_from(recipient.borrow()).unwrap().into()),
                 type_,
                 event_bytes,
-                false, /* should_freeze */
                 tx_digest,
                 &mut by_value_objects,
                 &mut gas_used,
@@ -565,7 +562,10 @@ fn process_successful_execution<
                 &mut object_owner_map,
             ),
             EventType::DeleteObjectID => {
-                // TODO: Process deleted object event.
+                // unwrap safe because this event can only be emitted from processing
+                // native call delete_id, which guarantees the type of the id.
+                let id: VersionedID = bcs::from_bytes(&event_bytes).unwrap();
+                deleted_ids.insert(*id.object_id(), id.version());
                 Ok(())
             }
             EventType::User => {
@@ -586,11 +586,39 @@ fn process_successful_execution<
     // any object left in `by_value_objects` is an input passed by value that was not transferred or frozen.
     // this means that either the object was (1) deleted from the Sui system altogether, or
     // (2) wrapped inside another object that is in the Sui object pool
-    // in either case, we want to delete it
     let mut gas_refund: u64 = 0;
     for (id, object) in by_value_objects.iter() {
-        state_view.delete_object(id);
+        // If an object is owned by another object, we are not allowed to delete the child
+        // object because this could lead to a dangling reference of the ownership. Such
+        // dangling reference can never be dropped. To delete this object, it must first
+        // be transferred to an account address.
+        if matches!(object.owner, Owner::ObjectOwner { .. }) {
+            return (gas_used, 0, Err(SuiError::DeleteObjectOwnedObject));
+        }
+        if deleted_ids.contains_key(id) {
+            state_view.delete_object(id, object.version(), DeleteKind::ExistInInput);
+        } else {
+            state_view.delete_object(id, object.version(), DeleteKind::Wrap);
+        }
+
         gas_refund += gas::calculate_object_deletion_refund(object);
+    }
+    // The loop above may not cover all ids in deleted_ids, i.e. some of the deleted_ids
+    // may not show up in by_value_objects.
+    // This can happen for two reasons:
+    //  1. The call to ID::delete_id() was not a result of deleting a pre-existing object.
+    //    This can happen either because we were deleting an object that just got created
+    //    in this same transaction; or we have an ID that's created but not associated with
+    //    a real object. In either case, we don't care about this id.
+    //  2. This object was wrapped in the past, and now is getting deleted. It won't show up
+    //    in the input, but the deletion is also real.
+    // We cannot distinguish the above two cases here just yet. So we just add it with
+    // the kind NotExistInInput. They will be eventually filtered out in
+    // [`AuthorityTemporaryStore::patch_unwrapped_objects`].
+    for (id, version) in deleted_ids {
+        if !by_value_objects.contains_key(&id) {
+            state_view.delete_object(&id, version, DeleteKind::NotExistInInput);
+        }
     }
 
     (gas_used, gas_refund, Ok(()))
@@ -601,10 +629,9 @@ fn handle_transfer<
     E: Debug,
     S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
 >(
-    recipient: SuiAddress,
+    recipient: Owner,
     type_: TypeTag,
     contents: Vec<u8>,
-    should_freeze: bool,
     tx_digest: TransactionDigest,
     by_value_objects: &mut BTreeMap<ObjectID, Object>,
     gas_used: &mut u64,
@@ -625,32 +652,29 @@ fn handle_transfer<
             // freshly created, this means that its version will now be 1.
             // thus, all objects in the global object pool have version > 0
             move_obj.increment_version();
-            let new_owner = if should_freeze {
-                Owner::SharedImmutable
-            } else {
-                Owner::SingleOwner(recipient)
-            };
-            let obj = Object::new_move(move_obj, new_owner, tx_digest);
+            let obj = Object::new_move(move_obj, recipient, tx_digest);
             if old_object.is_none() {
                 // Charge extra gas based on object size if we are creating a new object.
                 *gas_used += gas::calculate_object_creation_cost(&obj);
             }
             let obj_address: SuiAddress = obj.id().into();
-            // Below we check whether the transfer introduced any circular ownership.
-            // We know that for any mutable object, all its ancenstors (if it was owned by another object)
-            // must be in the input as well. Prior to this we have recored the original ownership mapping
-            // in object_owner_map. For any new transfer, we trace the new owner through the ownership
-            // chain to see if a cycle is detected.
-            // TODO: Set a constant upper bound to the depth of the new ownership chain.
             object_owner_map.remove(&obj_address);
-            let mut parent = recipient;
-            while parent != obj_address && object_owner_map.contains_key(&parent) {
-                parent = *object_owner_map.get(&parent).unwrap();
+            if let Owner::ObjectOwner(new_owner) = recipient {
+                // Below we check whether the transfer introduced any circular ownership.
+                // We know that for any mutable object, all its ancenstors (if it was owned by another object)
+                // must be in the input as well. Prior to this we have recored the original ownership mapping
+                // in object_owner_map. For any new transfer, we trace the new owner through the ownership
+                // chain to see if a cycle is detected.
+                // TODO: Set a constant upper bound to the depth of the new ownership chain.
+                let mut parent = new_owner;
+                while parent != obj_address && object_owner_map.contains_key(&parent) {
+                    parent = *object_owner_map.get(&parent).unwrap();
+                }
+                if parent == obj_address {
+                    return Err(SuiError::CircularObjectOwnership);
+                }
+                object_owner_map.insert(obj_address, new_owner);
             }
-            if parent == obj_address {
-                return Err(SuiError::CircularObjectOwnership);
-            }
-            object_owner_map.insert(obj_address, recipient);
 
             state_view.write_object(obj);
         }

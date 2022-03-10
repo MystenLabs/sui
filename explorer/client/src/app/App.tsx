@@ -2,6 +2,7 @@ import Footer from '../components/footer/Footer';
 import Header from '../components/header/Header';
 import Search from '../components/search/Search';
 import AppRoutes from '../pages/config/AppRoutes';
+
 import styles from './App.module.css';
 
 function App() {

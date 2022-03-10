@@ -129,11 +129,7 @@ impl AsRef<[u8]> for SuiAddress {
 // We use SHA3-256 hence 32 bytes here
 const TRANSACTION_DIGEST_LENGTH: usize = 32;
 
-pub const OBJECT_DIGEST_MAX: ObjectDigest = ObjectDigest([255; 32]);
-pub const OBJECT_DIGEST_DELETED: ObjectDigest = ObjectDigest([99; 32]);
-
 /// A transaction will have a (unique) digest.
-
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize)]
 pub struct TransactionDigest(#[serde_as(as = "Bytes")] [u8; TRANSACTION_DIGEST_LENGTH]);
@@ -210,7 +206,7 @@ impl TransactionDigest {
     /// A digest we use to signify the parent transaction was the genesis,
     /// ie. for an object there is no parent digest.
     ///
-    /// TODO(https://github.com/MystenLabs/fastnft/issues/65): we can pick anything here
+    /// TODO(https://github.com/MystenLabs/sui/issues/65): we can pick anything here
     pub fn genesis() -> Self {
         Self::new([0; 32])
     }
@@ -218,7 +214,7 @@ impl TransactionDigest {
     /// Create an ObjectID from `self` and `creation_num`.
     /// Caller is responsible for ensuring that `creation_num` is fresh
     pub fn derive_id(&self, creation_num: u64) -> ObjectID {
-        // TODO(https://github.com/MystenLabs/fastnft/issues/58):audit ID derivation
+        // TODO(https://github.com/MystenLabs/sui/issues/58):audit ID derivation
 
         let mut hasher = Sha3_256::default();
         hasher.update(self.0);
@@ -240,13 +236,14 @@ impl ObjectDigest {
     pub const MIN: ObjectDigest = ObjectDigest([u8::MIN; 32]);
     pub const MAX: ObjectDigest = ObjectDigest([u8::MAX; 32]);
 
+    /// A marker that signifies the object is deleted.
+    pub const OBJECT_DIGEST_DELETED: ObjectDigest = ObjectDigest([99; 32]);
+
+    /// A marker that signifies the object is wrapped into another object.
+    pub const OBJECT_DIGEST_WRAPPED: ObjectDigest = ObjectDigest([88; 32]);
+
     pub fn new(bytes: [u8; 32]) -> Self {
         Self(bytes)
-    }
-
-    /// A marker that signifies the object is deleted.
-    pub fn deleted() -> Self {
-        OBJECT_DIGEST_DELETED
     }
 
     // for testing

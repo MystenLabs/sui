@@ -25,10 +25,10 @@ pub const DEFAULT_FRAMEWORK_PATH: &str = env!("CARGO_MANIFEST_DIR");
 pub enum EventType {
     /// System event: transfer between addresses
     TransferToAddress,
-    /// System event: freeze, then transfer between addresses
-    TransferToAddressAndFreeze,
     /// System event: transfer object to another object
     TransferToObject,
+    /// System event: freeze object
+    FreezeObject,
     /// System event: an object ID is deleted. This does not necessarily
     /// mean an object is being deleted. However whenever an object is being
     /// deleted, the object ID must be deleted and this event will be
@@ -49,6 +49,8 @@ pub fn get_move_stdlib_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>>
         ident_str!("Capability").to_owned(),
         ident_str!("Event").to_owned(),
         ident_str!("GUID").to_owned(),
+        #[cfg(not(test))]
+        ident_str!("Debug").to_owned(),
     ];
     let modules: Vec<CompiledModule> = build_framework(lib_dir)?
         .into_iter()
@@ -127,7 +129,7 @@ pub fn build_move_package(
                         && m.self_id().address() == &AccountAddress::ZERO
                 })
             {
-                return Err(SuiError::ModulePublishFailure { error: format!("Denpendent modules must have been published on-chain with non-0 addresses, unlike module {:?}", m.self_id()) });
+                return Err(SuiError::ModulePublishFailure { error: format!("Dependent modules must have been published on-chain with non-0 addresses, unlike module {:?}", m.self_id()) });
             }
             Ok(package
                 .transitive_compiled_modules()
@@ -160,7 +162,7 @@ fn verify_modules(modules: &[CompiledModule]) -> SuiResult {
         sui_bytecode_verifier::verify_module(m)?;
     }
     Ok(())
-    // TODO(https://github.com/MystenLabs/fastnft/issues/69): Run Move linker
+    // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
 }
 
 fn build_framework(framework_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
@@ -180,7 +182,10 @@ pub fn run_move_unit_tests(path: &Path) -> SuiResult {
     let result = cli::run_move_unit_tests(
         path,
         BuildConfig::default(),
-        UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)),
+        UnitTestingConfig {
+            report_stacktrace_on_abort: true,
+            ..UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS))
+        },
         natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
         /* compute_coverage */ false,
     )
@@ -204,7 +209,12 @@ fn run_framework_move_unit_tests() {
 
 #[test]
 fn run_examples_move_unit_tests() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples");
-    build_and_verify_user_package(&path, true).unwrap();
-    run_move_unit_tests(&path).unwrap();
+    let examples = vec!["basics", "defi", "fungible_tokens", "games", "nfts"];
+    for example in examples {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../examples")
+            .join(example);
+        build_and_verify_user_package(&path, true).unwrap();
+        run_move_unit_tests(&path).unwrap();
+    }
 }

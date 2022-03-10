@@ -29,20 +29,31 @@ env:
   RUST_BACKTRACE: short
 
 jobs:
+  diff:
+    runs-on: ubuntu-latest
+    outputs:
+      isRust: ${{ steps.diff.outputs.isRust }}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Detect Changes
+      uses: dorny/paths-filter@v2.10.2
+      id: diff
+      with:
+        filters: |
+          isRust:
+            - '!(explorer|doc|.github)/**'
+            - '.github/workflows/rust.yml'
   release-check:
-    name: Rust release-mode compilation ${{matrix.toolchain}} on ${{matrix.os}}
-    runs-on: ${{matrix.os}}-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        toolchain: [nightly]
-        os: [ubuntu]
+    name: Rust release-mode compilation nightly on ubuntu
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{matrix.toolchain}}
+          toolchain: nightly
           profile: minimal
           override: true
       - uses: Swatinem/rust-cache@v1
@@ -54,6 +65,7 @@ jobs:
 
   test:
     name: Test Rust ${{matrix.toolchain}} on ${{matrix.os}}
+    needs: diff
     runs-on: ${{matrix.os}}-latest
     strategy:
       fail-fast: false
@@ -62,14 +74,18 @@ jobs:
         os: [ubuntu]
     steps:
       - uses: actions/checkout@v2
+        if: needs.diff.outputs.isRust == 'true'
       - name: Install rust
+        if: needs.diff.outputs.isRust == 'true'
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{matrix.toolchain}}
           profile: minimal
           override: true
       - uses: Swatinem/rust-cache@v1
+        if: needs.diff.outputs.isRust == 'true'
       - name: Test
+        if: needs.diff.outputs.isRust == 'true'
         uses: actions-rs/cargo@v1
         with:
           command: test
@@ -77,6 +93,8 @@ jobs:
 
   clippy:
     name: Clippy
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -96,6 +114,8 @@ jobs:
 
   rustfmt:
     name: rustfmt
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -117,6 +137,8 @@ jobs:
 
   cargo-deny:
     name: cargo-deny (advisories, licenses, bans, ...)
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -124,6 +146,8 @@ jobs:
 
   cargo-udeps:
     name: cargo-udeps
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

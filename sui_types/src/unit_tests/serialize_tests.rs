@@ -89,11 +89,13 @@ fn test_info_request() {
 fn test_transaction() {
     let (sender_name, sender_key) = get_key_pair();
 
-    let transfer_transaction = Transaction::new_transfer(
-        dbg_addr(0x20),
-        random_object_ref(),
-        sender_name,
-        random_object_ref(),
+    let transfer_transaction = Transaction::from_data(
+        TransactionData::new_transfer(
+            dbg_addr(0x20),
+            random_object_ref(),
+            sender_name,
+            random_object_ref(),
+        ),
         &sender_key,
     );
 
@@ -107,11 +109,13 @@ fn test_transaction() {
     }
 
     let (sender_name, sender_key) = get_key_pair();
-    let transfer_transaction2 = Transaction::new_transfer(
-        dbg_addr(0x20),
-        random_object_ref(),
-        sender_name,
-        random_object_ref(),
+    let transfer_transaction2 = Transaction::from_data(
+        TransactionData::new_transfer(
+            dbg_addr(0x20),
+            random_object_ref(),
+            sender_name,
+            random_object_ref(),
+        ),
         &sender_key,
     );
 
@@ -128,11 +132,13 @@ fn test_transaction() {
 #[test]
 fn test_vote() {
     let (sender_name, sender_key) = get_key_pair();
-    let transaction = Transaction::new_transfer(
-        dbg_addr(0x20),
-        random_object_ref(),
-        sender_name,
-        random_object_ref(),
+    let transaction = Transaction::from_data(
+        TransactionData::new_transfer(
+            dbg_addr(0x20),
+            random_object_ref(),
+            sender_name,
+            random_object_ref(),
+        ),
         &sender_key,
     );
 
@@ -156,11 +162,13 @@ fn test_vote() {
 #[test]
 fn test_cert() {
     let (sender_name, sender_key) = get_key_pair();
-    let transaction = Transaction::new_transfer(
-        dbg_addr(0x20),
-        random_object_ref(),
-        sender_name,
-        random_object_ref(),
+    let transaction = Transaction::from_data(
+        TransactionData::new_transfer(
+            dbg_addr(0x20),
+            random_object_ref(),
+            sender_name,
+            random_object_ref(),
+        ),
         &sender_key,
     );
     let mut cert = CertifiedTransaction {
@@ -189,11 +197,13 @@ fn test_cert() {
 #[test]
 fn test_info_response() {
     let (sender_name, sender_key) = get_key_pair();
-    let transaction = Transaction::new_transfer(
-        dbg_addr(0x20),
-        random_object_ref(),
-        sender_name,
-        random_object_ref(),
+    let transaction = Transaction::from_data(
+        TransactionData::new_transfer(
+            dbg_addr(0x20),
+            random_object_ref(),
+            sender_name,
+            random_object_ref(),
+        ),
         &sender_key,
     );
 
@@ -246,11 +256,13 @@ fn test_time_transaction() {
     let mut buf = Vec::new();
     let now = Instant::now();
     for _ in 0..100 {
-        let transfer_transaction = Transaction::new_transfer(
-            dbg_addr(0x20),
-            random_object_ref(),
-            sender_name,
-            random_object_ref(),
+        let transfer_transaction = Transaction::from_data(
+            TransactionData::new_transfer(
+                dbg_addr(0x20),
+                random_object_ref(),
+                sender_name,
+                random_object_ref(),
+            ),
             &sender_key,
         );
         serialize_transfer_transaction_into(&mut buf, &transfer_transaction).unwrap();
@@ -278,11 +290,13 @@ fn test_time_transaction() {
 #[test]
 fn test_time_vote() {
     let (sender_name, sender_key) = get_key_pair();
-    let transaction = Transaction::new_transfer(
-        dbg_addr(0x20),
-        random_object_ref(),
-        sender_name,
-        random_object_ref(),
+    let transaction = Transaction::from_data(
+        TransactionData::new_transfer(
+            dbg_addr(0x20),
+            random_object_ref(),
+            sender_name,
+            random_object_ref(),
+        ),
         &sender_key,
     );
 
@@ -320,11 +334,13 @@ fn test_time_vote() {
 fn test_time_cert() {
     let count = 100;
     let (sender_name, sender_key) = get_key_pair();
-    let transaction = Transaction::new_transfer(
-        dbg_addr(0x20),
-        random_object_ref(),
-        sender_name,
-        random_object_ref(),
+    let transaction = Transaction::from_data(
+        TransactionData::new_transfer(
+            dbg_addr(0x20),
+            random_object_ref(),
+            sender_name,
+            random_object_ref(),
+        ),
         &sender_key,
     );
     let mut cert = CertifiedTransaction {

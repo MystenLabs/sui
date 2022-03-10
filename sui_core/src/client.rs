@@ -9,7 +9,6 @@ use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::value::MoveStructLayout;
-use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
 use sui_types::error::SuiResult;
 use sui_types::{
@@ -25,7 +24,8 @@ use sui_types::{
 use typed_store::rocks::open_cf;
 use typed_store::Map;
 
-use std::path::{Path, PathBuf};
+use std::collections::btree_map::Entry;
+use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
@@ -34,24 +34,65 @@ use std::{
 
 use self::client_responses::{MergeCoinResponse, SplitCoinResponse};
 
-/// a Trait object for `signature::Signer` that is:
-/// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
+/// A trait for supplying transaction signature asynchronously.
+///
+/// The transaction data can be validated inside [`Self::sign`] function before signing,
+/// return `signature::Error` if the transaction data is incorrect or unexpected.
+///
+/// # Example
+/// ```
+/// use signature::Error;
+/// use sui_core::client::AsyncTransactionSigner;
+/// use sui_types::base_types::SuiAddress;
+/// use sui_types::crypto::Signature;
+/// use sui_types::messages::TransactionData;
+/// use async_trait::async_trait;
+///
+/// struct ExampleTransactionSigner{
+///     signer: dyn signature::Signer<Signature> + Sync + Send
+/// }
+/// #[async_trait]
+/// impl AsyncTransactionSigner for ExampleTransactionSigner {
+///     async fn sign(&self, address: &SuiAddress, data: TransactionData) -> Result<Signature, Error> {
+///         // 1. Validate the transaction data
+///  
+///         // 2. Create a signature if the transaction data is valid
+///         let signature = Signature::new(&data, &self.signer);
+///         // 3. return the signature
+///         Ok(signature)
+///     }
+/// }
+/// ```
+/// This trait is typically use with [`StableSyncTransactionSigner`] to supply signature to the [`Client`] trait
+#[async_trait]
+pub trait AsyncTransactionSigner {
+    async fn sign(
+        &self,
+        address: &SuiAddress,
+        data: TransactionData,
+    ) -> Result<Signature, signature::Error>;
+}
+
+/// a Trait object for [`AsyncTransactionSigner`] that is:
+/// - Pin, i.e. confined to one place in memory.
 /// - Sync, i.e. can be safely shared between threads.
 ///
-/// Typically instantiated with Box::pin(keypair) where keypair is a `KeyPair`
-///
-pub type StableSyncSigner = Pin<Box<dyn signature::Signer<Signature> + Send + Sync>>;
+/// Typically instantiated with Box::pin(tx_signer) where tx_signer is a [`AsyncTransactionSigner`]
+pub type StableSyncTransactionSigner = Pin<Box<dyn AsyncTransactionSigner + Send + Sync>>;
 
 pub mod client_responses;
 pub mod client_store;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
+pub type GatewayClient = Box<dyn Client + Sync + Send>;
+
 pub struct ClientAddressManager<A> {
     authorities: AuthorityAggregator<A>,
     store: client_store::ClientAddressManagerStore,
     address_states: BTreeMap<SuiAddress, ClientState>,
 }
+
 impl<A> ClientAddressManager<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -69,54 +110,30 @@ where
         }
     }
 
-    /// Create a new managed address state.
-    pub fn create_account_state(
-        &mut self,
-        address: SuiAddress,
-        secret: StableSyncSigner,
-    ) -> SuiResult {
-        fp_ensure!(
-            !self.address_states.contains_key(&address),
-            SuiError::AccountExists
-        );
-        // Load the records if available
-        let single_store = match self.store.get_managed_address(address)? {
-            Some(store) => store,
-            None => self.store.manage_new_address(address)?,
+    fn get_or_create_account(&mut self, address: SuiAddress) -> SuiResult<&ClientState> {
+        let client_state = match self.address_states.entry(address) {
+            Entry::Vacant(e) => {
+                let single_store = match self.store.get_managed_address(address)? {
+                    Some(store) => store,
+                    None => self.store.manage_new_address(address)?,
+                };
+                let state = ClientState::new_for_manager(address, single_store);
+                e.insert(state)
+            }
+            Entry::Occupied(o) => o.into_mut(),
         };
-        self.address_states.insert(
-            address,
-            ClientState::new_for_manager(address, secret, single_store),
-        );
-        Ok(())
-    }
-
-    fn get_account(&self, address: &SuiAddress) -> SuiResult<&ClientState> {
-        // TODO: Eventually, we want this to support getting
-        // account whose address has not been seen before.
-        // We could create a new account on-demand and sync
-        // that account. But that's not possible today due
-        // to that creating an account requires the secret,
-        // but the ClientAddressManager doesn't have access to it.
-        self.address_states
-            .get(address)
-            .ok_or(SuiError::AccountNotFound)
+        Ok(client_state)
     }
 
     /// Get all the states
+    #[cfg(test)]
     pub fn get_managed_address_states(&self) -> &BTreeMap<SuiAddress, ClientState> {
         &self.address_states
     }
 
     /// Get the object info
-    pub async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
+    async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error> {
         self.authorities.get_object_info_execute(object_id).await
-    }
-
-    /// Get the current owner of the given object
-    pub async fn get_object_owner(&self, object_id: ObjectID) -> Result<Owner, anyhow::Error> {
-        let obj_read = self.authorities.get_object_info_execute(object_id).await?;
-        Ok(obj_read.object()?.owner)
     }
 
     #[cfg(test)]
@@ -128,8 +145,6 @@ where
 pub struct ClientState {
     /// Our Sui address.
     address: SuiAddress,
-    /// Our signature key.
-    secret: StableSyncSigner,
     /// Persistent store for client
     store: client_store::ClientSingleAddressStore,
 }
@@ -137,13 +152,14 @@ pub struct ClientState {
 // Operations are considered successful when they successfully reach a quorum of authorities.
 #[async_trait]
 pub trait Client {
-    /// Send object to a Sui account.
-    async fn transfer_object(
+    /// Send coin object to a Sui address.
+    async fn transfer_coin(
         &mut self,
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: SuiAddress,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
     /// Synchronise client state with a random authorities, updates all object_ids and certificates
@@ -164,15 +180,17 @@ pub trait Client {
         shared_object_arguments: Vec<ObjectID>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
     /// Publish Move modules
     async fn publish(
         &mut self,
         signer: SuiAddress,
-        package_source_files_path: String,
+        package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
     /// Split the coin object (identified by `coin_object_ref`) into
@@ -184,10 +202,11 @@ pub trait Client {
     async fn split_coin(
         &mut self,
         signer: SuiAddress,
-        coin_object_ref: ObjectRef,
+        coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas_payment: ObjectRef,
+        gas_payment: ObjectID,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<SplitCoinResponse, anyhow::Error>;
 
     /// Merge the `coin_to_merge` coin object into `primary_coin`.
@@ -201,10 +220,11 @@ pub trait Client {
     async fn merge_coins(
         &mut self,
         signer: SuiAddress,
-        primary_coin: ObjectRef,
-        coin_to_merge: ObjectRef,
-        gas_payment: ObjectRef,
+        primary_coin: ObjectID,
+        coin_to_merge: ObjectID,
+        gas_payment: ObjectID,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<MergeCoinResponse, anyhow::Error>;
 
     /// Get the object information
@@ -212,11 +232,11 @@ pub trait Client {
     async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, anyhow::Error>;
 
     /// Get refs of all objects we own from local cache.
-    fn get_owned_objects(&self, account_addr: SuiAddress) -> Vec<ObjectRef>;
+    fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Vec<ObjectRef>;
 
     /// Fetch objects from authorities
     async fn download_owned_objects_not_in_db(
-        &self,
+        &mut self,
         account_addr: SuiAddress,
     ) -> Result<BTreeSet<ObjectRef>, SuiError>;
 }
@@ -225,26 +245,20 @@ impl ClientState {
     /// It is recommended that one call sync and download_owned_objects
     /// right after constructor to fetch missing info form authorities
     /// TODO: client should manage multiple addresses instead of each addr having DBs
-    /// https://github.com/MystenLabs/fastnft/issues/332
+    /// https://github.com/MystenLabs/sui/issues/332
     #[cfg(test)]
-    pub fn new(path: PathBuf, address: SuiAddress, secret: StableSyncSigner) -> Self {
+    pub fn new(path: PathBuf, address: SuiAddress) -> Self {
         ClientState {
             address,
-            secret,
             store: client_store::ClientSingleAddressStore::new(path),
         }
     }
 
     pub fn new_for_manager(
         address: SuiAddress,
-        secret: StableSyncSigner,
         store: client_store::ClientSingleAddressStore,
     ) -> Self {
-        ClientState {
-            address,
-            secret,
-            store,
-        }
+        ClientState { address, store }
     }
 
     pub fn address(&self) -> SuiAddress {
@@ -387,10 +401,6 @@ impl ClientState {
         &self.store
     }
 
-    pub fn secret(&self) -> &dyn signature::Signer<Signature> {
-        &*self.secret
-    }
-
     pub fn get_unique_pending_transactions(&self) -> HashSet<Transaction> {
         self.store
             .pending_transactions
@@ -403,7 +413,7 @@ impl ClientState {
     /// We use this to ensure that a transaction can indeed unlock or lock certain objects in the transaction
     /// This means either exactly all the objects are owned by this transaction, or by no transaction
     /// The caller has to explicitly find which objects are locked
-    /// TODO: always return true for immutable objects https://github.com/MystenLabs/fastnft/issues/305
+    /// TODO: always return true for immutable objects https://github.com/MystenLabs/sui/issues/305
     fn can_lock_or_unlock(&self, transaction: &Transaction) -> Result<bool, SuiError> {
         let iter_matches = self.store.pending_transactions.multi_get(
             &transaction
@@ -428,7 +438,7 @@ impl ClientState {
     /// One should call can_lock_or_unlock before locking as this overwites the previous lock
     /// If the object is already locked, ensure it is unlocked by calling unlock_pending_transaction_objects
     /// Client runs sequentially right now so access to this is safe
-    /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/fastnft/issues/335
+    /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/sui/issues/335
     pub fn lock_pending_transaction_objects(
         &self,
         transaction: &Transaction,
@@ -496,12 +506,12 @@ where
     /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
     /// This functions locks all the input objects if possible, and unlocks at the end of confirmation or if an error occurs
     /// TODO: define other situations where we can unlock objects after authority error
-    /// https://github.com/MystenLabs/fastnft/issues/346
+    /// https://github.com/MystenLabs/sui/issues/346
     async fn execute_transaction(
         &mut self,
         transaction: Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        let account = self.get_account(&transaction.sender_address())?;
+        let account = self.get_or_create_account(transaction.sender_address())?;
         for object_kind in &transaction.input_objects() {
             let object_id = object_kind.object_id();
             let next_sequence_number = account
@@ -524,11 +534,11 @@ where
 
         // How do we handle errors on authority which lock objects?
         // Currently VM crash can keep objects locked, but we would like to avoid this.
-        // TODO: https://github.com/MystenLabs/fastnft/issues/349
-        // https://github.com/MystenLabs/fastnft/issues/211
-        // https://github.com/MystenLabs/fastnft/issues/346
+        // TODO: https://github.com/MystenLabs/sui/issues/349
+        // https://github.com/MystenLabs/sui/issues/211
+        // https://github.com/MystenLabs/sui/issues/346
 
-        let account = self.get_account(&transaction.sender_address())?;
+        let account = self.get_or_create_account(transaction.sender_address())?;
         account.unlock_pending_transaction_objects(&transaction)?;
         result
     }
@@ -539,7 +549,7 @@ where
         effects: TransactionEffects,
     ) -> Result<(CertifiedTransaction, TransactionEffects), SuiError> {
         let address = cert.transaction.sender_address();
-        let account = self.get_account(&address)?;
+        let account = self.get_or_create_account(address)?;
         // The cert should be included in the response
         let parent_tx_digest = cert.transaction.digest();
         // TODO: certicates should ideally be inserted to the shared store.
@@ -561,17 +571,12 @@ where
                     account.remove_object_info(&object_id)?;
                     // TODO: Could potentially add this object_ref to the relevant account store
                 }
-            } else if old_seq == seq && owner == Owner::SingleOwner(address) {
+            } else if old_seq == seq && owner == Owner::AddressOwner(address) {
+                // TODO: Store objects owned by objects as well.
                 // ObjectRef can be 1 version behind because it's only updated after confirmation.
                 account.update_object_ref(&object_ref)?;
             }
         }
-
-        // TODO: decide what to do with failed object downloads
-        // https://github.com/MystenLabs/fastnft/issues/331
-        let _failed = self
-            .download_objects_not_in_db(address, objs_to_download)
-            .await?;
 
         for (object_id, seq, _) in &effects.deleted {
             let old_seq = account.highest_known_version(object_id).unwrap_or_default();
@@ -579,6 +584,12 @@ where
                 account.remove_object_info(object_id)?;
             }
         }
+
+        // TODO: decide what to do with failed object downloads
+        // https://github.com/MystenLabs/sui/issues/331
+        let _failed = self
+            .download_objects_not_in_db(address, objs_to_download)
+            .await?;
         Ok((cert, effects))
     }
 
@@ -589,11 +600,11 @@ where
     /// Returns a set of the object ids which failed to download
     /// TODO: return failed download errors along with the object id
     async fn download_objects_not_in_db(
-        &self,
+        &mut self,
         account_addr: SuiAddress,
         object_refs: Vec<ObjectRef>,
     ) -> Result<BTreeSet<ObjectRef>, SuiError> {
-        let account = self.get_account(&account_addr)?;
+        let account = self.get_or_create_account(account_addr)?;
         // Check the DB
         // This could be expensive. Might want to use object_ref table
         // We want items that are NOT in the table
@@ -605,6 +616,7 @@ where
             .fetch_objects_from_authorities(fresh_object_refs.clone());
 
         let mut err_object_refs = fresh_object_refs;
+        let account = self.get_or_create_account(account_addr)?;
         // Receive from the downloader
         while let Some(resp) = receiver.recv().await {
             // Persists them to disk
@@ -622,11 +634,11 @@ where
         &mut self,
         account_addr: SuiAddress,
     ) -> Result<(), SuiError> {
-        let account = self.get_account(&account_addr)?;
+        let account = self.get_or_create_account(account_addr)?;
         let unique_pending_transactions = account.get_unique_pending_transactions();
         // Transactions are idempotent so no need to prevent multiple executions
         // Need some kind of timeout or max_trials here?
-        // TODO: https://github.com/MystenLabs/fastnft/issues/330
+        // TODO: https://github.com/MystenLabs/sui/issues/330
         for transaction in unique_pending_transactions {
             self.execute_transaction(transaction.clone())
                 .await
@@ -643,21 +655,28 @@ impl<A> Client for ClientAddressManager<A>
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
-    async fn transfer_object(
+    async fn transfer_coin(
         &mut self,
         signer: SuiAddress,
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: SuiAddress,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        let account = self.get_account(&signer)?;
+        let account = self.get_or_create_account(signer)?;
         let object_ref = account.latest_object_ref(&object_id)?;
+        self.get_object_info(object_id)
+            .await?
+            .object()?
+            .is_transfer_elegible()?;
 
+        let account = self.get_or_create_account(signer)?;
         let gas_payment = account.latest_object_ref(&gas_payment)?;
-
-        let transaction =
-            Transaction::new_transfer(recipient, object_ref, signer, gas_payment, account.secret());
-        let (certificate, effects) = self.execute_transaction(transaction).await?;
+        let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_payment);
+        let signature = tx_signer.sign(&signer, data.clone()).await?;
+        let (certificate, effects) = self
+            .execute_transaction(Transaction::new(data, signature))
+            .await?;
 
         Ok((certificate, effects))
     }
@@ -670,7 +689,7 @@ where
             .sync_all_owned_objects(account_addr, Duration::from_secs(60))
             .await?;
 
-        let account = self.get_account(&account_addr)?;
+        let account = self.get_or_create_account(account_addr)?;
         account.clear_object_refs()?;
         for (object, option_layout, option_cert) in active_object_certs {
             account.insert_active_object_cert(object, option_layout, option_cert)?;
@@ -691,8 +710,9 @@ where
         shared_object_arguments: Vec<ObjectID>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        let move_call_transaction = Transaction::new_move_call(
+        let data = TransactionData::new_move_call(
             signer,
             package_object_ref,
             module,
@@ -703,45 +723,46 @@ where
             shared_object_arguments,
             pure_arguments,
             gas_budget,
-            self.get_account(&signer)?.secret(),
         );
-        self.execute_transaction(move_call_transaction).await
+        let signature = tx_signer.sign(&signer, data.clone()).await?;
+        self.execute_transaction(Transaction::new(data, signature))
+            .await
     }
 
     async fn publish(
         &mut self,
         signer: SuiAddress,
-        package_source_files_path: String,
+        package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        // Try to compile the package at the given path
-        let compiled_modules = build_move_package_to_bytes(Path::new(&package_source_files_path))?;
-        let move_publish_transaction = Transaction::new_module(
-            signer,
-            gas_object_ref,
-            compiled_modules,
-            gas_budget,
-            self.get_account(&signer)?.secret(),
-        );
-        self.execute_transaction(move_publish_transaction).await
+        let data = TransactionData::new_module(signer, gas_object_ref, package_bytes, gas_budget);
+        let signature = tx_signer.sign(&signer, data.clone()).await?;
+
+        self.execute_transaction(Transaction::new(data, signature))
+            .await
     }
 
     async fn split_coin(
         &mut self,
         signer: SuiAddress,
-        coin_object_ref: ObjectRef,
+        coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
-        gas_payment: ObjectRef,
+        gas_payment: ObjectID,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<SplitCoinResponse, anyhow::Error> {
+        let account = self.get_or_create_account(signer)?;
+        let coin_object_ref = account.latest_object_ref(&coin_object_id)?;
+        let gas_payment = account.latest_object_ref(&gas_payment)?;
         let coin_type = self
             .get_object_info(coin_object_ref.0)
             .await?
             .object()?
             .get_move_template_type()?;
 
-        let move_call_transaction = Transaction::new_move_call(
+        let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
@@ -752,9 +773,13 @@ where
             vec![],
             vec![bcs::to_bytes(&split_amounts)?],
             gas_budget,
-            self.get_account(&signer)?.secret(),
         );
-        let (certificate, effects) = self.execute_transaction(move_call_transaction).await?;
+
+        let signature = tx_signer.sign(&signer, data.clone()).await?;
+
+        let (certificate, effects) = self
+            .execute_transaction(Transaction::new(data, signature))
+            .await?;
         if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
             return Err(error.into());
         }
@@ -762,7 +787,7 @@ where
         fp_ensure!(
             effects.mutated.len() == 2     // coin and gas
                && created.len() == split_amounts.len()
-               && created.iter().all(|(_, owner)| owner == &Owner::SingleOwner(signer)),
+               && created.iter().all(|(_, owner)| owner == &signer),
             SuiError::IncorrectGasSplit.into()
         );
         let updated_coin = self
@@ -785,18 +810,24 @@ where
     async fn merge_coins(
         &mut self,
         signer: SuiAddress,
-        primary_coin: ObjectRef,
-        coin_to_merge: ObjectRef,
-        gas_payment: ObjectRef,
+        primary_coin: ObjectID,
+        coin_to_merge: ObjectID,
+        gas_payment: ObjectID,
         gas_budget: u64,
+        tx_signer: StableSyncTransactionSigner,
     ) -> Result<MergeCoinResponse, anyhow::Error> {
+        let account = self.get_or_create_account(signer)?;
+        let primary_coin = account.latest_object_ref(&primary_coin)?;
+        let coin_to_merge = account.latest_object_ref(&coin_to_merge)?;
+        let gas_payment = account.latest_object_ref(&gas_payment)?;
+
         let coin_type = self
             .get_object_info(primary_coin.0)
             .await?
             .object()?
             .get_move_template_type()?;
 
-        let move_call_transaction = Transaction::new_move_call(
+        let data = TransactionData::new_move_call(
             signer,
             self.get_framework_object_ref().await?,
             coin::COIN_MODULE_NAME.to_owned(),
@@ -807,9 +838,11 @@ where
             vec![],
             vec![],
             gas_budget,
-            self.get_account(&signer)?.secret(),
         );
-        let (certificate, effects) = self.execute_transaction(move_call_transaction).await?;
+        let signature = tx_signer.sign(&signer, data.clone()).await?;
+        let (certificate, effects) = self
+            .execute_transaction(Transaction::new(data, signature))
+            .await?;
         if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
             return Err(error.into());
         }
@@ -830,15 +863,15 @@ where
         self.authorities.get_object_info_execute(object_id).await
     }
 
-    fn get_owned_objects(&self, account_addr: SuiAddress) -> Vec<ObjectRef> {
+    fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Vec<ObjectRef> {
         // Returns empty vec![] if the account cannot be found.
-        self.get_account(&account_addr)
+        self.get_or_create_account(account_addr)
             .map(|acc| acc.object_refs().map(|(_, r)| r).collect())
             .unwrap_or_default()
     }
 
     async fn download_owned_objects_not_in_db(
-        &self,
+        &mut self,
         account_addr: SuiAddress,
     ) -> Result<BTreeSet<ObjectRef>, SuiError> {
         let object_refs: Vec<ObjectRef> = self.get_owned_objects(account_addr);

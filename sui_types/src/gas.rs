@@ -7,7 +7,7 @@ use crate::{
     error::{SuiError, SuiResult},
     gas_coin::GasCoin,
     messages::{Transaction, TransactionKind},
-    object::Object,
+    object::{Object, Owner},
 };
 use std::convert::TryFrom;
 
@@ -26,6 +26,10 @@ pub const MIN_OBJ_TRANSFER_GAS: u64 = 8;
 
 pub fn check_gas_requirement(transaction: &Transaction, gas_object: &Object) -> SuiResult {
     debug_assert_eq!(transaction.gas_payment_object_ref().0, gas_object.id());
+    ok_or_gas_error!(
+        matches!(gas_object.owner, Owner::AddressOwner(..)),
+        "Gas object must be owned by the signer".to_string()
+    )?;
     match &transaction.data.kind {
         TransactionKind::Transfer(_) => {
             let balance = get_gas_balance(gas_object)?;

@@ -8,7 +8,7 @@ use move_binary_format::file_format::{
 };
 use move_core_types::{account_address::AccountAddress, ident_str, language_storage::StructTag};
 use move_package::BuildConfig;
-use std::{collections::BTreeSet, mem, path::PathBuf};
+use std::{mem, path::PathBuf};
 use sui_types::{
     base_types::{self, SequenceNumber},
     crypto::get_key_pair,
@@ -28,7 +28,7 @@ const GAS_BUDGET: u64 = 10000;
 struct ScratchPad {
     updated: BTreeMap<ObjectID, Object>,
     created: BTreeMap<ObjectID, Object>,
-    deleted: BTreeSet<ObjectID>,
+    deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     events: Vec<Event>,
 }
 
@@ -74,7 +74,7 @@ impl InMemoryStorage {
         for (id, o) in to_flush.updated {
             assert!(self.persistent.insert(id, o).is_some())
         }
-        for id in to_flush.deleted {
+        for (id, _) in to_flush.deleted {
             self.persistent.remove(&id);
         }
     }
@@ -87,7 +87,7 @@ impl InMemoryStorage {
         &self.temporary.updated
     }
 
-    pub fn deleted(&self) -> &BTreeSet<ObjectID> {
+    pub fn deleted(&self) -> &BTreeMap<ObjectID, (SequenceNumber, DeleteKind)> {
         &self.temporary.deleted
     }
 
@@ -107,7 +107,7 @@ impl Storage for InMemoryStorage {
 
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
         // there should be no read after delete
-        assert!(!self.temporary.deleted.contains(id));
+        assert!(!self.temporary.deleted.contains_key(id));
         // try objects updated in temp memory first
         self.temporary.updated.get(id).cloned().or_else(|| {
             self.temporary.created.get(id).cloned().or_else(||
@@ -120,7 +120,7 @@ impl Storage for InMemoryStorage {
     fn write_object(&mut self, object: Object) {
         let id = object.id();
         // there should be no write after delete
-        assert!(!self.temporary.deleted.contains(&id));
+        assert!(!self.temporary.deleted.contains_key(&id));
         if self.persistent.contains_key(&id) {
             self.temporary.updated.insert(id, object);
         } else {
@@ -133,12 +133,12 @@ impl Storage for InMemoryStorage {
     }
 
     // buffer delete
-    fn delete_object(&mut self, id: &ObjectID) {
+    fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
         // there should be no deletion after write
         assert!(self.temporary.updated.get(id) == None);
-        let fresh_id = self.temporary.deleted.insert(*id);
+        let old_entry = self.temporary.deleted.insert(*id, (version, kind));
         // this object was not previously deleted
-        assert!(fresh_id);
+        assert!(old_entry.is_none());
     }
 }
 
@@ -429,7 +429,7 @@ fn test_wrap_unwrap() {
     // wrapping should create wrapper object and "delete" wrapped object
     assert_eq!(storage.created().len(), 1);
     assert_eq!(storage.deleted().len(), 1);
-    assert_eq!(storage.deleted().iter().next().unwrap(), &id1);
+    assert_eq!(storage.deleted().iter().next().unwrap().0, &id1);
     let id2 = storage.get_created_keys().pop().unwrap();
     storage.flush();
     assert!(storage.read_object(&id1).is_none());
@@ -452,7 +452,7 @@ fn test_wrap_unwrap() {
     // wrapping should delete wrapped object and "create" unwrapped object
     assert_eq!(storage.created().len(), 1);
     assert_eq!(storage.deleted().len(), 1);
-    assert_eq!(storage.deleted().iter().next().unwrap(), &id2);
+    assert_eq!(storage.deleted().iter().next().unwrap().0, &id2);
     assert_eq!(id1, storage.get_created_keys().pop().unwrap());
     storage.flush();
     assert!(storage.read_object(&id2).is_none());
@@ -566,9 +566,8 @@ fn test_publish_module_insufficient_gas() {
 }
 
 #[test]
-fn test_transfer_and_freeze() {
+fn test_freeze() {
     let addr1 = base_types::get_new_address();
-    let addr2 = base_types::get_new_address();
 
     let native_functions =
         sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
@@ -606,18 +605,17 @@ fn test_transfer_and_freeze() {
     let obj1 = storage.read_object(&id1).unwrap();
     assert!(!obj1.is_read_only());
 
-    // 2. Call transfer_and_freeze.
-    let pure_args = vec![bcs::to_bytes(&AccountAddress::from(addr2)).unwrap()];
+    // 2. Call freeze_object.
     call(
         &mut storage,
         &native_functions,
         "ObjectBasics",
-        "transfer_and_freeze",
+        "freeze_object",
         gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         vec![obj1],
-        pure_args,
+        vec![],
     )
     .unwrap()
     .unwrap();
@@ -708,7 +706,7 @@ fn test_move_call_args_type_mismatch() {
         .contains("Expected 3 arguments calling function 'create', but found 2"));
 
     /*
-    // Need to fix https://github.com/MystenLabs/fastnft/issues/211
+    // Need to fix https://github.com/MystenLabs/sui/issues/211
     // in order to enable the following test.
     let pure_args = vec![
         10u64.to_le_bytes().to_vec(),

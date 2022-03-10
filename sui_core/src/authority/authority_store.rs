@@ -9,19 +9,30 @@ use std::path::Path;
 
 use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
+use sui_types::batch::{SignedBatch, TxSequenceNumber};
+use tracing::warn;
 use typed_store::rocks::{open_cf, DBBatch, DBMap};
 
 use std::sync::atomic::Ordering;
 use typed_store::traits::Map;
 
-pub use crate::authority_batch::AuthorityBatch;
-use crate::authority_batch::{SignedBatch, TxSequenceNumber};
+pub type AuthorityStore = SuiDataStore<true>;
+#[allow(dead_code)]
+pub type ReplicaStore = SuiDataStore<false>;
 
-pub struct AuthorityStore {
+/// ALL_OBJ_VER determines whether we want to store all past
+/// versions of every object in the store. Authority doesn't store
+/// them, but other entities such as replicas will.
+pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// This is a map between the object ID and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
     objects: DBMap<ObjectID, Object>,
+
+    /// Stores all history versions of all objects.
+    /// This is not needed by an authority, but is needed by a replica.
+    #[allow(dead_code)]
+    all_object_versions: DBMap<(ObjectID, SequenceNumber), Object>,
 
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the transaction that they are lock on for use by this specific authority. Where an object
@@ -62,7 +73,10 @@ pub struct AuthorityStore {
     /// the same response for any call after the first (ie. make certificate processing idempotent).
     signed_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
 
-    /// Hold the lock for shared objects. These two maps should eventually be merged into a single one.
+    /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
+    /// certified transaction from consensus, the authority assigns a lock to each shared objects of the
+    /// transaction. Note that all authorities are guaranteed to assign the same lock to these objects.
+    /// TODO: These two maps should be merged into a single one (no reason to have two).
     sequenced: DBMap<(TransactionDigest, ObjectID), SequenceNumber>,
     schedule: DBMap<ObjectID, SequenceNumber>,
 
@@ -80,7 +94,7 @@ pub struct AuthorityStore {
     pub next_sequence_number: AtomicU64,
 }
 
-impl AuthorityStore {
+impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> AuthorityStore {
         let db = open_cf(
@@ -88,6 +102,7 @@ impl AuthorityStore {
             db_options,
             &[
                 "objects",
+                "all_object_versions",
                 "owner_index",
                 "transaction_lock",
                 "signed_transactions",
@@ -119,6 +134,8 @@ impl AuthorityStore {
 
         AuthorityStore {
             objects: DBMap::reopen(&db, Some("objects")).expect("Cannot open CF."),
+            all_object_versions: DBMap::reopen(&db, Some("all_object_versions"))
+                .expect("Cannot open CF."),
             owner_index: DBMap::reopen(&db, Some("owner_index")).expect("Cannot open CF."),
             transaction_lock: DBMap::reopen(&db, Some("transaction_lock"))
                 .expect("Cannot open CF."),
@@ -330,6 +347,7 @@ impl AuthorityStore {
         // new locks must be atomic, and not writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
+            // MutexGuards are unlocked on drop (ie end of this block)
             let _mutexes = self.acquire_locks(mutable_input_objects);
 
             let locks = self.transaction_lock.multi_get(mutable_input_objects)?;
@@ -344,6 +362,9 @@ impl AuthorityStore {
                             .get_transaction_lock(obj_ref)?
                             .expect("If we have a lock we should have a transaction.");
 
+                        warn!(prev_tx_digest =? previous_tx_digest,
+                              cur_tx_digest =? tx_digest,
+                              "Conflicting transaction!  Lock state changed in unexpected way");
                         // TODO: modify ConflictingTransaction to only return the transaction digest here.
                         return Err(SuiError::ConflictingTransaction {
                             pending_transaction: prev_transaction.transaction,
@@ -386,6 +407,13 @@ impl AuthorityStore {
             std::iter::once((transaction_digest, &signed_effects)),
         )?;
 
+        // Cleanup the lock of the shared objects.
+        let write_batch = self.remove_shared_objects_locks(
+            write_batch,
+            transaction_digest,
+            &certificate.transaction,
+        )?;
+
         // Safe to unwrap since the "true" flag ensures we get a sequence value back.
         let seq: TxSequenceNumber = self
             .batch_update_objects(write_batch, temporary_store, transaction_digest, true)?
@@ -426,14 +454,22 @@ impl AuthorityStore {
         // Archive the old lock.
         write_batch = write_batch.delete_batch(&self.transaction_lock, active_inputs.iter())?;
 
-        // Delete objects
-        write_batch = write_batch.delete_batch(&self.objects, deleted.iter())?;
+        // Delete objects.
+        // Wrapped objects need to be deleted as well because we can no longer track their
+        // content nor use them directly.
+        write_batch = write_batch.delete_batch(&self.objects, deleted.iter().map(|(id, _)| *id))?;
 
         // Make an iterator over all objects that are either deleted or have changed owner,
         // along with their old owner.  This is used to update the owner index.
+        // For wrapped objects, although their owners technically didn't change, we will lose track
+        // of them and there is no guarantee on their owner in the future. Hence we treat them
+        // the same as deleted.
         let old_object_owners = deleted
             .iter()
-            .filter_map(|id| objects[id].get_single_owner_and_id())
+            // We need to call get() on objects because some object that were just deleted may not
+            // be in the objects list. This can happen if these deleted objects were wrapped in the past,
+            // and hence will not show up in the input objects.
+            .filter_map(|(id, _)| objects.get(id).and_then(Object::get_single_owner_and_id))
             .chain(
                 written
                     .iter()
@@ -459,12 +495,16 @@ impl AuthorityStore {
         // Index the certificate by the objects deleted
         write_batch = write_batch.insert_batch(
             &self.parent_sync,
-            deleted.iter().map(|object_id| {
+            deleted.iter().map(|(object_id, (version, kind))| {
                 (
                     (
                         *object_id,
-                        objects[object_id].version().increment(),
-                        ObjectDigest::deleted(),
+                        *version,
+                        if kind == &DeleteKind::Wrap {
+                            ObjectDigest::OBJECT_DIGEST_WRAPPED
+                        } else {
+                            ObjectDigest::OBJECT_DIGEST_DELETED
+                        },
                     ),
                     transaction_digest,
                 )
@@ -482,6 +522,16 @@ impl AuthorityStore {
                 }
             }),
         )?;
+
+        if ALL_OBJ_VER {
+            // Keep all versions of every object if ALL_OBJ_VER is true.
+            write_batch = write_batch.insert_batch(
+                &self.all_object_versions,
+                written
+                    .iter()
+                    .map(|(id, object)| ((*id, object.version()), object)),
+            )?;
+        }
 
         // Update the indexes of the objects written
         write_batch = write_batch.insert_batch(
@@ -557,7 +607,7 @@ impl AuthorityStore {
             .parent_sync
             .iter()
             // Make the max possible entry for this object ID.
-            .skip_prior_to(&(object_id, SequenceNumber::MAX, OBJECT_DIGEST_MAX))?;
+            .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
 
         Ok(iterator.next().and_then(|(obj_ref, tx_digest)| {
             if obj_ref.0 == object_id {
@@ -568,39 +618,35 @@ impl AuthorityStore {
         }))
     }
 
-    /// Delete a lock of a shared object.
-    pub fn delete_sequence_lock(
+    /// Remove the shared objects locks. This function is not safety-critical and is only need to cleanup the store.
+    pub fn remove_shared_objects_locks(
         &self,
+        mut write_batch: DBBatch,
         transaction_digest: TransactionDigest,
-        object_id: ObjectID,
-    ) -> Result<(), SuiError> {
-        self.sequenced
-            .remove(&(transaction_digest, object_id))
-            .map_err(SuiError::from)
-    }
-
-    /// Free the schedule data structure.
-    pub fn delete_schedule(&self, object_id: &ObjectID) -> Result<(), SuiError> {
-        self.schedule.remove(object_id).map_err(SuiError::from)
-    }
-
-    /// Persist a certificate.
-    pub fn persist_certificate(
-        &self,
-        transaction_digest: &TransactionDigest,
-        certificate: &CertifiedTransaction,
-    ) -> Result<(), SuiError> {
-        self.certificates
-            .insert(transaction_digest, certificate)
-            .map_err(SuiError::from)
+        transaction: &Transaction,
+    ) -> SuiResult<DBBatch> {
+        let mut sequenced_to_delete = Vec::new();
+        let mut schedule_to_delete = Vec::new();
+        for object_id in transaction.shared_input_objects() {
+            sequenced_to_delete.push((transaction_digest, *object_id));
+            if self.get_object(object_id)?.is_none() {
+                schedule_to_delete.push(object_id);
+            }
+        }
+        write_batch = write_batch.delete_batch(&self.sequenced, sequenced_to_delete)?;
+        write_batch = write_batch.delete_batch(&self.schedule, schedule_to_delete)?;
+        Ok(write_batch)
     }
 
     /// Lock a sequence number for the shared objects of the input transaction.
-    pub fn lock_shared_objects(
+    pub fn persist_certificate_and_lock_shared_objects(
         &self,
         transaction_digest: TransactionDigest,
         transaction: &Transaction,
+        certificate: CertifiedTransaction,
     ) -> Result<(), SuiError> {
+        let certificate_to_write = std::iter::once((transaction_digest, certificate));
+
         let mut sequenced_to_write = Vec::new();
         let mut schedule_to_write = Vec::new();
         for id in transaction.shared_input_objects() {
@@ -610,12 +656,113 @@ impl AuthorityStore {
             schedule_to_write.push((id, next_version));
         }
 
-        // TODO: Writing into `sequenced` and `schedule` should be atomic. Should we merge
-        // them into a single DB?
         let mut write_batch = self.sequenced.batch();
+        write_batch = write_batch.insert_batch(&self.certificates, certificate_to_write)?;
         write_batch = write_batch.insert_batch(&self.sequenced, sequenced_to_write)?;
         write_batch = write_batch.insert_batch(&self.schedule, schedule_to_write)?;
         write_batch.write().map_err(SuiError::from)
+    }
+
+    /// Retrieves batches including transactions within a range.
+    ///
+    /// This function returns all signed batches that enclose the requested transaction
+    /// including the batch preceeding the first requested transaction, the batch including
+    /// the last requested transaction (if there is one) and all batches in between.
+    ///
+    /// Transactions returned include all transactions within the batch that include the
+    /// first requested transaction, all the way to at least all the transactions that are
+    /// included in the last batch returned. If the last requested transaction is outside a
+    /// batch (one has not yet been generated) the function returns all transactions at the
+    /// end of the sequence that are in TxSequenceOrder (and ignores any that are out of
+    /// order.)
+    #[allow(clippy::type_complexity)]
+    pub fn batches_and_transactions(
+        &self,
+        start: u64,
+        end: u64,
+    ) -> Result<(Vec<SignedBatch>, Vec<(TxSequenceNumber, TransactionDigest)>), SuiError> {
+        /*
+        Get all batches that include requested transactions. This includes the signed batch
+        prior to the first requested transaction, the batch including the last requested
+        transaction and all batches in between.
+
+        So for example if we got a request for start: 3 end: 9 and we have:
+        B0 T0 T1 B2 T2 T3 B3 T3 T4 T5 B6 T6 T8 T9
+
+        This will return B2, B3, B6
+
+
+        */
+        let batches: Vec<SignedBatch> = self
+            .batches
+            .iter()
+            .skip_prior_to(&start)?
+            .take_while(|(_seq, batch)| batch.batch.initial_sequence_number < end)
+            .map(|(_, batch)| batch)
+            .collect();
+
+        /*
+        Get transactions in the retrieved batches. The first batch is included
+        without transactions, so get transactions of all subsequent batches, or
+        until the end of the sequence if the last batch does not contain the
+        requested end sequence number.
+
+        So for example if we got a request for start: 3 end: 9 and we have:
+        B0 T0 T1 B2 T2 T3 B3 T3 T4 T5 B6 T6 T8 T9
+
+        The code below will return T2 .. T6
+
+        Note: T8 is out of order so the sequence returned ends at T6.
+
+        */
+
+        let first_seq = batches
+            .first()
+            .ok_or(SuiError::NoBatchesFoundError)?
+            .batch
+            .next_sequence_number;
+        let mut last_seq = batches
+            .last()
+            .unwrap() // if the first exists the last exists too
+            .batch
+            .next_sequence_number;
+
+        let mut in_sequence = last_seq;
+        let in_sequence_ptr = &mut in_sequence;
+
+        if last_seq < end {
+            // This means that the request needs items beyond the end of the
+            // last batch, so we include all items.
+            last_seq = TxSequenceNumber::MAX;
+        }
+
+        /* Since the database writes are asynchronous it may be the case that the tail end of the
+        sequence misses items. This will confuse calling logic, so we filter them out and allow
+        callers to use the subscription API to catch the latest items in order. */
+
+        let transactions: Vec<(TxSequenceNumber, TransactionDigest)> = self
+            .executed_sequence
+            .iter()
+            .skip_to(&first_seq)?
+            .take_while(|(seq, _tx)| {
+                // Before the end of the last batch we want everything.
+                if *seq < *in_sequence_ptr {
+                    return true;
+                };
+
+                // After the end of the last batch we only take items in sequence.
+                if *seq < last_seq && *seq == *in_sequence_ptr {
+                    *in_sequence_ptr += 1;
+                    return true;
+                }
+
+                // If too large or out of sequence after the last batch
+                // we stop taking items.
+                false
+            })
+            .collect();
+
+        Ok((batches, transactions))
     }
 }
 

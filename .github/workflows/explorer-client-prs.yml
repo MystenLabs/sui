@@ -1,0 +1,43 @@
+name: Explorer Client PR checks
+on: pull_request
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    outputs:
+      isClient: ${{ steps.diff.outputs.isClient }}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Detect Changes
+      uses: dorny/paths-filter@v2.10.2
+      id: diff
+      with:
+        filters: |
+          isClient:
+            - 'explorer/client/**'
+            - '.github/workflows/explorer-client-prs.yml'
+  client_checks:
+    name: Lint, Test & Build
+    needs: diff
+    if: needs.diff.outputs.isClient == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Nodejs
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+          cache: 'npm'
+          cache-dependency-path: ./explorer/client/package-lock.json
+      - name: Install npm dependencies
+        working-directory: ./explorer/client
+        run: npm ci
+      - name: Lint
+        working-directory: ./explorer/client
+        run: npm run lint
+      - name: Test
+        working-directory: ./explorer/client
+        run: npm run test
+      - name: Build
+        working-directory: ./explorer/client
+        run: npm run build

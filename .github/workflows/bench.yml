@@ -27,8 +27,23 @@ env:
   RUST_BACKTRACE: short
 
 jobs:
+  diff:
+    runs-on: ubuntu-latest
+    outputs:
+      isRust: ${{ steps.diff.outputs.isRust }}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Detect Changes
+      uses: dorny/paths-filter@v2.10.2
+      id: diff
+      with:
+        filters: |
+          isRust:
+            - '!(explorer|doc|.github)/**'
+            - '.github/workflows/bench.yml'
   bench:
-    if: github.event.pull_request.draft == false
+    needs: diff
+    if: github.event.pull_request.draft == false && needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2

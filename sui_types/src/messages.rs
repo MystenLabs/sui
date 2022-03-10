@@ -5,7 +5,7 @@
 use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
-use super::{base_types::*, committee::Committee, error::*, event::Event};
+use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 
 #[cfg(test)]
 #[path = "unit_tests/messages_tests.rs"]
@@ -22,6 +22,7 @@ use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
+use strum::VariantNames;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Transfer {
@@ -52,7 +53,9 @@ pub struct MoveModulePublish {
     pub gas_budget: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, strum_macros::EnumVariantNames,
+)]
 pub enum TransactionKind {
     /// Initiate an object transfer between addresses
     Transfer(Transfer),
@@ -68,6 +71,81 @@ pub struct TransactionData {
     pub kind: TransactionKind,
     sender: SuiAddress,
     gas_payment: ObjectRef,
+}
+
+impl TransactionData {
+    pub fn new(kind: TransactionKind, sender: SuiAddress, gas_payment: ObjectRef) -> Self {
+        TransactionData {
+            kind,
+            sender,
+            gas_payment,
+        }
+    }
+
+    pub fn new_move_call(
+        sender: SuiAddress,
+        package: ObjectRef,
+        module: Identifier,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        gas_payment: ObjectRef,
+        object_arguments: Vec<ObjectRef>,
+        shared_object_arguments: Vec<ObjectID>,
+        pure_arguments: Vec<Vec<u8>>,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Call(MoveCall {
+            package,
+            module,
+            function,
+            type_arguments,
+            object_arguments,
+            shared_object_arguments,
+            pure_arguments,
+            gas_budget,
+        });
+        Self::new(kind, sender, gas_payment)
+    }
+
+    pub fn new_transfer(
+        recipient: SuiAddress,
+        object_ref: ObjectRef,
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+    ) -> Self {
+        let kind = TransactionKind::Transfer(Transfer {
+            recipient,
+            object_ref,
+        });
+        Self::new(kind, sender, gas_payment)
+    }
+
+    pub fn new_module(
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        modules: Vec<Vec<u8>>,
+        gas_budget: u64,
+    ) -> Self {
+        let kind = TransactionKind::Publish(MoveModulePublish {
+            modules,
+            gas_budget,
+        });
+        Self::new(kind, sender, gas_payment)
+    }
+
+    /// Returns the transaction kind as a &str (variant name, no fields)
+    pub fn kind_as_str(&self) -> &'static str {
+        // NOTE: Ideally we could have used something like https://docs.rs/strum/latest/strum/derive.AsRefStr.html
+        // The problem is that it doesn't actually return &'static ref due to &self above
+        // and we really want 'static for common situations, such as authority_server dispatch where
+        // by the time we instrument the transaction kind, the message or Transaction might have been moved
+        // and so the lifetime and Kind is out of scope and we cannot borrow it.
+        match self.kind {
+            TransactionKind::Transfer(_) => TransactionKind::VARIANTS[0],
+            TransactionKind::Publish(_) => TransactionKind::VARIANTS[1],
+            TransactionKind::Call(_) => TransactionKind::VARIANTS[2],
+        }
+    }
 }
 
 /// An transaction signed by a client. signature is applied on data.
@@ -113,7 +191,7 @@ pub struct CertifiedTransaction {
 // maintain the invariant that valid certificates with distinct signatures are equivalent, but yet-unchecked
 // certificates that differ on signers aren't.
 //
-// see also https://github.com/MystenLabs/fastnft/issues/266
+// see also https://github.com/MystenLabs/sui/issues/266
 //
 static_assertions::assert_not_impl_any!(CertifiedTransaction: Hash, Eq, PartialEq);
 
@@ -126,6 +204,21 @@ pub struct ConfirmationTransaction {
 pub struct AccountInfoRequest {
     pub account: SuiAddress,
 }
+
+/// An information Request for batches, and their associated transactions
+///
+/// This reads historic data and sends the batch and transactions in the
+/// database starting at the batch that includes `start`,
+/// and then listens to new transactions until a batch equal or
+/// is over the batch end marker.  
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct BatchInfoRequest {
+    pub start: TxSequenceNumber,
+    pub end: TxSequenceNumber,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct BatchInfoResponseItem(pub UpdateItem);
 
 impl From<SuiAddress> for AccountInfoRequest {
     fn from(account: SuiAddress) -> Self {
@@ -254,6 +347,14 @@ impl ExecutionStatus {
         }
     }
 
+    pub fn is_ok(&self) -> bool {
+        matches!(self, ExecutionStatus::Success { .. })
+    }
+
+    pub fn is_err(&self) -> bool {
+        matches!(self, ExecutionStatus::Failure { .. })
+    }
+
     pub fn unwrap(self) -> u64 {
         match self {
             ExecutionStatus::Success { gas_used } => gas_used,
@@ -271,6 +372,14 @@ impl ExecutionStatus {
             ExecutionStatus::Failure { gas_used, error } => (gas_used, *error),
         }
     }
+
+    /// Returns the gas used from the status
+    pub fn gas_used(&self) -> u64 {
+        match &self {
+            ExecutionStatus::Success { gas_used } => *gas_used,
+            ExecutionStatus::Failure { gas_used, .. } => *gas_used,
+        }
+    }
 }
 
 /// The response from processing a transaction or a certified transaction
@@ -284,8 +393,14 @@ pub struct TransactionEffects {
     pub created: Vec<(ObjectRef, Owner)>,
     // ObjectRef and owner of mutated objects, including gas object.
     pub mutated: Vec<(ObjectRef, Owner)>,
+    // ObjectRef and owner of objects that are unwrapped in this transaction.
+    // Unwrapped objects are objects that were wrapped into other objects in the past,
+    // and just got extracted out.
+    pub unwrapped: Vec<(ObjectRef, Owner)>,
     // Object Refs of objects now deleted (the old refs).
     pub deleted: Vec<ObjectRef>,
+    // Object refs of objects now wrapped in other objects.
+    pub wrapped: Vec<ObjectRef>,
     // The updated gas object reference. Have a dedicated field for convenient access.
     // It's also included in mutated.
     pub gas_object: (ObjectRef, Owner),
@@ -306,6 +421,34 @@ impl TransactionEffects {
     /// Return an iterator of mutated objects, but excluding the gas object.
     pub fn mutated_excluding_gas(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> {
         self.mutated.iter().filter(|o| *o != &self.gas_object)
+    }
+
+    pub fn is_object_mutated_here(&self, obj_ref: ObjectRef) -> bool {
+        // The mutated or created case
+        if self.mutated_and_created().any(|(oref, _)| *oref == obj_ref) {
+            return true;
+        }
+
+        // The deleted case
+        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_DELETED
+            && self
+                .deleted
+                .iter()
+                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
+        {
+            return true;
+        }
+
+        // The wrapped case
+        if obj_ref.2 == ObjectDigest::OBJECT_DIGEST_WRAPPED
+            && self
+                .wrapped
+                .iter()
+                .any(|(id, seq, _)| *id == obj_ref.0 && seq.increment() == obj_ref.1)
+        {
+            return true;
+        }
+        false
     }
 }
 
@@ -404,74 +547,14 @@ impl InputObjectKind {
 }
 
 impl Transaction {
-    pub fn new(
-        kind: TransactionKind,
-        secret: &dyn signature::Signer<Signature>,
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-    ) -> Self {
-        let data = TransactionData {
-            kind,
-            sender,
-            gas_payment,
-        };
-        let signature = Signature::new(&data, secret);
+    #[cfg(test)]
+    pub fn from_data(data: TransactionData, signer: &dyn signature::Signer<Signature>) -> Self {
+        let signature = Signature::new(&data, signer);
+        Self::new(data, signature)
+    }
+
+    pub fn new(data: TransactionData, signature: Signature) -> Self {
         Transaction { data, signature }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_move_call(
-        sender: SuiAddress,
-        package: ObjectRef,
-        module: Identifier,
-        function: Identifier,
-        type_arguments: Vec<TypeTag>,
-        gas_payment: ObjectRef,
-        object_arguments: Vec<ObjectRef>,
-        shared_object_arguments: Vec<ObjectID>,
-        pure_arguments: Vec<Vec<u8>>,
-        gas_budget: u64,
-        secret: &dyn signature::Signer<Signature>,
-    ) -> Self {
-        let kind = TransactionKind::Call(MoveCall {
-            package,
-            module,
-            function,
-            type_arguments,
-            object_arguments,
-            shared_object_arguments,
-            pure_arguments,
-            gas_budget,
-        });
-        Self::new(kind, secret, sender, gas_payment)
-    }
-
-    pub fn new_module(
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        modules: Vec<Vec<u8>>,
-        gas_budget: u64,
-        secret: &dyn signature::Signer<Signature>,
-    ) -> Self {
-        let kind = TransactionKind::Publish(MoveModulePublish {
-            modules,
-            gas_budget,
-        });
-        Self::new(kind, secret, sender, gas_payment)
-    }
-
-    pub fn new_transfer(
-        recipient: SuiAddress,
-        object_ref: ObjectRef,
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        secret: &dyn signature::Signer<Signature>,
-    ) -> Self {
-        let kind = TransactionKind::Transfer(Transfer {
-            recipient,
-            object_ref,
-        });
-        Self::new(kind, secret, sender, gas_payment)
     }
 
     pub fn check_signature(&self) -> Result<(), SuiError> {
@@ -728,7 +811,7 @@ impl Display for CertifiedTransaction {
             TransactionKind::Call(c) => {
                 writeln!(writer, "Transaction Kind : Call")?;
                 writeln!(writer, "Gas Budget : {}", c.gas_budget)?;
-                writeln!(writer, "Package ID : {}", c.package.0.to_hex())?;
+                writeln!(writer, "Package ID : {}", c.package.0.to_hex_literal())?;
                 writeln!(writer, "Module : {}", c.module)?;
                 writeln!(writer, "Function : {}", c.function)?;
                 writeln!(writer, "Object Arguments : {:?}", c.object_arguments)?;

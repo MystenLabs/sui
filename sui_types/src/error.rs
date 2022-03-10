@@ -35,14 +35,18 @@ pub enum SuiError {
     // Object misuse issues
     #[error("Error acquiring lock for object(s): {:?}", errors)]
     LockErrors { errors: Vec<SuiError> },
-    #[error("Attempt to transfer read-only object.")]
-    CannotTransferReadOnlyObject,
+    #[error("Attempt to transfer a shared object.")]
+    TransferSharedError,
+    #[error("Attempt to transfer an object that's not a coin.")]
+    TransferNonCoinError,
     #[error("A move package is expected, instead a move object is passed: {object_id}")]
     MoveObjectAsPackage { object_id: ObjectID },
     #[error("Expecting a singler owner, shared ownership found")]
     UnexpectedOwnerType,
     #[error("Shared mutable object not yet supported")]
     UnsupportedSharedObjectError,
+    #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transerred to an account address first before deletion")]
+    DeleteObjectOwnedObject,
 
     // Signature verification
     #[error("Signature is not valid: {}", error)]
@@ -135,6 +139,20 @@ pub enum SuiError {
     #[error("Cannot transfer immutable object.")]
     TransferImmutableError,
 
+    // Errors related to batches
+    #[error("The number of items requested exceeds defined limits of {0}.")]
+    TooManyItemsError(u64),
+    #[error("The range specified is invalid.")]
+    InvalidSequenceRangeError,
+    #[error("No batches mached the range requested.")]
+    NoBatchesFoundError,
+    #[error("The channel to repond to the client returned an error.")]
+    CannotSendClientMessageError,
+    #[error("Subscription service had to drop {0} items")]
+    SubscriptionItemsDropedError(u64),
+    #[error("Subscription service closed.")]
+    SubscriptionServiceClosed,
+
     // Move module publishing related errors
     #[error("Failed to load the Move module, reason: {error:?}.")]
     ModuleLoadFailure { error: String },
@@ -215,6 +233,8 @@ pub enum SuiError {
     StorageError(#[from] typed_store::rocks::TypedStoreError),
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
+    #[error("Authority Error: {error:?}")]
+    GenericAuthorityError { error: String },
 
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",
@@ -237,11 +257,6 @@ pub enum SuiError {
     IncorrectGasSplit,
     #[error("Inconsistent gas coin merge result.")]
     IncorrectGasMerge,
-
-    #[error("Account not found.")]
-    AccountNotFound,
-    #[error("Account already exists.")]
-    AccountExists,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
