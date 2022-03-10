@@ -37,6 +37,10 @@ module Games::RockPaperScissors {
     const SCISSORS: u8 = 3;
     const CHEAT: u8 = 111;
 
+    public fun rock(): u8 { ROCK }
+    public fun paper(): u8 { PAPER }
+    public fun scissors(): u8 { SCISSORS }
+
     // -- Game statuses list -- //
 
     const STATUS_READY: u8 = 0;
@@ -123,34 +127,15 @@ module Games::RockPaperScissors {
         }, TxContext::sender(ctx));
     }
 
-    // -- Player entrypoints -- //
-
-    /// Play ROCK secretly by submitting the move as a [`PlayerTurn`] struct.
-    public fun play_rock(at: address, salt: vector<u8>, ctx: &mut TxContext) {
-        internal(ROCK, at, salt, ctx)
-    }
-    
-    /// Play PAPER secretly by submitting the move as a [`PlayerTurn`] struct.
-    public fun play_paper(at: address, salt: vector<u8>, ctx: &mut TxContext) {
-        internal(PAPER, at, salt, ctx)
-    }
-    
-    /// Play SCISSORS secretly by submitting the move as a [`PlayerTurn`] struct.
-    public fun play_scissors(at: address, salt: vector<u8>, ctx: &mut TxContext) {
-        internal(SCISSORS, at, salt, ctx)
-    }
-
     /// Transfer [`PlayerTurn`] to the game owner. 
     /// Currently there's no check on whether the game exists.
-    fun internal(gesture: u8, at: address, salt: vector<u8>, ctx: &mut TxContext) {
+    public fun player_turn(at: address, hash: vector<u8>, ctx: &mut TxContext) {
         Transfer::transfer(PlayerTurn {
+            hash,
             id: TxContext::new_id(ctx),
-            hash: hash(gesture, salt),
             player: TxContext::sender(ctx),
         }, at);
     }
-
-    // -- Assign plays to the game and calculate the winner -- //
 
     /// Add a hashed gesture to the game. Store it as a `hash_one` or `hash_two` depending
     /// on the player number (one or two)

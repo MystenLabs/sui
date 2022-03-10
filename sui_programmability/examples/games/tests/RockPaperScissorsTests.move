@@ -2,6 +2,8 @@
 module Games::RockPaperScissorsTests {
     use Games::RockPaperScissors::{Self as Game, Game, PlayerTurn, Secret, ThePrize};
     use Sui::TestScenario::{Self};
+    use Std::Vector;
+    use Std::Hash;
 
     #[test]
     public fun play_rock_paper_scissors() {
@@ -18,7 +20,10 @@ module Games::RockPaperScissorsTests {
         // Mr Spock makes his move. He does it secretly and hashes the gesture with a salt
         // so that only he knows what it is. 
         TestScenario::next_tx(scenario, &mr_spock);
-        Game::play_rock(the_main_guy, b"my_phaser_never_failed_me!", TestScenario::ctx(scenario));
+        {
+            let hash = hash(Game::rock(), b"my_phaser_never_failed_me!");
+            Game::player_turn(the_main_guy, hash, TestScenario::ctx(scenario));
+        };
 
         // Now it's time for The Main Guy to accept his turn.
         TestScenario::next_tx(scenario, &the_main_guy);
@@ -37,7 +42,10 @@ module Games::RockPaperScissorsTests {
 
         // Same for Mr Lizard. He uses his secret phrase to encode his turn.
         TestScenario::next_tx(scenario, &mr_lizard);
-        Game::play_scissors(the_main_guy, b"sssssss_you_are_dead!", TestScenario::ctx(scenario));
+        {
+            let hash = hash(Game::scissors(), b"sssssss_you_are_dead!");
+            Game::player_turn(the_main_guy, hash, TestScenario::ctx(scenario));
+        };
 
         TestScenario::next_tx(scenario, &the_main_guy);
         {
@@ -88,5 +96,11 @@ module Games::RockPaperScissorsTests {
         let prize = TestScenario::remove_object<ThePrize>(scenario); 
         // Don't forget to give it back!
         TestScenario::return_object(scenario, prize); 
+    }
+
+    // Copy of the hashing function from the main module.
+    fun hash(gesture: u8, salt: vector<u8>): vector<u8> {
+        Vector::push_back(&mut salt, gesture);
+        Hash::sha2_256(salt)
     }
 }
