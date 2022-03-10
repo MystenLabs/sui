@@ -91,11 +91,11 @@ module Sui::Geniteam {
     }
 
     public fun create_monster_(
-        monster_name: vector<u8>, 
-        monster_img_id: u64, 
-        breed: u8, 
-        monster_affinity: u8, 
-        monster_description: vector<u8>, 
+        monster_name: vector<u8>,
+        monster_img_id: u64,
+        breed: u8,
+        monster_affinity: u8,
+        monster_description: vector<u8>,
         ctx: &mut TxContext
     ): Monster {
 
@@ -148,11 +148,11 @@ module Sui::Geniteam {
 
     /// Update the attributes of a player
     public fun update_player(
-        self: &mut Player, 
-        water_runes_count: u64, 
-        fire_runes_count: u64, 
+        self: &mut Player,
+        water_runes_count: u64,
+        fire_runes_count: u64,
         wind_runes_count: u64,
-        earth_runes_count: u64, 
+        earth_runes_count: u64,
         _ctx: &mut TxContext
     ) {
         self.water_runes_count = water_runes_count;
@@ -161,12 +161,12 @@ module Sui::Geniteam {
         self.earth_runes_count = earth_runes_count
     }
 
-    /// Create a monster and transfer it to the transaction sender 
+    /// Create a monster and transfer it to the transaction sender
     public fun create_monster(
-        monster_name: vector<u8>, 
-        monster_img_id: u64, 
-        breed: u8, 
-        monster_affinity: u8, 
+        monster_name: vector<u8>,
+        monster_img_id: u64,
+        breed: u8,
+        monster_affinity: u8,
         monster_description: vector<u8>,
         ctx: &mut TxContext
     ) {
@@ -216,11 +216,11 @@ module Sui::Geniteam {
 
     /// Update the attributes of a monster
     public fun update_monster(
-        self: &mut Monster, 
-        monster_level: u64, 
-        hunger_level: u64, 
-        affection_level: u64, 
-        buddy_level: u8, 
+        self: &mut Monster,
+        monster_level: u64,
+        hunger_level: u64,
+        affection_level: u64,
+        buddy_level: u8,
         _ctx: &mut TxContext
     ) {
         self.monster_level = monster_level;
@@ -241,5 +241,5 @@ module Sui::Geniteam {
         self: &mut Monster, cosmetic_type: u8, cosmetic_id: u64, _ctx: &mut TxContext
     ) {
         self.monster_cosmetic_slot2 = Option::some(MonsterCosmetic { cosmetic_type, cosmetic_id })
-    }   
+    }
 }

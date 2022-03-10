@@ -21,6 +21,8 @@ use sui_types::{
     object::Owner,
 };
 
+use super::get_nested_struct_field;
+
 type Event = (Vec<u8>, u64, Type, MoveTypeLayout, Value);
 
 const WRAPPED_OBJECT_EVENT: u64 = 255;
@@ -38,6 +40,14 @@ struct OwnedObj {
 // into the module's StructHandle table for structs) to something human-readable like `TypeTag`.
 // TODO: add a native function that prints the log of transfers, deletes, wraps for debugging purposes
 type Inventory = BTreeMap<ObjectID, OwnedObj>;
+
+// The deleted id event contains the VersionedID.
+// We want to retrive the inner id bytes.
+fn get_deleted_id_bytes(id: &Value) -> AccountAddress {
+    get_nested_struct_field(id.copy_value().unwrap(), &[0, 0, 0])
+        .value_as::<AccountAddress>()
+        .unwrap()
+}
 
 /// Process the event log to determine the global set of live objects
 fn get_global_inventory(events: &[Event]) -> Inventory {
@@ -81,12 +91,8 @@ fn get_global_inventory(events: &[Event]) -> Inventory {
                 );
             }
             EventType::DeleteObjectID => {
-                let id_bytes = val
-                    .simple_serialize(layout)
-                    .expect("This will always succeed for a well-structured event log");
-                let obj_id = ObjectID::try_from(id_bytes.as_slice()).expect("This will always succeed for a well-formed from a system delete object ID event");
                 // note: obj_id may or may not be present in `inventory`--a useer can create an ID and delete it without associating it with a transferred object
-                inventory.remove(&obj_id);
+                inventory.remove(&get_deleted_id_bytes(val).into());
             }
             EventType::User => (),
         }
@@ -108,7 +114,7 @@ fn get_inventory_for(
         .filter_map(|(_, obj)| {
             // TODO: We should also be able to include objects indirectly owned by the
             // requested address through owning other objects.
-            // https://github.com/MystenLabs/fastnft/issues/673
+            // https://github.com/MystenLabs/sui/issues/673
             if (obj.owner == Owner::AddressOwner(sui_addr) || obj.owner.is_shared())
                 && &obj.type_ == type_
             {
@@ -135,14 +141,9 @@ pub fn deleted_object_ids(
         .events()
         .iter()
         .skip(tx_begin_idx)
-        .filter_map(|(_, event_type_byte, _, layout, val)| {
+        .filter_map(|(_, event_type_byte, _, _, val)| {
             if *event_type_byte == EventType::DeleteObjectID as u64 {
-                // TODO: for some reason, this creates internal type errors in the VM. Create a fresh value with the object ID instead
-                //Some(Value::copy_value(val).unwrap())
-                let id_bytes = val
-                    .simple_serialize(layout)
-                    .expect("This will always succeed for a well-structured event log");
-                Some(Value::vector_u8(id_bytes))
+                Some(Value::vector_u8(get_deleted_id_bytes(val).to_vec()))
             } else {
                 None
             }

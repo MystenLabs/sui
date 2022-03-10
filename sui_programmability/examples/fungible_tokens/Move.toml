@@ -1,0 +1,12 @@
+[package]
+name = "FungibleTokens"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../framework" }
+
+[addresses]
+FungibleTokens = "0x0"
+
+[dev-addresses]
+FungibleTokens = "0x0"

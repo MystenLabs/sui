@@ -33,7 +33,7 @@ pub fn emit(
     match ty {
         Type::Struct(..) | Type::StructInstantiation(..) => (),
         ty => {
-            // TODO: // TODO(https://github.com/MystenLabs/fastnft/issues/19): enforce this in the ability system
+            // TODO: // TODO(https://github.com/MystenLabs/sui/issues/19): enforce this in the ability system
             panic!("Unsupported event type {:?}--struct expected", ty)
         }
     }

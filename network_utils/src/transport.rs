@@ -2,27 +2,50 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::future;
+use futures::{Sink, SinkExt, Stream, StreamExt};
 use std::io::ErrorKind;
-use std::{collections::HashMap, convert::TryInto, io, sync::Arc};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::sync::Arc;
 use tokio::net::TcpSocket;
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    net::{TcpListener, TcpStream},
-};
+use tokio::net::{TcpListener, TcpStream};
+
+use async_trait::async_trait;
+
 use tracing::*;
+
+use bytes::{Bytes, BytesMut};
+use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 #[cfg(test)]
 #[path = "unit_tests/transport_tests.rs"]
 mod transport_tests;
 
 /// Suggested buffer size
-pub const DEFAULT_MAX_DATAGRAM_SIZE: &str = "65507";
+pub const DEFAULT_MAX_DATAGRAM_SIZE: usize = 65507;
+pub const DEFAULT_MAX_DATAGRAM_SIZE_STR: &str = "65507";
 
 /// The handler required to create a service.
-pub trait MessageHandler {
-    fn handle_message<'a>(&'a self, buffer: &'a [u8]) -> future::BoxFuture<'a, Option<Vec<u8>>>;
+#[async_trait]
+pub trait MessageHandler<A> {
+    async fn handle_messages(&self, channel: A) -> ();
+}
+
+/*
+    The RwChannel connects the low-level networking code here, that handles
+    TCP streams, ports, accept/connect, and sockets that provide AsyncRead /
+    AsyncWrite on byte streams, with the higher level logic in AuthorityServer
+    that handles sequences of Bytes / BytesMut, as framed messages, through
+    exposing a standard Stream and Sink trait.
+
+    This separation allows us to change the details of the network, transport
+    and framing, without changing the authority code. It also allows us to test
+    the authority without using a real network.
+*/
+pub trait RwChannel<'a> {
+    type R: 'a + Stream<Item = Result<BytesMut, std::io::Error>> + Unpin + Send;
+    type W: 'a + Sink<Bytes, Error = std::io::Error> + Unpin + Send;
+
+    fn sink(&mut self) -> &mut Self::W;
+    fn stream(&mut self) -> &mut Self::R;
 }
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
@@ -53,11 +76,6 @@ pub async fn connect(
     TcpDataStream::connect(address, max_data_size).await
 }
 
-/// Create a DataStreamPool for this protocol.
-pub async fn make_outgoing_connection_pool() -> Result<TcpDataStreamPool, std::io::Error> {
-    TcpDataStreamPool::new().await
-}
-
 /// Run a server for this protocol and the given message handler.
 pub async fn spawn_server<S>(
     address: &str,
@@ -65,7 +83,7 @@ pub async fn spawn_server<S>(
     buffer_size: usize,
 ) -> Result<SpawnedServer, std::io::Error>
 where
-    S: MessageHandler + Send + Sync + 'static,
+    S: MessageHandler<TcpDataStream> + Send + Sync + 'static,
 {
     let (complete, receiver) = futures::channel::oneshot::channel();
     let handle = {
@@ -88,8 +106,7 @@ where
 
 /// An implementation of DataStream based on TCP.
 pub struct TcpDataStream {
-    stream: TcpStream,
-    max_data_size: usize,
+    framed: Framed<TcpStream, LengthDelimitedCodec>,
 }
 
 impl TcpDataStream {
@@ -102,95 +119,41 @@ impl TcpDataStream {
         socket.set_recv_buffer_size(max_data_size as u32)?;
 
         let stream = socket.connect(addr).await?;
-        Ok(Self {
+        Ok(TcpDataStream::from_tcp_stream(stream, max_data_size))
+    }
+
+    fn from_tcp_stream(stream: TcpStream, max_data_size: usize) -> TcpDataStream {
+        let framed = Framed::new(
             stream,
-            max_data_size,
-        })
+            LengthDelimitedCodec::builder()
+                .max_frame_length(max_data_size)
+                .new_codec(),
+        );
+
+        Self { framed }
     }
 
-    async fn tcp_write_data<S>(stream: &mut S, buffer: &[u8]) -> Result<(), std::io::Error>
-    where
-        S: AsyncWrite + Unpin,
-    {
-        stream
-            .write_all(&u32::to_le_bytes(
-                buffer
-                    .len()
-                    .try_into()
-                    .expect("length must not exceed u32::MAX"),
-            ))
-            .await?;
-        stream.write_all(buffer).await
-    }
+    // TODO: Eliminate vecs and use Byte, ByteBuf
 
-    async fn tcp_read_data<S>(stream: &mut S, max_size: usize) -> Result<Vec<u8>, std::io::Error>
-    where
-        S: AsyncRead + Unpin,
-    {
-        let mut size_buf = [0u8; 4];
-        stream.read_exact(&mut size_buf).await?;
-        let size = u32::from_le_bytes(size_buf);
-        if size as usize > max_size {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Message size exceeds buffer size",
-            ));
-        }
-        let mut buf = vec![0u8; size as usize];
-        stream.read_exact(&mut buf).await?;
-        Ok(buf)
-    }
-}
-
-impl TcpDataStream {
     pub async fn write_data<'a>(&'a mut self, buffer: &'a [u8]) -> Result<(), std::io::Error> {
-        Self::tcp_write_data(&mut self.stream, buffer).await
+        self.framed.send(buffer.to_vec().into()).await
     }
 
-    pub async fn read_data(&mut self) -> Result<Vec<u8>, std::io::Error> {
-        Self::tcp_read_data(&mut self.stream, self.max_data_size).await
-    }
-}
-
-/// An implementation of DataStreamPool based on TCP.
-pub struct TcpDataStreamPool {
-    streams: HashMap<String, TcpStream>,
-}
-
-impl TcpDataStreamPool {
-    async fn new() -> Result<Self, std::io::Error> {
-        let streams = HashMap::new();
-        Ok(Self { streams })
-    }
-
-    async fn get_stream(&mut self, address: &str) -> Result<&mut TcpStream, io::Error> {
-        if !self.streams.contains_key(address) {
-            match TcpStream::connect(address).await {
-                Ok(s) => {
-                    self.streams.insert(address.to_string(), s);
-                }
-                Err(error) => {
-                    error!("Failed to open connection to {}: {}", address, error);
-                    return Err(error);
-                }
-            };
-        };
-        Ok(self.streams.get_mut(address).unwrap())
+    pub async fn read_data(&mut self) -> Option<Result<Vec<u8>, std::io::Error>> {
+        let result = self.framed.next().await;
+        result.map(|v| v.map(|w| w.to_vec()))
     }
 }
 
-impl TcpDataStreamPool {
-    pub async fn send_data_to<'a>(
-        &'a mut self,
-        buffer: &'a [u8],
-        address: &'a str,
-    ) -> Result<(), std::io::Error> {
-        let stream = self.get_stream(address).await?;
-        let result = TcpDataStream::tcp_write_data(stream, buffer).await;
-        if result.is_err() {
-            self.streams.remove(address);
-        }
-        result
+impl<'a> RwChannel<'a> for TcpDataStream {
+    type W = Framed<TcpStream, LengthDelimitedCodec>;
+    type R = Framed<TcpStream, LengthDelimitedCodec>;
+
+    fn sink(&mut self) -> &mut Self::W {
+        &mut self.framed
+    }
+    fn stream(&mut self) -> &mut Self::R {
+        &mut self.framed
     }
 }
 
@@ -199,44 +162,27 @@ async fn run_tcp_server<S>(
     listener: TcpListener,
     state: S,
     mut exit_future: futures::channel::oneshot::Receiver<()>,
-    buffer_size: usize,
+    _buffer_size: usize,
 ) -> Result<(), std::io::Error>
 where
-    S: MessageHandler + Send + Sync + 'static,
+    S: MessageHandler<TcpDataStream> + Send + Sync + 'static,
 {
-    let guarded_state = Arc::new(Box::new(state));
+    let guarded_state = Arc::new(state);
     loop {
-        let (mut stream, _) = match future::select(exit_future, Box::pin(listener.accept())).await {
-            future::Either::Left(_) => break,
-            future::Either::Right((value, new_exit_future)) => {
-                exit_future = new_exit_future;
-                value?
+        let stream;
+
+        tokio::select! {
+            _ = &mut exit_future => { break },
+            result = listener.accept() => {
+                let (value, _addr) = result?;
+                stream = value;
             }
-        };
+        }
 
         let guarded_state = guarded_state.clone();
         tokio::spawn(async move {
-            loop {
-                let buffer = match TcpDataStream::tcp_read_data(&mut stream, buffer_size).await {
-                    Ok(buffer) => buffer,
-                    Err(err) => {
-                        // We expect some EOF or disconnect error at the end.
-                        if err.kind() != io::ErrorKind::UnexpectedEof
-                            && err.kind() != io::ErrorKind::ConnectionReset
-                        {
-                            error!("Error while reading TCP stream: {}", err);
-                        }
-                        break;
-                    }
-                };
-
-                if let Some(reply) = guarded_state.handle_message(&buffer[..]).await {
-                    let status = TcpDataStream::tcp_write_data(&mut stream, &reply[..]).await;
-                    if let Err(error) = status {
-                        error!("Failed to send query response: {}", error);
-                    }
-                };
-            }
+            let framed = TcpDataStream::from_tcp_stream(stream, _buffer_size);
+            guarded_state.handle_messages(framed).await
         });
     }
     Ok(())

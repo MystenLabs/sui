@@ -6,6 +6,7 @@
 
 use bytes::Bytes;
 use futures::stream::StreamExt;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use rand::rngs::StdRng;
 use rand::Rng;
@@ -62,7 +63,7 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "4000000")]
     recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
-    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE)]
+    #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR)]
     buffer_size: usize,
     /// Which execution path to track. TransactionsAndCerts or TransactionsOnly or CertsOnly
     #[structopt(long, default_value = "TransactionsAndCerts")]
@@ -231,7 +232,7 @@ impl ClientServerBenchmark {
                     gas_object_ref,
                     vec![object_ref],
                     vec![],
-                    vec![bcs::to_bytes(&next_recipient.to_vec()).unwrap()],
+                    vec![bcs::to_bytes(&AccountAddress::from(next_recipient)).unwrap()],
                     1000,
                 )
             } else {

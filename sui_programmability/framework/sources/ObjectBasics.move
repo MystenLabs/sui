@@ -34,10 +34,6 @@ module Sui::ObjectBasics {
         Transfer::freeze_object(o)
     }
 
-    public fun transfer_to_object(o: Object, owner: &mut Object, _ctx: &mut TxContext) {
-        Transfer::transfer_to_object(o, owner)
-    }
-
     public fun set_value(o: &mut Object, value: u64, _ctx: &mut TxContext) {
         o.value = value;
     }

@@ -10,28 +10,34 @@ use move_core_types::{
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
     pin::Pin,
     sync::Arc,
 };
 use sui_adapter::adapter;
 use sui_types::{
     base_types::*,
+    batch::UpdateItem,
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
     fp_bail, fp_ensure, gas,
     messages::*,
     object::{Data, Object, Owner},
-    storage::Storage,
+    storage::{DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
+use tracing::*;
 
-use crate::authority_batch::BatchSender;
+use crate::authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
 pub mod authority_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/move_integration_tests.rs"]
+pub mod move_integration_tests;
 
 mod temporary_store;
 use temporary_store::AuthorityTemporaryStore;
@@ -41,6 +47,7 @@ pub use authority_store::AuthorityStore;
 
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
+const MAX_ITEMS_LIMIT: u64 = 10_000;
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -67,10 +74,11 @@ pub struct AuthorityState {
     /// The database
     _database: Arc<AuthorityStore>,
 
+    // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
     /// and create batches for this authority.
     /// Keep as None if there is no need for this.
-    batch_sender: Option<BatchSender>,
+    batch_channels: Option<(BatchSender, BroadcastSender)>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -82,12 +90,26 @@ pub struct AuthorityState {
 impl AuthorityState {
     /// Set a listener for transaction certificate updates. Returns an
     /// error if a listener is already registered.
-    pub fn set_batch_sender(&mut self, batch_sender: BatchSender) -> SuiResult {
-        if self.batch_sender.is_some() {
+    pub fn set_batch_sender(
+        &mut self,
+        batch_sender: BatchSender,
+        broadcast_sender: BroadcastSender,
+    ) -> SuiResult {
+        if self.batch_channels.is_some() {
             return Err(SuiError::AuthorityUpdateFailure);
         }
-        self.batch_sender = Some(batch_sender);
+        self.batch_channels = Some((batch_sender, broadcast_sender));
         Ok(())
+    }
+
+    /// Get a broadcast receiver for updates
+    pub fn subscribe(&self) -> Result<BroadcastReceiver, SuiError> {
+        self.batch_channels
+            .as_ref()
+            .map(|(_, tx)| tx.subscribe())
+            .ok_or(SuiError::GenericAuthorityError {
+                error: "No broadcast subscriptions allowed for this authority.".to_string(),
+            })
     }
 
     /// The logic to check one object against a reference, and return the object if all is well
@@ -254,6 +276,7 @@ impl AuthorityState {
 
         let mutable_objects: Vec<_> = self
             .check_locks(&transaction)
+            .instrument(tracing::trace_span!("tx_check_locks"))
             .await?
             .into_iter()
             .filter_map(|(object_kind, object)| match object_kind {
@@ -269,6 +292,11 @@ impl AuthorityState {
             })
             .collect();
 
+        debug!(
+            num_mutable_objects = mutable_objects.len(),
+            "Checked locks and found mutable objects"
+        );
+
         let signed_transaction = SignedTransaction::new(transaction, self.name, &*self.secret);
 
         // Check and write locks, to signed transaction, into the database
@@ -276,6 +304,7 @@ impl AuthorityState {
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
         self.set_transaction_lock(&mutable_objects, signed_transaction)
+            .instrument(tracing::trace_span!("db_set_transaction_lock"))
             .await?;
 
         // Return the signed Transaction or maybe a cert.
@@ -287,15 +316,23 @@ impl AuthorityState {
         &self,
         confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
-        // Check the certificate and retrieve the transfer data.
         let certificate = &confirmation_transaction.certificate;
+        let transaction = &certificate.transaction;
+        let transaction_digest = transaction.digest();
+
+        // Ensure an idempotent answer.
+        let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+        if transaction_info.signed_effects.is_some() {
+            return Ok(transaction_info);
+        }
+
+        // Check the certificate and retrieve the transfer data.
         certificate.check(&self.committee)?;
 
         // If the transaction contains shared objects, we need to ensure they have been scheduled
         // for processing by the consensus protocol.
-        let transaction = &certificate.transaction;
-        let transaction_digest = transaction.digest();
         if transaction.contains_shared_object() {
+            debug!("Validating shared object sequence numbers from consensus...");
             let mut lock_errors = Vec::new();
             for object_id in transaction.shared_input_objects() {
                 // Check whether the shared objects have already been assigned a sequence number by
@@ -310,6 +347,9 @@ impl AuthorityState {
                     Some(lock) => {
                         if let Some(object) = self._database.get_object(object_id)? {
                             if object.version() != lock {
+                                warn!(object_version =? object.version(),
+                                      locked_version =? lock,
+                                      "Unexpected version number in locked shared object");
                                 lock_errors.push(SuiError::InvalidSequenceNumber);
                             }
                         }
@@ -328,24 +368,8 @@ impl AuthorityState {
             // unlock all single-writer objects. Since transactions with shared objects always
             // have at least one owner objects, it is not necessary to re-check the locks on
             // shared objects as we do with owned objects.
-            let result = self
-                .process_certificate(confirmation_transaction.clone())
-                .await;
-
-            // TODO [#676]: What if we crash right here? The cleanup should be done atomically
-            // within `process_certificate`. It is not safety-critical but cleanup won't happen.
-
-            // If the execution is successfully, we cleanup some data structures.
-            if result.is_ok() {
-                for object_id in transaction.shared_input_objects() {
-                    self._database
-                        .delete_sequence_lock(transaction_digest, *object_id)?;
-                    if self._database.get_object(object_id)?.is_none() {
-                        self._database.delete_schedule(object_id)?;
-                    }
-                }
-            }
-            result
+            self.process_certificate(confirmation_transaction.clone())
+                .await
         }
         // In case there are no shared objects, we simply process the certificate.
         else {
@@ -378,6 +402,10 @@ impl AuthorityState {
                 inputs.push(object);
             }
         }
+        debug!(
+            num_inputs = inputs.len(),
+            "Read inputs for transaction from DB"
+        );
 
         let mut transaction_dependencies: BTreeSet<_> = inputs
             .iter()
@@ -390,12 +418,19 @@ impl AuthorityState {
         let gas_object_id = transaction.gas_payment_object_ref().0;
         let (mut temporary_store, status) =
             self.execute_transaction(transaction, inputs, &mut tx_ctx)?;
+        debug!(
+            gas_used = status.gas_used(),
+            "Finished execution of transaction with status {:?}", status
+        );
 
         // Remove from dependencies the generic hash
         transaction_dependencies.remove(&TransactionDigest::genesis());
 
-        let unwrapped_object_ids = self.get_unwrapped_object_ids(temporary_store.written())?;
-        temporary_store.patch_unwrapped_object_version(unwrapped_object_ids);
+        // Objects that were wrapped in the past and just got unwrapped
+        // require special patch up. It also affects how signed effects are generated.
+        // See detailed comments in the implementation of [`AuthorityTemporaryStore::patch_unwrapped_objects`].
+        let unwrapped_object_ids = self.get_unwrapped_object_ids(&temporary_store)?;
+        temporary_store.patch_unwrapped_objects(&unwrapped_object_ids);
         let to_signed_effects = temporary_store.to_signed_effects(
             &self.name,
             &*self.secret,
@@ -403,15 +438,16 @@ impl AuthorityState {
             transaction_dependencies.into_iter().collect(),
             status,
             &gas_object_id,
+            unwrapped_object_ids,
         );
         // Update the database in an atomic manner
-
         let (seq, resp) = self
             .update_state(temporary_store, certificate, to_signed_effects)
+            .instrument(tracing::debug_span!("db_update_state"))
             .await?; // Returns the OrderInfoResponse
 
         // If there is a notifier registered, notify:
-        if let Some(sender) = &self.batch_sender {
+        if let Some((sender, _)) = &self.batch_channels {
             sender.send_item(seq, transaction_digest).await?;
         }
 
@@ -629,6 +665,66 @@ impl AuthorityState {
         })
     }
 
+    /// Handles a request for a batch info. It returns a sequence of
+    /// [batches, transactions, batches, transactions] as UpdateItems, and a flag
+    /// that if true indicates the request goes beyond the last batch in the
+    /// database.
+    pub async fn handle_batch_info_request(
+        &self,
+        request: BatchInfoRequest,
+    ) -> Result<(VecDeque<UpdateItem>, bool), SuiError> {
+        // Ensure the range contains some elements and end > start
+        if request.end <= request.start {
+            return Err(SuiError::InvalidSequenceRangeError);
+        };
+
+        // Ensure we are not doing too much work per request
+        if request.end - request.start > MAX_ITEMS_LIMIT {
+            return Err(SuiError::TooManyItemsError(MAX_ITEMS_LIMIT));
+        }
+
+        let (batches, transactions) = self
+            ._database
+            .batches_and_transactions(request.start, request.end)?;
+
+        let mut dq_batches = std::collections::VecDeque::from(batches);
+        let mut dq_transactions = std::collections::VecDeque::from(transactions);
+        let mut items = VecDeque::with_capacity(dq_batches.len() + dq_transactions.len());
+        let mut last_batch_next_seq = 0;
+
+        // Send full historical data as [Batch - Transactions - Batch - Transactions - Batch].
+        while let Some(current_batch) = dq_batches.pop_front() {
+            // Get all transactions belonging to this batch and send them
+            loop {
+                // No more items or item too large for this batch
+                if dq_transactions.is_empty()
+                    || dq_transactions[0].0 >= current_batch.batch.next_sequence_number
+                {
+                    break;
+                }
+
+                let current_transaction = dq_transactions.pop_front().unwrap();
+                items.push_back(UpdateItem::Transaction(current_transaction));
+            }
+
+            // Now send the batch
+            last_batch_next_seq = current_batch.batch.next_sequence_number;
+            items.push_back(UpdateItem::Batch(current_batch));
+        }
+
+        // whether we have sent everything requested, or need to start
+        // live notifications.
+        let should_subscribe = request.end > last_batch_next_seq;
+
+        // If any transactions are left they must be outside a batch
+        while let Some(current_transaction) = dq_transactions.pop_front() {
+            // Remember the last sequence sent
+            items.push_back(UpdateItem::Transaction(current_transaction));
+        }
+
+        Ok((items, should_subscribe))
+    }
+
     pub async fn new(
         committee: Committee,
         name: AuthorityName,
@@ -647,7 +743,7 @@ impl AuthorityState {
             move_vm: adapter::new_move_vm(native_functions)
                 .expect("We defined natives to not fail here"),
             _database: store,
-            batch_sender: None,
+            batch_channels: None,
         };
 
         for genesis_modules in genesis_packages {
@@ -659,9 +755,13 @@ impl AuthorityState {
         state
     }
 
-    #[cfg(test)]
-    pub fn db(&self) -> Arc<AuthorityStore> {
+    pub(crate) fn db(&self) -> Arc<AuthorityStore> {
         self._database.clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn batch_sender(&self) -> &BatchSender {
+        &self.batch_channels.as_ref().unwrap().0
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
@@ -803,28 +903,41 @@ impl AuthorityState {
         self._database.get_latest_parent_entry(object_id)
     }
 
-    /// Given all mutated objects during a transaction, return the list of objects
-    /// that were unwrapped (i.e. re-appeared after being deleted).
+    /// Find all objects that were wrapped in the past and got unwrapped in this
+    /// transaction. An unwrapped object can either show up after this transaction
+    /// (i.e. in written), or gets deleted in this transaction (in deleted).
     fn get_unwrapped_object_ids(
         &self,
-        written: &BTreeMap<ObjectID, Object>,
-    ) -> Result<Vec<ObjectID>, SuiError> {
+        temporary_store: &AuthorityTemporaryStore,
+    ) -> SuiResult<HashSet<ObjectID>> {
+        // mutated will contain all objects from this transaction that were
+        // written or deleted. We include deleted objects because it's possible
+        // to unwrap a wrapped object and immediately delete it in the same transaction.
+        let mutated = temporary_store
+            .written()
+            .iter()
+            .map(|(id, obj)| (*id, obj.version()))
+            .chain(
+                temporary_store
+                    .deleted()
+                    .iter()
+                    .map(|(id, (version, _))| (*id, *version)),
+            );
         // For each mutated object, we first find out whether there was a transaction
-        // that deleted this object in the past.
+        // that wrapped this object in the past.
         let parents = self._database.multi_get_parents(
-            &written
-                .iter()
-                .map(|(object_id, object)| (*object_id, object.version(), OBJECT_DIGEST_DELETED))
+            &mutated
+                .clone()
+                .map(|(object_id, version)| {
+                    (object_id, version, ObjectDigest::OBJECT_DIGEST_WRAPPED)
+                })
                 .collect::<Vec<_>>(),
         )?;
-        // Filter the list of mutated objects based on whether they were deleted in the past.
-        // These objects are the unwrapped ones.
-        let filtered = written
-            .iter()
+        let unwrapped_object_ids = mutated
             .zip(parents.iter())
-            .filter_map(|((object_id, _object), d)| d.map(|_| *object_id))
+            .filter_map(|((object_id, _), d)| d.map(|_| object_id))
             .collect();
-        Ok(filtered)
+        Ok(unwrapped_object_ids)
     }
 }
 

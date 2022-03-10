@@ -11,7 +11,6 @@ use serde_json::json;
 use sui::config::{Config, GenesisConfig, NetworkConfig, WalletConfig};
 use sui::sui_commands;
 use sui::wallet_commands::{SimpleTransactionSigner, WalletContext};
-use sui_core::client::Client;
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
 
@@ -29,11 +28,15 @@ use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
 
 use std::sync::{Arc, Mutex};
+use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
+
+const REST_SERVER_PORT: u16 = 5000;
+const REST_SERVER_ADDR_IPV4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
     let config_dropshot: ConfigDropshot = ConfigDropshot {
-        bind_address: SocketAddr::from((Ipv4Addr::new(127, 0, 0, 1), 5000)),
+        bind_address: SocketAddr::from((REST_SERVER_ADDR_IPV4, REST_SERVER_PORT)),
         ..Default::default()
     };
 
@@ -44,9 +47,12 @@ async fn main() -> Result<(), String> {
         .to_logger("rest_server")
         .map_err(|error| format!("failed to create logger: {}", error))?;
 
-    tracing_subscriber::fmt().init();
+    tracing_subscriber::fmt::init();
 
     let mut api = ApiDescription::new();
+
+    // [DOCS]
+    api.register(docs).unwrap();
 
     // [DEBUG]
     api.register(genesis).unwrap();
@@ -56,17 +62,19 @@ async fn main() -> Result<(), String> {
     // [WALLET]
     api.register(get_addresses).unwrap();
     api.register(get_objects).unwrap();
+    api.register(object_schema).unwrap();
     api.register(object_info).unwrap();
     api.register(transfer_object).unwrap();
     api.register(publish).unwrap();
     api.register(call).unwrap();
     api.register(sync).unwrap();
 
-    api.openapi("Sui API", "0.1")
-        .write(&mut std::io::stdout())
+    let documentation = api
+        .openapi("Sui API", "0.1")
+        .json()
         .map_err(|e| e.to_string())?;
 
-    let api_context = ServerContext::new();
+    let api_context = ServerContext::new(documentation);
 
     let server = HttpServerStarter::new(&config_dropshot, api, api_context, &log)
         .map_err(|error| format!("failed to create server: {}", error))?
@@ -79,6 +87,7 @@ async fn main() -> Result<(), String> {
  * Server context (state shared by handler functions)
  */
 struct ServerContext {
+    documentation: serde_json::Value,
     genesis_config_path: String,
     wallet_config_path: String,
     network_config_path: String,
@@ -92,8 +101,9 @@ struct ServerContext {
 }
 
 impl ServerContext {
-    pub fn new() -> ServerContext {
+    pub fn new(documentation: serde_json::Value) -> ServerContext {
         ServerContext {
+            documentation,
             genesis_config_path: String::from("genesis.conf"),
             wallet_config_path: String::from("wallet.conf"),
             network_config_path: String::from("./network.conf"),
@@ -104,6 +114,35 @@ impl ServerContext {
             wallet_context: Arc::new(Mutex::new(None)),
         }
     }
+}
+
+/**
+Response containing the API documentation.
+ */
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct DocumentationResponse {
+    /** A JSON object containing the OpenAPI definition for this API. */
+    documentation: serde_json::Value,
+}
+
+/**
+Generate OpenAPI documentation.
+ */
+#[endpoint {
+    method = GET,
+    path = "/docs",
+    tags = [ "docs" ],
+}]
+async fn docs(
+    rqctx: Arc<RequestContext<ServerContext>>,
+) -> Result<HttpResponseOk<DocumentationResponse>, HttpError> {
+    let server_context = rqctx.context();
+    let documentation = &server_context.documentation;
+
+    Ok(HttpResponseOk(DocumentationResponse {
+        documentation: documentation.clone(),
+    }))
 }
 
 /**
@@ -183,6 +222,7 @@ async fn genesis(
         })?;
 
     let wallet_path = working_dir.join(wallet_config_path);
+    // TODO: Rest service should use `ClientAddressManager` directly instead of using the wallet context.
     let mut wallet_config =
         WalletConfig::create(&working_dir.join(wallet_path)).map_err(|error| {
             custom_http_error(
@@ -194,7 +234,14 @@ async fn genesis(
     // means even if the directory is deleted the lock will remain causing an
     // IO Error when a restart is attempted.
     let client_db_path = format!("client_db_{:?}", ObjectID::random());
-    wallet_config.db_folder_path = working_dir.join(&client_db_path);
+
+    if let GatewayType::Embedded(config) = wallet_config.gateway {
+        wallet_config.gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
+            db_folder_path: working_dir.join(&client_db_path),
+            ..config
+        })
+    }
+
     *server_context.client_db_path.lock().unwrap() = client_db_path;
 
     sui_commands::genesis(&mut network_config, genesis_conf, &mut wallet_config)
@@ -326,7 +373,7 @@ async fn sui_start(
     // Sync all accounts.
     for address in addresses.iter() {
         wallet_context
-            .address_manager
+            .gateway
             .sync_client_state(*address)
             .await
             .map_err(|err| {
@@ -406,21 +453,12 @@ async fn get_addresses(
         )
     })?;
 
-    let addresses: Vec<SuiAddress> = wallet_context
-        .address_manager
-        .get_managed_address_states()
-        .keys()
-        .copied()
-        .collect();
+    let addresses: Vec<SuiAddress> = wallet_context.config.accounts.clone();
 
     // TODO: Speed up sync operations by kicking them off concurrently.
     // Also need to investigate if this should be an automatic sync or manually triggered.
     for address in addresses.iter() {
-        if let Err(err) = wallet_context
-            .address_manager
-            .sync_client_state(*address)
-            .await
-        {
+        if let Err(err) = wallet_context.gateway.sync_client_state(*address).await {
             *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
@@ -505,7 +543,7 @@ async fn get_objects(
         )
     })?;
 
-    let object_refs = wallet_context.address_manager.get_owned_objects(*address);
+    let object_refs = wallet_context.gateway.get_owned_objects(*address);
 
     Ok(HttpResponseOk(GetObjectsResponse {
         objects: object_refs
@@ -517,6 +555,100 @@ async fn get_objects(
             })
             .collect::<Vec<Object>>(),
     }))
+}
+
+/**
+Request containing the object schema for which info is to be retrieved.
+
+If owner is specified we look for this object in that address's account store,
+otherwise we look for it in the shared object store.
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct GetObjectSchemaRequest {
+    /** Required; Hex code as string representing the object id */
+    object_id: String,
+}
+
+/**
+Response containing the information of an object schema if found, otherwise an error
+is returned.
+*/
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct ObjectSchemaResponse {
+    /** JSON representation of the object schema */
+    schema: serde_json::Value,
+}
+
+/**
+Returns the schema for a specified object.
+ */
+#[endpoint {
+    method = GET,
+    path = "/object_schema",
+    tags = [ "wallet" ],
+}]
+async fn object_schema(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    query: Query<GetObjectSchemaRequest>,
+) -> Result<HttpResponseOk<ObjectSchemaResponse>, HttpError> {
+    let server_context = rqctx.context();
+    let object_info_params = query.into_inner();
+
+    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
+    let wallet_context = server_context.wallet_context.lock().unwrap().take();
+    let wallet_context = wallet_context.ok_or_else(|| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
+                .to_string(),
+        )
+    })?;
+
+    let object_id = match ObjectID::try_from(object_info_params.object_id) {
+        Ok(object_id) => object_id,
+        Err(error) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("{error}"),
+            ));
+        }
+    };
+
+    let layout = match wallet_context.gateway.get_object_info(object_id).await {
+        Ok(ObjectRead::Exists(_, _, layout)) => layout,
+        Ok(ObjectRead::Deleted(_)) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({object_id}) was deleted."),
+            ));
+        }
+        Ok(ObjectRead::NotExists(_)) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Object ({object_id}) does not exist."),
+            ));
+        }
+        Err(error) => {
+            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            return Err(custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Error while getting object info: {:?}", error),
+            ));
+        }
+    };
+
+    match serde_json::to_value(layout) {
+        Ok(schema) => Ok(HttpResponseOk(ObjectSchemaResponse { schema })),
+        Err(e) => Err(custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            format!("Error while getting object info: {:?}", e),
+        )),
+    }
 }
 
 /**
@@ -589,11 +721,7 @@ async fn object_info(
         }
     };
 
-    let (object, layout) = match wallet_context
-        .address_manager
-        .get_object_info(object_id)
-        .await
-    {
+    let (object, layout) = match wallet_context.gateway.get_object_info(object_id).await {
         Ok(ObjectRead::Exists(_, object, layout)) => (object, layout),
         Ok(ObjectRead::Deleted(_)) => {
             *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
@@ -731,7 +859,7 @@ async fn transfer_object(
     });
 
     let (cert, effects, gas_used) = match wallet_context
-        .address_manager
+        .gateway
         .transfer_coin(owner, object_id, gas_object_id, to_address, tx_signer)
         .await
     {
@@ -919,15 +1047,7 @@ async fn sync(
     })?;
 
     // Attempt to create a new account state, but continue if it already exists.
-    if let Err(error) = wallet_context.address_manager.create_account_state(address) {
-        info!("{:?}", error);
-    }
-
-    if let Err(err) = wallet_context
-        .address_manager
-        .sync_client_state(address)
-        .await
-    {
+    if let Err(err) = wallet_context.gateway.sync_client_state(address).await {
         *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
         return Err(custom_http_error(
             StatusCode::FAILED_DEPENDENCY,

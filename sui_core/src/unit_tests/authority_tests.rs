@@ -9,22 +9,18 @@ use move_binary_format::{
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
 };
-use move_core_types::{
-    account_address::AccountAddress, ident_str, identifier::Identifier, language_storage::TypeTag,
-};
-
+use move_core_types::{account_address::AccountAddress, ident_str, language_storage::TypeTag};
 use sui_adapter::genesis;
 use sui_types::{
     base_types::dbg_addr,
     crypto::KeyPair,
     crypto::{get_key_pair, Signature},
     gas::{calculate_module_publish_cost, get_gas_balance},
-    messages::{ExecutionStatus, Transaction},
+    messages::Transaction,
     object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
 };
 
 use std::fs;
-
 use std::{convert::TryInto, env};
 
 pub fn system_maxfiles() -> usize {
@@ -345,7 +341,7 @@ async fn test_handle_transfer_zero_balance() {
         .contains("Gas balance is 0, smaller than minimum requirement of 8 for object transfer."));
 }
 
-async fn send_and_confirm_transaction(
+pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
     transaction: Transaction,
 ) -> Result<TransactionInfoResponse, SuiError> {
@@ -592,7 +588,7 @@ async fn test_handle_move_transaction() {
     .await
     .unwrap();
 
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(effects.status.is_ok());
     assert_eq!(effects.created.len(), 1);
     assert_eq!(effects.mutated.len(), 1);
 
@@ -1041,10 +1037,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
         ))
         .await
         .unwrap();
-    assert!(matches!(
-        info.signed_effects.as_ref().unwrap().effects.status,
-        ExecutionStatus::Success { .. }
-    ));
+    assert!(info.signed_effects.as_ref().unwrap().effects.status.is_ok());
 
     let info2 = authority_state
         .handle_confirmation_transaction(ConfirmationTransaction::new(
@@ -1052,10 +1045,13 @@ async fn test_handle_confirmation_transaction_idempotent() {
         ))
         .await
         .unwrap();
-    assert!(matches!(
-        info2.signed_effects.as_ref().unwrap().effects.status,
-        ExecutionStatus::Success { .. }
-    ));
+    assert!(info2
+        .signed_effects
+        .as_ref()
+        .unwrap()
+        .effects
+        .status
+        .is_ok());
 
     // this is valid because we're checking the authority state does not change the certificate
     compare_transaction_info_responses(&info, &info2);
@@ -1080,14 +1076,14 @@ async fn test_move_call_mutable_object_not_mutated() {
     let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(effects.status.is_ok());
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
     let (new_object_id1, seq1, _) = effects.created[0].0;
 
     let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(effects.status.is_ok());
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
     let (new_object_id2, seq2, _) = effects.created[0].0;
 
@@ -1105,7 +1101,7 @@ async fn test_move_call_mutable_object_not_mutated() {
     )
     .await
     .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(effects.status.is_ok());
     assert_eq!((effects.created.len(), effects.mutated.len()), (0, 3));
     // Verify that both objects' version increased, even though only one object was updated.
     assert_eq!(
@@ -1137,14 +1133,14 @@ async fn test_move_call_delete() {
     let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(effects.status.is_ok());
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
     let (new_object_id1, _seq1, _) = effects.created[0].0;
 
     let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
         .await
         .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(effects.status.is_ok());
     assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
     let (new_object_id2, _seq2, _) = effects.created[0].0;
 
@@ -1162,7 +1158,7 @@ async fn test_move_call_delete() {
     )
     .await
     .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(effects.status.is_ok());
     // All mutable objects will appear to be mutated, even if they are not.
     // obj1, obj2 and gas are all mutated here.
     assert_eq!((effects.created.len(), effects.mutated.len()), (0, 3));
@@ -1181,7 +1177,7 @@ async fn test_move_call_delete() {
     )
     .await
     .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
+    assert!(effects.status.is_ok());
     assert_eq!((effects.deleted.len(), effects.mutated.len()), (1, 1));
 }
 
@@ -1280,7 +1276,7 @@ async fn test_get_latest_parent_entry() {
         .unwrap();
     assert_eq!(obj_ref.0, new_object_id1);
     assert_eq!(obj_ref.1, SequenceNumber::from(3));
-    assert_eq!(obj_ref.2, ObjectDigest::deleted());
+    assert_eq!(obj_ref.2, ObjectDigest::OBJECT_DIGEST_DELETED);
     assert_eq!(effects.transaction_digest, tx);
 }
 
@@ -1373,152 +1369,6 @@ async fn test_authority_persist() {
     assert_eq!(obj2.owner, recipient);
 }
 
-#[tokio::test]
-async fn test_object_owning_another_object() {
-    let (sender1, sender1_key) = get_key_pair();
-    let (sender2, sender2_key) = get_key_pair();
-    let gas1 = ObjectID::random();
-    let gas2 = ObjectID::random();
-    let authority = init_state_with_ids(vec![(sender1, gas1), (sender2, gas2)]).await;
-
-    // Created 3 objects, all owned by sender1.
-    let effects = create_move_object(&authority, &gas1, &sender1, &sender1_key)
-        .await
-        .unwrap();
-    let (obj1, _, _) = effects.created[0].0;
-    let effects = create_move_object(&authority, &gas1, &sender1, &sender1_key)
-        .await
-        .unwrap();
-    let (obj2, _, _) = effects.created[0].0;
-    let effects = create_move_object(&authority, &gas1, &sender1, &sender1_key)
-        .await
-        .unwrap();
-    let (obj3, _, _) = effects.created[0].0;
-
-    // Transfer obj1 to obj2.
-    let effects = call_framework_code(
-        &authority,
-        &gas1,
-        &sender1,
-        &sender1_key,
-        "ObjectBasics",
-        "transfer_to_object",
-        vec![],
-        vec![obj1, obj2],
-        vec![],
-        vec![],
-    )
-    .await
-    .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!(effects.mutated.len(), 3);
-    assert_eq!(
-        authority.get_object(&obj1).await.unwrap().unwrap().owner,
-        obj2,
-    );
-
-    // Try to transfer obj1 to obj3, this time it will fail since obj1 is now owned by obj2,
-    // and obj2 must be in the input to mutate obj1.
-    let effects = call_framework_code(
-        &authority,
-        &gas1,
-        &sender1,
-        &sender1_key,
-        "ObjectBasics",
-        "transfer_to_object",
-        vec![],
-        vec![obj1, obj3],
-        vec![],
-        vec![],
-    )
-    .await;
-    assert!(effects.unwrap_err().to_string().contains("IncorrectSigner"));
-
-    // Try to transfer obj2 to obj1, this will create circular ownership and fail.
-    let effects = call_framework_code(
-        &authority,
-        &gas1,
-        &sender1,
-        &sender1_key,
-        "ObjectBasics",
-        "transfer_to_object",
-        vec![],
-        vec![obj2, obj1],
-        vec![],
-        vec![],
-    )
-    .await
-    .unwrap();
-    assert!(effects
-        .status
-        .unwrap_err()
-        .1
-        .to_string()
-        .contains("Circular object ownership detected"));
-
-    // Transfer obj2 to sender2, now sender 2 owns obj2, which owns obj1.
-    let effects = call_framework_code(
-        &authority,
-        &gas1,
-        &sender1,
-        &sender1_key,
-        "ObjectBasics",
-        "transfer",
-        vec![],
-        vec![obj2],
-        vec![],
-        vec![bcs::to_bytes(&AccountAddress::from(sender2)).unwrap()],
-    )
-    .await
-    .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!(effects.mutated.len(), 2);
-    assert_eq!(
-        authority.get_object(&obj2).await.unwrap().unwrap().owner,
-        sender2
-    );
-
-    // Sender 1 try to transfer obj1 to obj2 again.
-    // This will fail since sender1 no longer owns obj2.
-    let effects = call_framework_code(
-        &authority,
-        &gas1,
-        &sender1,
-        &sender1_key,
-        "ObjectBasics",
-        "transfer_to_object",
-        vec![],
-        vec![obj1, obj2],
-        vec![],
-        vec![],
-    )
-    .await;
-    assert!(effects.unwrap_err().to_string().contains("IncorrectSigner"));
-
-    // Sender2 transfers obj1 to obj2. This should be a successful noop
-    // since obj1 is already owned by obj2.
-    let effects = call_framework_code(
-        &authority,
-        &gas2,
-        &sender2,
-        &sender2_key,
-        "ObjectBasics",
-        "transfer_to_object",
-        vec![],
-        vec![obj1, obj2],
-        vec![],
-        vec![],
-    )
-    .await
-    .unwrap();
-    assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-    assert_eq!(effects.mutated.len(), 3);
-    assert_eq!(
-        authority.get_object(&obj1).await.unwrap().unwrap().owner,
-        obj2,
-    );
-}
-
 // helpers
 
 #[cfg(test)]
@@ -1558,7 +1408,7 @@ async fn init_state() -> AuthorityState {
 }
 
 #[cfg(test)]
-async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
+pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>(
     objects: I,
 ) -> AuthorityState {
     let state = init_state().await;
@@ -1584,7 +1434,7 @@ pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I)
 }
 
 #[cfg(test)]
-async fn init_state_with_object_id(address: SuiAddress, object: ObjectID) -> AuthorityState {
+pub async fn init_state_with_object_id(address: SuiAddress, object: ObjectID) -> AuthorityState {
     init_state_with_ids(std::iter::once((address, object))).await
 }
 
@@ -1641,14 +1491,14 @@ fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> Ob
         .unwrap()
 }
 
-async fn call_move(
+pub async fn call_move(
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
     sender_key: &KeyPair,
     package: &ObjectRef,
-    module: Identifier,
-    function: Identifier,
+    module: &'static str,
+    function: &'static str,
     type_args: Vec<TypeTag>,
     object_arg_ids: Vec<ObjectID>,
     shared_object_args_ids: Vec<ObjectID>,
@@ -1670,8 +1520,8 @@ async fn call_move(
     let data = TransactionData::new_move_call(
         *sender,
         *package,
-        module,
-        function,
+        ident_str!(module).to_owned(),
+        ident_str!(function).to_owned(),
         type_args,
         gas_object_ref,
         object_args,
@@ -1708,8 +1558,8 @@ async fn call_framework_code(
         sender,
         sender_key,
         &package_object_ref,
-        ident_str!(module).to_owned(),
-        ident_str!(function).to_owned(),
+        module,
+        function,
         type_args,
         object_arg_ids,
         shared_object_arg_ids,

@@ -9,7 +9,7 @@ pub type InnerTemporaryStore = (
     BTreeMap<ObjectID, Object>,
     Vec<ObjectRef>,
     BTreeMap<ObjectID, Object>,
-    BTreeSet<ObjectID>,
+    BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     Vec<Event>,
 );
 
@@ -22,7 +22,8 @@ pub struct AuthorityTemporaryStore {
     // object reference by caching object reference in the map as well.
     // Object reference calculation involves hashing which could be expensive.
     written: BTreeMap<ObjectID, Object>, // Objects written
-    deleted: BTreeSet<ObjectID>,         // Objects actively deleted
+    /// Objects actively deleted.
+    deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
 }
@@ -45,7 +46,7 @@ impl AuthorityTemporaryStore {
                 .map(|v| v.to_object_reference())
                 .collect(),
             written: BTreeMap::new(),
-            deleted: BTreeSet::new(),
+            deleted: BTreeMap::new(),
             events: Vec::new(),
         }
     }
@@ -59,7 +60,7 @@ impl AuthorityTemporaryStore {
         &self.written
     }
 
-    pub fn deleted(&self) -> &BTreeSet<ObjectID> {
+    pub fn deleted(&self) -> &BTreeMap<ObjectID, (SequenceNumber, DeleteKind)> {
         &self.deleted
     }
 
@@ -83,7 +84,7 @@ impl AuthorityTemporaryStore {
     /// sequence number. This is required to achieve safety.
     pub fn ensure_active_inputs_mutated(&mut self) {
         for (id, _seq, _) in self.active_inputs.iter() {
-            if !self.written.contains_key(id) && !self.deleted.contains(id) {
+            if !self.written.contains_key(id) && !self.deleted.contains_key(id) {
                 let mut object = self.objects[id].clone();
                 // Active input object must be Move object.
                 object.data.try_as_move_mut().unwrap().increment_version();
@@ -92,21 +93,32 @@ impl AuthorityTemporaryStore {
         }
     }
 
-    /// We need to special handle objects that was deleted in the past but re-appeared.
-    /// These objects must have been wrapped into another object, and then got unwrapped.
-    /// When an object was deleted at version `v`, we added an record into `parent_sync`
-    /// with version `v+1` along with OBJECT_DIGEST_MAX. Now when the object re-appeared,
+    /// We need to special handle objects that was wrapped in the past and now unwrapped.
+    /// When an object was wrapped at version `v`, we added an record into `parent_sync`
+    /// with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
     /// it will also have version `v+1`, leading to a violation of the invariant that any
-    /// object_id and version pair must be unique. Hence for any object that re-appear
-    /// after deletion, we force incrementing its version number again to make it `v+2`
-    /// before writing to the store.
-    pub fn patch_unwrapped_object_version(&mut self, unwrapped_object_ids: Vec<ObjectID>) {
+    /// object_id and version pair must be unique. Hence for any object that's just unwrapped,
+    /// we force incrementing its version number again to make it `v+2` before writing to the store.
+    pub fn patch_unwrapped_objects(&mut self, unwrapped_object_ids: &HashSet<ObjectID>) {
         for id in unwrapped_object_ids {
-            // The way we constructed `unwrapped_object_ids` guarantees it must exists
-            // in written and is a mutable move object. Safe to unwrap.
-            let object = self.written.get_mut(&id).unwrap();
-            object.data.try_as_move_mut().unwrap().increment_version();
+            // Unwrapped object could show up in either written or deleted.
+            if let Some(object) = self.written.get_mut(id) {
+                object.data.try_as_move_mut().unwrap().increment_version();
+            } else {
+                // unwrap safe because we constructed unwrapped_object_ids from written and deleted.
+                // If the object is not in written, it must be in deleted.
+                let entry = self.deleted.get_mut(id).unwrap();
+                entry.0 = entry.0.increment();
+            }
         }
+        // self.deleted contains all object IDs that were passed through ID::delete_id.
+        // However that doesn't necessarily indicate an object was deleted, if the object
+        // didn't show up in the input. There are two cases, one is that the object just got
+        // unwrapped, and another is just deletion of an ID that doesn't belong to a previous
+        // existing object. The second case can be filtered out.
+        self.deleted.retain(|id, (_version, kind)| {
+            kind != &DeleteKind::NotExistInInput || unwrapped_object_ids.contains(id)
+        });
     }
 
     pub fn to_signed_effects(
@@ -117,6 +129,7 @@ impl AuthorityTemporaryStore {
         transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
         gas_object_id: &ObjectID,
+        unwrapped_object_ids: HashSet<ObjectID>,
     ) -> SignedTransactionEffects {
         let gas_object = &self.written[gas_object_id];
         let effects = TransactionEffects {
@@ -125,7 +138,9 @@ impl AuthorityTemporaryStore {
             created: self
                 .written
                 .iter()
-                .filter(|(id, _)| !self.objects.contains_key(*id))
+                .filter(|(id, _)| {
+                    !self.objects.contains_key(*id) && !unwrapped_object_ids.contains(*id)
+                })
                 .map(|(_, object)| (object.to_object_reference(), object.owner))
                 .collect(),
             mutated: self
@@ -134,10 +149,35 @@ impl AuthorityTemporaryStore {
                 .filter(|(id, _)| self.objects.contains_key(*id))
                 .map(|(_, object)| (object.to_object_reference(), object.owner))
                 .collect(),
+            unwrapped: self
+                .written
+                .iter()
+                .filter(|(id, _)| {
+                    !self.objects.contains_key(*id) && unwrapped_object_ids.contains(*id)
+                })
+                .map(|(_, object)| (object.to_object_reference(), object.owner))
+                .collect(),
             deleted: self
                 .deleted
                 .iter()
-                .map(|id| self.objects[id].to_object_reference())
+                .filter_map(|(id, (version, kind))| {
+                    if kind != &DeleteKind::Wrap {
+                        Some((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            wrapped: self
+                .deleted
+                .iter()
+                .filter_map(|(id, (version, kind))| {
+                    if kind == &DeleteKind::Wrap {
+                        Some((*id, *version, ObjectDigest::OBJECT_DIGEST_WRAPPED))
+                    } else {
+                        None
+                    }
+                })
                 .collect(),
             gas_object: (gas_object.to_object_reference(), gas_object.owner),
             events: self.events.clone(),
@@ -155,23 +195,12 @@ impl AuthorityTemporaryStore {
     /// An internal check of the invariants (will only fire in debug)
     #[cfg(debug_assertions)]
     fn check_invariants(&self) {
-        // Now we are using a BTreeMap so by construction items in "written" are unique.
-
-        // Check uniqueness in the 'deleted' set
-        debug_assert!(
-            {
-                let mut used = HashSet::new();
-                self.deleted.iter().all(move |elt| used.insert(elt))
-            },
-            "Duplicate object reference in self.deleted."
-        );
-
         // Check not both deleted and written
         debug_assert!(
             {
                 let mut used = HashSet::new();
                 self.written.iter().all(|(elt, _)| used.insert(elt));
-                self.deleted.iter().all(move |elt| used.insert(elt))
+                self.deleted.iter().all(move |elt| used.insert(elt.0))
             },
             "Object both written and deleted."
         );
@@ -181,7 +210,7 @@ impl AuthorityTemporaryStore {
             {
                 let mut used = HashSet::new();
                 self.written.iter().all(|(elt, _)| used.insert(elt));
-                self.deleted.iter().all(|elt| used.insert(elt));
+                self.deleted.iter().all(|elt| used.insert(elt.0));
 
                 self.active_inputs.iter().all(|elt| !used.insert(&elt.0))
             },
@@ -238,7 +267,7 @@ impl Storage for AuthorityTemporaryStore {
         self.written.insert(object.id(), object);
     }
 
-    fn delete_object(&mut self, id: &ObjectID) {
+    fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
         // there should be no deletion after write
         debug_assert!(self.written.get(id) == None);
         // Check it is not read-only
@@ -251,9 +280,9 @@ impl Storage for AuthorityTemporaryStore {
             }
         }
 
-        // Mark it for deletion
-        debug_assert!(self.objects.get(id).is_some());
-        self.deleted.insert(*id);
+        // For object deletion, we increment their version so that they will
+        // eventually show up in the parent_sync table with an updated version.
+        self.deleted.insert(*id, (version.increment(), kind));
     }
 
     fn log_event(&mut self, event: Event) {
