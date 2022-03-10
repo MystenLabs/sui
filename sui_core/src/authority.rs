@@ -429,7 +429,7 @@ impl AuthorityState {
         // Objects that were wrapped in the past and just got unwrapped
         // require special patch up. It also affects how signed effects are generated.
         // See detailed comments in the implementation of [`AuthorityTemporaryStore::patch_unwrapped_objects`].
-        let unwrapped_object_ids = self.get_unwrapped_object_ids(&temporary_store)?;
+        let unwrapped_object_ids = self.get_unwrapped_object_ids(&temporary_store, &tx_ctx)?;
         temporary_store.patch_unwrapped_objects(&unwrapped_object_ids);
         let to_signed_effects = temporary_store.to_signed_effects(
             &self.name,
@@ -909,10 +909,19 @@ impl AuthorityState {
     fn get_unwrapped_object_ids(
         &self,
         temporary_store: &AuthorityTemporaryStore,
+        ctx: &TxContext,
     ) -> SuiResult<HashSet<ObjectID>> {
         // mutated will contain all objects from this transaction that were
         // written or deleted. We include deleted objects because it's possible
         // to unwrap a wrapped object and immediately delete it in the same transaction.
+        let ids_generated = ctx.recreate_all_ids();
+        let unwrapped : HashSet<_> = temporary_store
+            .written()
+            .iter()
+            .filter_map(|(objid, _)| { if !(ids_generated.contains(objid) || temporary_store.objects().contains_key(objid)) {
+                Some(*objid)
+            } else { None } }).collect();
+        
         let mutated = temporary_store
             .written()
             .iter()
@@ -937,6 +946,9 @@ impl AuthorityState {
             .zip(parents.iter())
             .filter_map(|((object_id, _), d)| d.map(|_| object_id))
             .collect();
+
+        assert!(unwrapped == unwrapped_object_ids);
+
         Ok(unwrapped_object_ids)
     }
 }
