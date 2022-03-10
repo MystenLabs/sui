@@ -125,7 +125,7 @@ impl MockSequencer {
                             }
                         };
                         if let Some(replier) = repliers.remove(&digest) {
-                            if let Err(_) = replier.send(reply) {
+                            if replier.send(reply).is_err() {
                                 panic!("Failed to reply to network server");
                             }
                         }
@@ -164,7 +164,7 @@ where
 
             // Send the transaction to the sequencer.
             let (sender, receiver) = oneshot::channel();
-            if let Err(_) = self.tx_input.send((buffer.freeze(), sender)).await {
+            self.tx_input.send((buffer.freeze(), sender)).await.is_err() {
                 panic!("Failed to sequence input bytes");
             }
 
