@@ -48,6 +48,7 @@ pub fn all_natives(
         ),
         ("Transfer", "transfer_internal", transfer::transfer_internal),
         ("Transfer", "freeze_object", transfer::freeze_object),
+        ("Transfer", "share_object", transfer::share_object),
         ("TxContext", "fresh_id", tx_context::fresh_id),
         (
             "TxContext",

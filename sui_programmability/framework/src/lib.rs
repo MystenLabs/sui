@@ -29,6 +29,8 @@ pub enum EventType {
     TransferToObject,
     /// System event: freeze object
     FreezeObject,
+    /// System event: turn an object into a shared mutable object
+    ShareObject,
     /// System event: an object ID is deleted. This does not necessarily
     /// mean an object is being deleted. However whenever an object is being
     /// deleted, the object ID must be deleted and this event will be
