@@ -143,7 +143,7 @@ impl Display for WalletConfig {
 
         writeln!(writer, "Config path : {:?}", self.config_path)?;
         writeln!(writer, "Managed addresses : {}", self.accounts.len())?;
-        writeln!(writer, "{}", self.gateway)?;
+        write!(writer, "{}", self.gateway)?;
 
         write!(f, "{}", writer)
     }
