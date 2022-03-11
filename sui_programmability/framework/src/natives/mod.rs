@@ -46,6 +46,11 @@ pub fn all_natives(
             "transferred_object_ids",
             test_scenario::transferred_object_ids,
         ),
+        (
+            "Transfer",
+            "delete_child_object_internal",
+            transfer::delete_child_object_internal,
+        ),
         ("Transfer", "transfer_internal", transfer::transfer_internal),
         ("Transfer", "freeze_object", transfer::freeze_object),
         ("Transfer", "share_object", transfer::share_object),

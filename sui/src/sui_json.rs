@@ -23,7 +23,7 @@ const HEX_PREFIX: &str = "0x";
 #[path = "unit_tests/sui_json.rs"]
 mod base_types_tests;
 
-#[derive(Eq, PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SuiJsonValue(JsonValue);
 impl SuiJsonValue {
     pub fn new(json_value: JsonValue) -> Result<SuiJsonValue, anyhow::Error> {

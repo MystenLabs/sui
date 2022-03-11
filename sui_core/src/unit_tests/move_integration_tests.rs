@@ -456,10 +456,33 @@ async fn test_object_owning_another_object() {
     assert!(effects.status.is_ok());
     assert_eq!(effects.created.len(), 2);
     // Check that one of them is the parent and the other is the child.
-    assert!(
-        (effects.created[0].1 == sender && effects.created[1].1 == effects.created[0].0 .0)
-            || (effects.created[1].1 == sender && effects.created[0].1 == effects.created[1].0 .0)
-    );
+    let (parent, child) = if effects.created[0].1 == sender {
+        assert_eq!(effects.created[1].1, effects.created[0].0 .0);
+        (effects.created[0].0, effects.created[1].0)
+    } else {
+        assert!(effects.created[1].1 == sender && effects.created[0].1 == effects.created[1].0 .0);
+        (effects.created[1].0, effects.created[0].0)
+    };
+
+    // Delete the parent and child altogether.
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "ObjectOwner",
+        "delete_parent_and_child",
+        vec![],
+        vec![parent.0, child.0],
+        vec![],
+        vec![],
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    // Check that both objects were deleted.
+    assert_eq!(effects.deleted.len(), 2);
 }
 
 async fn build_and_publish_test_package(

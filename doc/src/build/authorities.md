@@ -1,4 +1,6 @@
-# Authorities
+---
+title: Authorities
+---
 
 The Sui network is operated by a set of independent *authorities*, each running its own instance of the Sui software on a separate machine (or a [sharded](TODO) cluster of machines operated by the same entity). An authority participates in the network by handling [read](TODO) and write requests sent by [clients](TODO). This section focuses on the latter.
 

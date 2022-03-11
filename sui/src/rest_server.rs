@@ -28,6 +28,7 @@ use std::fs;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
+use sui_types::event::Event;
 use sui_types::messages::{ExecutionStatus, TransactionEffects};
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::Object as SuiObject;
@@ -1048,37 +1049,80 @@ async fn get_object_effects(
     transaction_effects: TransactionEffects,
 ) -> Result<HashMap<String, Vec<HashMap<String, String>>>, HttpError> {
     let mut object_effects_summary = HashMap::new();
-    if !transaction_effects.created.is_empty() {
-        let mut effects = Vec::new();
-        for ((object_id, sequence_number, object_digest), _) in transaction_effects.created {
-            let effect = get_effect(wallet_context, object_id, sequence_number, object_digest)
-                .await
-                .map_err(|error| error)?;
-            effects.push(effect);
-        }
-        object_effects_summary.insert(String::from("created_objects"), effects);
-    }
-    if !transaction_effects.mutated.is_empty() {
-        let mut effects = Vec::new();
-        for ((object_id, sequence_number, object_digest), _) in transaction_effects.mutated {
-            let effect = get_effect(wallet_context, object_id, sequence_number, object_digest)
-                .await
-                .map_err(|error| error)?;
-            effects.push(effect);
-        }
-        object_effects_summary.insert(String::from("mutated_objects"), effects);
-    }
-    if !transaction_effects.deleted.is_empty() {
-        let mut effects = Vec::new();
-        for (object_id, sequence_number, object_digest) in transaction_effects.deleted {
-            let effect = get_effect(wallet_context, object_id, sequence_number, object_digest)
-                .await
-                .map_err(|error| error)?;
-            effects.push(effect);
-        }
-        object_effects_summary.insert(String::from("deleted_objects"), effects);
-    }
+    object_effects_summary.insert(
+        String::from("created_objects"),
+        get_obj_ref_effects(
+            wallet_context,
+            transaction_effects
+                .created
+                .into_iter()
+                .map(|(oref, _)| oref)
+                .collect::<Vec<_>>(),
+        )
+        .await?,
+    );
+    object_effects_summary.insert(
+        String::from("mutated_objects"),
+        get_obj_ref_effects(
+            wallet_context,
+            transaction_effects
+                .mutated
+                .into_iter()
+                .map(|(oref, _)| oref)
+                .collect::<Vec<_>>(),
+        )
+        .await?,
+    );
+    object_effects_summary.insert(
+        String::from("unwrapped_objects"),
+        get_obj_ref_effects(
+            wallet_context,
+            transaction_effects
+                .unwrapped
+                .into_iter()
+                .map(|(oref, _)| oref)
+                .collect::<Vec<_>>(),
+        )
+        .await?,
+    );
+    object_effects_summary.insert(
+        String::from("deleted_objects"),
+        get_obj_ref_effects(wallet_context, transaction_effects.deleted).await?,
+    );
+    object_effects_summary.insert(
+        String::from("wrapped_objects"),
+        get_obj_ref_effects(wallet_context, transaction_effects.wrapped).await?,
+    );
+    object_effects_summary.insert(
+        String::from("events"),
+        get_events(transaction_effects.events)?,
+    );
     Ok(object_effects_summary)
+}
+
+fn get_events(events: Vec<Event>) -> Result<Vec<HashMap<String, String>>, HttpError> {
+    let mut effects = Vec::new();
+    for event in events {
+        let mut effect: HashMap<String, String> = HashMap::new();
+        effect.insert("type".to_string(), format!("{}", event.type_));
+        effect.insert("contents".to_string(), format!("{:?}", event.contents));
+        effects.push(effect);
+    }
+    Ok(effects)
+}
+
+async fn get_obj_ref_effects(
+    wallet_context: &WalletContext,
+    object_refs: Vec<ObjectRef>,
+) -> Result<Vec<HashMap<String, String>>, HttpError> {
+    let mut effects = Vec::new();
+    for (object_id, sequence_number, object_digest) in object_refs {
+        let effect = get_effect(wallet_context, object_id, sequence_number, object_digest)
+            .await
+            .map_err(|error| error)?;
+        effects.push(effect);
+    }
+    Ok(effects)
 }
 
 async fn get_effect(
@@ -1099,7 +1143,7 @@ async fn get_effect(
         object
             .data
             .type_()
-            .map_or("Move Package".to_owned(), |type_| format!("{}", type_)),
+            .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
     );
     effect.insert("id".to_string(), object_id.to_string());
     effect.insert("version".to_string(), format!("{:?}", sequence_number));
@@ -1148,7 +1192,6 @@ async fn handle_move_call(
         .unwrap_or_default()
         .iter()
         .map(|type_arg| parse_type_tag(type_arg))
-        .into_iter()
         .collect::<Result<Vec<_>, _>>()?;
     let gas_budget = call_params.gas_budget;
     let gas_object_id = ObjectID::try_from(call_params.gas_object_id)?;
