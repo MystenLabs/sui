@@ -6,7 +6,7 @@ This document contains a list of research papers that are relevant to Sui and ha
 Some of the ideas of these papers are currently being integrated into Sui, others are in our roadmap, and others are not in our roadmap
 but could be integrated in the future. 
 
-### FastPay: High-Performance Byzantine Fault Tolerant Settlement 
+## FastPay: High-Performance Byzantine Fault Tolerant Settlement 
 
 * **Link:** https://arxiv.org/abs/2003.11506
 * **Publication:** ACM Conference on Advances in Financial Technologies (AFT), 2020
@@ -17,8 +17,7 @@ but could be integrated in the future.
   foregoing the expenses of full atomic commit channels (consensus). The resulting system has low-latency for both confirmation and payment finality.
   Remarkably, each authority can be sharded across many machines to allow unbounded horizontal scalability. 
 
-
-### Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus
+## Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus
 
 * **Link:** https://arxiv.org/abs/2105.11827
 * **Publication: **EuroSys, 2022
@@ -35,8 +34,7 @@ but could be integrated in the future.
   without any latency increase. Tusk achieves 160,000 tx/sec with about 3 seconds latency. Under faults, both protocols maintain high throughput, but
   Narwhal-HotStuff suffers from increased latency.
 
-
-### Zef: Low-latency, Scalable, Private Payments 
+## Zef: Low-latency, Scalable, Private Payments 
 
 * **Link:** https://arxiv.org/abs/2201.05671
 * **Publication:** Not published yet (under submission at PETS 22)
@@ -52,8 +50,7 @@ but could be integrated in the future.
   scalability and demonstrate a confirmation time under one second at nominal capacity. Compared to existing anonymous payment systems based on a blockchain,
   this represents a latency speedup of three orders of magnitude, with no theoretical limit on throughput.
 
-
-###  Bullshark: DAG BFT Protocols Made Practical 
+##  Bullshark: DAG BFT Protocols Made Practical 
 
 * **Link:** https://arxiv.org/abs/2201.05677
 * **Publication:** Not published yet (will likely be accepted at CCS shortly)
@@ -64,8 +61,7 @@ but could be integrated in the future.
   a standalone partially synchronous version of Bullshark and evaluate it against the state of the art. The resulting protocol is embarrassingly simple (20 LOC
   on top of a DAG-based mempool implementation) and highly efficient, achieving for example, 125k transactions per second and 2 seconds latency with 50 nodes.
 
-
-### Be Aware of Your Leaders 
+## Be Aware of Your Leaders 
 
 * **Link:** https://arxiv.org/abs/2110.00960
 * **Publication:** Financial Cryptography and Data Security (FC), 2022
@@ -81,8 +77,7 @@ but could be integrated in the future.
   drastic performance improvements: it increases throughput over 2x in faultless settings and provides a 20x throughput increase and 5x latency reduction
   in the presence of faults.
 
-
-### Twins: BFT Systems Made Robust** **
+## Twins: BFT Systems Made Robust
 
 * **Link:** https://arxiv.org/abs/2004.10617
 * **Publication:** International Conference on Principles of Distributed Systems (OPODIS), 2021
@@ -100,8 +95,7 @@ but could be integrated in the future.
   several known attacks against other BFT protocols were materialized as Twins scenarios. In all cases, the target protocols break within fewer than a dozen
   protocol rounds. Hence it is realistic for the Twins approach to expose the problems.
 
-
-### SybilQuorum: Open Distributed Ledgers Through Trust Networks 
+## SybilQuorum: Open Distributed Ledgers Through Trust Networks 
 
 * **Link:** https://arxiv.org/abs/1906.12237
 * **Publication:** Not published yet
