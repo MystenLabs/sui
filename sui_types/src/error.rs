@@ -45,8 +45,12 @@ pub enum SuiError {
     UnexpectedOwnerType,
     #[error("Shared mutable object not yet supported")]
     UnsupportedSharedObjectError,
+    #[error("Object used as shared is not shared.")]
+    NotSharedObjectError,
     #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transerred to an account address first before deletion")]
     DeleteObjectOwnedObject,
+    #[error("The shared locks for this transaction have not yet been set.")]
+    SharedObjectLockNotSetObject,
 
     // Signature verification
     #[error("Signature is not valid: {}", error)]
