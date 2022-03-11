@@ -119,7 +119,6 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         object_owner_map,
         gas_budget,
         ctx,
-        false,
     ) {
         ExecutionStatus::Failure { gas_used, error } => {
             exec_failure!(gas_used, *error)
@@ -155,7 +154,6 @@ fn execute_internal<
     object_owner_map: HashMap<SuiAddress, SuiAddress>,
     gas_budget: u64, // gas budget for the current call operation
     ctx: &mut TxContext,
-    _for_publish: bool,
 ) -> ExecutionStatus {
     // TODO: Update Move gas constants to reflect the gas fee on sui.
     let cost_table = &move_vm_types::gas_schedule::INITIAL_COST_SCHEDULE;
@@ -381,7 +379,6 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
             HashMap::new(),
             current_gas_budget,
             ctx,
-            true,
         ) {
             ExecutionStatus::Success { gas_used } => gas_used,
             ExecutionStatus::Failure { gas_used, error } => {
