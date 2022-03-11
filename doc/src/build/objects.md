@@ -1,5 +1,5 @@
 ---
-title: Build Objects
+title: Objects
 ---
 
 Sui has programmable objects created and managed by [Move](https://github.com/diem/move) packages (a.k.a. *smart contracts*). Move packages themselves are also objects. Thus, Sui objects can be partitioned into two categories:
