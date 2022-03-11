@@ -53,5 +53,4 @@ module NFTs::Num {
         let Num { n: _ } = NFT::burn(nft);
         cap.supply = cap.supply - 1;
     }
-
 }
