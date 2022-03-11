@@ -9,6 +9,7 @@ mod tx_context;
 
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
+use move_vm_types::values::{Struct, Value};
 
 pub fn all_natives(
     move_stdlib_addr: AccountAddress,
@@ -45,8 +46,14 @@ pub fn all_natives(
             "transferred_object_ids",
             test_scenario::transferred_object_ids,
         ),
+        (
+            "Transfer",
+            "delete_child_object_internal",
+            transfer::delete_child_object_internal,
+        ),
         ("Transfer", "transfer_internal", transfer::transfer_internal),
         ("Transfer", "freeze_object", transfer::freeze_object),
+        ("Transfer", "share_object", transfer::share_object),
         ("TxContext", "fresh_id", tx_context::fresh_id),
         (
             "TxContext",
@@ -67,4 +74,25 @@ pub fn all_natives(
         })
         .chain(move_stdlib::natives::all_natives(move_stdlib_addr))
         .collect()
+}
+
+// Object { id: VersionedID { id: UniqueID { id: ID { bytes: address } } } .. }
+// Extract the first field of the struct 4 times to get the id bytes.
+pub fn get_object_id_bytes(object: Value) -> AccountAddress {
+    let id_bytes = get_nested_struct_field(object, &[0, 0, 0, 0]);
+    id_bytes.value_as::<AccountAddress>().unwrap()
+}
+
+// Extract a field valye that's nested inside value `v`. The offset of each nesting
+// is determined by `offsets`.
+pub fn get_nested_struct_field(mut v: Value, offsets: &[usize]) -> Value {
+    for offset in offsets {
+        v = get_nth_struct_field(v, *offset);
+    }
+    v
+}
+
+pub fn get_nth_struct_field(v: Value, n: usize) -> Value {
+    let mut itr = v.value_as::<Struct>().unwrap().unpack().unwrap();
+    itr.nth(n).unwrap()
 }

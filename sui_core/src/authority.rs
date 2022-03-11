@@ -27,12 +27,17 @@ use sui_types::{
     storage::{DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
+use tracing::*;
 
 use crate::authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
 pub mod authority_tests;
+
+#[cfg(test)]
+#[path = "unit_tests/move_integration_tests.rs"]
+pub mod move_integration_tests;
 
 mod temporary_store;
 use temporary_store::AuthorityTemporaryStore;
@@ -271,6 +276,7 @@ impl AuthorityState {
 
         let mutable_objects: Vec<_> = self
             .check_locks(&transaction)
+            .instrument(tracing::trace_span!("tx_check_locks"))
             .await?
             .into_iter()
             .filter_map(|(object_kind, object)| match object_kind {
@@ -286,6 +292,11 @@ impl AuthorityState {
             })
             .collect();
 
+        debug!(
+            num_mutable_objects = mutable_objects.len(),
+            "Checked locks and found mutable objects"
+        );
+
         let signed_transaction = SignedTransaction::new(transaction, self.name, &*self.secret);
 
         // Check and write locks, to signed transaction, into the database
@@ -293,6 +304,7 @@ impl AuthorityState {
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
         self.set_transaction_lock(&mutable_objects, signed_transaction)
+            .instrument(tracing::trace_span!("db_set_transaction_lock"))
             .await?;
 
         // Return the signed Transaction or maybe a cert.
@@ -320,6 +332,7 @@ impl AuthorityState {
         // If the transaction contains shared objects, we need to ensure they have been scheduled
         // for processing by the consensus protocol.
         if transaction.contains_shared_object() {
+            debug!("Validating shared object sequence numbers from consensus...");
             let mut lock_errors = Vec::new();
             for object_id in transaction.shared_input_objects() {
                 // Check whether the shared objects have already been assigned a sequence number by
@@ -334,6 +347,9 @@ impl AuthorityState {
                     Some(lock) => {
                         if let Some(object) = self._database.get_object(object_id)? {
                             if object.version() != lock {
+                                warn!(object_version =? object.version(),
+                                      locked_version =? lock,
+                                      "Unexpected version number in locked shared object");
                                 lock_errors.push(SuiError::InvalidSequenceNumber);
                             }
                         }
@@ -386,6 +402,10 @@ impl AuthorityState {
                 inputs.push(object);
             }
         }
+        debug!(
+            num_inputs = inputs.len(),
+            "Read inputs for transaction from DB"
+        );
 
         let mut transaction_dependencies: BTreeSet<_> = inputs
             .iter()
@@ -398,6 +418,10 @@ impl AuthorityState {
         let gas_object_id = transaction.gas_payment_object_ref().0;
         let (mut temporary_store, status) =
             self.execute_transaction(transaction, inputs, &mut tx_ctx)?;
+        debug!(
+            gas_used = status.gas_used(),
+            "Finished execution of transaction with status {:?}", status
+        );
 
         // Remove from dependencies the generic hash
         transaction_dependencies.remove(&TransactionDigest::genesis());
@@ -405,7 +429,7 @@ impl AuthorityState {
         // Objects that were wrapped in the past and just got unwrapped
         // require special patch up. It also affects how signed effects are generated.
         // See detailed comments in the implementation of [`AuthorityTemporaryStore::patch_unwrapped_objects`].
-        let unwrapped_object_ids = self.get_unwrapped_object_ids(&temporary_store)?;
+        let unwrapped_object_ids = self.get_unwrapped_object_ids(&temporary_store, &tx_ctx)?;
         temporary_store.patch_unwrapped_objects(&unwrapped_object_ids);
         let to_signed_effects = temporary_store.to_signed_effects(
             &self.name,
@@ -417,9 +441,9 @@ impl AuthorityState {
             unwrapped_object_ids,
         );
         // Update the database in an atomic manner
-
         let (seq, resp) = self
             .update_state(temporary_store, certificate, to_signed_effects)
+            .instrument(tracing::debug_span!("db_update_state"))
             .await?; // Returns the OrderInfoResponse
 
         // If there is a notifier registered, notify:
@@ -885,35 +909,25 @@ impl AuthorityState {
     fn get_unwrapped_object_ids(
         &self,
         temporary_store: &AuthorityTemporaryStore,
+        ctx: &TxContext,
     ) -> SuiResult<HashSet<ObjectID>> {
-        // mutated will contain all objects from this transaction that were
-        // written or deleted. We include deleted objects because it's possible
-        // to unwrap a wrapped object and immediately delete it in the same transaction.
-        let mutated = temporary_store
+        // unwrapped will contain all objects from this transaction that were
+        // written or deleted, which were not in the input and do not have an
+        // ID that is generated by the given TxContext. These were presumably
+        // unwrapped as part of the transaction that created the temp store.
+        let ids_generated = ctx.recreate_all_ids();
+
+        let unwrapped: HashSet<_> = temporary_store
             .written()
             .iter()
-            .map(|(id, obj)| (*id, obj.version()))
-            .chain(
-                temporary_store
-                    .deleted()
-                    .iter()
-                    .map(|(id, (version, _))| (*id, *version)),
-            );
-        // For each mutated object, we first find out whether there was a transaction
-        // that wrapped this object in the past.
-        let parents = self._database.multi_get_parents(
-            &mutated
-                .clone()
-                .map(|(object_id, version)| {
-                    (object_id, version, ObjectDigest::OBJECT_DIGEST_WRAPPED)
-                })
-                .collect::<Vec<_>>(),
-        )?;
-        let unwrapped_object_ids = mutated
-            .zip(parents.iter())
-            .filter_map(|((object_id, _), d)| d.map(|_| object_id))
+            .map(|(objid, _)| *objid)
+            .chain(temporary_store.deleted().iter().map(|(objid, _)| *objid))
+            .filter(|objid| {
+                !(ids_generated.contains(objid) || temporary_store.objects().contains_key(objid))
+            })
             .collect();
-        Ok(unwrapped_object_ids)
+
+        Ok(unwrapped)
     }
 }
 

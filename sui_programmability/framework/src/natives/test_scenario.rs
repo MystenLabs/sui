@@ -11,7 +11,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::{native_gas, NativeResult},
     pop_arg,
-    values::{Struct, Value},
+    values::Value,
 };
 use num_enum::TryFromPrimitive;
 use smallvec::smallvec;
@@ -20,6 +20,8 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress},
     object::Owner,
 };
+
+use super::{get_nested_struct_field, get_nth_struct_field};
 
 type Event = (Vec<u8>, u64, Type, MoveTypeLayout, Value);
 
@@ -39,33 +41,10 @@ struct OwnedObj {
 // TODO: add a native function that prints the log of transfers, deletes, wraps for debugging purposes
 type Inventory = BTreeMap<ObjectID, OwnedObj>;
 
-fn get_id(versioned_id: &Value) -> AccountAddress {
-    // All of the following unwraps are safe by construction because a properly verified
-    // bytecode ensures that the parameter must be of type UniqueID with the correct fields:
-    // ```
-    // VersionedID { id: UniqueID { id: ID { bytes: address } } .. }
-    // ```
-    versioned_id
-        .copy_value()
-        .unwrap()
-        .value_as::<Struct>()
-        .unwrap() // Convert to VersionedID
-        .unpack()
-        .unwrap()
-        .next() // Get id field of VersionedID
-        .unwrap()
-        .value_as::<Struct>() // Convert to UniqueID
-        .unwrap()
-        .unpack()
-        .unwrap()
-        .next()
-        .unwrap() // Get id field of UniqueID
-        .value_as::<Struct>() // Convert to ID
-        .unwrap()
-        .unpack()
-        .unwrap()
-        .next()
-        .unwrap()
+// The deleted id event contains the VersionedID.
+// We want to retrive the inner id bytes.
+fn get_deleted_id_bytes(id: &Value) -> AccountAddress {
+    get_nested_struct_field(id.copy_value().unwrap(), &[0, 0, 0])
         .value_as::<AccountAddress>()
         .unwrap()
 }
@@ -85,22 +64,14 @@ fn get_global_inventory(events: &[Event]) -> Inventory {
         match event_type {
             EventType::TransferToAddress
             | EventType::TransferToObject
-            | EventType::FreezeObject => {
+            | EventType::FreezeObject
+            | EventType::ShareObject => {
                 let obj_bytes = val
                     .simple_serialize(layout)
                     .expect("This will always succeed for a well-structured event log");
                 let obj_id = ObjectID::try_from(&obj_bytes[0..ObjectID::LENGTH])
                     .expect("This will always succeed on an object from a system transfer event");
-                let owner = match event_type {
-                    EventType::FreezeObject => Owner::SharedImmutable,
-                    EventType::TransferToAddress => {
-                        Owner::AddressOwner(SuiAddress::try_from(recipient.clone()).unwrap())
-                    }
-                    EventType::TransferToObject => {
-                        Owner::ObjectOwner(SuiAddress::try_from(recipient.clone()).unwrap())
-                    }
-                    _ => panic!("Unrecognized event_type"),
-                };
+                let owner = get_new_owner(&inventory, &obj_id, event_type, recipient.clone());
                 // note; may overwrite older values of the object, which is intended
                 inventory.insert(
                     obj_id,
@@ -112,14 +83,44 @@ fn get_global_inventory(events: &[Event]) -> Inventory {
                 );
             }
             EventType::DeleteObjectID => {
-                let obj_id = get_id(val);
                 // note: obj_id may or may not be present in `inventory`--a useer can create an ID and delete it without associating it with a transferred object
-                inventory.remove(&obj_id.into());
+                inventory.remove(&get_deleted_id_bytes(val).into());
+            }
+            EventType::DeleteChildObject => {
+                // val is an Sui object, with the first field as the versioned id.
+                let versioned_id = get_nth_struct_field(val.copy_value().unwrap(), 0);
+                inventory.remove(&get_deleted_id_bytes(&versioned_id).into());
             }
             EventType::User => (),
         }
     }
     inventory
+}
+
+fn get_new_owner(
+    inventory: &Inventory,
+    obj_id: &ObjectID,
+    event_type: EventType,
+    recipient: Vec<u8>,
+) -> Owner {
+    if let Some(existing) = inventory.get(obj_id) {
+        if existing.owner.is_shared() {
+            // Shared objects are not allowed to be transferred anymore.
+            // This (transfer after sharing) can happen because the current
+            // way of returning an object back to the inventory is through a transfer.
+            // In that case, we need to keep the ownership unchanged.
+            return existing.owner;
+        }
+    }
+    match event_type {
+        EventType::FreezeObject => Owner::SharedImmutable,
+        EventType::ShareObject => Owner::SharedMutable,
+        EventType::TransferToAddress => {
+            Owner::AddressOwner(SuiAddress::try_from(recipient).unwrap())
+        }
+        EventType::TransferToObject => Owner::ObjectOwner(SuiAddress::try_from(recipient).unwrap()),
+        _ => panic!("Unrecognized event_type"),
+    }
 }
 
 /// Get the objects of type `type_` that can be spent by `addr`
@@ -136,7 +137,7 @@ fn get_inventory_for(
         .filter_map(|(_, obj)| {
             // TODO: We should also be able to include objects indirectly owned by the
             // requested address through owning other objects.
-            // https://github.com/MystenLabs/fastnft/issues/673
+            // https://github.com/MystenLabs/sui/issues/673
             if (obj.owner == Owner::AddressOwner(sui_addr) || obj.owner.is_shared())
                 && &obj.type_ == type_
             {
@@ -165,10 +166,7 @@ pub fn deleted_object_ids(
         .skip(tx_begin_idx)
         .filter_map(|(_, event_type_byte, _, _, val)| {
             if *event_type_byte == EventType::DeleteObjectID as u64 {
-                // TODO: for some reason, this creates internal type errors in the VM. Create a fresh value with the object ID instead
-                //Some(Value::copy_value(val).unwrap())
-                let id_bytes = get_id(val).to_vec();
-                Some(Value::vector_u8(id_bytes))
+                Some(Value::vector_u8(get_deleted_id_bytes(val).to_vec()))
             } else {
                 None
             }

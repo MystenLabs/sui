@@ -10,16 +10,29 @@ use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
+use tracing::warn;
 use typed_store::rocks::{open_cf, DBBatch, DBMap};
 
 use std::sync::atomic::Ordering;
-use typed_store::traits::Map;
+use typed_store::{reopen, traits::Map};
 
-pub struct AuthorityStore {
+pub type AuthorityStore = SuiDataStore<true>;
+#[allow(dead_code)]
+pub type ReplicaStore = SuiDataStore<false>;
+
+/// ALL_OBJ_VER determines whether we want to store all past
+/// versions of every object in the store. Authority doesn't store
+/// them, but other entities such as replicas will.
+pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// This is a map between the object ID and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
     objects: DBMap<ObjectID, Object>,
+
+    /// Stores all history versions of all objects.
+    /// This is not needed by an authority, but is needed by a replica.
+    #[allow(dead_code)]
+    all_object_versions: DBMap<(ObjectID, SequenceNumber), Object>,
 
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the transaction that they are lock on for use by this specific authority. Where an object
@@ -81,7 +94,7 @@ pub struct AuthorityStore {
     pub next_sequence_number: AtomicU64,
 }
 
-impl AuthorityStore {
+impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> AuthorityStore {
         let db = open_cf(
@@ -89,6 +102,7 @@ impl AuthorityStore {
             db_options,
             &[
                 "objects",
+                "all_object_versions",
                 "owner_index",
                 "transaction_lock",
                 "signed_transactions",
@@ -118,24 +132,49 @@ impl AuthorityStore {
                 .unwrap_or(0),
         );
 
+        let (
+            objects,
+            all_object_versions,
+            owner_index,
+            transaction_lock,
+            signed_transactions,
+            certificates,
+            parent_sync,
+            signed_effects,
+            sequenced,
+            schedule,
+            batches,
+        ) = reopen! (
+            &db,
+            "objects";<ObjectID, Object>,
+            "all_object_versions";<(ObjectID, SequenceNumber), Object>,
+            "owner_index";<(SuiAddress, ObjectID), ObjectRef>,
+            "transaction_lock";<ObjectRef, Option<TransactionDigest>>,
+            "signed_transactions";<TransactionDigest, SignedTransaction>,
+            "certificates";<TransactionDigest, CertifiedTransaction>,
+            "parent_sync";<ObjectRef, TransactionDigest>,
+            "signed_effects";<TransactionDigest, SignedTransactionEffects>,
+            "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
+            "schedule";<ObjectID, SequenceNumber>,
+            "batches";<TxSequenceNumber, SignedBatch>
+        );
         AuthorityStore {
-            objects: DBMap::reopen(&db, Some("objects")).expect("Cannot open CF."),
-            owner_index: DBMap::reopen(&db, Some("owner_index")).expect("Cannot open CF."),
-            transaction_lock: DBMap::reopen(&db, Some("transaction_lock"))
-                .expect("Cannot open CF."),
-            signed_transactions: DBMap::reopen(&db, Some("signed_transactions"))
-                .expect("Cannot open CF."),
-            certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
-            parent_sync: DBMap::reopen(&db, Some("parent_sync")).expect("Cannot open CF."),
-            signed_effects: DBMap::reopen(&db, Some("signed_effects")).expect("Cannot open CF."),
-            sequenced: DBMap::reopen(&db, Some("sequenced")).expect("Cannot open CF."),
-            schedule: DBMap::reopen(&db, Some("schedule")).expect("Cannot open CF."),
+            objects,
+            all_object_versions,
+            owner_index,
+            transaction_lock,
+            signed_transactions,
+            certificates,
+            parent_sync,
+            signed_effects,
+            sequenced,
+            schedule,
             lock_table: (0..1024)
                 .into_iter()
                 .map(|_| parking_lot::Mutex::new(()))
                 .collect(),
             executed_sequence,
-            batches: DBMap::reopen(&db, Some("batches")).expect("Cannot open CF."),
+            batches,
             next_sequence_number,
         }
     }
@@ -331,6 +370,7 @@ impl AuthorityStore {
         // new locks must be atomic, and not writes should happen in between.
         {
             // Aquire the lock to ensure no one else writes when we are in here.
+            // MutexGuards are unlocked on drop (ie end of this block)
             let _mutexes = self.acquire_locks(mutable_input_objects);
 
             let locks = self.transaction_lock.multi_get(mutable_input_objects)?;
@@ -345,6 +385,9 @@ impl AuthorityStore {
                             .get_transaction_lock(obj_ref)?
                             .expect("If we have a lock we should have a transaction.");
 
+                        warn!(prev_tx_digest =? previous_tx_digest,
+                              cur_tx_digest =? tx_digest,
+                              "Conflicting transaction!  Lock state changed in unexpected way");
                         // TODO: modify ConflictingTransaction to only return the transaction digest here.
                         return Err(SuiError::ConflictingTransaction {
                             pending_transaction: prev_transaction.transaction,
@@ -502,6 +545,16 @@ impl AuthorityStore {
                 }
             }),
         )?;
+
+        if ALL_OBJ_VER {
+            // Keep all versions of every object if ALL_OBJ_VER is true.
+            write_batch = write_batch.insert_batch(
+                &self.all_object_versions,
+                written
+                    .iter()
+                    .map(|(id, object)| ((*id, object.version()), object)),
+            )?;
+        }
 
         // Update the indexes of the objects written
         write_batch = write_batch.insert_batch(
