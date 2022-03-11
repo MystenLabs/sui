@@ -1,4 +1,6 @@
-# Wallet Quick Start
+---
+title: Wallet Quick Start
+---
 
 Welcome to the Sui tutorial on the sample Sui wallet developed
 to facilitate local experimentation with Sui features using a
