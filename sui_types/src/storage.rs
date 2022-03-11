@@ -5,6 +5,7 @@ use std::collections::HashSet;
 
 use crate::{
     base_types::{ObjectID, SequenceNumber},
+    error::SuiResult,
     event::Event,
     object::Object,
 };
@@ -36,4 +37,8 @@ pub trait Storage {
     fn log_event(&mut self, event: Event);
 
     fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind);
+}
+
+pub trait BackingPackageStore {
+    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>>;
 }

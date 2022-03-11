@@ -13,8 +13,11 @@ pub type InnerTemporaryStore = (
     Vec<Event>,
 );
 
-pub struct AuthorityTemporaryStore {
-    object_store: Arc<AuthorityStore>,
+pub struct AuthorityTemporaryStore<S> {
+    // The backing store for retrieving Move packages onchain.
+    // When executing a Move call, the dependent packages are not going to be
+    // in the input objects. They will be feteched from the backing store.
+    package_store: Arc<S>,
     tx_digest: TransactionDigest,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
@@ -31,16 +34,16 @@ pub struct AuthorityTemporaryStore {
     created_object_ids: HashSet<ObjectID>,
 }
 
-impl AuthorityTemporaryStore {
+impl<S> AuthorityTemporaryStore<S> {
     /// Creates a new store associated with an authority store, and populates it with
     /// initial objects.
     pub fn new(
-        authority_state: &AuthorityState,
+        package_store: Arc<S>,
         _input_objects: &'_ [Object],
         tx_digest: TransactionDigest,
-    ) -> AuthorityTemporaryStore {
-        AuthorityTemporaryStore {
-            object_store: authority_state._database.clone(),
+    ) -> Self {
+        Self {
+            package_store,
             tx_digest,
             objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
             active_inputs: _input_objects
@@ -200,7 +203,7 @@ impl AuthorityTemporaryStore {
     }
 }
 
-impl Storage for AuthorityTemporaryStore {
+impl<S> Storage for AuthorityTemporaryStore<S> {
     /// Resets any mutations and deletions recorded in the store.
     fn reset(&mut self) {
         self.written.clear();
@@ -214,13 +217,7 @@ impl Storage for AuthorityTemporaryStore {
         debug_assert!(self.deleted.get(id) == None);
         match self.written.get(id) {
             Some(x) => Some(x.clone()),
-            None => match self.objects.get(id) {
-                Some(x) => Some(x.clone()),
-                None => match self.object_store.get_object(id) {
-                    Ok(o) => o,
-                    Err(e) => panic!("Could not read object {}", e),
-                },
-            },
+            None => self.objects.get(id).cloned(),
         }
     }
 
@@ -276,26 +273,33 @@ impl Storage for AuthorityTemporaryStore {
     }
 }
 
-impl ModuleResolver for AuthorityTemporaryStore {
+impl<S: BackingPackageStore> ModuleResolver for AuthorityTemporaryStore<S> {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.read_object(&ObjectID::from(*module_id.address())) {
-            Some(o) => match &o.data {
-                Data::Package(c) => Ok(c
-                    .serialized_module_map()
-                    .get(module_id.name().as_str())
-                    .cloned()
-                    .map(|m| m.into_vec())),
-                _ => Err(SuiError::BadObjectType {
-                    error: "Expected module object".to_string(),
-                }),
+        let package_id = &ObjectID::from(*module_id.address());
+        let package = match self.read_object(package_id) {
+            Some(object) => object,
+            None => match self.package_store.get_package(package_id)? {
+                Some(object) => object,
+                None => {
+                    return Ok(None);
+                }
             },
-            None => Ok(None),
+        };
+        match &package.data {
+            Data::Package(c) => Ok(c
+                .serialized_module_map()
+                .get(module_id.name().as_str())
+                .cloned()
+                .map(|m| m.into_vec())),
+            _ => Err(SuiError::BadObjectType {
+                error: "Expected module object".to_string(),
+            }),
         }
     }
 }
 
-impl ResourceResolver for AuthorityTemporaryStore {
+impl<S> ResourceResolver for AuthorityTemporaryStore<S> {
     type Error = SuiError;
 
     fn get_resource(
