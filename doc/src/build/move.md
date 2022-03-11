@@ -782,6 +782,7 @@ number of created swords as follows and put into the `M1.move` file:
         id: VersionedID,
         swords_created: u64,
     }
+
     public fun swords_created(self: &Forge): u64 {
         self.swords_created
     }
