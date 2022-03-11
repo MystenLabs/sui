@@ -1,20 +1,46 @@
+/// This is an implementation of an English auction
+/// (https://en.wikipedia.org/wiki/English_auction). There are 3 types
+/// of parties participating in an auction:
+/// - auctioneer - this is a trusted party that runs the auction
+/// - owner - this is the original owner of an item that is sold at an
+/// auction; the owner submits a request to an auctioneer that runs
+/// the auction
+/// - bidders - these are parties interested in purchasing items sold
+/// at an auction; they submit bids to an auctioneer to affect the
+/// state of an auction
+///
+/// A typical lifetime of an auction looks as follows:
+/// - auction starts by the owner sending an item to be sold along with
+/// its own address to the auctioneer who creates and initializes an
+/// auction
+/// - bidders send bid to the auctioneer for a given auction
+/// consisting of the funds they intend to use for the item's purchase
+/// and their addresses
+/// - the auctioneer periodically inspects the bids:
+///   - if the inspected bid is higher than the current bid (initially
+///   0), the auction is updated with the current bid and funds
+///   representing previous highest bid are sent to the original owner
+///   - otherwise (bid is too low) the bidder's funds are sent back to
+///   the bidder and the auction remains unchanged
+/// - the auctioneer eventually ends the auction
+///   - if no bids were received, the item goes back to the original owner
+///   - otherwise the funds accumulated in the auction go to the
+///   original owner and the item goes to the bidder that won the
+///   auction
+
 module Basics::Auction {
     use Std::Option::{Self, Option};
 
     use Sui::Coin::{Self, Coin};
+    use Sui::GAS::GAS;
     use Sui::ID::{Self, ID, VersionedID};
     use Sui::Transfer;
     use Sui::TxContext::{Self,TxContext};
 
-
     // Error codes.
 
     /// A bid submitted for the wrong (e.g. non-existent) auction.
-    const WRONG_AUCTION: u64 = 1;
-
-
-    /// Currency to be used during auctions.
-    struct ACOIN has drop {}
+    const EWRONG_AUCTION: u64 = 1;
 
     /// Maintains the state of the auction owned by a trusted
     /// auctioneer.
@@ -23,7 +49,7 @@ module Basics::Auction {
         /// Item to be sold.
         to_sell: T,
         /// Coin representing the current bid (starts with no bid).
-        funds: Option<Coin<ACOIN>>,
+        funds: Option<Coin<GAS>>,
         /// Address of the highest bidder.
         highest_bidder: address,
     }
@@ -36,11 +62,7 @@ module Basics::Auction {
         /// ID of the Auction object this bid is intended for
         auction_id: ID,
         /// Coin used for bidding.
-        coin: Coin<ACOIN>
-    }
-
-    public fun coin_type(): ACOIN {
-        ACOIN{}
+        coin: Coin<GAS>
     }
 
     // Entry functions.
@@ -67,7 +89,7 @@ module Basics::Auction {
 
     /// Creates a bid a and send it to the auctioneer along with the
     /// ID of the auction. This is executed by a bidder.
-    public fun bid(coin: Coin<ACOIN>, auction_id: ID, auctioneer: address, ctx: &mut TxContext) {
+    public fun bid(coin: Coin<GAS>, auction_id: ID, auctioneer: address, ctx: &mut TxContext) {
         let bid = Bid {
             id: TxContext::new_id(ctx),
             bidder: TxContext::sender(ctx),
@@ -78,14 +100,13 @@ module Basics::Auction {
     }
 
     /// Updates the auction based on the information in the bid
-    /// (update action if higher bid received and send coin back for
+    /// (update auction if higher bid received and send coin back for
     /// bids that are too low). This is executed by the auctioneer.
     public fun update_auction<T: key + store>(auction: &mut Auction<T>, bid: Bid, _ctx: &mut TxContext) {
-
         let Bid { id, bidder, auction_id, coin } = bid;
         ID::delete(id);
 
-        assert!(ID::inner(&auction.id) == &auction_id, WRONG_AUCTION);
+        assert!(ID::inner(&auction.id) == &auction_id, EWRONG_AUCTION);
         if (Option::is_none(&auction.funds)) {
             // first bid
             Option::fill(&mut auction.funds, coin);
@@ -114,8 +135,7 @@ module Basics::Auction {
         let Auction { id, to_sell, funds, highest_bidder } = auction;
         ID::delete(id);
 
-        if (Option::is_some<Coin<ACOIN>>(&funds)) {
-
+        if (Option::is_some<Coin<GAS>>(&funds)) {
             // bids have been placed - send the funds to the item owner
             let prev_funds = Option::extract(&mut funds);
             Transfer::transfer(prev_funds, highest_bidder);
@@ -128,8 +148,5 @@ module Basics::Auction {
         // owner (highest_bidder can represent both depending on
         // whether there were any bids or not)
         Transfer::transfer(to_sell, highest_bidder);
-
     }
-
-
 }

@@ -3,15 +3,14 @@ module Basics::AuctionTests {
     use Std::Vector;
 
     use Sui::Coin::{Self, Coin};
+    use Sui::GAS::GAS;
     use Sui::ID::{Self, VersionedID};
     use Sui::TestScenario::Self;
-    use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
 
-    use Basics::Auction::{Self, ACOIN, Auction, Bid};
+    use Basics::Auction::{Self, Auction, Bid};
 
-    // Everything went well!
-    const SUCCESS: u64 = 0;
+    const WRONG_ITEM_VALUE: u64 = 1;
 
     // Example of an object type that could be sold at an auction.
     struct SomeItemToSell has key, store {
@@ -23,15 +22,11 @@ module Basics::AuctionTests {
     // be available in Sui genesis state (e.g., mints and distributes
     // coins to users).
     fun init(ctx: &mut TxContext, bidders: vector<address>) {
-        let treasury_cap = Coin::create_currency(Auction::coin_type(), ctx);
-
         while (!Vector::is_empty(&bidders)) {
             let bidder = Vector::pop_back(&mut bidders);
-            let coin = Coin::mint(100, &mut treasury_cap, ctx);
-            Coin::transfer<ACOIN>(coin, bidder);
+            let coin = Coin::mint_for_testing(100, ctx);
+            Coin::transfer<GAS>(coin, bidder);
         };
-
-        Transfer::transfer(treasury_cap, TxContext::sender(ctx));
     }
 
     #[test]
@@ -71,7 +66,7 @@ module Basics::AuctionTests {
         // a transaction by the first bidder to create an put a bid
         TestScenario::next_tx(scenario, &bidder1);
         {
-            let coin = TestScenario::remove_object<Coin<ACOIN>>(scenario);
+            let coin = TestScenario::remove_object<Coin<GAS>>(scenario);
 
             Auction::bid(coin, auction_id, auctioneer, TestScenario::ctx(scenario));
         };
@@ -85,14 +80,13 @@ module Basics::AuctionTests {
             Auction::update_auction(&mut auction, bid, TestScenario::ctx(scenario));
 
             TestScenario::return_object(scenario, auction);
-
         };
         // a transaction by the second bidder to create an put a bid (a
         // bid will fail as it has the same value as that of the first
         // bidder's)
         TestScenario::next_tx(scenario, &bidder2);
         {
-            let coin = TestScenario::remove_object<Coin<ACOIN>>(scenario);
+            let coin = TestScenario::remove_object<Coin<GAS>>(scenario);
 
             Auction::bid(coin, auction_id, auctioneer, TestScenario::ctx(scenario));
         };
@@ -106,7 +100,6 @@ module Basics::AuctionTests {
             Auction::update_auction(&mut auction, bid, TestScenario::ctx(scenario));
 
             TestScenario::return_object(scenario, auction);
-
         };
 
         // a transaction by the auctioneer to end auction
@@ -121,10 +114,8 @@ module Basics::AuctionTests {
         TestScenario::next_tx(scenario, &bidder1);
         {
             let acquired_item = TestScenario::remove_object<SomeItemToSell>(scenario);
-            assert!(acquired_item.value == 42, SUCCESS);
+            assert!(acquired_item.value == 42, WRONG_ITEM_VALUE);
             TestScenario::return_object(scenario, acquired_item);
         };
-
     }
-
 }
