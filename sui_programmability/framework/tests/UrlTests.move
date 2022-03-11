@@ -16,7 +16,7 @@ module Sui::UrlTests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = EHASH_LENGTH_MISMATCH)]
     fun test_malformed_hash() {
         // url strings are not currently validated
         let url_str = ASCII::string(x"414243454647");
