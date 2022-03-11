@@ -19,7 +19,7 @@ how (e.g.) a fiat-backed stablecoin would work.
 
 ## Games
 
-The [Games](../../../sui_programmability/examples/games) example let's you try out and modify toy games built on top of Sui! These include classic Tic Tac Toe
+The [Games](../../../sui_programmability/examples/games) example lets you try out and modify toy games built on top of Sui! These include classic Tic Tac Toe
 and various versions of an adventure game (Hero).
 
 ## NFTs
