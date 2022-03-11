@@ -2,8 +2,9 @@
 title: About Sui
 ---
 
- Sui is the first layer 1 blockchain designed from the ground up to enable creators and developers to build experiences
- that cater for the next billion users in crypto.
+Sui is a high performance, horizontally-scalable blockchain with no theoretical limits utilizing extremely low computation resources per
+transaction. It is designed from the ground up to facilitate instant settlement, delivering the high throughput, low latency, and low cost
+needed to power applications for billions of users.
  
 With existing platforms, users pay a huge tax as network usage increases due to limited throughput. This results in terrible user experiences:
 
