@@ -17,6 +17,8 @@ Sui is written in Rust, and we are using Cargo to build and manage the dependenc
 As a prerequisite, you will need to [install cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) 
 in order to build and install Sui on your machine.
 
+Check out the [Sui GitHub](https://github.com/MystenLabs/sui) repository.
+
 To install the `sui` and `wallet` binaries, use the following commands.
 ```shell
 $ cargo install --git ssh://git@github.com/MystenLabs/sui.git --bin sui --bin wallet
@@ -25,13 +27,12 @@ or
 ```shell
 $ cargo install --path <Path to Sui project>/sui --bin wallet --bin sui
 ```
-If you have already checked out the Sui GitHub repository.
 
-This will install `sui` and `wallet` binaries in `~/.cargo/bin`directory, and can be executed directly.
+This will install `sui` and `wallet` binaries in `~/.cargo/bin`directory that can be executed directly.
 
 ## Genesis
 ```shell
-$ sui genesis
+sui genesis
 ```
 NOTE: For logs, set `RUST_LOG=debug` before invoking `./sui genesis`.
 
@@ -146,8 +147,8 @@ The following commands are supported by the wallet:
     `gas`            Obtain all gas objects owned by the address
     `help`           Prints this message or the help of the given subcommand(s)
     `merge-coin`     Merge two coin objects into one coin
-    `new-address`    Generate new address and keypair
-    `object`         Get obj info
+    `new-address`    Generate new address and key-pair
+    `object`         Get object info
     `objects`        Obtain all objects owned by the address
     `publish`        Publish Move modules
     `split-coin`     Split a coin object into multiple coins
@@ -155,7 +156,7 @@ The following commands are supported by the wallet:
     `transfer`       Transfer an object
 Use `help <command>` to see more information on each command.
 
-The wallet can be started in two mode - interactive shell or command line mode.
+The wallet can be started in two modes: interactive shell or command line interface.
 
 ### Interactive shell
 
@@ -175,20 +176,20 @@ The wallet config file path defaults to `./wallet.conf` if not
 specified.
 
 The Sui interactive wallet supports the following shell functionality:
-* #### Command History
-  The `history` command can be used to print out the interactive shell's command history, 
-you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next match from history. 
-History search is also supported using Ctrl-R.
-* #### Tab completion
+* Command History
+  The `history` command can be used to print the interactive shell's command history; 
+  you can also use Up, Down or Ctrl-P, Ctrl-N to navigate previous or next matches from history. 
+  History search is also supported using Ctrl-R.
+* Tab completion
   Tab completion is supported for all commands using Tab and Ctrl-I keys.
-* #### Environment variable substitution
-  The wallet shell will substitute inputs prefixed `$` with environment variables, 
-you can use the `env` command to print out the entire list of variables and 
-use `echo` to preview the substitution without invoking any commands.  
+* Environment variable substitution
+  The wallet shell will substitute inputs prefixed with `$` with environment variables, 
+  you can use the `env` command to print out the entire list of variables and 
+  use `echo` to preview the substitution without invoking any commands.  
 
 ### Command line mode
 
-The wallet can also be used without the interactive shell, which can be usefully if 
+The wallet can also be used without the interactive shell, which can be useful if 
 you want to pipe the output of the wallet to another application or invoke wallet 
 commands using scripts.
 
