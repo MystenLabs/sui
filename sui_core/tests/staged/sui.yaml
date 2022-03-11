@@ -386,7 +386,7 @@ SuiError:
       ConflictingTransaction:
         STRUCT:
           - pending_transaction:
-              TYPENAME: Transaction
+              TYPENAME: TransactionDigest
     15:
       ErrorWhileProcessingTransaction: UNIT
     16:

@@ -365,7 +365,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     ///
     pub fn set_transaction_lock(
         &self,
-        mutable_input_objects: &[ObjectRef],
+        owned_input_objects: &[ObjectRef],
         signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
         let tx_digest = signed_transaction.transaction.digest();
@@ -374,7 +374,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .batch()
             .insert_batch(
                 &self.transaction_lock,
-                mutable_input_objects
+                owned_input_objects
                     .iter()
                     .map(|obj_ref| (obj_ref, Some(tx_digest))),
             )?
@@ -385,39 +385,41 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
 
         // This is the critical region: testing the locks and writing the
         // new locks must be atomic, and not writes should happen in between.
+        let mut need_write = false;
         {
             // Aquire the lock to ensure no one else writes when we are in here.
             // MutexGuards are unlocked on drop (ie end of this block)
-            let _mutexes = self.acquire_locks(mutable_input_objects);
+            let _mutexes = self.acquire_locks(owned_input_objects);
 
-            let locks = self.transaction_lock.multi_get(mutable_input_objects)?;
+            let locks = self.transaction_lock.multi_get(owned_input_objects)?;
 
-            for (obj_ref, lock) in mutable_input_objects.iter().zip(locks) {
+            for lock in locks {
                 // The object / version must exist, and therefore lock initialized.
                 let lock = lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
 
                 if let Some(previous_tx_digest) = lock {
                     if previous_tx_digest != tx_digest {
-                        let prev_transaction = self
-                            .get_transaction_lock(obj_ref)?
-                            .expect("If we have a lock we should have a transaction.");
-
                         warn!(prev_tx_digest =? previous_tx_digest,
                               cur_tx_digest =? tx_digest,
                               "Conflicting transaction!  Lock state changed in unexpected way");
-                        // TODO: modify ConflictingTransaction to only return the transaction digest here.
                         return Err(SuiError::ConflictingTransaction {
-                            pending_transaction: prev_transaction.transaction,
+                            pending_transaction: previous_tx_digest,
                         });
                     }
+                } else {
+                    need_write |= true;
                 }
             }
 
-            // Atomic write of all locks
-            lock_batch.write().map_err(|e| e.into())
+            if need_write {
+                // Atomic write of all locks
+                lock_batch.write()?
+            }
 
             // Implicit: drop(_mutexes);
         } // End of critical region
+
+        Ok(())
     }
 
     /// Updates the state resulting from the execution of a certificate.
