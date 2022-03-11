@@ -8,6 +8,7 @@ use ed25519_dalek::Digest;
 use hex::FromHex;
 use rand::Rng;
 use serde::{de::Error as _, Deserialize, Serialize};
+use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
@@ -182,7 +183,10 @@ impl TxContext {
     /// serialize/deserialize and this is the reason why this method
     /// consumes the other contex..
     pub fn update_state(&mut self, other: TxContext) -> Result<(), SuiError> {
-        if self.sender != other.sender || self.digest != other.digest {
+        if self.sender != other.sender
+            || self.digest != other.digest
+            || other.ids_created < self.ids_created
+        {
             return Err(SuiError::InvalidTxUpdate);
         }
         self.ids_created = other.ids_created;
@@ -195,6 +199,13 @@ impl TxContext {
             &SuiAddress::random_for_testing_only(),
             TransactionDigest::random(),
         )
+    }
+
+    /// A function that lists all IDs created by this TXContext
+    pub fn recreate_all_ids(&self) -> HashSet<ObjectID> {
+        (0..self.ids_created)
+            .map(|seq| self.digest().derive_id(seq))
+            .collect()
     }
 }
 
