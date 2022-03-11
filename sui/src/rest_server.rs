@@ -1,42 +1,42 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use dropshot::{endpoint, Query, TypedBody};
-use dropshot::{
-    ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
-    HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
-};
-use hyper::StatusCode;
-use move_core_types::identifier::Identifier;
-use move_core_types::parser::parse_type_tag;
-use move_core_types::value::MoveStructLayout;
-use serde_json::json;
-use sui::config::{Config, GenesisConfig, NetworkConfig, WalletConfig};
-use sui::sui_commands;
-use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
-use sui::wallet_commands::{SimpleTransactionSigner, WalletContext};
-use sui_types::base_types::*;
-use sui_types::committee::Committee;
-
-use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
+
+use dropshot::{endpoint, Query, TypedBody};
+use dropshot::{
+    ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
+    HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
+};
+use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
+use hyper::StatusCode;
+use move_core_types::identifier::Identifier;
+use move_core_types::parser::parse_type_tag;
+use move_core_types::value::MoveStructLayout;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use tokio::task::{self, JoinHandle};
+use tracing::{error, info};
+
+use sui::config::{AuthorityInfo, Config, GenesisConfig, NetworkConfig, WalletConfig};
+use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
+use sui::keystore::KeystoreType;
+use sui::sui_commands;
+use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
+use sui::wallet_commands::{SimpleTransactionSigner, WalletContext};
+use sui_types::base_types::*;
+use sui_types::committee::Committee;
 use sui_types::event::Event;
 use sui_types::messages::{ExecutionStatus, TransactionEffects};
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
-use tokio::task::{self, JoinHandle};
-use tracing::{error, info};
-
-use std::sync::{Arc, Mutex};
-use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 
 const REST_SERVER_PORT: u16 = 5000;
 const REST_SERVER_ADDR_IPV4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
@@ -96,7 +96,6 @@ async fn main() -> Result<(), String> {
  */
 struct ServerContext {
     documentation: serde_json::Value,
-    genesis_config_path: String,
     wallet_config_path: String,
     network_config_path: String,
     authority_db_path: String,
@@ -111,7 +110,6 @@ impl ServerContext {
     pub fn new(documentation: serde_json::Value) -> ServerContext {
         ServerContext {
             documentation,
-            genesis_config_path: String::from("genesis.conf"),
             wallet_config_path: String::from("wallet.conf"),
             network_config_path: String::from("./network.conf"),
             authority_db_path: String::from("./authorities_db"),
@@ -199,17 +197,17 @@ async fn genesis(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<GenesisResponse>, HttpError> {
     let server_context = rqctx.context();
-    let genesis_config_path = &server_context.genesis_config_path;
+    //let genesis_config_path = &server_context.genesis_config_path;
     let network_config_path = &server_context.network_config_path;
-    let wallet_config_path = &server_context.wallet_config_path;
+    //let wallet_config_path = &server_context.wallet_config_path;
 
-    let mut network_config = NetworkConfig::read_or_create(&PathBuf::from(network_config_path))
-        .map_err(|error| {
-            custom_http_error(
-                StatusCode::CONFLICT,
-                format!("Unable to read network config: {error}"),
-            )
-        })?;
+    let network_config_path = PathBuf::from(network_config_path);
+    let network_config = NetworkConfig::read_or_create(&network_config_path).map_err(|error| {
+        custom_http_error(
+            StatusCode::CONFLICT,
+            format!("Unable to read network config: {error}"),
+        )
+    })?;
 
     if !network_config.authorities.is_empty() {
         return Err(custom_http_error(
@@ -218,46 +216,56 @@ async fn genesis(
         ));
     }
 
-    let working_dir = network_config.config_path().parent().unwrap().to_owned();
-    let genesis_conf = GenesisConfig::default_genesis(&working_dir.join(genesis_config_path))
-        .map_err(|error| {
-            custom_http_error(
-                StatusCode::CONFLICT,
-                format!("Unable to create default genesis configuration: {error}"),
-            )
-        })?;
+    let working_dir = network_config_path.parent().unwrap().to_owned();
+    let genesis_conf = GenesisConfig::default_genesis(&working_dir).map_err(|error| {
+        custom_http_error(
+            StatusCode::CONFLICT,
+            format!("Unable to create default genesis configuration: {error}"),
+        )
+    })?;
 
-    let wallet_path = working_dir.join(wallet_config_path);
-    // TODO: Rest service should use `ClientAddressManager` directly instead of using the wallet context.
-    let mut wallet_config =
-        WalletConfig::create(&working_dir.join(wallet_path)).map_err(|error| {
-            custom_http_error(
-                StatusCode::CONFLICT,
-                format!("Wallet config was unable to be created: {error}"),
-            )
-        })?;
-    // Need to use a random id because rocksdb locks on current process which
-    // means even if the directory is deleted the lock will remain causing an
-    // IO Error when a restart is attempted.
-    let client_db_path = format!("client_db_{:?}", ObjectID::random());
-
-    if let GatewayType::Embedded(config) = wallet_config.gateway {
-        wallet_config.gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
-            db_folder_path: working_dir.join(&client_db_path),
-            ..config
-        })
-    }
-
-    *server_context.client_db_path.lock().unwrap() = client_db_path;
-
-    sui_commands::genesis(&mut network_config, genesis_conf, &mut wallet_config)
-        .await
-        .map_err(|err| {
+    let (network_config, accounts, keystore) =
+        sui_commands::genesis(genesis_conf).await.map_err(|err| {
             custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("Genesis error: {:?}", err),
             )
         })?;
+
+    let keystore_path = working_dir.join("wallet.key");
+    keystore.save(&keystore_path).map_err(|err| {
+        custom_http_error(
+            StatusCode::FAILED_DEPENDENCY,
+            format!("Genesis error: {:?}", err),
+        )
+    })?;
+    // TODO: Rest service should use `ClientAddressManager` directly instead of using the wallet context.
+    // Need to use a random id because rocksdb locks on current process which
+    // means even if the directory is deleted the lock will remain causing an
+    // IO Error when a restart is attempted.
+    let client_db_path = format!("client_db_{:?}", ObjectID::random());
+    *server_context.client_db_path.lock().unwrap() = client_db_path.clone();
+
+    let authorities = network_config
+        .authorities
+        .iter()
+        .map(|info| AuthorityInfo {
+            name: *info.key_pair.public_key_bytes(),
+            host: info.host.clone(),
+            base_port: info.port,
+        })
+        .collect();
+
+    let wallet_config = WalletConfig {
+        accounts,
+        keystore: KeystoreType::File(keystore_path),
+        gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
+            authorities,
+            db_folder_path: working_dir.join(&client_db_path),
+            ..Default::default()
+        }),
+    };
+    //let wallet_path = working_dir.join(wallet_config_path);
 
     Ok(HttpResponseOk(GenesisResponse {
         wallet_config: json!(wallet_config),
@@ -269,7 +277,7 @@ async fn genesis(
 Start servers with the specified configurations from the genesis endpoint.
 
 Note: This is a temporary endpoint that will no longer be needed once the
-network has been started on testnet or mainnet.
+network has been started on testnet or main-net.
  */
 #[endpoint {
     method = POST,
@@ -358,18 +366,16 @@ async fn sui_start(
             }));
     }
 
-    let wallet_config_path = &server_context.wallet_config_path;
-
-    let wallet_config =
-        WalletConfig::read_or_create(&PathBuf::from(wallet_config_path)).map_err(|error| {
-            custom_http_error(
-                StatusCode::CONFLICT,
-                format!("Unable to read wallet config: {error}"),
-            )
-        })?;
+    let wallet_config_path = PathBuf::from(&server_context.wallet_config_path);
+    let wallet_config = WalletConfig::read_or_create(&wallet_config_path).map_err(|error| {
+        custom_http_error(
+            StatusCode::CONFLICT,
+            format!("Unable to read wallet config: {error}"),
+        )
+    })?;
 
     let addresses = wallet_config.accounts.clone();
-    let mut wallet_context = WalletContext::new(wallet_config).map_err(|error| {
+    let mut wallet_context = WalletContext::new(&wallet_config_path).map_err(|error| {
         custom_http_error(
             StatusCode::CONFLICT,
             format!("Can't create new wallet context: {error}"),

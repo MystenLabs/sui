@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::anyhow;
@@ -16,7 +16,7 @@ use sui_adapter::adapter::generate_package_id;
 use sui_adapter::genesis;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
-use sui_types::base_types::{SequenceNumber, TxContext};
+use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
 use sui_types::committee::Committee;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
@@ -25,47 +25,90 @@ use crate::config::{
     AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, WalletConfig,
 };
 use crate::gateway::{EmbeddedGatewayConfig, GatewayType};
-use crate::keystore::KeystoreType;
+use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub enum SuiCommand {
     /// Start sui network.
     #[structopt(name = "start")]
-    Start,
+    Start {
+        #[structopt(long, default_value = "./network.conf")]
+        config: PathBuf,
+    },
     #[structopt(name = "genesis")]
     Genesis {
+        #[structopt(long, default_value = ".")]
+        working_dir: PathBuf,
         #[structopt(long)]
         config: Option<PathBuf>,
     },
 }
 
 impl SuiCommand {
-    pub async fn execute(&self, config: &mut NetworkConfig) -> Result<(), anyhow::Error> {
+    pub async fn execute(&self) -> Result<(), anyhow::Error> {
         match self {
-            SuiCommand::Start => start_network(config).await,
-            SuiCommand::Genesis { config: path } => {
-                // Network config has been created by this point, safe to unwrap.
-                let working_dir = config.config_path().parent().unwrap();
+            SuiCommand::Start { config } => start_network(config).await,
+            SuiCommand::Genesis {
+                working_dir,
+                config: path,
+            } => {
+                let network_path = working_dir.join("network.conf");
+                let wallet_path = working_dir.join("wallet.conf");
+                let keystore_path = working_dir.join("wallet.key");
+                let db_folder_path = working_dir.join("client_db");
+
+                if let Ok(config) = NetworkConfig::read(&network_path) {
+                    if !config.authorities.is_empty() {
+                        return Err(anyhow!("Cannot run genesis on a existing network, please delete network config file and try again."));
+                    }
+                }
+
                 let genesis_conf = if let Some(path) = path {
+                    // unwrap is ok here because the path exist
                     GenesisConfig::read(path)?
                 } else {
-                    GenesisConfig::default_genesis(&working_dir.join("genesis.conf"))?
+                    GenesisConfig::default_genesis(working_dir)?
                 };
-                let wallet_path = working_dir.join("wallet.conf");
-                let mut wallet_config = WalletConfig::create(&wallet_path)?;
-                wallet_config.keystore = KeystoreType::File(working_dir.join("wallet.key"));
-                wallet_config.gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
-                    db_folder_path: working_dir.join("client_db"),
-                    ..Default::default()
-                });
-                genesis(config, genesis_conf, &mut wallet_config).await
+
+                let (network_config, accounts, keystore) = genesis(genesis_conf).await?;
+                info!("Network genesis completed.");
+                network_config.write(&network_path)?;
+                info!("Network config file is stored in {:?}.", network_path);
+
+                keystore.save(&keystore_path)?;
+                info!("Wallet keystore is stored in {:?}.", keystore_path);
+
+                let authorities = network_config
+                    .authorities
+                    .iter()
+                    .map(|info| AuthorityInfo {
+                        name: *info.key_pair.public_key_bytes(),
+                        host: info.host.clone(),
+                        base_port: info.port,
+                    })
+                    .collect();
+
+                let wallet_config = WalletConfig {
+                    accounts,
+                    keystore: KeystoreType::File(keystore_path),
+                    gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
+                        db_folder_path,
+                        authorities,
+                        ..Default::default()
+                    }),
+                };
+
+                wallet_config.write(&wallet_path)?;
+                info!("Wallet config file is stored in {:?}.", wallet_path);
+                Ok(())
             }
         }
     }
 }
 
-async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
+async fn start_network(config_path: &Path) -> Result<(), anyhow::Error> {
+    let config = NetworkConfig::read(config_path)?;
     if config.authorities.is_empty() {
         return Err(anyhow!(
             "No authority configured for the network, please run genesis."
@@ -109,57 +152,37 @@ async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
 }
 
 pub async fn genesis(
-    config: &mut NetworkConfig,
     genesis_conf: GenesisConfig,
-    wallet_config: &mut WalletConfig,
-) -> Result<(), anyhow::Error> {
-    if !config.authorities.is_empty() {
-        return Err(anyhow!("Cannot run genesis on a existing network, please delete network config file and try again."));
-    }
-
-    let mut voting_right = BTreeMap::new();
-    let mut authority_info = Vec::new();
-
+) -> Result<(NetworkConfig, Vec<SuiAddress>, SuiKeystore), anyhow::Error> {
     info!(
         "Creating {} new authorities...",
         genesis_conf.authorities.len()
     );
 
+    let mut network_config = NetworkConfig::default();
+    let mut voting_right = BTreeMap::new();
+
     for authority in genesis_conf.authorities {
         voting_right.insert(*authority.key_pair.public_key_bytes(), authority.stake);
-        authority_info.push(AuthorityInfo {
-            name: *authority.key_pair.public_key_bytes(),
-            host: authority.host.clone(),
-            base_port: authority.port,
-        });
-        config.authorities.push(authority);
+        network_config.authorities.push(authority);
     }
 
-    let mut new_addresses = Vec::new();
+    let mut addresses = Vec::new();
     let mut preload_modules: Vec<Vec<CompiledModule>> = Vec::new();
     let mut preload_objects = Vec::new();
 
-    let new_account_count = genesis_conf
-        .accounts
-        .iter()
-        .filter(|acc| acc.address.is_none())
-        .count();
+    info!("Creating accounts and gas objects...",);
 
-    info!(
-        "Creating {} account(s) and gas objects...",
-        new_account_count
-    );
-
-    let mut keystore = wallet_config.keystore.init()?;
-
+    let mut keystore = SuiKeystore::default();
     for account in genesis_conf.accounts {
         let address = if let Some(address) = account.address {
             address
         } else {
-            let address = keystore.add_random_key()?;
-            new_addresses.push(address);
-            address
+            keystore.add_random_key()?
         };
+
+        addresses.push(address);
+
         for object_conf in account.gas_objects {
             let new_object = Object::with_id_owner_gas_coin_object_for_testing(
                 object_conf.object_id,
@@ -203,46 +226,25 @@ pub async fn genesis(
 
             info!("Loaded package [{}] from {:?}.", package_id, path);
             // Writing package id to network.conf for user to retrieve later.
-            config.loaded_move_packages.push((path, package_id));
+            network_config.loaded_move_packages.push((path, package_id));
             preload_modules.push(modules)
         }
     }
 
     let committee = Committee::new(voting_right);
-    for authority in &config.authorities {
+    for authority in &network_config.authorities {
         make_server_with_genesis_ctx(
             authority,
             &committee,
             preload_modules.clone(),
             &preload_objects,
-            config.buffer_size,
+            network_config.buffer_size,
             &mut genesis_ctx.clone(),
         )
         .await?;
     }
 
-    if let GatewayType::Embedded(config) = &wallet_config.gateway {
-        wallet_config.gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
-            db_folder_path: config.db_folder_path.clone(),
-            authorities: authority_info,
-            ..Default::default()
-        });
-    }
-
-    wallet_config.accounts = new_addresses;
-
-    info!("Network genesis completed.");
-    config.save()?;
-    info!(
-        "Network config file is stored in {:?}.",
-        config.config_path()
-    );
-    wallet_config.save()?;
-    info!(
-        "Wallet config file is stored in {:?}.",
-        wallet_config.config_path()
-    );
-    Ok(())
+    Ok((network_config, addresses, keystore))
 }
 
 pub async fn make_server(

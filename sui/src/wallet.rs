@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use colored::Colorize;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
+use sui::shell::{install_shell_plugins, AsyncHandler, CommandStructure, Shell};
 use tracing::error;
 use tracing_subscriber::EnvFilter;
 
@@ -65,13 +66,11 @@ async fn main() -> Result<(), anyhow::Error> {
     app = app.unset_setting(AppSettings::NoBinaryName);
     let options: ClientOpt = ClientOpt::from_clap(&app.get_matches());
     let wallet_conf_path = options.config;
-    let config =
-        WalletConfig::read_or_create(&wallet_conf_path).expect("Unable to read wallet config");
-    let addresses = config.accounts.clone();
-    let mut context = WalletContext::new(config)?;
+
+    let mut context = WalletContext::new(&wallet_conf_path)?;
 
     // Sync all accounts on start up.
-    for address in addresses {
+    for address in context.config.accounts.clone() {
         WalletCommands::SyncClientState { address }
             .execute(&mut context)
             .await?;
