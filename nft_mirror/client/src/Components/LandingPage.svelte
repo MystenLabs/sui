@@ -16,7 +16,9 @@
     let isweb3Enabled = typeof window.ethereum !== 'undefined'
 
     //Check if wallect is connected, get connected wallet
-    $walletAddress = isweb3Enabled ? window.ethereum.selectedAddress : false
+    $walletAddress = isweb3Enabled ?  window.ethereum.selectedAddress : false
+    //"0x09dbc4a902199bbe7f7ec29b3714731786f2e878" : false
+    // window.ethereum.selectedAddress : false
 
     let isloading: boolean = false
     $:error = false
@@ -58,7 +60,8 @@
     }
     onMount(async ()=> {
         isweb3Enabled = typeof window.ethereum !== 'undefined'
-        $walletAddress = isweb3Enabled ? window.ethereum.selectedAddress : false
+        $walletAddress = isweb3Enabled ?  window.ethereum.selectedAddress : false
+        //  window.ethereum.selectedAddress : false
 
         /// trigger if metamask is installed
         if(typeof window.ethereum !== 'undefined'){
@@ -73,9 +76,6 @@
             $walletAddress  = accounts[0]
         })
     }
-    
-    
-        
     
 </script>
 <!-- svelte-ignore non-top-level-reactive-declaration -->

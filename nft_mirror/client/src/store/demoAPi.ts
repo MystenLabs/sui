@@ -18,207 +18,150 @@ export const fetchDataNFTDemo = async (wallectAddress:string) => {
         const demoNFTsData = {
             "results": [
                 {
-                "token": {
-                    "contract_address": "0x090f688f0c11a8671c47d833af3cf965c30d3c35",
-                    "name": "Deadfrenz Lab Access Pass (DF)",
-                    "token_id": "0x02",
-                    "media_uri": "ipfs://QmPrEMTsZWst1YzALnKzC3MeA9Qcc8uS1n8zUbNRg41NQA"
-                },
-                "claim_status": "none"
-                },
-                {
-                "token": {
-                    "contract_address": "0x090f688f0c11a8671c47d833af3cf965c30d3c35",
-                    "name": "Deadfrenz Lab Access Pass",
-                    "token_id": "0x05",
-                    "media_uri": "ipfs://QmPrEMTsZWst1YzALnKzC3MeA9Qcc8uS1n8zUbNRg41NQA"
-                },
-                "claim_status": "none"
+                    "token": {
+                        "contract_address": "0x226bf5293692610692e2c996c9875c914d2a7f73",
+                        "name": "RTFKT Space Pod",
+                        "token_id": "0x05",
+                        "media_uri": "ipfs://QmYLKT7uM1psPr8j7fH8dzSfm4ga5gmTnf72eqbPcism5u"
+                    },
+                    "claim_status": "none"
                 },
                 {
-                "token": {
-                    "contract_address": "0x1657e2200216ebacb92475b69d6bc0fdad48b068",
-                    "name": "#2519",
-                    "token_id": "0x00000000000000000000000000000000000000000000000000000000000009d7",
-                    "media_uri": "ipfs://QmQ86mg5LSCS4j9AjQ6BQ5Q2yqtoGGVofjcZHdhMzZnuMb/2519.png"
-                },
-                "claim_status": "none"
-                },
-                {
-                "token": {
-                    "contract_address": "0x2acab3dea77832c09420663b0e1cb386031ba17b",
-                    "name": "DeadFellaz #3022",
-                    "token_id": "0x0000000000000000000000000000000000000000000000000000000000000bce",
-                    "media_uri": "https://gateway.pinata.cloud/ipfs/QmVHjkV7JaJSgBExJ1drnQHozqcQWioTyWKwphxzoMKBnA"
-                },
-                "claim_status": "none"
+                    "token": {
+                        "contract_address": "0x3fe1a4c1481c8351e91b64d5c398b159de07cbc5",
+                        "name": "SupDuck 4207",
+                        "token_id": "0x000000000000000000000000000000000000000000000000000000000000106f",
+                        "media_uri": "https://ipfs.io/ipfs/Qmc4m3zdxpKNEkEAKanuZjfxVGLwnVGVABz9iJyriBGza3"
+                    },
+                    "claim_status": "none"
                 },
                 {
-                "token": {
-                    "contract_address": "0x2acab3dea77832c09420663b0e1cb386031ba17b",
-                    "name": "DeadFellaz #9992",
-                    "token_id": "0x0000000000000000000000000000000000000000000000000000000000002708",
-                    "media_uri": "https://gateway.pinata.cloud/ipfs/QmXZ8nLPtQvQpJMY3tVDYdmg1xXW1Cs8FCsY93nCBCyzc6"
-                },
-                "claim_status": "none"
-                },
-                {
-                "token": {
-                    "contract_address": "0x4274675c3d8b3767e099288efb486f6838a3e532",
-                    "name": "",
-                    "token_id": "0x000000000000000000000000000000000000000000000000000000000000003e"
-                },
-                "claim_status": "none"
+                    "token": {
+                        "contract_address": "0x42f1654b8eeb80c96471451b1106b63d0b1a9fe1",
+                        "name": "Chubbipig #2464",
+                        "token_id": "0x00000000000000000000000000000000000000000000000000000000000009a0",
+                        "media_uri": "https://chubbifren.s3.us-east-2.amazonaws.com/images/2464.png"
+                    },
+                    "claim_status": "none"
                 },
                 {
-                "token": {
-                    "contract_address": "0x495f947276749ce646f68ac8c248420045cb7b5e",
-                    "name": "Picasso Punk #0660",
-                    "token_id": "0xb953b2f5a30b9897ef58a495051b373039f033af000000000003bc0000000001",
-                    "media_uri": "https://lh3.googleusercontent.com/uVfEWkPYeeONt2HUx2CMmV4IfY3AkJ4Qy4sVda6GONpfAB7JZbSETOmdt63Mv6-2ntX6hMgGH_NLkTMLwTsHJ-ZYtN-C-TCB-_WOlrI"
-                },
-                "claim_status": "none"
-                },
-                {
-                "token": {
-                    "contract_address": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
-                    "name": "cheapbills.eth",
-                    "token_id": "0x31c825ef8a880f4aa861382921a318c967f13dcd3c9e16e14bb70e643a3f748a"
-                },
-                "claim_status": "none"
+                    "token": {
+                        "contract_address": "0x42f1654b8eeb80c96471451b1106b63d0b1a9fe1",
+                        "name": "Chubbicat #7016",
+                        "token_id": "0x0000000000000000000000000000000000000000000000000000000000001b68",
+                        "media_uri": "https://chubbifren.s3.us-east-2.amazonaws.com/images/7016.png"
+                    },
+                    "claim_status": "none"
                 },
                 {
-                "token": {
-                    "contract_address": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
-                    "name": "casinow.eth",
-                    "token_id": "0x52da1b72df839d786f4afa9175d9f4f6a4793fe58004edc9cfabff4597736875"
-                },
-                "claim_status": "none"
-                },
-                {
-                "token": {
-                    "contract_address": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
-                    "name": "holypunks.eth",
-                    "token_id": "0x58190089d60ccdc4f357e40964ad64f9fefebc0750a9738f799218532f96d65a"
-                },
-                "claim_status": "none"
+                    "token": {
+                        "contract_address": "0x49cf6f5d44e70224e2e23fdcdd2c053f30ada28b",
+                        "name": "CloneX #18172",
+                        "token_id": "0x00000000000000000000000000000000000000000000000000000000000007b0",
+                        "media_uri": "https://clonex-assets.rtfkt.com/images/1968.png"
+                    },
+                    "claim_status": "none"
                 },
                 {
-                "token": {
-                    "contract_address": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
-                    "name": "zens.eth",
-                    "token_id": "0x97895b56545b866473f6a124320f4c536c45bc1faae6b9bb8590658272031896"
-                },
-                "claim_status": "none"
-                },
-                {
-                "token": {
-                    "contract_address": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
-                    "name": "diorofficial.eth",
-                    "token_id": "0xd5b62f0c95f48dee226c56eeb37bd210df71b30926910a65009ee3a8f332a651"
-                },
-                "claim_status": "none"
+                    "token": {
+                        "contract_address": "0x49cf6f5d44e70224e2e23fdcdd2c053f30ada28b",
+                        "name": "CloneX #15493",
+                        "token_id": "0x0000000000000000000000000000000000000000000000000000000000000fd6",
+                        "media_uri": "https://clonex-assets.rtfkt.com/images/4054.png"
+                    },
+                    "claim_status": "none"
                 },
                 {
-                "token": {
-                    "contract_address": "0x60e4d786628fea6478f785a6d7e704777c86a7c6",
-                    "name": "",
-                    "token_id": "0x000000000000000000000000000000000000000000000000000000000000625b",
-                    "media_uri": "ipfs://QmThDrFXh2UU4wCdwZbZwY6Fz4RB65wF2gJCKeJQMq9CRf"
-                },
-                "claim_status": "none"
-                },
-                {
-                "token": {
-                    "contract_address": "0x7afeda4c714e1c0a2a1248332c100924506ac8e6",
-                    "name": "FVCK_CRYSTAL// #2319",
-                    "token_id": "0x000000000000000000000000000000000000000000000000000000000000090f",
-                    "media_uri": "https://arweave.net/sPXrw3NhMbdVEc1pfK-UPrTrzfBMilTqclBu-gDyM98"
-                },
-                "claim_status": "none"
+                    "token": {
+                        "contract_address": "0x49cf6f5d44e70224e2e23fdcdd2c053f30ada28b",
+                        "name": "CloneX #4029",
+                        "token_id": "0x00000000000000000000000000000000000000000000000000000000000039b6",
+                        "media_uri": "https://clonex-assets.rtfkt.com/images/14774.png"
+                    },
+                    "claim_status": "none"
                 },
                 {
-                "token": {
-                    "contract_address": "0x84f6c4b892547a6acee98a3954bc2089f97c43f3",
-                    "name": "Lil Brain #1352",
-                    "token_id": "0x0000000000000000000000000000000000000000000000000000000000000547",
-                    "media_uri": "https://ipfs.io/ipfs/QmT8YW4MgZy1Jz4rtqweFzcATpL2QRnK1E1j4wC1DYkgJ6"
-                },
-                "claim_status": "none"
-                },
-                {
-                "token": {
-                    "contract_address": "0xa7d8d9ef8d8ce8992df33d8b8cf4aebabd5bd270",
-                    "name": "Para Bellum  #10",
-                    "token_id": "0x000000000000000000000000000000000000000000000000000000000f8e8b4a",
-                    "media_uri": "https://media.artblocks.io/261000010.png"
-                },
-                "claim_status": "none"
+                    "token": {
+                        "contract_address": "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
+                        "name": "mmxyz.eth",
+                        "token_id": "0x6f42c1cec21e7d78597c924b7a2e263ede6059fc656716f0222efe39eeb63d85"
+                    },
+                    "claim_status": "none"
                 },
                 {
-                "token": {
-                    "contract_address": "0xa7d8d9ef8d8ce8992df33d8b8cf4aebabd5bd270",
-                    "name": "Para Bellum  #819",
-                    "token_id": "0x000000000000000000000000000000000000000000000000000000000f8e8e73",
-                    "media_uri": "https://media.artblocks.io/261000819.png"
-                },
-                "claim_status": "none"
-                },
-                {
-                "token": {
-                    "contract_address": "0xba30e5f9bb24caa003e9f2f0497ad287fdf95623",
-                    "name": "",
-                    "token_id": "0x0000000000000000000000000000000000000000000000000000000000000021",
-                    "media_uri": "ipfs://QmU9WfhRD5FJ29N7ERCrrwRXCyP775Lq5GetmwydreNCP7"
-                },
-                "claim_status": "none"
+                    "token": {
+                        "contract_address": "0x5ab81e38b14faa61a699af1bccd1fe5ecab20fae",
+                        "name": "Alpha Finance 2.0 x APY.Vision NFT",
+                        "token_id": "0x20",
+                        "media_uri": "ipfs://ipfs/QmebhVHaTiMKvdpX6dFR7w8PffiLcWao31myrKiEbuFVXQ/image.png"
+                    },
+                    "claim_status": "none"
                 },
                 {
-                "token": {
-                    "contract_address": "0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d",
-                    "name": "",
-                    "token_id": "0x0000000000000000000000000000000000000000000000000000000000001e59",
-                    "media_uri": "ipfs://QmUVxjmmecZLnHq7TDW2oYcX3QZPn5mZFkqFLv1WijavgQ"
-                },
-                "claim_status": "none"
-                },
-                {
-                "token": {
-                    "contract_address": "0xc9301506425869dd79d50545481f48c07aa1ad25",
-                    "name": "Dead Decor #100",
-                    "token_id": "0x0000000000000000000000000000000000000000000000000000000000000064",
-                    "media_uri": "https://deaddecor.co/storage/rooms/Jsw1SVeyM2SpNc1t3P91dzWVZtCFMYS6JTma26ZF.png"
-                },
-                "claim_status": "none"
+                    "token": {
+                        "contract_address": "0x86825dfca7a6224cfbd2da48e85df2fc3aa7c4b1",
+                        "name": "RTFKT - MNLTH 🗿",
+                        "token_id": "0x01",
+                        "media_uri": "ipfs://QmWYzoYLgsQpr294KywUiHA8EwfPn5AgaN4RFgqDmSGuaq"
+                    },
+                    "claim_status": "none"
                 },
                 {
-                "token": {
-                    "contract_address": "0xda22422592ee3623c8d3c40fe0059cdecf30ca79",
-                    "name": "",
-                    "token_id": "0x00000000000000000000000000000000000000000000000000000000000031f7"
-                },
-                "claim_status": "none"
-                },
-                {
-                "token": {
-                    "contract_address": "0xf70074f1cb0aa67917bbecf5476a6778e2056671",
-                    "name": "Dead Heart",
-                    "token_id": "0x00",
-                    "media_uri": "ipfs://QmQKQFGb5NZm8TVHKYkK3rrdY3BAfaQH267iVif2jYeDUW"
-                },
-                "claim_status": "none"
+                    "token": {
+                        "contract_address": "0x933492b6b7038a7e4f14b64defe40463f9bc3508",
+                        "name": "",
+                        "token_id": "0x00000000000000000000000000000000000000000000000000000000000004bf"
+                    },
+                    "claim_status": "none"
                 },
                 {
-                "token": {
-                    "contract_address": "0xfdb3e529814afc5df5a5faf126989683b17daef9",
-                    "name": "Doodlesaur #5442",
-                    "token_id": "0x0000000000000000000000000000000000000000000000000000000000001542",
-                    "media_uri": "https://storage.googleapis.com/doodlesaurs/images/p4wg8siorp6s.png"
+                    "token": {
+                        "contract_address": "0x97597002980134bea46250aa0510c9b90d87a587",
+                        "name": "Runner #6005",
+                        "token_id": "0x0000000000000000000000000000000000000000000000000000000000001775",
+                        "media_uri": "https://img.chainrunners.xyz/api/v1/tokens/png/6005"
+                    },
+                    "claim_status": "none"
                 },
-                "claim_status": "none"
+                {
+                    "token": {
+                        "contract_address": "0xb7be4001bff2c5f4a61dd2435e4c9a19d8d12343",
+                        "name": "RTFKT LOOT Pod",
+                        "token_id": "0x01",
+                        "media_uri": "ipfs://QmZMUiC6G2kRRyk7oCacVsuqcornwVM6LdPEWibyAc8xMu"
+                    },
+                    "claim_status": "none"
+                },
+                {
+                    "token": {
+                        "contract_address": "0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d",
+                        "name": "",
+                        "token_id": "0x00000000000000000000000000000000000000000000000000000000000022ae",
+                        "media_uri": "ipfs://QmedGpmBhyB6RbPcKM8Y8B8EyPBEKMpaMj5BNPTFfjtKAM"
+                    },
+                    "claim_status": "none"
+                },
+                {
+                    "token": {
+                        "contract_address": "0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d",
+                        "name": "",
+                        "token_id": "0x00000000000000000000000000000000000000000000000000000000000022e9",
+                        "media_uri": "ipfs://QmYjEDqhb9dtoiJShEaUaVceoTa7hf25dhH8JYxjtF3HJ6"
+                    },
+                    "claim_status": "none"
+                },
+                {
+                    "token": {
+                        "contract_address": "0xed5af388653567af2f388e6224dc7c4b3241c544",
+                        "name": "Azuki #9289",
+                        "token_id": "0x0000000000000000000000000000000000000000000000000000000000002449",
+                        "media_uri": "https://ikzttp.mypinata.cloud/ipfs/QmYDvPAXtiJg7s8JdRBSLWdgSphQdac8j1YuQNNxcGE1hg/9289.png"
+                    },
+                    "claim_status": "none"
                 }
             ]
         }
+       
         await resolveAfter2Seconds()
        /// format data from api
         return mapDatafromApi(demoNFTsData.results);
@@ -229,15 +172,13 @@ export const fetchDataNFTDemo = async (wallectAddress:string) => {
 
 
 export const signNFTDemo = async (suiWalletAddress) => {
-    console.log(suiWalletAddress)
-  
     try {
-        console.log(suiWalletAddress)
+
         await resolveAfter2Seconds();
         /// ramdomly throw error! to test error handling 
-        if([true, false][Math.round(Math.random())]){
+        /*if([true, false][Math.round(Math.random())]){
             throw new Error("Signing failed")
-        }
+        }*/
         return"0x21fbf0696d5e0aa2ef41a2b4ffb623bcaf070461d61cf7251c74161f82fec3a4370854bc0a34b3ab487c1bc021cd318c734c51ae29374f2beb0e6f2dd49b4bf41c"
     } catch (error) {
         throw error
@@ -254,13 +195,13 @@ export const mintSuiNFTDemo = async (signature) => {
             "source_chain": "ethereum",
             "source_contract_address": "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D",
             "source_token_id": "101",
-            "sui_explorer_link": "http:127.0.0.1:8000/BC4CA0EdA7647A8a"
+            "sui_explorer_link": "https://djgd7fpxio1yh.cloudfront.net/objects/7bc832ec31709638cd8d9323e90edf332gff4389"
         }
     try {
         /// ramdomly throw error! to test error handling
-        if([true, false][Math.round(Math.random())]){
+       /*if([true, false][Math.round(Math.random())]){
             throw new Error("Validation failed")
-        }
+        } */ 
         return success
     } catch (error) {
         throw ( {

@@ -49,23 +49,56 @@
         try {
             /// format the signature
             // {sui_address:xxx, eth_contract_address, token_id:xx, minter, timestamp}
-            let signObj = {
+            let signObj =  {
+                domain: {
+                    // Ethereum Mainnet
+                    chainId: 1,
+                    // Give a user friendly name to the specific contract you are signing for.
+                    name: 'SuiDrop',
+                    // Just let's you know the latest version
+                    version: '1',
+                },
+
                 message: {
-                    sui_address: suiwalledAdr,
-                    eth_contract_address: data.eth_contract_address,
-                    token_id: data.token_id,
-                    minter:$walletAddress,
-                    timestamp: Date.now()
-                }
-            } 
-            return startSigning(signObj)
+                    source_chain: "ethereum",
+                    source_contract_address: data.contract_address,
+                    source_token_id: '8937',
+                    source_owner_address: $walletAddress,
+                    destination_sui_address: '0xa5e6dbcf33730ace6ec8b400ff4788c1f150ff7e'   
+                 },
+                // Refers to the keys of the *types* object below.
+                primaryType: 'ClaimRequest',
+                types: {
+                    // TODO: Clarify if EIP712Domain refers to the domain the contract is hosted on
+                    EIP712Domain: [
+                        { name: 'name', type: 'string' },
+                        { name: 'version', type: 'string' },
+                        { name: 'chainId', type: 'uint256' }
+                    ],
+                    
+                    // Refer to PrimaryType
+                    ClaimRequest: [
+                        { name: 'source_chain', type: 'string' },
+                        { name: 'source_contract_address', type: 'string' },
+                        { name: 'source_token_id', type: 'string' },
+                        { name: 'source_owner_address', type: 'string' },
+                        { name: 'destination_sui_address', type: 'string' }
+                    ],
+                },
+                 
+                
+            }
+            const params = [$walletAddress, signObj];
+            console.log(signObj)
+            return startSigning($walletAddress, JSON.stringify(signObj))
         } catch (err) {
             error  =  err.message
             throw err
         }
     }
     const mintSuiNFTFn = async (signature:string) => {
-        console.log(signature)
+
+
         try {
             /// TODO: martch data to the format 
             const reqObj = {
@@ -121,7 +154,7 @@
                                 <div class="container">
                                     <div class="section-heading heading-light">
                                         <ResponseCheckMark responsetype="success" />
-                                        <h2 class="title"> Minted on Sui network</h2>
+                                        <h2 class="title">Minted on Sui network</h2>
                                         <a href="{response.sui_explorer_link}" target="_blank" class="axil-btn btn-large btn-fill-white">View in Explorer</a>
                                         <button  class="axil-btn btn-fill-white btn-large err-btn" on:click="{changeSelectedNFT}">Mint another NFT</button>
                                     </div>

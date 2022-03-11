@@ -14,7 +14,8 @@ const fetchNFTData = async (wallectAddress:string) => {
         if(!wallectAddress) throw new Error("Wallet address is required")
         const urlAddress = `${config.url}nfts/ethereum/${wallectAddress}`;
         const response:any = await fetch(urlAddress);
-        return mapDatafromApi(response.json().results);
+        const data = await response.json();
+        return mapDatafromApi(data.results);
     } catch (err) {
         throw err
     } 
@@ -41,26 +42,28 @@ const mintSuiNFT = async (reqObj) => {
             },
             body: JSON.stringify(reqObj)
         })
-
-        return response.json()
+        const data = await response.json();
+        return data.json()
     } catch (err) {
         throw err
     }
 }
-const signNFT = async (signObj) => {
+const signNFT = async (from:string, msgParams:any) => {
     try {
-        let nftJson = JSON.stringify(signObj)
-        const signature = await window.ethereum.request({ method: 'personal_sign', params: [ nftJson ] })
+         const signature = await window.ethereum.request({ method: 'eth_signTypedData_v4', params: [  from, msgParams ] })
+        // return signature
         return signature
     } catch (err) {
+        console.log(err)
         throw err
     }
 }
 
-export const startSigning = async (signObj) => {
-    try {
 
-        const response:any = await config.demo ? signNFTDemo(signObj) : signNFT(signObj);
+export const startSigning = async (from, msgParams) => {
+    try {
+        //To show
+        const response:any = await config.demo ? signNFTDemo(msgParams) : signNFT(from, msgParams);
         return response
     } catch (err) {
         throw err

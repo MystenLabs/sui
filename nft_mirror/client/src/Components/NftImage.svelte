@@ -8,7 +8,7 @@
         <img src={nftData.media_uri} alt={nftData.name} />
       </div>
       <div class="content">
-        <h4 class="title">{nftData.name}</h4>
+        <h4 class="title ">{nftData.name}</h4>
         {#if nftData.claim_status !== "none"}
           <div>
             <span class="claimedNFT">Claimed </span>
@@ -22,8 +22,10 @@
 <style lang="scss">
     @import "../styles/variables.scss";
     ._nft-img {
+      max-width: 260px;
         margin: auto;
         .thumbnail {
+          
             img {
                 object-fit: cover;
                // max-height: 250px;
@@ -35,6 +37,9 @@
             text-align: left;
             .title {
                 font-size: 20px;
+                overflow-wrap: break-word;
+                word-wrap: break-word;
+                hyphens: auto;
                 color: $sui__black;
             }
         }
@@ -46,5 +51,7 @@
     }
     :global( ._nft-item .thumbnail){
         margin: auto;
+        max-width: 16vw;
+       
     }
 </style>

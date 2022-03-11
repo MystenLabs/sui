@@ -31,7 +31,9 @@
             if(nft_list.length > 0) {
                 return nft_list
             }
-            nft_list = await fetchNFTDataByAddress(address)
+            // demo use only
+            const demoWallet = '0x09dbc4a902199bbe7f7ec29b3714731786f2e878'//'0xd6647Eeec0c8D810C546f2ab8e025D4664d833Ac'
+            nft_list = await fetchNFTDataByAddress(demoWallet)
             return nft_list
         } catch (error) {
             throw error
@@ -113,6 +115,7 @@
             font-size: 40px;
         }
         ._nft-item{
+            margin: 10px 0;
             cursor: pointer;
         }
         
