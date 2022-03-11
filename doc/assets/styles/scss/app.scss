@@ -53,3 +53,18 @@ select:focus {
 ._sui_side_menu_header{
   font-size: 16px;
 }
+
+._suiMD{
+  &.nuxt-content{
+    ul {
+      padding-left: 16px;
+    }
+  }
+}
+.post__content a{
+  border-bottom: 0;
+  &:hover{
+    border-bottom: 1px solid $sui__blue;
+    color: $sui__blue;
+  }
+}

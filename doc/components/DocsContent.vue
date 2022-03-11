@@ -75,8 +75,13 @@
 <script lang="ts">
 import { Component, Vue, Prop } from 'nuxt-property-decorator'
 import { RootState } from '~/store'
+import AppCopyButton from './AppCopyButton.vue'
 
-@Component
+@Component({
+  components: {
+    AppCopyButton,
+  }
+})
 export default class DocsContent extends Vue {
   @Prop({ required: true }) readonly document!: object
   @Prop({ required: true }) readonly editLink!: string
@@ -112,6 +117,15 @@ export default class DocsContent extends Vue {
         $this.$scrollToElment(hash.replace('#', ''))
       }, 100)
     }
+
+    setTimeout(() => {
+      const blocks:any = document.getElementsByClassName('nuxt-content-highlight')
+      for (const block of blocks) {
+        const CopyButton = Vue.extend(AppCopyButton)
+        const component = new CopyButton().$mount()
+        block.appendChild(component.$el)
+      }
+    }, 100)
   }
 }
 </script>
