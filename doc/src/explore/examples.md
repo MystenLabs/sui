@@ -6,7 +6,7 @@ Find sample Sui implementations in the [sui_programmability/examples](../../../s
 
 ## Basics
 
-Use the [Basics](../../../sui_programmability/examples/basics) example to explore heavily commented objects and a simple exchange.
+Use the [Basics](../../../sui_programmability/examples/basics) example to explore object creation, update, and exchange.
 
 ## DeFi
 
