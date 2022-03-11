@@ -109,7 +109,7 @@ export default {
       file.data = file.data
         .replace(/<table>/g, '<div class="suiTable"><table>')
         .replace(/<\/table>/g, tableClosing)
-        .replace(/.md/g, '/')
+        // .replace(/.md/g, '/')
     },
     'content:file:beforeInsert': (document) => {
       if (document.extension === '.md') {
