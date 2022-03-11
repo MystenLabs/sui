@@ -2,7 +2,7 @@
 title: Examples of Sui Smart Contracts
 ---
 
-Find sample Sui implementations in the [sui_programmability/examples](../../../sui_programmability/examples) directory. Here is a rundown of existing examples.
+Find sample Sui smart contract implementations in the [sui_programmability/examples](../../../sui_programmability/examples) directory. Here is a rundown of existing examples.
 
 ## Basics
 
