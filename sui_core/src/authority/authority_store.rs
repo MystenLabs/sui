@@ -314,6 +314,20 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         self.sequenced.multi_get(&keys[..]).map_err(SuiError::from)
     }
 
+    /// Read a lock for a specific (transaction, shared object) pair.
+    pub fn all_shared_locks(
+        &self,
+        transaction_digest: TransactionDigest,
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
+        Ok(self
+            .sequenced
+            .iter()
+            .skip_to(&(transaction_digest, ObjectID::ZERO))?
+            .take_while(|((tx, _objid), _ver)| *tx == transaction_digest)
+            .map(|((_tx, objid), ver)| (objid, ver))
+            .collect())
+    }
+
     // Methods to mutate the store
 
     /// Insert an object
