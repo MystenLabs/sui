@@ -3,6 +3,7 @@
 
 use crate::base_types::{AuthorityName, TransactionDigest};
 use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable};
+use roaring::RoaringBitmap;
 use serde::{Deserialize, Serialize};
 
 pub type TxSequenceNumber = u64;
@@ -23,14 +24,15 @@ impl BcsSignable for TransactionBatch {}
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Default, Debug, Serialize, Deserialize)]
 pub struct AuthorityBatch {
     // TODO: Add epoch
-    /// The next sequence number after the end of this batch
-    pub next_sequence_number: u64,
+    /// The highest sequence number in this batch
+    pub highest_sequence_number: u64,
 
-    /// The first sequence number of this batch
-    pub initial_sequence_number: u64,
+    /// The lowest sequence number in this batch
+    pub lowest_sequence_number: u64,
 
-    // The number of items in the batch
-    pub size: u64,
+    // A compressed representation of the sequence numbers in this batch
+    // We use the X-platform standard roaring bitmap format, see https://github.com/RoaringBitmap/RoaringFormatSpec
+    pub seqnum_bitmap: Vec<u8>,
 
     /// The digest of the previous batch, if there is one
     pub previous_digest: Option<BatchDigest>,
@@ -53,9 +55,9 @@ impl AuthorityBatch {
         let transactions_digest = sha3_hash(&to_hash);
 
         AuthorityBatch {
-            next_sequence_number: 0,
-            initial_sequence_number: 0,
-            size: 0,
+            highest_sequence_number: 0,
+            lowest_sequence_number: 0,
+            seqnum_bitmap: Vec::default(),
             previous_digest: None,
             transactions_digest,
         }
@@ -71,19 +73,47 @@ impl AuthorityBatch {
         transaction_vec.sort_by(|(s_a, _d_a), (s_b, _d_b)| s_a.cmp(s_b));
         debug_assert!(!transaction_vec.is_empty());
 
-        let initial_sequence_number = transaction_vec[0].0 as u64;
-        let next_sequence_number = (transaction_vec[transaction_vec.len() - 1].0 + 1) as u64;
+        let lowest_sequence_number = transaction_vec[0].0 as u64;
+        let highest_sequence_number = (transaction_vec[transaction_vec.len() - 1].0) as u64;
+
+        let mut rb = RoaringBitmap::new();
+        // insert the seq nums into the bitmap
+        transaction_vec
+            .iter()
+            .map(|(seqnum, _)| seqnum - lowest_sequence_number)
+            .for_each(|s| {
+                let insertee =
+                    u32::try_from(s).expect("batch contains more than u32::MAX elements!");
+                rb.insert(insertee);
+            });
+        let mut bitmap_bytes = Vec::default();
+        rb.serialize_into(&mut bitmap_bytes)
+            .expect("Bitmap serialization failed!"); // the Vec is growable
 
         let to_hash = TransactionBatch(transaction_vec);
         let transactions_digest = sha3_hash(&to_hash);
 
         AuthorityBatch {
-            next_sequence_number,
-            initial_sequence_number,
-            size: transactions.len() as u64,
+            highest_sequence_number,
+            lowest_sequence_number,
+            seqnum_bitmap: bitmap_bytes,
             previous_digest: Some(previous_batch.digest()),
             transactions_digest,
         }
+    }
+
+    pub fn seqnums(&self) -> Vec<u64> {
+        let rb = RoaringBitmap::deserialize_from(&self.seqnum_bitmap[..])
+            .expect("bitmap deserialization failed!");
+        rb.iter()
+            .map(|value| self.lowest_sequence_number + value as u64)
+            .collect()
+    }
+
+    pub fn size(&self) -> u64 {
+        let rb = RoaringBitmap::deserialize_from(&self.seqnum_bitmap[..])
+            .expect("bitmap deserialization failed!");
+        rb.len()
     }
 }
 

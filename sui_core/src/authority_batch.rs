@@ -128,7 +128,7 @@ impl BatchManager {
             .db
             .batches
             .iter()
-            .skip_prior_to(&TxSequenceNumber::MAX)?
+            .skip_prior_to(&(TxSequenceNumber::MAX..=TxSequenceNumber::MAX).into())?
             .next()
         {
             Some((_, last_batch)) => last_batch.batch,
@@ -136,17 +136,19 @@ impl BatchManager {
                 // Make a batch at zero
                 let zero_batch =
                     SignedBatch::new(AuthorityBatch::initial(), &*secret, authority_name);
-                self.db.batches.insert(&0, &zero_batch)?;
+                self.db.batches.insert(&(0..=0).into(), &zero_batch)?;
                 zero_batch.batch
             }
         };
 
         // See if there are any transactions in the database not in a batch
+        // Note: whether this proceeds with batches recording TXes in order, or batches which can be out-of-order,
+        // this can only detect TXes written past the last batch items, rather than past TXes not yet written to a batch
         let transactions: Vec<_> = self
             .db
             .executed_sequence
             .iter()
-            .skip_to(&last_batch.next_sequence_number)?
+            .skip_to(&last_batch.highest_sequence_number)?
             .collect();
 
         if !transactions.is_empty() {
@@ -156,10 +158,12 @@ impl BatchManager {
                 &*secret,
                 authority_name,
             );
-            self.db.batches.insert(
-                &last_signed_batch.batch.next_sequence_number,
-                &last_signed_batch,
-            )?;
+            let lowest_snum = last_signed_batch.batch.lowest_sequence_number;
+            let highest_snum = last_signed_batch.batch.highest_sequence_number;
+
+            self.db
+                .batches
+                .insert(&(lowest_snum..=highest_snum).into(), &last_signed_batch)?;
             last_batch = last_signed_batch.batch;
         }
 
@@ -230,9 +234,14 @@ impl BatchManager {
                     &*secret,
                     authority_name,
                 );
+
+                // index it: note there will never be any duplicates (there are no TX duplicates in the first place)
+                let lowest_snum = new_batch.batch.lowest_sequence_number;
+                let highest_snum = new_batch.batch.highest_sequence_number;
+
                 self.db
                     .batches
-                    .insert(&new_batch.batch.next_sequence_number, &new_batch)?;
+                    .insert(&(lowest_snum..=highest_snum).into(), &new_batch)?;
 
                 // Send the update
                 let _ = self.tx_broadcast.send(UpdateItem::Batch(new_batch.clone()));

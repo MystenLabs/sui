@@ -10,7 +10,7 @@ use move_core_types::{
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     pin::Pin,
     sync::Arc,
 };
@@ -687,39 +687,40 @@ impl AuthorityState {
             ._database
             .batches_and_transactions(request.start, request.end)?;
 
-        let mut dq_batches = std::collections::VecDeque::from(batches);
-        let mut dq_transactions = std::collections::VecDeque::from(transactions);
-        let mut items = VecDeque::with_capacity(dq_batches.len() + dq_transactions.len());
-        let mut last_batch_next_seq = 0;
+        let highest_served_batch_tx = batches
+            .iter()
+            .map(|batch| batch.batch.highest_sequence_number)
+            .max()
+            .unwrap_or_default();
+        let mut dq_batches = VecDeque::from(batches);
+        let mut hm_transactions: HashMap<u64, TransactionDigest> =
+            transactions.into_iter().collect();
+        let mut items = VecDeque::with_capacity(dq_batches.len() + hm_transactions.len());
 
         // Send full historical data as [Batch - Transactions - Batch - Transactions - Batch].
         while let Some(current_batch) = dq_batches.pop_front() {
             // Get all transactions belonging to this batch and send them
-            loop {
-                // No more items or item too large for this batch
-                if dq_transactions.is_empty()
-                    || dq_transactions[0].0 >= current_batch.batch.next_sequence_number
-                {
-                    break;
+            for seqnum in current_batch.batch.seqnums() {
+                if let Some(current_transaction) = hm_transactions.remove_entry(&seqnum) {
+                    items.push_back(UpdateItem::Transaction(current_transaction));
+                } else {
+                    unreachable!(
+                        "Authority wrote a batch without having written the transactions for it!"
+                    )
                 }
-
-                let current_transaction = dq_transactions.pop_front().unwrap();
-                items.push_back(UpdateItem::Transaction(current_transaction));
             }
 
             // Now send the batch
-            last_batch_next_seq = current_batch.batch.next_sequence_number;
             items.push_back(UpdateItem::Batch(current_batch));
         }
 
         // whether we have sent everything requested, or need to start
         // live notifications.
-        let should_subscribe = request.end > last_batch_next_seq;
+        let should_subscribe = request.end > highest_served_batch_tx;
 
         // If any transactions are left they must be outside a batch
-        while let Some(current_transaction) = dq_transactions.pop_front() {
-            // Remember the last sequence sent
-            items.push_back(UpdateItem::Transaction(current_transaction));
+        for leftover_transaction in hm_transactions.into_iter() {
+            items.push_back(UpdateItem::Transaction(leftover_transaction));
         }
 
         Ok((items, should_subscribe))

@@ -20,9 +20,10 @@ AccountInfoResponse:
         TYPENAME: SuiAddress
 AuthorityBatch:
   STRUCT:
-    - next_sequence_number: U64
-    - initial_sequence_number: U64
-    - size: U64
+    - highest_sequence_number: U64
+    - lowest_sequence_number: U64
+    - seqnum_bitmap:
+        SEQ: U8
     - previous_digest:
         OPTION:
           TUPLEARRAY:

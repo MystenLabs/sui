@@ -44,7 +44,7 @@ async fn test_open_manager() {
             .await
             .expect("No error expected.");
 
-        assert_eq!(0, last_block.next_sequence_number);
+        assert_eq!(0, last_block.highest_sequence_number);
 
         // TEST 2: init from a db with a transaction not in the sequence makes a new block
         //         when we re-open the database.
@@ -67,7 +67,7 @@ async fn test_open_manager() {
             .await
             .expect("No error expected.");
 
-        assert_eq!(1, last_block.next_sequence_number);
+        assert_eq!(0, last_block.highest_sequence_number);
 
         // TEST 3: If the database contains out of order transactions we just make a block with gaps
         store
@@ -88,9 +88,9 @@ async fn test_open_manager() {
             .await
             .unwrap();
 
-        assert_eq!(last_block.next_sequence_number, 3);
-        assert_eq!(last_block.initial_sequence_number, 2);
-        assert_eq!(last_block.size, 1);
+        assert_eq!(last_block.highest_sequence_number, 2);
+        assert_eq!(last_block.lowest_sequence_number, 0);
+        assert_eq!(last_block.size(), 2);
     }
 }
 
@@ -336,7 +336,7 @@ async fn test_batch_store_retrieval() {
             .expect("Send to the channel.");
     }
 
-    // Add a few out of order transactions that should be ignored
+    // Add a few (10) out of order transactions
     // NOTE: gap between 104 and 110
     for i in 110u64..120 {
         inner_store
@@ -351,14 +351,13 @@ async fn test_batch_store_retrieval() {
     }
 
     // TEST 1: Get batches across boundaries
-
     let (batches, transactions) = store
         .batches_and_transactions(12, 34)
         .expect("Retrieval failed!");
 
-    assert_eq!(4, batches.len());
-    assert_eq!(10, batches.first().unwrap().batch.next_sequence_number);
-    assert_eq!(40, batches.last().unwrap().batch.next_sequence_number);
+    assert_eq!(3, batches.len());
+    assert_eq!(10, batches.first().unwrap().batch.lowest_sequence_number);
+    assert_eq!(39, batches.last().unwrap().batch.highest_sequence_number);
 
     assert_eq!(30, transactions.len());
 
@@ -367,9 +366,9 @@ async fn test_batch_store_retrieval() {
         .batches_and_transactions(54, 56)
         .expect("Retrieval failed!");
 
-    assert_eq!(2, batches.len());
-    assert_eq!(50, batches.first().unwrap().batch.next_sequence_number);
-    assert_eq!(60, batches.last().unwrap().batch.next_sequence_number);
+    assert_eq!(1, batches.len());
+    assert_eq!(50, batches.first().unwrap().batch.lowest_sequence_number);
+    assert_eq!(59, batches.last().unwrap().batch.highest_sequence_number);
 
     assert_eq!(10, transactions.len());
 
@@ -378,11 +377,9 @@ async fn test_batch_store_retrieval() {
         .batches_and_transactions(30, 50)
         .expect("Retrieval failed!");
 
-    println!("{:?}", batches);
-
-    assert_eq!(3, batches.len());
-    assert_eq!(30, batches.first().unwrap().batch.next_sequence_number);
-    assert_eq!(50, batches.last().unwrap().batch.next_sequence_number);
+    assert_eq!(2, batches.len());
+    assert_eq!(30, batches.first().unwrap().batch.lowest_sequence_number);
+    assert_eq!(49, batches.last().unwrap().batch.highest_sequence_number);
 
     assert_eq!(20, transactions.len());
 
@@ -393,11 +390,11 @@ async fn test_batch_store_retrieval() {
 
     println!("{:?}", batches);
 
-    assert_eq!(2, batches.len());
-    assert_eq!(90, batches.first().unwrap().batch.next_sequence_number);
-    assert_eq!(100, batches.last().unwrap().batch.next_sequence_number);
+    assert_eq!(1, batches.len());
+    assert_eq!(90, batches.first().unwrap().batch.lowest_sequence_number);
+    assert_eq!(99, batches.last().unwrap().batch.highest_sequence_number);
 
-    assert_eq!(15, transactions.len());
+    assert_eq!(25, transactions.len());
 
     // TEST 5: Both past the end
     let (batches, transactions) = store
@@ -406,10 +403,8 @@ async fn test_batch_store_retrieval() {
 
     println!("{:?}", batches);
 
-    assert_eq!(1, batches.len());
-    assert_eq!(100, batches.first().unwrap().batch.next_sequence_number);
-
-    assert_eq!(5, transactions.len());
+    assert_eq!(0, batches.len());
+    assert_eq!(0, transactions.len());
 
     // When we close the sending channel we also also end the service task
     drop(_send);

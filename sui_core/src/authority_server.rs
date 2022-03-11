@@ -116,7 +116,9 @@ impl AuthorityServer {
                 Ok(item) => {
                     let seq = match &item {
                         UpdateItem::Transaction((seq, _)) => *seq,
-                        UpdateItem::Batch(signed_batch) => signed_batch.batch.next_sequence_number,
+                        UpdateItem::Batch(signed_batch) => {
+                            signed_batch.batch.highest_sequence_number
+                        }
                     };
 
                     // Do not re-send transactions already sent from the database
@@ -137,7 +139,7 @@ impl AuthorityServer {
                     // We always stop sending at batch boundaries, so that we try to always
                     // start with a batch and end with a batch to allow signature verification.
                     if let BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) = &response {
-                        if message_end < signed_batch.batch.next_sequence_number {
+                        if message_end < signed_batch.batch.highest_sequence_number {
                             break;
                         }
                     }

@@ -166,7 +166,7 @@ async fn test_subscription() {
             SerializedMessage::BatchInfoResp(resp) => match *resp {
                 BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                     num_batches += 1;
-                    if signed_batch.batch.next_sequence_number >= 34 {
+                    if signed_batch.batch.highest_sequence_number >= 34 {
                         break;
                     }
                 }
@@ -180,7 +180,7 @@ async fn test_subscription() {
         }
     }
 
-    assert_eq!(4, num_batches);
+    assert_eq!(3, num_batches);
     assert_eq!(30, num_transactions);
 
     // Test 2: Get subscription data
@@ -219,7 +219,7 @@ async fn test_subscription() {
             SerializedMessage::BatchInfoResp(resp) => match *resp {
                 BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                     num_batches += 1;
-                    if signed_batch.batch.next_sequence_number >= 112 {
+                    if signed_batch.batch.highest_sequence_number >= 112 {
                         break;
                     }
                 }
@@ -234,8 +234,8 @@ async fn test_subscription() {
         }
     }
 
-    assert_eq!(3, num_batches);
-    assert_eq!(20, num_transactions);
+    assert_eq!(2, num_batches);
+    assert_eq!(19, num_transactions);
 
     drop(tx);
     handle1.await.expect("Problem closing task");
