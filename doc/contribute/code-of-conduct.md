@@ -4,7 +4,7 @@
 Sui as an open source project encourages free discussion rooted in respect.
 We endeavor to always be mindful of others' perspectives and ask all
 fellow contributors to do the same. We welcome you to the Sui platform
-and ask you to help us grow it with relevant, on-point solutions.
+and ask you to help us grow it with relevant, on-point contributions.
 
 ## Our Pledge
 
