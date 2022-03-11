@@ -50,11 +50,13 @@ const mintSuiNFT = async (reqObj) => {
 }
 const signNFT = async (from:string, msgParams:any) => {
     try {
+        console.log(msgParams)
          const signature = await window.ethereum.request({ method: 'eth_signTypedData_v4', params: [  from, msgParams ] })
         // return signature
+        console.log(signature)
         return signature
     } catch (err) {
-        console.log(err)
+        console.log(err.message)
         throw err
     }
 }
@@ -62,8 +64,8 @@ const signNFT = async (from:string, msgParams:any) => {
 
 export const startSigning = async (from, msgParams) => {
     try {
-        //To show
-        const response:any = await config.demo ? signNFTDemo(msgParams) : signNFT(from, msgParams);
+        //To show config.demo ? signNFTDemo(msgParams) : 
+        const response:any = await signNFT(from, msgParams);
         return response
     } catch (err) {
         throw err
@@ -72,7 +74,8 @@ export const startSigning = async (from, msgParams) => {
 
 export const startMinting = async (reqObj) => {
     try {
-        const response:any = await config.demo ? mintSuiNFTDemo(reqObj) : mintSuiNFT(reqObj);
+        const response:any = mintSuiNFTDemo(reqObj)
+        /// await config.demo ? mintSuiNFTDemo(reqObj) : mintSuiNFT(reqObj);
         return response
     } catch (err) {
         throw err
