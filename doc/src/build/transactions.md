@@ -1,8 +1,10 @@
-# Transactions
+---
+title: Transactions
+---
 
 All updates to the Sui ledger happen via a transaction. This section describes the transaction types supported by Sui and explains how their execution changes the ledger.
 
-TODO: Define *Gas* and settle upon spelling and capitalization right here.
+TODO: Define *Gas* and settle upon spelling and capitalization right here. And fix all broken links here.
 
 ## Transaction metadata
 
