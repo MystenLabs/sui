@@ -1673,8 +1673,8 @@ async fn shared_object() {
 
     let shared_object_version = authority
         .db()
-        .sequenced(transaction_digest, shared_object_id)
-        .unwrap()
+        .sequenced(transaction_digest, &[shared_object_id])
+        .unwrap()[0]
         .unwrap();
     assert_eq!(shared_object_version, SequenceNumber::new());
 
@@ -1687,8 +1687,8 @@ async fn shared_object() {
 
     let shared_object_lock = authority
         .db()
-        .sequenced(transaction_digest, shared_object_id)
-        .unwrap();
+        .sequenced(transaction_digest, &[shared_object_id])
+        .unwrap()[0];
     assert!(shared_object_lock.is_none());
 
     let shared_object_version = authority

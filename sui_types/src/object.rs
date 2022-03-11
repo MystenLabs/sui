@@ -275,6 +275,10 @@ impl Owner {
             Owner::SharedMutable | Owner::SharedImmutable => true,
         }
     }
+
+    pub fn is_shared_mutable(&self) -> bool {
+        matches!(self, Owner::SharedMutable)
+    }
 }
 
 impl std::cmp::PartialEq<SuiAddress> for Owner {
