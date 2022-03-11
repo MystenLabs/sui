@@ -1,5 +1,6 @@
-
-# Contributor Covenant Code of Conduct
+---
+title: Sui Contributor Covenant Code of Conduct
+---
 
 Sui as an open source project encourages free discussion rooted in respect.
 We endeavor to always be mindful of others' perspectives and ask all
