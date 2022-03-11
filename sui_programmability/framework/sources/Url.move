@@ -19,7 +19,7 @@ module Sui::Url {
     }
 
     /// Represents an arbitrary URL plus an immutable commitment to the underlying
-    /// resource hash
+    /// resource hash. Clients rendering values of this type should fetch the resource at `url`, and then compare it against `resource_hash` using a to-be-defined Sui standard, and (if the two match) render the value using the `Url` standard.
     struct UrlCommitment has store, drop {
         url: Url,
         resource_hash: vector<u8>,
