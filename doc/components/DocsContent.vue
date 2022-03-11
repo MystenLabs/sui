@@ -41,6 +41,7 @@
         <div class="section-blog__wrapper-post">
           <article class="post">
             <div class="post__content">
+               <h1>{{ document.title }}</h1>
               <nuxt-content :document="document" class="_suiMD" />
             </div>
           </article>

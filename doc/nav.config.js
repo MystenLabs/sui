@@ -33,19 +33,16 @@ module.exports = {
       },
       {
         label: 'Terminology',
-        fileName: 'move',
+        fileName: 'learn/how-sui-works',
       },
       {
         label: 'Why Move?',
-        fileName: 'what-makes-sui-different',
+        fileName: 'learn/sui-move-diffs',
       },
-      {
-        label: 'Why Sui?',
-        fileName: 'what-makes-sui-different',
-      },
+
       {
         label: 'What Makes Sui Different?',
-        fileName: 'what-makes-sui-different',
+        fileName: 'learn/sui-compared',
       },
       {
         /// Items here are submenu items under the learn menu
@@ -53,44 +50,44 @@ module.exports = {
         items: [
           {
             label: 'Security',
-            fileName: 'sui-json',
+            fileName: 'learn/sui-compared',
           },
           {
             label: 'Storage',
-            fileName: 'sui-json',
+            fileName: 'learn/sui-compared',
           },
           {
             label: 'Limitations',
-            fileName: 'sui-json',
+            fileName: 'learn/sui-compared',
           },
         ],
       },
       {
         label: 'Sui White Paper',
-        fileName: 'what-makes-sui-different',
+        fileName: 'learn/how-sui-works',
       },
     ],
     build: [
       {
         label: 'Install',
-        fileName: 'what-makes-sui-different',
+        fileName: 'build/authorities',
       },
 
       {
         label: 'Smart Contracts with Move',
-        fileName: 'what-makes-sui-different',
+        fileName: 'build/move',
       },
       {
         label: 'Wallet',
-        fileName: 'wallet',
+        fileName: 'build/wallet',
       },
       {
         label: 'Objects',
-        fileName: 'object',
+        fileName: 'build/objects',
       },
       {
         label: 'Transactions',
-        fileName: 'transactions',
+        fileName: 'build/transactions',
       },
     ],
     explore: [
@@ -139,8 +136,8 @@ module.exports = {
       },
       {
         label: 'Code of Conduct',
-        link: 'https://www.google.com/',
-        external: true,
+        fileName: 'contribute/code-of-conduct',
+
       },
     ],
   },

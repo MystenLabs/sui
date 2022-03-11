@@ -78,6 +78,20 @@ export default {
     subFolders: true,
     exclude: [],
     fallback: '404.html',
+    async routes () {
+      const { $content } = require('@nuxt/content')
+      const files = await $content({ deep: true }).only(['path']).fetch()
+
+      return files.map(file => {
+       /*  const { path } = file
+        const splitPath = path.split('/')
+        if(splitPath.length > 1 && splitPath[splitPath.length - 1]  === 'index') {
+          return path.replace('/index', '')
+        }*/
+        // console.log(file)
+        return file.path === '/index' ? '/' : file.path
+      })
+    }
   },
 
   // Modules for dev and build (recommended): https://go.nuxtjs.dev/config-modules

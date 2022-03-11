@@ -13,7 +13,6 @@ import { MetaInfo } from 'vue-meta'
 
 @Component({
   layout: 'DevDocs',
-
   /// Dynamic pull markdown file based on Params slug regardless of the directory depth
   // asyncData hook (page context), server rendering
   async asyncData({ $content, params, error }: any): Promise<any> {
@@ -25,11 +24,11 @@ import { MetaInfo } from 'vue-meta'
           .map((key) => params[key])
           .join('/')
           .replace(/\/$/, '')
+      /// Fetch page content from markdown file based on Params slug
+       const path = `/${(params.pathMatch || 'index').replace(/\/$/, "")}`
+      const document = await $content(editUrl + path).fetch()
+      // await $content({ deep: true }).where({ path }).fetch()
 
-     /// Fetch page content from markdown file based on Params slug
-      const path = `/${(params.pathMatch || 'index').replace(/\/$/, "")}`
-
-      const [document] = await $content({ deep: true }).where({ path }).fetch()
 
       /// Get Previous and Next page Order by categoryOrder and itemOder
       const [prev, next]: any = await $content({ deep: true })
@@ -43,7 +42,7 @@ import { MetaInfo } from 'vue-meta'
       return {
         title: document.title,
         page_meta: {},
-        editLink: `https://github.com/MystenLabs/sui/tree/main/doc${editUrl}.md`,
+        editLink: `https://github.com/MystenLabs/sui/tree/main/doc${editUrl + path}.md`,
         document,
         prev,
         next,

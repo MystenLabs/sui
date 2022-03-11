@@ -16,15 +16,15 @@ export const siteConfig = {
         listItems: [
           {
             title: 'Getting Started',
-            link: '/docs/build/quick-start/',
+            link: '/learn/sui-move-diffs/',
           },
           {
             title: 'SDK Reference',
-            link: '/docs/general/about/',
+            link: '/learn/sui-move-diffs/',
           },
           {
             title: 'Prototypes',
-            link: '/docs/prototypes/Introduction/',
+            link: '/learn/sui-move-diffs/',
           },
         ],
       },
@@ -74,19 +74,19 @@ export const siteConfig = {
     menu: [
       {
         title: 'Learn',
-        link: '/authorities/',
+        link: '/learn/how-sui-works',
       },
       {
         title: 'Build',
-        link: '/move/',
+        link: '/build/',
       },
       {
         title: 'Explore',
-        link: '/key-concepts/',
+        link: '/explore/observability',
       },
       {
         title: 'Contribute',
-        link: '/key-concepts/',
+        link: '/contribute/code-of-conduct',
       },
       {
         title: 'Discord',
@@ -110,11 +110,11 @@ export const siteConfig = {
         sublist: [
           {
             name: 'What makes Sui different?',
-            url: '/what-makes-sui-different/',
+            url: '/learn/sui-move-diffs/',
           },
           {
             name: 'Wallet Quick Start',
-            url: '/wallet/',
+            url: '/build/wallet/',
           },
         ],
       },
@@ -123,11 +123,11 @@ export const siteConfig = {
         sublist: [
           {
             name: 'What makes Sui different?',
-            url: '/what-makes-sui-different/',
+            url: '/learn/sui-move-diffs/',
           },
           {
             name: 'Wallet Quick Start',
-            url: '/wallet/',
+            url: '/build/wallet/',
           },
         ],
       },
@@ -136,11 +136,11 @@ export const siteConfig = {
         sublist: [
           {
             name: 'What makes Sui different?',
-            url: '/what-makes-sui-different/',
+            url: '/learn/sui-move-diffs/',
           },
           {
             name: 'Wallet Quick Start',
-            url: '/wallet/',
+            url: '/build/wallet/',
           },
         ],
       },
@@ -158,11 +158,11 @@ export const siteConfig = {
         sublist: [
           {
             name: 'What makes Sui different?',
-            url: '/what-makes-sui-different/',
+            url: '/learn/sui-move-diffs/',
           },
           {
             name: 'Wallet Quick Start',
-            url: '/wallet/',
+            url: '/build/wallet/',
           },
         ],
       },
@@ -171,11 +171,11 @@ export const siteConfig = {
         sublist: [
           {
             name: 'What makes Sui different?',
-            url: '/what-makes-sui-different/',
+            url: '/learn/sui-move-diffs/',
           },
           {
             name: 'Wallet Quick Start',
-            url: '/wallet/',
+            url: '/build/wallet/',
           },
         ],
       },
