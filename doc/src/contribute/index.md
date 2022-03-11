@@ -1,4 +1,6 @@
-## Contributing to Sui
+---
+title: Contributing to Sui
+---
 
 To contribute, ensure you have the latest version of the codebase. To clone the repository, run the following:
 ```bash
