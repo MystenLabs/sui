@@ -7,8 +7,10 @@ Find terms used in Sui defined below. Where possible, we link to a canonical def
 
 ### Accumulator
 
-An [accumulator](https://en.wikipedia.org/wiki/Accumulator_(cryptography)) collects votes on transactions from authorities in Sui.
-The  accumulator enables transactions to be certified.
+An [accumulator](https://en.wikipedia.org/wiki/Accumulator_(cryptography)) makes sure the transaction is received by a quorum of authorities,
+collects a quorum of votes, submits the certificate to the authorities, and replies to the client. The accumulator enables transactions to be
+certified. Sui offers a Gateway service that can assume the role of accumulator and collect votes on transactions from authorities in Sui,
+saving end users bandwidth.
 
 
 ### Authority
