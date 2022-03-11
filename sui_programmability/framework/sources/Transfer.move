@@ -96,6 +96,16 @@ module Sui::Transfer {
         transfer(child, recipient)
     }
 
+    /// Delete the child object along with a ownership reference that shows this object
+    /// is owned by another object. Deleting both the child object and the reference
+    /// is safe because the ownership will also be destroyed, and hence there won't
+    /// be dangling reference to the child object through ownership.
+    public fun delete_child_object<T: key>(child: T, child_ref: ChildRef<T>) {
+        let ChildRef { parent_id: _, child_id } = child_ref;
+        assert!(&child_id == ID::id(&child), ECHILD_ID_MISMATCH);
+        delete_child_object_internal(child);
+    }
+
     /// Freeze `obj`. After freezing `obj` becomes immutable and can no
     /// longer be transferred or mutated.
     public native fun freeze_object<T: key>(obj: T);
@@ -112,4 +122,6 @@ module Sui::Transfer {
     public native fun share_object<T: key>(obj: T);
 
     native fun transfer_internal<T: key>(obj: T, recipient: address, to_object: bool);
+
+    native fun delete_child_object_internal<T: key>(child: T);
 }
