@@ -233,7 +233,7 @@ module Sui::Geniteam {
         );
 
         // Check if this is the right collection
-        assert!(Transfer::child_id(&farm.pet_monsters) == *ID::id(pet_monsters), EMONSTER_COLLECTION_NOT_OWNED_BY_FARM);
+        assert!(*Transfer::child_id(&farm.pet_monsters) == *ID::id(pet_monsters), EMONSTER_COLLECTION_NOT_OWNED_BY_FARM);
 
         // TODO: Decouple adding monster to farm from creating a monster.
         // Add it to the collection
@@ -243,7 +243,7 @@ module Sui::Geniteam {
     /// Create Farm cosmetic owned by player and add to its inventory
     public fun create_farm_cosmetics(player: &mut Player, inventory: &mut Collection::Collection, cosmetic_type: u8, ctx: &mut TxContext) {
         // Check if this is the right collection
-        assert!(Transfer::child_id(&player.inventory)
+        assert!(*Transfer::child_id(&player.inventory)
                     == *ID::id(inventory), EINVENTORY_NOT_OWNED_BY_PLAYER);
         
         // Create the farm cosmetic object
@@ -257,7 +257,7 @@ module Sui::Geniteam {
     public fun create_monster_cosmetics(player: &mut Player, inventory: &mut Collection::Collection, cosmetic_type: u8, ctx: &mut TxContext) {
         
         // Check if this is the right collection
-        assert!(Transfer::child_id(&player.inventory)
+        assert!(*Transfer::child_id(&player.inventory)
                     == *ID::id(inventory), EINVENTORY_NOT_OWNED_BY_PLAYER);
         
         // Create the farm cosmetic object
