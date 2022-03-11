@@ -32,6 +32,7 @@ const SUI: &str = "   _____       _    _       __      ____     __
 )]
 struct ClientOpt {
     #[structopt(long, global = true)]
+    /// Run wallet command without interactive shell
     no_shell: bool,
     /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
     #[structopt(long, default_value = "./wallet.conf")]
