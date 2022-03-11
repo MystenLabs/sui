@@ -25,6 +25,6 @@ To submit your pull request:
 ## Further reading
 
 * Learn [about Mysten Labs](https://mystenlabs.com/) the company on our public site.
-* Read the [Sui Smart Contract Platform](doc/paper/sui.pdf) white paper.
+* Read the [Sui Smart Contract Platform](../../paper/sui.pdf) white paper.
 * Find related [research papers](research-papers.md).
 * See and adhere to our [code of conduct](code-of-conduct.md).
