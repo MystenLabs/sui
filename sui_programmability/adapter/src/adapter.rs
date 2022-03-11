@@ -349,6 +349,7 @@ pub fn store_package_and_init_modules<
     // wrap the modules in an object, write it to the store
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
     let package_object = Object::new_package(modules, ctx.digest());
+    state_view.create_object_id(package_object.id());
     state_view.write_object(package_object);
 
     init_modules(state_view, vm, modules_to_init, ctx, gas_budget)
@@ -520,69 +521,91 @@ fn process_successful_execution<
     }
     // process events to identify transfers, freezes
     let mut gas_used = 0;
+    let mut gas_refund = 0;
     let tx_digest = ctx.digest();
-    let mut deleted_ids = HashMap::new();
-    let mut deleted_child_ids = HashSet::new();
     // newly_generated_ids contains all object IDs generated in this transaction.
     let newly_generated_ids = ctx.recreate_all_ids();
+    for id in newly_generated_ids.iter() {
+        state_view.create_object_id(*id);
+    }
     for e in events {
         let (recipient, event_type, type_, event_bytes) = e;
-        let result = match EventType::try_from(event_type as u8)
-            .expect("Safe because event_type is derived from an EventType enum")
-        {
-            EventType::TransferToAddress => handle_transfer(
-                Owner::AddressOwner(SuiAddress::try_from(recipient.as_slice()).unwrap()),
-                type_,
-                event_bytes,
-                tx_digest,
-                &mut by_value_objects,
-                &mut gas_used,
-                state_view,
-                &mut object_owner_map,
-            ),
-            EventType::FreezeObject => handle_transfer(
-                Owner::SharedImmutable,
-                type_,
-                event_bytes,
-                tx_digest,
-                &mut by_value_objects,
-                &mut gas_used,
-                state_view,
-                &mut object_owner_map,
-            ),
-            EventType::TransferToObject => handle_transfer(
-                Owner::ObjectOwner(ObjectID::try_from(recipient.borrow()).unwrap().into()),
-                type_,
-                event_bytes,
-                tx_digest,
-                &mut by_value_objects,
-                &mut gas_used,
-                state_view,
-                &mut object_owner_map,
-            ),
+        let event_type = EventType::try_from(event_type as u8)
+            .expect("Safe because event_type is derived from an EventType enum");
+        let result = match event_type {
+            EventType::TransferToAddress
+            | EventType::FreezeObject
+            | EventType::TransferToObject => {
+                let new_owner = match event_type {
+                    EventType::TransferToAddress => {
+                        Owner::AddressOwner(SuiAddress::try_from(recipient.as_slice()).unwrap())
+                    }
+                    EventType::FreezeObject => Owner::SharedImmutable,
+                    EventType::TransferToObject => {
+                        Owner::ObjectOwner(ObjectID::try_from(recipient.borrow()).unwrap().into())
+                    }
+                    _ => unreachable!(),
+                };
+                handle_transfer(
+                    new_owner,
+                    type_,
+                    event_bytes,
+                    tx_digest,
+                    &mut by_value_objects,
+                    &mut gas_used,
+                    state_view,
+                    &mut object_owner_map,
+                    &newly_generated_ids,
+                )
+            }
+            EventType::ShareObject => Err(SuiError::UnsupportedSharedObjectError),
             EventType::DeleteObjectID => {
                 // unwrap safe because this event can only be emitted from processing
                 // native call delete_id, which guarantees the type of the id.
                 let id: VersionedID = bcs::from_bytes(&event_bytes).unwrap();
+                let obj_id = id.object_id();
                 // We don't care about IDs that are generated in this same transaction
                 // but only to be deleted.
-                if !newly_generated_ids.contains(id.object_id()) {
-                    deleted_ids.insert(*id.object_id(), id.version());
+                if !newly_generated_ids.contains(obj_id) {
+                    if let Some(object) = by_value_objects.remove(id.object_id()) {
+                        // This object was in the input, and is being deleted. A normal deletion.
+                        debug_assert_eq!(object.version(), id.version());
+                        if matches!(object.owner, Owner::ObjectOwner { .. }) {
+                            // If an object is owned by another object, we are not allowed to directly delete the child
+                            // object because this could lead to a dangling reference of the ownership. Such
+                            // dangling reference can never be dropped. To delete this object, one must either first transfer
+                            // the child object to an account address, or call through Transfer::delete_child_object(),
+                            // which would consume both the child object and the ChildRef ownership reference,
+                            // and emit the DeleteChildObject event. These child objects can be safely deleted.
+                            return (gas_used, 0, Err(SuiError::DeleteObjectOwnedObject));
+                        }
+                        state_view.delete_object(obj_id, id.version(), DeleteKind::Normal);
+                        gas_refund += gas::calculate_object_deletion_refund(&object);
+                    } else {
+                        // This object wasn't in the input, and is being deleted. It must
+                        // be unwrapped in this transaction and then get deleted.
+                        // When an object was wrapped at version `v`, we added an record into `parent_sync`
+                        // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
+                        // it will also have version `v+1`, leading to a violation of the invariant that any
+                        // object_id and version pair must be unique. Hence for any object that's just unwrapped,
+                        // we force incrementing its version number again to make it `v+2` before writing to the store.
+                        state_view.delete_object(
+                            obj_id,
+                            id.version().increment(),
+                            DeleteKind::UnwrapThenDelete,
+                        );
+                    }
                 }
                 Ok(())
             }
-            EventType::ShareObject => Err(SuiError::UnsupportedSharedObjectError),
             EventType::DeleteChildObject => {
-                match type_ {
-                    TypeTag::Struct(s) => {
-                        let obj = MoveObject::new(s, event_bytes);
-                        deleted_ids.insert(obj.id(), obj.version());
-                        deleted_child_ids.insert(obj.id());
-                    },
-                    _ => unreachable!(
-                        "Native function delete_child_object_internal<T> ensures that T is always bound to structs"
-                    ),
-                }
+                let id_bytes: AccountAddress = bcs::from_bytes(&event_bytes).unwrap();
+                let obj_id: ObjectID = id_bytes.into();
+                // unwrap safe since to delete a child object, this child object
+                // must be passed by value in the input.
+                let object = by_value_objects.remove(&obj_id).unwrap();
+                state_view.delete_object(&obj_id, object.version(), DeleteKind::Normal);
+                gas_refund += gas::calculate_object_deletion_refund(&object);
                 Ok(())
             }
             EventType::User => {
@@ -603,32 +626,8 @@ fn process_successful_execution<
     // any object left in `by_value_objects` is an input passed by value that was not transferred or frozen.
     // this means that either the object was (1) deleted from the Sui system altogether, or
     // (2) wrapped inside another object that is in the Sui object pool
-    let mut gas_refund: u64 = 0;
     for (id, object) in by_value_objects.iter() {
-        // If an object is owned by another object, we are not allowed to directly delete the child
-        // object because this could lead to a dangling reference of the ownership. Such
-        // dangling reference can never be dropped. To delete this object, one must either first transfer
-        // the child object to an account address, or call through Transfer::delete_child_object(),
-        // which would consume both the child object and the ChildRef ownership reference,
-        // and emit the DeleteChildObject event. These child objects can be safely deleted.
-        if matches!(object.owner, Owner::ObjectOwner { .. }) && !deleted_child_ids.contains(id) {
-            return (gas_used, 0, Err(SuiError::DeleteObjectOwnedObject));
-        }
-        if deleted_ids.contains_key(id) {
-            state_view.delete_object(id, object.version(), DeleteKind::Normal);
-        } else {
-            state_view.delete_object(id, object.version(), DeleteKind::Wrap);
-        }
-
-        gas_refund += gas::calculate_object_deletion_refund(object);
-    }
-
-    // Any id that's not covered in the above loop, i.e. not in input but also deleted,
-    // must be unwrapped and then deleted.
-    for (id, version) in deleted_ids {
-        if !by_value_objects.contains_key(&id) {
-            state_view.delete_object(&id, version, DeleteKind::UnwrapThenDelete);
-        }
+        state_view.delete_object(id, object.version(), DeleteKind::Wrap);
     }
 
     (gas_used, gas_refund, Ok(()))
@@ -647,6 +646,7 @@ fn handle_transfer<
     gas_used: &mut u64,
     state_view: &mut S,
     object_owner_map: &mut HashMap<SuiAddress, SuiAddress>,
+    newly_generated_ids: &HashSet<ObjectID>,
 ) -> SuiResult {
     match type_ {
         TypeTag::Struct(s_type) => {
@@ -662,12 +662,26 @@ fn handle_transfer<
             // freshly created, this means that its version will now be 1.
             // thus, all objects in the global object pool have version > 0
             move_obj.increment_version();
+            let obj_id = move_obj.id();
+            // A to-be-transferred object can come from 3 sources:
+            //   1. Passed in by-value (in `by_value_objects`, i.e. old_object is not none)
+            //   2. Created in this transaction (in `newly_generated_ids`)
+            //   3. Unwrapped in this transaction
+            // The following condition checks if this object was unwrapped in this transaction.
+            if old_object.is_none() && !newly_generated_ids.contains(&obj_id) {
+                // When an object was wrapped at version `v`, we added an record into `parent_sync`
+                // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
+                // it will also have version `v+1`, leading to a violation of the invariant that any
+                // object_id and version pair must be unique. Hence for any object that's just unwrapped,
+                // we force incrementing its version number again to make it `v+2` before writing to the store.
+                move_obj.increment_version();
+            }
             let obj = Object::new_move(move_obj, recipient, tx_digest);
             if old_object.is_none() {
                 // Charge extra gas based on object size if we are creating a new object.
                 *gas_used += gas::calculate_object_creation_cost(&obj);
             }
-            let obj_address: SuiAddress = obj.id().into();
+            let obj_address: SuiAddress = obj_id.into();
             object_owner_map.remove(&obj_address);
             if let Owner::ObjectOwner(new_owner) = recipient {
                 // Below we check whether the transfer introduced any circular ownership.

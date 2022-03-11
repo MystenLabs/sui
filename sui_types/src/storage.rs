@@ -24,6 +24,10 @@ pub trait Storage {
 
     fn read_object(&self, id: &ObjectID) -> Option<Object>;
 
+    // Indicate a new object ID is created, which may be used to create an object.
+    // This is needed to determine unwrapped objects at the end.
+    fn create_object_id(&mut self, id: ObjectID);
+
     fn write_object(&mut self, object: Object);
 
     /// Record an event that happened during execution

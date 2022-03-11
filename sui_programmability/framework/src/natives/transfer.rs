@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::EventType;
+use crate::{natives::get_object_id, EventType};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::native_functions::NativeContext;
@@ -97,18 +97,18 @@ pub fn share_object(
 /// `delete_child_object_internal<T: key>(child: T)`
 pub fn delete_child_object_internal(
     context: &mut NativeContext,
-    mut ty_args: Vec<Type>,
+    ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
 
-    let ty = ty_args.pop().unwrap();
     let obj = args.pop_back().unwrap();
     let event_type = EventType::DeleteChildObject;
+    let obj_id = get_object_id(obj);
     // TODO: Decide the cost.
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
-    if context.save_event(vec![], event_type as u64, ty, obj)? {
+    if context.save_event(vec![], event_type as u64, Type::Address, obj_id)? {
         Ok(NativeResult::ok(cost, smallvec![]))
     } else {
         Ok(NativeResult::err(cost, 0))
