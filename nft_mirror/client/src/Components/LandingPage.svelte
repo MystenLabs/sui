@@ -87,8 +87,9 @@
                     <div class="row align-items-center">
                         <div class="col-lg-12">
                             <div class="banner-content">
-                                <h1 class="title">Sui Mirror </h1>
-                                <p>Turpis egestas integer eget aliquet nibh praesent tristique magna sit. Vitae purus faucibus ornare suspendisse. Consectetur adipiscing elit duis tristique sollicitudin. Viverra aliquet eget sit amet tellus cras adipiscing enim. Cursus turpis massa tincidunt dui ut ornare lectus sit amet. Dui sapien eget mi proin sed libero enim sed faucibus. </p>
+                                <h1 class="title">Sui Drop</h1>
+                                <p>Dropping your existing NFTs from other networks will let you use them on Sui and unleash new functionality such as fully on-chain dynamic and composable NFTs.
+                                    Get started by connecting your wallet below!</p>
                                 <Loader state={isloading} />
                             
                                 {#if $walletAddress}
