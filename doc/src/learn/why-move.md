@@ -14,7 +14,7 @@ Here are the major advantages of the Move programming language over Solidity:
 * Less complex
 * Infinitely less error prone
 
-Move is inherently more secure than Solidity. It stores digital assets securely, acting as a keystore. It wasn’t developed initially for blockchains
+Move is inherently more secure than Solidity. Move stores digital assets securely, acting as a keystore. Move wasn’t developed initially for blockchains
 yet has growing adoption.
 
 Solidity is simply harder to use. It requires expertise to develop a smart contract that will still need to be audited thoroughly to ensure proper
