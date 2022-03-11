@@ -9,8 +9,12 @@ use crate::{
 
 #[derive(Debug, PartialEq)]
 pub enum DeleteKind {
-    ExistInInput,
-    NotExistInInput,
+    /// An object is provided in the call input, and gets deleted.
+    Normal,
+    /// An object is not provided in the call input, but gets unwrapped
+    /// from another object, and then gets deleted.
+    UnwrapThenDelete,
+    /// An object is provided in the call input, and gets wrapped into another object.
     Wrap,
 }
 
@@ -22,7 +26,7 @@ pub trait Storage {
 
     fn write_object(&mut self, object: Object);
 
-    /// Record an event that happened during execution  
+    /// Record an event that happened during execution
     fn log_event(&mut self, event: Event);
 
     fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind);
