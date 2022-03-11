@@ -111,14 +111,6 @@ impl AuthorityTemporaryStore {
                 entry.0 = entry.0.increment();
             }
         }
-        // self.deleted contains all object IDs that were passed through ID::delete_id.
-        // However that doesn't necessarily indicate an object was deleted, if the object
-        // didn't show up in the input. There are two cases, one is that the object just got
-        // unwrapped, and another is just deletion of an ID that doesn't belong to a previous
-        // existing object. The second case can be filtered out.
-        self.deleted.retain(|id, (_version, kind)| {
-            kind != &DeleteKind::NotExistInInput || unwrapped_object_ids.contains(id)
-        });
     }
 
     pub fn to_signed_effects(

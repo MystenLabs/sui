@@ -523,6 +523,8 @@ fn process_successful_execution<
     let tx_digest = ctx.digest();
     let mut deleted_ids = HashMap::new();
     let mut deleted_child_ids = HashSet::new();
+    // newly_generated_ids contains all object IDs generated in this transaction.
+    let newly_generated_ids = ctx.recreate_all_ids();
     for e in events {
         let (recipient, event_type, type_, event_bytes) = e;
         let result = match EventType::try_from(event_type as u8)
@@ -562,7 +564,11 @@ fn process_successful_execution<
                 // unwrap safe because this event can only be emitted from processing
                 // native call delete_id, which guarantees the type of the id.
                 let id: VersionedID = bcs::from_bytes(&event_bytes).unwrap();
-                deleted_ids.insert(*id.object_id(), id.version());
+                // We don't care about IDs that are generated in this same transaction
+                // but only to be deleted.
+                if !newly_generated_ids.contains(id.object_id()) {
+                    deleted_ids.insert(*id.object_id(), id.version());
+                }
                 Ok(())
             }
             EventType::ShareObject => Err(SuiError::UnsupportedSharedObjectError),
@@ -609,28 +615,19 @@ fn process_successful_execution<
             return (gas_used, 0, Err(SuiError::DeleteObjectOwnedObject));
         }
         if deleted_ids.contains_key(id) {
-            state_view.delete_object(id, object.version(), DeleteKind::ExistInInput);
+            state_view.delete_object(id, object.version(), DeleteKind::Normal);
         } else {
             state_view.delete_object(id, object.version(), DeleteKind::Wrap);
         }
 
         gas_refund += gas::calculate_object_deletion_refund(object);
     }
-    // The loop above may not cover all ids in deleted_ids, i.e. some of the deleted_ids
-    // may not show up in by_value_objects.
-    // This can happen for two reasons:
-    //  1. The call to ID::delete_id() was not a result of deleting a pre-existing object.
-    //    This can happen either because we were deleting an object that just got created
-    //    in this same transaction; or we have an ID that's created but not associated with
-    //    a real object. In either case, we don't care about this id.
-    //  2. This object was wrapped in the past, and now is getting deleted. It won't show up
-    //    in the input, but the deletion is also real.
-    // We cannot distinguish the above two cases here just yet. So we just add it with
-    // the kind NotExistInInput. They will be eventually filtered out in
-    // [`AuthorityTemporaryStore::patch_unwrapped_objects`].
+
+    // Any id that's not covered in the above loop, i.e. not in input but also deleted,
+    // must be unwrapped and then deleted.
     for (id, version) in deleted_ids {
         if !by_value_objects.contains_key(&id) {
-            state_view.delete_object(&id, version, DeleteKind::NotExistInInput);
+            state_view.delete_object(&id, version, DeleteKind::UnwrapThenDelete);
         }
     }
 
