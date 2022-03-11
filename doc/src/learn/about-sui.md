@@ -3,7 +3,7 @@ title: About Sui
 ---
 
 Sui is a high performance, horizontally-scalable blockchain with no theoretical limits utilizing extremely low computation resources per
-transaction. It is designed from the ground up to facilitate instant settlement, delivering the high throughput, low latency, and low cost
+transaction. It is designed from the ground up to facilitate immediate settlement, delivering the high throughput, low latency, and low cost
 needed to power applications for billions of users.
  
 With existing platforms, users pay a huge tax as network usage increases due to limited throughput. This results in terrible user experiences:
@@ -13,7 +13,7 @@ With existing platforms, users pay a huge tax as network usage increases due to 
 * High NFT minting costs
 * Only high-value use cases can be experienced (not coupons and other valuable, mass market consumer use cases)
 
-## Unparalleled scalability, instant settlement
+## Unparalleled scalability, immediate settlement
 
 Sui scales horizontally as the demands of Dapps increase. Validators can add more workers to increase the networking, storage
 and compute capacity of the network. We are proud to say that Sui is the first proof of stake, decentralized blockchain that scales
