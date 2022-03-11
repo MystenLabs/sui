@@ -24,4 +24,4 @@ The [Games](../../../sui_programmability/examples/games) example lets you try ou
 
 ## NFTs
 
-In the [NFTs](../../../sui_programmability/examples/nfts) example, issue non-fungible tokens and see NFTs representing assets in a game.
+In the [NFTs](../../../sui_programmability/examples/nfts) example, browse non-fungible tokens of various types and see NFTs representing assets in a game.
