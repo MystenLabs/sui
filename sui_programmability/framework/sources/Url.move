@@ -12,7 +12,7 @@ module Sui::Url {
     /// Error code when the length of the hash vector is not HASH_VECTOR_LENGTH
     const EHASH_LENGTH_MISMATCH: u64 = 0;
 
-    /// Represents an arbitrary URL
+    /// Represents an arbitrary URL. Clients rendering values of this type should fetch the resource at `url` and render it using a to-be-defined Sui standard.
     struct Url has store, drop {
         // TODO: validate URL format
         url: String,
