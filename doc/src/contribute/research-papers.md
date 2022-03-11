@@ -4,7 +4,8 @@ title: Sui-Related Research Papers
 
 This document contains a list of research papers that are relevant to Sui and have been co-authored by at least one member of the team.
 Some of the ideas of these papers are currently being integrated into Sui, others are in our roadmap, and others are not in our roadmap
-but could be integrated in the future. 
+but could be integrated in the future. Start with the [Sui Smart Contract Platform](../../doc/paper/sui.pdf) white paper, which contains
+our latest design, inspired from previous works below.
 
 ## FastPay: High-Performance Byzantine Fault Tolerant Settlement 
 
@@ -13,9 +14,10 @@ but could be integrated in the future.
 * **Relevance:** FastPay describes the core protocol at the heart of Sui.
 * **Summary:** FastPay allows a set of distributed authorities, some of which are Byzantine, to maintain a high-integrity and availability
   settlement system for pre-funded payments. It can be used to settle payments in a native unit of value (crypto-currency), or as a financial
-  side-infrastructure to support retail payments in fiat currencies. FastPay is based on Byzantine Consistent Broadcast as its core primitive,
-  foregoing the expenses of full atomic commit channels (consensus). The resulting system has low-latency for both confirmation and payment finality.
-  Remarkably, each authority can be sharded across many machines to allow unbounded horizontal scalability. 
+  side-infrastructure to support retail payments in fiat currencies. This is not the protocol Sui uses, yet it proposes the basic safety mechanism
+  that Sui extends. FastPay is based on Byzantine Consistent Broadcast as its core primitive, foregoing the expenses of full atomic commit channels
+  (consensus). The resulting system has low-latency for both confirmation and payment finality. Remarkably, each authority can be sharded across many
+  machines to allow unbounded horizontal scalability. 
 
 ## Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus
 
@@ -37,7 +39,7 @@ but could be integrated in the future.
 ## Zef: Low-latency, Scalable, Private Payments 
 
 * **Link:** https://arxiv.org/abs/2201.05671
-* **Publication:** Not published yet (under submission at PETS 22)
+* **Publication:** Not published yet (under submission)
 * **Relevance:** Extends the FastPay design to support objects (rather than accounts), what Sui actually uses. An additional contribution of this paper is
   to add strong privacy to FastPay transactions (but Sui does not plan to do this).
 * **Summary:** We introduce Zef, the first Byzantine-Fault Tolerant (BFT) protocol to support payments in anonymous digital coins at arbitrary scale. Zef
@@ -53,7 +55,7 @@ but could be integrated in the future.
 ##  Bullshark: DAG BFT Protocols Made Practical 
 
 * **Link:** https://arxiv.org/abs/2201.05677
-* **Publication:** Not published yet (will likely be accepted at CCS shortly)
+* **Publication:** Not published yet (under submission)
 * **Relevance:** Provides a partially-synchronous consensus protocol running over Narwhal. Sui may want to use it instead of Tusk.
 * **Summary:** We present Bullshark, the first directed acyclic graph (DAG) based Byzantine Fault Tolerant (BFT) protocol that is optimized for partial synchrony.
   Bullshark inherits all the desired properties of its predecessor (DAG-Rider) such as optimal amortized complexity, asynchronous liveness, zero-overhead,
@@ -98,7 +100,7 @@ but could be integrated in the future.
 ## SybilQuorum: Open Distributed Ledgers Through Trust Networks 
 
 * **Link:** https://arxiv.org/abs/1906.12237
-* **Publication:** Not published yet
+* **Publication:** Not published
 * **Relevance:** Less related to Sui than the other papers, and the paper is in its early stages. It presents an algorithm to strengthen proof-of-Stake
 systems (like Sui). The paper is, however, theoretical and not on our roadmap.
 * **Summary:** The Sybil attack plagues all peer-to-peer systems, and modern open distributed ledgers employ a number of tactics to prevent it from proof
