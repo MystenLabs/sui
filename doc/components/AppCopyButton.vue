@@ -4,7 +4,7 @@
     <div class="tagcloud">
       <ul ref="copy" >
         <li v-if="state === 'copied'">
-          <a class="tag-cloud-link" href="javascript:void(0)">Copyed to clipboard</a>
+          <a class="tag-cloud-link" href="javascript:void(0)">Copied to clipboard</a>
         </li>
         <li v-else><a class="tag-cloud-link" href="javascript:void(0)">Copy</a></li>
       </ul>
