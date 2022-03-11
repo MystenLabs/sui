@@ -17,7 +17,7 @@ pub enum UpdateItem {
 pub type BatchDigest = [u8; 32];
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
-pub struct TransactionBatch(Vec<(TxSequenceNumber, TransactionDigest)>);
+pub struct TransactionBatch(pub Vec<(TxSequenceNumber, TransactionDigest)>);
 impl BcsSignable for TransactionBatch {}
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Default, Debug, Serialize, Deserialize)]
@@ -32,7 +32,7 @@ pub struct AuthorityBatch {
     // The number of items in the batch
     pub size: u64,
 
-    /// The digest of the previous block, if there is one
+    /// The digest of the previous batch, if there is one
     pub previous_digest: Option<BatchDigest>,
 
     // The digest of all transactions digests in this batch
@@ -67,7 +67,8 @@ impl AuthorityBatch {
         previous_batch: &AuthorityBatch,
         transactions: &[(TxSequenceNumber, TransactionDigest)],
     ) -> AuthorityBatch {
-        let transaction_vec = transactions.to_vec();
+        let mut transaction_vec = transactions.to_vec();
+        transaction_vec.sort_by(|(s_a, _d_a), (s_b, _d_b)| s_a.cmp(s_b));
         debug_assert!(!transaction_vec.is_empty());
 
         let initial_sequence_number = transaction_vec[0].0 as u64;

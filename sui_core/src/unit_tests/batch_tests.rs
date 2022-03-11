@@ -7,6 +7,16 @@ use crate::authority::authority_tests::*;
 use std::env;
 use std::fs;
 
+fn batch_as_expected(
+    expected: Vec<(TxSequenceNumber, TransactionDigest)>,
+    batch: AuthorityBatch,
+) -> bool {
+    let mut work_expected = expected;
+    work_expected.sort_by(|(s_a, _d_a), (s_b, _d_b)| s_a.cmp(s_b));
+
+    sha3_hash(&TransactionBatch(work_expected)) == batch.transactions_digest
+}
+
 #[tokio::test]
 async fn test_open_manager() {
     // let (_, authority_key) = get_key_pair();
@@ -171,7 +181,7 @@ async fn test_batch_manager_out_of_order() {
         .await
         .expect("Start service with no issues.");
 
-    // Send transactions out of order
+    // Send transactions out of sequence order
     let tx_zero = TransactionDigest::new([0; 32]);
     _send
         .send_item(1, tx_zero)
@@ -193,12 +203,8 @@ async fn test_batch_manager_out_of_order() {
         .await
         .expect("Send to the channel.");
 
-    // Get transactions in order then batch.
+    // Get transactions in reception order, then the batch.
     let (_tx, mut rx) = _pair;
-    assert!(matches!(
-        rx.recv().await.unwrap(),
-        UpdateItem::Transaction((0, _))
-    ));
 
     assert!(matches!(
         rx.recv().await.unwrap(),
@@ -206,15 +212,26 @@ async fn test_batch_manager_out_of_order() {
     ));
     assert!(matches!(
         rx.recv().await.unwrap(),
+        UpdateItem::Transaction((3, _))
+    ));
+    assert!(matches!(
+        rx.recv().await.unwrap(),
         UpdateItem::Transaction((2, _))
     ));
     assert!(matches!(
         rx.recv().await.unwrap(),
-        UpdateItem::Transaction((3, _))
+        UpdateItem::Transaction((0, _))
     ));
 
     // Then we (eventually) get a batch
-    assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
+    let recvd_batch = rx.recv().await.unwrap();
+    assert!(matches!(recvd_batch, UpdateItem::Batch(_)));
+    if let UpdateItem::Batch(signed_batch) = recvd_batch {
+        assert!(batch_as_expected(
+            vec![(0, tx_zero), (1, tx_zero), (2, tx_zero), (3, tx_zero)],
+            signed_batch.batch
+        ));
+    }
 
     // When we close the sending channel we also also end the service task
     drop(_send);
@@ -225,6 +242,7 @@ async fn test_batch_manager_out_of_order() {
     assert!(matches!(rx.recv().await, Err(_)));
 }
 
+use sui_types::crypto::sha3_hash;
 use sui_types::{crypto::get_key_pair, object::Object};
 
 #[tokio::test]
@@ -234,7 +252,7 @@ async fn test_handle_move_order_with_batch() {
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let mut authority_state = init_state_with_objects(vec![gas_payment_object]).await;
 
-    // Create a listening infrastrucure.
+    // Create a listening infrastructure.
     let (_send, manager, _pair) = BatchManager::new(authority_state.db(), 100);
     let _join = manager
         .start_service(
