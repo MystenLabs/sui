@@ -1,12 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use dropshot::{endpoint, Query, TypedBody};
+use dropshot::{endpoint, Query, TypedBody, CONTENT_TYPE_JSON};
 use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
 };
-use hyper::StatusCode;
+use http::Response;
+use hyper::{Body, StatusCode};
 use move_core_types::identifier::Identifier;
 use move_core_types::parser::parse_type_tag;
 use move_core_types::value::MoveStructLayout;
@@ -139,15 +140,17 @@ Generate OpenAPI documentation.
     path = "/docs",
     tags = [ "docs" ],
 }]
-async fn docs(
-    rqctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseOk<DocumentationResponse>, HttpError> {
+async fn docs(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body>, HttpError> {
     let server_context = rqctx.context();
     let documentation = &server_context.documentation;
 
-    Ok(HttpResponseOk(DocumentationResponse {
-        documentation: documentation.clone(),
-    }))
+    custom_http_response(
+        StatusCode::OK,
+        &DocumentationResponse {
+            documentation: documentation.clone(),
+        },
+    )
+    .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{err}")))
 }
 
 /**
@@ -158,12 +161,7 @@ the fields are not set.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct GenesisRequest {
-    /** Optional; Number of authorities to be started in the network */
-    num_authorities: Option<u16>,
-    /** Optional; Number of managed addresses to be created at genesis */
-    num_addresses: Option<u16>,
-    /** Optional; Number of gas objects to be created for each address */
-    num_gas_objects: Option<u16>,
+    custom_genesis: bool,
 }
 
 /**
@@ -193,8 +191,10 @@ network has been started on testnet or mainnet.
 }]
 async fn genesis(
     rqctx: Arc<RequestContext<ServerContext>>,
+    request: TypedBody<GenesisRequest>,
 ) -> Result<HttpResponseOk<GenesisResponse>, HttpError> {
     let server_context = rqctx.context();
+    let genesis_request_params = request.into_inner();
     let genesis_config_path = &server_context.genesis_config_path;
     let network_config_path = &server_context.network_config_path;
     let wallet_config_path = &server_context.wallet_config_path;
@@ -215,16 +215,25 @@ async fn genesis(
     }
 
     let working_dir = network_config.config_path().parent().unwrap().to_owned();
-    let genesis_conf = GenesisConfig::default_genesis(&working_dir.join(genesis_config_path))
-        .map_err(|error| {
+    let genesis_conf = if genesis_request_params.custom_genesis {
+        GenesisConfig::read(&working_dir.join(genesis_config_path)).map_err(|error| {
+            custom_http_error(
+                StatusCode::CONFLICT,
+                format!("Unable to read genesis configuration: {error}"),
+            )
+        })?
+    } else {
+        GenesisConfig::default_genesis(&working_dir.join(genesis_config_path)).map_err(|error| {
             custom_http_error(
                 StatusCode::CONFLICT,
                 format!("Unable to create default genesis configuration: {error}"),
             )
-        })?;
+        })?
+    };
+
+    // println!("{:#?}", &genesis_conf);
 
     let wallet_path = working_dir.join(wallet_config_path);
-    // TODO: Rest service should use `ClientAddressManager` directly instead of using the wallet context.
     let mut wallet_config =
         WalletConfig::create(&working_dir.join(wallet_path)).map_err(|error| {
             custom_http_error(
@@ -441,7 +450,7 @@ Retrieve all managed addresses for this client.
 }]
 async fn get_addresses(
     rqctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let server_context = rqctx.context();
     // TODO: Find a better way to utilize wallet context here that does not require 'take()'
     let mut wallet_context =
@@ -463,12 +472,16 @@ async fn get_addresses(
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
-    Ok(HttpResponseOk(GetAddressResponse {
-        addresses: addresses
-            .into_iter()
-            .map(|address| format!("{}", address))
-            .collect(),
-    }))
+    custom_http_response(
+        StatusCode::OK,
+        &GetAddressResponse {
+            addresses: addresses
+                .into_iter()
+                .map(|address| format!("{}", address))
+                .collect(),
+        },
+    )
+    .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{err}")))
 }
 
 /**
@@ -515,7 +528,7 @@ Returns list of objects owned by an address.
 async fn get_objects(
     rqctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectsRequest>,
-) -> Result<HttpResponseOk<GetObjectsResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let server_context = rqctx.context();
 
     let get_objects_params = query.into_inner();
@@ -539,16 +552,20 @@ async fn get_objects(
 
     let object_refs = wallet_context.gateway.get_owned_objects(*address);
 
-    Ok(HttpResponseOk(GetObjectsResponse {
-        objects: object_refs
-            .iter()
-            .map(|(object_id, sequence_number, object_digest)| Object {
-                object_id: object_id.to_string(),
-                version: format!("{:?}", sequence_number),
-                object_digest: format!("{:?}", object_digest),
-            })
-            .collect::<Vec<Object>>(),
-    }))
+    custom_http_response(
+        StatusCode::OK,
+        &GetObjectsResponse {
+            objects: object_refs
+                .iter()
+                .map(|(object_id, sequence_number, object_digest)| Object {
+                    object_id: object_id.to_string(),
+                    version: format!("{:?}", sequence_number),
+                    object_digest: format!("{:?}", object_digest),
+                })
+                .collect::<Vec<Object>>(),
+        },
+    )
+    .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{err}")))
 }
 
 /**
@@ -585,7 +602,7 @@ Returns the schema for a specified object.
 async fn object_schema(
     rqctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectSchemaRequest>,
-) -> Result<HttpResponseOk<ObjectSchemaResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let server_context = rqctx.context();
     let object_info_params = query.into_inner();
 
@@ -628,13 +645,15 @@ async fn object_schema(
         }
     };
 
-    match serde_json::to_value(layout) {
-        Ok(schema) => Ok(HttpResponseOk(ObjectSchemaResponse { schema })),
-        Err(e) => Err(custom_http_error(
+    let schema = serde_json::to_value(layout).map_err(|err| {
+        custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
-            format!("Error while getting object info: {:?}", e),
-        )),
-    }
+            format!("Error while getting object info: {:?}", err),
+        )
+    })?;
+
+    custom_http_response(StatusCode::OK, &ObjectSchemaResponse { schema })
+        .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{err}")))
 }
 
 /**
@@ -681,7 +700,7 @@ Returns the object information for a specified object.
 async fn object_info(
     rqctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectInfoRequest>,
-) -> Result<HttpResponseOk<ObjectInfoResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let server_context = rqctx.context();
     let object_info_params = query.into_inner();
 
@@ -711,17 +730,21 @@ async fn object_info(
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
-    Ok(HttpResponseOk(ObjectInfoResponse {
-        owner: format!("{:?}", object.owner),
-        version: format!("{:?}", object.version().value()),
-        id: format!("{:?}", object.id()),
-        readonly: format!("{:?}", object.is_read_only()),
-        obj_type: object
-            .data
-            .type_()
-            .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
-        data: object_data,
-    }))
+    custom_http_response(
+        StatusCode::OK,
+        &ObjectInfoResponse {
+            owner: format!("{:?}", object.owner),
+            version: format!("{:?}", object.version().value()),
+            id: format!("{:?}", object.id()),
+            readonly: format!("{:?}", object.is_read_only()),
+            obj_type: object
+                .data
+                .type_()
+                .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
+            data: object_data,
+        },
+    )
+    .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{err}")))
 }
 
 /**
@@ -1121,7 +1144,8 @@ async fn handle_move_call(
     let function = Identifier::from_str(&call_params.function.to_owned())?;
     let args = call_params.args;
     let type_args = call_params
-        .type_args.unwrap_or_default()
+        .type_args
+        .unwrap_or_default()
         .iter()
         .map(|type_arg| parse_type_tag(type_arg))
         .into_iter()
@@ -1222,6 +1246,19 @@ fn get_wallet_context(wallet_context: Option<WalletContext>) -> Result<WalletCon
                 .to_string(),
         )
     })
+}
+
+fn custom_http_response<T: Serialize + JsonSchema>(
+    status_code: StatusCode,
+    response_body: T,
+) -> Result<Response<Body>, anyhow::Error> {
+    let body: Body = serde_json::to_string(&response_body)?.into();
+    let res = Response::builder()
+        .status(status_code)
+        .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
+        .header(http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .body(body)?;
+    Ok(res)
 }
 
 fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpError {

@@ -31,6 +31,10 @@ module Sui::Transfer {
         recipient: address,
     }
 
+    public fun child_id<T: key>(child_ref: &ChildRef<T>): ID {
+        child_ref.child_id
+    }
+
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the
     /// `key` attribute, which (in turn) ensures that `obj` has a globally
     /// unique ID.
