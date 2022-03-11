@@ -44,8 +44,9 @@ Equivocation in blockchains is the malicious action of dishonest actors giving c
 
 ### Epoch
 
-An [epoch](https://coinmarketcap.com/alexandria/glossary/epoch) refers to the period between increments made in a blockchain, for instance before
-and after a transaction succeeds.
+Operation of the Sui network is temporally partitioned into non-overlapping, fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of authorities participating in the network is fixed.
+
+For more information, see [Epochs](../build/authorities.md#epochs).
 
 
 ### Eventual consistency
