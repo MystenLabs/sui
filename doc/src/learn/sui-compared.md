@@ -46,7 +46,7 @@ Because Sui limits the sender to one transaction at a time, it is imperative the
 
 A traditional blockchain operates via a single broadcasted request and awaits approval of the transaction, polling the validators for an answer sometime later. Either end users or the gateway must do a little more work and then get: low latency and better security. Simple broadcast transactions are completed instantly. Remember, no private keys are ever exchanged.
 
-Each authority has weight according to standard Proof of Stake. Bonding their stake for the duration of the epoch. If all goes well, get a small fee. If proved cheating, you sacrifice your stake. For example, equivocation  - or inconsistent/duplicate voting - will cost you your stake.
+Each authority has weight according to standard Proof of Stake. Bonding their stake for the duration of the transaction. If all goes well, get a small fee. If proved cheating, you sacrifice your stake. For example, equivocation  - or inconsistent/duplicate voting - will cost you your stake.
 
 ## Reads
 
