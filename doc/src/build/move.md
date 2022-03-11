@@ -1,4 +1,6 @@
-# Move Quick Start
+---
+title: Smart Contracts with Move
+---
 
 Welcome to the Sui tutorial for building smart contracts with
 the [Move](https://github.com/MystenLabs/awesome-move) language.
@@ -12,7 +14,7 @@ Move is an open source language for writing safe smart contracts. It
 was originally developed at Facebook to power the [Diem](https://github.com/diem/diem)
 blockchain. However, Move was designed as a platform-agnostic language
 to enable common libraries, tooling, and developer communities across
-blockchains with vastly different data and execution models. [Sui](../../README.md),
+blockchains with vastly different data and execution models. [Sui](../../../README.md),
 [0L](https://github.com/OLSF/libra), and
 [Starcoin](https://github.com/starcoinorg/starcoin) are using Move,
 and there are also plans to integrate the language in several upcoming
@@ -81,10 +83,10 @@ user-defined coin types, which are custom assets define in the Move
 language. Sui framework code contains the `Coin` module supporting
 creation and management of custom coins. The `Coin` module is
 located in the
-[sui_programmability/framework/sources/Coin.move](../../sui_programmability/framework/sources/Coin.move)
+[sui_programmability/framework/sources/Coin.move](../../../sui_programmability/framework/sources/Coin.move)
 file. As you would expect, the manifest file describing how to build the
 package containing the `Coin` module is located in the corresponding
-[sui_programmability/framework/Move.toml](../../sui_programmability/framework/Move.toml)
+[sui_programmability/framework/Move.toml](../../../sui_programmability/framework/Move.toml)
 file.
 
 Let's see what module definition in the `Coin` module file looks like:
@@ -199,7 +201,7 @@ section describing how to
 Similarly to other popular programming languages, the main unit of
 computation in Move is a function. Let us look at one of the simplest
 functions defined in the
-[Coin module](../../sui_programmability/framework/sources/Coin.move), that is
+[Coin module](../../../sui_programmability/framework/sources/Coin.move), that is
 the `value` function.
 
 ``` rust
@@ -241,7 +243,7 @@ One of the basic operations in Sui is transfer of gas objects between
 [addresses](https://github.com/diem/move/blob/main/language/documentation/book/src/address.md)
 representing individual users. And one of the
 simplest entry functions is defined in the GAS
-[module](../../sui_programmability/framework/sources/GAS.move) to
+[module](../../../sui_programmability/framework/sources/GAS.move) to
 implement gas object transfer:
 
 ```rust
@@ -263,7 +265,7 @@ In general, an entry function, must satisfy the following properties:
   - one or more primitive types (or vectors of such types)
   - a mutable reference to an instance of the `TxContext` struct
   defined in the
-  [TxContext module](../../sui_programmability/framework/sources/TxContext.move)
+  [TxContext module](../../../sui_programmability/framework/sources/TxContext.move)
 
 More, concretely, the `transfer` function is public, has no return
 value, and has three parameters:
@@ -349,7 +351,7 @@ Since we are developing a fantasy game, in addition to the mandatory
 `Coin` struct), our asset has both `magic` and `strength` fields
 describing its respective attribute values. Please note that we need
 to import the
-[ID package](../sui_programmability/framework/sources/ID.move) from
+[ID package](../../../sui_programmability/framework/sources/ID.move) from
 Sui framework to gain access to the `VersionedID` struct type defined
 in this package.
 
