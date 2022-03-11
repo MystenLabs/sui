@@ -14,7 +14,7 @@ use tracing::warn;
 use typed_store::rocks::{open_cf, DBBatch, DBMap};
 
 use std::sync::atomic::Ordering;
-use typed_store::traits::Map;
+use typed_store::{reopen, traits::Map};
 
 pub type AuthorityStore = SuiDataStore<true>;
 #[allow(dead_code)]
@@ -132,26 +132,49 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
                 .unwrap_or(0),
         );
 
+        let (
+            objects,
+            all_object_versions,
+            owner_index,
+            transaction_lock,
+            signed_transactions,
+            certificates,
+            parent_sync,
+            signed_effects,
+            sequenced,
+            schedule,
+            batches,
+        ) = reopen! (
+            &db,
+            "objects";<ObjectID, Object>,
+            "all_object_versions";<(ObjectID, SequenceNumber), Object>,
+            "owner_index";<(SuiAddress, ObjectID), ObjectRef>,
+            "transaction_lock";<ObjectRef, Option<TransactionDigest>>,
+            "signed_transactions";<TransactionDigest, SignedTransaction>,
+            "certificates";<TransactionDigest, CertifiedTransaction>,
+            "parent_sync";<ObjectRef, TransactionDigest>,
+            "signed_effects";<TransactionDigest, SignedTransactionEffects>,
+            "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
+            "schedule";<ObjectID, SequenceNumber>,
+            "batches";<TxSequenceNumber, SignedBatch>
+        );
         AuthorityStore {
-            objects: DBMap::reopen(&db, Some("objects")).expect("Cannot open CF."),
-            all_object_versions: DBMap::reopen(&db, Some("all_object_versions"))
-                .expect("Cannot open CF."),
-            owner_index: DBMap::reopen(&db, Some("owner_index")).expect("Cannot open CF."),
-            transaction_lock: DBMap::reopen(&db, Some("transaction_lock"))
-                .expect("Cannot open CF."),
-            signed_transactions: DBMap::reopen(&db, Some("signed_transactions"))
-                .expect("Cannot open CF."),
-            certificates: DBMap::reopen(&db, Some("certificates")).expect("Cannot open CF."),
-            parent_sync: DBMap::reopen(&db, Some("parent_sync")).expect("Cannot open CF."),
-            signed_effects: DBMap::reopen(&db, Some("signed_effects")).expect("Cannot open CF."),
-            sequenced: DBMap::reopen(&db, Some("sequenced")).expect("Cannot open CF."),
-            schedule: DBMap::reopen(&db, Some("schedule")).expect("Cannot open CF."),
+            objects,
+            all_object_versions,
+            owner_index,
+            transaction_lock,
+            signed_transactions,
+            certificates,
+            parent_sync,
+            signed_effects,
+            sequenced,
+            schedule,
             lock_table: (0..1024)
                 .into_iter()
                 .map(|_| parking_lot::Mutex::new(()))
                 .collect(),
             executed_sequence,
-            batches: DBMap::reopen(&db, Some("batches")).expect("Cannot open CF."),
+            batches,
             next_sequence_number,
         }
     }

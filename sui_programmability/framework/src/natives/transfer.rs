@@ -71,3 +71,46 @@ pub fn freeze_object(
         Ok(NativeResult::err(cost, 0))
     }
 }
+
+/// Implementation of Move native function
+/// `share_object<T: key>(obj: T)`
+pub fn share_object(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 1);
+
+    let ty = ty_args.pop().unwrap();
+    let obj = args.pop_back().unwrap();
+    let event_type = EventType::ShareObject;
+    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
+    if context.save_event(vec![], event_type as u64, ty, obj)? {
+        Ok(NativeResult::ok(cost, smallvec![]))
+    } else {
+        Ok(NativeResult::err(cost, 0))
+    }
+}
+
+/// Implementation of Move native function
+/// `delete_child_object_internal<T: key>(child: T)`
+pub fn delete_child_object_internal(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 1);
+
+    let ty = ty_args.pop().unwrap();
+    let obj = args.pop_back().unwrap();
+    let event_type = EventType::DeleteChildObject;
+    // TODO: Decide the cost.
+    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
+    if context.save_event(vec![], event_type as u64, ty, obj)? {
+        Ok(NativeResult::ok(cost, smallvec![]))
+    } else {
+        Ok(NativeResult::err(cost, 0))
+    }
+}

@@ -30,7 +30,7 @@ use move_vm_runtime::{native_functions::NativeFunctionTable, session::ExecutionR
 use std::{
     borrow::Borrow,
     cmp,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     convert::TryFrom,
     fmt::Debug,
     sync::Arc,
@@ -57,7 +57,7 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<Arc<MoveVM>, SuiError
 /// Execute `module::function<type_args>(object_args ++ pure_args)` as a call from `sender` with the given `gas_budget`.
 /// Execution will read from/write to the store in `state_view`.
 /// IMPORTANT NOTES on the return value:
-/// The return value indicates whether a system error has occured (i.e. issues with the sui system, not with user transaction).
+/// The return value indicates whether a system error has occurred (i.e. issues with the sui system, not with user transaction).
 /// As long as there are no system issues we return Ok(ExecutionStatus).
 /// ExecutionStatus indicates the execution result. If execution failed, we wrap both the gas used and the error
 /// into ExecutionStatus::Failure.
@@ -221,7 +221,7 @@ fn execute_internal<
                 // Cap total_gas by gas_budget in the fail case.
                 return ExecutionStatus::new_failure(cmp::min(total_gas, gas_budget), err);
             }
-            // gas_budget should be enough to pay not only the VM excution cost,
+            // gas_budget should be enough to pay not only the VM execution cost,
             // but also the cost to process all events, such as transfers.
             if total_gas > gas_budget {
                 ExecutionStatus::new_failure(
@@ -526,6 +526,7 @@ fn process_successful_execution<
     let mut gas_used = 0;
     let tx_digest = ctx.digest();
     let mut deleted_ids = HashMap::new();
+    let mut deleted_child_ids = HashSet::new();
     for e in events {
         let (recipient, event_type, type_, event_bytes) = e;
         let result = match EventType::try_from(event_type as u8)
@@ -568,6 +569,20 @@ fn process_successful_execution<
                 deleted_ids.insert(*id.object_id(), id.version());
                 Ok(())
             }
+            EventType::ShareObject => Err(SuiError::UnsupportedSharedObjectError),
+            EventType::DeleteChildObject => {
+                match type_ {
+                    TypeTag::Struct(s) => {
+                        let obj = MoveObject::new(s, event_bytes);
+                        deleted_ids.insert(obj.id(), obj.version());
+                        deleted_child_ids.insert(obj.id());
+                    },
+                    _ => unreachable!(
+                        "Native function delete_child_object_internal<T> ensures that T is always bound to structs"
+                    ),
+                }
+                Ok(())
+            }
             EventType::User => {
                 match type_ {
                     TypeTag::Struct(s) => state_view.log_event(Event::new(s, event_bytes)),
@@ -588,11 +603,13 @@ fn process_successful_execution<
     // (2) wrapped inside another object that is in the Sui object pool
     let mut gas_refund: u64 = 0;
     for (id, object) in by_value_objects.iter() {
-        // If an object is owned by another object, we are not allowed to delete the child
+        // If an object is owned by another object, we are not allowed to directly delete the child
         // object because this could lead to a dangling reference of the ownership. Such
-        // dangling reference can never be dropped. To delete this object, it must first
-        // be transferred to an account address.
-        if matches!(object.owner, Owner::ObjectOwner { .. }) {
+        // dangling reference can never be dropped. To delete this object, one must either first transfer
+        // the child object to an account address, or call through Transfer::delete_child_object(),
+        // which would consume both the child object and the ChildRef ownership reference,
+        // and emit the DeleteChildObject event. These child objects can be safely deleted.
+        if matches!(object.owner, Owner::ObjectOwner { .. }) && !deleted_child_ids.contains(id) {
             return (gas_used, 0, Err(SuiError::DeleteObjectOwnedObject));
         }
         if deleted_ids.contains_key(id) {
@@ -662,7 +679,7 @@ fn handle_transfer<
             if let Owner::ObjectOwner(new_owner) = recipient {
                 // Below we check whether the transfer introduced any circular ownership.
                 // We know that for any mutable object, all its ancenstors (if it was owned by another object)
-                // must be in the input as well. Prior to this we have recored the original ownership mapping
+                // must be in the input as well. Prior to this we have recorded the original ownership mapping
                 // in object_owner_map. For any new transfer, we trace the new owner through the ownership
                 // chain to see if a cycle is detected.
                 // TODO: Set a constant upper bound to the depth of the new ownership chain.
@@ -687,7 +704,7 @@ fn handle_transfer<
 fn check_transferred_object_invariants(new_object: &MoveObject, old_object: &Option<Object>) {
     if let Some(o) = old_object {
         // check consistency between the transferred object `new_object` and the tx input `o`
-        // specificially, the object id, type, and version should be unchanged
+        // specifically, the object id, type, and version should be unchanged
         let m = o.data.try_as_move().unwrap();
         debug_assert_eq!(m.id(), new_object.id());
         debug_assert_eq!(m.version(), new_object.version());
