@@ -1,5 +1,5 @@
 #[test_only]
-module Basics::AuctionTests {
+module DeFi::AuctionTests {
     use Std::Vector;
 
     use Sui::Coin::{Self, Coin};
@@ -8,7 +8,7 @@ module Basics::AuctionTests {
     use Sui::TestScenario::Self;
     use Sui::TxContext::{Self, TxContext};
 
-    use Basics::Auction::{Self, Auction, Bid};
+    use DeFi::Auction::{Self, Auction, Bid};
 
     const WRONG_ITEM_VALUE: u64 = 1;
 

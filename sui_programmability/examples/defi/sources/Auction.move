@@ -28,7 +28,7 @@
 ///   original owner and the item goes to the bidder that won the
 ///   auction
 
-module Basics::Auction {
+module DeFi::Auction {
     use Std::Option::{Self, Option};
 
     use Sui::Coin::{Self, Coin};
