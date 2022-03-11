@@ -379,6 +379,11 @@ impl AuthorityState {
                 .into_iter()
                 .collect();
 
+            // Check whether the shared objects have already been assigned a sequence number by
+            // the consensus. Bail if the transaction contains even one shared object that either:
+            // (i) was not assigned a sequence number, or
+            // (ii) has a different sequence number than the current one.
+
             let lock_errors: Vec<_> = shared_ids
                 .iter()
                 .filter_map(|(object_id, version)| {
