@@ -731,10 +731,10 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .iter()
             // because we serialize this end-first, this will skip to the first position w/ a highest_seq_num > than start
             .skip_to(&(TxSequenceNumber::MIN..=start).into())?
-            .take_while(|(efrange, _batch)| {
+            .filter(|(efrange, _batch)| {
                 // for convenience, we convert the batch to an inclusive range
                 let range: RangeInclusive<TxSequenceNumber> = efrange.clone().into();
-                *range.end() >= start && *range.start() < end
+                *range.start() < end
             })
             .map(|(_, batch)| batch)
             .collect();
