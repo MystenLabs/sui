@@ -349,7 +349,7 @@ pub fn store_package_and_init_modules<
     // wrap the modules in an object, write it to the store
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
     let package_object = Object::new_package(modules, ctx.digest());
-    state_view.create_object_id(package_object.id());
+    state_view.set_create_object_ids(HashSet::from([package_object.id()]));
     state_view.write_object(package_object);
 
     init_modules(state_view, vm, modules_to_init, ctx, gas_budget)
@@ -525,9 +525,7 @@ fn process_successful_execution<
     let tx_digest = ctx.digest();
     // newly_generated_ids contains all object IDs generated in this transaction.
     let newly_generated_ids = ctx.recreate_all_ids();
-    for id in newly_generated_ids.iter() {
-        state_view.create_object_id(*id);
-    }
+    state_view.set_create_object_ids(newly_generated_ids.clone());
     for e in events {
         let (recipient, event_type, type_, event_bytes) = e;
         let event_type = EventType::try_from(event_type as u8)

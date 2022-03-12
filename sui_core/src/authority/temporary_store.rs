@@ -224,8 +224,8 @@ impl Storage for AuthorityTemporaryStore {
         }
     }
 
-    fn create_object_id(&mut self, id: ObjectID) {
-        self.created_object_ids.insert(id);
+    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>) {
+        self.created_object_ids = ids;
     }
 
     /*

@@ -119,8 +119,8 @@ impl Storage for InMemoryStorage {
         })
     }
 
-    fn create_object_id(&mut self, id: ObjectID) {
-        self.temporary.created_object_ids.insert(id);
+    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>) {
+        self.temporary.created_object_ids = ids;
     }
 
     // buffer write to appropriate place in temporary storage

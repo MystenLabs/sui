@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashSet;
+
 use crate::{
     base_types::{ObjectID, SequenceNumber},
     event::Event,
@@ -24,9 +26,9 @@ pub trait Storage {
 
     fn read_object(&self, id: &ObjectID) -> Option<Object>;
 
-    // Indicate a new object ID is created, which may be used to create an object.
+    // Specify the list of object IDs created during the transaction.
     // This is needed to determine unwrapped objects at the end.
-    fn create_object_id(&mut self, id: ObjectID);
+    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>);
 
     fn write_object(&mut self, object: Object);
 
