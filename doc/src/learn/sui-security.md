@@ -92,16 +92,10 @@ assets in the transaction is not changed. However, the gas asset is always charg
 denial-of-service attacks on the system as a whole.
 
 A user client can perform the process of submitting the transaction and certificate itself or rely on third party 
-services to submit the transaction and interact with authorities.
-In the latter case, a user client can be reassured a transaction has been finalized through a set of signatures from 
+services to submit the transaction and interact with authorities. Such third parties need not have user private signature keys and cannot forge transactions on the users' behalf.
+They can reassure a user client a transaction has been finalized through a set of signatures from 
 authorities attesting to the transactions finality and its effects. After that point, the users can be assured that 
-changes the transaction resulted in are final. Relaying on third parties, that do not know the signature key of a user,
-to finalize transactions does not allow them to forge any further transactions, but may not finalize it.
-
-TODO: Clarify that last sentence. Something like:
-Relaying on third parties to finalize transactions is safe since they do not know the signature key of a user. This 
-does not allow them to forge any further transactions, but may not finalize it? (This last sentence is still unclear.
-They are allowed to forge?)
+changes the transaction resulted in are final. 
 
 ### Auditing and privacy
 
@@ -113,13 +107,7 @@ Services that operate full replicas, mirroring the state of one or more authorit
 
 The extreme public auditability of Sui also implies that all transactions and assets within Sui are publicly
 visible. Users that are mindful of their privacy may use multiple addresses to benefit from some degree of
-pseudonymity, or third-party custodial or non-custodial services that allow them to safely unlike their long-term
-identity from operations on Sui. Specific smart contracts with additional cryptographic privacy protections
-can also be provided by third parties.
-
-TODO: Clarify the second to last sentence above. "Users that are mindful of their privacy may use multiple addresses to benefit from some degree of
-pseudonymity, or third-party custodial or non-custodial services that allow them to safely unlike their long-term
-identity from operations on Sui." What do we mean "allow them to safely unlike their" here? Consider breaking this into two sentences.
+pseudonymity, or third-party custodial or non-custodial services. Specific smart contracts with additional cryptographic privacy protections can also be provided by third parties.
 
 ### Censorship-resistance and openness
 
