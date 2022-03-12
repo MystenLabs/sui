@@ -38,7 +38,7 @@ such other object transfers or smart contract (Move) calls. These
 numbers represent a sample configuration and have been chosen somewhat
 arbitrarily; the process of generating the genesis state can be
 customized with additional accounts, objects, code, etc. as described
-in [Genesis customization](#genesis-customization).
+in [Genesis customization](#customize-genesis).
 
 The network configuration is stored in `network.conf` and
 can be used subsequently to start the network. `wallet.conf` and `wallet.key` are
@@ -489,7 +489,7 @@ public fun transfer(c: Coin::Coin<GAS>, recipient: address, _ctx: &mut TxContext
 
 Please note that there is no real need to use a Move call to transfer
 objects as this can be accomplish with a built-in wallet
-[command](#transfering-objects) - we chose this example due to its
+[command](#transferring-objects) - we chose this example due to its
 simplicity.
 
 
@@ -525,9 +525,9 @@ parameters one-by-one:
 - `--function` - name of the function to be called
 - `--module` - name of the module containing the function
 - `--package` - ID of the package object where the module containing
-  the function is located ([remember](#a-quick-look-at-the-gas-module)
+  the function is located. (Remember
   that the ID of the genesis Sui package containing the GAS module is
-  defined in its manifest file, and is equal to `0x2`)
+  defined in its manifest file, and is equal to `0x2`.)
 - `args` - a list of function arguments:
   - ID of the gas object representing the `c` parameter of the `transfer`
     function
