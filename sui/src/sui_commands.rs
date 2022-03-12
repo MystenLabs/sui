@@ -86,7 +86,7 @@ async fn start_network(config: &NetworkConfig) -> Result<(), anyhow::Error> {
     );
 
     for authority in &config.authorities {
-        let server = make_server(authority, &committee, vec![], &[], config.buffer_size).await?;
+        let server = start_server(authority, &committee, config.buffer_size).await?;
 
         handles.push(async move {
             let spawned_server = match server.spawn().await {
@@ -245,23 +245,26 @@ pub async fn genesis(
     Ok(())
 }
 
-pub async fn make_server(
+pub async fn start_server(
     authority: &AuthorityPrivateInfo,
     committee: &Committee,
-    preload_modules: Vec<Vec<CompiledModule>>,
-    preload_objects: &[Object],
     buffer_size: usize,
 ) -> SuiResult<AuthorityServer> {
-    let mut genesis_ctx = genesis::get_genesis_context();
-    make_server_with_genesis_ctx(
-        authority,
-        committee,
-        preload_modules,
-        preload_objects,
-        buffer_size,
-        &mut genesis_ctx,
+    let store = Arc::new(AuthorityStore::open(&authority.db_path, None));
+    let name = *authority.key_pair.public_key_bytes();
+    let state = AuthorityState::new_without_genesis(
+        committee.clone(),
+        name,
+        Arc::pin(authority.key_pair.copy()),
+        store,
     )
-    .await
+    .await;
+    Ok(AuthorityServer::new(
+        authority.host.clone(),
+        authority.port,
+        buffer_size,
+        state,
+    ))
 }
 
 async fn make_server_with_genesis_ctx(
