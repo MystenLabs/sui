@@ -2,7 +2,7 @@ module Sui::Transfer {
     use Sui::ID::{Self, ID, VersionedID};
 
     // To allow access to transfer_to_object_unsafe.
-    friend Sui::Collection;
+    friend Sui::Bag;
 
     // When transferring a child object, this error is thrown if the child object
     // doesn't match the ChildRef that represents the onwershp.
