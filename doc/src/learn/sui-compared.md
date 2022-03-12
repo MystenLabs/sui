@@ -2,8 +2,6 @@
 title: Sui compared to another blockchain & Sui limitations
 ---
 
-# Sui compared to other Blockchains
-
 This is a high-level overview of the differences in approach between Sui and other blockchain systems.
 
 ## Block chains
