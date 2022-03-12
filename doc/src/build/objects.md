@@ -2,7 +2,7 @@
 title: Objects
 ---
 
-Sui has programmable objects created and managed by [Move](https://github.com/diem/move) packages (a.k.a. *smart contracts*). Move packages themselves are also objects. Thus, Sui objects can be partitioned into two categories:
+Sui has programmable objects created and managed by [Move](move.md) packages (a.k.a. *smart contracts*). Move packages themselves are also objects. Thus, Sui objects can be partitioned into two categories:
 * *Mutable data values*: typed data governed by a particular Move [*module*](https://github.com/diem/move/blob/main/language/documentation/book/src/modules-and-scripts.md). Each object value is a [struct](https://github.com/diem/move/blob/main/language/documentation/book/src/structs-and-resources.md) with fields that can contain primitive types (e.g. integers, addresses), other objects, and non-object structs. Each object value is mutable at the time of its creation but can subsequently be *frozen* and become permanently immutable.
 * *Immutable packages*: a set of Move bytecode modules with a distinct name. A package can depend on other package objects that were previously published to the Sui ledger.
 
@@ -31,16 +31,11 @@ Transactions (and thus, certificates) take objects as input, read/write/mutate t
 
 To construct this graph, we add a node for each committed transaction and draw a directed edge labeled with object reference `O` from transaction `A` to transaction `B` if `A` produced object `O` (i.e., created or mutated `O`) and transaction `B` takes object `O` as an input.
 
-EDITORIAL NOTE: A diagram would be useful here. Can we use Mermaid as now seen in the [Summary](SUMMARY.md) thanks to Evan? Tracked in:
-https://github.com/MystenLabs/sui/issues/564
-
 The root of this DAG is a *genesis* transaction that takes no inputs and produces the objects that exist in the initial state of the system. The DAG can be extended by identifying mutable transaction outputs that have not yet been consumed by any committed transaction and sending a new transaction that takes these outputs (and optionally, immutable transaction outputs) as inputs.
 
 The set of objects that are available to be taken as input by a transaction are the *live objects*, and the global state maintained by Sui consists of the totality of such objects. The live objects for a particular Sui address `A` are all objects owned by `A`, along with all immutable objects in the system.
 
 When this DAG contains all committed transactions in the system, it forms a complete (and crytographically auditable) view of the system's state and history. In addition, we can use the scheme above to construct a DAG of the relevant history for a subset of transactions or objects (e.g., the objects owned by a single address).
-
-EDITORIAL NOTE: Should we describe how to audit this here? In a separate section?
 
 ## Further reading
 * Objects are modified and created by [transactions](transactions.md).
