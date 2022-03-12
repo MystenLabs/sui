@@ -21,6 +21,11 @@ module Sui::Transfer {
         child_id: ID,
     }
 
+    /// Getter for ChildRefs child id.
+    public fun child_id<T: key>(child_ref: &ChildRef<T>): &ID {
+        &child_ref.child_id
+    }
+
     /// Transfers are implemented by emitting a
     /// special `TransferEvent` that the sui adapter
     /// interprets differently than user events.
