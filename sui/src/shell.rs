@@ -1,10 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::Display;
-use std::io::Write;
-use std::{env, io};
-
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::env;
@@ -119,7 +115,7 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                                 for (pos, history) in rl.history().iter().enumerate() {
                                     println!(" {} {}", pos + 1, history);
                                 }
-                                continue 'shell;
+                                continue;
                             }
                             _ => {}
                         }

@@ -21,11 +21,11 @@ Check out the [Sui GitHub](https://github.com/MystenLabs/sui) repository.
 
 To install the `sui` and `wallet` binaries, use the following commands.
 ```shell
-$ cargo install --git ssh://git@github.com/MystenLabs/sui.git --bin sui --bin wallet
+cargo install --git ssh://git@github.com/MystenLabs/sui.git --bin sui --bin wallet
 ```
 or 
 ```shell
-$ cargo install --path <Path to Sui project>/sui --bin wallet --bin sui
+cargo install --path <Path to Sui project>/sui --bin wallet --bin sui
 ```
 
 This will install `sui` and `wallet` binaries in `~/.cargo/bin`directory that can be executed directly.
@@ -126,13 +126,13 @@ implement more secure key management and support hardware signing in a future re
 Run the following command to start the local Sui network:
 
 ```shell
-$ sui start
+sui start
 ```
 
 or
 
 ```shell
-$ sui start --config [config file path]
+sui start --config [config file path]
 ```
 NOTE: For logs, set `RUST_LOG=debug` before invoking `./sui start`.
 
@@ -163,13 +163,13 @@ The wallet can be started in two modes: interactive shell or command line interf
 To start the interactive shell:
 
 ```shell
-$ wallet
+wallet
 ```
 
 or
 
 ```shell
-$ wallet --config [config file path]
+wallet --config [config file path]
 ```
 
 The wallet config file path defaults to `./wallet.conf` if not
@@ -202,7 +202,7 @@ For example, we can use the following command to see the list of
 accounts available on the platform:
 
 ```shell
-$ wallet --no-shell addresses
+wallet --no-shell addresses
 ```
 
 The result of running this command should resemble the following output:
@@ -235,7 +235,7 @@ not enough, there are two ways to add accounts to the Sui wallet if needed.
 To create a new account, execute the `new-address` command:
 
 ```shell
-$ wallet --no-shell new-address
+wallet --no-shell new-address
 ```
 
 The output shows a confirmation after the account has been created:
@@ -271,7 +271,7 @@ OPTIONS:
 ```
 To view the objects owned by the accounts created in genesis, run the following command (substitute the address with one of the genesis addresses in your wallet):
 ```shell
-$ wallet --no-shell objects --address 0999FD9EEE3AD557112182E7CB5747A253132000
+wallet --no-shell objects --address 0999FD9EEE3AD557112182E7CB5747A253132000
 ```
 The result should resemble the following, which shows the object in the format of (`object_id`, `sequence_number`, `object_hash`).
 ```shell
@@ -299,7 +299,7 @@ OPTIONS:
 ```
 To view the object, use the following command:
 ```bash
-$ wallet --no-shell object --id C7CC5FA26A039CFA03B32FA56414DFCE19BA318C
+wallet --no-shell object --id C7CC5FA26A039CFA03B32FA56414DFCE19BA318C
 ```
 This should give you output similar to the following:
 ```shell
@@ -538,7 +538,7 @@ We will perform the transfer by calling the `transfer` function from
 the GAS module using the following Sui Wallet command:
 
 ```shell
-$ wallet --no-shell call --function transfer --module GAS --package 0x2 --args \"0x591BADC8D906BAE7FEE95D6B6464A474CCC67ACF\" \"0xF456EBEF195E4A231488DF56B762AC90695BE2DD\" --gas AF1CF17AA1231461BC274DB0CDDCC49E38687667 --gas-budget 1000
+wallet --no-shell call --function transfer --module GAS --package 0x2 --args \"0x591BADC8D906BAE7FEE95D6B6464A474CCC67ACF\" \"0xF456EBEF195E4A231488DF56B762AC90695BE2DD\" --gas AF1CF17AA1231461BC274DB0CDDCC49E38687667 --gas-budget 1000
 ```
 
 This is a pretty complicated command so let's explain all of its
@@ -651,7 +651,7 @@ that the location of the package's sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
 ```shell
-$ wallet --no-shell publish --path $PATH_TO_PACKAGE/my_move_package --gas  7154ECD49047FC4554D38C41C92DF91736D5A906 --gas-budget 30000
+wallet --no-shell publish --path $PATH_TO_PACKAGE/my_move_package --gas  7154ECD49047FC4554D38C41C92DF91736D5A906 --gas-budget 30000
 ```
 
 The result of running this command should look as follows:
@@ -707,7 +707,7 @@ The genesis process can be customized by providing a genesis configuration
 file using the `--config` flag.
 
 ```shell
-$ sui genesis --config <Path to genesis config file>
+sui genesis --config <Path to genesis config file>
 ```
 Example `genesis.conf`:
 ```json
