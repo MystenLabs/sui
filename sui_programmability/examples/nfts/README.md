@@ -1,4 +1,4 @@
-# NFT's
+# NFTs
 
 * Num: Issuing the first ten natural numbers as collectible NFT's.
 * Geniteam: NFTs representing collectible monsters and cosmetics used in a farming game.
