@@ -59,10 +59,55 @@ CallResult:
       U128:
         NEWTYPE: U128
     4:
-      Vector:
+      Address:
+        NEWTYPE:
+          TYPENAME: AccountAddress
+    5:
+      BoolVec:
+        NEWTYPE:
+          SEQ: BOOL
+    6:
+      U8Vec:
+        NEWTYPE:
+          SEQ: U8
+    7:
+      U64Vec:
+        NEWTYPE:
+          SEQ: U64
+    8:
+      U128Vec:
+        NEWTYPE:
+          SEQ: U128
+    9:
+      AddrVec:
         NEWTYPE:
           SEQ:
-            TYPENAME: CallResult
+            TYPENAME: AccountAddress
+    10:
+      BoolVecVec:
+        NEWTYPE:
+          SEQ: BOOL
+    11:
+      U8VecVec:
+        NEWTYPE:
+          SEQ:
+            SEQ: U8
+    12:
+      U64VecVec:
+        NEWTYPE:
+          SEQ:
+            SEQ: U64
+    13:
+      U128VecVec:
+        NEWTYPE:
+          SEQ:
+            SEQ: U128
+    14:
+      AddrVecVec:
+        NEWTYPE:
+          SEQ:
+            SEQ:
+              TYPENAME: AccountAddress
 CertifiedTransaction:
   STRUCT:
     - transaction:

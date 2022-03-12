@@ -269,6 +269,13 @@ fn process_return_values(
 
     for (idx, r) in return_types.iter().enumerate() {
         match r {
+            // debug_assert-s for missing arms should be OK here as we
+            // already checked in
+            // MovePackage::check_and_get_entry_function that no other
+            // types can exist in the signature
+
+            // see CallResults struct comments for why this is
+            // implemented the way it is
             Type::Bool => results.push(CallResult::Bool(
                 bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
             )),
@@ -278,11 +285,48 @@ fn process_return_values(
             Type::U64 => results.push(CallResult::U64(
                 bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
             )),
-            Type::U128 => results.push(CallResult::U64(
+            Type::U128 => results.push(CallResult::U128(
                 bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
             )),
-            // already checked in MovePackage::check_and_get_entry_function that no
-            // other types can exist in the signature
+            Type::Address => results.push(CallResult::Address(
+                bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+            )),
+            Type::Vector(t) => match &**t {
+                Type::Bool => results.push(CallResult::BoolVec(
+                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                )),
+                Type::U8 => results.push(CallResult::U8Vec(
+                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                )),
+                Type::U64 => results.push(CallResult::U64Vec(
+                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                )),
+                Type::U128 => results.push(CallResult::U128Vec(
+                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                )),
+                Type::Address => results.push(CallResult::AddrVec(
+                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                )),
+                Type::Vector(inner_t) => match &**inner_t {
+                    Type::Bool => results.push(CallResult::BoolVecVec(
+                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                    )),
+                    Type::U8 => results.push(CallResult::U8VecVec(
+                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                    )),
+                    Type::U64 => results.push(CallResult::U64VecVec(
+                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                    )),
+                    Type::U128 => results.push(CallResult::U128VecVec(
+                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                    )),
+                    Type::Address => results.push(CallResult::AddrVecVec(
+                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                    )),
+                    _ => debug_assert!(false),
+                },
+                _ => debug_assert!(false),
+            },
             _ => debug_assert!(false),
         }
     }

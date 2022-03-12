@@ -12,7 +12,10 @@ use super::{base_types::*, batch::*, committee::Committee, error::*, event::Even
 mod messages_tests;
 
 use move_binary_format::{access::ModuleAccess, CompiledModule};
-use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
+use move_core_types::{
+    account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
+    value::MoveStructLayout,
+};
 use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
 use static_assertions::const_assert_eq;
@@ -326,7 +329,20 @@ pub enum CallResult {
     U8(u8),
     U64(u64),
     U128(u128),
-    Vector(Vec<CallResult>),
+    Address(AccountAddress),
+    // these are not ideal but there is no other way to deserialize
+    // vectors encoded in BCS (you need a full type before this can be
+    // done)
+    BoolVec(Vec<bool>),
+    U8Vec(Vec<u8>),
+    U64Vec(Vec<u64>),
+    U128Vec(Vec<u128>),
+    AddrVec(Vec<AccountAddress>),
+    BoolVecVec(Vec<bool>),
+    U8VecVec(Vec<Vec<u8>>),
+    U64VecVec(Vec<Vec<u64>>),
+    U128VecVec(Vec<Vec<u128>>),
+    AddrVecVec(Vec<Vec<AccountAddress>>),
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]

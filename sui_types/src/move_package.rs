@@ -19,7 +19,7 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, u32};
 
 // TODO: robust MovePackage tests
 // #[cfg(test)]
@@ -113,7 +113,7 @@ impl MovePackage {
 
         // Entry function can only return primitive values
         for (idx, r) in function_signature.return_.iter().enumerate() {
-            if !is_primitive(r) {
+            if !is_entry_ret_type(r) {
                 return Err(SuiError::InvalidFunctionSignature {
                     error: format!("Incorrect type of the return value at index ({})", idx),
                 });
@@ -322,10 +322,27 @@ pub fn is_param_tx_context(param: &Type) -> bool {
 
 // TODO: upstream Type::is_primitive in diem
 pub fn is_primitive(t: &Type) -> bool {
+    // nested vectors of primitive types are OK to arbitrary nesting
+    // level
+    is_primitive_internal(t, 0, u32::MAX)
+}
+
+pub fn is_entry_ret_type(t: &Type) -> bool {
+    // allow vectors of vectors but no deeper nesting
+    is_primitive_internal(t, 0, 2)
+}
+
+pub fn is_primitive_internal(t: &Type, depth: u32, max_depth: u32) -> bool {
     use Type::*;
     match t {
         Bool | U8 | U64 | U128 | Address => true,
-        Vector(inner_t) => is_primitive(inner_t),
+        Vector(inner_t) => {
+            if depth < max_depth {
+                is_primitive_internal(inner_t, depth + 1, max_depth)
+            } else {
+                false
+            }
+        }
         Signer | Struct { .. } | TypeParameter(_) | Reference(_) | MutableReference(_) => false,
     }
 }

@@ -1012,9 +1012,6 @@ fn test_simple_call() {
         gas_object.clone(),
         GAS_BUDGET,
     );
-    // TODO: to be honest I am not sure why this flush is needed but
-    // without it, the following assertion below fails:
-    // assert!(obj.owner.is_address(&addr));
     storage.flush();
 
     // call published module function
@@ -1189,14 +1186,10 @@ fn test_call_ret() {
         gas_object.clone(),
         GAS_BUDGET,
     );
-    // TODO: to be honest I am not sure why this flush is needed but
-    // without it, the following assertion below fails:
-    // assert!(obj.owner.is_address(&addr));
     storage.flush();
 
-    // call published module function
+    // call published module function returning a u64
     let obj_val = 42u64;
-
     let pure_args = vec![obj_val.to_le_bytes().to_vec()];
 
     let response = call(
@@ -1204,12 +1197,103 @@ fn test_call_ret() {
         &native_functions,
         "M1",
         "identity_u64",
-        gas_object,
+        gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         Vec::new(),
         pure_args,
     );
-    println!("RESP: {:?}", response);
-    assert!(matches!(response.unwrap(), ExecutionStatus::Success { .. }));
+    let mut success_64 = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::U64(val) = results.get(0).unwrap() {
+            if val == &obj_val {
+                success_64 = true;
+            }
+        }
+    }
+
+    // call published module function returning an address (0x42)
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_addr",
+        gas_object.clone(),
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_addr = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::Address(val) = results.get(0).unwrap() {
+            if val.to_hex_literal() == "0x42" {
+                success_addr = true;
+            }
+        }
+    }
+
+    // call published module function returning a vector
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_vec",
+        gas_object.clone(),
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_vec = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::U64Vec(val) = results.get(0).unwrap() {
+            if val.len() == 2 && val.get(0).unwrap() == &42 && val.get(1).unwrap() == &7 {
+                success_vec = true;
+            }
+        }
+    }
+
+    // call published module function returning a vector of vectors
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_vec_vec",
+        gas_object,
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_vec_vec = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::U64VecVec(val) = results.get(0).unwrap() {
+            if val.len() == 1
+                && val.get(0).unwrap().len() == 2
+                && val.get(0).unwrap().get(0).unwrap() == &42
+                && val.get(0).unwrap().get(1).unwrap() == &7
+            {
+                success_vec_vec = true;
+            }
+        }
+    }
+
+    assert!(success_64 && success_addr && success_vec && success_vec_vec);
 }
