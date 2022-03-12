@@ -6,8 +6,10 @@ use crate::error::SuiError;
 use ed25519_dalek::Digest;
 
 use hex::FromHex;
+use opentelemetry::{global, Context};
 use rand::Rng;
 use serde::{de::Error as _, Deserialize, Serialize};
+use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
@@ -230,6 +232,17 @@ impl TransactionDigest {
         let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
         Self::new(random_bytes)
     }
+}
+
+/// Returns a Context for OpenTelemetry tracing from a TransactionDigest
+pub fn context_from_digest(digest: TransactionDigest) -> Context {
+    // TODO: don't create a HashMap, that wastes memory and costs an allocation!
+    let mut carrier = HashMap::new();
+    // TODO: figure out exactly what key to use.  I suspect it has to be the parent span ID in OpenTelemetry format.
+    carrier.insert("traceparent".to_string(), hex::encode(digest.0));
+    // carrier.insert("tx_digest".to_string(), hex::encode(digest.0));
+
+    global::get_text_map_propagator(|propagator| propagator.extract(&carrier))
 }
 
 impl ObjectDigest {

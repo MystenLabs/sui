@@ -5,7 +5,7 @@ more challenging by the distributed and asynchronous nature of Sui, with multipl
 processes distributed over a potentially global network.
 
 The observability stack in Sui is based on the [Tokio tracing](https://tokio.rs/blog/2019-08-tracing) library.
-The rest of this document highlights specific aspects of achieving good observability through useful logging
+The rest of this document highlights specific aspects of achieving good observability through structured logging
 and metrics in Sui.
 
 NOTE: The output here is largely for the consumption of Sui operators, administrators, and developers.  The
@@ -14,10 +14,19 @@ to potentially byzantine behavior.
 
 ## Contexts, scopes, and tracing transaction flow
 
-The main idea of logging and tracing in a distributed and asynchronous context, where you cannot rely on looking
-at individual logs over time in a single thread, is to assign context to logging/tracing so that we can trace,
-for example, individual transactions.  Context uses key-value pairs so that we can easily filter on subsets
-and examine individual flows, across both thread/task and process boundaries.
+In a distributed and asynchronous system like Sui, one cannot rely on looking at individual logs over time in a single thread.
+To solve this problem, we use the approach of structured logging.  Structured logging offers a way to tie together
+logs, events, and blocks of functionality across threads and process boundaries.
+
+### Spans and events
+
+In the [Tokio tracing](https://tokio.rs/blog/2019-08-tracing) library, structured logging is implemented using [spans and events](https://docs.rs/tracing/0.1.31/tracing/index.html#core-concepts).
+Spans cover a whole block of functionality - like one function call, a Future or async task, etc.  They can be
+nested and key-value pairs in spans give context to events or logs inside the function.
+
+* spans and their key-value pairs adds essential context to enclosed logs, such as a transaction ID.
+* spans also track time spent in different sections of code, enabling distributed tracing functionality
+* individual logs can also add key-value pairs to aid in parsing, filtering and aggregation.
 
 Here is a table/summary of context information that we will want:
 
@@ -43,6 +52,11 @@ and tracing a transaction across the gateway (`authority_aggregator`) as well as
 2022-03-05T01:35:03.395917Z DEBUG test_move_call_args_linter_command:process_cert{tx_digest=t#7e5f08ab09ec80e3372c101c5858c96965a25326c21af27ab7774d1f7bd40848}: sui_core::authority: Finished execution of transaction with status Success { gas_used: 7 } gas_used=7
 ```
 
+From the example above, we can see that `process_tx` is a span that covers handling the initial transaction request, and "Checked locks" is a single log message within the transaction handling method in the authority.
+Every log message that occurs within the span inherits the key-value properties defined in the span, including the tx_digest and any other fields that are added.
+Log messages can set their own keys and values.
+The fact that logs inherit the span properties allows us to trace, for example, the flow of a transaction across thread and process boundaries.
+
 ## Key-value pairs schema
 
 ### Span names
@@ -53,8 +67,10 @@ and analyzed for tracing, performance analysis, etc.
 |           Name          |       Place        |                                    Meaning                                     |
 | ----------------------- | ------------------ | ------------------------------------------------------------------------------ |
 | process_tx              | Gateway, Authority | Send transaction request, get back 2f+1 signatures and make certificate        |
-| process_cert            | Gateway            | Send certificate to authorities to execute transaction                         |
-| handle_cert             | Gateway, Authority | Handle certificate processing and Move execution                               |
+| process_cert            | Gateway, Authority | Send certificate to authorities to execute transaction                         |
+| process_cert_inner      | Authority          | Inner function to process certificates in authority                            |
+| tx_execute              | Authority          | Actual execution of transfer/MOVE call etc.                                    |
+| handle_cert             | Gateway            | Send to one authority for certificate processing                               |
 | sync_cert               | Gateway, Authority | Gateway-initiated sync of data to authority                                    |
 | tx_check_locks          | Authority          | Check locks on input objects of incoming transaction request                   |
 | db_set_transaction_lock | Authority          | Database set transaction locks on new transaction                              |
@@ -160,6 +176,17 @@ Also notice `elapsed_milliseconds` which logs the duration of each span.
 {"v":0,"name":"sui","msg":"[DB_UPDATE_STATE - END]","level":20,"hostname":"Evan-MLbook.lan","pid":51425,"time":"2022-03-08T22:48:11.248114Z","target":"sui_core::authority","line":430,"file":"sui_core/src/authority.rs","tx_digest":"t#d1385064287c2ad67e4019dd118d487a39ca91a40e0fd8e678dbc32e112a1493","elapsed_milliseconds":0}
 {"v":0,"name":"sui","msg":"[PROCESS_CERT - END]","level":20,"hostname":"Evan-MLbook.lan","pid":51425,"time":"2022-03-08T22:48:11.248688Z","target":"sui_core::authority_server","line":67,"file":"sui_core/src/authority_server.rs","tx_digest":"t#d1385064287c2ad67e4019dd118d487a39ca91a40e0fd8e678dbc32e112a1493","elapsed_milliseconds":2}
 ```
+
+### Jaeger (seeing distributed traces)
+
+To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do the following:
+
+1. Run this to get a local Jaeger container: `docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest`
+2. Set `SUI_TRACING_ENABLE` to 1
+3. Start sui and run some transfers with wallet, or run the benchmarking tool.
+4. Browse to `http://localhost:16686/` and select "Sui" as the Service
+
+NOTE: separate spans (which are not nested) are not connected as a single trace for now.
 
 ### Live async inspection / Tokio Console
 

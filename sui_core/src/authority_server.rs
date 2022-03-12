@@ -8,13 +8,16 @@ use sui_network::{
     network::NetworkServer,
     transport::{spawn_server, MessageHandler, RwChannel, SpawnedServer},
 };
-use sui_types::{batch::UpdateItem, error::*, messages::*, serialize::*};
+use sui_types::{
+    base_types::context_from_digest, batch::UpdateItem, error::*, messages::*, serialize::*,
+};
 
 use crate::authority_batch::BatchManager;
 use futures::{SinkExt, StreamExt};
 
 use std::time::Duration;
 use tracing::*;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -172,11 +175,16 @@ impl AuthorityServer {
                 match result {
                     SerializedMessage::Transaction(message) => {
                         let tx_digest = message.digest();
-                        // No allocations: it's a 'static str!
-                        let tx_kind = message.data.kind_as_str();
+                        // Enable Trace Propagation across spans/processes using tx_digest
+                        let span = tracing::debug_span!(
+                            "process_tx",
+                            ?tx_digest,
+                            tx_kind = message.data.kind_as_str()
+                        );
+                        span.set_parent(context_from_digest(tx_digest));
                         self.state
                             .handle_transaction(*message)
-                            .instrument(tracing::debug_span!("process_tx", ?tx_digest, tx_kind))
+                            .instrument(span)
                             .await
                             .map(|info| Some(serialize_transaction_info(&info)))
                     }
@@ -184,13 +192,17 @@ impl AuthorityServer {
                         let confirmation_transaction = ConfirmationTransaction {
                             certificate: message.as_ref().clone(),
                         };
-                        let tx_kind = message.transaction.data.kind_as_str();
+                        let tx_digest = message.transaction.digest();
+                        let span = tracing::debug_span!(
+                            "process_cert",
+                            ?tx_digest,
+                            tx_kind = message.transaction.data.kind_as_str()
+                        );
+                        span.set_parent(context_from_digest(tx_digest));
                         match self
                             .state
                             .handle_confirmation_transaction(confirmation_transaction)
-                            .instrument(tracing::debug_span!("process_cert",
-                                                             tx_digest =? message.transaction.digest(),
-                                                             tx_kind))
+                            .instrument(span)
                             .await
                         {
                             Ok(info) => {

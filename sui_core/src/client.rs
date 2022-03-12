@@ -21,6 +21,8 @@ use sui_types::{
     object::{Object, ObjectRead, Owner},
     SUI_FRAMEWORK_ADDRESS,
 };
+use tracing::Instrument;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use typed_store::rocks::open_cf;
 use typed_store::Map;
 
@@ -493,7 +495,19 @@ where
         &mut self,
         transaction: &Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        let (new_certificate, effects) = self.authorities.execute_transaction(transaction).await?;
+        let tx_digest = transaction.digest();
+        let span = tracing::debug_span!(
+            "execute_transaction",
+            ?tx_digest,
+            tx_kind = transaction.data.kind_as_str()
+        );
+        span.set_parent(context_from_digest(tx_digest));
+
+        let (new_certificate, effects) = self
+            .authorities
+            .execute_transaction(transaction)
+            .instrument(span)
+            .await?;
 
         // Update local data using new transaction response.
         self.update_objects_from_transaction_info(new_certificate.clone(), effects.clone())

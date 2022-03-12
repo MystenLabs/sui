@@ -347,7 +347,7 @@ impl AuthorityState {
                     Some(lock) => {
                         if let Some(object) = self._database.get_object(object_id)? {
                             if object.version() != lock {
-                                warn!(object_version =? object.version(),
+                                debug!(object_version =? object.version(),
                                       locked_version =? lock,
                                       "Unexpected version number in locked shared object");
                                 lock_errors.push(SuiError::InvalidSequenceNumber);
@@ -369,6 +369,7 @@ impl AuthorityState {
             // have at least one owner objects, it is not necessary to re-check the locks on
             // shared objects as we do with owned objects.
             self.process_certificate(confirmation_transaction.clone())
+                .instrument(tracing::debug_span!("process_cert_inner"))
                 .await
         }
         // In case there are no shared objects, we simply process the certificate.
@@ -379,7 +380,9 @@ impl AuthorityState {
                 return Ok(transaction_info);
             }
 
-            self.process_certificate(confirmation_transaction).await
+            self.process_certificate(confirmation_transaction)
+                .instrument(tracing::debug_span!("process_cert_inner"))
+                .await
         }
     }
 
@@ -416,8 +419,9 @@ impl AuthorityState {
         let mut tx_ctx = TxContext::new(&transaction.sender_address(), transaction_digest);
 
         let gas_object_id = transaction.gas_payment_object_ref().0;
-        let (mut temporary_store, status) =
-            self.execute_transaction(transaction, inputs, &mut tx_ctx)?;
+        let res = tracing::debug_span!("tx_execute")
+            .in_scope(|| self.execute_transaction(transaction, inputs, &mut tx_ctx));
+        let (mut temporary_store, status) = res?;
         debug!(
             gas_used = status.gas_used(),
             "Finished execution of transaction with status {:?}", status
