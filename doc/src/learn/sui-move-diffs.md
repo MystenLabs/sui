@@ -1,4 +1,3 @@
-
 ---
 title: How Sui Move differs from Core Move
 ---
