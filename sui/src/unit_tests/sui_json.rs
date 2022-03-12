@@ -235,23 +235,30 @@ fn test_basic_args_linter_top_level() {
     /*
     Function signature:
             public fun create_monster(
+                _player: &mut Player,
+                farm: &mut Farm,
+                pet_monsters: &mut Collection,
                 monster_name: vector<u8>,
-                monster_img_id: u64,
+                monster_img_index: u64,
                 breed: u8,
                 monster_affinity: u8,
                 monster_description: vector<u8>,
                 ctx: &mut TxContext
             )
     */
+
     let monster_name_raw = "MonsterName";
     let monster_img_id_raw = 12345678;
     let breed_raw = 89;
     let monster_affinity_raw = 200;
     let monster_description_raw = "MonsterDescription";
 
+    let player_id = json!(format!("0x{:02x}", ObjectID::random()));
+    let farm_id = json!(format!("0x{:02x}", ObjectID::random()));
+    let pet_monsters_id = json!(format!("0x{:02x}", ObjectID::random()));
     // This is okay since not starting with 0x
     let monster_name = json!(monster_name_raw);
-    // Well withing U64 bounds
+    // Well within U64 bounds
     let monster_img_id = json!(monster_img_id_raw);
     // Well within U8 bounds
     let breed = json!(breed_raw);
@@ -262,6 +269,9 @@ fn test_basic_args_linter_top_level() {
 
     // They have to be ordered
     let args = vec![
+        player_id,
+        farm_id,
+        pet_monsters_id,
         monster_name.clone(),
         monster_img_id.clone(),
         breed,
@@ -275,7 +285,7 @@ fn test_basic_args_linter_top_level() {
     let (object_args, pure_args) =
         resolve_move_function_args(framework_pkg, module.clone(), function.clone(), args).unwrap();
 
-    assert!(object_args.is_empty());
+    assert!(!object_args.is_empty());
 
     assert_eq!(
         pure_args[0],
