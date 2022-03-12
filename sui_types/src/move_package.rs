@@ -242,10 +242,12 @@ pub fn resolve_and_type_check(
                         }
                     }
                     Type::Struct { .. } => {
-                        if object.is_read_only() {
+                        if object.is_shared() {
+                            // Forbid passing shared (both mutable and immutable) object by value.
+                            // This ensures that shared object cannot be transferred, deleted or wrapped.
                             return Err(SuiError::TypeError {
                                 error: format!(
-                                    "Argument {} is expected to be mutable, immutable object found",
+                                    "Shared object cannot be passed by-value, found in argument {}",
                                     idx
                                 ),
                             });
