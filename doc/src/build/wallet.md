@@ -21,11 +21,11 @@ Check out the [Sui GitHub](https://github.com/MystenLabs/sui) repository.
 
 To install the `sui` and `wallet` binaries, use the following commands.
 ```shell
-cargo install --git ssh://git@github.com/MystenLabs/sui.git --bin sui --bin wallet
+cargo install --git ssh://git@github.com/MystenLabs/sui.git
 ```
 or 
 ```shell
-cargo install --path <Path to Sui project>/sui --bin wallet --bin sui
+cargo install --path <Path to Sui project>/sui
 ```
 
 This will install `sui` and `wallet` binaries in `~/.cargo/bin`directory that can be executed directly.
