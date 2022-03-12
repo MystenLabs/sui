@@ -642,7 +642,7 @@ fn test_freeze() {
     assert!(err
         .1
         .to_string()
-        .contains("Argument 0 is expected to be mutable, immutable object found"));
+        .contains("Shared object cannot be passed by-value, found in argument 0"));
     // Since it failed before VM execution, during type resolving,
     // only minimum gas will be charged.
     assert_eq!(err.0, gas::MIN_MOVE);
