@@ -119,7 +119,7 @@ impl Config for WalletConfig {
             .ok_or_else(|| anyhow!("Cannot determine parent directory."))?;
         Ok(WalletConfig {
             accounts: Vec::new(),
-            keystore: KeystoreType::File(working_dir.join("wallet.ks")),
+            keystore: KeystoreType::File(working_dir.join("wallet.key")),
             gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
                 db_folder_path: working_dir.join("client_db"),
                 ..Default::default()

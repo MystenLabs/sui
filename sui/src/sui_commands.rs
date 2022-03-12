@@ -25,7 +25,6 @@ use crate::config::{
     AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, WalletConfig,
 };
 use crate::gateway::{EmbeddedGatewayConfig, GatewayType};
-use crate::keystore::KeystoreType;
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
@@ -54,11 +53,6 @@ impl SuiCommand {
                 };
                 let wallet_path = working_dir.join("wallet.conf");
                 let mut wallet_config = WalletConfig::create(&wallet_path)?;
-                wallet_config.keystore = KeystoreType::File(working_dir.join("wallet.key"));
-                wallet_config.gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
-                    db_folder_path: working_dir.join("client_db"),
-                    ..Default::default()
-                });
                 genesis(config, genesis_conf, &mut wallet_config).await
             }
         }
