@@ -32,7 +32,7 @@ use std::{
     pin::Pin,
 };
 
-use self::client_responses::{MergeCoinResponse, SplitCoinResponse};
+use self::gateway_responses::{MergeCoinResponse, SplitCoinResponse};
 
 /// A trait for supplying transaction signature asynchronously.
 ///
@@ -42,7 +42,7 @@ use self::client_responses::{MergeCoinResponse, SplitCoinResponse};
 /// # Example
 /// ```
 /// use signature::Error;
-/// use sui_core::client::AsyncTransactionSigner;
+/// use sui_core::gateway_state::AsyncTransactionSigner;
 /// use sui_types::base_types::SuiAddress;
 /// use sui_types::crypto::Signature;
 /// use sui_types::messages::TransactionData;
@@ -55,7 +55,7 @@ use self::client_responses::{MergeCoinResponse, SplitCoinResponse};
 /// impl AsyncTransactionSigner for ExampleTransactionSigner {
 ///     async fn sign(&self, address: &SuiAddress, data: TransactionData) -> Result<Signature, Error> {
 ///         // 1. Validate the transaction data
-///  
+///
 ///         // 2. Create a signature if the transaction data is valid
 ///         let signature = Signature::new(&data, &self.signer);
 ///         // 3. return the signature
@@ -63,7 +63,7 @@ use self::client_responses::{MergeCoinResponse, SplitCoinResponse};
 ///     }
 /// }
 /// ```
-/// This trait is typically use with [`StableSyncTransactionSigner`] to supply signature to the [`Client`] trait
+/// This trait is typically use with [`StableSyncTransactionSigner`] to supply signature to the [`GatewayAPI`] trait
 #[async_trait]
 pub trait AsyncTransactionSigner {
     async fn sign(
@@ -80,20 +80,20 @@ pub trait AsyncTransactionSigner {
 /// Typically instantiated with Box::pin(tx_signer) where tx_signer is a [`AsyncTransactionSigner`]
 pub type StableSyncTransactionSigner = Pin<Box<dyn AsyncTransactionSigner + Send + Sync>>;
 
-pub mod client_responses;
-pub mod client_store;
+pub mod gateway_responses;
+pub mod gateway_store;
 
 pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
 
-pub type GatewayClient = Box<dyn Client + Sync + Send>;
+pub type GatewayClient = Box<dyn GatewayAPI + Sync + Send>;
 
-pub struct ClientAddressManager<A> {
+pub struct GatewayState<A> {
     authorities: AuthorityAggregator<A>,
-    store: client_store::ClientAddressManagerStore,
-    address_states: BTreeMap<SuiAddress, ClientState>,
+    store: gateway_store::GatewayStore,
+    address_states: BTreeMap<SuiAddress, AccountState>,
 }
 
-impl<A> ClientAddressManager<A>
+impl<A> GatewayState<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -104,30 +104,30 @@ where
         authority_clients: BTreeMap<AuthorityName, A>,
     ) -> Self {
         Self {
-            store: client_store::ClientAddressManagerStore::open(path),
+            store: gateway_store::GatewayStore::open(path),
             authorities: AuthorityAggregator::new(committee, authority_clients),
             address_states: BTreeMap::new(),
         }
     }
 
-    fn get_or_create_account(&mut self, address: SuiAddress) -> SuiResult<&ClientState> {
-        let client_state = match self.address_states.entry(address) {
+    fn get_or_create_account(&mut self, address: SuiAddress) -> SuiResult<&AccountState> {
+        let account_state = match self.address_states.entry(address) {
             Entry::Vacant(e) => {
                 let single_store = match self.store.get_managed_address(address)? {
                     Some(store) => store,
                     None => self.store.manage_new_address(address)?,
                 };
-                let state = ClientState::new_for_manager(address, single_store);
+                let state = AccountState::new_for_manager(address, single_store);
                 e.insert(state)
             }
             Entry::Occupied(o) => o.into_mut(),
         };
-        Ok(client_state)
+        Ok(account_state)
     }
 
     /// Get all the states
     #[cfg(test)]
-    pub fn get_managed_address_states(&self) -> &BTreeMap<SuiAddress, ClientState> {
+    pub fn get_managed_address_states(&self) -> &BTreeMap<SuiAddress, AccountState> {
         &self.address_states
     }
 
@@ -142,16 +142,16 @@ where
     }
 }
 
-pub struct ClientState {
-    /// Our Sui address.
+pub struct AccountState {
+    /// Sui address of this account.
     address: SuiAddress,
-    /// Persistent store for client
-    store: client_store::ClientSingleAddressStore,
+    /// Persistent store for this account.
+    store: gateway_store::AccountStore,
 }
 
 // Operations are considered successful when they successfully reach a quorum of authorities.
 #[async_trait]
-pub trait Client {
+pub trait GatewayAPI {
     /// Send coin object to a Sui address.
     async fn transfer_coin(
         &mut self,
@@ -162,10 +162,10 @@ pub trait Client {
         tx_signer: StableSyncTransactionSigner,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
 
-    /// Synchronise client state with a random authorities, updates all object_ids and certificates
+    /// Synchronise account state with a random authorities, updates all object_ids and certificates
     /// from account_addr, request only goes out to one authority.
-    /// this method doesn't guarantee data correctness, client will have to handle potential byzantine authority
-    async fn sync_client_state(&mut self, account_addr: SuiAddress) -> Result<(), anyhow::Error>;
+    /// this method doesn't guarantee data correctness, caller will have to handle potential byzantine authority
+    async fn sync_account_state(&mut self, account_addr: SuiAddress) -> Result<(), anyhow::Error>;
 
     /// Call move functions in the module in the given package, with args supplied
     async fn move_call(
@@ -241,24 +241,19 @@ pub trait Client {
     ) -> Result<BTreeSet<ObjectRef>, SuiError>;
 }
 
-impl ClientState {
+impl AccountState {
     /// It is recommended that one call sync and download_owned_objects
     /// right after constructor to fetch missing info form authorities
-    /// TODO: client should manage multiple addresses instead of each addr having DBs
-    /// https://github.com/MystenLabs/sui/issues/332
     #[cfg(test)]
     pub fn new(path: PathBuf, address: SuiAddress) -> Self {
-        ClientState {
+        AccountState {
             address,
-            store: client_store::ClientSingleAddressStore::new(path),
+            store: gateway_store::AccountStore::new(path),
         }
     }
 
-    pub fn new_for_manager(
-        address: SuiAddress,
-        store: client_store::ClientSingleAddressStore,
-    ) -> Self {
-        ClientState { address, store }
+    pub fn new_for_manager(address: SuiAddress, store: gateway_store::AccountStore) -> Self {
+        AccountState { address, store }
     }
 
     pub fn address(&self) -> SuiAddress {
@@ -397,7 +392,7 @@ impl ClientState {
     }
 
     #[cfg(test)]
-    pub fn store(&self) -> &client_store::ClientSingleAddressStore {
+    pub fn store(&self) -> &gateway_store::AccountStore {
         &self.store
     }
 
@@ -409,7 +404,7 @@ impl ClientState {
             .collect()
     }
 
-    /// This function verifies that the objects in the specfied transaction are locked by the given transaction
+    /// This function verifies that the objects in the specified transaction are locked by the given transaction
     /// We use this to ensure that a transaction can indeed unlock or lock certain objects in the transaction
     /// This means either exactly all the objects are owned by this transaction, or by no transaction
     /// The caller has to explicitly find which objects are locked
@@ -435,7 +430,7 @@ impl ClientState {
 
     /// Locks the objects for the given transaction
     /// It is important to check that the object is not locked before locking again
-    /// One should call can_lock_or_unlock before locking as this overwites the previous lock
+    /// One should call can_lock_or_unlock before locking as this overwrites the previous lock
     /// If the object is already locked, ensure it is unlocked by calling unlock_pending_transaction_objects
     /// Client runs sequentially right now so access to this is safe
     /// Double-locking can cause equivocation. TODO: https://github.com/MystenLabs/sui/issues/335
@@ -473,7 +468,7 @@ impl ClientState {
     }
 }
 
-impl<A> ClientAddressManager<A>
+impl<A> GatewayState<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -552,7 +547,7 @@ where
         let account = self.get_or_create_account(address)?;
         // The cert should be included in the response
         let parent_tx_digest = cert.transaction.digest();
-        // TODO: certicates should ideally be inserted to the shared store.
+        // TODO: certificates should ideally be inserted to the shared store.
         account.insert_certificate(&parent_tx_digest, &cert)?;
 
         let mut objs_to_download = Vec::new();
@@ -651,7 +646,7 @@ where
 }
 
 #[async_trait]
-impl<A> Client for ClientAddressManager<A>
+impl<A> GatewayAPI for GatewayState<A>
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
@@ -668,7 +663,7 @@ where
         self.get_object_info(object_id)
             .await?
             .object()?
-            .is_transfer_elegible()?;
+            .is_transfer_eligible()?;
 
         let account = self.get_or_create_account(signer)?;
         let gas_payment = account.latest_object_ref(&gas_payment)?;
@@ -681,7 +676,7 @@ where
         Ok((certificate, effects))
     }
 
-    async fn sync_client_state(&mut self, account_addr: SuiAddress) -> Result<(), anyhow::Error> {
+    async fn sync_account_state(&mut self, account_addr: SuiAddress) -> Result<(), anyhow::Error> {
         self.try_complete_pending_transactions(account_addr).await?;
 
         let (active_object_certs, _deleted_refs_certs) = self

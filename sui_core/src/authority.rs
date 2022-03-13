@@ -24,12 +24,15 @@ use sui_types::{
     fp_bail, fp_ensure, gas,
     messages::*,
     object::{Data, Object, Owner},
-    storage::{DeleteKind, Storage},
+    storage::{BackingPackageStore, DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use tracing::*;
 
-use crate::authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender};
+use crate::{
+    authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender},
+    execution_engine,
+};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -40,7 +43,7 @@ pub mod authority_tests;
 pub mod move_integration_tests;
 
 mod temporary_store;
-use temporary_store::AuthorityTemporaryStore;
+pub use temporary_store::AuthorityTemporaryStore;
 
 mod authority_store;
 pub use authority_store::AuthorityStore;
@@ -447,8 +450,16 @@ impl AuthorityState {
         let mut tx_ctx = TxContext::new(&transaction.sender_address(), transaction_digest);
 
         let gas_object_id = transaction.gas_payment_object_ref().0;
-        let (temporary_store, status) =
-            self.execute_transaction(transaction, inputs, &mut tx_ctx)?;
+        let mut temporary_store =
+            AuthorityTemporaryStore::new(self._database.clone(), &inputs, tx_ctx.digest());
+        let status = execution_engine::execute_transaction(
+            &mut temporary_store,
+            transaction,
+            inputs,
+            &mut tx_ctx,
+            &self.move_vm,
+            self._native_functions.clone(),
+        )?;
         debug!(
             gas_used = status.gas_used(),
             "Finished execution of transaction with status {:?}", status
@@ -477,61 +488,6 @@ impl AuthorityState {
         }
 
         Ok(resp)
-    }
-
-    fn execute_transaction(
-        &self,
-        transaction: Transaction,
-        mut inputs: Vec<Object>,
-        tx_ctx: &mut TxContext,
-    ) -> SuiResult<(AuthorityTemporaryStore, ExecutionStatus)> {
-        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs, tx_ctx.digest());
-        // unwraps here are safe because we built `inputs`
-        let mut gas_object = inputs.pop().unwrap();
-
-        let status = match transaction.data.kind {
-            TransactionKind::Transfer(t) => AuthorityState::transfer(
-                &mut temporary_store,
-                inputs,
-                t.recipient,
-                gas_object.clone(),
-            ),
-            TransactionKind::Call(c) => {
-                // unwraps here are safe because we built `inputs`
-                let package = inputs.pop().unwrap();
-                adapter::execute(
-                    &self.move_vm,
-                    &mut temporary_store,
-                    self._native_functions.clone(),
-                    package,
-                    &c.module,
-                    &c.function,
-                    c.type_arguments,
-                    inputs,
-                    c.pure_arguments,
-                    c.gas_budget,
-                    gas_object.clone(),
-                    tx_ctx,
-                )
-            }
-            TransactionKind::Publish(m) => adapter::publish(
-                &mut temporary_store,
-                self._native_functions.clone(),
-                m.modules,
-                tx_ctx,
-                m.gas_budget,
-                gas_object.clone(),
-            ),
-        }?;
-        if let ExecutionStatus::Failure { gas_used, .. } = &status {
-            // Roll back the temporary store if execution failed.
-            temporary_store.reset();
-            // This gas deduction cannot fail.
-            gas::deduct_gas(&mut gas_object, *gas_used);
-            temporary_store.write_object(gas_object);
-        }
-        temporary_store.ensure_active_inputs_mutated();
-        Ok((temporary_store, status))
     }
 
     /// Process certificates coming from the consensus. It is crucial that this function is only
@@ -570,41 +526,6 @@ impl AuthorityState {
             transaction,
             certificate.clone(),
         )
-    }
-
-    fn transfer(
-        temporary_store: &mut AuthorityTemporaryStore,
-        mut inputs: Vec<Object>,
-        recipient: SuiAddress,
-        mut gas_object: Object,
-    ) -> SuiResult<ExecutionStatus> {
-        if !inputs.len() == 1 {
-            return Ok(ExecutionStatus::Failure {
-                gas_used: gas::MIN_OBJ_TRANSFER_GAS,
-                error: Box::new(SuiError::ObjectInputArityViolation),
-            });
-        }
-
-        // Safe to do pop due to check !is_empty()
-        let mut output_object = inputs.pop().unwrap();
-
-        let gas_used = gas::calculate_object_transfer_cost(&output_object);
-        if let Err(err) = gas::try_deduct_gas(&mut gas_object, gas_used) {
-            return Ok(ExecutionStatus::Failure {
-                gas_used: gas::MIN_OBJ_TRANSFER_GAS,
-                error: Box::new(err),
-            });
-        }
-        temporary_store.write_object(gas_object);
-
-        if let Err(err) = output_object.transfer(recipient) {
-            return Ok(ExecutionStatus::Failure {
-                gas_used: gas::MIN_OBJ_TRANSFER_GAS,
-                error: Box::new(err),
-            });
-        }
-        temporary_store.write_object(output_object);
-        Ok(ExecutionStatus::Success { gas_used })
     }
 
     pub async fn handle_transaction_info_request(
@@ -824,7 +745,8 @@ impl AuthorityState {
             .flatten()
             .collect::<Vec<_>>();
 
-        let mut temporary_store = AuthorityTemporaryStore::new(self, &input_objects, ctx.digest());
+        let mut temporary_store =
+            AuthorityTemporaryStore::new(self._database.clone(), &input_objects, ctx.digest());
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
         let vm = adapter::verify_and_link(&temporary_store, &modules, package_id, natives)?;
@@ -879,8 +801,7 @@ impl AuthorityState {
 
     async fn update_state(
         &self,
-        temporary_store: AuthorityTemporaryStore,
-
+        temporary_store: AuthorityTemporaryStore<AuthorityStore>,
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
     ) -> Result<(u64, TransactionInfoResponse), SuiError> {

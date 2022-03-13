@@ -20,7 +20,7 @@ const OBJECT_LAYOUTS_CF_NAME: &str = "object_layouts";
 const MANAGED_ADDRESS_PATHS_CF_NAME: &str = "managed_address_paths";
 const MANAGED_ADDRESS_SUBDIR: &str = "managed_addresses";
 
-/// The address manager allows multiple addresses to be managed by one client
+/// The address manager allows multiple addresses to be managed by one store.
 /// It also manages the different DB locations and in future, the configurations
 /// Dir Structure
 /// AddressManagerStore
@@ -32,21 +32,21 @@ const MANAGED_ADDRESS_SUBDIR: &str = "managed_addresses";
 ///     ------ SingleAddressStore3
 ///     |
 ///     ------ SingleAddressStore4
-pub struct ClientAddressManagerStore {
+pub struct GatewayStore {
     // Address manager store path
     pub path: PathBuf,
     // Table of managed addresses to their paths
     // This is in the subdirectory MANAGED_ADDRESS_SUBDIR
     pub managed_address_paths: DBMap<SuiAddress, PathBuf>,
 }
-impl ClientAddressManagerStore {
+impl GatewayStore {
     /// Open a store for the manager
     pub fn open(path: PathBuf) -> Self {
         // Open column family
-        let db = client_store::init_store(path.clone(), vec![MANAGED_ADDRESS_PATHS_CF_NAME]);
-        ClientAddressManagerStore {
+        let db = init_store(path.clone(), vec![MANAGED_ADDRESS_PATHS_CF_NAME]);
+        GatewayStore {
             path,
-            managed_address_paths: client_store::reopen_db(&db, MANAGED_ADDRESS_PATHS_CF_NAME),
+            managed_address_paths: reopen_db(&db, MANAGED_ADDRESS_PATHS_CF_NAME),
         }
     }
 
@@ -64,22 +64,21 @@ impl ClientAddressManagerStore {
     pub fn manage_new_address(
         &self,
         address: SuiAddress,
-    ) -> Result<client_store::ClientSingleAddressStore, typed_store::rocks::TypedStoreError> {
+    ) -> Result<AccountStore, typed_store::rocks::TypedStoreError> {
         // Create an a path for this address
         let path = self.make_db_path_for_address(address);
         self.managed_address_paths.insert(&address, &path)?;
-        Ok(ClientSingleAddressStore::new(path))
+        Ok(AccountStore::new(path))
     }
 
     /// Gets managed address if any
     pub fn get_managed_address(
         &self,
         address: SuiAddress,
-    ) -> Result<Option<client_store::ClientSingleAddressStore>, typed_store::rocks::TypedStoreError>
-    {
+    ) -> Result<Option<AccountStore>, typed_store::rocks::TypedStoreError> {
         self.managed_address_paths
             .get(&address)
-            .map(|opt_path| opt_path.map(ClientSingleAddressStore::new))
+            .map(|opt_path| opt_path.map(AccountStore::new))
     }
 
     /// Check if an address is managed
@@ -92,13 +91,13 @@ impl ClientAddressManagerStore {
 }
 
 /// This is the store of one address
-pub struct ClientSingleAddressStore {
+pub struct AccountStore {
     /// Table of objects to transactions pending on the objects
     pub pending_transactions: DBMap<ObjectID, Transaction>,
     // The remaining fields are used to minimize networking, and may not always be persisted locally.
     /// Known certificates, indexed by TX digest.
     pub certificates: DBMap<TransactionDigest, CertifiedTransaction>,
-    /// Confirmed objects with it's ref owned by the client.
+    /// Confirmed objects with it's ref owned by the account.
     pub object_refs: DBMap<ObjectID, ObjectRef>,
     /// Certificate <-> object id linking map.
     pub object_certs: DBMap<ObjectRef, TransactionDigest>,
@@ -111,10 +110,10 @@ pub struct ClientSingleAddressStore {
     pub object_layouts: DBMap<StructTag, MoveStructLayout>,
 }
 
-impl ClientSingleAddressStore {
+impl AccountStore {
     pub fn new(path: PathBuf) -> Self {
         // Open column families
-        let db = client_store::init_store(
+        let db = init_store(
             path,
             vec![
                 PENDING_TRANSACTIONS_CF_NAME,
@@ -127,13 +126,13 @@ impl ClientSingleAddressStore {
             ],
         );
 
-        ClientSingleAddressStore {
-            pending_transactions: client_store::reopen_db(&db, PENDING_TRANSACTIONS_CF_NAME),
-            certificates: client_store::reopen_db(&db, CERT_CF_NAME),
-            object_refs: client_store::reopen_db(&db, OBJ_REF_CF_NAME),
-            object_certs: client_store::reopen_db(&db, TX_DIGEST_TO_CERT_CF_NAME),
-            objects: client_store::reopen_db(&db, OBJECT_CF_NAME),
-            object_layouts: client_store::reopen_db(&db, OBJECT_LAYOUTS_CF_NAME),
+        AccountStore {
+            pending_transactions: reopen_db(&db, PENDING_TRANSACTIONS_CF_NAME),
+            certificates: reopen_db(&db, CERT_CF_NAME),
+            object_refs: reopen_db(&db, OBJ_REF_CF_NAME),
+            object_certs: reopen_db(&db, TX_DIGEST_TO_CERT_CF_NAME),
+            objects: reopen_db(&db, OBJECT_CF_NAME),
+            object_layouts: reopen_db(&db, OBJECT_LAYOUTS_CF_NAME),
         }
     }
 }
