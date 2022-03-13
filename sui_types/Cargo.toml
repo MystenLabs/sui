@@ -24,10 +24,9 @@ serde_json = "1.0.79"
 serde_with = "1.12.0"
 signature = "1.5.0"
 static_assertions = "1.1.0"
-strum = "0.24.0"
-strum_macros = "0.24.0"
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="a36c852c30729a16ee3c8a6a863f654887f0c30e"}
+name_variant = { git = "https://github.com/MystenLabs/mysten-infra", rev ="97a056f85555fa2afe497d6abb7cf6bf8faa63cf"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev ="97a056f85555fa2afe497d6abb7cf6bf8faa63cf"}
 
 move-binary-format = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }
 move-bytecode-utils = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }

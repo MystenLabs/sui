@@ -17,8 +17,12 @@ module Sui::Transfer {
     /// object to an account address. Because of this, an object cannot be deleted when
     /// it's still owned by another object.
     struct ChildRef<phantom T: key> has store {
-        parent_id: ID,
         child_id: ID,
+    }
+
+    /// Getter for ChildRefs child id.
+    public fun child_id<T: key>(child_ref: &ChildRef<T>): &ID {
+        &child_ref.child_id
     }
 
     /// Transfers are implemented by emitting a
@@ -50,10 +54,7 @@ module Sui::Transfer {
         let obj_id = *ID::id(&obj);
         let owner_id = ID::id_address(ID::id(owner));
         transfer_internal(obj, owner_id, true);
-        ChildRef {
-            parent_id: ID::new(owner_id),
-            child_id: obj_id,
-        }
+        ChildRef { child_id: obj_id }
     }
 
     /// Similar to transfer_to_object where we want to transfer an object to another object.
@@ -68,10 +69,7 @@ module Sui::Transfer {
         let obj_id = *ID::id(&obj);
         let inner_owner_id = *ID::inner(&owner_id);
         transfer_internal(obj, ID::id_address(&inner_owner_id), true);
-        let child_ref = ChildRef {
-            parent_id: inner_owner_id,
-            child_id: obj_id,
-        };
+        let child_ref = ChildRef { child_id: obj_id };
         (owner_id, child_ref)
     }
 
@@ -79,13 +77,13 @@ module Sui::Transfer {
     /// However it does not return the ChildRef. This can be unsafe to use since there is
     /// no longer guarantee that the ID stored in the parent actually represent ownership.
     public(friend) fun transfer_to_object_unsafe<T: key, R: key>(obj: T, owner: &mut R) {
-        let ChildRef { parent_id: _, child_id: _ } = transfer_to_object(obj, owner);
+        let ChildRef { child_id: _ } = transfer_to_object(obj, owner);
     }
 
     /// Transfer a child object to new owner. This is one of the two ways that can
     /// consume a ChildRef. It will return a ChildRef that represents the new ownership.
     public fun transfer_child_to_object<T: key, R: key>(child: T, child_ref: ChildRef<T>, owner: &mut R): ChildRef<T> {
-        let ChildRef { parent_id: _, child_id } = child_ref;
+        let ChildRef { child_id } = child_ref;
         assert!(&child_id == ID::id(&child), ECHILD_ID_MISMATCH);
         transfer_to_object(child, owner)
     }
@@ -96,7 +94,7 @@ module Sui::Transfer {
     // TODO: Figure out a way to make it easier to destroy a child object in one call.
     // Currently one has to first transfer it to an address, and then delete it.
     public fun transfer_child_to_address<T: key>(child: T, child_ref: ChildRef<T>, recipient: address) {
-        let ChildRef { parent_id: _, child_id } = child_ref;
+        let ChildRef { child_id } = child_ref;
         assert!(&child_id == ID::id(&child), ECHILD_ID_MISMATCH);
         transfer(child, recipient)
     }
@@ -106,7 +104,7 @@ module Sui::Transfer {
     /// is safe because the ownership will also be destroyed, and hence there won't
     /// be dangling reference to the child object through ownership.
     public fun delete_child_object<T: key>(child: T, child_ref: ChildRef<T>) {
-        let ChildRef { parent_id: _, child_id } = child_ref;
+        let ChildRef { child_id } = child_ref;
         assert!(&child_id == ID::id(&child), ECHILD_ID_MISMATCH);
         delete_child_object_internal(child);
     }

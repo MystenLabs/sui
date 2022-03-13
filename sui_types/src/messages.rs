@@ -13,6 +13,7 @@ mod messages_tests;
 
 use move_binary_format::{access::ModuleAccess, CompiledModule};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
+use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
 use static_assertions::const_assert_eq;
 use std::fmt::Write;
@@ -22,7 +23,6 @@ use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
-use strum::VariantNames;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Transfer {
@@ -53,9 +53,7 @@ pub struct MoveModulePublish {
     pub gas_budget: u64,
 }
 
-#[derive(
-    Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, strum_macros::EnumVariantNames,
-)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, NamedVariant)]
 pub enum TransactionKind {
     /// Initiate an object transfer between addresses
     Transfer(Transfer),
@@ -135,16 +133,7 @@ impl TransactionData {
 
     /// Returns the transaction kind as a &str (variant name, no fields)
     pub fn kind_as_str(&self) -> &'static str {
-        // NOTE: Ideally we could have used something like https://docs.rs/strum/latest/strum/derive.AsRefStr.html
-        // The problem is that it doesn't actually return &'static ref due to &self above
-        // and we really want 'static for common situations, such as authority_server dispatch where
-        // by the time we instrument the transaction kind, the message or Transaction might have been moved
-        // and so the lifetime and Kind is out of scope and we cannot borrow it.
-        match self.kind {
-            TransactionKind::Transfer(_) => TransactionKind::VARIANTS[0],
-            TransactionKind::Publish(_) => TransactionKind::VARIANTS[1],
-            TransactionKind::Call(_) => TransactionKind::VARIANTS[2],
-        }
+        self.kind.variant_name()
     }
 }
 

@@ -33,7 +33,9 @@ module Sui::Geniteam {
         // Owned Farm
         owned_farm: Option<ChildRef<Farm>>,
 
-        // Inventory of unassigned cosmetics
+        // Inventory of unassigned cosmetics.
+        // A cosmetic can be either a FarmCosmetic or a MonsterCosmetic.
+        // Since they can be of different types, we use Bag instead of Collection.
         inventory: ChildRef<Bag>,
     }
 
@@ -204,25 +206,22 @@ module Sui::Geniteam {
         hunger_level: u64,
         affection_level: u64,
         buddy_level: u8,
-        monster_img_index: u64,
         _ctx: &mut TxContext
     ) {
         self.monster_level = monster_level;
         self.hunger_level = hunger_level;
         self.affection_level = affection_level;
         self.buddy_level = buddy_level;
-        self.monster_img_index = monster_img_index;
     }
 
 
     /// Update the attributes of the farm
     public fun update_farm_stats(
         _player: &mut Player, farm: &mut Farm, level: u64, current_xp: u64,
-        farm_img_index: u64, _ctx: &mut TxContext
+        _ctx: &mut TxContext
     ) {
         farm.current_xp = current_xp;
         farm.level = level;
-        farm.farm_img_index = farm_img_index;
     }
 
     /// Apply the cosmetic to the Farm from the inventory
@@ -293,8 +292,7 @@ module Sui::Geniteam {
         let id = TxContext::new_id(ctx);
 
         // Create inventory collection.
-        let max_capacity = 65536;
-        let inventory = Bag::new_with_max_capacity(ctx, max_capacity + 1);
+        let inventory = Bag::new(ctx);
 
         // Transfer ownership of inventory to player.
         let (id, child_ref) = Transfer::transfer_to_object_id(inventory, id);

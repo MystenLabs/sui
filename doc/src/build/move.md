@@ -158,7 +158,7 @@ in the Move book.
 In order for a Move struct type to define a Sui object type such as
 `Coin`, its first field must be `id: VersionedID`, which is a
 struct type defined in the
-[ID module](../sui_programmability/framework/sources/ID.move). The
+[ID module](../../../sui_programmability/framework/sources/ID.move). The
 Move struct type must
 also have the `key` ability, which allows the object to be persisted
 in Sui's global storage. Abilities of a Move struct are listed after
@@ -186,7 +186,7 @@ In particular, one type of custom coin already defined in Sui is
 `Coin<GAS>`, which represents a token used to pay for gas used in Sui
 computations - in this case, the concrete type used to parameterize the
 `Coin` struct is the `GAS` struct in the
-[Coin module](../../sui_programmability/framework/sources/Coin.move):
+[Coin module](../../../sui_programmability/framework/sources/Coin.move):
 
 ``` rust
 struct GAS has drop {}
@@ -374,7 +374,7 @@ In order to build a package containing this simple module, we need to
 put some required metadata into the `Move.toml` file, including package
 name, package version, local dependency path to locate Sui framework
 code, and package numeric ID, which must be 0x0 for user-defined modules
-to facilitate [package publishing](wallet.md#package-publishing).
+to facilitate [package publishing](wallet.md#publish-packages).
 
 ```
 [package]
@@ -519,7 +519,7 @@ problem is to transfer ownership of the sword.
 
 In order to get our test to work, we then add the following line to
 the beginning of our testing function to import the
-[Transfer module](../../sui_programmability/framework/sources/Transfer.move):
+[Transfer module](../../../sui_programmability/framework/sources/Transfer.move):
 
 ``` rust
         use Sui::Transfer;
@@ -556,13 +556,13 @@ little to do with Sui beyond using some Sui packages, such as
 already very useful for developers writing Move code for Sui, they may
 also want to test additional Sui-specific features. In particular, a
 Move call in Sui is encapsulated in a Sui
-[transaction](https://github.com/MystenLabs/sui/blob/main/doc/transactions.md),
+[transaction](transactions.md),
 and a developer may wish to test interactions between different
 transactions within a single test (e.g. one transaction creating an
 object and the other one transferring it).
 
 Sui-specific testing is supported via the
-[TestScenario module](../../sui_programmability/framework/sources/TestScenario.move)
+[TestScenario module](../../../sui_programmability/framework/sources/TestScenario.move)
 that provides Sui-related testing functionality otherwise unavailable
 in *pure Move* and its
 [testing framework](https://github.com/diem/move/blob/main/language/documentation/book/src/unit-testing.md).
@@ -735,8 +735,7 @@ Alternatively, any call to `abort` or assertion failure will also print the stac
 
 For functions in a Move package to actually be callable from Sui
 (rather than for Sui execution scenario to be emulated), the package
-has to be _published_ to Sui's [distributed
-ledger](../README.md#architecture)
+has to be _published_ to Sui's [distributed ledger](../learn/how-sui-works.md)
 where it is represented as a Sui object.
 
 At this point, however, the
@@ -744,7 +743,7 @@ At this point, however, the
 not clear if it even makes sense to accommodate package publishing,
 which happens once per package creation, in the context of a unit
 testing framework. Instead, one can use a sample Sui wallet to
-[publish](wallet.md#package-publishing) Move code and to
+[publish](wallet.md#publish-packages) Move code and to
 [call](wallet.md#calling-move-code) it. See the
 [wallet documentation](wallet.md) for a description of how
 to publish the package we have [written](#writing-a-package) as as
@@ -858,8 +857,8 @@ encounter compilation errors in the existing tests due to the
 `sword_create` function signature change. We will leave the changes
 required for the tests to run again as an exercise for the reader. The
 entire source code for the package we have developed (with all the
-tests properly adjusted) can be found
-[here](../../sui_programmability/tutorial/sources/M1.move).
+tests properly adjusted) can be found in
+[M1.move](../../../sui_programmability/tutorial/sources/M1.move).
 
 ## Sui Move Library
 Sui provides a list of Move library functions that allows us to manipulate objects in Sui.
@@ -872,7 +871,7 @@ Objects in Sui can have different ownership types. Specifically, they are:
 - Shared and mutable (work-in-progress).
 
 **Transfer to Address**
-The [`Transfer`](../../sui_programmability/framework/sources/Transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
+The [`Transfer`](../../../sui_programmability/framework/sources/Transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
 
 The most common case is to transfer an object to an account address. For example, when a new object is created, it is typically transferred to an account address so that the address owns the object. To transfer an object `obj` to an account address `recipient`:
 ```
@@ -920,7 +919,8 @@ Transfer::transfer_child_to_address(child, child_ref, recipient);
 This call also requires to have the `child_ref` as proof of original ownership.
 After this transfer, the object will be owned by `recipient`.
 
-More examples of how objects can be transferred and owned can be found [here](../../sui_core/src/unit_tests/data/object_owner/sources/ObjectOwner.move).
+More examples of how objects can be transferred and owned can be found in
+[ObjectOwner.move](../../../sui_core/src/unit_tests/data/object_owner/sources/ObjectOwner.move).
 
 **Freeze an object**
 To make an object `obj` shared and immutable, one can call:
@@ -937,7 +937,7 @@ To make an object `obj` shared and mutable, one can call:
 Transfer::share_object(obj);
 ```
 After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, such an object cannot be deleted, transferred or embedded in another object as a field.
-Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](../../sui_programmability/examples/games/sources/TicTacToe.move) vs [Shared Object](../../sui_programmability/examples/games/sources/TicTacToeV2.move).
+Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](../../../sui_programmability/examples/games/sources/TicTacToe.move) vs [Shared Object](../../../sui_programmability/examples/games/sources/TicTacToeV2.move).
 
 ### Transaction Context
 `TxContext` module provides a few important APIs that operate based on the current transaction context.
@@ -964,7 +964,7 @@ TxContext::sender(ctx)
 Now that you are familiar with the Move language, as well as with how
 to develop and test Move code, you are ready to start looking at and
 playing with some larger
-[examples](../../sui_programmability/examples/sources) of Move
+[examples](../explore/examples.md) of Move
 programs, such as implementation of the tic-tac-toe game or a more
 fleshed out variant of a fantasy game similar to the one we have been
 developing during this tutorial.

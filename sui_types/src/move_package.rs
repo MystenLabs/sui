@@ -38,6 +38,7 @@ pub struct TypeCheckSuccess {
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
 pub struct MovePackage {
+    id: ObjectID,
     module_map: BTreeMap<String, ByteBuf>,
 }
 
@@ -46,22 +47,15 @@ impl MovePackage {
         &self.module_map
     }
 
-    pub fn from_map(module_map: &BTreeMap<String, ByteBuf>) -> Self {
+    pub fn from_map(id: ObjectID, module_map: &BTreeMap<String, ByteBuf>) -> Self {
         Self {
+            id,
             module_map: module_map.clone(),
         }
     }
 
     pub fn id(&self) -> ObjectID {
-        // TODO: simplify this
-        // https://github.com/MystenLabs/sui/issues/249
-        // All modules in the same package must have the same address. Pick any
-        ObjectID::from(
-            *CompiledModule::deserialize(self.module_map.values().next().unwrap())
-                .unwrap()
-                .self_id()
-                .address(),
-        )
+        self.id
     }
 
     pub fn module_id(&self, module: &Identifier) -> Result<ModuleId, SuiError> {
@@ -140,7 +134,10 @@ impl MovePackage {
 
 impl From<&Vec<CompiledModule>> for MovePackage {
     fn from(compiled_modules: &Vec<CompiledModule>) -> Self {
+        let id = ObjectID::from(*compiled_modules[0].self_id().address());
+
         MovePackage::from_map(
+            id,
             &compiled_modules
                 .iter()
                 .map(|module| {
@@ -242,10 +239,12 @@ pub fn resolve_and_type_check(
                         }
                     }
                     Type::Struct { .. } => {
-                        if object.is_read_only() {
+                        if object.is_shared() {
+                            // Forbid passing shared (both mutable and immutable) object by value.
+                            // This ensures that shared object cannot be transferred, deleted or wrapped.
                             return Err(SuiError::TypeError {
                                 error: format!(
-                                    "Argument {} is expected to be mutable, immutable object found",
+                                    "Shared object cannot be passed by-value, found in argument {}",
                                     idx
                                 ),
                             });

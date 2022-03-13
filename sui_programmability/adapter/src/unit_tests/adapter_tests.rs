@@ -30,8 +30,11 @@ struct ScratchPad {
     created: BTreeMap<ObjectID, Object>,
     deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     events: Vec<Event>,
+    created_object_ids: HashSet<ObjectID>,
 }
 
+// TODO: We should use AuthorityTemporaryStore instead.
+// Keeping this functionally identical to AuthorityTemporaryStore is a pain.
 #[derive(Default, Debug)]
 struct InMemoryStorage {
     persistent: BTreeMap<ObjectID, Object>,
@@ -114,6 +117,10 @@ impl Storage for InMemoryStorage {
                 // try persistent memory
                  self.persistent.get(id).cloned())
         })
+    }
+
+    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>) {
+        self.temporary.created_object_ids = ids;
     }
 
     // buffer write to appropriate place in temporary storage
@@ -457,8 +464,9 @@ fn test_wrap_unwrap() {
     storage.flush();
     assert!(storage.read_object(&id2).is_none());
     let new_obj1 = storage.read_object(&id1).unwrap();
-    // sequence # should increase after unwrapping
-    assert_eq!(new_obj1.version(), obj1_version.increment());
+    // obj1 has gone through wrapping and unwrapping.
+    // version number is now the original version + 2.
+    assert_eq!(new_obj1.version(), obj1_version.increment().increment());
     // type-specific contents should not change after unwrapping
     assert_eq!(
         new_obj1
@@ -642,7 +650,7 @@ fn test_freeze() {
     assert!(err
         .1
         .to_string()
-        .contains("Argument 0 is expected to be mutable, immutable object found"));
+        .contains("Shared object cannot be passed by-value, found in argument 0"));
     // Since it failed before VM execution, during type resolving,
     // only minimum gas will be charged.
     assert_eq!(err.0, gas::MIN_MOVE);

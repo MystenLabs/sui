@@ -25,6 +25,17 @@ const app: Application = express();
 app.use(morgan('tiny'));
 app.use(express.static('public'));
 
+// Set up CORS Policy
+// TODO: update the allowed origin before launch
+app.use(function (_, res, next) {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header(
+        'Access-Control-Allow-Headers',
+        'Origin, X-Requested-With, Content-Type, Accept'
+    );
+    next();
+});
+
 // Use body parser to read sent json payloads
 app.use(
     bodyParser.urlencoded({
@@ -61,6 +72,7 @@ app.use(function errorHandler(
         });
     }
     if (err instanceof Error) {
+        console.warn('Internal Server Error:', err);
         return res.status(500).json({
             message: 'Internal Server Error',
         });
