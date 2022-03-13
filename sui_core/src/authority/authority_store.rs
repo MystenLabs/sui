@@ -6,8 +6,8 @@ use rocksdb::Options;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
-
 use std::sync::atomic::AtomicU64;
+
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use tracing::warn;
@@ -386,7 +386,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         // This is the critical region: testing the locks and writing the
         // new locks must be atomic, and not writes should happen in between.
         {
-            // Aquire the lock to ensure no one else writes when we are in here.
+            // Acquire the lock to ensure no one else writes when we are in here.
             // MutexGuards are unlocked on drop (ie end of this block)
             let _mutexes = self.acquire_locks(mutable_input_objects);
 
@@ -424,9 +424,9 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     ///
     /// Internally it checks that all locks for active inputs are at the correct
     /// version, and then writes locks, objects, certificates, parents atomically.
-    pub fn update_state(
+    pub fn update_state<S>(
         &self,
-        temporary_store: AuthorityTemporaryStore,
+        temporary_store: AuthorityTemporaryStore<S>,
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
     ) -> Result<(TxSequenceNumber, TransactionInfoResponse), SuiError> {
@@ -470,9 +470,9 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     }
 
     /// Persist temporary storage to DB for genesis modules
-    pub fn update_objects_state_for_genesis(
+    pub fn update_objects_state_for_genesis<S>(
         &self,
-        temporary_store: AuthorityTemporaryStore,
+        temporary_store: AuthorityTemporaryStore<S>,
         transaction_digest: TransactionDigest,
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
@@ -482,10 +482,10 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     }
 
     /// Helper function for updating the objects in the state
-    fn batch_update_objects(
+    fn batch_update_objects<S>(
         &self,
         mut write_batch: DBBatch,
-        temporary_store: AuthorityTemporaryStore,
+        temporary_store: AuthorityTemporaryStore<S>,
         transaction_digest: TransactionDigest,
         should_sequence: bool,
     ) -> Result<Option<TxSequenceNumber>, SuiError> {
@@ -706,7 +706,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Retrieves batches including transactions within a range.
     ///
     /// This function returns all signed batches that enclose the requested transaction
-    /// including the batch preceeding the first requested transaction, the batch including
+    /// including the batch preceding the first requested transaction, the batch including
     /// the last requested transaction (if there is one) and all batches in between.
     ///
     /// Transactions returned include all transactions within the batch that include the
@@ -806,22 +806,40 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     }
 }
 
-impl ModuleResolver for AuthorityStore {
+impl<const ALL_OBJ_VER: bool> BackingPackageStore for SuiDataStore<ALL_OBJ_VER> {
+    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        let package = self.get_object(package_id)?;
+        if let Some(obj) = &package {
+            fp_ensure!(
+                obj.is_package(),
+                SuiError::BadObjectType {
+                    error: format!("Package expected, Move object found: {}", package_id),
+                }
+            );
+        }
+        Ok(package)
+    }
+}
+
+impl<const ALL_OBJ_VER: bool> ModuleResolver for SuiDataStore<ALL_OBJ_VER> {
     type Error = SuiError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.get_object(&ObjectID::from(*module_id.address()))? {
-            Some(o) => match &o.data {
-                Data::Package(c) => Ok(c
+        // TODO: We should cache the deserialized modules to avoid
+        // fetching from the store / re-deserializing them everytime.
+        // https://github.com/MystenLabs/sui/issues/809
+        Ok(self
+            .get_package(&ObjectID::from(*module_id.address()))?
+            .and_then(|package| {
+                // unwrap safe since get_package() ensures it's a package object.
+                package
+                    .data
+                    .try_as_package()
+                    .unwrap()
                     .serialized_module_map()
                     .get(module_id.name().as_str())
                     .cloned()
-                    .map(|m| m.into_vec())),
-                _ => Err(SuiError::BadObjectType {
-                    error: "Expected module object".to_string(),
-                }),
-            },
-            None => Ok(None),
-        }
+                    .map(|m| m.into_vec())
+            }))
     }
 }
