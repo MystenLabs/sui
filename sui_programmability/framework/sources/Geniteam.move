@@ -1,4 +1,5 @@
 module Sui::Geniteam {
+    use Sui::Bag::{Self, Bag};
     use Sui::Collection::{Self, Collection};
     use Sui::ID::{Self, VersionedID};
     use Sui::TxContext::{Self, TxContext};
@@ -23,20 +24,22 @@ module Sui::Geniteam {
 
     struct Player has key {
         id: VersionedID,
-        player_name: String,        
+        player_name: String,
         water_runes_count: u64,
         fire_runes_count: u64,
         wind_runes_count: u64,
         earth_runes_count: u64,
-        
+
         // Owned Farm
         owned_farm: Option<ChildRef<Farm>>,
 
-        // Inventory of unassigned cosmetics 
-        inventory: ChildRef<Collection>,
+        // Inventory of unassigned cosmetics.
+        // A cosmetic can be either a FarmCosmetic or a MonsterCosmetic.
+        // Since they can be of different types, we use Bag instead of Collection.
+        inventory: ChildRef<Bag>,
     }
 
-    struct Farm has key, store {
+    struct Farm has key {
         id: VersionedID,
         farm_name: String,
         farm_img_index: u64,
@@ -45,15 +48,15 @@ module Sui::Geniteam {
         occupied_monster_slots: u64,
 
         // Collection of Pet monsters owned by this Farm
-        pet_monsters: ChildRef<Collection>,
+        pet_monsters: ChildRef<Collection<Monster>>,
 
         // Applied cosmetic at this slot
         applied_farm_cosmetic_0:  Option<ChildRef<FarmCosmetic>>,
         // Applied cosmetic at this slot
-        applied_farm_cosmetic_1:  Option<ChildRef<FarmCosmetic>>,        
+        applied_farm_cosmetic_1:  Option<ChildRef<FarmCosmetic>>,
     }
 
-    struct Monster has key, store {
+    struct Monster has key {
         id: VersionedID,
         monster_name: String,
         monster_img_index: u64,
@@ -69,16 +72,16 @@ module Sui::Geniteam {
         // Applied cosmetic at this slot
         applied_monster_cosmetic_0: Option<ChildRef<MonsterCosmetic>>,
         // Applied cosmetic at this slot
-        applied_monster_cosmetic_1: Option<ChildRef<MonsterCosmetic>>,    
+        applied_monster_cosmetic_1: Option<ChildRef<MonsterCosmetic>>,
 
     }
 
-    struct FarmCosmetic has key, store {
+    struct FarmCosmetic has key {
         id: VersionedID,
         cosmetic_type: u8,
     }
 
-    struct MonsterCosmetic has key, store {
+    struct MonsterCosmetic has key {
         id: VersionedID,
         cosmetic_type: u8,
     }
@@ -110,11 +113,11 @@ module Sui::Geniteam {
         Option::fill(&mut player.owned_farm, child_ref)
     }
 
-    /// Create a Monster and add it to the Farm's collection of Monsters, which 
+    /// Create a Monster and add it to the Farm's collection of Monsters, which
     /// is unbounded
     public fun create_monster(_player: &mut Player,
                               farm: &mut Farm,
-                              pet_monsters: &mut Collection,
+                              pet_monsters: &mut Collection<Monster>,
                               monster_name: vector<u8>,
                               monster_img_index: u64,
                               breed: u8,
@@ -132,7 +135,7 @@ module Sui::Geniteam {
         );
 
         // Check if this is the right collection
-        assert!(Transfer::child_id(&farm.pet_monsters) == ID::id(pet_monsters), 
+        assert!(Transfer::child_id(&farm.pet_monsters) == ID::id(pet_monsters),
                 EMONSTER_COLLECTION_NOT_OWNED_BY_FARM);
 
         // TODO: Decouple adding monster to farm from creating a monster.
@@ -142,40 +145,40 @@ module Sui::Geniteam {
 
     /// Create Farm cosmetic owned by player and add to its inventory
     public fun create_farm_cosmetics(
-        player: &mut Player, inventory: &mut Collection, cosmetic_type: u8, 
+        player: &mut Player, inventory: &mut Bag, cosmetic_type: u8,
         ctx: &mut TxContext
     ) {
         // Check if this is the right collection
-        assert!(Transfer::child_id(&player.inventory) == ID::id(inventory), 
+        assert!(Transfer::child_id(&player.inventory) == ID::id(inventory),
                 EINVENTORY_NOT_OWNED_BY_PLAYER);
-        
+
         // Create the farm cosmetic object
         let farm_cosmetic = FarmCosmetic {
-            id: TxContext::new_id(ctx), 
+            id: TxContext::new_id(ctx),
             cosmetic_type
             };
 
         // Add it to the player's inventory
-        Collection::add(inventory, farm_cosmetic);
+        Bag::add(inventory, farm_cosmetic);
     }
 
     /// Create Monster cosmetic owned by player and add to its inventory
     public fun create_monster_cosmetics(
-        player: &mut Player, inventory: &mut Collection, cosmetic_type: u8, 
+        player: &mut Player, inventory: &mut Bag, cosmetic_type: u8,
         ctx: &mut TxContext
-    ) {        
+    ) {
         // Check if this is the right collection
-        assert!(Transfer::child_id(&player.inventory) == ID::id(inventory), 
+        assert!(Transfer::child_id(&player.inventory) == ID::id(inventory),
                 EINVENTORY_NOT_OWNED_BY_PLAYER);
-        
+
         // Create the farm cosmetic object
         let monster_cosmetic = MonsterCosmetic {
-            id: TxContext::new_id(ctx), 
+            id: TxContext::new_id(ctx),
             cosmetic_type
             };
 
         // Add it to the player's inventory
-        Collection::add(inventory, monster_cosmetic);
+        Bag::add(inventory, monster_cosmetic);
     }
 
     /// Update the attributes of a player
@@ -197,7 +200,7 @@ module Sui::Geniteam {
     public fun update_monster_stats(
         _player: &mut Player,
         _farm: &mut Farm,
-        _pet_monsters: &mut Collection,
+        _pet_monsters: &mut Collection<Monster>,
         self: &mut Monster,
         monster_level: u64,
         hunger_level: u64,
@@ -223,7 +226,7 @@ module Sui::Geniteam {
 
     /// Apply the cosmetic to the Farm from the inventory
     public fun update_farm_cosmetics(
-        _player: &mut Player, farm: &mut Farm, _inventory: &mut Collection,
+        _player: &mut Player, farm: &mut Farm, _inventory: &mut Bag,
         farm_cosmetic: FarmCosmetic, cosmetic_slot_id: u64, _ctx: &mut TxContext
     ) {
         // Only 2 slots allowed
@@ -235,16 +238,16 @@ module Sui::Geniteam {
         // Assign by slot
         if (cosmetic_slot_id == 0) {
             // Check that the slot has no items
-            assert!(Option::is_none(&farm.applied_farm_cosmetic_0), 
+            assert!(Option::is_none(&farm.applied_farm_cosmetic_0),
                     ETOO_MANY_COSMETICS);
 
             // Store the cosmetic
             Option::fill(&mut farm.applied_farm_cosmetic_0, child_ref)
         } else {
             // Check that the slot has no items
-            assert!(Option::is_none(&farm.applied_farm_cosmetic_1), 
+            assert!(Option::is_none(&farm.applied_farm_cosmetic_1),
                     ETOO_MANY_COSMETICS);
-        
+
             // Store the cosmetic
             Option::fill(&mut farm.applied_farm_cosmetic_1, child_ref)
         };
@@ -252,9 +255,9 @@ module Sui::Geniteam {
 
     /// Apply the cosmetics to the Monster from the inventory
     public fun update_monster_cosmetics(
-        _player: &mut Player, _farm: &mut Farm, monster: &mut Monster, 
-        _inventory: &mut Collection, monster_cosmetic: MonsterCosmetic, 
-        _pet_monsters: &mut Collection, cosmetic_slot_id: u64,
+        _player: &mut Player, _farm: &mut Farm, monster: &mut Monster,
+        _inventory: &mut Bag, monster_cosmetic: MonsterCosmetic,
+        _pet_monsters: &mut Collection<Monster>, cosmetic_slot_id: u64,
          _ctx: &mut TxContext
     ) {
         // Only 2 slots allowed
@@ -273,7 +276,7 @@ module Sui::Geniteam {
         } else {
             // Check that the slot has no items
             assert!(Option::is_none(&monster.applied_monster_cosmetic_0), ETOO_MANY_COSMETICS);
-        
+
             // Store the cosmetic
             Option::fill(&mut monster.applied_monster_cosmetic_0, child_ref)
         };
@@ -289,11 +292,11 @@ module Sui::Geniteam {
         let id = TxContext::new_id(ctx);
 
         // Create inventory collection.
-        let inventory = Collection::new(ctx);
+        let inventory = Bag::new(ctx);
 
         // Transfer ownership of inventory to player.
         let (id, child_ref) = Transfer::transfer_to_object_id(inventory, id);
-        
+
         let player = Player {
             id,
             player_name: ASCII::string(player_name),
@@ -316,12 +319,12 @@ module Sui::Geniteam {
         let id = TxContext::new_id(ctx);
 
         // Create pet monsters collection.
-        let pet_monsters = Collection::new(ctx);
+        let pet_monsters = Collection::new<Monster>(ctx);
 
         // Transfer ownership of pet monsters to farm.
         let (id, child_ref) = Transfer::transfer_to_object_id(pet_monsters, id);
-        
-        
+
+
         let farm = Farm {
             id,
             farm_name: ASCII::string(farm_name),
