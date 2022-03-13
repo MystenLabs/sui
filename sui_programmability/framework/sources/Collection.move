@@ -118,7 +118,7 @@ module Sui::Collection {
         let len = size(c);
         while (i < len) {
             let child_ref = Vector::borrow(&c.objects, i);
-            if (Transfer::child_id(child_ref) == id) {
+            if (Transfer::is_child_unsafe(child_ref,  id)) {
                 return Option::some(i)
             };
             i = i + 1;
