@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
-use rocksdb::Options;
-use std::collections::BTreeSet;
+use rocksdb::{ColumnFamilyDescriptor, Options};
+use std::collections::{BTreeSet, };
 use std::convert::TryInto;
 use std::path::Path;
+
+use rocksdb::MultiThreaded;
 use std::sync::atomic::AtomicU64;
 
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use tracing::warn;
-use typed_store::rocks::{open_cf, DBBatch, DBMap};
+use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
 
 use std::sync::atomic::Ordering;
 use typed_store::{reopen, traits::Map};
@@ -19,6 +21,8 @@ use typed_store::{reopen, traits::Map};
 pub type AuthorityStore = SuiDataStore<false>;
 #[allow(dead_code)]
 pub type ReplicaStore = SuiDataStore<true>;
+
+const NUM_SHARDS: usize = 2048;
 
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
@@ -94,25 +98,69 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     pub next_sequence_number: AtomicU64,
 }
 
+/// Opens a database with options, and a number of column families that are created if they do not exist.
+pub fn open_cf_opts<P: AsRef<Path>>(
+    path: P,
+    db_options: Option<rocksdb::Options>,
+    opt_cfs: &[(&str, &rocksdb::Options)],
+) -> Result<Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
+    // Customize database options
+    let mut options = db_options.unwrap_or_default();
+    let mut cfs = rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&options, &path)
+        .ok()
+        .unwrap_or_default();
+
+    // Customize CFs
+
+    for cf_key in opt_cfs.iter().map(|(name, _)| name) {
+        let key = (*cf_key).to_owned();
+        if !cfs.contains(&key) {
+            cfs.push(key);
+        }
+    }
+
+    let primary = path.as_ref().to_path_buf();
+
+    let rocksdb = {
+        options.create_if_missing(true);
+        options.create_missing_column_families(true);
+        Arc::new(
+            rocksdb::DBWithThreadMode::<MultiThreaded>::open_cf_descriptors(
+                &options,
+                &primary,
+                opt_cfs
+                    .iter()
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(*name, (*opts).clone())),
+            )?,
+        )
+    };
+    Ok(rocksdb)
+}
+
 impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> AuthorityStore {
-        let db = open_cf(
+        let options = db_options.unwrap_or_default();
+
+        let mut point_lookup = options.clone();
+        point_lookup.optimize_for_point_lookup(1024 * 1024);
+
+        let db = open_cf_opts(
             &path,
-            db_options,
+            Some(options.clone()),
             &[
-                "objects",
-                "all_object_versions",
-                "owner_index",
-                "transaction_lock",
-                "signed_transactions",
-                "certificates",
-                "parent_sync",
-                "signed_effects",
-                "sequenced",
-                "schedule",
-                "executed_sequence",
-                "batches",
+                ("objects", &point_lookup),
+                ("all_object_versions", &options),
+                ("owner_index", &options),
+                ("transaction_lock", &point_lookup),
+                ("signed_transactions", &point_lookup),
+                ("certificates", &point_lookup),
+                ("parent_sync", &options),
+                ("signed_effects", &point_lookup),
+                ("sequenced", &options),
+                ("schedule", &options),
+                ("executed_sequence", &options),
+                ("batches", &options),
             ],
         )
         .expect("Cannot open DB.");
@@ -169,7 +217,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             signed_effects,
             sequenced,
             schedule,
-            lock_table: (0..1024)
+            lock_table: (0..NUM_SHARDS)
                 .into_iter()
                 .map(|_| parking_lot::Mutex::new(()))
                 .collect(),
@@ -349,13 +397,20 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
 
     /// Insert an object
     pub fn insert_object(&self, object: Object) -> Result<(), SuiError> {
-        self.objects.insert(&object.id(), &object)?;
+        // We only side load objects with a genesis parent transaction.
+        debug_assert!(object.previous_transaction == TransactionDigest::genesis());
+
+        // Insert object
         let object_ref = object.compute_object_reference();
+        self.objects.insert(&object_ref.0, &object)?;
+
+        // Indert lock
+        self.transaction_lock.get_or_insert(&object_ref, || None)?;
 
         // Update the index
         if let Some(address) = object.get_single_owner() {
             self.owner_index
-                .insert(&(address, object.id()), &object_ref)?;
+                .insert(&(address, object_ref.0), &object_ref)?;
         }
 
         // Update the parent
@@ -365,13 +420,6 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
 
-        Ok(())
-    }
-
-    /// Initialize a lock to an object reference to None, but keep it
-    /// as it is if a value is already present.
-    pub fn init_transaction_lock(&self, object_ref: ObjectRef) -> Result<(), SuiError> {
-        self.transaction_lock.get_or_insert(&object_ref, || None)?;
         Ok(())
     }
 
