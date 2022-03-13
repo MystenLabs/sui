@@ -380,7 +380,7 @@ async fn sui_start(
     for address in addresses.iter() {
         wallet_context
             .gateway
-            .sync_client_state(*address)
+            .sync_account_state(*address)
             .await
             .map_err(|err| {
                 custom_http_error(
@@ -458,7 +458,7 @@ async fn get_addresses(
     // TODO: Speed up sync operations by kicking them off concurrently.
     // Also need to investigate if this should be an automatic sync or manually triggered.
     for address in addresses.iter() {
-        if let Err(err) = wallet_context.gateway.sync_client_state(*address).await {
+        if let Err(err) = wallet_context.gateway.sync_account_state(*address).await {
             *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
@@ -668,7 +668,7 @@ struct ObjectInfoResponse {
     owner: String,
     /** Sequence number of the object */
     version: String,
-    /** Hex code as string representing the objet id */
+    /** Hex code as string representing the object id */
     id: String,
     /** Boolean representing if the object is mutable */
     readonly: String,
@@ -755,7 +755,7 @@ associated with the transaction that verifies the transaction.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct TransactionResponse {
-    /** Integer representing the acutal cost of the transaction */
+    /** Integer representing the actual cost of the transaction */
     gas_used: u64,
     /** JSON representation of the list of resulting effects on the object */
     object_effects_summary: serde_json::Value,
@@ -881,7 +881,7 @@ struct PublishRequest {
 
 /**
 Publish move module. It will perform proper verification and linking to make
-sure the pacakge is valid. If some modules have initializers, these initializers
+sure the package is valid. If some modules have initializers, these initializers
 will also be executed in Move (which means new Move objects can be created in
 the process of publishing a Move package). Gas budget is required because of the
 need to execute module initializers.
@@ -1016,7 +1016,7 @@ async fn sync(
         get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
 
     // Attempt to create a new account state, but continue if it already exists.
-    if let Err(err) = wallet_context.gateway.sync_client_state(address).await {
+    if let Err(err) = wallet_context.gateway.sync_account_state(address).await {
         *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
         return Err(custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
