@@ -147,9 +147,9 @@ pub fn build_move_package(
     }
 }
 
-pub fn build_and_verify_user_package(path: &Path, dev_mode: bool) -> SuiResult {
+pub fn build_and_verify_user_package(path: &Path) -> SuiResult {
     let build_config = BuildConfig {
-        dev_mode,
+        dev_mode: false,
         ..Default::default()
     };
     let modules = build_move_package(path, build_config, false)?;
@@ -218,7 +218,7 @@ fn run_examples_move_unit_tests() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../examples")
             .join(example);
-        build_and_verify_user_package(&path, true).unwrap();
+        build_and_verify_user_package(&path).unwrap();
         run_move_unit_tests(&path).unwrap();
     }
 }
