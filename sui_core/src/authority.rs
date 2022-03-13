@@ -24,7 +24,7 @@ use sui_types::{
     fp_bail, fp_ensure, gas,
     messages::*,
     object::{Data, Object, Owner},
-    storage::{DeleteKind, Storage},
+    storage::{BackingPackageStore, DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use tracing::*;
@@ -484,8 +484,9 @@ impl AuthorityState {
         transaction: Transaction,
         mut inputs: Vec<Object>,
         tx_ctx: &mut TxContext,
-    ) -> SuiResult<(AuthorityTemporaryStore, ExecutionStatus)> {
-        let mut temporary_store = AuthorityTemporaryStore::new(self, &inputs, tx_ctx.digest());
+    ) -> SuiResult<(AuthorityTemporaryStore<AuthorityStore>, ExecutionStatus)> {
+        let mut temporary_store =
+            AuthorityTemporaryStore::new(self._database.clone(), &inputs, tx_ctx.digest());
         // unwraps here are safe because we built `inputs`
         let mut gas_object = inputs.pop().unwrap();
 
@@ -573,7 +574,7 @@ impl AuthorityState {
     }
 
     fn transfer(
-        temporary_store: &mut AuthorityTemporaryStore,
+        temporary_store: &mut AuthorityTemporaryStore<AuthorityStore>,
         mut inputs: Vec<Object>,
         recipient: SuiAddress,
         mut gas_object: Object,
@@ -824,7 +825,8 @@ impl AuthorityState {
             .flatten()
             .collect::<Vec<_>>();
 
-        let mut temporary_store = AuthorityTemporaryStore::new(self, &input_objects, ctx.digest());
+        let mut temporary_store =
+            AuthorityTemporaryStore::new(self._database.clone(), &input_objects, ctx.digest());
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
         let vm = adapter::verify_and_link(&temporary_store, &modules, package_id, natives)?;
@@ -879,8 +881,7 @@ impl AuthorityState {
 
     async fn update_state(
         &self,
-        temporary_store: AuthorityTemporaryStore,
-
+        temporary_store: AuthorityTemporaryStore<AuthorityStore>,
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
     ) -> Result<(u64, TransactionInfoResponse), SuiError> {
