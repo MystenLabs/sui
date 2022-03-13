@@ -388,7 +388,7 @@ impl Object {
 
     /// Change the owner of `self` to `new_owner`
     pub fn transfer(&mut self, new_owner: SuiAddress) -> SuiResult {
-        self.is_transfer_elegible()?;
+        self.is_transfer_eligible()?;
         // unwrap safe as the above check guarantees it.
         self.owner = Owner::AddressOwner(new_owner);
         let data = self.data.try_as_move_mut().unwrap();
@@ -482,7 +482,7 @@ impl Object {
         Ok(type_tag)
     }
 
-    pub fn is_transfer_elegible(&self) -> SuiResult {
+    pub fn is_transfer_eligible(&self) -> SuiResult {
         fp_ensure!(!self.is_shared(), SuiError::TransferSharedError);
         let is_coin = match &self.data {
             Data::Move(m) => bcs::from_bytes::<Coin>(&m.contents).is_ok(),
