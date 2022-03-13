@@ -147,11 +147,11 @@ async fn docs(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body
 
     custom_http_response(
         StatusCode::OK,
-        &DocumentationResponse {
+        DocumentationResponse {
             documentation: documentation.clone(),
         },
     )
-    .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{err}")))
+    .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))
 }
 
 /**
@@ -193,7 +193,7 @@ network has been started on testnet or mainnet.
 async fn genesis(
     rqctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<GenesisRequest>,
-) -> Result<HttpResponseOk<GenesisResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let server_context = rqctx.context();
     let genesis_request_params = request.into_inner();
     let genesis_config_path = &server_context.genesis_config_path;
@@ -265,10 +265,14 @@ async fn genesis(
             )
         })?;
 
-    Ok(HttpResponseOk(GenesisResponse {
-        wallet_config: json!(wallet_config),
-        network_config: json!(network_config),
-    }))
+    custom_http_response(
+        StatusCode::OK,
+        GenesisResponse {
+            wallet_config: json!(wallet_config),
+            network_config: json!(network_config),
+        },
+    )
+    .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))
 }
 
 /**
@@ -281,9 +285,7 @@ network has been started on testnet or mainnet.
     path = "/sui/start",
     tags = [ "debug" ],
 }]
-async fn sui_start(
-    rqctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseOk<String>, HttpError> {
+async fn sui_start(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body>, HttpError> {
     let server_context = rqctx.context();
     let network_config_path = &server_context.network_config_path;
 
@@ -397,10 +399,11 @@ async fn sui_start(
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
-    Ok(HttpResponseOk(format!(
-        "Started {} authorities",
-        num_authorities
-    )))
+    custom_http_response(
+        StatusCode::OK,
+        format!("Started {} authorities", num_authorities),
+    )
+    .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))
 }
 
 /**
@@ -475,7 +478,7 @@ async fn get_addresses(
 
     custom_http_response(
         StatusCode::OK,
-        &GetAddressResponse {
+        GetAddressResponse {
             addresses: addresses
                 .into_iter()
                 .map(|address| format!("{}", address))
@@ -555,7 +558,7 @@ async fn get_objects(
 
     custom_http_response(
         StatusCode::OK,
-        &GetObjectsResponse {
+        GetObjectsResponse {
             objects: object_refs
                 .iter()
                 .map(|(object_id, sequence_number, object_digest)| Object {
@@ -653,7 +656,7 @@ async fn object_schema(
         )
     })?;
 
-    custom_http_response(StatusCode::OK, &ObjectSchemaResponse { schema })
+    custom_http_response(StatusCode::OK, ObjectSchemaResponse { schema })
         .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{err}")))
 }
 
@@ -803,7 +806,7 @@ Example TransferTransactionRequest
 async fn transfer_object(
     rqctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<TransferTransactionRequest>,
-) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let server_context = rqctx.context();
     let transfer_order_params = request.into_inner();
     let to_address =
@@ -872,11 +875,15 @@ async fn transfer_object(
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
-    Ok(HttpResponseOk(TransactionResponse {
-        gas_used,
-        object_effects_summary: json!(object_effects_summary),
-        certificate: json!(cert),
-    }))
+    custom_http_response(
+        StatusCode::OK,
+        TransactionResponse {
+            gas_used,
+            object_effects_summary: json!(object_effects_summary),
+            certificate: json!(cert),
+        },
+    )
+    .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))
 }
 
 /**
@@ -973,7 +980,7 @@ Example CallRequest
 async fn call(
     rqctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<CallRequest>,
-) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let server_context = rqctx.context();
     let call_params = request.into_inner();
 
@@ -990,7 +997,8 @@ async fn call(
 
     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
 
-    Ok(HttpResponseOk(transaction_response))
+    custom_http_response(StatusCode::OK, transaction_response)
+        .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))
 }
 
 /**
