@@ -195,6 +195,8 @@ NOTE: separate spans (which are not nested) are not connected as a single trace 
 
 [Tokio-console](https://github.com/tokio-rs/console) is an awesome CLI tool designed to analyze and help debug Rust apps using Tokio, in real time!  It relies on a special subscriber.
 
-TODO: Add instructions for setting env var and building Sui specially to enable Tokio-console support.
+1. Build Sui using a special flag: `RUSTFLAGS="--cfg tokio_unstable" cargo build`
+2. Start Sui with `SUI_TOKIO_CONSOLE` set to 1
+3. Clone the console repo and `cargo run` to alunch the console
 
 NOTE: Adding Tokio-console support may significantly slow down Sui authorities/gateways.

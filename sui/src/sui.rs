@@ -57,6 +57,8 @@ async fn main() -> Result<(), anyhow::Error> {
         set_global_default(subscriber).expect("Failed to set subscriber");
 
         info!("Enabling JSON and span logging");
+    } else if std::env::var("SUI_TOKIO_CONSOLE").is_ok() {
+        console_subscriber::init();
     } else {
         // Standard env filter (RUST_LOG) with standard formatter
         let subscriber = Registry::default()
