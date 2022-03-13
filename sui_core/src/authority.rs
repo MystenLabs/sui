@@ -327,7 +327,8 @@ impl AuthorityState {
         }
 
         // Check the certificate and retrieve the transfer data.
-        certificate.check(&self.committee)?;
+        tracing::trace_span!("cert_check_signature")
+            .in_scope(|| certificate.check(&self.committee))?;
 
         // If the transaction contains shared objects, we need to ensure they have been scheduled
         // for processing by the consensus protocol.
@@ -396,15 +397,19 @@ impl AuthorityState {
 
         let mut inputs: Vec<_> = self
             .check_locks(&transaction)
+            .instrument(tracing::trace_span!("cert_check_locks"))
             .await?
             .into_iter()
             .map(|(_, object)| object)
             .collect();
-        for object_id in transaction.shared_input_objects() {
-            if let Some(object) = self._database.get_object(object_id)? {
-                inputs.push(object);
+        tracing::trace_span!("cert_db_get_objects").in_scope(|| {
+            for object_id in transaction.shared_input_objects() {
+                if let Some(object) = self._database.get_object(object_id)? {
+                    inputs.push(object);
+                }
             }
-        }
+            Ok::<(), SuiError>(())
+        })?;
         debug!(
             num_inputs = inputs.len(),
             "Read inputs for transaction from DB"

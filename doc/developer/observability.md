@@ -68,7 +68,10 @@ and analyzed for tracing, performance analysis, etc.
 | ----------------------- | ------------------ | ------------------------------------------------------------------------------ |
 | process_tx              | Gateway, Authority | Send transaction request, get back 2f+1 signatures and make certificate        |
 | process_cert            | Gateway, Authority | Send certificate to authorities to execute transaction                         |
+| cert_check_signature    | Authority          | Check certificate signatures                                                   |
 | process_cert_inner      | Authority          | Inner function to process certificates in authority                            |
+| cert_check_locks        | Authority          | Check object locks needed for transaction                                      |
+| cert_db_get_objects     | Authority          | Read objects from database                                                     |
 | tx_execute              | Authority          | Actual execution of transfer/MOVE call etc.                                    |
 | handle_cert             | Gateway            | Send to one authority for certificate processing                               |
 | sync_cert               | Gateway, Authority | Gateway-initiated sync of data to authority                                    |
