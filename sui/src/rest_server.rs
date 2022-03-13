@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::fs;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use dropshot::{endpoint, Query, TypedBody};
 use dropshot::{
@@ -24,12 +25,13 @@ use serde_json::json;
 use tokio::task::{self, JoinHandle};
 use tracing::{error, info};
 
-use sui::config::{AuthorityInfo, Config, GenesisConfig, NetworkConfig, WalletConfig};
+use sui::config::{GenesisConfig, NetworkConfig};
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
-use sui::keystore::KeystoreType;
+use sui::keystore::Keystore;
 use sui::sui_commands;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
-use sui::wallet_commands::{SimpleTransactionSigner, WalletContext};
+use sui::wallet_commands::SimpleTransactionSigner;
+use sui_core::gateway_state::GatewayClient;
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
 use sui_types::event::Event;
@@ -96,27 +98,45 @@ async fn main() -> Result<(), String> {
  */
 struct ServerContext {
     documentation: serde_json::Value,
-    wallet_config_path: String,
-    network_config_path: String,
-    authority_db_path: String,
-    client_db_path: Arc<Mutex<String>>,
+    server_state: Arc<Mutex<Option<ServerState>>>,
+}
+
+struct ServerState {
+    config: NetworkConfig,
+    gateway: GatewayClient,
+    keystore: Arc<RwLock<Box<dyn Keystore>>>,
+    addresses: Vec<SuiAddress>,
+    working_dir: PathBuf,
     // Server handles that will be used to restart authorities.
-    authority_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
-    // Used to manage addresses for client.
-    wallet_context: Arc<Mutex<Option<WalletContext>>>,
+    authority_handles: Vec<JoinHandle<()>>,
+}
+
+impl Debug for ServerState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ServerState")
+    }
 }
 
 impl ServerContext {
     pub fn new(documentation: serde_json::Value) -> ServerContext {
         ServerContext {
             documentation,
-            wallet_config_path: String::from("wallet.conf"),
-            network_config_path: String::from("./network.conf"),
-            authority_db_path: String::from("./authorities_db"),
-            client_db_path: Arc::new(Mutex::new(String::new())),
-            authority_handles: Arc::new(Mutex::new(Vec::new())),
-            wallet_context: Arc::new(Mutex::new(None)),
+            server_state: Arc::new(Mutex::new(None)),
         }
+    }
+
+    fn take_server_state(&self) -> Result<ServerState, HttpError> {
+        let mut state = self.server_state.lock().unwrap();
+        state.take().ok_or_else(|| {
+            custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                "Server state does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
+                    .to_string(),
+            )
+        })
+    }
+    fn return_server_state(&self, state: ServerState) {
+        *self.server_state.lock().unwrap() = Some(state);
     }
 }
 
@@ -196,27 +216,16 @@ network has been started on testnet or mainnet.
 async fn genesis(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<GenesisResponse>, HttpError> {
-    let server_context = rqctx.context();
-    //let genesis_config_path = &server_context.genesis_config_path;
-    let network_config_path = &server_context.network_config_path;
-    //let wallet_config_path = &server_context.wallet_config_path;
+    let context = rqctx.context();
+    let working_dir = PathBuf::from(".").join(format!("{}", ObjectID::random()));
 
-    let network_config_path = PathBuf::from(network_config_path);
-    let network_config = NetworkConfig::read_or_create(&network_config_path).map_err(|error| {
-        custom_http_error(
-            StatusCode::CONFLICT,
-            format!("Unable to read network config: {error}"),
-        )
-    })?;
-
-    if !network_config.authorities.is_empty() {
+    if context.server_state.lock().unwrap().is_some() {
         return Err(custom_http_error(
             StatusCode::CONFLICT,
             String::from("Cannot run genesis on a existing network, please make a POST request to the `sui/stop` endpoint to reset."),
         ));
     }
 
-    let working_dir = network_config_path.parent().unwrap().to_owned();
     let genesis_conf = GenesisConfig::default_genesis(&working_dir).map_err(|error| {
         custom_http_error(
             StatusCode::CONFLICT,
@@ -232,45 +241,33 @@ async fn genesis(
             )
         })?;
 
-    let keystore_path = working_dir.join("wallet.key");
-    keystore.save(&keystore_path).map_err(|err| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            format!("Genesis error: {:?}", err),
-        )
-    })?;
-    // TODO: Rest service should use `ClientAddressManager` directly instead of using the wallet context.
+    let authorities = network_config.get_authority_infos();
     // Need to use a random id because rocksdb locks on current process which
     // means even if the directory is deleted the lock will remain causing an
     // IO Error when a restart is attempted.
-    let client_db_path = format!("client_db_{:?}", ObjectID::random());
-    *server_context.client_db_path.lock().unwrap() = client_db_path.clone();
+    let gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
+        authorities,
+        db_folder_path: working_dir.join("client_db"),
+        ..Default::default()
+    });
 
-    let authorities = network_config
-        .authorities
-        .iter()
-        .map(|info| AuthorityInfo {
-            name: *info.key_pair.public_key_bytes(),
-            host: info.host.clone(),
-            base_port: info.port,
-        })
-        .collect();
-
-    let wallet_config = WalletConfig {
-        accounts,
-        keystore: KeystoreType::File(keystore_path),
-        gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
-            authorities,
-            db_folder_path: working_dir.join(&client_db_path),
-            ..Default::default()
-        }),
-    };
-    //let wallet_path = working_dir.join(wallet_config_path);
-
-    Ok(HttpResponseOk(GenesisResponse {
-        wallet_config: json!(wallet_config),
+    let response = HttpResponseOk(GenesisResponse {
+        wallet_config: json!(accounts),
         network_config: json!(network_config),
-    }))
+    });
+
+    let state = ServerState {
+        config: network_config,
+        gateway: gateway.init(),
+        keystore: Arc::new(RwLock::new(Box::new(keystore))),
+        addresses: accounts,
+        working_dir: working_dir.to_path_buf(),
+        authority_handles: vec![],
+    };
+
+    *context.server_state.lock().unwrap() = Some(state);
+
+    Ok(response)
 }
 
 /**
@@ -287,35 +284,20 @@ network has been started on testnet or main-net.
 async fn sui_start(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
-    let server_context = rqctx.context();
-    let network_config_path = &server_context.network_config_path;
+    let context = rqctx.context();
 
-    let network_config = NetworkConfig::read_or_create(&PathBuf::from(network_config_path))
-        .map_err(|error| {
-            custom_http_error(
-                StatusCode::CONFLICT,
-                format!("Unable to read network config: {error}"),
-            )
-        })?;
-
-    if network_config.authorities.is_empty() {
+    let mut state = context.take_server_state()?;
+    if !state.authority_handles.is_empty() {
+        context.return_server_state(state);
         return Err(custom_http_error(
-            StatusCode::CONFLICT,
-            String::from("No authority configured for the network, please make a POST request to the `sui/genesis` endpoint."),
+            StatusCode::FORBIDDEN,
+            String::from("Sui network is already running."),
         ));
     }
 
-    {
-        if !(*server_context.authority_handles.lock().unwrap()).is_empty() {
-            return Err(custom_http_error(
-                StatusCode::FORBIDDEN,
-                String::from("Sui network is already running."),
-            ));
-        }
-    }
-
     let committee = Committee::new(
-        network_config
+        state
+            .config
             .authorities
             .iter()
             .map(|info| (*info.key_pair.public_key_bytes(), info.stake))
@@ -323,21 +305,16 @@ async fn sui_start(
     );
     let mut handles = FuturesUnordered::new();
 
-    for authority in &network_config.authorities {
-        let server = sui_commands::make_server(
-            authority,
-            &committee,
-            vec![],
-            &[],
-            network_config.buffer_size,
-        )
-        .await
-        .map_err(|error| {
-            custom_http_error(
-                StatusCode::CONFLICT,
-                format!("Unable to make server: {error}"),
-            )
-        })?;
+    for authority in &state.config.authorities {
+        let server =
+            sui_commands::make_server(authority, &committee, vec![], &[], state.config.buffer_size)
+                .await
+                .map_err(|error| {
+                    custom_http_error(
+                        StatusCode::CONFLICT,
+                        format!("Unable to make server: {error}"),
+                    )
+                })?;
         handles.push(async move {
             match server.spawn().await {
                 Ok(server) => Ok(server),
@@ -355,38 +332,17 @@ async fn sui_start(
     info!("Started {} authorities", num_authorities);
 
     while let Some(spawned_server) = handles.next().await {
-        server_context
-            .authority_handles
-            .lock()
-            .unwrap()
-            .push(task::spawn(async {
-                if let Err(err) = spawned_server.unwrap().join().await {
-                    error!("Server ended with an error: {}", err);
-                }
-            }));
+        state.authority_handles.push(task::spawn(async {
+            if let Err(err) = spawned_server.unwrap().join().await {
+                error!("Server ended with an error: {}", err);
+            }
+        }));
     }
 
-    let wallet_config_path = PathBuf::from(&server_context.wallet_config_path);
-    let wallet_config = WalletConfig::read_or_create(&wallet_config_path).map_err(|error| {
-        custom_http_error(
-            StatusCode::CONFLICT,
-            format!("Unable to read wallet config: {error}"),
-        )
-    })?;
-
-    let addresses = wallet_config.accounts.clone();
-    let mut wallet_context = WalletContext::new(&wallet_config_path).map_err(|error| {
-        custom_http_error(
-            StatusCode::CONFLICT,
-            format!("Can't create new wallet context: {error}"),
-        )
-    })?;
-
-    // Sync all accounts.
-    for address in addresses.iter() {
-        wallet_context
+    for address in state.addresses.clone() {
+        state
             .gateway
-            .sync_account_state(*address)
+            .sync_account_state(address)
             .await
             .map_err(|err| {
                 custom_http_error(
@@ -395,9 +351,7 @@ async fn sui_start(
                 )
             })?;
     }
-
-    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-
+    context.return_server_state(state);
     Ok(HttpResponseOk(format!(
         "Started {} authorities",
         num_authorities
@@ -419,17 +373,12 @@ async fn sui_stop(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     let server_context = rqctx.context();
+    let state = server_context.take_server_state()?;
 
-    for authority_handle in &*server_context.authority_handles.lock().unwrap() {
+    for authority_handle in state.authority_handles {
         authority_handle.abort();
     }
-    (*server_context.authority_handles.lock().unwrap()).clear();
-
-    fs::remove_dir_all(server_context.client_db_path.lock().unwrap().clone()).ok();
-    fs::remove_dir_all(&server_context.authority_db_path).ok();
-    fs::remove_file(&server_context.network_config_path).ok();
-    fs::remove_file(&server_context.wallet_config_path).ok();
-
+    fs::remove_dir_all(state.working_dir).ok();
     Ok(HttpResponseUpdatedNoContent())
 }
 
@@ -455,26 +404,20 @@ async fn get_addresses(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
     let server_context = rqctx.context();
-    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
-    let mut wallet_context =
-        get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
-
-    let addresses: Vec<SuiAddress> = wallet_context.config.accounts.clone();
-
+    let mut state = server_context.take_server_state()?;
     // TODO: Speed up sync operations by kicking them off concurrently.
     // Also need to investigate if this should be an automatic sync or manually triggered.
-    for address in addresses.iter() {
-        if let Err(err) = wallet_context.gateway.sync_account_state(*address).await {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+    let addresses = state.addresses.clone();
+    for address in &addresses {
+        if let Err(err) = state.gateway.sync_account_state(*address).await {
+            server_context.return_server_state(state);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("Can't create client state: {err}"),
             ));
         }
     }
-
-    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-
+    server_context.return_server_state(state);
     Ok(HttpResponseOk(GetAddressResponse {
         addresses: addresses
             .into_iter()
@@ -533,14 +476,7 @@ async fn get_objects(
     let get_objects_params = query.into_inner();
     let address = get_objects_params.address;
 
-    let wallet_context = &mut *server_context.wallet_context.lock().unwrap();
-    let wallet_context = wallet_context.as_mut().ok_or_else(|| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
-                .to_string(),
-        )
-    })?;
+    let mut state = server_context.take_server_state()?;
 
     let address = &decode_bytes_hex(address.as_str()).map_err(|error| {
         custom_http_error(
@@ -549,8 +485,9 @@ async fn get_objects(
         )
     })?;
 
-    let object_refs = wallet_context.gateway.get_owned_objects(*address);
+    let object_refs = state.gateway.get_owned_objects(*address);
 
+    server_context.return_server_state(state);
     Ok(HttpResponseOk(GetObjectsResponse {
         objects: object_refs
             .iter()
@@ -602,13 +539,11 @@ async fn object_schema(
     let server_context = rqctx.context();
     let object_info_params = query.into_inner();
 
-    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
-    let wallet_context = get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
+    let state = server_context.take_server_state()?;
 
     let object_id = match ObjectID::try_from(object_info_params.object_id) {
         Ok(object_id) => object_id,
         Err(error) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("{error}"),
@@ -616,24 +551,24 @@ async fn object_schema(
         }
     };
 
-    let layout = match wallet_context.gateway.get_object_info(object_id).await {
+    let layout = match state.gateway.get_object_info(object_id).await {
         Ok(ObjectRead::Exists(_, _, layout)) => layout,
         Ok(ObjectRead::Deleted(_)) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            server_context.return_server_state(state);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("Object ({object_id}) was deleted."),
             ));
         }
         Ok(ObjectRead::NotExists(_)) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            server_context.return_server_state(state);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("Object ({object_id}) does not exist."),
             ));
         }
         Err(error) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            server_context.return_server_state(state);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("Error while getting object info: {:?}", error),
@@ -641,6 +576,7 @@ async fn object_schema(
         }
     };
 
+    server_context.return_server_state(state);
     match serde_json::to_value(layout) {
         Ok(schema) => Ok(HttpResponseOk(ObjectSchemaResponse { schema })),
         Err(e) => Err(custom_http_error(
@@ -699,13 +635,12 @@ async fn object_info(
     let server_context = rqctx.context();
     let object_info_params = query.into_inner();
 
-    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
-    let wallet_context = get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
+    let state = server_context.take_server_state()?;
 
     let object_id = match ObjectID::try_from(object_info_params.object_id) {
         Ok(object_id) => object_id,
         Err(error) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            server_context.return_server_state(state);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("{error}"),
@@ -713,18 +648,11 @@ async fn object_info(
         }
     };
 
-    let (object, layout) = match get_object_info(&wallet_context, object_id).await {
-        Ok((_, object, layout)) => (object, layout),
-        Err(error) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(error);
-        }
-    };
+    let (_, object, layout) = get_object_info(&state, object_id).await?;
 
     let object_data = object.to_json(&layout).unwrap_or_else(|_| json!(""));
 
-    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-
+    server_context.return_server_state(state);
     Ok(HttpResponseOk(ObjectInfoResponse {
         owner: format!("{:?}", object.owner),
         version: format!("{:?}", object.version().value()),
@@ -795,6 +723,8 @@ async fn transfer_object(
     request: TypedBody<TransferTransactionRequest>,
 ) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
     let server_context = rqctx.context();
+    let mut state = server_context.take_server_state()?;
+
     let transfer_order_params = request.into_inner();
     let to_address =
         decode_bytes_hex(transfer_order_params.to_address.as_str()).map_err(|error| {
@@ -814,15 +744,11 @@ async fn transfer_object(
         )
     })?;
 
-    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
-    let mut wallet_context =
-        get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
-
     let tx_signer = Box::pin(SimpleTransactionSigner {
-        keystore: wallet_context.keystore.clone(),
+        keystore: state.keystore.clone(),
     });
 
-    let (cert, effects, gas_used) = match wallet_context
+    let (cert, effects, gas_used) = match state
         .gateway
         .transfer_coin(owner, object_id, gas_object_id, to_address, tx_signer)
         .await
@@ -833,7 +759,7 @@ async fn transfer_object(
                 // ExecutionStatus::Success
                 ExecutionStatus::Success { gas_used, .. } => gas_used,
                 ExecutionStatus::Failure { gas_used, error } => {
-                    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+                    server_context.return_server_state(state);
                     return Err(custom_http_error(
                         StatusCode::FAILED_DEPENDENCY,
                         format!(
@@ -846,7 +772,7 @@ async fn transfer_object(
             (cert, effects, gas_used)
         }
         Err(err) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
+            server_context.return_server_state(state);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("Transfer error: {err}"),
@@ -854,16 +780,9 @@ async fn transfer_object(
         }
     };
 
-    let object_effects_summary = match get_object_effects(&wallet_context, effects).await {
-        Ok(effects) => effects,
-        Err(err) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(err);
-        }
-    };
+    let object_effects_summary = get_object_effects(&state, effects).await?;
 
-    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-
+    server_context.return_server_state(state);
     Ok(HttpResponseOk(TransactionResponse {
         gas_used,
         object_effects_summary: json!(object_effects_summary),
@@ -970,19 +889,13 @@ async fn call(
     let server_context = rqctx.context();
     let call_params = request.into_inner();
 
-    let mut wallet_context =
-        get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
+    let mut state = server_context.take_server_state()?;
 
-    let transaction_response = match handle_move_call(call_params, &mut wallet_context).await {
-        Ok(transaction_response) => transaction_response,
-        Err(err) => {
-            *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-            return Err(custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")));
-        }
-    };
+    let transaction_response = handle_move_call(call_params, &mut state)
+        .await
+        .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))?;
 
-    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-
+    server_context.return_server_state(state);
     Ok(HttpResponseOk(transaction_response))
 }
 
@@ -1012,6 +925,9 @@ async fn sync(
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     let server_context = rqctx.context();
     let sync_params = request.into_inner();
+
+    let mut state = server_context.take_server_state()?;
+
     let address = decode_bytes_hex(sync_params.address.as_str()).map_err(|error| {
         custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
@@ -1019,33 +935,30 @@ async fn sync(
         )
     })?;
 
-    // TODO: Find a better way to utilize wallet context here that does not require 'take()'
-    let mut wallet_context =
-        get_wallet_context(server_context.wallet_context.lock().unwrap().take())?;
+    state
+        .gateway
+        .sync_account_state(address)
+        .await
+        .map_err(|err| {
+            custom_http_error(
+                StatusCode::FAILED_DEPENDENCY,
+                format!("Can't create client state: {err}"),
+            )
+        })?;
 
-    // Attempt to create a new account state, but continue if it already exists.
-    if let Err(err) = wallet_context.gateway.sync_account_state(address).await {
-        *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-        return Err(custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            format!("Can't create client state: {err}"),
-        ));
-    }
-
-    *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
-
+    server_context.return_server_state(state);
     Ok(HttpResponseUpdatedNoContent())
 }
 
 async fn get_object_effects(
-    wallet_context: &WalletContext,
+    state: &ServerState,
     transaction_effects: TransactionEffects,
 ) -> Result<HashMap<String, Vec<HashMap<String, String>>>, HttpError> {
     let mut object_effects_summary = HashMap::new();
     object_effects_summary.insert(
         String::from("created_objects"),
         get_obj_ref_effects(
-            wallet_context,
+            state,
             transaction_effects
                 .created
                 .into_iter()
@@ -1057,7 +970,7 @@ async fn get_object_effects(
     object_effects_summary.insert(
         String::from("mutated_objects"),
         get_obj_ref_effects(
-            wallet_context,
+            state,
             transaction_effects
                 .mutated
                 .into_iter()
@@ -1069,7 +982,7 @@ async fn get_object_effects(
     object_effects_summary.insert(
         String::from("unwrapped_objects"),
         get_obj_ref_effects(
-            wallet_context,
+            state,
             transaction_effects
                 .unwrapped
                 .into_iter()
@@ -1080,11 +993,11 @@ async fn get_object_effects(
     );
     object_effects_summary.insert(
         String::from("deleted_objects"),
-        get_obj_ref_effects(wallet_context, transaction_effects.deleted).await?,
+        get_obj_ref_effects(state, transaction_effects.deleted).await?,
     );
     object_effects_summary.insert(
         String::from("wrapped_objects"),
-        get_obj_ref_effects(wallet_context, transaction_effects.wrapped).await?,
+        get_obj_ref_effects(state, transaction_effects.wrapped).await?,
     );
     object_effects_summary.insert(
         String::from("events"),
@@ -1105,12 +1018,12 @@ fn get_events(events: Vec<Event>) -> Result<Vec<HashMap<String, String>>, HttpEr
 }
 
 async fn get_obj_ref_effects(
-    wallet_context: &WalletContext,
+    state: &ServerState,
     object_refs: Vec<ObjectRef>,
 ) -> Result<Vec<HashMap<String, String>>, HttpError> {
     let mut effects = Vec::new();
     for (object_id, sequence_number, object_digest) in object_refs {
-        let effect = get_effect(wallet_context, object_id, sequence_number, object_digest)
+        let effect = get_effect(state, object_id, sequence_number, object_digest)
             .await
             .map_err(|error| error)?;
         effects.push(effect);
@@ -1119,13 +1032,13 @@ async fn get_obj_ref_effects(
 }
 
 async fn get_effect(
-    wallet_context: &WalletContext,
+    state: &ServerState,
     object_id: ObjectID,
     sequence_number: SequenceNumber,
     object_digest: ObjectDigest,
 ) -> Result<HashMap<String, String>, HttpError> {
     let mut effect = HashMap::new();
-    let object = match get_object_info(wallet_context, object_id).await {
+    let object = match get_object_info(state, object_id).await {
         Ok((_, object, _)) => object,
         Err(error) => {
             return Err(error);
@@ -1145,11 +1058,10 @@ async fn get_effect(
 }
 
 async fn get_object_info(
-    wallet_context: &WalletContext,
+    state: &ServerState,
     object_id: ObjectID,
 ) -> Result<(ObjectRef, SuiObject, Option<MoveStructLayout>), HttpError> {
-    let (object_ref, object, layout) = match wallet_context.gateway.get_object_info(object_id).await
-    {
+    let (object_ref, object, layout) = match state.gateway.get_object_info(object_id).await {
         Ok(ObjectRead::Exists(object_ref, object, layout)) => (object_ref, object, layout),
         Ok(ObjectRead::Deleted(_)) => {
             return Err(custom_http_error(
@@ -1175,7 +1087,7 @@ async fn get_object_info(
 
 async fn handle_move_call(
     call_params: CallRequest,
-    wallet_context: &mut WalletContext,
+    state: &mut ServerState,
 ) -> Result<TransactionResponse, anyhow::Error> {
     let module = Identifier::from_str(&call_params.module.to_owned())?;
     let function = Identifier::from_str(&call_params.function.to_owned())?;
@@ -1192,8 +1104,7 @@ async fn handle_move_call(
 
     let sender: SuiAddress = decode_bytes_hex(call_params.sender.as_str())?;
 
-    let (package_object_ref, package_object, _) =
-        get_object_info(wallet_context, package_object_id).await?;
+    let (package_object_ref, package_object, _) = get_object_info(state, package_object_id).await?;
 
     // Extract the input args
     let (object_ids, pure_args) =
@@ -1204,7 +1115,7 @@ async fn handle_move_call(
     // Fetch all the objects needed for this call
     let mut input_objs = vec![];
     for obj_id in object_ids.clone() {
-        let (_, object, _) = get_object_info(wallet_context, obj_id).await?;
+        let (_, object, _) = get_object_info(state, obj_id).await?;
         input_objs.push(object);
     }
 
@@ -1219,20 +1130,20 @@ async fn handle_move_call(
     )?;
 
     // Fetch the object info for the gas obj
-    let (gas_obj_ref, _, _) = get_object_info(wallet_context, gas_object_id).await?;
+    let (gas_obj_ref, _, _) = get_object_info(state, gas_object_id).await?;
 
     // Fetch the objects for the object args
     let mut object_args_refs = Vec::new();
     for obj_id in object_ids {
-        let (object_ref, _, _) = get_object_info(wallet_context, obj_id).await?;
+        let (object_ref, _, _) = get_object_info(state, obj_id).await?;
         object_args_refs.push(object_ref);
     }
 
     let tx_signer = Box::pin(SimpleTransactionSigner {
-        keystore: wallet_context.keystore.clone(),
+        keystore: state.keystore.clone(),
     });
 
-    let (cert, effects, gas_used) = match wallet_context
+    let (cert, effects, gas_used) = match state
         .gateway
         .move_call(
             sender,
@@ -1267,22 +1178,12 @@ async fn handle_move_call(
         }
     };
 
-    let object_effects_summary = get_object_effects(wallet_context, effects).await?;
+    let object_effects_summary = get_object_effects(state, effects).await?;
 
     Ok(TransactionResponse {
         gas_used,
         object_effects_summary: json!(object_effects_summary),
         certificate: json!(cert),
-    })
-}
-
-fn get_wallet_context(wallet_context: Option<WalletContext>) -> Result<WalletContext, HttpError> {
-    wallet_context.ok_or_else(|| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            "Wallet Context does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
-                .to_string(),
-        )
     })
 }
 

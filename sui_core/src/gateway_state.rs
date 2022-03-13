@@ -2,13 +2,23 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI};
+use std::collections::btree_map::Entry;
+use std::path::PathBuf;
+use std::time::Duration;
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    pin::Pin,
+};
+
 use async_trait::async_trait;
 use futures::future;
 use itertools::Itertools;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::value::MoveStructLayout;
+use typed_store::rocks::open_cf;
+use typed_store::Map;
+
 use sui_types::crypto::Signature;
 use sui_types::error::SuiResult;
 use sui_types::{
@@ -21,16 +31,8 @@ use sui_types::{
     object::{Object, ObjectRead, Owner},
     SUI_FRAMEWORK_ADDRESS,
 };
-use typed_store::rocks::open_cf;
-use typed_store::Map;
 
-use std::collections::btree_map::Entry;
-use std::path::PathBuf;
-use std::time::Duration;
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    pin::Pin,
-};
+use crate::{authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI};
 
 use self::gateway_responses::*;
 

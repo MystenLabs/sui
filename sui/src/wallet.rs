@@ -3,17 +3,16 @@
 
 use std::io::Write;
 use std::io::{stderr, stdout};
+use std::ops::Deref;
 use std::path::PathBuf;
 
 use async_trait::async_trait;
 use colored::Colorize;
 use structopt::clap::{App, AppSettings};
 use structopt::StructOpt;
-use sui::shell::{install_shell_plugins, AsyncHandler, CommandStructure, Shell};
 use tracing::error;
 use tracing_subscriber::EnvFilter;
 
-use sui::config::{Config, WalletConfig};
 use sui::shell::{
     install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
 };
@@ -88,7 +87,7 @@ async fn main() -> Result<(), anyhow::Error> {
             .unwrap_or_else(|| app.p.meta.version.unwrap_or("unknown"));
         writeln!(out, "--- sui wallet {} ---", version)?;
         writeln!(out)?;
-        writeln!(out, "{}", context.config)?;
+        writeln!(out, "{}", context.config.deref())?;
         writeln!(out, "Welcome to the Sui interactive shell.")?;
         writeln!(out)?;
 

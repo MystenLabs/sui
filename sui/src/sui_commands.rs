@@ -22,7 +22,7 @@ use sui_types::error::SuiResult;
 use sui_types::object::Object;
 
 use crate::config::{
-    AuthorityInfo, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, WalletConfig,
+    AuthorityPrivateInfo, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
 };
 use crate::gateway::{EmbeddedGatewayConfig, GatewayType};
 use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
@@ -58,48 +58,39 @@ impl SuiCommand {
                 let keystore_path = working_dir.join("wallet.key");
                 let db_folder_path = working_dir.join("client_db");
 
-                if let Ok(config) = NetworkConfig::read(&network_path) {
+                if let Ok(config) = PersistedConfig::<NetworkConfig>::read(&network_path) {
                     if !config.authorities.is_empty() {
                         return Err(anyhow!("Cannot run genesis on a existing network, please delete network config file and try again."));
                     }
                 }
 
                 let genesis_conf = if let Some(path) = path {
-                    // unwrap is ok here because the path exist
-                    GenesisConfig::read(path)?
+                    PersistedConfig::read_config(path)?
                 } else {
                     GenesisConfig::default_genesis(working_dir)?
                 };
 
                 let (network_config, accounts, keystore) = genesis(genesis_conf).await?;
                 info!("Network genesis completed.");
-                network_config.write(&network_path)?;
+                let network_config = PersistedConfig::from_config(network_config, &network_path);
+                network_config.save()?;
                 info!("Network config file is stored in {:?}.", network_path);
 
                 keystore.save(&keystore_path)?;
                 info!("Wallet keystore is stored in {:?}.", keystore_path);
-
-                let authorities = network_config
-                    .authorities
-                    .iter()
-                    .map(|info| AuthorityInfo {
-                        name: *info.key_pair.public_key_bytes(),
-                        host: info.host.clone(),
-                        base_port: info.port,
-                    })
-                    .collect();
 
                 let wallet_config = WalletConfig {
                     accounts,
                     keystore: KeystoreType::File(keystore_path),
                     gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
                         db_folder_path,
-                        authorities,
+                        authorities: network_config.get_authority_infos(),
                         ..Default::default()
                     }),
                 };
 
-                wallet_config.write(&wallet_path)?;
+                let wallet_config = PersistedConfig::from_config(wallet_config, &wallet_path);
+                wallet_config.save()?;
                 info!("Wallet config file is stored in {:?}.", wallet_path);
                 Ok(())
             }
@@ -108,7 +99,7 @@ impl SuiCommand {
 }
 
 async fn start_network(config_path: &Path) -> Result<(), anyhow::Error> {
-    let config = NetworkConfig::read(config_path)?;
+    let config: NetworkConfig = PersistedConfig::read_config(config_path)?;
     if config.authorities.is_empty() {
         return Err(anyhow!(
             "No authority configured for the network, please run genesis."

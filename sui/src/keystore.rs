@@ -99,6 +99,10 @@ impl SuiKeystore {
         self.keys.insert(address, keypair);
         Ok(())
     }
+
+    pub fn addresses(&self) -> Vec<SuiAddress> {
+        self.keys.keys().cloned().collect()
+    }
 }
 
 pub struct SuiKeystoreSigner {

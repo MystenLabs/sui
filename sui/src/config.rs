@@ -6,6 +6,7 @@ use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::fs::{self, File};
 use std::io::BufReader;
+use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -111,8 +112,6 @@ pub struct WalletConfig {
     pub gateway: GatewayType,
 }
 
-impl Config for WalletConfig {}
-
 impl Default for WalletConfig {
     fn default() -> Self {
         Self {
@@ -142,8 +141,6 @@ pub struct NetworkConfig {
     pub loaded_move_packages: Vec<(PathBuf, ObjectID)>,
 }
 
-impl Config for NetworkConfig {}
-
 impl Default for NetworkConfig {
     fn default() -> Self {
         Self {
@@ -151,6 +148,19 @@ impl Default for NetworkConfig {
             buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE,
             loaded_move_packages: vec![],
         }
+    }
+}
+
+impl NetworkConfig {
+    pub fn get_authority_infos(&self) -> Vec<AuthorityInfo> {
+        self.authorities
+            .iter()
+            .map(|info| AuthorityInfo {
+                name: *info.key_pair.public_key_bytes(),
+                host: info.host.clone(),
+                base_port: info.port,
+            })
+            .collect()
     }
 }
 
@@ -251,8 +261,6 @@ impl GenesisConfig {
     }
 }
 
-impl Config for GenesisConfig {}
-
 impl Default for GenesisConfig {
     fn default() -> Self {
         Self {
@@ -265,32 +273,63 @@ impl Default for GenesisConfig {
     }
 }
 
-pub trait Config
+pub struct PersistedConfig<C> {
+    inner: C,
+    path: PathBuf,
+}
+
+impl<C> PersistedConfig<C>
 where
-    Self: DeserializeOwned + Serialize + Default,
+    C: DeserializeOwned + Serialize,
 {
-    fn read_or_create(path: &Path) -> Result<Self, anyhow::Error> {
-        let path_buf = PathBuf::from(path);
+    pub fn from_config(config: C, path: &Path) -> Self {
+        Self {
+            inner: config,
+            path: path.to_path_buf(),
+        }
+    }
+
+    pub fn read_or_else<F>(path: &Path, default: F) -> Result<Self, anyhow::Error>
+    where
+        F: FnOnce() -> Result<C, anyhow::Error>,
+    {
+        let path_buf = path.to_path_buf();
         Ok(if path_buf.exists() {
             Self::read(path)?
         } else {
             trace!("Config file not found, creating new config '{:?}'", path);
-            let new_config = Self::default();
-            new_config.write(path)?;
-            new_config
+            Self::from_config(default()?, path)
         })
     }
 
-    fn read(path: &Path) -> Result<Self, anyhow::Error> {
+    pub fn read_config(path: &Path) -> Result<C, anyhow::Error> {
         trace!("Reading config from '{:?}'", path);
         let reader = BufReader::new(File::open(path)?);
         Ok(serde_json::from_reader(reader)?)
     }
 
-    fn write(&self, path: &Path) -> Result<(), anyhow::Error> {
-        trace!("Writing config to '{:?}'", path);
-        let config = serde_json::to_string_pretty(self).unwrap();
-        fs::write(path, config).expect("Unable to write to config file");
+    pub fn read(path: &Path) -> Result<Self, anyhow::Error> {
+        Ok(Self::from_config(Self::read_config(path)?, path))
+    }
+
+    pub fn save(&self) -> Result<(), anyhow::Error> {
+        trace!("Writing config to '{:?}'", &self.path);
+        let config = serde_json::to_string_pretty(&self.inner)?;
+        fs::write(&self.path, config)?;
         Ok(())
+    }
+}
+
+impl<C> Deref for PersistedConfig<C> {
+    type Target = C;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<C> DerefMut for PersistedConfig<C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }

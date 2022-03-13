@@ -15,8 +15,8 @@ use tokio::task::JoinHandle;
 use tracing_test::traced_test;
 
 use sui::config::{
-    AccountConfig, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, ObjectConfig,
-    WalletConfig, AUTHORITIES_DB_NAME,
+    AccountConfig, AuthorityPrivateInfo, GenesisConfig, NetworkConfig, ObjectConfig,
+    PersistedConfig, WalletConfig, AUTHORITIES_DB_NAME,
 };
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 use sui::keystore::{KeystoreType, SuiKeystore};
@@ -80,13 +80,13 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     assert!(files.contains(&"wallet.key".to_string()));
 
     // Check network.conf
-    let network_conf = NetworkConfig::read_or_create(&working_dir.join("network.conf"))?;
+    let network_conf = PersistedConfig::<NetworkConfig>::read(&working_dir.join("network.conf"))?;
     assert_eq!(4, network_conf.authorities.len());
 
     // Check wallet.conf
-    let wallet_conf = WalletConfig::read_or_create(&working_dir.join("wallet.conf"))?;
+    let wallet_conf = PersistedConfig::<WalletConfig>::read(&working_dir.join("wallet.conf"))?;
 
-    if let GatewayType::Embedded(config) = wallet_conf.gateway {
+    if let GatewayType::Embedded(config) = &wallet_conf.gateway {
         assert_eq!(4, config.authorities.len());
         assert_eq!(working_dir.join("client_db"), config.db_folder_path);
     } else {
@@ -114,7 +114,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir()?;
     let working_dir = temp_dir.path();
 
-    let mut wallet_config = WalletConfig {
+    let wallet_config = WalletConfig {
         accounts: vec![],
         keystore: KeystoreType::File(working_dir.join("wallet.key")),
         gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
@@ -122,6 +122,8 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             ..Default::default()
         }),
     };
+    let wallet_conf_path = working_dir.join("wallet.conf");
+    let mut wallet_config = PersistedConfig::from_config(wallet_config, &wallet_conf_path);
 
     // Add 3 accounts
     for _ in 0..3 {
@@ -130,8 +132,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             address
         });
     }
-    let wallet_conf_path = working_dir.join("wallet.conf");
-    wallet_config.write(&wallet_conf_path)?;
+    wallet_config.save()?;
 
     let mut context = WalletContext::new(&wallet_conf_path)?;
 
@@ -142,7 +143,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         .print(true);
 
     // Check log output contains all addresses
-    for address in context.config.accounts {
+    for address in &context.config.accounts {
         assert!(logs_contain(&*format!("{}", address)));
     }
 
@@ -155,7 +156,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
 
-    let network = start_network(working_dir.path(), 10101, None).await?;
+    let network = start_network(working_dir.path(), 10800, None).await?;
     // Wait for authorities to come alive.
     retry_assert!(
         logs_contain("Listening to TCP traffic on 127.0.0.1"),
@@ -219,7 +220,8 @@ async fn airdrop_get_wallet_context_with_oracle(
         255, 163, 60, 174,
     ]);
     let wallet_conf_path = working_dir.path().join("wallet.conf");
-    let mut wallet_conf = WalletConfig::read_or_create(&wallet_conf_path)?;
+    let mut wallet_conf =
+        PersistedConfig::read_or_else(&wallet_conf_path, || Ok(WalletConfig::default()))?;
     let path = match &wallet_conf.keystore {
         KeystoreType::File(path) => path,
         _ => panic!("Unexpected KeystoreType"),
@@ -229,7 +231,7 @@ async fn airdrop_get_wallet_context_with_oracle(
     store.save(path)?;
 
     wallet_conf.accounts.push(oracle_address);
-    wallet_conf.write(&wallet_conf_path)?;
+    wallet_conf.save()?;
 
     Ok((oracle_address, WalletContext::new(&wallet_conf_path)?))
 }
@@ -414,7 +416,9 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     // Create 4 authorities and 1 account
     let genesis_path = working_dir.join("genesis.conf");
     let num_authorities = 4;
-    let mut config = GenesisConfig::custom_genesis(working_dir, num_authorities, 0, 0)?;
+    let config = GenesisConfig::custom_genesis(working_dir, num_authorities, 0, 0)?;
+    let mut config = PersistedConfig::from_config(config, &genesis_path);
+
     config.accounts.clear();
     config.accounts.push(AccountConfig {
         address: Some(address),
@@ -426,7 +430,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     config
         .move_packages
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_2"));
-    config.write(&genesis_path)?;
+    config.save()?;
 
     // Genesis
     SuiCommand::Genesis {
@@ -438,11 +442,11 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 
     assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids
-    let network_conf = NetworkConfig::read(&working_dir.join("network.conf"))?;
+    let network_conf = PersistedConfig::<NetworkConfig>::read(&working_dir.join("network.conf"))?;
     assert_eq!(2, network_conf.loaded_move_packages.len());
 
     // Make sure we log out package id
-    for (_, id) in network_conf.loaded_move_packages {
+    for (_, id) in &network_conf.loaded_move_packages {
         assert!(logs_contain(&*format!("{}", id)));
     }
 
@@ -458,9 +462,9 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 
     // Create Wallet context.
     let wallet_conf_path = working_dir.join("wallet.conf");
-    let mut wallet_conf = WalletConfig::read_or_create(&wallet_conf_path)?;
+    let mut wallet_conf = PersistedConfig::<WalletConfig>::read(&wallet_conf_path)?;
     wallet_conf.accounts = vec![address];
-    wallet_conf.write(&wallet_conf_path)?;
+    wallet_conf.save()?;
     let mut context = WalletContext::new(&wallet_conf_path)?;
 
     // Make sure init() is executed correctly for custom_genesis_package_2::M1
@@ -710,7 +714,9 @@ async fn start_network(
         })
         .collect();
     genesis_config.authorities = authorities;
-    genesis_config.write(&genesis_conf_path)?;
+
+    let genesis_config = PersistedConfig::from_config(genesis_config, &genesis_conf_path);
+    genesis_config.save()?;
 
     SuiCommand::Genesis {
         working_dir,

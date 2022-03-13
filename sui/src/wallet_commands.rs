@@ -1,10 +1,8 @@
-use core::fmt;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use std::fmt::Write;
+use core::fmt;
 use std::fmt::{Debug, Display, Formatter, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -36,14 +34,7 @@ use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::ObjectRead;
 use sui_types::object::ObjectRead::Exists;
 
-// Copyright (c) 2022, Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-use crate::config::{Config, WalletConfig};
-use crate::keystore::Keystore;
-use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
-use sui_types::object::ObjectRead::Exists;
-
-use crate::config::{Config, WalletConfig};
+use crate::config::{PersistedConfig, WalletConfig};
 use crate::keystore::Keystore;
 use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
 
@@ -371,7 +362,7 @@ impl WalletCommands {
             WalletCommands::NewAddress => {
                 let address = context.keystore.write().unwrap().add_random_key()?;
                 context.config.accounts.push(address);
-                context.config.write(&context.config_path)?;
+                context.config.save()?;
                 WalletCommandResult::NewAddress(address)
             }
             WalletCommands::Gas { address } => {
@@ -444,20 +435,18 @@ impl WalletCommands {
 }
 
 pub struct WalletContext {
-    pub config: WalletConfig,
-    pub config_path: PathBuf,
+    pub config: PersistedConfig<WalletConfig>,
     pub keystore: Arc<RwLock<Box<dyn Keystore>>>,
     pub gateway: GatewayClient,
 }
 
 impl WalletContext {
     pub fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
-        let config = WalletConfig::read_or_create(config_path)?;
+        let config = PersistedConfig::read_or_else(config_path, || Ok(WalletConfig::default()))?;
         let keystore = Arc::new(RwLock::new(config.keystore.init()?));
         let gateway = config.gateway.init();
         let context = Self {
             config,
-            config_path: config_path.to_path_buf(),
             keystore,
             gateway,
         };
