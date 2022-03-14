@@ -3,7 +3,7 @@
 use super::*;
 
 use rocksdb::{ColumnFamilyDescriptor, Options};
-use std::collections::{BTreeSet, };
+use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
 
