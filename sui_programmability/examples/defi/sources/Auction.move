@@ -42,16 +42,24 @@ module DeFi::Auction {
     /// A bid submitted for the wrong (e.g. non-existent) auction.
     const EWRONG_AUCTION: u64 = 1;
 
+    /// Stores information about an auction bid.
+    struct BidData has store {
+        /// Coin representing the current (highest) bid.
+        funds: Coin<GAS>,
+        /// Address of the highest bidder.
+        highest_bidder: address,
+    }
+
     /// Maintains the state of the auction owned by a trusted
     /// auctioneer.
     struct Auction<T:  key + store> has key {
         id: VersionedID,
         /// Item to be sold.
         to_sell: T,
-        /// Coin representing the current bid (starts with no bid).
-        funds: Option<Coin<GAS>>,
-        /// Address of the highest bidder.
-        highest_bidder: address,
+        /// Owner of the time to be sold.
+        owner: address,
+        /// Data representing the highest bid (starts with no bid)
+        bid_data: Option<BidData>,
     }
 
     /// Represents a bid sent by a bidder to the auctioneer.
@@ -77,12 +85,10 @@ module DeFi::Auction {
         // is owned by the caller of this entry function and the
         // answer is that it's checked by the runtime.
         let auction = Auction<T> {
-            id: id,
-            to_sell: to_sell,
-            funds: Option::none(),
-            // set highest_bidder to the owner so that we can return
-            // the item if no one bids on it
-            highest_bidder: TxContext::sender(ctx),
+            id,
+            to_sell,
+            owner: TxContext::sender(ctx),
+            bid_data: Option::none(),
         };
         Transfer::transfer(auction, auctioneer);
     }
@@ -93,8 +99,8 @@ module DeFi::Auction {
         let bid = Bid {
             id: TxContext::new_id(ctx),
             bidder: TxContext::sender(ctx),
-            auction_id: auction_id,
-            coin: coin,
+            auction_id,
+            coin,
         };
         Transfer::transfer(bid, auctioneer);
     }
@@ -107,21 +113,25 @@ module DeFi::Auction {
         ID::delete(id);
 
         assert!(ID::inner(&auction.id) == &auction_id, EWRONG_AUCTION);
-        if (Option::is_none(&auction.funds)) {
+        if (Option::is_none(&auction.bid_data)) {
             // first bid
-            Option::fill(&mut auction.funds, coin);
-            auction.highest_bidder = bidder;
+            let bid_data = BidData {
+                funds: coin,
+                highest_bidder: bidder,
+            };
+            Option::fill(&mut auction.bid_data, bid_data);
         } else {
-            let prev_funds_value = Coin::value(Option::borrow(&mut auction.funds));
-            if (Coin::value(&coin) > prev_funds_value) {
+            let prev_bid_data = Option::borrow(&mut auction.bid_data);
+            if (Coin::value(&coin) > Coin::value(&prev_bid_data.funds)) {
                 // a bid higher than currently highest bid received
-
+                let new_bid_data = BidData {
+                    funds: coin,
+                    highest_bidder: bidder
+                };
                 // update auction to reflect highest bid
-                let prev_funds = Option::swap(&mut auction.funds, coin);
+                let BidData { funds, highest_bidder } = Option::swap(&mut auction.bid_data, new_bid_data);
                 // transfer previously highest bid to its bidder
-                Coin::transfer(prev_funds, auction.highest_bidder);
-                // update auction to reflect the new bidder
-                auction.highest_bidder = bidder;
+                Coin::transfer(funds, highest_bidder);
             } else {
                 // a bid is too low - return funds to the bidder
                 Coin::transfer(coin, bidder);
@@ -132,21 +142,21 @@ module DeFi::Auction {
     /// Ends the auction - transfers item to the currently highest
     /// bidder or to the original owner if no bids have been placed.
     public fun end_auction<T: key + store>(auction: Auction<T>, _ctx: &mut TxContext) {
-        let Auction { id, to_sell, funds, highest_bidder } = auction;
+        let Auction { id, to_sell, owner, bid_data } = auction;
         ID::delete(id);
 
-        if (Option::is_some<Coin<GAS>>(&funds)) {
-            // bids have been placed - send the funds to the item owner
-            let prev_funds = Option::extract(&mut funds);
-            Transfer::transfer(prev_funds, highest_bidder);
+        if (Option::is_some<BidData>(&bid_data)) {
+            // bids have been placed - send funds to the original item
+            // owner and the item to the highest bidder
+            let BidData { funds, highest_bidder } = Option::extract(&mut bid_data);
+            Transfer::transfer(funds, owner);
+            Transfer::transfer(to_sell, highest_bidder);
+        } else {
+            // no bids placed - send the item back to the original owner
+            Transfer::transfer(to_sell, owner);
         };
-        // there are no funds left regardless of the result, but the
-        // funds value still needs to be destroyed
-        Option::destroy_none(funds);
-
-        // send item back to the highest bidder or to the original
-        // owner (highest_bidder can represent both depending on
-        // whether there were any bids or not)
-        Transfer::transfer(to_sell, highest_bidder);
+        // there is no bid data left regardless of the result, but the
+        // option still needs to be destroyed
+        Option::destroy_none(bid_data);
     }
 }
