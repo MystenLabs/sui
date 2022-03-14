@@ -288,10 +288,11 @@ impl AuthorityState {
         let transaction_digest = transaction.digest();
 
         // Ensure an idempotent answer.
-        let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-        if transaction_info.signed_effects.is_some()
-            || transaction_info.signed_transaction.is_some()
+        if self
+            ._database
+            .signed_transaction_exists(&transaction_digest)?
         {
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
 
@@ -342,8 +343,8 @@ impl AuthorityState {
         let transaction_digest = transaction.digest();
 
         // Ensure an idempotent answer.
-        let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-        if transaction_info.signed_effects.is_some() {
+        if self._database.signed_effects_exists(&transaction_digest)? {
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
 

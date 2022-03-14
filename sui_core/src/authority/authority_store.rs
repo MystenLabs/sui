@@ -179,6 +179,23 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         }
     }
 
+    /// Returns true if we have a signed_effects structure for this transaction digest
+    pub fn signed_effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
+        self.signed_effects
+            .contains_key(transaction_digest)
+            .map_err(|e| e.into())
+    }
+
+    /// Returns true if we have a signed_effects structure for this transaction digest
+    pub fn signed_transaction_exists(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        self.signed_transactions
+            .contains_key(transaction_digest)
+            .map_err(|e| e.into())
+    }
+
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
     fn acquire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
         let num_locks = self.lock_table.len();
