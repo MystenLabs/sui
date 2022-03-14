@@ -37,7 +37,7 @@ pub fn verify_module(module: &CompiledModule) -> SuiResult {
 /// above must have the `key` ability.
 pub fn check_params(module: &CompiledModule) -> SuiResult {
     let view = BinaryIndexedView::Module(module);
-    'outer: for func_def in module.function_defs.iter() {
+    for func_def in module.function_defs.iter() {
         // find candidate entry functions and checke their parameters
         // (ignore other functions)
         if func_def.visibility != Visibility::Public {
@@ -46,12 +46,16 @@ pub fn check_params(module: &CompiledModule) -> SuiResult {
             continue;
         }
         let handle = view.function_handle_at(func_def.function);
-        for ret_type in &view.signature_at(handle.return_).0 {
-            if !is_entry_ret_type(ret_type) {
-                // it's not an entry function as it returns a value of
-                // types unsupported in entry functions
-                continue 'outer;
-            }
+
+        if view
+            .signature_at(handle.return_)
+            .0
+            .iter()
+            .any(|ret_type| !is_entry_ret_type(ret_type))
+        {
+            // it's not an entry function as it returns a value of
+            // types unsupported in entry functions
+            continue;
         }
 
         let params = view.signature_at(handle.parameters);

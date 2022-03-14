@@ -823,6 +823,8 @@ async fn transfer_object(
     {
         Ok((cert, effects)) => {
             let gas_used = match effects.status {
+                // TODO: handle the actual return value stored in
+                // ExecutionStatus::Success
                 ExecutionStatus::Success { gas_used, .. } => gas_used,
                 ExecutionStatus::Failure { gas_used, error } => {
                     *server_context.wallet_context.lock().unwrap() = Some(wallet_context);
@@ -1244,6 +1246,8 @@ async fn handle_move_call(
     {
         Ok((cert, effects)) => {
             let gas_used = match effects.status {
+                // TODO: handle the actual return value stored in
+                // ExecutionStatus::Success
                 ExecutionStatus::Success { gas_used, .. } => gas_used,
                 ExecutionStatus::Failure { gas_used, error } => {
                     let context = format!("Error calling move function, gas used {gas_used}");

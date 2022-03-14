@@ -115,7 +115,10 @@ impl MovePackage {
         for (idx, r) in function_signature.return_.iter().enumerate() {
             if !is_entry_ret_type(r) {
                 return Err(SuiError::InvalidFunctionSignature {
-                    error: format!("Incorrect type of the return value at index ({})", idx),
+                    error: format!(
+                        "Expected return value at index ({}) to be of a primitive type",
+                        idx
+                    ),
                 });
             }
         }
