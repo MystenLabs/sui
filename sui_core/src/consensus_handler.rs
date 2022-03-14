@@ -62,6 +62,7 @@ impl ConsensusHandler {
         self.state.handle_consensus_certificate(&certificate).await
     }
 
+    /// Main loop connecting to the consensus. This mainly acts as a light client.
     async fn run(&mut self) {
         'main: loop {
             // Subscribe to the consensus' output.
