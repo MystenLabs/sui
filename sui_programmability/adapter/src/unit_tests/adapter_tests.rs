@@ -1188,20 +1188,17 @@ fn test_call_ret() {
     );
     storage.flush();
 
-    // call published module function returning a u64
-    let obj_val = 42u64;
-    let pure_args = vec![obj_val.to_le_bytes().to_vec()];
-
+    // call published module function returning a u64 (42)
     let response = call(
         &mut storage,
         &native_functions,
         "M1",
-        "identity_u64",
+        "get_u64",
         gas_object.clone(),
         GAS_BUDGET,
         Vec::new(),
         Vec::new(),
-        pure_args,
+        Vec::new(),
     );
     let mut success_64 = false;
     if let ExecutionStatus::Success {
@@ -1210,7 +1207,7 @@ fn test_call_ret() {
     } = response.unwrap()
     {
         if let CallResult::U64(val) = results.get(0).unwrap() {
-            if val == &obj_val {
+            if val == &42 {
                 success_64 = true;
             }
         }
@@ -1237,6 +1234,34 @@ fn test_call_ret() {
         if let CallResult::Address(val) = results.get(0).unwrap() {
             if val.to_hex_literal() == "0x42" {
                 success_addr = true;
+            }
+        }
+    }
+
+    // call published module function returning two values: a u64 (42)
+    // and an address (0x42)
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_tuple",
+        gas_object.clone(),
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_tuple = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::U64(val1) = results.get(0).unwrap() {
+            if let CallResult::Address(val2) = results.get(1).unwrap() {
+                if val1 == &42 && val2.to_hex_literal() == "0x42" {
+                    success_tuple = true;
+                }
             }
         }
     }
@@ -1295,5 +1320,5 @@ fn test_call_ret() {
         }
     }
 
-    assert!(success_64 && success_addr && success_vec && success_vec_vec);
+    assert!(success_64 && success_addr && success_tuple && success_vec && success_vec_vec);
 }

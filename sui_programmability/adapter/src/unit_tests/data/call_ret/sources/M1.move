@@ -5,12 +5,16 @@ module Test::M1 {
 
     const ADDR: address = @0x42;
 
-    public fun identity_u64(value: u64, _ctx: &mut TxContext): u64 {
-        value
+    public fun get_u64(_ctx: &mut TxContext): u64 {
+        42
     }
 
     public fun get_addr(_ctx: &mut TxContext): address {
         ADDR
+    }
+
+    public fun get_tuple(_ctx: &mut TxContext): (u64, address) {
+        (42, ADDR)
     }
 
     public fun get_vec(_ctx: &mut TxContext): vector<u64> {
@@ -28,6 +32,5 @@ module Test::M1 {
         Vector::push_back(&mut vec2, vec);
         vec2
     }
-
 
 }
