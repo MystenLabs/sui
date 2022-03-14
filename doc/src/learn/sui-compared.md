@@ -6,9 +6,9 @@ title: Sui compared to another blockchain & Sui limitations
 
 This is a high-level overview of the differences in approach between Sui and other blockchain systems.
 
-## Block chains
+## Blockchains
 
-Blockchains validators collectively build a shared accumulator: a representation of the state of the blockchain, a chain to which they add increments over time, called blocks. In blockchains that offer finality, every time validators want to make an incremental addition to the blockchain, i.e. a block proposal, they enter into a consensus protocol. This protocol lets them form an agreement over the current state of the chain, whether the proposed increment is suitable and valid, and what the state of the chain will be after the new addition. 
+Blockchain validators collectively build a shared accumulator: a representation of the state of the blockchain, a chain to which they add increments over time, called blocks. In blockchains that offer finality, every time validators want to make an incremental addition to the blockchain, i.e. a block proposal, they enter into a consensus protocol. This protocol lets them form an agreement over the current state of the chain, whether the proposed increment is suitable and valid, and what the state of the chain will be after the new addition. 
 
 This method of maintaining common state over time has known practical success over the last 14 years or so, using a wealth of theory from the last 50 years of research in the field of Byzantine Fault Tolerant distributed systems. 
 
