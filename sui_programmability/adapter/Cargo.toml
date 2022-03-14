@@ -13,17 +13,17 @@ bcs = "0.1.3"
 once_cell = "1.9.0"
 structopt = "0.3.26"
 
-move-binary-format = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }
-move-bytecode-utils = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }
-move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }
-move-core-types = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a", features = ["address20"] }
-move-cli = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }
-move-vm-runtime = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }
-move-vm-types = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }
+move-binary-format = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
+move-bytecode-utils = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
+move-bytecode-verifier = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
+move-core-types = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a", features = ["address20"] }
+move-cli = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
+move-vm-runtime = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
+move-vm-types = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
 
 sui-framework = { path = "../framework" }
 sui-verifier = { path = "../verifier" }
 sui-types = { path = "../../sui_types" }
 
 [dev-dependencies]
-move-package = { git = "https://github.com/diem/move", rev = "584bfc8c5f8e582223581975106ffa2545677e2a" }
+move-package = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
