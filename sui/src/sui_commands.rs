@@ -205,7 +205,12 @@ pub async fn genesis(
     let sui_lib = sui_framework::get_sui_framework_modules(&genesis_conf.sui_framework_lib_path)?;
     preload_modules.push(sui_lib);
 
-    let mut genesis_ctx = genesis::get_genesis_context();
+    // TODO: allow custom address to be used after the Gateway refactoring
+    // Default to use the last address in the wallet config for initializing modules.
+    // If there's no address in wallet config, then use 0x0
+    let null_address = SuiAddress::default();
+    let module_init_address = addresses.last().unwrap_or(&null_address);
+    let mut genesis_ctx = genesis::get_genesis_context_with_custom_address(module_init_address);
     // Build custom move packages
     if !genesis_conf.move_packages.is_empty() {
         info!(
