@@ -15,7 +15,7 @@ use tokio::task::JoinHandle;
 use tracing_test::traced_test;
 
 use sui::config::{
-    AccountConfig, AuthorityPrivateInfo, GenesisConfig, NetworkConfig, ObjectConfig,
+    AccountConfig, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, ObjectConfig,
     PersistedConfig, WalletConfig, AUTHORITIES_DB_NAME,
 };
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
@@ -123,7 +123,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         }),
     };
     let wallet_conf_path = working_dir.join("wallet.conf");
-    let mut wallet_config = PersistedConfig::from_config(wallet_config, &wallet_conf_path);
+    let mut wallet_config = wallet_config.persisted(&wallet_conf_path);
 
     // Add 3 accounts
     for _ in 0..3 {
@@ -220,8 +220,8 @@ async fn airdrop_get_wallet_context_with_oracle(
         255, 163, 60, 174,
     ]);
     let wallet_conf_path = working_dir.path().join("wallet.conf");
-    let mut wallet_conf =
-        PersistedConfig::read_or_else(&wallet_conf_path, || Ok(WalletConfig::default()))?;
+    let wallet_conf: WalletConfig = PersistedConfig::read(&wallet_conf_path)?;
+    let mut wallet_conf = wallet_conf.persisted(&wallet_conf_path);
     let path = match &wallet_conf.keystore {
         KeystoreType::File(path) => path,
         _ => panic!("Unexpected KeystoreType"),
@@ -417,7 +417,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     let genesis_path = working_dir.join("genesis.conf");
     let num_authorities = 4;
     let config = GenesisConfig::custom_genesis(working_dir, num_authorities, 0, 0)?;
-    let mut config = PersistedConfig::from_config(config, &genesis_path);
+    let mut config = config.persisted(&genesis_path);
 
     config.accounts.clear();
     config.accounts.push(AccountConfig {
@@ -462,7 +462,8 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 
     // Create Wallet context.
     let wallet_conf_path = working_dir.join("wallet.conf");
-    let mut wallet_conf = PersistedConfig::<WalletConfig>::read(&wallet_conf_path)?;
+    let wallet_conf: WalletConfig = PersistedConfig::read(&wallet_conf_path)?;
+    let mut wallet_conf = wallet_conf.persisted(&wallet_conf_path);
     wallet_conf.accounts = vec![address];
     wallet_conf.save()?;
     let mut context = WalletContext::new(&wallet_conf_path)?;
@@ -715,7 +716,7 @@ async fn start_network(
         .collect();
     genesis_config.authorities = authorities;
 
-    let genesis_config = PersistedConfig::from_config(genesis_config, &genesis_conf_path);
+    let genesis_config = genesis_config.persisted(&genesis_conf_path);
     genesis_config.save()?;
 
     SuiCommand::Genesis {

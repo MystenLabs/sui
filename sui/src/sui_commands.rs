@@ -16,13 +16,14 @@ use sui_adapter::adapter::generate_package_id;
 use sui_adapter::genesis;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
+use sui_network::transport::DEFAULT_MAX_DATAGRAM_SIZE;
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
 use sui_types::committee::Committee;
 use sui_types::error::SuiResult;
 use sui_types::object::Object;
 
 use crate::config::{
-    AuthorityPrivateInfo, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
+    AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, PersistedConfig, WalletConfig,
 };
 use crate::gateway::{EmbeddedGatewayConfig, GatewayType};
 use crate::keystore::{Keystore, KeystoreType, SuiKeystore};
@@ -65,14 +66,14 @@ impl SuiCommand {
                 }
 
                 let genesis_conf = if let Some(path) = path {
-                    PersistedConfig::read_config(path)?
+                    PersistedConfig::read(path)?
                 } else {
                     GenesisConfig::default_genesis(working_dir)?
                 };
 
                 let (network_config, accounts, keystore) = genesis(genesis_conf).await?;
                 info!("Network genesis completed.");
-                let network_config = PersistedConfig::from_config(network_config, &network_path);
+                let network_config = network_config.persisted(&network_path);
                 network_config.save()?;
                 info!("Network config file is stored in {:?}.", network_path);
 
@@ -89,7 +90,7 @@ impl SuiCommand {
                     }),
                 };
 
-                let wallet_config = PersistedConfig::from_config(wallet_config, &wallet_path);
+                let wallet_config = wallet_config.persisted(&wallet_path);
                 wallet_config.save()?;
                 info!("Wallet config file is stored in {:?}.", wallet_path);
                 Ok(())
@@ -99,7 +100,7 @@ impl SuiCommand {
 }
 
 async fn start_network(config_path: &Path) -> Result<(), anyhow::Error> {
-    let config: NetworkConfig = PersistedConfig::read_config(config_path)?;
+    let config: NetworkConfig = PersistedConfig::read(config_path)?;
     if config.authorities.is_empty() {
         return Err(anyhow!(
             "No authority configured for the network, please run genesis."
@@ -150,7 +151,11 @@ pub async fn genesis(
         genesis_conf.authorities.len()
     );
 
-    let mut network_config = NetworkConfig::default();
+    let mut network_config = NetworkConfig {
+        authorities: vec![],
+        buffer_size: DEFAULT_MAX_DATAGRAM_SIZE,
+        loaded_move_packages: vec![],
+    };
     let mut voting_right = BTreeMap::new();
 
     for authority in genesis_conf.authorities {

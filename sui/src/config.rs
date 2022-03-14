@@ -20,7 +20,6 @@ use tracing::log::trace;
 
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_network::network::PortAllocator;
-use sui_network::transport;
 use sui_types::base_types::*;
 use sui_types::crypto::{get_key_pair, KeyPair};
 
@@ -112,15 +111,7 @@ pub struct WalletConfig {
     pub gateway: GatewayType,
 }
 
-impl Default for WalletConfig {
-    fn default() -> Self {
-        Self {
-            accounts: Vec::new(),
-            keystore: KeystoreType::File(PathBuf::from("./wallet.key")),
-            gateway: GatewayType::Embedded(Default::default()),
-        }
-    }
-}
+impl Config for WalletConfig {}
 
 impl Display for WalletConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -141,15 +132,7 @@ pub struct NetworkConfig {
     pub loaded_move_packages: Vec<(PathBuf, ObjectID)>,
 }
 
-impl Default for NetworkConfig {
-    fn default() -> Self {
-        Self {
-            authorities: vec![],
-            buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE,
-            loaded_move_packages: vec![],
-        }
-    }
-}
+impl Config for NetworkConfig {}
 
 impl NetworkConfig {
     pub fn get_authority_infos(&self) -> Vec<AuthorityInfo> {
@@ -170,11 +153,11 @@ pub struct GenesisConfig {
     pub authorities: Vec<AuthorityPrivateInfo>,
     pub accounts: Vec<AccountConfig>,
     pub move_packages: Vec<PathBuf>,
-    #[serde(default = "default_sui_framework_lib")]
     pub sui_framework_lib_path: PathBuf,
-    #[serde(default = "default_move_framework_lib")]
     pub move_framework_lib_path: PathBuf,
 }
+
+impl Config for GenesisConfig {}
 
 #[derive(Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -198,16 +181,6 @@ pub struct ObjectConfig {
 
 fn default_gas_value() -> u64 {
     DEFAULT_GAS_AMOUNT
-}
-
-fn default_sui_framework_lib() -> PathBuf {
-    PathBuf::from(DEFAULT_FRAMEWORK_PATH)
-}
-
-fn default_move_framework_lib() -> PathBuf {
-    PathBuf::from(DEFAULT_FRAMEWORK_PATH)
-        .join("deps")
-        .join("move-stdlib")
 }
 
 const DEFAULT_NUMBER_OF_AUTHORITIES: usize = 4;
@@ -267,8 +240,22 @@ impl Default for GenesisConfig {
             authorities: vec![],
             accounts: vec![],
             move_packages: vec![],
-            sui_framework_lib_path: default_sui_framework_lib(),
-            move_framework_lib_path: default_move_framework_lib(),
+            sui_framework_lib_path: PathBuf::from(DEFAULT_FRAMEWORK_PATH),
+            move_framework_lib_path: PathBuf::from(DEFAULT_FRAMEWORK_PATH)
+                .join("deps")
+                .join("move-stdlib"),
+        }
+    }
+}
+
+pub trait Config
+where
+    Self: DeserializeOwned + Serialize,
+{
+    fn persisted(self, path: &Path) -> PersistedConfig<Self> {
+        PersistedConfig {
+            inner: self,
+            path: path.to_path_buf(),
         }
     }
 }
@@ -280,36 +267,12 @@ pub struct PersistedConfig<C> {
 
 impl<C> PersistedConfig<C>
 where
-    C: DeserializeOwned + Serialize,
+    C: Config,
 {
-    pub fn from_config(config: C, path: &Path) -> Self {
-        Self {
-            inner: config,
-            path: path.to_path_buf(),
-        }
-    }
-
-    pub fn read_or_else<F>(path: &Path, default: F) -> Result<Self, anyhow::Error>
-    where
-        F: FnOnce() -> Result<C, anyhow::Error>,
-    {
-        let path_buf = path.to_path_buf();
-        Ok(if path_buf.exists() {
-            Self::read(path)?
-        } else {
-            trace!("Config file not found, creating new config '{:?}'", path);
-            Self::from_config(default()?, path)
-        })
-    }
-
-    pub fn read_config(path: &Path) -> Result<C, anyhow::Error> {
+    pub fn read(path: &Path) -> Result<C, anyhow::Error> {
         trace!("Reading config from '{:?}'", path);
         let reader = BufReader::new(File::open(path)?);
         Ok(serde_json::from_reader(reader)?)
-    }
-
-    pub fn read(path: &Path) -> Result<Self, anyhow::Error> {
-        Ok(Self::from_config(Self::read_config(path)?, path))
     }
 
     pub fn save(&self) -> Result<(), anyhow::Error> {

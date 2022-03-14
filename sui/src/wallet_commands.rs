@@ -34,7 +34,7 @@ use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::ObjectRead;
 use sui_types::object::ObjectRead::Exists;
 
-use crate::config::{PersistedConfig, WalletConfig};
+use crate::config::{Config, PersistedConfig, WalletConfig};
 use crate::keystore::Keystore;
 use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
 
@@ -442,7 +442,8 @@ pub struct WalletContext {
 
 impl WalletContext {
     pub fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
-        let config = PersistedConfig::read_or_else(config_path, || Ok(WalletConfig::default()))?;
+        let config: WalletConfig = PersistedConfig::read(config_path)?;
+        let config = config.persisted(config_path);
         let keystore = Arc::new(RwLock::new(config.keystore.init()?));
         let gateway = config.gateway.init();
         let context = Self {
