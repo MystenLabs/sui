@@ -13,28 +13,15 @@ use sui_types::serialize::{deserialize_message, SerializedMessage};
 /// The `ConsensusHandler` receives certificates sequenced by the consensus and updates
 /// the authority's database
 pub struct ConsensusHandler {
-    /// The network address of to request sequenced certificates from the consensus.
-    pub address: SocketAddr,
-    /// The network buffer size.
-    pub buffer_size: usize,
     /// The (global) authority state to update the locks of shared objects.
     pub state: Arc<AuthorityState>,
 }
 
 impl ConsensusHandler {
-    /// Create a new consensus handler instance.
-    pub fn new(address: SocketAddr, buffer_size: usize, state: Arc<AuthorityState>) -> Self {
-        Self {
-            address,
-            buffer_size,
-            state,
-        }
-    }
-
     /// Spawn the consensus handler in a new tokio task.
-    pub fn spawn(mut handler: Self) {
+    pub fn spawn(mut handler: Self, address: SocketAddr, buffer_size: usize) {
         tokio::spawn(async move {
-            handler.run().await;
+            handler.run(address, buffer_size).await;
         });
     }
 
@@ -63,17 +50,16 @@ impl ConsensusHandler {
     }
 
     /// Main loop connecting to the consensus. This mainly acts as a light client.
-    async fn run(&mut self) {
+    async fn run(&mut self, address: SocketAddr, buffer_size: usize) {
         'main: loop {
             // Subscribe to the consensus' output.
-            let mut connection =
-                match transport::connect(self.address.to_string(), self.buffer_size).await {
-                    Ok(stream) => stream,
-                    Err(e) => {
-                        log::warn!("Failed to subscribe to consensus output: {}", e);
-                        continue 'main;
-                    }
-                };
+            let mut connection = match transport::connect(address.to_string(), buffer_size).await {
+                Ok(stream) => stream,
+                Err(e) => {
+                    log::warn!("Failed to subscribe to consensus output: {}", e);
+                    continue 'main;
+                }
+            };
 
             // Listen to sequenced certificates and process them.
             loop {
