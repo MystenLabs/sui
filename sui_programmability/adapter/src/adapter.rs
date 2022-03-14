@@ -278,7 +278,10 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         exec_failure!(
             gas::MIN_MOVE,
             SuiError::InsufficientGas {
-                error: "Gas budget insufficient to publish a package".to_string(),
+                error: format!(
+                    "Gas cost to publish the package is {}, exceeding the budget which is {}",
+                    gas_used_for_publish, gas_budget
+                ),
             }
         );
     }
@@ -309,6 +312,8 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     ) {
         ExecutionStatus::Success { gas_used } => gas_used,
         ExecutionStatus::Failure { gas_used, error } => {
+            // TODO: We should't charge the full publish cost when this failed.
+            // Instead we should only charge the cost to run bytecode verification.
             exec_failure!(gas_used + gas_used_for_publish, *error)
         }
     };
