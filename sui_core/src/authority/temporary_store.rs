@@ -13,8 +13,11 @@ pub type InnerTemporaryStore = (
     Vec<Event>,
 );
 
-pub struct AuthorityTemporaryStore {
-    object_store: Arc<AuthorityStore>,
+pub struct AuthorityTemporaryStore<S> {
+    // The backing store for retrieving Move packages onchain.
+    // When executing a Move call, the dependent packages are not going to be
+    // in the input objects. They will be feteched from the backing store.
+    package_store: Arc<S>,
     tx_digest: TransactionDigest,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
@@ -26,18 +29,21 @@ pub struct AuthorityTemporaryStore {
     deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
+    // New object IDs created during the transaction, needed for
+    // telling apart unwrapped objects.
+    created_object_ids: HashSet<ObjectID>,
 }
 
-impl AuthorityTemporaryStore {
+impl<S> AuthorityTemporaryStore<S> {
     /// Creates a new store associated with an authority store, and populates it with
     /// initial objects.
     pub fn new(
-        authority_state: &AuthorityState,
+        package_store: Arc<S>,
         _input_objects: &'_ [Object],
         tx_digest: TransactionDigest,
-    ) -> AuthorityTemporaryStore {
-        AuthorityTemporaryStore {
-            object_store: authority_state._database.clone(),
+    ) -> Self {
+        Self {
+            package_store,
             tx_digest,
             objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
             active_inputs: _input_objects
@@ -48,6 +54,7 @@ impl AuthorityTemporaryStore {
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
+            created_object_ids: HashSet::new(),
         }
     }
 
@@ -93,34 +100,6 @@ impl AuthorityTemporaryStore {
         }
     }
 
-    /// We need to special handle objects that was wrapped in the past and now unwrapped.
-    /// When an object was wrapped at version `v`, we added an record into `parent_sync`
-    /// with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
-    /// it will also have version `v+1`, leading to a violation of the invariant that any
-    /// object_id and version pair must be unique. Hence for any object that's just unwrapped,
-    /// we force incrementing its version number again to make it `v+2` before writing to the store.
-    pub fn patch_unwrapped_objects(&mut self, unwrapped_object_ids: &HashSet<ObjectID>) {
-        for id in unwrapped_object_ids {
-            // Unwrapped object could show up in either written or deleted.
-            if let Some(object) = self.written.get_mut(id) {
-                object.data.try_as_move_mut().unwrap().increment_version();
-            } else {
-                // unwrap safe because we constructed unwrapped_object_ids from written and deleted.
-                // If the object is not in written, it must be in deleted.
-                let entry = self.deleted.get_mut(id).unwrap();
-                entry.0 = entry.0.increment();
-            }
-        }
-        // self.deleted contains all object IDs that were passed through ID::delete_id.
-        // However that doesn't necessarily indicate an object was deleted, if the object
-        // didn't show up in the input. There are two cases, one is that the object just got
-        // unwrapped, and another is just deletion of an ID that doesn't belong to a previous
-        // existing object. The second case can be filtered out.
-        self.deleted.retain(|id, (_version, kind)| {
-            kind != &DeleteKind::NotExistInInput || unwrapped_object_ids.contains(id)
-        });
-    }
-
     pub fn to_signed_effects(
         &self,
         authority_name: &AuthorityName,
@@ -129,7 +108,6 @@ impl AuthorityTemporaryStore {
         transaction_dependencies: Vec<TransactionDigest>,
         status: ExecutionStatus,
         gas_object_id: &ObjectID,
-        unwrapped_object_ids: HashSet<ObjectID>,
     ) -> SignedTransactionEffects {
         let gas_object = &self.written[gas_object_id];
         let effects = TransactionEffects {
@@ -138,9 +116,7 @@ impl AuthorityTemporaryStore {
             created: self
                 .written
                 .iter()
-                .filter(|(id, _)| {
-                    !self.objects.contains_key(*id) && !unwrapped_object_ids.contains(*id)
-                })
+                .filter(|(id, _)| self.created_object_ids.contains(*id))
                 .map(|(_, object)| (object.to_object_reference(), object.owner))
                 .collect(),
             mutated: self
@@ -153,7 +129,7 @@ impl AuthorityTemporaryStore {
                 .written
                 .iter()
                 .filter(|(id, _)| {
-                    !self.objects.contains_key(*id) && unwrapped_object_ids.contains(*id)
+                    !self.objects.contains_key(*id) && !self.created_object_ids.contains(*id)
                 })
                 .map(|(_, object)| (object.to_object_reference(), object.owner))
                 .collect(),
@@ -216,15 +192,24 @@ impl AuthorityTemporaryStore {
             },
             "Mutable input neither written nor deleted."
         );
+
+        debug_assert!(
+            {
+                let input_ids: HashSet<ObjectID> = self.objects.clone().into_keys().collect();
+                self.created_object_ids.is_disjoint(&input_ids)
+            },
+            "Newly created object IDs showed up in the input",
+        );
     }
 }
 
-impl Storage for AuthorityTemporaryStore {
+impl<S> Storage for AuthorityTemporaryStore<S> {
     /// Resets any mutations and deletions recorded in the store.
     fn reset(&mut self) {
         self.written.clear();
         self.deleted.clear();
         self.events.clear();
+        self.created_object_ids.clear();
     }
 
     fn read_object(&self, id: &ObjectID) -> Option<Object> {
@@ -232,14 +217,12 @@ impl Storage for AuthorityTemporaryStore {
         debug_assert!(self.deleted.get(id) == None);
         match self.written.get(id) {
             Some(x) => Some(x.clone()),
-            None => match self.objects.get(id) {
-                Some(x) => Some(x.clone()),
-                None => match self.object_store.get_object(id) {
-                    Ok(o) => o,
-                    Err(e) => panic!("Could not read object {}", e),
-                },
-            },
+            None => self.objects.get(id).cloned(),
         }
+    }
+
+    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>) {
+        self.created_object_ids = ids;
     }
 
     /*
@@ -290,26 +273,33 @@ impl Storage for AuthorityTemporaryStore {
     }
 }
 
-impl ModuleResolver for AuthorityTemporaryStore {
+impl<S: BackingPackageStore> ModuleResolver for AuthorityTemporaryStore<S> {
     type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.read_object(&ObjectID::from(*module_id.address())) {
-            Some(o) => match &o.data {
-                Data::Package(c) => Ok(c
-                    .serialized_module_map()
-                    .get(module_id.name().as_str())
-                    .cloned()
-                    .map(|m| m.into_vec())),
-                _ => Err(SuiError::BadObjectType {
-                    error: "Expected module object".to_string(),
-                }),
+        let package_id = &ObjectID::from(*module_id.address());
+        let package = match self.read_object(package_id) {
+            Some(object) => object,
+            None => match self.package_store.get_package(package_id)? {
+                Some(object) => object,
+                None => {
+                    return Ok(None);
+                }
             },
-            None => Ok(None),
+        };
+        match &package.data {
+            Data::Package(c) => Ok(c
+                .serialized_module_map()
+                .get(module_id.name().as_str())
+                .cloned()
+                .map(|m| m.into_vec())),
+            _ => Err(SuiError::BadObjectType {
+                error: "Expected module object".to_string(),
+            }),
         }
     }
 }
 
-impl ResourceResolver for AuthorityTemporaryStore {
+impl<S> ResourceResolver for AuthorityTemporaryStore<S> {
     type Error = SuiError;
 
     fn get_resource(

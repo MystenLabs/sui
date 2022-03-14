@@ -1,6 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::env;
+use std::fmt::Display;
+use std::io::Write;
+use std::sync::{Arc, RwLock};
+
 use async_trait::async_trait;
 use colored::Colorize;
 use rustyline::completion::{Completer, Pair};
@@ -10,31 +17,24 @@ use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::{Config, Context, Editor};
 use rustyline_derive::Helper;
-use std::fmt::Display;
-use std::io::Write;
-use std::{env, io};
 use structopt::clap::{App, SubCommand};
 use unescape::unescape;
 
+#[path = "unit_tests/shell_tests.rs"]
+#[cfg(test)]
+mod shell_tests;
+
 /// A interactive command line shell with history and completion support
 pub struct Shell<P: Display, S, H> {
-    pub prompt: P,
-    pub state: S,
-    pub handler: H,
-    pub command: CommandStructure,
+    prompt: P,
+    state: S,
+    handler: H,
+    command: CommandStructure,
 }
 
 impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
-    pub async fn run_async(&mut self) -> Result<(), anyhow::Error> {
-        let config = Config::builder()
-            .auto_add_history(true)
-            .history_ignore_space(true)
-            .history_ignore_dups(true)
-            .build();
-
-        let mut rl = Editor::with_config(config);
-
-        let mut command = self.command.clone();
+    pub fn new(prompt: P, state: S, handler: H, mut command: CommandStructure) -> Self {
+        // Add help to auto complete
         let help = CommandStructure {
             name: "help".to_string(),
             completions: command.completions.clone(),
@@ -43,22 +43,47 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
         command.children.push(help);
         command.completions.extend(["help".to_string()]);
 
-        rl.set_helper(Some(ShellHelper { command }));
+        Self {
+            prompt,
+            state,
+            handler,
+            command,
+        }
+    }
 
-        let mut stdout = io::stdout();
-        'shell: loop {
-            print!("{}", self.prompt);
-            stdout.flush()?;
+    pub async fn run_async(
+        &mut self,
+        out: &mut dyn Write,
+        err: &mut dyn Write,
+    ) -> Result<(), anyhow::Error> {
+        let config = Config::builder()
+            .auto_add_history(true)
+            .history_ignore_space(true)
+            .history_ignore_dups(true)
+            .build();
+
+        let mut rl = Editor::with_config(config);
+
+        let completion_cache = Arc::new(RwLock::new(BTreeMap::new()));
+
+        rl.set_helper(Some(ShellHelper {
+            command: self.command.clone(),
+            completion_cache: completion_cache.clone(),
+        }));
+
+        loop {
+            write!(out, "{}", self.prompt)?;
+            out.flush()?;
 
             // Read a line
             let readline = rl.readline(&self.prompt.to_string());
             let line = match readline {
                 Ok(rl_line) => rl_line,
-                Err(ReadlineError::Interrupted | ReadlineError::Eof) => break 'shell,
+                Err(ReadlineError::Interrupted | ReadlineError::Eof) => break,
                 Err(err) => return Err(err.into()),
             };
 
-            let line = Self::substitution_env_variables(line);
+            let line = substitute_env_variables(line);
 
             // Runs the line
             match Self::split_and_unescape(line.trim()) {
@@ -67,62 +92,44 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                         // These are shell only commands.
                         match s.as_str() {
                             "quit" | "exit" => {
-                                println!("Bye!");
-                                break 'shell;
+                                writeln!(out, "Bye!")?;
+                                break;
                             }
                             "clear" => {
                                 // Clear screen and move cursor to top left
-                                print!("\x1B[2J\x1B[1;1H");
-                                continue 'shell;
+                                write!(out, "\x1B[2J\x1B[1;1H")?;
+                                continue;
                             }
                             "echo" => {
-                                let out = line.as_slice()[1..line.len()].join(" ");
-                                println!("{}", out);
-                                continue 'shell;
+                                let line = line.as_slice()[1..line.len()].join(" ");
+                                writeln!(out, "{}", line)?;
+                                continue;
                             }
                             "env" => {
                                 for (key, var) in env::vars() {
-                                    println!("{}={}", key, var);
+                                    writeln!(out, "{}={}", key, var)?;
                                 }
-                                continue 'shell;
+                                continue;
                             }
                             _ => {}
                         }
                     } else {
                         // do nothing if line is empty
-                        continue 'shell;
+                        continue;
                     }
 
-                    if self.handler.handle_async(line, &mut self.state).await {
-                        break 'shell;
+                    if self
+                        .handler
+                        .handle_async(line, &mut self.state, completion_cache.clone())
+                        .await
+                    {
+                        break;
                     };
                 }
-                Err(e) => eprintln!("{}", e.red()),
+                Err(e) => writeln!(err, "{}", e.red())?,
             }
         }
         Ok(())
-    }
-
-    fn substitution_env_variables(s: String) -> String {
-        if !s.contains('$') {
-            return s;
-        }
-        let mut env = env::vars().collect::<Vec<_>>();
-        // Sort variable name by the length in descending order, to prevent wrong substitution by variable with partial same name.
-        env.sort_by(|(k1, _), (k2, _)| Ord::cmp(&k2.len(), &k1.len()));
-
-        for (key, value) in env {
-            let var = format!("${}", key);
-            if s.contains(&var) {
-                let result = s.replace(var.as_str(), value.as_str());
-                return if result.contains('$') {
-                    Self::substitution_env_variables(result)
-                } else {
-                    result
-                };
-            }
-        }
-        s
     }
 
     fn split_and_unescape(line: &str) -> Result<Vec<String>, String> {
@@ -134,6 +141,28 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
         }
         Ok(commands)
     }
+}
+
+fn substitute_env_variables(s: String) -> String {
+    if !s.contains('$') {
+        return s;
+    }
+    let mut env = env::vars().collect::<Vec<_>>();
+    // Sort variable name by the length in descending order, to prevent wrong substitution by variable with partial same name.
+    env.sort_by(|(k1, _), (k2, _)| Ord::cmp(&k2.len(), &k1.len()));
+
+    for (key, value) in env {
+        let var = format!("${}", key);
+        if s.contains(&var) {
+            let result = s.replace(var.as_str(), value.as_str());
+            return if result.contains('$') {
+                substitute_env_variables(result)
+            } else {
+                result
+            };
+        }
+    }
+    s
 }
 
 pub fn install_shell_plugins<'a>(clap: App<'a, 'a>) -> App<'a, 'a> {
@@ -150,6 +179,7 @@ pub fn install_shell_plugins<'a>(clap: App<'a, 'a>) -> App<'a, 'a> {
 #[derive(Helper)]
 struct ShellHelper {
     pub command: CommandStructure,
+    pub completion_cache: CompletionCache,
 }
 
 impl Hinter for ShellHelper {
@@ -184,11 +214,22 @@ impl Completer for ShellHelper {
             previous_tokens.push(tok.to_string());
         }
 
-        let candidates = command
-            .completions
-            .iter()
-            .filter(|string| string.starts_with(&last_token) && !previous_tokens.contains(*string))
-            .cloned()
+        let completions = command.completions.clone();
+        let cache_key = CacheKey {
+            command: Some(command.name.clone()),
+            flag: previous_tokens.last().cloned().unwrap_or_default(),
+        };
+        let mut completion_from_cache = self
+            .completion_cache
+            .read()
+            .map(|cache| cache.get(&cache_key).cloned().unwrap_or_default())
+            .unwrap_or_default();
+
+        completion_from_cache.extend(completions);
+
+        let candidates = completion_from_cache
+            .into_iter()
+            .filter(|string| string.starts_with(&last_token) && !previous_tokens.contains(string))
             .collect::<Vec<_>>();
 
         Ok((
@@ -218,15 +259,18 @@ impl CommandStructure {
             .p
             .subcommands
             .iter()
-            .map(|it| CommandStructure {
-                name: it.get_name().to_string(),
-                completions: it
-                    .p
-                    .opts
-                    .iter()
-                    .map(|it| format!("--{}", it.b.name))
-                    .collect::<Vec<_>>(),
-                children: vec![],
+            .map(|it| {
+                let name = it.get_name();
+                CommandStructure {
+                    name: name.to_string(),
+                    completions: it
+                        .p
+                        .opts
+                        .iter()
+                        .map(|it| format!("--{}", it.b.name))
+                        .collect::<Vec<_>>(),
+                    children: vec![],
+                }
             })
             .collect::<Vec<_>>();
 
@@ -257,5 +301,72 @@ impl CommandStructure {
 
 #[async_trait]
 pub trait AsyncHandler<T: Send> {
-    async fn handle_async(&self, args: Vec<String>, state: &mut T) -> bool;
+    async fn handle_async(
+        &self,
+        args: Vec<String>,
+        state: &mut T,
+        completion_cache: CompletionCache,
+    ) -> bool;
+}
+
+pub type CompletionCache = Arc<RwLock<BTreeMap<CacheKey, Vec<String>>>>;
+
+#[derive(PartialEq)]
+/// A special key for `CompletionCache` which will perform wildcard key matching.
+/// Command field is optional and it will be treated as wildcard if `None`
+pub struct CacheKey {
+    command: Option<String>,
+    flag: String,
+}
+impl CacheKey {
+    pub fn new(command: &str, flag: &str) -> Self {
+        Self {
+            command: Some(command.to_string()),
+            flag: flag.to_string(),
+        }
+    }
+    pub fn flag(flag: &str) -> Self {
+        Self {
+            command: None,
+            flag: flag.to_string(),
+        }
+    }
+}
+impl Eq for CacheKey {}
+
+impl PartialOrd<Self> for CacheKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+/// This custom ordering for `CacheKey` enable wildcard matching,
+/// the command field for `CacheKey` is optional and can be used as a wildcard when equal `None`
+/// # Examples
+/// ```
+/// use std::cmp::Ordering;
+/// use std::collections::BTreeMap;
+/// use sui::shell::CacheKey;
+///
+/// assert_eq!(Ordering::Equal, CacheKey::flag("--flag").cmp(&CacheKey::new("any command", "--flag")));
+///
+/// let mut data = BTreeMap::new();
+/// data.insert(CacheKey::flag("--flag"), "Some Data");
+///
+/// assert_eq!(Some(&"Some Data"), data.get(&CacheKey::new("This can be anything", "--flag")));
+/// assert_eq!(Some(&"Some Data"), data.get(&CacheKey::flag("--flag")));
+/// ```
+impl Ord for CacheKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let cmd_eq = if self.command.is_none() || other.command.is_none() {
+            Ordering::Equal
+        } else {
+            self.command.cmp(&other.command)
+        };
+
+        if cmd_eq != Ordering::Equal {
+            cmd_eq
+        } else {
+            self.flag.cmp(&other.flag)
+        }
+    }
 }
