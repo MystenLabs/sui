@@ -1,3 +1,19 @@
+// This is an implementation of the TicTacToe game.
+// The game object (which includes gameboard) is owned by a game admin.
+// Since players don't have ownership over the game object, they cannot
+// mutate the gameboard directly. In order for each plaer to place
+// a marker, they must first show their intention of placing a marker
+// by creating a marker object with the placement information and send
+// the marker to the admin. The admin needs to run a centralized cervice
+// that monitors the marker placement events and respond do them.
+// Upon receiving an event, the admin will attempt the place the new
+// marker on the gameboard. This means that every marker placement operation
+// always take two transactions, one by the player, and one by the admin.
+// It also means that we need to trust the centralized service for liveness,
+// i.e. the service is willing to make progress in the game.
+// TicTacToeV2 shows a simpler way to implement this using shared objects,
+// providing different trade-offs: using shared object is more expensive,
+// however it eliminates the need of a centralized service.
 module Games::TicTacToe {
     use Std::Option::{Self, Option};
     use Std::Vector;
@@ -212,7 +228,7 @@ module Games::TicTacToe {
         check_for_winner(game, 2, 0, 1, 1, 0, 2);
 
         // Check if we have a draw
-        if (game.cur_turn == 9) {
+        if (game.game_status != IN_PROGRESS && game.cur_turn == 9) {
             game.game_status = DRAW;
         };
     }

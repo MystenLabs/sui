@@ -1,4 +1,6 @@
-# Wallet Quick Start
+---
+title: Wallet Quick Start
+---
 
 Welcome to the Sui tutorial on the sample Sui wallet developed
 to facilitate local experimentation with Sui features using a
@@ -36,7 +38,7 @@ such other object transfers or smart contract (Move) calls. These
 numbers represent a sample configuration and have been chosen somewhat
 arbitrarily; the process of generating the genesis state can be
 customized with additional accounts, objects, code, etc. as described
-in [Genesis customization](#genesis-customization).
+in [Genesis customization](#customize-genesis).
 
 The network configuration is stored in `network.conf` and
 can be used subsequently to start the network. `wallet.conf` and `wallet.key` are
@@ -131,6 +133,8 @@ or
 
 The network config file path defaults to `./network.conf` if not
 specified.
+
+NOTE: For logs, set `RUST_LOG=debug` before invoking `./sui start`.
 
 
 ### Running interactive wallet
@@ -485,7 +489,7 @@ public fun transfer(c: Coin::Coin<GAS>, recipient: address, _ctx: &mut TxContext
 
 Please note that there is no real need to use a Move call to transfer
 objects as this can be accomplish with a built-in wallet
-[command](#transfering-objects) - we chose this example due to its
+[command](#transferring-objects) - we chose this example due to its
 simplicity.
 
 
@@ -521,9 +525,9 @@ parameters one-by-one:
 - `--function` - name of the function to be called
 - `--module` - name of the module containing the function
 - `--package` - ID of the package object where the module containing
-  the function is located ([remember](#a-quick-look-at-the-gas-module)
+  the function is located. (Remember
   that the ID of the genesis Sui package containing the GAS module is
-  defined in its manifest file, and is equal to `0x2`)
+  defined in its manifest file, and is equal to `0x2`.)
 - `args` - a list of function arguments:
   - ID of the gas object representing the `c` parameter of the `transfer`
     function
@@ -594,11 +598,10 @@ Type: 0x2::Coin::Coin<0x2::GAS::GAS>
 ## Publish packages
 
 In order for user-written code to be available in Sui, it must be
-_published_ to Sui's [distributed
-ledger](../../README.md#architecture). Please see the [Move developer
-documentation](move.md) for a
-[description](move.md#writing-a-package) on how to write a simple Move
-code package, which we can publish using Sui wallet's `publish` command.
+_published_ to Sui's [distributed ledger](../learn/how-sui-works.md#architecture).
+Please see the [Move developer documentation](move.md) for a
+description on how to [write a simple Move code package](move.md#writing-a-package),
+which we can publish using Sui wallet's `publish` command.
 
 The publish command
 requires us to specify a directory where the user-defined package lives.

@@ -170,18 +170,27 @@ impl AuthorityServer {
             Err(_) => Err(SuiError::InvalidDecoding),
             Ok(result) => {
                 match result {
-                    SerializedMessage::Transaction(message) => self
-                        .state
-                        .handle_transaction(*message)
-                        .await
-                        .map(|info| Some(serialize_transaction_info(&info))),
+                    SerializedMessage::Transaction(message) => {
+                        let tx_digest = message.digest();
+                        // No allocations: it's a 'static str!
+                        let tx_kind = message.data.kind_as_str();
+                        self.state
+                            .handle_transaction(*message)
+                            .instrument(tracing::debug_span!("process_tx", ?tx_digest, tx_kind))
+                            .await
+                            .map(|info| Some(serialize_transaction_info(&info)))
+                    }
                     SerializedMessage::Cert(message) => {
                         let confirmation_transaction = ConfirmationTransaction {
                             certificate: message.as_ref().clone(),
                         };
+                        let tx_kind = message.transaction.data.kind_as_str();
                         match self
                             .state
                             .handle_confirmation_transaction(confirmation_transaction)
+                            .instrument(tracing::debug_span!("process_cert",
+                                                             tx_digest =? message.transaction.digest(),
+                                                             tx_kind))
                             .await
                         {
                             Ok(info) => {

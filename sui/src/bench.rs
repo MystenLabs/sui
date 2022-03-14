@@ -6,6 +6,7 @@
 
 use bytes::Bytes;
 use futures::stream::StreamExt;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use rand::rngs::StdRng;
 use rand::Rng;
@@ -46,7 +47,7 @@ struct ClientServerBenchmark {
     /// Base port number
     #[structopt(long, default_value = "9555")]
     port: u16,
-    /// Size of the Sui committee
+    /// Size of the Sui committee. Minimum size is 4 to tolerate one fault
     #[structopt(long, default_value = "10")]
     committee_size: usize,
     /// Maximum number of requests in flight (0 for blocking client)
@@ -88,6 +89,9 @@ impl std::fmt::Display for BenchmarkType {
         write!(f, "{:?}", self)
     }
 }
+
+const MIN_COMMITTEE_SIZE: usize = 4;
+
 fn main() {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let subscriber_builder =
@@ -95,6 +99,12 @@ fn main() {
     let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
     set_global_default(subscriber).expect("Failed to set subscriber");
     let benchmark = ClientServerBenchmark::from_args();
+    assert!(
+        benchmark.committee_size >= MIN_COMMITTEE_SIZE,
+        "Found committee size of {:?}, but minimum committee size is {:?}",
+        benchmark.committee_size,
+        MIN_COMMITTEE_SIZE
+    );
     let (state, transactions) = benchmark.make_structures();
 
     // Make multi-threaded runtime for the authority
@@ -231,7 +241,7 @@ impl ClientServerBenchmark {
                     gas_object_ref,
                     vec![object_ref],
                     vec![],
-                    vec![bcs::to_bytes(&next_recipient.to_vec()).unwrap()],
+                    vec![bcs::to_bytes(&AccountAddress::from(next_recipient)).unwrap()],
                     1000,
                 )
             } else {

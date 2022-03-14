@@ -13,6 +13,7 @@ mod messages_tests;
 
 use move_binary_format::{access::ModuleAccess, CompiledModule};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
+use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
 use static_assertions::const_assert_eq;
 use std::fmt::Write;
@@ -52,7 +53,7 @@ pub struct MoveModulePublish {
     pub gas_budget: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, NamedVariant)]
 pub enum TransactionKind {
     /// Initiate an object transfer between addresses
     Transfer(Transfer),
@@ -128,6 +129,11 @@ impl TransactionData {
             gas_budget,
         });
         Self::new(kind, sender, gas_payment)
+    }
+
+    /// Returns the transaction kind as a &str (variant name, no fields)
+    pub fn kind_as_str(&self) -> &'static str {
+        self.kind.variant_name()
     }
 }
 
@@ -353,6 +359,14 @@ impl ExecutionStatus {
                 panic!("Unable to unwrap() on {:?}", self);
             }
             ExecutionStatus::Failure { gas_used, error } => (gas_used, *error),
+        }
+    }
+
+    /// Returns the gas used from the status
+    pub fn gas_used(&self) -> u64 {
+        match &self {
+            ExecutionStatus::Success { gas_used } => *gas_used,
+            ExecutionStatus::Failure { gas_used, .. } => *gas_used,
         }
     }
 }
