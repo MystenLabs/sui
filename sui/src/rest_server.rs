@@ -135,7 +135,7 @@ impl ServerContext {
             )
         })
     }
-    fn return_server_state(&self, state: ServerState) {
+    fn set_server_state(&self, state: ServerState) {
         *self.server_state.lock().unwrap() = Some(state);
     }
 }
@@ -194,7 +194,7 @@ provided genesis configuration.
 #[serde(rename_all = "camelCase")]
 struct GenesisResponse {
     /** List of managed addresses and the list of authorities */
-    wallet_config: serde_json::Value,
+    addresses: serde_json::Value,
     /** Information about authorities and the list of loaded move packages. */
     network_config: serde_json::Value,
 }
@@ -251,10 +251,9 @@ async fn genesis(
         ..Default::default()
     });
 
-    let response = HttpResponseOk(GenesisResponse {
-        wallet_config: json!(accounts),
-        network_config: json!(network_config),
-    });
+    let addresses = accounts.iter().map(encode_bytes_hex).collect::<Vec<_>>();
+    let addresses_json = json!(addresses);
+    let network_config_json = json!(network_config);
 
     let state = ServerState {
         config: network_config,
@@ -264,10 +263,12 @@ async fn genesis(
         working_dir: working_dir.to_path_buf(),
         authority_handles: vec![],
     };
+    context.set_server_state(state);
 
-    *context.server_state.lock().unwrap() = Some(state);
-
-    Ok(response)
+    Ok(HttpResponseOk(GenesisResponse {
+        addresses: addresses_json,
+        network_config: network_config_json,
+    }))
 }
 
 /**
@@ -288,7 +289,7 @@ async fn sui_start(
 
     let mut state = context.take_server_state()?;
     if !state.authority_handles.is_empty() {
-        context.return_server_state(state);
+        context.set_server_state(state);
         return Err(custom_http_error(
             StatusCode::FORBIDDEN,
             String::from("Sui network is already running."),
@@ -351,7 +352,7 @@ async fn sui_start(
                 )
             })?;
     }
-    context.return_server_state(state);
+    context.set_server_state(state);
     Ok(HttpResponseOk(format!(
         "Started {} authorities",
         num_authorities
@@ -410,14 +411,14 @@ async fn get_addresses(
     let addresses = state.addresses.clone();
     for address in &addresses {
         if let Err(err) = state.gateway.sync_account_state(*address).await {
-            server_context.return_server_state(state);
+            server_context.set_server_state(state);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("Can't create client state: {err}"),
             ));
         }
     }
-    server_context.return_server_state(state);
+    server_context.set_server_state(state);
     Ok(HttpResponseOk(GetAddressResponse {
         addresses: addresses
             .into_iter()
@@ -487,7 +488,7 @@ async fn get_objects(
 
     let object_refs = state.gateway.get_owned_objects(*address);
 
-    server_context.return_server_state(state);
+    server_context.set_server_state(state);
     Ok(HttpResponseOk(GetObjectsResponse {
         objects: object_refs
             .iter()
@@ -554,21 +555,21 @@ async fn object_schema(
     let layout = match state.gateway.get_object_info(object_id).await {
         Ok(ObjectRead::Exists(_, _, layout)) => layout,
         Ok(ObjectRead::Deleted(_)) => {
-            server_context.return_server_state(state);
+            server_context.set_server_state(state);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("Object ({object_id}) was deleted."),
             ));
         }
         Ok(ObjectRead::NotExists(_)) => {
-            server_context.return_server_state(state);
+            server_context.set_server_state(state);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("Object ({object_id}) does not exist."),
             ));
         }
         Err(error) => {
-            server_context.return_server_state(state);
+            server_context.set_server_state(state);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("Error while getting object info: {:?}", error),
@@ -576,7 +577,7 @@ async fn object_schema(
         }
     };
 
-    server_context.return_server_state(state);
+    server_context.set_server_state(state);
     match serde_json::to_value(layout) {
         Ok(schema) => Ok(HttpResponseOk(ObjectSchemaResponse { schema })),
         Err(e) => Err(custom_http_error(
@@ -640,7 +641,7 @@ async fn object_info(
     let object_id = match ObjectID::try_from(object_info_params.object_id) {
         Ok(object_id) => object_id,
         Err(error) => {
-            server_context.return_server_state(state);
+            server_context.set_server_state(state);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("{error}"),
@@ -652,7 +653,7 @@ async fn object_info(
 
     let object_data = object.to_json(&layout).unwrap_or_else(|_| json!(""));
 
-    server_context.return_server_state(state);
+    server_context.set_server_state(state);
     Ok(HttpResponseOk(ObjectInfoResponse {
         owner: format!("{:?}", object.owner),
         version: format!("{:?}", object.version().value()),
@@ -759,7 +760,7 @@ async fn transfer_object(
                 // ExecutionStatus::Success
                 ExecutionStatus::Success { gas_used, .. } => gas_used,
                 ExecutionStatus::Failure { gas_used, error } => {
-                    server_context.return_server_state(state);
+                    server_context.set_server_state(state);
                     return Err(custom_http_error(
                         StatusCode::FAILED_DEPENDENCY,
                         format!(
@@ -772,7 +773,7 @@ async fn transfer_object(
             (cert, effects, gas_used)
         }
         Err(err) => {
-            server_context.return_server_state(state);
+            server_context.set_server_state(state);
             return Err(custom_http_error(
                 StatusCode::FAILED_DEPENDENCY,
                 format!("Transfer error: {err}"),
@@ -782,7 +783,7 @@ async fn transfer_object(
 
     let object_effects_summary = get_object_effects(&state, effects).await?;
 
-    server_context.return_server_state(state);
+    server_context.set_server_state(state);
     Ok(HttpResponseOk(TransactionResponse {
         gas_used,
         object_effects_summary: json!(object_effects_summary),
@@ -895,7 +896,7 @@ async fn call(
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))?;
 
-    server_context.return_server_state(state);
+    server_context.set_server_state(state);
     Ok(HttpResponseOk(transaction_response))
 }
 
@@ -946,7 +947,7 @@ async fn sync(
             )
         })?;
 
-    server_context.return_server_state(state);
+    server_context.set_server_state(state);
     Ok(HttpResponseUpdatedNoContent())
 }
 
