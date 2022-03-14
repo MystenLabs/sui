@@ -923,70 +923,41 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
-    // Get the created objects
-    let (mut created_obj1, mut created_obj2) = (
-        dumy_obj.compute_object_reference(),
-        dumy_obj.compute_object_reference(),
-    );
-
-    if let WalletCommandResult::Publish(
-        _,
-        TransactionEffects {
-            created: new_objs, ..
-        },
-    ) = resp
-    {
-        (created_obj1, created_obj2) = (new_objs.get(0).unwrap().0, new_objs.get(1).unwrap().0);
+    let (package, created_obj) = if let WalletCommandResult::Publish(resppnse) = resp {
+        (
+            resppnse.package,
+            resppnse.created_objects[0].compute_object_reference(),
+        )
     } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false);
+        unreachable!("Invaldi response");
     };
 
     // One is the actual module, while the other is the object created at init
     retry_assert!(
-        logs_contain(&format!("{:02X}", created_obj1.0)),
+        logs_contain(&format!("{}", package.0)),
         Duration::from_millis(5000)
     );
     retry_assert!(
-        logs_contain(&format!("{:02X}", created_obj2.0)),
+        logs_contain(&format!("{}", created_obj.0)),
         Duration::from_millis(5000)
     );
 
     // Check the objects
-    // Init with some value to satisfy the type checker
-    let mut cr_obj1 = dumy_obj.clone();
-
-    let resp = WalletCommands::Object { id: created_obj1.0 }
+    let resp = WalletCommands::Object { id: package.0 }
         .execute(&mut context)
         .await?;
-    if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
-        cr_obj1 = object;
-    } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false)
-    };
+    assert!(matches!(
+        resp,
+        WalletCommandResult::Object(ObjectRead::Exists(..))
+    ));
 
-    let mut cr_obj2 = dumy_obj;
-
-    let resp = WalletCommands::Object { id: created_obj2.0 }
+    let resp = WalletCommands::Object { id: created_obj.0 }
         .execute(&mut context)
         .await?;
-    if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
-        cr_obj2 = object;
-    } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false)
-    };
-
-    let (pkg, obj) = if cr_obj1.is_package() {
-        (cr_obj1, cr_obj2)
-    } else {
-        (cr_obj2, cr_obj1)
-    };
-
-    assert!(pkg.is_package());
-    assert!(!obj.is_package());
+    assert!(matches!(
+        resp,
+        WalletCommandResult::Object(ObjectRead::Exists(..))
+    ));
 
     network.abort();
     Ok(())

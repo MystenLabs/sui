@@ -20,7 +20,9 @@ use structopt::clap::AppSettings;
 use structopt::StructOpt;
 use tracing::info;
 
-use sui_core::gateway_state::gateway_responses::{MergeCoinResponse, SplitCoinResponse};
+use sui_core::gateway_state::gateway_responses::{
+    MergeCoinResponse, PublishResponse, SplitCoinResponse,
+};
 use sui_core::gateway_state::{AsyncTransactionSigner, GatewayClient};
 use sui_framework::build_move_package_to_bytes;
 use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
@@ -222,7 +224,7 @@ impl WalletCommands {
                 let gas_obj_ref = gas_object.compute_object_reference();
 
                 let compiled_modules = build_move_package_to_bytes(Path::new(path))?;
-                let (cert, effects) = context
+                let response = context
                     .gateway
                     .publish(
                         sender,
@@ -233,10 +235,7 @@ impl WalletCommands {
                     )
                     .await?;
 
-                if matches!(effects.status, ExecutionStatus::Failure { .. }) {
-                    return Err(anyhow!("Error publishing module: {:#?}", effects.status));
-                };
-                WalletCommandResult::Publish(cert, effects)
+                WalletCommandResult::Publish(response)
             }
 
             WalletCommands::Object { id } => {
@@ -459,8 +458,8 @@ impl Display for WalletCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match self {
-            WalletCommandResult::Publish(cert, effects) => {
-                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            WalletCommandResult::Publish(response) => {
+                write!(writer, "{}", response)?;
             }
             WalletCommandResult::Object(object_read) => {
                 let object = object_read.object().map_err(fmt::Error::custom)?;
@@ -569,7 +568,7 @@ impl WalletCommandResult {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum WalletCommandResult {
-    Publish(CertifiedTransaction, TransactionEffects),
+    Publish(PublishResponse),
     Object(ObjectRead),
     Call(CertifiedTransaction, TransactionEffects),
     Transfer(

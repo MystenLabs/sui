@@ -89,7 +89,7 @@ pub enum SuiError {
     #[error("Object fetch failed for {object_id:?}, err {err:?}.")]
     ObjectFetchFailed { object_id: ObjectID, err: String },
     #[error("Object {object_id:?} at old version: {current_sequence_number:?}")]
-    MissingEalierConfirmations {
+    MissingEarlierConfirmations {
         object_id: ObjectID,
         current_sequence_number: VersionNumber,
     },
@@ -149,12 +149,12 @@ pub enum SuiError {
     TooManyItemsError(u64),
     #[error("The range specified is invalid.")]
     InvalidSequenceRangeError,
-    #[error("No batches mached the range requested.")]
+    #[error("No batches matched the range requested.")]
     NoBatchesFoundError,
     #[error("The channel to repond to the client returned an error.")]
     CannotSendClientMessageError,
     #[error("Subscription service had to drop {0} items")]
-    SubscriptionItemsDropedError(u64),
+    SubscriptionItemsDroppedError(u64),
     #[error("Subscription service closed.")]
     SubscriptionServiceClosed,
 
@@ -258,10 +258,8 @@ pub enum SuiError {
     IncorrectRecipientError,
     #[error("Too many authority errors were detected.")]
     TooManyIncorrectAuthorities,
-    #[error("Inconsistent gas coin split result.")]
-    IncorrectGasSplit,
-    #[error("Inconsistent gas coin merge result.")]
-    IncorrectGasMerge,
+    #[error("Inconsistent results observed in the Gateway. This should not happen and typically means there is a bug in the Sui implementation. Details: {error:?}")]
+    InconsistentGatewayResult { error: String },
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
