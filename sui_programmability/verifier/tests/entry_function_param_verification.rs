@@ -15,7 +15,7 @@ use move_binary_format::{
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use sui_verifier::param_typecheck_verifier::verify_module;
+use sui_verifier::entry_function_param_verifier::verify_module;
 
 fn add_function(
     builder: &mut ModuleBuilder,
