@@ -100,5 +100,8 @@ fn transfer<S>(
         });
     }
     temporary_store.write_object(output_object);
-    Ok(ExecutionStatus::Success { gas_used })
+    Ok(ExecutionStatus::Success {
+        gas_used,
+        results: vec![],
+    })
 }
