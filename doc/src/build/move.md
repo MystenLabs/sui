@@ -548,6 +548,20 @@ Running Move unit tests
 Test result: OK. Total tests: 1; passed: 1; failed: 0
 ```
 
+---
+**TIPS**
+If you only want to run a subset of the unittests, you can filter by test name using the `--filter` option. Example:
+```
+sui-move test --filter hero
+```
+The above command will run all tests whose name contains "hero".
+You can discover more testing options through:
+```
+sui-move test -h
+```
+
+---
+
 ### Sui-specific testing
 
 The testing example we have seen so far is largely *pure Move* and has
