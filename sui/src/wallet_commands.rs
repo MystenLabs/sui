@@ -33,7 +33,6 @@ use structopt::StructOpt;
 use sui_core::client::client_responses::{MergeCoinResponse, SplitCoinResponse};
 use sui_types::crypto::{Signable, Signature};
 use sui_types::object::ObjectRead;
-use tracing::info;
 
 #[derive(StructOpt)]
 #[structopt(name = "", rename_all = "kebab-case")]
@@ -558,7 +557,7 @@ impl WalletCommandResult {
         };
         // Log line by line
         for line in line.lines() {
-            info!("{}", line)
+            println!("{}", line)
         }
     }
 }

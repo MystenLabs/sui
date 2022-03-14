@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use async_trait::async_trait;
 use colored::Colorize;
+use opentelemetry::global;
+use opentelemetry::sdk::propagation::TraceContextPropagator;
 use std::io;
 use std::path::PathBuf;
 use structopt::clap::{App, AppSettings};
@@ -10,7 +12,8 @@ use sui::config::{Config, WalletConfig};
 use sui::shell::{install_shell_plugins, AsyncHandler, CommandStructure, Shell};
 use sui::wallet_commands::*;
 use tracing::error;
-use tracing_subscriber::EnvFilter;
+use tracing::subscriber::set_global_default;
+use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
 const SUI: &str = "   _____       _    _       __      ____     __
   / ___/__  __(_)  | |     / /___ _/ / /__  / /_
@@ -40,19 +43,38 @@ struct ClientOpt {
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let format = tracing_subscriber::fmt::format()
+    let file_appender = tracing_appender::rolling::daily("", "wallet.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    let format = tracing_subscriber::fmt::layer()
         .with_level(false)
         .with_target(false)
         .with_thread_ids(false)
         .with_thread_names(false)
         .without_time()
+        .with_writer(non_blocking)
         .compact();
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt()
-        .event_format(format)
-        .with_env_filter(env_filter)
-        .init();
+    let subscriber = Registry::default().with(env_filter).with(format);
+
+    if std::env::var("SUI_TRACING_ENABLE").is_ok() {
+        // Install a tracer to send traces to Jaeger.  Batching for better performance.
+        let tracer = opentelemetry_jaeger::new_pipeline()
+            .with_service_name("Sui wallet")
+            .install_simple()
+            .expect("Could not create async Tracer");
+
+        // Create a tracing subscriber with the configured tracer
+        let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+
+        // Enable Trace Contexts for tying spans together
+        global::set_text_map_propagator(TraceContextPropagator::new());
+
+        set_global_default(subscriber.with(telemetry)).expect("Failed to set subscriber");
+    } else {
+        set_global_default(subscriber).expect("Failed to set subscriber");
+    }
 
     let mut app: App = ClientOpt::clap();
     app = app.unset_setting(AppSettings::NoBinaryName);

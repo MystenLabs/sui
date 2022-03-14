@@ -74,6 +74,7 @@ and analyzed for tracing, performance analysis, etc.
 | cert_db_get_objects     | Authority          | Read objects from database                                                     |
 | tx_execute              | Authority          | Actual execution of transfer/MOVE call etc.                                    |
 | handle_cert             | Gateway            | Send to one authority for certificate processing                               |
+| quorum_map_auth         | Gateway            | Handle one network component with one authority                                |
 | sync_cert               | Gateway, Authority | Gateway-initiated sync of data to authority                                    |
 | tx_check_locks          | Authority          | Check locks on input objects of incoming transaction request                   |
 | db_set_transaction_lock | Authority          | Database set transaction locks on new transaction                              |
@@ -185,8 +186,8 @@ Also notice `elapsed_milliseconds` which logs the duration of each span.
 To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do the following:
 
 1. Run this to get a local Jaeger container: `docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest`
-2. Set `SUI_TRACING_ENABLE` to 1
-3. Start sui and run some transfers with wallet, or run the benchmarking tool.
+2. Run sui like this (trace enables the most detailed spans): `SUI_TRACING_ENABLE=1 RUST_LOG="info,sui_core=trace" ./sui start`
+3. Run some transfers with wallet, or run the benchmarking tool.
 4. Browse to `http://localhost:16686/` and select "Sui" as the Service
 
 NOTE: separate spans (which are not nested) are not connected as a single trace for now.

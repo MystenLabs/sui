@@ -318,7 +318,14 @@ where
             .iter()
             .map(|(name, client)| {
                 let execute = map_each_authority.clone();
-                async move { (*name, execute(*name, client).await) }
+                async move {
+                    (
+                        *name,
+                        execute(*name, client)
+                            .instrument(tracing::trace_span!("quorum_map_auth", authority =? name))
+                            .await,
+                    )
+                }
             })
             .collect();
 
