@@ -15,7 +15,10 @@ pub enum MoveCommands {
 
     /// Run all Move unit tests
     #[structopt(name = "test")]
-    Test,
+    Test {
+        #[structopt(long)]
+        filter: Option<String>,
+    },
 }
 
 impl MoveCommands {
@@ -26,9 +29,9 @@ impl MoveCommands {
                 println!("{}", "Build Successful".bold().green());
                 println!("Artifacts path: {:?}", path.join("build"));
             }
-            Self::Test => {
+            Self::Test { filter } => {
                 Self::build(path, is_std_framework)?;
-                sui_framework::run_move_unit_tests(path)?;
+                sui_framework::run_move_unit_tests(path, filter.clone())?;
             }
         }
         Ok(())

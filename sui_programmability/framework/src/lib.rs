@@ -177,7 +177,7 @@ fn build_framework(framework_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
     build_move_package(framework_dir, build_config, true)
 }
 
-pub fn run_move_unit_tests(path: &Path) -> SuiResult {
+pub fn run_move_unit_tests(path: &Path, filter: Option<String>) -> SuiResult {
     use move_cli::package::cli::{self, UnitTestResult};
     use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
@@ -188,6 +188,7 @@ pub fn run_move_unit_tests(path: &Path) -> SuiResult {
         BuildConfig::default(),
         UnitTestingConfig {
             report_stacktrace_on_abort: true,
+            filter,
             ..UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS))
         },
         natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
@@ -208,7 +209,7 @@ pub fn run_move_unit_tests(path: &Path) -> SuiResult {
 #[test]
 fn run_framework_move_unit_tests() {
     get_sui_framework_modules(&PathBuf::from(DEFAULT_FRAMEWORK_PATH)).unwrap();
-    run_move_unit_tests(Path::new(env!("CARGO_MANIFEST_DIR"))).unwrap();
+    run_move_unit_tests(Path::new(env!("CARGO_MANIFEST_DIR")), None).unwrap();
 }
 
 #[test]
@@ -219,6 +220,6 @@ fn run_examples_move_unit_tests() {
             .join("../examples")
             .join(example);
         build_and_verify_user_package(&path).unwrap();
-        run_move_unit_tests(&path).unwrap();
+        run_move_unit_tests(&path, None).unwrap();
     }
 }
