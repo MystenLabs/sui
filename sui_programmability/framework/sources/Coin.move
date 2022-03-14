@@ -99,7 +99,7 @@ module Sui::Coin {
 
     /// Make any Coin with a zero value. Useful for placeholding
     /// bids/payments or preemptively making empty balances.
-    public fun zero()<T>(): Coin<T> {
+    public fun zero<T>(ctx: &mut TxContext): Coin<T> {
         Coin { id: TxContext::new_id(ctx), value: 0 }
     }
 
