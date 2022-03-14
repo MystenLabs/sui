@@ -52,7 +52,7 @@ module Basics::Lock {
         let Key { id, for } = key;
 
         assert!(Option::is_some(&lock.locked), 0);
-        assert!(ID::inner(&for) == ID::id(lock), 0);
+        assert!(&for == ID::id(lock), 0);
 
         ID::delete(id);
 
