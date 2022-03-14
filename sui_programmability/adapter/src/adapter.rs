@@ -188,10 +188,7 @@ fn execute_internal<
             debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
             debug_assert!(gas_used <= gas_budget);
 
-            let return_values = match process_return_values(&return_values, &return_types) {
-                Ok(v) => v,
-                Err(err) => return ExecutionStatus::new_failure(gas_used, err),
-            };
+            let return_values = process_return_values(&return_values, &return_types);
 
             // When this function is used during publishing, it
             // may be executed several times, with objects being
@@ -252,20 +249,9 @@ fn execute_internal<
     }
 }
 
-fn process_return_values(
-    values: &[Vec<u8>],
-    return_types: &[Type],
-) -> Result<Vec<CallResult>, SuiError> {
+fn process_return_values(values: &[Vec<u8>], return_types: &[Type]) -> Vec<CallResult> {
     let mut results = vec![];
-    if values.len() != return_types.len() {
-        return Err(SuiError::InvalidFunctionSignature {
-            error:
-                format!(
-                    "Number of declared return values ({}) different from the number of values actually returned ({})",
-                    return_types.len(), values.len()
-                ),
-        });
-    }
+    debug_assert!(values.len() == return_types.len());
 
     for (idx, r) in return_types.iter().enumerate() {
         match r {
@@ -331,7 +317,7 @@ fn process_return_values(
         }
     }
 
-    Ok(results)
+    results
 }
 
 /// Similar to execute(), only returns Err if there are system issues.
