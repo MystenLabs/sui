@@ -555,6 +555,10 @@ If you only want to run a subset of the unittests, you can filter by test name u
 sui-move test --filter hero
 ```
 The above command will run all tests whose name contains "hero".
+You can discover more testing options through:
+```
+sui-move test -h
+```
 
 ---
 
