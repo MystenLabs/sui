@@ -70,8 +70,9 @@ async fn main() -> Result<(), anyhow::Error> {
             // Install a tracer to send traces to Jaeger.  Batching for better performance.
             let tracer = opentelemetry_jaeger::new_pipeline()
                 .with_service_name("sui")
-                // .install_batch(opentelemetry::runtime::Tokio)
-                .install_simple()
+                .with_max_packet_size(9216) // Default max UDP packet size on OSX
+                .with_auto_split_batch(true) // Auto split batches so they fit under packet size
+                .install_batch(opentelemetry::runtime::Tokio)
                 .expect("Could not create async Tracer");
 
             // Create a tracing subscriber with the configured tracer
