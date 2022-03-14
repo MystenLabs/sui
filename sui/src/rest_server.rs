@@ -98,6 +98,7 @@ async fn main() -> Result<(), String> {
  */
 struct ServerContext {
     documentation: serde_json::Value,
+    // ServerState is created after genesis.
     server_state: Arc<Mutex<Option<ServerState>>>,
 }
 
@@ -124,7 +125,9 @@ impl ServerContext {
             server_state: Arc::new(Mutex::new(None)),
         }
     }
-
+    // TODO: Can this work without take?
+    // Take is required here because dropshot's `HttpHandlerFunc` is Send + Sync + 'static
+    // and we cannot use &mut reference on the server_state object.
     fn take_server_state(&self) -> Result<ServerState, HttpError> {
         let mut state = self.server_state.lock().unwrap();
         state.take().ok_or_else(|| {
@@ -135,6 +138,8 @@ impl ServerContext {
             )
         })
     }
+    // This is to return ownership of ServerState after take()
+    // TODO: Anyway to make this automatic?
     fn set_server_state(&self, state: ServerState) {
         *self.server_state.lock().unwrap() = Some(state);
     }
