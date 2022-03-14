@@ -15,21 +15,21 @@ module Basics::Lock {
     use Std::Option::{Self, Option};
 
     /// Lock that stores any content inside it. 
-    struct Lock<T: store + key> has key {
+    struct Lock<T: store + key> has key, store {
         id: VersionedID,
         locked: Option<T>
     }
 
     /// A key that is created with a Lock; is transferable
     /// and contains all the needed information to open the Lock. 
-    struct Key<phantom T: store + key> has key {
+    struct Key<phantom T: store + key> has key, store {
         id: VersionedID,
         for: ID
     }
 
     /// Lock some content inside a shared object. A key is created and is 
     /// sent to the transaction sender.
-    public fun lock<T: store + key>(obj: T, ctx: &mut TxContext) {
+    public fun create<T: store + key>(obj: T, ctx: &mut TxContext) {
         let id = TxContext::new_id(ctx);
         let for = *ID::inner(&id);
 
@@ -52,7 +52,7 @@ module Basics::Lock {
         let Key { id, for } = key;
 
         assert!(Option::is_some(&lock.locked), 0);
-        assert!(ID::bytes(&for) == ID::id_bytes(lock), 0);
+        assert!(ID::inner(&for) == ID::id(lock), 0);
 
         ID::delete(id);
 
