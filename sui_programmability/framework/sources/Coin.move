@@ -97,6 +97,12 @@ module Sui::Coin {
 
     // === Registering new coin types and managing the coin supply ===
 
+    /// Make any Coin with a zero value. Useful for placeholding
+    /// bids/payments or preemptively making empty balances.
+    public fun zero()<T>(): Coin<T> {
+        Coin { id: TxContext::new_id(ctx), value: 0 }
+    }
+
     /// Create a new currency type `T` as and return the `TreasuryCap`
     /// for `T` to the caller.
     /// NOTE: It is the caller's responsibility to ensure that
