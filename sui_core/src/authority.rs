@@ -525,14 +525,7 @@ impl AuthorityState {
             transaction_digest,
             transaction,
             certificate.clone(),
-        )?;
-
-        // Return an acknowledgement to the consensus node.
-        Ok(TransactionInfoResponse {
-            signed_transaction: None,
-            certified_transaction: Some(certificate),
-            signed_effects: None,
-        })
+        )
     }
 
     pub async fn handle_transaction_info_request(

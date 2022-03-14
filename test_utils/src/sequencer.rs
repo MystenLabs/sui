@@ -18,7 +18,7 @@ pub struct Sequencer {
     /// The network address where to receive input messages.
     pub input_address: SocketAddr,
     /// The network address where to receive subscriber requests.
-   pub  subscriber_address: SocketAddr,
+    pub subscriber_address: SocketAddr,
     /// The network buffer size.
     pub buffer_size: usize,
     /// The delay to wait before sequencing a message. This parameter is only required to
