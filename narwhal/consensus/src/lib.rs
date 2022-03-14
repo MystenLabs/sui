@@ -25,6 +25,8 @@ use tracing::{debug, info, warn};
 #[path = "tests/consensus_tests.rs"]
 pub mod consensus_tests;
 
+pub mod dag;
+
 /// The representation of the DAG in memory.
 type Dag<PublicKey> = HashMap<Round, HashMap<PublicKey, (Digest, Certificate<PublicKey>)>>;
 

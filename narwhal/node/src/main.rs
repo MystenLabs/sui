@@ -11,7 +11,7 @@
 use anyhow::{Context, Result};
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Import, Parameters, WorkerId};
-use consensus::Consensus;
+use consensus::{dag::Dag, Consensus};
 use crypto::{
     ed25519::{Ed25519KeyPair, Ed25519PublicKey},
     generate_production_keypair,
@@ -21,7 +21,7 @@ use crypto::{
 use primary::{Certificate, Header, PayloadToken, Primary};
 use store::{reopen, rocks, rocks::DBMap, Store};
 use tokio::sync::mpsc::{channel, Receiver};
-use tracing::subscriber::set_global_default;
+use tracing::{debug, subscriber::set_global_default};
 use tracing_subscriber::filter::EnvFilter;
 use worker::Worker;
 
@@ -52,7 +52,10 @@ async fn main() -> Result<()> {
                 .args_from_usage("--committee=<FILE> 'The file containing committee information'")
                 .args_from_usage("--parameters=[FILE] 'The file containing the node parameters'")
                 .args_from_usage("--store=<PATH> 'The path where to create the data store'")
-                .subcommand(SubCommand::with_name("primary").about("Run a single primary"))
+                .subcommand(SubCommand::with_name("primary")
+                    .about("Run a single primary")
+                    .args_from_usage("-d, --consensus-disabled 'Provide this flag to run a primary node without Tusk'")
+                )
                 .subcommand(
                     SubCommand::with_name("worker")
                         .about("Run a single worker")
@@ -140,7 +143,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
     // Check whether to run a primary, a worker, or an entire authority.
     match matches.subcommand() {
         // Spawn the primary and consensus core.
-        ("primary", _) => {
+        ("primary", Some(sub_matches)) => {
             let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
             let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
             Primary::spawn(
@@ -154,13 +157,19 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
                 /* tx_consensus */ tx_new_certificates,
                 /* rx_consensus */ rx_feedback,
             );
-            Consensus::spawn(
-                committee,
-                parameters.gc_depth,
-                /* rx_primary */ rx_new_certificates,
-                /* tx_primary */ tx_feedback,
-                tx_output,
-            );
+
+            if sub_matches.is_present("consensus-disabled") {
+                debug!("Consensus is disabled. Will run without Tusk");
+                Dag::spawn(rx_new_certificates);
+            } else {
+                Consensus::spawn(
+                    committee,
+                    parameters.gc_depth,
+                    /* rx_primary */ rx_new_certificates,
+                    /* tx_primary */ tx_feedback,
+                    tx_output,
+                );
+            }
         }
 
         // Spawn a single worker.
