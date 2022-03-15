@@ -350,16 +350,17 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Insert an object
     pub fn insert_object(&self, object: Object) -> Result<(), SuiError> {
         self.objects.insert(&object.id(), &object)?;
+        let object_ref = object.to_object_reference();
 
         // Update the index
         if let Some(address) = object.get_single_owner() {
             self.owner_index
-                .insert(&(address, object.id()), &object.to_object_reference())?;
+                .insert(&(address, object.id()), &object_ref)?;
         }
 
         // Update the parent
         self.parent_sync
-            .insert(&object.to_object_reference(), &object.previous_transaction)?;
+            .insert(&object_ref, &object.previous_transaction)?;
 
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());

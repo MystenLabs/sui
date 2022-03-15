@@ -110,7 +110,7 @@ impl<S> AuthorityTemporaryStore<S> {
         status: ExecutionStatus,
         gas_object_id: &ObjectID,
     ) -> SignedTransactionEffects {
-        let gas_object = &self.written[gas_object_id].1;
+        let (gas_reference, gas_object) = &self.written[gas_object_id];
         let effects = TransactionEffects {
             status,
             transaction_digest: *transaction_digest,
@@ -156,7 +156,7 @@ impl<S> AuthorityTemporaryStore<S> {
                     }
                 })
                 .collect(),
-            gas_object: (gas_object.to_object_reference(), gas_object.owner),
+            gas_object: (*gas_reference, gas_object.owner),
             events: self.events.clone(),
             dependencies: transaction_dependencies,
         };
