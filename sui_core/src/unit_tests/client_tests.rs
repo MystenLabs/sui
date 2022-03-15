@@ -833,7 +833,7 @@ async fn test_move_calls_object_create() {
             .next()
             .unwrap()
             .1
-            .to_object_reference();
+            .compute_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
@@ -894,7 +894,7 @@ async fn test_move_calls_object_transfer() {
             .next()
             .unwrap()
             .1
-            .to_object_reference();
+            .compute_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
@@ -984,7 +984,7 @@ async fn test_move_calls_freeze_object() {
             .next()
             .unwrap()
             .1
-            .to_object_reference();
+            .compute_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
@@ -1073,7 +1073,7 @@ async fn test_move_calls_object_delete() {
             .next()
             .unwrap()
             .1
-            .to_object_reference();
+            .compute_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
@@ -1173,7 +1173,7 @@ async fn test_module_publish_and_call_good() {
             .next()
             .unwrap()
             .1
-            .to_object_reference();
+            .compute_object_reference();
 
     // Provide path to well formed package sources
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
@@ -1250,12 +1250,15 @@ async fn test_module_publish_and_call_good() {
     let call_resp = client
         .move_call(
             addr1,
-            new_obj.object().unwrap().to_object_reference(),
+            new_obj.object().unwrap().compute_object_reference(),
             ident_str!("TrustedCoin").to_owned(),
             ident_str!("mint").to_owned(),
             vec![],
             gas_object_ref,
-            vec![tres_cap_obj_info.object().unwrap().to_object_reference()],
+            vec![tres_cap_obj_info
+                .object()
+                .unwrap()
+                .compute_object_reference()],
             vec![],
             vec![42u64.to_le_bytes().to_vec()],
             1000,
@@ -1299,7 +1302,7 @@ async fn test_module_publish_file_path() {
             .next()
             .unwrap()
             .1
-            .to_object_reference();
+            .compute_object_reference();
 
     // Compile
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
@@ -1409,7 +1412,7 @@ async fn test_transfer_object_error() {
     get_account(&client, sender)
         .store()
         .object_refs
-        .insert(&obj.id(), &obj.to_object_reference())
+        .insert(&obj.id(), &obj.compute_object_reference())
         .unwrap();
 
     let result = client
@@ -1533,7 +1536,7 @@ async fn test_object_store() {
             .unwrap()
             .1
             .clone();
-    let gas_object_ref = gas_object.clone().to_object_reference();
+    let gas_object_ref = gas_object.clone().compute_object_reference();
     // Ensure that object store is empty
     assert!(get_account(&client, addr1).store().objects.is_empty());
 
@@ -1740,7 +1743,7 @@ async fn auth_object(authority: &LocalAuthorityClient, object_id: ObjectID) -> (
         .unwrap();
 
     let object = response.object_and_lock.unwrap().object;
-    (object.to_object_reference(), object)
+    (object.compute_object_reference(), object)
 }
 
 #[tokio::test]
@@ -2298,7 +2301,7 @@ async fn test_transfer_pending_transactions() {
     get_account(&client, sender)
         .store()
         .object_refs
-        .insert(&obj.id(), &obj.to_object_reference())
+        .insert(&obj.id(), &obj.compute_object_reference())
         .unwrap();
 
     let result = client

@@ -350,7 +350,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Insert an object
     pub fn insert_object(&self, object: Object) -> Result<(), SuiError> {
         self.objects.insert(&object.id(), &object)?;
-        let object_ref = object.to_object_reference();
+        let object_ref = object.compute_object_reference();
 
         // Update the index
         if let Some(address) = object.get_single_owner() {

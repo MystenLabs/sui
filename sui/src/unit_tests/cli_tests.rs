@@ -926,8 +926,8 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
     // Get the created objects
     let (mut created_obj1, mut created_obj2) = (
-        dumy_obj.to_object_reference(),
-        dumy_obj.to_object_reference(),
+        dumy_obj.compute_object_reference(),
+        dumy_obj.compute_object_reference(),
     );
 
     if let WalletCommandResult::Publish(
@@ -1044,8 +1044,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         } else {
             assert!(false);
             (
-                dumy_obj.to_object_reference(),
-                dumy_obj.to_object_reference(),
+                dumy_obj.compute_object_reference(),
+                dumy_obj.compute_object_reference(),
             )
         };
 

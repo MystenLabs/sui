@@ -21,9 +21,6 @@ pub struct AuthorityTemporaryStore<S> {
     tx_digest: TransactionDigest,
     objects: BTreeMap<ObjectID, Object>,
     active_inputs: Vec<ObjectRef>, // Inputs that are not read only
-    // TODO: We need to study whether it's worth to optimize the lookup of
-    // object reference by caching object reference in the map as well.
-    // Object reference calculation involves hashing which could be expensive.
     written: BTreeMap<ObjectID, (ObjectRef, Object)>, // Objects written
     /// Objects actively deleted.
     deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
@@ -49,7 +46,7 @@ impl<S> AuthorityTemporaryStore<S> {
             active_inputs: _input_objects
                 .iter()
                 .filter(|v| !v.is_read_only())
-                .map(|v| v.to_object_reference())
+                .map(|v| v.compute_object_reference())
                 .collect(),
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
@@ -96,7 +93,7 @@ impl<S> AuthorityTemporaryStore<S> {
                 // Active input object must be Move object.
                 object.data.try_as_move_mut().unwrap().increment_version();
                 self.written
-                    .insert(*id, (object.to_object_reference(), object));
+                    .insert(*id, (object.compute_object_reference(), object));
             }
         }
     }
@@ -249,7 +246,7 @@ impl<S> Storage for AuthorityTemporaryStore<S> {
         // previous transaction digest, so we ensure it is correct here.
         object.previous_transaction = self.tx_digest;
         self.written
-            .insert(object.id(), (object.to_object_reference(), object));
+            .insert(object.id(), (object.compute_object_reference(), object));
     }
 
     fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
