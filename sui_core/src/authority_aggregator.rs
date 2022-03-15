@@ -806,6 +806,7 @@ where
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
                                     state.certificate = Some(CertifiedTransaction {
+                                        transaction_digest: None,
                                         transaction: transaction_ref.clone(),
                                         signatures: state.signatures.clone(),
                                     });

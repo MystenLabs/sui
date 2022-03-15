@@ -172,6 +172,7 @@ fn test_cert() {
         &sender_key,
     );
     let mut cert = CertifiedTransaction {
+        transaction_digest: None,
         transaction,
         signatures: Vec::new(),
     };
@@ -211,6 +212,7 @@ fn test_info_response() {
     let vote = SignedTransaction::new(transaction.clone(), *auth_key.public_key_bytes(), &auth_key);
 
     let mut cert = CertifiedTransaction {
+        transaction_digest: None,
         transaction,
         signatures: Vec::new(),
     };
@@ -344,6 +346,7 @@ fn test_time_cert() {
         &sender_key,
     );
     let mut cert = CertifiedTransaction {
+        transaction_digest: None,
         transaction,
         signatures: Vec::new(),
     };

@@ -543,7 +543,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     pub fn update_state<S>(
         &self,
         temporary_store: AuthorityTemporaryStore<S>,
-        certificate: CertifiedTransaction,
+        mut certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
     ) -> Result<(TxSequenceNumber, TransactionInfoResponse), SuiError> {
         // Extract the new state from the execution
@@ -551,7 +551,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         let mut write_batch = self.transaction_lock.batch();
 
         // Store the certificate indexed by transaction digest
-        let transaction_digest: TransactionDigest = certificate.transaction.digest();
+        let transaction_digest: TransactionDigest = certificate.cached_digest();
         write_batch = write_batch.insert_batch(
             &self.certificates,
             std::iter::once((transaction_digest, &certificate)),
@@ -805,14 +805,13 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     pub fn persist_certificate_and_lock_shared_objects(
         &self,
         transaction_digest: TransactionDigest,
-        transaction: &Transaction,
         certificate: CertifiedTransaction,
     ) -> Result<(), SuiError> {
-        let certificate_to_write = std::iter::once((transaction_digest, certificate));
+        let certificate_to_write = std::iter::once((transaction_digest, &certificate));
 
         let mut sequenced_to_write = Vec::new();
         let mut schedule_to_write = Vec::new();
-        for id in transaction.shared_input_objects() {
+        for id in certificate.transaction.shared_input_objects() {
             let version = self.schedule.get(id)?.unwrap_or_default();
             sequenced_to_write.push(((transaction_digest, *id), version));
             let next_version = version.increment();

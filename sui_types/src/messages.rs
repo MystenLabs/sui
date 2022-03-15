@@ -170,6 +170,11 @@ pub struct SignedTransaction {
 ///
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CertifiedTransaction {
+    // This is a cache of an otherwise expensive to compute value.
+    // DO NOT serialize or deserialize from the network or disk.
+    #[serde(skip)]
+    pub transaction_digest: Option<TransactionDigest>,
+
     pub transaction: Transaction,
     pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
 }
@@ -732,6 +737,7 @@ impl<'a> SignatureAggregator<'a> {
             weight: 0,
             used_authorities: HashSet::new(),
             partial: CertifiedTransaction {
+                transaction_digest: None,
                 transaction,
                 signatures: Vec::new(),
             },
@@ -769,6 +775,24 @@ impl<'a> SignatureAggregator<'a> {
 }
 
 impl CertifiedTransaction {
+    /// Get the transaction digest and write it to the cache
+    pub fn cached_digest(&mut self) -> TransactionDigest {
+        if let Some(tx_digest) = self.transaction_digest {
+            return tx_digest;
+        }
+        let tx_digest = self.transaction.digest();
+        self.transaction_digest = Some(tx_digest);
+        tx_digest
+    }
+
+    /// Try the transaction digest but do not write back in cache
+    pub fn try_cached_digest(&self) -> TransactionDigest {
+        if let Some(tx_digest) = self.transaction_digest {
+            return tx_digest;
+        }
+        self.transaction.digest()
+    }
+
     /// Verify the certificate.
     pub fn check(&self, committee: &Committee) -> Result<(), SuiError> {
         // Check the quorum.

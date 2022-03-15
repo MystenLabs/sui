@@ -147,6 +147,7 @@ async fn extract_cert(
     assert!(stake >= committee.quorum_threshold());
 
     CertifiedTransaction {
+        transaction_digest: None,
         transaction: transaction.unwrap(),
         signatures: votes,
     }

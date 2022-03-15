@@ -289,10 +289,7 @@ impl ClientServerBenchmark {
 
                 if self.benchmark_type != BenchmarkType::TransactionsOnly {
                     // Make certificate
-                    let mut certificate = CertifiedTransaction {
-                        transaction,
-                        signatures: Vec::with_capacity(committee.quorum_threshold()),
-                    };
+                    let mut certificate = CertifiedTransaction::new_with_signatures(transaction,signatures);
                     for i in 0..committee.quorum_threshold() {
                         let (pubx, secx) = keys.get(i).unwrap();
                         let sig = AuthoritySignature::new(&certificate.transaction.data, secx);
