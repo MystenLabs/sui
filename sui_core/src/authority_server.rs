@@ -181,7 +181,7 @@ impl AuthorityServer {
                             ?tx_digest,
                             tx_kind = message.data.kind_as_str()
                         );
-                        span.set_parent(context_from_digest(tx_digest));
+                        // span.set_parent(context_from_digest(tx_digest));
                         self.state
                             .handle_transaction(*message)
                             .instrument(span)
@@ -198,7 +198,7 @@ impl AuthorityServer {
                             ?tx_digest,
                             tx_kind = message.transaction.data.kind_as_str()
                         );
-                        span.set_parent(context_from_digest(tx_digest));
+                        // span.set_parent(context_from_digest(tx_digest));
                         match self
                             .state
                             .handle_confirmation_transaction(confirmation_transaction)

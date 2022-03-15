@@ -496,7 +496,8 @@ where
             ?tx_digest,
             tx_kind = transaction.data.kind_as_str()
         );
-        span.set_parent(context_from_digest(tx_digest));
+        // Disabled until we figure out https://github.com/MystenLabs/sui/issues/852
+        // span.set_parent(context_from_digest(tx_digest));
 
         let (new_certificate, effects) = self
             .authorities

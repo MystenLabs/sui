@@ -246,6 +246,9 @@ impl TransactionDigest {
 }
 
 /// Returns a Context for OpenTelemetry tracing from a TransactionDigest
+// NOTE: See https://github.com/MystenLabs/sui/issues/852
+// The current code doesn't really work.  Maybe the traceparent needs to be a specific format,
+// prohably needs to be the propagated trace ID from the source.
 pub fn context_from_digest(digest: TransactionDigest) -> Context {
     // TODO: don't create a HashMap, that wastes memory and costs an allocation!
     let mut carrier = HashMap::new();
