@@ -41,7 +41,7 @@ Sui authorities agree on and execute transactions in parallel with high throughp
 
 ## Overview
 
-Sui, which is written in Rust, supports smart contracts written in Move .Sui addresses the primary hindrance to blockchain growth: [head-of-line blocking](https://en.wikipedia.org/wiki/Head-of-line_blocking). Blockchain nodes manage an *accumulator* that represents the state of the entire blockchain, such as the latest certified transactions. Validators participate in a consensus protocol to add an update to that state reflecting the transaction’s modification to blocks (add, remove, mutate).
+Sui, which is written in Rust, supports smart contracts written in Move. Sui mitigates the major hindrance to blockchain growth: [head-of-line blocking](https://en.wikipedia.org/wiki/Head-of-line_blocking). Blockchain nodes manage an *accumulator* that represents the state of the entire blockchain, such as the latest certified transactions. Validators participate in a consensus protocol to add an update to that state reflecting the transaction’s modification to blocks (add, remove, mutate).
 
 That consensus protocol leads to an agreement on the state of the blockchain before the increment, the validity and suitability of the state update itself, and the state of the blockchain after the increment. On a periodic basis, these increments are collected in the accumulator.
 
@@ -49,11 +49,11 @@ In Sui, this consensus protocol is required only when the transaction involves s
 
 Sui votes result in *[eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency)* in the classical sense. Eventual consistency is achieved when two authorities who have seen the exact same set of transactions reach the same state.
 
-Eventual availability is achieved through eventual consistency. If one honest authority certifies the transaction, all of the other honest authorities will, as well. One of the components that is missing from eventual consistency is the witnessing of the convergence.
+[Eventual availability](https://hal.inria.fr/inria-00609399/document) is achieved through eventual consistency. If one honest authority certifies the transaction, all of the other honest authorities will, as well. One of the components that is missing from eventual consistency is the witnessing of the convergence.
 
-This means we do not insist by default on two authorities having the same state. This would be possible only by halting input transactions, which is impractical. So transactions arrive in no particular order, and views of the authorities into those transactions are limited. And authorities do not normally communicate in the world of causal order. As a result, getting a fresh view of the total world state is difficult in an efficient manner.
+This means we do not insist by default on two authorities having the same state. This would be possible only by halting input transactions, which is impractical. So transactions arrive in no particular order, and views of the authorities into those transactions are limited. Sui transactions do not reach authorities in a well-specified total order, so that two authorities can be at different stages of completely replicating the set of transactions that went through the system.
 
-Sui’s high throughput and low latency is unrivaled. Other blockchains that operate from a [proof of work](https://en.wikipedia.org/wiki/Proof_of_work), for instance, may take an hour or more to reach consensus across the required six blocks due to a lack of deterministic finality and (strong) synchrony assumptions.
+Sui’s high throughput and low latency is unrivaled. Other blockchains that operate from a [proof of work](https://en.wikipedia.org/wiki/Proof_of_work), for instance, may take an hour or more to reach consensus across the required six blocks due to a lack of deterministic finality.
 
 And the Sui model encourages third parties to assist with transaction submissions. For example, if you run an app (say, game) on the blockchain and have many users, you can manage transaction submission on behalf of those users. You as the app owner may use the servers where you store the state of the game to run the Sui Gateway service.
 
@@ -71,7 +71,7 @@ Yet it is inherently sequential: increments to the chain are added one at a time
 
 ## Sui's approach to validating new transactions
 
-A lot of transactions do not have complex interdependencies with other, arbitrary parts of the state of the blockchain. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's account. Hence Sui takes the approach of only taking a lock - or "stopping the world" - for the relevant piece of data rather than the whole chain -- in this case, the account of the sender, which can only send one transaction at a time.
+[A lot of transactions](https://eprint.iacr.org/2019/611.pdf) do not have complex interdependencies with other, arbitrary parts of the state of the blockchain. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's account. Hence Sui takes the approach of only taking a lock - or "stopping the world" - for the relevant piece of data rather than the whole chain -- in this case, the account of the sender, which can only send one transaction at a time. (Note, client-side batching is available.)
 
 Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using an [object model][Objects] and leveraging [Move][Move]'s strong ownership model. By requiring that dependencies be explicit, Sui applies a "multi-lane" approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
 
