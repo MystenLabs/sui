@@ -149,7 +149,7 @@ impl AuthorityServer {
                 Err(RecvError::Lagged(number_skipped)) => {
                     // We tell the client they are too slow to consume, and
                     // stop.
-                    return Err(SuiError::SubscriptionItemsDropedError(number_skipped));
+                    return Err(SuiError::SubscriptionItemsDroppedError(number_skipped));
                 }
             }
         }
