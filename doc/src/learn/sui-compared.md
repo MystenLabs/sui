@@ -39,7 +39,8 @@ Sui’s architecture minimizes the impact of checking the validity of a transact
 
 Because Sui limits the sender to one transaction at a time, it is imperative the transactions finalize quickly. Sui offers these optimizations to speed transaction completion:
 
-* Simpler algorithms are used to determine state, since less of the world’s state must be ascertained. These algorithms are based upon [Byzantine Consistent Broadcast](https://link.springer.com/book/10.1007/978-3-642-15260-3).
+* For transactions dependent on a single writer, Sui uses a lighter communication algorithm based on
+  [Byzantine Consistent Broadcast](https://link.springer.com/book/10.1007/978-3-642-15260-3).
 * Transaction sessions are interactive to ensure at-once processing and vote gathering. Instead of a fire-and-forget model where transactions may take minutes or even hours, Sui transactions can finish in under a second.
 
 A traditional blockchain client operates via a single send request and awaits approval of the transaction, polling the validators for an answer sometime later. Either end users or the gateway must do a little more work and then get: low latency and better security. Simple broadcast transactions are completed immediately. Remember, no private keys are ever revealed.
