@@ -43,6 +43,11 @@ pub fn all_natives(
         ("TestScenario", "num_events", test_scenario::num_events),
         (
             "TestScenario",
+            "update_object",
+            test_scenario::update_object,
+        ),
+        (
+            "TestScenario",
             "transferred_object_ids",
             test_scenario::transferred_object_ids,
         ),
