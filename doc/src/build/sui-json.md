@@ -1,5 +1,6 @@
-
-# SuiJSON
+---
+title: SuiJSON
+---
 
 ## Introduction
 
@@ -203,11 +204,7 @@ U8 vectors represented as UTF-8 (and ASCII) strings.
    <code>abcdE738-2 _=?</code>: ASCII
 
    </td>
-   <td>TODO: Complete invalid example.
+   <td>
    </td>
   </tr>
 </table>
-
-For practical examples, see _Anatomy Of A Move Call From REST & CLI_
-
-TODO: Fix Anatomy link above.

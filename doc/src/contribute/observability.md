@@ -1,4 +1,6 @@
-# Logging, Tracing, Metrics, and Observability
+---
+title: Logging, Tracing, Metrics, and Observability
+---
 
 Good observability facilities are key to the development and growth of Sui.  This is made
 more challenging by the distributed and asynchronous nature of Sui, with multiple client and authority

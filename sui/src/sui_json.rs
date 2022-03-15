@@ -3,6 +3,8 @@
 
 use anyhow::anyhow;
 use move_core_types::identifier::Identifier;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use sui_types::{
     base_types::{decode_bytes_hex, ObjectID, SuiAddress},
@@ -21,7 +23,7 @@ const HEX_PREFIX: &str = "0x";
 #[path = "unit_tests/sui_json.rs"]
 mod base_types_tests;
 
-#[derive(Eq, PartialEq, Debug, Clone)]
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SuiJsonValue(JsonValue);
 impl SuiJsonValue {
     pub fn new(json_value: JsonValue) -> Result<SuiJsonValue, anyhow::Error> {

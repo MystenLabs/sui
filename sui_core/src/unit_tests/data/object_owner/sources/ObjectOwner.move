@@ -27,6 +27,17 @@ module ObjectOwner::ObjectOwner {
         );
     }
 
+    public fun create_parent_and_child(ctx: &mut TxContext) {
+        let parent_id = TxContext::new_id(ctx);
+        let child = Child { id: TxContext::new_id(ctx) };
+        let (parent_id, child_ref) = Transfer::transfer_to_object_id(child, parent_id);
+        let parent = Parent {
+            id: parent_id,
+            child: Option::some(child_ref),
+        };
+        Transfer::transfer(parent, TxContext::sender(ctx));
+    }
+
     public fun add_child(parent: &mut Parent, child: Child, _ctx: &mut TxContext) {
         let child_ref = Transfer::transfer_to_object(child, parent);
         Option::fill(&mut parent.child, child_ref);
@@ -53,6 +64,14 @@ module ObjectOwner::ObjectOwner {
     // Call to delete_child can fail if it's still owned by a parent.
     public fun delete_child(child: Child, _parent: &mut Parent, _ctx: &mut TxContext) {
         let Child { id } = child;
+        ID::delete(id);
+    }
+
+    public fun delete_parent_and_child(parent: Parent, child: Child, _ctx: &mut TxContext) {
+        let Parent { id, child: child_ref_opt } = parent;
+        let child_ref = Option::extract(&mut child_ref_opt);
+        Option::destroy_none(child_ref_opt);
+        Transfer::delete_child_object(child, child_ref);
         ID::delete(id);
     }
 }

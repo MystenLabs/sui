@@ -5,9 +5,9 @@
 
 use super::*;
 use crate::authority::{AuthorityState, AuthorityStore};
-use crate::client::client_store::ClientSingleAddressStore;
-use crate::client::{
-    AsyncTransactionSigner, Client, ClientAddressManager, ClientState, StableSyncTransactionSigner,
+use crate::gateway_state::gateway_store::AccountStore;
+use crate::gateway_state::{
+    AccountState, AsyncTransactionSigner, GatewayAPI, GatewayState, StableSyncTransactionSigner,
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -122,7 +122,7 @@ impl LocalAuthorityClient {
 #[cfg(test)]
 async fn extract_cert(
     authorities: &[LocalAuthorityClient],
-    commitee: &Committee,
+    committee: &Committee,
     transaction_digest: TransactionDigest,
 ) -> CertifiedTransaction {
     let mut votes = vec![];
@@ -143,8 +143,8 @@ async fn extract_cert(
         }
     }
 
-    let stake: usize = votes.iter().map(|(name, _)| commitee.weight(name)).sum();
-    assert!(stake >= commitee.quorum_threshold());
+    let stake: usize = votes.iter().map(|(name, _)| committee.weight(name)).sum();
+    assert!(stake >= committee.quorum_threshold());
 
     CertifiedTransaction {
         transaction: transaction.unwrap(),
@@ -375,7 +375,7 @@ async fn init_local_authorities_bad(
 
 async fn fund_account(
     authorities: Vec<LocalAuthorityClient>,
-    client: &mut ClientAddressManager<LocalAuthorityClient>,
+    client: &mut GatewayState<LocalAuthorityClient>,
     address: SuiAddress,
     object_ids: Vec<Vec<ObjectID>>,
 ) -> HashMap<ObjectID, Object> {
@@ -392,13 +392,13 @@ async fn fund_account(
             client_ref.insert_object(object).await;
         }
     }
-    client.sync_client_state(address).await.unwrap();
+    client.sync_account_state(address).await.unwrap();
     created_objects
 }
 
 async fn fund_account_with_same_objects(
     authorities: Vec<LocalAuthorityClient>,
-    client: &mut ClientAddressManager<LocalAuthorityClient>,
+    client: &mut GatewayState<LocalAuthorityClient>,
     address: SuiAddress,
     object_ids: Vec<ObjectID>,
 ) -> HashMap<ObjectID, Object> {
@@ -409,12 +409,12 @@ async fn fund_account_with_same_objects(
 async fn make_address_manager(
     authority_count: usize,
 ) -> (
-    ClientAddressManager<LocalAuthorityClient>,
+    GatewayState<LocalAuthorityClient>,
     Vec<LocalAuthorityClient>,
 ) {
     let (authority_clients, committee) = init_local_authorities(authority_count).await;
     let path = tempfile::tempdir().unwrap().into_path();
-    let client = ClientAddressManager::new(path, committee, authority_clients.clone());
+    let client = GatewayState::new(path, committee, authority_clients.clone());
     (client, authority_clients.into_values().collect())
 }
 
@@ -433,7 +433,7 @@ fn make_admin_account() -> (SuiAddress, KeyPair) {
 async fn init_local_client_and_fund_account(
     address: SuiAddress,
     object_ids: Vec<Vec<ObjectID>>,
-) -> ClientAddressManager<LocalAuthorityClient> {
+) -> GatewayState<LocalAuthorityClient> {
     let (mut client, authority_clients) = make_address_manager(object_ids.len()).await;
     fund_account(authority_clients, &mut client, address, object_ids).await;
     client
@@ -442,10 +442,10 @@ async fn init_local_client_and_fund_account(
 async fn init_local_client_and_fund_account_bad(
     address: SuiAddress,
     object_ids: Vec<Vec<ObjectID>>,
-) -> ClientAddressManager<LocalAuthorityClient> {
+) -> GatewayState<LocalAuthorityClient> {
     let (authority_clients, committee) = init_local_authorities_bad(object_ids.len()).await;
     let path = tempfile::tempdir().unwrap().into_path();
-    let mut client = ClientAddressManager::new(path, committee, authority_clients.clone());
+    let mut client = GatewayState::new(path, committee, authority_clients.clone());
     fund_account(
         authority_clients.into_values().collect(),
         &mut client,
@@ -456,10 +456,7 @@ async fn init_local_client_and_fund_account_bad(
     client
 }
 
-fn get_account(
-    client: &ClientAddressManager<LocalAuthorityClient>,
-    address: SuiAddress,
-) -> &ClientState {
+fn get_account(client: &GatewayState<LocalAuthorityClient>, address: SuiAddress) -> &AccountState {
     client.get_managed_address_states().get(&address).unwrap()
 }
 
@@ -673,7 +670,7 @@ async fn test_bidirectional_transfer() {
     );
 
     // Update client2's local object data.
-    client.sync_client_state(addr2).await.unwrap();
+    client.sync_account_state(addr2).await.unwrap();
 
     // Confirm sequence number are consistent between clients.
     assert_eq!(
@@ -747,7 +744,7 @@ async fn test_client_state_sync() {
     assert!(account.get_owned_objects().is_empty());
 
     // Sync client state
-    client.sync_client_state(sender).await.unwrap();
+    client.sync_account_state(sender).await.unwrap();
 
     let account = get_account(&client, sender);
     // Confirm data are the same after sync
@@ -810,7 +807,7 @@ async fn test_client_state_sync_with_transferred_object() {
     assert!(&account2.store().certificates.is_empty());
 
     // Sync client state
-    client.sync_client_state(addr2).await.unwrap();
+    client.sync_account_state(addr2).await.unwrap();
 
     // Confirm client 2 received the new object id and cert
     let account2 = get_account(&client, addr2);
@@ -954,7 +951,7 @@ async fn test_move_calls_object_transfer() {
     ));
     // Nothing should be deleted during a transfer
     assert!(transaction_effects.deleted.is_empty());
-    // The object being transfered will be in mutated.
+    // The object being transferred will be in mutated.
     assert_eq!(transaction_effects.mutated.len(), 2);
     // Confirm the items
     assert_eq!(transaction_effects.gas_object.0 .0, gas_object_id);
@@ -1042,7 +1039,7 @@ async fn test_move_calls_freeze_object() {
     ));
     // Nothing should be deleted during a transfer
     assert!(transaction_effects.deleted.is_empty());
-    // Item being transfered is mutated. Plus gas object.
+    // Item being transferred is mutated. Plus gas object.
     assert_eq!(transaction_effects.mutated.len(), 2);
 
     let (transferred_obj_ref, _) = *transaction_effects.mutated_excluding_gas().next().unwrap();
@@ -1145,7 +1142,7 @@ async fn test_move_calls_object_delete() {
 }
 
 async fn get_package_obj(
-    client: &mut ClientAddressManager<LocalAuthorityClient>,
+    client: &mut GatewayState<LocalAuthorityClient>,
     objects: &[(ObjectRef, Owner)],
     gas_object_ref: &ObjectRef,
 ) -> Option<ObjectRead> {
@@ -1482,10 +1479,9 @@ async fn test_transfer_object_error() {
 }
 
 #[tokio::test]
-async fn test_client_store() {
-    let store = ClientSingleAddressStore::new(
-        env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())),
-    );
+async fn test_gateway_store() {
+    let store =
+        AccountStore::new(env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())));
 
     // Make random sequence numbers
     let keys_vals = (0..100)
@@ -1543,7 +1539,7 @@ async fn test_object_store() {
 
     // Run a few syncs to retrieve objects ids
     for _ in 0..4 {
-        let _ = client.sync_client_state(addr1).await.unwrap();
+        let _ = client.sync_account_state(addr1).await.unwrap();
     }
     // Try to download objects which are not already in storage
     client
@@ -1646,8 +1642,8 @@ async fn test_object_store_transfer() {
 
     // Run a few syncs to populate object ids
     for _ in 0..4 {
-        let _ = client.sync_client_state(addr1).await.unwrap();
-        let _ = client.sync_client_state(addr2).await.unwrap();
+        let _ = client.sync_account_state(addr1).await.unwrap();
+        let _ = client.sync_account_state(addr2).await.unwrap();
     }
 
     // Try to download objects which are not already in storage
@@ -1685,7 +1681,7 @@ async fn test_object_store_transfer() {
         .unwrap();
 
     // Update client2's local object data.
-    client.sync_client_state(addr2).await.unwrap();
+    client.sync_account_state(addr2).await.unwrap();
 
     // Client 1 should not have lost its objects
     // Plus it should have a new gas object
@@ -1712,7 +1708,7 @@ async fn test_object_store_transfer() {
         .unwrap();
 
     // Update client1's local object data.
-    client.sync_client_state(addr1).await.unwrap();
+    client.sync_account_state(addr1).await.unwrap();
 
     // Client 1 should have a new version of the object back
     assert_eq!(
@@ -1727,7 +1723,7 @@ async fn test_object_store_transfer() {
 }
 
 // A helper function to make tests less verbose
-async fn client_object(client: &mut dyn Client, object_id: ObjectID) -> (ObjectRef, Object) {
+async fn client_object(client: &mut dyn GatewayAPI, object_id: ObjectID) -> (ObjectRef, Object) {
     let info = client.get_object_info(object_id).await.unwrap();
 
     (info.reference().unwrap(), info.object().unwrap().clone())
@@ -2108,7 +2104,7 @@ async fn test_sync_all_owned_objects() {
     do_cert(&authority_clients[3], &cert2).await;
 
     // Test 2: Before we sync we see 6 object, incl: (old + new gas) x 2, and 2 x old objects
-    // after we see just 2 (one deleted one transfered.)
+    // after we see just 2 (one deleted one transferred.)
     let (owned_object, _) = client
         .get_authorities()
         .get_all_owned_objects(addr1, Duration::from_secs(10))
@@ -2421,7 +2417,7 @@ async fn test_address_manager() {
     )
     .await;
 
-    address_manager.sync_client_state(address).await.unwrap();
+    address_manager.sync_account_state(address).await.unwrap();
     address_manager
         .download_owned_objects_not_in_db(address)
         .await
