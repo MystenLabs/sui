@@ -111,6 +111,12 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
                                 }
                                 continue;
                             }
+                            "history" => {
+                                for (pos, history) in rl.history().iter().enumerate() {
+                                    println!(" {} {}", pos + 1, history);
+                                }
+                                continue;
+                            }
                             _ => {}
                         }
                     } else {
@@ -174,6 +180,7 @@ pub fn install_shell_plugins<'a>(clap: App<'a, 'a>) -> App<'a, 'a> {
     .subcommand(SubCommand::with_name("clear").about("Clear screen"))
     .subcommand(SubCommand::with_name("echo").about("Write arguments to the console output"))
     .subcommand(SubCommand::with_name("env").about("Print environment"))
+    .subcommand(SubCommand::with_name("history").about("Print history"))
 }
 
 #[derive(Helper)]
