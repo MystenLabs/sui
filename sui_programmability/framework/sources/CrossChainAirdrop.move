@@ -7,7 +7,9 @@
 /// chains by adding a chain_id field. 
 module Sui::CrossChainAirdrop {
     use Std::Vector;
+    use Sui::ERC721Metadata::{Self, ERC721Metadata, TokenID};
     use Sui::ID::{VersionedID};
+    use Sui::NFT;
     use Sui::Transfer;
     use Sui::TxContext::{Self, TxContext};
 
@@ -15,12 +17,7 @@ module Sui::CrossChainAirdrop {
     struct CrossChainAirdropOracle has key {
         id: VersionedID,
         // TODO: replace this with SparseSet for O(1) on-chain uniqueness check
-        managed_contracts: vector<PerContractAirdropInfo>
-    }
-
-    /// The token ID on the source contract
-    struct SourceTokenID has store, copy {
-        id: u64,
+        managed_contracts: vector<PerContractAirdropInfo>,        
     }
 
     /// The address of the source contract
@@ -38,26 +35,15 @@ module Sui::CrossChainAirdrop {
         // TODO: replace u64 with u256 once the latter is supported
         // <https://github.com/MystenLabs/fastnft/issues/618>
         // TODO: replace this with SparseSet for O(1) on-chain uniqueness check
-        claimed_source_token_ids: vector<SourceTokenID>
+        claimed_source_token_ids: vector<TokenID>
     }
     
-    /// The Sui representation of the original NFT
-    struct NFT has key {
-        id: VersionedID,
+    /// The Sui representation of the original ERC721 NFT on Eth
+    struct ERC721 has store {
         /// The address of the source contract, e.g, the Ethereum contract address
         source_contract_address: SourceContractAddress,
-        // TODO: replace u64 with u256 once the latter is supported
-        // <https://github.com/MystenLabs/fastnft/issues/618>
-        /// The token id associated with the source contract e.g., the Ethereum token id
-        source_token_id: SourceTokenID,
-        /// A distinct Uniform Resource Identifier (URI) for a given asset.
-        /// This corresponds to the `tokenURI()` method in the ERC721Metadata 
-        /// interface in EIP-721.
-        token_uri: vector<u8>,
-        /// A descriptive name for a collection of NFTs in this contract. 
-        /// This corresponds to the `name()` method in the
-        /// ERC721Metadata interface in EIP-721.
-        name: vector<u8>,
+        /// The metadata associated with this NFT
+        metadata: ERC721Metadata,
     }
 
     /// Address of the Oracle
@@ -92,18 +78,18 @@ module Sui::CrossChainAirdrop {
         ctx: &mut TxContext,
     ) {
         let contract = get_or_create_contract(oracle, &source_contract_address);
+        let token_id = ERC721Metadata::new_token_id(source_token_id);
         // NOTE: this is where the globally uniqueness check happens
-        assert!(!is_token_claimed(contract, source_token_id), ETOKEN_ID_CLAIMED);
-        let token_id = SourceTokenID{ id: source_token_id };
-        let coin = NFT {
-            id: TxContext::new_id(ctx),
-            source_contract_address: SourceContractAddress { address: source_contract_address },
-            source_token_id: copy token_id,
-            name,
-            token_uri
-        };
+        assert!(!is_token_claimed(contract, &token_id), ETOKEN_ID_CLAIMED);
+        let nft = NFT::mint(
+            ERC721 {            
+                source_contract_address: SourceContractAddress { address: source_contract_address },
+                metadata: ERC721Metadata::new(token_id, name, token_uri),
+            },
+            ctx
+        );
         Vector::push_back(&mut contract.claimed_source_token_ids, token_id);
-        Transfer::transfer(coin, recipient);
+        Transfer::transfer(nft, recipient)
     }
 
     fun get_or_create_contract(oracle: &mut CrossChainAirdropOracle, source_contract_address: &vector<u8>): &mut PerContractAirdropInfo {
@@ -130,12 +116,12 @@ module Sui::CrossChainAirdrop {
         Vector::borrow_mut(&mut oracle.managed_contracts, idx)
     }
 
-    fun is_token_claimed(contract: &PerContractAirdropInfo, source_token_id: u64): bool {
+    fun is_token_claimed(contract: &PerContractAirdropInfo, source_token_id: &TokenID): bool {
         // TODO: replace this with SparseSet so that the on-chain uniqueness check can be O(1)
         let index = 0;
         while (index < Vector::length(&contract.claimed_source_token_ids)) {
             let claimed_id = Vector::borrow(&contract.claimed_source_token_ids, index);
-            if (&claimed_id.id == &source_token_id) {
+            if (claimed_id == source_token_id) {
                 return true
             };
             index = index + 1;

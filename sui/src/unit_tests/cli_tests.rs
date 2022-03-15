@@ -167,10 +167,14 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     let token = airdrop_call_move_and_get_created_object(args, gas_object_id, &mut context).await?;
 
     // Verify the airdrop token
-    assert_eq!(token["contents"]["type"], ("0x2::CrossChainAirdrop::NFT"));
-    let fields = &token["contents"]["fields"];
     assert_eq!(
-        fields["source_token_id"]["fields"]["id"],
+        token["contents"]["type"],
+        ("0x2::NFT::NFT<0x2::CrossChainAirdrop::ERC721>")
+    );
+    let nft_data = &token["contents"]["fields"]["data"];
+    let erc721_metadata = &nft_data["fields"]["metadata"];
+    assert_eq!(
+        erc721_metadata["fields"]["token_id"]["fields"]["id"],
         AIRDROP_SOURCE_TOKEN_ID
     );
 
