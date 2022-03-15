@@ -2,7 +2,7 @@
 title: An end-to-end tutorial of playing TicTacToe on Sui
 ---
 
-In this tutorial, we will demonstrate an end-to-end process of starting a Sui network locally, collecting to it through our demo wallet app, publish a TicTacToe game on Sui and play it to the end.
+In this tutorial, we will demonstrate an end-to-end process of starting a Sui network locally, connecting to it through our demo wallet app, publishing a TicTacToe game on Sui, and playing it to the end.
 
 ## Start the network
 In the Sui repository, build Sui:
@@ -47,7 +47,7 @@ export PLAYER_X=7B61DA6AACED7F28C1187D998955F10464BEAE55
 export PLAYER_O=251CF224B6BA3A019D04B6041357C20490F7A322
 ```
 
-For each of these addresses, let's discover their gas objects (replace the addresses with what you see, repeat the following command for these 3 addresses):
+For each of these addresses, let's discover their gas objects for each account address:
 ```
 $ ./wallet --no-shell gas --address $ADMIN
                 Object ID                 |  Version   |  Gas Value
@@ -74,8 +74,7 @@ $ ./wallet --no-shell gas --address $PLAYER_O
  A0DBF58C3801EC2FEDA1D039E190A6B31A25B199 |     0      |   100000
  D5EBB8A19A35874A18B7A1D883EBFC8D897F5693 |     0      |   100000
 ```
-We only need one gas object per account address. So let's pick the first gas object of each account. In the above example, it's `38B89FE9F4A4823F1406938E87A8767CBD7F0B93`, `6F675038CAA48184707DBBE95ACFBA2030E87CD8` and `2110ADFB7BAF889A05EA6F5889AF7724299F9BED` respectively. By now, we have 3 account addresses, and for each address, we have one gas object.
-Since we will be using these addresses and gas objects repeatedly in the rest of this tutorial, let's make them environment variables so that we don't have to retype them every time:
+We only need one gas object per account address. So let's pick the first gas object of each account. In the above example, it's `38B89FE9F4A4823F1406938E87A8767CBD7F0B93`, `6F675038CAA48184707DBBE95ACFBA2030E87CD8` and `2110ADFB7BAF889A05EA6F5889AF7724299F9BED` respectively. Again, you will see different IDs. We also add them to our environment variables:
 ```
 export ADMIN_GAS=38B89FE9F4A4823F1406938E87A8767CBD7F0B93
 export X_GAS=6F675038CAA48184707DBBE95ACFBA2030E87CD8
@@ -104,11 +103,11 @@ export PACKAGE=A613A7FF8CB03E0DFC0D157E232BBA50C5F19D17
 ## Playing TicTacToe
 As we mentioned earlier, we will need 3 parties to participate in this game: Admin, PlayerX and PlayerO.
 As a high level, the game works as following:
-1. The admin creates a game, which also specifies the addresses or the two players. This will also creates two capability objects and send to each of the addresses to give them permission to participate in the same game. This ensures that arbitrary person cannot attempt to join their game.
-2. Each player takes turns to send a Marker object to the admin indicating where they want to place their marker.
-3. The admin, upon receiving markers (in practice, this is done through monitoring events), place the marker to the gameboard.
+1. The admin creates a game, which also specifies the addresses of the two players. This will also create two capability objects and send to each of the addresses to give them permission to participate in the same game. This ensures that an arbitrary person cannot attempt to join this game.
+2. Each player takes turns to send a *Mark* object to the admin indicating where they want to place their mark.
+3. The admin, upon receiving marks (in practice, this is done through monitoring events), places the mark to the gameboard.
 4. (2) and (3) repeats until game ends.
-Because the admin owns the gameboard, each individual player cannot place a marker directly to the gameboard (they don't own the object, and hence cannot mutate it, see [Object Model](../build/objects.md)), each marker placement is split to 2 steps, that each player first sends a marker, and then the admin places the marker. A sample gameplay can also be found in the [TicTacToeTests](../../../sui_programmability/examples/games/tests/TicTacToeTests.move).
+Because the admin owns the gameboard, each individual player cannot place a mark directly on the gameboard (they don't own the object, and hence cannot mutate it, see [Object Model](../build/objects.md)), each mark placement is split to 2 steps, that each player first sends a mark, and then the admin places the mark. A sample gameplay can also be found in the [TicTacToeTests](../../../sui_programmability/examples/games/tests/TicTacToeTests.move).
 
 Now let's begin the game!
 First of all, let's create a game:
@@ -133,7 +132,7 @@ F1B8161BD97D3CD6627E739AD675089C5ACFB452 SequenceNumber(1) o#1c92bdf7646cad2a653
 Mutated Objects:
 38B89FE9F4A4823F1406938E87A8767CBD7F0B93 SequenceNumber(2) o#26dbaf7ec2032a6270a45498ad46ac0b1ddbc361fcff20cadafaf5d39b8181b1
 ```
-The above call created 3 objects. For each object, it printed out a tuple of 3 values (object_id, version, object_digest). Object ID is what we care about here. Since we don't have a real application here to display things for us, we need a bit of object printing magic to figure out which object is which. Print out the metadata of each created object (replace the object ID with what you see on your screen):
+The above call created 3 objects. For each object, it printed out a tuple of 3 values (object_id, version, object_digest). Object ID is what we care about here. Since we don't have a real application here to display things for us, we need a bit of object printing magic to figure out which object is which. Let's print out the metadata of each created object (replace the object ID with what you see on your screen):
 ```
 $ ./wallet --no-shell object --id 5851B7EA07B93E68696BC0CF811D2E266DFB880D
 Owner: AddressOwner(k#251cf224b6ba3a019d04b6041357c20490f7a322)
@@ -156,7 +155,7 @@ ID: F1B8161BD97D3CD6627E739AD675089C5ACFB452
 Readonly: false
 Type: 0xa613a7ff8cb03e0dfc0d157e232bba50c5f19d17::TicTacToe::TicTacToe
 ```
-There are two MarkMintCap objects (for capability of minting a Marker for each player) and a TicTacToe object (the game object). Take a look at each of their `Owner` field you will see that:
+There are two MarkMintCap objects (for capability of minting a mark for each player) and a TicTacToe object (the game object). Take a look at each of their `Owner` field you will see that:
 1. MarkMintCap Object `5851B7EA07B93E68696BC0CF811D2E266DFB880D` is owned by PLAYER_O.
 2. MarkMintCap Object `A6D3B507D4533822E690291166891D42694A2721` is owned by PLAYER_X.
 3. TicTacToe Object `F1B8161BD97D3CD6627E739AD675089C5ACFB452` is owned by ADMIN.
@@ -193,7 +192,7 @@ AE3CE9176F1A8C1F21D922722486DF667FA00394 SequenceNumber(1) o#d40c0e3c74a2badd60c
 Mutated Objects:
 ...
 ```
-The above call would have created a Mark object, with ID `AE3CE9176F1A8C1F21D922722486DF667FA00394`, and it was sent to the admin.
+The above call created a Mark object, with ID `AE3CE9176F1A8C1F21D922722486DF667FA00394`, and it was sent to the admin.
 The admin can now place the mark on the gameboard. The function to place the mark looks like this:
 ```
 public fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext);
@@ -209,7 +208,7 @@ _|X|_
  | |
 ```
 
-Player O now tries to put a marker at (0, 0) (note, in the second call, the second argument comes from the created objects in the first call):
+Player O now tries to put a mark at (0, 0) (note, in the second call, the second argument comes from the created objects in the first call):
 ```
 $ ./wallet --no-shell call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$OCAP\" \"0x$ADMIN\" 0 0 --gas $O_GAS --gas-budget 1000
 ----- Certificate ----
@@ -300,7 +299,7 @@ Created Objects:
 Mutated Objects:
 ...
 ```
-As we can see, the last transaction created a new object. Let's find out what object was created:
+Cool! The last transaction created a new object. Let's find out what object was created:
 ```
 $ ./wallet --no-shell object --id 54B58C0D5B14A269B1CD424B3CCAB1E315C43343
 
