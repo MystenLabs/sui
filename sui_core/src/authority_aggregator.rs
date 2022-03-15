@@ -154,7 +154,7 @@ where
             for returned_digest in &signed_effects.effects.dependencies {
                 // We check that we are not processing twice the same certificate, as
                 // it would be common if two objects used by one transaction, were also both
-                // mutated by the same preceeding transaction.
+                // mutated by the same preceding transaction.
                 if !candidate_certificates.contains(returned_digest) {
                     // Add this cert to the set we have processed
                     candidate_certificates.insert(*returned_digest);
@@ -181,7 +181,7 @@ where
     /// Sync a certificate to an authority.
     ///
     /// This function infers which authorities have the history related to
-    /// a certificate and attempts `retries` number of them, sampled accoding to
+    /// a certificate and attempts `retries` number of them, sampled according to
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
@@ -255,7 +255,7 @@ where
             };
 
             if timeout(timeout_period, logic).await.is_ok() {
-                // If the updates suceeds we return, since there is no need
+                // If the updates succeeds we return, since there is no need
                 // to try other sources.
                 return Ok(());
             }
@@ -269,7 +269,7 @@ where
         }
 
         // Eventually we should add more information to this error about the destination
-        // and maybe event the certificiate.
+        // and maybe event the certificate.
         Err(SuiError::AuthorityUpdateFailure)
     }
 
@@ -278,7 +278,7 @@ where
     ///
     /// FMap can do io, and returns a result V. An error there may not be fatal, and could be consumed by the
     /// MReduce function to overall recover from it. This is necessary to ensure byzantine authorities cannot
-    /// interupt the logic of this function.
+    /// interrupt the logic of this function.
     ///
     /// FReduce returns a result to a ReduceOutput. If the result is Err the function
     /// shortcuts and the Err is returned. An Ok ReduceOutput result can be used to shortcut and return
@@ -394,7 +394,7 @@ where
                 |(mut total_stake, mut state), name, weight, result| {
                     Box::pin(async move {
                         // Here we increase the stake counter no matter if we got an error or not. The idea is that a
-                        // call to ObjectInfoRequest should suceed for correct authorities no matter what. Therefore
+                        // call to ObjectInfoRequest should succeed for correct authorities no matter what. Therefore
                         // if there is an error it means that we are accessing an incorrect authority. However, an
                         // object is final if it is on 2f+1 good nodes, and any set of 2f+1 intersects with this, so
                         // after we have 2f+1 of stake (good or bad) we should get a response with the object.
@@ -495,9 +495,9 @@ where
     }
 
     /// This function returns a map between object references owned and authorities that hold the objects
-    /// at this version, as well as a list of authorities that responsed to the query for the objects owned.
+    /// at this version, as well as a list of authorities that responded to the query for the objects owned.
     ///
-    /// We do not expose this function to users, as its output is hard for callers to interpet. In particular,
+    /// We do not expose this function to users, as its output is hard for callers to interpret. In particular,
     /// some of the entries in the list might be the result of a query to a byzantine authority, so further
     /// sanitization and checks are necessary to rely on this information.
     ///
@@ -596,7 +596,7 @@ where
         // We update each object at each authority that does not have it.
         for object_id in objects {
             // Authorities to update.
-            let mut authorites: HashSet<AuthorityName> = self
+            let mut authorities: HashSet<AuthorityName> = self
                 .committee
                 .voting_rights
                 .iter()
@@ -637,7 +637,7 @@ where
 
                 // Remove authorities at this version, they will not need to be updated.
                 for (name, _signed_transaction) in object_authorities {
-                    authorites.remove(&name);
+                    authorities.remove(&name);
                 }
 
                 // NOTE: Just above we have access to signed transactions that have not quite
@@ -649,7 +649,7 @@ where
                 let entry = certs_to_sync
                     .entry(cert.transaction.digest())
                     .or_insert((cert.clone(), HashSet::new()));
-                entry.1.extend(authorites);
+                entry.1.extend(authorities);
 
                 // Return the latest version of an object, or a deleted object
                 match object_option {
@@ -663,7 +663,7 @@ where
 
         for (_, (cert, authorities)) in certs_to_sync {
             for name in authorities {
-                // For each certificate authority pair run a sync to upate this authority to this
+                // For each certificate authority pair run a sync to update this authority to this
                 // certificate.
                 // NOTE: this is right now done sequentially, we should do them in parallel using
                 //       the usual FuturesUnordered.
@@ -684,7 +684,7 @@ where
     }
 
     /// Ask authorities for the user owned objects. Then download all objects at all versions present
-    /// on authorites, along with the certificates preceeding them, and update lagging authorities to
+    /// on authorities, along with the certificates preceding them, and update lagging authorities to
     /// the latest version of the object.
     ///
     /// This function returns all objects, including those that are
@@ -884,7 +884,7 @@ where
             .ok_or(SuiError::ErrorWhileProcessingTransaction)
     }
 
-    /// Process a certificate assuming that 2f+1 authorites already are up to date.
+    /// Process a certificate assuming that 2f+1 authorities already are up to date.
     ///
     /// This call is meant to be called after `process_transaction` returns a certificate.
     /// At that point (and after) enough authorities are up to date with all objects
@@ -992,15 +992,13 @@ where
                                     timeout_after_quorum,
                                 ));
                             }
-                        }
-
-                        // Evan: couldn't we get here if entry.0 above is < threshold but response was valid? wtf??
-                        // If instead we have more than f bad responses, then we fail.
-                        state.bad_stake += weight;
-                        if state.bad_stake > validity {
-                            debug!(bad_stake = state.bad_stake,
-                                   "Too many bad responses from cert processing, validity threshold exceeded.");
-                            return Err(SuiError::ErrorWhileRequestingCertificate);
+                        } else {
+                            state.bad_stake += weight;
+                            if state.bad_stake > validity {
+                                debug!(bad_stake = state.bad_stake,
+                                    "Too many bad responses from cert processing, validity threshold exceeded.");
+                                return Err(SuiError::ErrorWhileRequestingCertificate);
+                            }
                         }
 
                         Ok(ReduceOutput::Continue(state))
