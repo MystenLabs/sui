@@ -17,8 +17,7 @@
 
     //Check if wallect is connected, get connected wallet
     $walletAddress = isweb3Enabled ?  window.ethereum.selectedAddress : false
-    //"0x09dbc4a902199bbe7f7ec29b3714731786f2e878" : false
-    // window.ethereum.selectedAddress : false
+
 
     let isloading: boolean = false
     $:error = false

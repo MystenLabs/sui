@@ -50,10 +50,7 @@ const mintSuiNFT = async (reqObj) => {
 }
 const signNFT = async (from:string, msgParams:any) => {
     try {
-        console.log(msgParams)
          const signature = await window.ethereum.request({ method: 'eth_signTypedData_v4', params: [  from, msgParams ] })
-        // return signature
-        console.log(signature)
         return signature
     } catch (err) {
         console.log(err.message)
@@ -74,7 +71,8 @@ export const startSigning = async (from, msgParams) => {
 
 export const startMinting = async (reqObj) => {
     try {
-        const response:any = mintSuiNFTDemo(reqObj)
+        /// Minting- To use demo data please use mintSuiNFTDemo(reqObj)
+        const response:any = mintSuiNFT(reqObj)
         /// await config.demo ? mintSuiNFTDemo(reqObj) : mintSuiNFT(reqObj);
         return response
     } catch (err) {

@@ -7,5 +7,4 @@ export const config = {
     url: 'http://localhost:8000/',
     demo: false
 }
-//'0x09dbc4a902199bbe7f7ec29b3714731786f2e878'
 export const walletAddress:any = writable(false);

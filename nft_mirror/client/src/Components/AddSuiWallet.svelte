@@ -62,9 +62,9 @@
                 message: {
                     source_chain: "ethereum",
                     source_contract_address: data.contract_address,
-                    source_token_id: '8937',
+                    source_token_id: data.token_id,
                     source_owner_address: $walletAddress,
-                    destination_sui_address: '0xa5e6dbcf33730ace6ec8b400ff4788c1f150ff7e'   
+                    destination_sui_address: suiwalledAdr
                  },
                 // Refers to the keys of the *types* object below.
                 primaryType: 'ClaimRequest',
@@ -106,8 +106,8 @@
                     "source_chain": "ethereum",
                     "source_contract_address": data.contract_address,
                     "source_token_id": data.token_id,
-                    "source_owner_address": "0x529f501ceb3ab599274a38f2aee41a7eba1fcead",
-                    "destination_sui_address": "0x10"
+                    "source_owner_address": $walletAddress,
+                    "destination_sui_address": suiWalletAddress
                 },
                 "signature": signature
             }
