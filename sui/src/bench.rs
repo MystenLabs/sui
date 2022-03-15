@@ -200,7 +200,7 @@ impl ClientServerBenchmark {
                 };
 
                 assert!(object.version() == SequenceNumber::from(0));
-                let object_ref = object.to_object_reference();
+                let object_ref = object.compute_object_reference();
                 state.init_transaction_lock(object_ref).await;
                 account_objects.push((address, object.clone(), keypair));
                 state.insert_object(object).await;
@@ -208,7 +208,7 @@ impl ClientServerBenchmark {
                 let gas_object_id = ObjectID::random();
                 let gas_object = Object::with_id_owner_for_testing(gas_object_id, address);
                 assert!(gas_object.version() == SequenceNumber::from(0));
-                let gas_object_ref = gas_object.to_object_reference();
+                let gas_object_ref = gas_object.compute_object_reference();
                 state.init_transaction_lock(gas_object_ref).await;
                 gas_objects.push(gas_object.clone());
                 state.insert_object(gas_object).await;
@@ -221,8 +221,8 @@ impl ClientServerBenchmark {
         let mut transactions: Vec<Bytes> = Vec::new();
         let mut next_recipient: SuiAddress = get_key_pair().0;
         for ((account_addr, object, secret), gas_obj) in account_objects.iter().zip(gas_objects) {
-            let object_ref = object.to_object_reference();
-            let gas_object_ref = gas_obj.to_object_reference();
+            let object_ref = object.compute_object_reference();
+            let gas_object_ref = gas_obj.compute_object_reference();
 
             let data = if self.use_move {
                 // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values

@@ -350,16 +350,17 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Insert an object
     pub fn insert_object(&self, object: Object) -> Result<(), SuiError> {
         self.objects.insert(&object.id(), &object)?;
+        let object_ref = object.compute_object_reference();
 
         // Update the index
         if let Some(address) = object.get_single_owner() {
             self.owner_index
-                .insert(&(address, object.id()), &object.to_object_reference())?;
+                .insert(&(address, object.id()), &object_ref)?;
         }
 
         // Update the parent
         self.parent_sync
-            .insert(&object.to_object_reference(), &object.previous_transaction)?;
+            .insert(&object_ref, &object.previous_transaction)?;
 
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
@@ -532,7 +533,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .chain(
                 written
                     .iter()
-                    .filter_map(|(id, new_object)| match objects.get(id) {
+                    .filter_map(|(id, (_, new_object))| match objects.get(id) {
                         Some(old_object) if old_object.owner != new_object.owner => {
                             old_object.get_single_owner_and_id()
                         }
@@ -548,7 +549,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             &self.parent_sync,
             written
                 .iter()
-                .map(|(_, object)| (object.to_object_reference(), transaction_digest)),
+                .map(|(_, (object_ref, _object_))| (object_ref, transaction_digest)),
         )?;
 
         // Index the certificate by the objects deleted
@@ -573,9 +574,9 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         // Create locks for new objects, if they are not immutable
         write_batch = write_batch.insert_batch(
             &self.transaction_lock,
-            written.iter().filter_map(|(_, new_object)| {
+            written.iter().filter_map(|(_, (object_ref, new_object))| {
                 if !new_object.is_read_only() {
-                    Some((new_object.to_object_reference(), None))
+                    Some((object_ref, None))
                 } else {
                     None
                 }
@@ -588,22 +589,29 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
                 &self.all_object_versions,
                 written
                     .iter()
-                    .map(|(id, object)| ((*id, object.version()), object)),
+                    .map(|(id, (_object_ref, object))| ((*id, object.version()), object)),
             )?;
         }
 
         // Update the indexes of the objects written
         write_batch = write_batch.insert_batch(
             &self.owner_index,
-            written.iter().filter_map(|(_id, new_object)| {
-                new_object
-                    .get_single_owner_and_id()
-                    .map(|owner_id| (owner_id, new_object.to_object_reference()))
-            }),
+            written
+                .iter()
+                .filter_map(|(_id, (object_ref, new_object))| {
+                    new_object
+                        .get_single_owner_and_id()
+                        .map(|owner_id| (owner_id, object_ref))
+                }),
         )?;
 
         // Insert each output object into the stores
-        write_batch = write_batch.insert_batch(&self.objects, written.iter())?;
+        write_batch = write_batch.insert_batch(
+            &self.objects,
+            written
+                .iter()
+                .map(|(object_id, (_, new_object))| (object_id, new_object)),
+        )?;
 
         // Update the indexes of the objects written
 

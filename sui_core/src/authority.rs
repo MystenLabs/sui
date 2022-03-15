@@ -599,7 +599,7 @@ impl AuthorityState {
                             // Read only objects have no locks.
                             None
                         } else {
-                            self.get_transaction_lock(&object.to_object_reference())
+                            self.get_transaction_lock(&object.compute_object_reference())
                                 .await?
                         };
                         let layout = match request_layout {
