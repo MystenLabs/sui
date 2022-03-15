@@ -1,6 +1,6 @@
 {
   "title": "Sui Developer Portal",
-  "tagline": "Welcome to Sui, a next generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
+  "tagline": "Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
   "URL": "https://devportal-30dd0.web.app/",
   "baseUrl": "/",
   "favIcon": "/favicon2.png",
@@ -21,15 +21,16 @@
         "title": "Docs",
         "listItems": [{
             "title": "Getting Started",
-            "link": "/learn/sui-move-diffs/"
+            "link": "/build/move"
           },
           {
             "title": "SDK Reference",
-            "link": "/learn/sui-move-diffs/"
+            "link": "https://app.swaggerhub.com/apis/MystenLabs/sui-api/"
+            "external": true
           },
           {
             "title": "Prototypes",
-            "link": "/learn/sui-move-diffs/"
+            "link": "/explore/prototypes"
           }
         ]
       },
@@ -41,19 +42,19 @@
             "external": true
           },
           {
-            "title": "Twiter",
+            "title": "Twitter",
             "link": "https://twitter.com/mysten_labs/",
             "external": true
           },
           {
-            "title": "Forum",
+            "title": "Medium",
             "link": "https://medium.com/mysten-labs/",
             "external": true
           }
         ]
       },
       {
-        "title": "More",
+        "title": "Team",
         "listItems": [{
             "title": "GitHub",
             "link": "https://github.com/MystenLabs",
@@ -66,7 +67,7 @@
           },
           {
             "title": "White Paper",
-            "link": "#",
+            "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf",
             "external": true
           }
         ]
@@ -76,7 +77,7 @@
   "headerData": {
     "menu": [{
         "title": "Learn",
-        "link": "/learn/how-sui-works"
+        "link": "/learn/"
       },
       {
         "title": "Build",
@@ -84,11 +85,11 @@
       },
       {
         "title": "Explore",
-        "link": "/explore/observability"
+        "link": "/explore/"
       },
       {
         "title": "Contribute",
-        "link": "/contribute/code-of-conduct"
+        "link": "/contribute/"
       },
       {
         "title": "Discord",
@@ -96,7 +97,7 @@
         "external": true
       },
       {
-        "title": "Github",
+        "title": "GitHub",
         "link": "https://github.com/MystenLabs",
         "external": true
       }
@@ -104,91 +105,93 @@
   },
   "HomePage": {
     "title": "Sui Developer Hub",
-    "subTitle": "Welcome to Sui, a next generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
+    "subTitle": "Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by Move",
     "partner": {
       "title": "Partner Highlight",
       "copy" : "See how Celo uses this copy to change this copy because this copy needs to be changed but that should be an easy fix.",
       "cta" : {
-        "label": "Get Started",
+        "label": "Learn More",
         "link": "/learn/how-sui-works",
         "external": false
       }
     },
     "cta": [{
-        "name": "Getting Started",
+        "name": "Get Started",
         "sublist": [{
-            "name": "What makes Sui different? ->",
-            "url": "/learn/sui-move-diffs/"
+            "name": "Move Quick Start ->",
+            "url": "/build/move"
           },
           {
             "name": "Wallet Quick Start ->",
-            "url": "/build/wallet/"
+            "url": "/build/wallet"
           }
         ]
       },
       {
         "name": "Learn About Sui",
         "sublist": [{
-            "name": "What makes Sui different? ->",
-            "url": "/learn/sui-move-diffs/"
+            "name": "How Sui Works ->",
+            "url": "/learn/how-sui-works"
           },
           {
-            "name": "Wallet Quick Start ->",
-            "url": "/build/wallet/"
+            "name": "Sui Compared to other Blockchains ->",
+            "url": "/learn/sui-compared"
           }
         ]
       },
       {
-        "name": "Demos",
+        "name": "Take Tutorial",
         "sublist": [{
-            "name": "What makes Sui different? ->",
-            "url": "/learn/sui-move-diffs/"
-          },
-          {
-            "name": "Create a Wallet ->",
-            "url": "/build/wallet/"
+            "name": "End-to-end guide for playing TicTacToe on Sui ->",
+            "url": "/explore/tutorials"
           }
         ]
       },
       {
         "name": "Explore Prototypes",
         "sublist": [{
-          "name": "Explore ->",
-          "url": "/"
+          "name": "Two games with mutable, expressive NFTs",
+          "url": "/explore/prototypes"
         } ]
       },
       {
         "name": "Build with Examples",
         "sublist": [{
-            "name": "Mint a Mutable NFT ->",
-            "url": "/learn/sui-move-diffs/"
+            "name": "Hold an auction ->",
+            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/Auction.move"
+            "external": true
+          },
+        "sublist": [{
+            "name": "Try A flash loan for any Coin type ->",
+            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/FlashLender.move"
+            "external": true
           },
           {
-            "name": "Gaming-related Example ->",
-            "url": "/build/wallet/"
+            "name": "See all examples ->",
+            "url": "/explore/examples/"
           }
         ]
       },
       {
         "name": "Join the Community",
         "sublist": [{
-            "name": "Github",
-            "url": "/learn/sui-move-diffs/",
+            "name": "GitHub",
+            "url": "https://github.com/MystenLabs",
             "external": true
           },
           {
             "name": "Discord",
-            "url": "/build/wallet/",
+            "url": "https://discord.com/invite/Tcfn7UdmAc",
             "external": true
           },
           {
             "name": "Twitter",
-            "url": "/build/wallet/",
+            "url": "https://twitter.com/mysten_labs/",
             "external": true
           },
           {
             "name": "Medium",
-            "url": "/build/wallet/",
+            "url": "https://medium.com/mysten-labs/",
             "external": true
           }
         ]
