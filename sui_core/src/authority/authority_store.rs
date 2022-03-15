@@ -15,7 +15,6 @@ use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use tracing::warn;
 use typed_store::rocks::{DBBatch, DBMap, TypedStoreError};
 
-// use std::sync::atomic::Ordering;
 use typed_store::{reopen, traits::Map};
 
 pub type AuthorityStore = SuiDataStore<false>;
@@ -35,7 +34,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// This is a map between the object ID and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
-    pub(crate) objects: DBMap<ObjectID, Object>, // TODO: remove pub
+    objects: DBMap<ObjectID, Object>, 
 
     /// Stores all history versions of all objects.
     /// This is not needed by an authority, but is needed by a replica.
@@ -48,7 +47,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// to None. The safety of consistent broadcast depend on each honest authority never changing
     /// the lock once it is set. After a certificate for this object is processed it can be
     /// forgotten.
-    pub(crate) transaction_lock: DBMap<ObjectRef, Option<TransactionDigest>>, // TODO: remove pub
+    transaction_lock: DBMap<ObjectRef, Option<TransactionDigest>>, 
 
     /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
@@ -66,7 +65,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// certificates that have been successfully processed by this authority. This set of certificates
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
-    pub(crate) certificates: DBMap<TransactionDigest, CertifiedTransaction>, // TODO: remove pub
+    certificates: DBMap<TransactionDigest, CertifiedTransaction>, 
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
