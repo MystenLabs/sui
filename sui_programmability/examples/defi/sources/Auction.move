@@ -1,6 +1,7 @@
 /// This is an implementation of an English auction
-/// (https://en.wikipedia.org/wiki/English_auction). There are 3 types
-/// of parties participating in an auction:
+/// (https://en.wikipedia.org/wiki/English_auction) using single-owner
+/// objects only. There are 3 types of parties participating in an
+/// auction:
 /// - auctioneer - this is a trusted party that runs the auction
 /// - owner - this is the original owner of an item that is sold at an
 /// auction; the owner submits a request to an auctioneer that runs
@@ -18,8 +19,9 @@
 /// and their addresses
 /// - the auctioneer periodically inspects the bids:
 ///   - if the inspected bid is higher than the current bid (initially
-///   0), the auction is updated with the current bid and funds
-///   representing previous highest bid are sent to the original owner
+///   there is no bid), the auction is updated with the current bid
+///   and funds representing previous highest bid are sent to the
+///   original owner
 ///   - otherwise (bid is too low) the bidder's funds are sent back to
 ///   the bidder and the auction remains unchanged
 /// - the auctioneer eventually ends the auction
@@ -80,7 +82,7 @@ module DeFi::Auction {
     /// it can be shared with bidders but we cannot do this at the
     /// moment. This is executed by the owner of the asset to be
     /// auctioned.
-    public fun create_auction<T: key + store >(to_sell: T, id: VersionedID, auctioneer: address, ctx: &mut TxContext) {
+    public fun create_auction<T: key + store>(to_sell: T, id: VersionedID, auctioneer: address, ctx: &mut TxContext) {
         // A question one might asked is how do we know that to_sell
         // is owned by the caller of this entry function and the
         // answer is that it's checked by the runtime.
@@ -121,7 +123,7 @@ module DeFi::Auction {
             };
             Option::fill(&mut auction.bid_data, bid_data);
         } else {
-            let prev_bid_data = Option::borrow(&mut auction.bid_data);
+            let prev_bid_data = Option::borrow(&auction.bid_data);
             if (Coin::value(&coin) > Coin::value(&prev_bid_data.funds)) {
                 // a bid higher than currently highest bid received
                 let new_bid_data = BidData {
@@ -140,7 +142,8 @@ module DeFi::Auction {
     }
 
     /// Ends the auction - transfers item to the currently highest
-    /// bidder or to the original owner if no bids have been placed.
+    /// bidder or to the original owner if no bids have been
+    /// placed. This is executed by the auctioneer.
     public fun end_auction<T: key + store>(auction: Auction<T>, _ctx: &mut TxContext) {
         let Auction { id, to_sell, owner, bid_data } = auction;
         ID::delete(id);

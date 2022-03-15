@@ -10,7 +10,8 @@ module DeFi::AuctionTests {
 
     use DeFi::Auction::{Self, Auction, Bid};
 
-    const WRONG_ITEM_VALUE: u64 = 1;
+    // Error codes.
+    const EWRONG_ITEM_VALUE: u64 = 1;
 
     // Example of an object type that could be sold at an auction.
     struct SomeItemToSell has key, store {
@@ -114,7 +115,7 @@ module DeFi::AuctionTests {
         TestScenario::next_tx(scenario, &bidder1);
         {
             let acquired_item = TestScenario::remove_object<SomeItemToSell>(scenario);
-            assert!(acquired_item.value == 42, WRONG_ITEM_VALUE);
+            assert!(acquired_item.value == 42, EWRONG_ITEM_VALUE);
             TestScenario::return_object(scenario, acquired_item);
         };
     }
