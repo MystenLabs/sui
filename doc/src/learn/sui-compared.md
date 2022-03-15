@@ -1,47 +1,78 @@
 ---
-title: Sui compared to another blockchain & Sui limitations
+title: How Sui Differs from Other Blockchains
 ---
 
-# Sui compared to other Blockchains
+This is a high-level overview of the differences in approach between Sui and other blockchain systems. This document is intended for potential adopters of Sui so they may decide whether it fits your use cases. See How Sui Works for a summary of Sui’s processes and approaches.
 
-This is a high-level overview of the differences in approach between Sui and other blockchain systems.
+Here are Sui's key features:
 
-## Blockchains
+- Causal order vs total order (enables massively parallel execution)
 
-Blockchain validators collectively build a shared accumulator: a representation of the state of the blockchain, a chain to which they add increments over time, called blocks. In blockchains that offer finality, every time validators want to make an incremental addition to the blockchain, i.e. a block proposal, they enter into a consensus protocol. This protocol lets them form an agreement over the current state of the chain, whether the proposed increment is suitable and valid, and what the state of the chain will be after the new addition. 
+- [Sui's variant of Move](../build/move.md) and its object-centric data model (enables composable objects/NFTs)
 
-This method of maintaining common state over time has known practical success over the last 14 years or so, using a wealth of theory from the last 50 years of research in the field of Byzantine Fault Tolerant distributed systems. 
-
-Yet it is inherently sequential: increments to the chain are added one at a time, like pearls on a string. In practice, this approach pauses the influx of transactions (often stored in a "mempool"), while the current block is under consideration.
-
-## Sui's approach to validating new transactions
-
-A lot of transactions do not have complex interdependencies with other, arbitrary parts of the state of the blockchain. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's account. Hence Sui takes the approach of only "stopping the world" for the relevant piece of data rather than the whole chain -- in this case, the account of the sender, which can only send one transaction at a time.
-
-Sui further expands this approach to more involved transactions that may explicilty depend on multiple elements under their sender's control, using an [object model][Objects] and leveraging [Move][Move]'s strong ownership model. By requiring that dependencies be explicit, Sui applies a "multi-lane" approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
-
-This doesn't mean that Sui is a platform never orders transactions with respect to each other, or that it we allows owners to only affect their owned microcosm of objects. Sui will also process transactions that have an effect on some shared state, in a rigorous, consensus-ordered manner. They're just not the default use case.
-## A collaborative approach to transaction submission
-
-Sui validates transactions individually, rather than batching them in the traditional blocks. An advantage of this approach is that each successful transaction quickly obtains a certificate of finality which proves to anyone that the transaction will be processed by the Sui network, but the process of submitting a transaction is a bit more involved. Whereas an usual blockchain can accept a bunch of transactions from the same author in a "fire and forget" mode, Sui transaction submission follows the following steps:
-1. the sender broadcasts a transaction to all Sui authorities,
-2. the Sui authorities send individual votes on this transaction to the sender, 
-3. the sender collects a Byzantine-resistant-majority of these votes into a Certificate, and broadcasts it to all Sui authorities,
-4. (optional) the sender collects a certificate detailing the effects of the transaction.
-
-While those steps demand more of the sender, performing them efficiently can still yield a cryptographic proof of finality well under a second. Aside from crafting the original transaction itself, the session management for a transaction does not require access to any private keys, and can be delegated to a third party. Since we live in a world where the cost of bandwith is diminishing steadily, we hope to see an ecosystem of services that will find it easy, fun, and perhaps even profitable to manage transaction submission on behalf of users. We provide a reference implementation of such a service, called the Sui Gateway service.
-
-In exchange for this collaboration, users of Sui get a much lower latency: their transaction is certified and final as soon as three sequential messaging & processing steps have occured between them and authorities (one and a half round-trips), something that can be routinely achieved under a second. Indeed, Sui's object model unlocks parallel execution, and means that authorities can be scaled. This means that processing a transaction in a well-resourced Sui node is only limited by those network transmission delays, rather than being bound by storage IO and compute power, a more common blocker in classical blockchain architectures.
-
-## A different approach to state
-
-Because Sui focuses on managing specific objects rather than a single aggregate of state, they also report on them in this way:
-- Every object in Sui has a unique version, and 
-- every new version is created from a transaction which may involve several dependencies, themselves versioned objects. 
-
-As a consequence, a Sui authority -- or any other node with a copy of the state -- can exhibit a causal history of an object, showing its history since genesis. Sui explicitly makes the bet that in most cases, the ordering of that causal history with the causal history of another oject is irrelevant, and in the few cases where it is, makes this relationship explicit in the data. 
+- Easier developer experience with the blockchain-oriented [Move programming language](https://github.com/MystenLabs/awesome-move)
 
 
-# Sui Limitations
+## Authorities vs validators/miners
 
-TODO: exhaustive reads, shared mutable state pegged on ordering.
+An authority plays a role similar to "validators" or "miners" in other blockchain systems. The key distinction between these roles (and the reason we insist on using a separate term) is that validators/miners are *active*, whereas authorities are *passive* for the main type of Sui transaction involving single-writer objects. Broadly speaking, to deal with a transfer:
+
+* Miners/validators continuously participate in a global consensus protocol that requires multiple rounds of all-to-all communication between the participants. The goal is typically to agree on a *totally ordered* block of transactions and the result of their execution.
+
+* Authorities do nothing until they receive a transaction or certificate from a user. Upon receiving a transaction or certificate, an authority need not communicate with other authorities in order to take action and advance its internal state machine. It may wish to communicate with other authorities to share certificates but need not do so.
+
+## Causal order vs total order
+
+Unlike most existing blockchain systems (and as the reader may have guessed from the description of write requests above), Sui does not always impose a total order on the transactions submitted by clients, with shared objects being the exception. Instead, most transactions are *causally* ordered--if a transaction `T1` produces output objects `O1` that are used as input objects in a transaction `T2`, an authority must execute `T1` before it executes `T2`. Note that `T2` need not use these objects directly for a causal relationship to exist--e.g., `T1` might produce output objects which are then used by `T3`, and `T2` might use `T3`'s output objects. However, transactions with no causal relationship can be processed by Sui authorities in any order.
+
+## Writes
+
+In a traditional blockchain, the problem is that there is a single increment for the entire blockchain's world. This design mutualizes the ceremony of reaching consensus across required parties, which is effective yet slow. Sui - a [proof-of-stake (PoS)](https://en.wikipedia.org/wiki/Proof_of_stake) blockchain - reduces this cost and latency by optimizing for the typical transaction sending assets to another account.
+
+Sui recognizes the only view needed to judge whether single-writer transactions are suitable is of that sender’s account. Sui does not need information from the rest of the world. Further, Sui supports more complex transactions with its object-centric focus and Move’s strong ownership model; these complex transitions can determine what part of the blockchain world must be seen to confirm transaction suitability and validity.
+
+In this manner, Sui enables multi-lane processing and eliminates [head-of-line blocking](https://en.wikipedia.org/wiki/Head-of-line_blocking). No longer must all other transactions in the world wait for the completion of the first transaction’s increment in a single lane. Sui provides a lane of the appropriate breadth for each transaction: simple sends require viewing only the sender account; more complex transactions may need to see more of the world’s state - but not all of it, and they will need to declare the required views explicitly.
+
+Sui’s architecture minimizes the impact of checking the validity of a transaction: each sender can send only one, non-equivocating transaction at a time. And that transaction blocks no one else on the network from sending transactions. Sui assumes complex, interdependent transactions are the exception rather than the rule; most transactions are independent from one another, merely making payments online. Sui and Move represent all of these transactions faithfully.
+
+Because Sui limits the sender to one transaction at a time, it is imperative the transactions finalize quickly. Sui offers these optimizations to speed transaction completion:
+
+* For transactions dependent on a single writer, Sui uses a lighter communication algorithm based on
+  [Byzantine Consistent Broadcast](https://link.springer.com/book/10.1007/978-3-642-15260-3).
+* Transaction sessions are interactive to ensure at-once processing and vote gathering. Instead of a fire-and-forget model where transactions may take minutes or even hours, Sui transactions can finish in under a second.
+
+A traditional blockchain client operates via a single send request and awaits approval of the transaction, polling the validators for an answer sometime later. Either end users or the gateway must do a little more work and then get: low latency and better security. Simple broadcast transactions are completed immediately. Remember, no private keys are ever revealed.
+
+## Reads
+
+Now that you know how Sui handles writes, you should remarks its management of reads follows the same object model.
+
+Indeed, Sui uses *causal order*, not total order. Every object in Sui has a version, and every valid transaction results in new versions for the objects it touches. For example, an addition to an NFT would result in a new object. The transaction may have several objects as dependents. Objects come with its *family history*, a generational set of new versioned objects.
+
+Since changes create new objects with a new version, Sui creates a narrow family tree starting from genesis. In Sui, as in life, you are most interested in your specific family, not the entire world’s genetic history. Sui relies upon no view of other family trees, only the one tied to the account making the transaction.
+
+By contrast, in a traditional blockchain, all families are ordered against one another to calculate a *total order*. This then requires querying a massive blob for the precise information needed, and disk I/O becomes a blocker. Some blockchains now require SSDs on their validators as a result.
+
+## Sui's limitations
+
+### Totality is harder to achieve using just Sui's default mode
+
+Sui's default model can make reads of the whole blockchains a bit harder to serve. Such exhaustive reads, though rare, are perfectly legitimate. They may include:
+
+* wanting to join a network as a new authority
+* wanting to audit the whole chain
+* exposing the whole chain to downstream customers
+
+Sui solves this with the state checkpoints resulting in state commitments. Sui will produce those checkpoints on every epoch change, and at regular intervals as long as they do not impede the ingestion of transactions.
+
+The checkpoints carry cryptographic signatures that guarantee they form a consensual snapshot of the state of the Sui blockchain. We discuss how it is produced in the next section.
+
+### Defining transactions that depend on shared state requires ordering
+
+Move’s strong ownership model ensures only the owner may change (mutate) the state of their objects (assets). They may transfer those objects to another user who may then modify those objects. By default, in Sui everything is owned by someone. You cannot touch someone else’s state. Only you can change state, such as transferring ownership of objects.
+
+Where this can become problematic is in transactions where objects are mutable by two writers. This may include the following use cases:
+- a time-bound auction, where several bidders must enter their bid before a deadline
+- an open-order, where several traders may fulfill the same proposed trade
+
+In this case, ordering transactions with respect to each other is vital to lead to a valid resolution, but no actor's action depends on the other. The way Sui resolves this is to resort to a consensus mechanism. While Sui's chosen consensus mechanism will be efficient and high-throughput (as in, e.g. [Narwhal & Tusk](https://arxiv.org/abs/2105.11827)), it still obeys the asymptotics and limitations of any consensus algorithm : polynomial worst-case complexity, requiring active inter-authority messages, etc.
