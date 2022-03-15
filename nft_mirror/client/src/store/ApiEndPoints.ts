@@ -72,7 +72,7 @@ export const startSigning = async (from, msgParams) => {
 export const startMinting = async (reqObj) => {
     try {
         /// Minting- To use demo data please use mintSuiNFTDemo(reqObj)
-        const response:any = mintSuiNFT(reqObj)
+        const response:any = await mintSuiNFT(reqObj)
         /// await config.demo ? mintSuiNFTDemo(reqObj) : mintSuiNFT(reqObj);
         return response
     } catch (err) {

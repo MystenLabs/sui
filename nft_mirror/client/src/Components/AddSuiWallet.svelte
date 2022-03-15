@@ -88,8 +88,7 @@
                  
                 
             }
-            const params = [$walletAddress, signObj];
-            console.log(signObj)
+            // const params = [$walletAddress, signObj];
             return startSigning($walletAddress, JSON.stringify(signObj))
         } catch (err) {
             error  =  err.message
@@ -97,8 +96,6 @@
         }
     }
     const mintSuiNFTFn = async (signature:string) => {
-
-
         try {
             /// TODO: martch data to the format 
             const reqObj = {
@@ -246,6 +243,4 @@
         width: 300px;
         margin: 0 auto;
     }
-
-
 </style>
