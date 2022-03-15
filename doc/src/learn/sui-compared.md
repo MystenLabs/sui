@@ -56,7 +56,7 @@ By contrat, in a traditional blockchain, all families are ordered against one an
 
 ## Sui's limitations
 
-### Totality is harder to achieve using just Sui's default mdoe
+### Totality is harder to achieve using just Sui's default mode
 
 Sui's default model can make reads of the whole blockchains a bit harder to serve. Such exhaustive reads, though rare, are perfectly legitimate. They may include:
 
