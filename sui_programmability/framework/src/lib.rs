@@ -4,6 +4,7 @@
 use move_binary_format::CompiledModule;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use move_package::BuildConfig;
+use move_unit_test::UnitTestingConfig;
 use num_enum::TryFromPrimitive;
 use std::collections::HashSet;
 use std::path::Path;
@@ -177,18 +178,20 @@ fn build_framework(framework_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
     build_move_package(framework_dir, build_config, true)
 }
 
-pub fn run_move_unit_tests(path: &Path) -> SuiResult {
+pub fn run_move_unit_tests(path: &Path, config: Option<UnitTestingConfig>) -> SuiResult {
     use move_cli::package::cli::{self, UnitTestResult};
     use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
-    use move_unit_test::UnitTestingConfig;
+    let config = config
+        .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
 
     let result = cli::run_move_unit_tests(
         path,
         BuildConfig::default(),
         UnitTestingConfig {
             report_stacktrace_on_abort: true,
-            ..UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS))
+            instruction_execution_bound: MAX_UNIT_TEST_INSTRUCTIONS,
+            ..config
         },
         natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS),
         /* compute_coverage */ false,
@@ -208,7 +211,7 @@ pub fn run_move_unit_tests(path: &Path) -> SuiResult {
 #[test]
 fn run_framework_move_unit_tests() {
     get_sui_framework_modules(&PathBuf::from(DEFAULT_FRAMEWORK_PATH)).unwrap();
-    run_move_unit_tests(Path::new(env!("CARGO_MANIFEST_DIR"))).unwrap();
+    run_move_unit_tests(Path::new(env!("CARGO_MANIFEST_DIR")), None).unwrap();
 }
 
 #[test]
@@ -219,6 +222,6 @@ fn run_examples_move_unit_tests() {
             .join("../examples")
             .join(example);
         build_and_verify_user_package(&path).unwrap();
-        run_move_unit_tests(&path).unwrap();
+        run_move_unit_tests(&path, None).unwrap();
     }
 }

@@ -30,43 +30,30 @@ module Sui::Coin {
         Transfer::transfer(c, recipient)
     }
 
+    /// Transfer `c` to the sender of the current transaction
+    public fun keep<T>(c: Coin<T>, ctx: &TxContext) {
+        transfer(c, TxContext::sender(ctx))
+    }
+
     /// Consume the coin `c` and add its value to `self`.
     /// Aborts if `c.value + self.value > U64_MAX`
-    public fun join<T>(self: &mut Coin<T>, c: Coin<T>, _ctx: &mut TxContext) {
+    public fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
         let Coin { id, value } = c;
         ID::delete(id);
         self.value = self.value + value
     }
 
     /// Join everything in `coins` with `self`
-    public fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>, ctx: &mut TxContext) {
+    public fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
         let i = 0;
         let len = Vector::length(&coins);
         while (i < len) {
             let coin = Vector::remove(&mut coins, i);
-            join(self, coin, ctx);
+            join(self, coin);
             i = i + 1
         };
         // safe because we've drained the vector
         Vector::destroy_empty(coins)
-    }
-
-    /// Split coin `self` to two coins, one with balance `split_amount`,
-    /// and the remaining balance is left is `self`.
-    public fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
-        let new_coin = withdraw(self, split_amount, ctx);
-        Transfer::transfer(new_coin, TxContext::sender(ctx));
-    }
-
-    /// Split coin `self` into multiple coins, each with balance specified
-    /// in `split_amounts`. Remaining balance is left in `self`.
-    public fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
-        let i = 0;
-        let len = Vector::length(&split_amounts);
-        while (i < len) {
-            split(self, *Vector::borrow(&split_amounts, i), ctx);
-            i = i + 1;
-        };
     }
 
     /// Subtract `value` from `self` and create a new coin
@@ -96,6 +83,12 @@ module Sui::Coin {
     }
 
     // === Registering new coin types and managing the coin supply ===
+
+    /// Make any Coin with a zero value. Useful for placeholding
+    /// bids/payments or preemptively making empty balances.
+    public fun zero<T>(ctx: &mut TxContext): Coin<T> {
+        Coin { id: TxContext::new_id(ctx), value: 0 }
+    }
 
     /// Create a new currency type `T` as and return the `TreasuryCap`
     /// for `T` to the caller.
@@ -138,7 +131,7 @@ module Sui::Coin {
         Transfer::transfer(c, recipient)
     }
 
-    // ---Entrypoints---
+    // === Entrypoints ===
 
     /// Send `amount` units of `c` to `recipient
     /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
@@ -146,7 +139,36 @@ module Sui::Coin {
         Transfer::transfer(withdraw(c, amount, ctx), recipient)
     }
 
-    // ---Test-only code---
+    /// Consume the coin `c` and add its value to `self`.
+    /// Aborts if `c.value + self.value > U64_MAX`
+    public fun join_<T>(self: &mut Coin<T>, c: Coin<T>, _ctx: &mut TxContext) {
+        join(self, c)
+    }
+
+    /// Join everything in `coins` with `self`
+    public fun join_vec_<T>(self: &mut Coin<T>, coins: vector<Coin<T>>, _ctx: &mut TxContext) {
+        join_vec(self, coins)
+    }
+
+    /// Split coin `self` to two coins, one with balance `split_amount`,
+    /// and the remaining balance is left is `self`.
+    public fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
+        let new_coin = withdraw(self, split_amount, ctx);
+        Transfer::transfer(new_coin, TxContext::sender(ctx));
+    }
+
+    /// Split coin `self` into multiple coins, each with balance specified
+    /// in `split_amounts`. Remaining balance is left in `self`.
+    public fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
+        let i = 0;
+        let len = Vector::length(&split_amounts);
+        while (i < len) {
+            split(self, *Vector::borrow(&split_amounts, i), ctx);
+            i = i + 1;
+        };
+    }
+
+    // === Test-only code ===
 
     #[test_only]
     /// Mint coins of any type for (obviously!) testing purposes only

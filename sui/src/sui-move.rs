@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use colored::Colorize;
+use move_unit_test::UnitTestingConfig;
 use std::path::Path;
 use structopt::clap::App;
 use structopt::StructOpt;
@@ -15,7 +16,7 @@ pub enum MoveCommands {
 
     /// Run all Move unit tests
     #[structopt(name = "test")]
-    Test,
+    Test(UnitTestingConfig),
 }
 
 impl MoveCommands {
@@ -26,9 +27,9 @@ impl MoveCommands {
                 println!("{}", "Build Successful".bold().green());
                 println!("Artifacts path: {:?}", path.join("build"));
             }
-            Self::Test => {
+            Self::Test(config) => {
                 Self::build(path, is_std_framework)?;
-                sui_framework::run_move_unit_tests(path)?;
+                sui_framework::run_move_unit_tests(path, Some(config.clone()))?;
             }
         }
         Ok(())

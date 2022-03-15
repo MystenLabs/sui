@@ -290,6 +290,15 @@ impl AuthorityState {
         transaction.check_signature()?;
         let transaction_digest = transaction.digest();
 
+        // Ensure an idempotent answer.
+        if self
+            ._database
+            .signed_transaction_exists(&transaction_digest)?
+        {
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+            return Ok(transaction_info);
+        }
+
         let owned_objects: Vec<_> = self
             .check_locks(&transaction)
             .instrument(tracing::trace_span!("tx_check_locks"))
@@ -337,8 +346,8 @@ impl AuthorityState {
         let transaction_digest = transaction.digest();
 
         // Ensure an idempotent answer.
-        let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-        if transaction_info.signed_effects.is_some() {
+        if self._database.signed_effects_exists(&transaction_digest)? {
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
 
