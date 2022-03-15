@@ -12,7 +12,10 @@ use super::{base_types::*, batch::*, committee::Committee, error::*, event::Even
 mod messages_tests;
 
 use move_binary_format::{access::ModuleAccess, CompiledModule};
-use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
+use move_core_types::{
+    account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
+    value::MoveStructLayout,
+};
 use name_variant::NamedVariant;
 use serde::{Deserialize, Serialize};
 use static_assertions::const_assert_eq;
@@ -199,7 +202,7 @@ pub struct AccountInfoRequest {
 /// This reads historic data and sends the batch and transactions in the
 /// database starting at the batch that includes `start`,
 /// and then listens to new transactions until a batch equal or
-/// is over the batch end marker.  
+/// is over the batch end marker.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct BatchInfoRequest {
     pub start: TxSequenceNumber,
@@ -321,11 +324,39 @@ pub struct TransactionInfoResponse {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum CallResult {
+    Bool(bool),
+    U8(u8),
+    U64(u64),
+    U128(u128),
+    Address(AccountAddress),
+    // these are not ideal but there is no other way to deserialize
+    // vectors encoded in BCS (you need a full type before this can be
+    // done)
+    BoolVec(Vec<bool>),
+    U8Vec(Vec<u8>),
+    U64Vec(Vec<u64>),
+    U128Vec(Vec<u128>),
+    AddrVec(Vec<AccountAddress>),
+    BoolVecVec(Vec<bool>),
+    U8VecVec(Vec<Vec<u8>>),
+    U64VecVec(Vec<Vec<u64>>),
+    U128VecVec(Vec<Vec<u128>>),
+    AddrVecVec(Vec<Vec<AccountAddress>>),
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionStatus {
     // Gas used in the success case.
-    Success { gas_used: u64 },
+    Success {
+        gas_used: u64,
+        results: Vec<CallResult>,
+    },
     // Gas used in the failed case, and the error.
-    Failure { gas_used: u64, error: Box<SuiError> },
+    Failure {
+        gas_used: u64,
+        error: Box<SuiError>,
+    },
 }
 
 impl ExecutionStatus {
@@ -344,9 +375,9 @@ impl ExecutionStatus {
         matches!(self, ExecutionStatus::Failure { .. })
     }
 
-    pub fn unwrap(self) -> u64 {
+    pub fn unwrap(self) -> (u64, Vec<CallResult>) {
         match self {
-            ExecutionStatus::Success { gas_used } => gas_used,
+            ExecutionStatus::Success { gas_used, results } => (gas_used, results),
             ExecutionStatus::Failure { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
@@ -365,7 +396,7 @@ impl ExecutionStatus {
     /// Returns the gas used from the status
     pub fn gas_used(&self) -> u64 {
         match &self {
-            ExecutionStatus::Success { gas_used } => *gas_used,
+            ExecutionStatus::Success { gas_used, .. } => *gas_used,
             ExecutionStatus::Failure { gas_used, .. } => *gas_used,
         }
     }

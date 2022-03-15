@@ -19,7 +19,7 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, u32};
 
 // TODO: robust MovePackage tests
 // #[cfg(test)]
@@ -33,6 +33,7 @@ pub struct TypeCheckSuccess {
     pub args: Vec<Vec<u8>>,
     pub by_value_objects: BTreeMap<ObjectID, Object>,
     pub mutable_ref_objects: Vec<Object>,
+    pub return_types: Vec<Type>, // to validate return types after the call
 }
 
 // serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
@@ -110,11 +111,16 @@ impl MovePackage {
             });
         }
 
-        // Function cannot return a value
-        if !function_signature.return_.is_empty() {
-            return Err(SuiError::InvalidFunctionSignature {
-                error: "Invoked function must not return a value".to_string(),
-            });
+        // Entry function can only return primitive values
+        for (idx, r) in function_signature.return_.iter().enumerate() {
+            if !is_entry_ret_type(r) {
+                return Err(SuiError::InvalidFunctionSignature {
+                    error: format!(
+                        "Expected return value at index ({}) to be of a primitive type",
+                        idx
+                    ),
+                });
+            }
         }
 
         // Last arg must be `&mut TxContext`
@@ -292,6 +298,7 @@ pub fn resolve_and_type_check(
         args,
         by_value_objects,
         mutable_ref_objects,
+        return_types: function_signature.return_,
     })
 }
 
@@ -318,10 +325,27 @@ pub fn is_param_tx_context(param: &Type) -> bool {
 
 // TODO: upstream Type::is_primitive in diem
 pub fn is_primitive(t: &Type) -> bool {
+    // nested vectors of primitive types are OK to arbitrary nesting
+    // level
+    is_primitive_internal(t, 0, u32::MAX)
+}
+
+pub fn is_entry_ret_type(t: &Type) -> bool {
+    // allow vectors of vectors but no deeper nesting
+    is_primitive_internal(t, 0, 2)
+}
+
+pub fn is_primitive_internal(t: &Type, depth: u32, max_depth: u32) -> bool {
     use Type::*;
     match t {
         Bool | U8 | U64 | U128 | Address => true,
-        Vector(inner_t) => is_primitive(inner_t),
+        Vector(inner_t) => {
+            if depth < max_depth {
+                is_primitive_internal(inner_t, depth + 1, max_depth)
+            } else {
+                false
+            }
+        }
         Signer | Struct { .. } | TypeParameter(_) | Reference(_) | MutableReference(_) => false,
     }
 }

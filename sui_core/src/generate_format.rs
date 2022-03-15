@@ -15,7 +15,7 @@ use sui_types::{
     batch::UpdateItem,
     crypto::{get_key_pair, AuthoritySignature, Signature},
     error::SuiError,
-    messages::{ExecutionStatus, ObjectInfoRequestKind, TransactionKind},
+    messages::{CallResult, ExecutionStatus, ObjectInfoRequestKind, TransactionKind},
     object::{Data, Owner},
     serialize,
 };
@@ -57,6 +57,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<SuiError>(&samples)?;
     tracer.trace_type::<Owner>(&samples)?;
     tracer.trace_type::<ExecutionStatus>(&samples)?;
+    tracer.trace_type::<CallResult>(&samples)?;
     tracer.trace_type::<Data>(&samples)?;
     tracer.trace_type::<TypeTag>(&samples)?;
     tracer.trace_type::<TypedStoreError>(&samples)?;
