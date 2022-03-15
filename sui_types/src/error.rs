@@ -6,7 +6,6 @@ use std::fmt::Debug;
 use thiserror::Error;
 
 use crate::base_types::*;
-use crate::messages::Transaction;
 use move_binary_format::errors::PartialVMError;
 use serde::{Deserialize, Serialize};
 
@@ -70,7 +69,9 @@ pub enum SuiError {
         expected_sequence: SequenceNumber,
     },
     #[error("Conflicting transaction already received: {pending_transaction:?}")]
-    ConflictingTransaction { pending_transaction: Transaction },
+    ConflictingTransaction {
+        pending_transaction: TransactionDigest,
+    },
     #[error("Transaction was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransaction,
     #[error("Transaction transaction processing failed: {err}")]
