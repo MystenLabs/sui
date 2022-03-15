@@ -50,3 +50,6 @@ assert-str = "0.1.0"
 name = "generate-format"
 path = "src/generate_format.rs"
 test = false
+
+[features]
+mockcrypto = []

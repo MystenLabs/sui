@@ -376,3 +376,13 @@ pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     let hash = digest.finalize();
     hash.into()
 }
+
+// Some Mocks for testing and profiling
+
+pub struct MockNoopSigner(pub AuthoritySignature);
+
+impl signature::Signer<AuthoritySignature> for MockNoopSigner {
+    fn try_sign(&self, _msg: &[u8]) -> Result<AuthoritySignature, signature::Error>{
+        Ok(self.0.clone())
+    }
+}

@@ -287,7 +287,7 @@ impl AuthorityState {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         // Check the sender's signature.
-        transaction.check_signature()?;
+        self.check_transaction(&transaction)?;
         let transaction_digest = transaction.digest();
 
         // Ensure an idempotent answer.
@@ -352,8 +352,7 @@ impl AuthorityState {
         }
 
         // Check the certificate and retrieve the transfer data.
-        certificate.check(&self.committee)?;
-
+        self.check_certificate(&certificate)?;
         self.process_certificate(confirmation_transaction).await
     }
 
@@ -525,7 +524,7 @@ impl AuthorityState {
         }
 
         // Check the certificate.
-        certificate.check(&self.committee)?;
+        self.check_certificate(&certificate)?;
 
         // Persist the certificate. We are about to lock one or more shared object.
         // We thus need to make sure someone (if not the client) can continue the protocol.
@@ -703,7 +702,7 @@ impl AuthorityState {
         let state = AuthorityState {
             committee,
             name,
-            secret,
+            secret : AuthorityState::provision_secret(secret),
             _native_functions: native_functions.clone(),
             move_vm: adapter::new_move_vm(native_functions)
                 .expect("We defined natives to not fail here"),
@@ -867,6 +866,50 @@ impl AuthorityState {
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self._database.get_latest_parent_entry(object_id)
     }
+
+    // Here we gather the crypto related commands, and also provide mocks for them
+    // so that we can turn off crypto when we benchmark to detect hotspots in other
+    // parts of the execution. The turning off is done through a compilation flag
+    // to ensure this is not done in produce, and turning off verification also turns
+    // off signing to ensure we never can emit bad signatures.
+
+    // The real crypto is here
+
+    #[cfg(not(feature = "mockcrypto"))]
+    fn check_certificate(&self, certificate : &CertifiedTransaction) -> SuiResult<()>{
+        certificate.check(&self.committee)
+    }
+
+    #[cfg(not(feature = "mockcrypto"))]
+    fn check_transaction(&self, transaction: &Transaction) -> SuiResult<()> {
+        transaction.check_signature()
+    }
+
+    #[cfg(not(feature = "mockcrypto"))]
+    fn provision_secret(secret : StableSyncAuthoritySigner) -> StableSyncAuthoritySigner {
+        secret
+    }
+
+    // The mock crypto is here
+
+    #[cfg(feature = "mockcrypto")]
+    fn check_certificate(&self, _certificate : &CertifiedTransaction) -> SuiResult<()>{
+        Ok(())
+    }
+
+    #[cfg(feature = "mockcrypto")]
+    fn check_transaction(&self, _transaction: &Transaction) -> SuiResult<()> {
+        Ok(())
+    }
+
+    #[cfg(feature = "mockcrypto")]
+    fn provision_secret(secret : StableSyncAuthoritySigner) -> StableSyncAuthoritySigner {
+        use sui_types::crypto::MockNoopSigner;
+        let one_signature = secret.try_sign(&(vec![1,2,3])[..]).unwrap();
+        Arc::pin(MockNoopSigner(one_signature))
+    }
+
+
 }
 
 impl ModuleResolver for AuthorityState {
