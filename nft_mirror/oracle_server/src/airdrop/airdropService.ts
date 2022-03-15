@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ValidateError } from 'tsoa';
+import { Connection } from '../sdk/gateway';
+
+const DEFAULT_GAS_BUDGET = 2000;
 
 interface AirdropClaimInfo {
     /**
@@ -86,6 +89,11 @@ export class AirdropService {
         const { wallet_message } = claimMessage;
         const data = JSON.parse(wallet_message);
         const claimInfo = this.parseClaimInfo(data);
+        // TODO: validate signature and ownership
+        const connection = new Connection(
+            process.env.SUI_GATEWAY_ENDPOINT as string
+        );
+        await this.executeMoveCall(connection, claimInfo);
         return {
             source_chain: claimInfo.source_chain,
             source_contract_address: claimInfo.source_contract_address,
@@ -104,6 +112,90 @@ export class AirdropService {
             { messages: { message: 'Wrong format', value: data['message'] } },
             'Wrong format for wallet message'
         );
+    }
+
+    async executeMoveCall(
+        connection: Connection,
+        claimInfo: AirdropClaimInfo
+    ): Promise<string> {
+        const oracleAddress = process.env.ORACLE_ADDRESS as string;
+        const [gasObjectId, oracleObjectId] = await this.getGasAndOracle(
+            connection,
+            oracleAddress
+        );
+        const {
+            destination_sui_address,
+            source_contract_address,
+            source_token_id,
+        } = claimInfo;
+
+        // TODO: remove these hardcoded values in the next PR
+        const name = 'BoredApeYachtClub';
+        const tokenUri = 'ipfs://abc';
+
+        const args = [
+            oracleObjectId,
+            destination_sui_address,
+            source_contract_address,
+            +source_token_id,
+            name,
+            tokenUri,
+        ];
+
+        const [packageObjectId, module] = this.getPackageAndModule();
+
+        const request = {
+            args,
+            function: process.env.ORACLE_CONTRACT_ENTRY_FUNCTION as string,
+            gasBudget: DEFAULT_GAS_BUDGET,
+            gasObjectId,
+            module,
+            packageObjectId,
+            sender: oracleAddress,
+        };
+        const result = await connection.callMoveFunction(request);
+        const created = result.objectEffectsSummary.created_objects;
+        if (created.length !== 1) {
+            throw new Error(`Unexpected number of objects created: ${created}`);
+        }
+        console.info('Created object', created);
+        return created[0].id;
+    }
+
+    async getGasAndOracle(
+        connection: Connection,
+        oracleAddress: string
+    ): Promise<[string, string]> {
+        const objects = await connection.bulkFetchObjects(oracleAddress);
+        const gasCoin = objects.filter(
+            (o) => o.objType === '0x2::Coin::Coin<0x2::GAS::GAS>'
+        )[0].id;
+        const oracle_object_identifier =
+            this.getPackageAndModule().join('::') +
+            '::' +
+            (process.env.ORACLE_CONTRACT_ADMIN_IDENTIFIER as string);
+        const oracle = objects.filter(
+            (o) => o.objType === oracle_object_identifier
+        );
+        if (oracle.length !== 1) {
+            throw new Error(`Unexpected number of oracle object: ${oracle}`);
+        }
+
+        return [
+            this.formatObjectId(gasCoin),
+            this.formatObjectId(oracle[0].id),
+        ];
+    }
+
+    formatObjectId(id: string): string {
+        return `0x${id}`;
+    }
+
+    getPackageAndModule(): [string, string] {
+        const package_name = process.env.ORACLE_CONTRACT_PACKAGE || '0x2';
+        const module_name =
+            process.env.ORACLE_CONTRACT_MODULE || 'CrossChainAirdrop';
+        return [package_name, module_name];
     }
 }
 
