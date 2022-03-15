@@ -45,6 +45,7 @@ module Sui::Geniteam {
         farm_img_index: u64,
         level: u64,
         current_xp: u64,
+        total_monster_slots: u64,
         occupied_monster_slots: u64,
 
         // Collection of Pet monsters owned by this Farm
@@ -98,13 +99,14 @@ module Sui::Geniteam {
     }
 
     /// Create a Farm and add it to the Player
-    public fun create_farm(player: &mut Player, farm_img_index: u64,
-                           farm_name: vector<u8>, ctx: &mut TxContext
+    public fun create_farm(
+        player: &mut Player, farm_img_index: u64, farm_name: vector<u8>, 
+        total_monster_slots: u64, ctx: &mut TxContext
     ) {
         // We only allow one farm for now
         assert!(Option::is_none(&player.owned_farm), ETOO_MANY_FARMS);
 
-        let farm = new_farm(farm_name, farm_img_index, ctx);
+        let farm = new_farm(farm_name, farm_img_index, total_monster_slots, ctx);
 
         // Transfer ownership of farm to player
         let child_ref = Transfer::transfer_to_object(farm, player);
@@ -202,12 +204,14 @@ module Sui::Geniteam {
         _farm: &mut Farm,
         _pet_monsters: &mut Collection<Monster>,
         self: &mut Monster,
+        monster_affinity: u8,
         monster_level: u64,
         hunger_level: u64,
         affection_level: u64,
         buddy_level: u8,
         _ctx: &mut TxContext
     ) {
+        self.monster_affinity = monster_affinity;
         self.monster_level = monster_level;
         self.hunger_level = hunger_level;
         self.affection_level = affection_level;
@@ -275,10 +279,10 @@ module Sui::Geniteam {
             Option::fill(&mut monster.applied_monster_cosmetic_0, child_ref)
         } else {
             // Check that the slot has no items
-            assert!(Option::is_none(&monster.applied_monster_cosmetic_0), ETOO_MANY_COSMETICS);
+            assert!(Option::is_none(&monster.applied_monster_cosmetic_1), ETOO_MANY_COSMETICS);
 
             // Store the cosmetic
-            Option::fill(&mut monster.applied_monster_cosmetic_0, child_ref)
+            Option::fill(&mut monster.applied_monster_cosmetic_1, child_ref)
         };
     }
 
@@ -313,7 +317,8 @@ module Sui::Geniteam {
 
     // Constructs a new basic Farm object
     fun new_farm(
-        farm_name: vector<u8>, farm_img_index: u64, ctx: &mut TxContext
+        farm_name: vector<u8>, farm_img_index: u64, total_monster_slots: u64,
+        ctx: &mut TxContext
     ): Farm {
         // Create a new id for farm.
         let id = TxContext::new_id(ctx);
@@ -328,6 +333,7 @@ module Sui::Geniteam {
         let farm = Farm {
             id,
             farm_name: ASCII::string(farm_name),
+            total_monster_slots,
             farm_img_index,
             level: 0,
             current_xp: 0,
