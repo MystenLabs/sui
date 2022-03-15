@@ -1,7 +1,7 @@
 /// Endpoints for the NFT minting and signing
 /// use demo data for testing
 import { config  } from './index';
-import { mintSuiNFTDemo, signNFTDemo, fetchDataNFTDemo } from '../store/demoAPi'
+// import { mintSuiNFTDemo, signNFTDemo, fetchDataNFTDemo } from '../store/demoAPi'
 import { mapDatafromApi } from '../util';
 
 /**
@@ -23,7 +23,8 @@ const fetchNFTData = async (wallectAddress:string) => {
 
 export const fetchNFTDataByAddress = async (wallectAddress:string) => {
     try {
-        const response = await config.demo ? fetchDataNFTDemo(wallectAddress) : fetchNFTData(wallectAddress)
+        //? fetchDataNFTDemo(wallectAddress) :
+        const response = await fetchNFTData(wallectAddress)
         return response
     } catch (err) {
         throw err
@@ -50,7 +51,7 @@ const mintSuiNFT = async (reqObj) => {
 }
 const signNFT = async (from:string, msgParams:any) => {
     try {
-         const signature = await window.ethereum.request({ method: 'eth_signTypedData_v4', params: [  from, msgParams ] })
+        const signature = await window.ethereum.request({ method: 'eth_signTypedData_v4', params: [  from, msgParams ] })
         return signature
     } catch (err) {
         console.log(err.message)
@@ -58,7 +59,8 @@ const signNFT = async (from:string, msgParams:any) => {
     }
 }
 
-
+/// Endpoints for the NFT minting and signing
+///  intermedate function to call signNFTDemo and signNFT base on config.demo
 export const startSigning = async (from, msgParams) => {
     try {
         //To show config.demo ? signNFTDemo(msgParams) : 
