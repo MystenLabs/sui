@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender},
+    authority_batch::{BroadcastReceiver, BroadcastSender},
     execution_engine,
 };
 use move_binary_format::CompiledModule;
@@ -52,11 +52,12 @@ pub use temporary_store::AuthorityTemporaryStore;
 mod authority_store;
 pub use authority_store::AuthorityStore;
 
-pub mod authority_autoinc_channel;
+pub mod authority_notifier;
 
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
 const MAX_ITEMS_LIMIT: u64 = 10_000;
+const BROADCAST_CAPACITY: usize = 10_000;
 
 /// a Trait object for `signature::Signer` that is:
 /// - Pin, i.e. confined to one place in memory (we don't want to copy private keys).
@@ -81,17 +82,19 @@ pub struct AuthorityState {
     move_vm: Arc<adapter::MoveVM>,
 
     /// The database
-    _database: Arc<AuthorityStore>,
+    pub(crate) _database: Arc<AuthorityStore>, // TODO: remove pub
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
     /// and create batches for this authority.
     /// Keep as None if there is no need for this.
-    batch_channels: Option<(BatchSender, BroadcastSender)>,
+    pub(crate) batch_channels: BroadcastSender, // TODO: remove pub
+
+    // The Transaction notifier ticketing engine.
+    pub(crate) batch_notifier: Arc<authority_notifier::TransactionNotifier>, // TODO: remove pub
 
     /// Ensures there can only be a single consensus client is updating the state.
     pub consensus_guardrail: AtomicUsize,
-
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -101,29 +104,9 @@ pub struct AuthorityState {
 ///
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
-    /// Set a listener for transaction certificate updates. Returns an
-    /// error if a listener is already registered.
-    pub fn set_batch_sender(
-        &mut self,
-        batch_sender: BatchSender,
-        broadcast_sender: BroadcastSender,
-    ) -> SuiResult {
-        if self.batch_channels.is_some() {
-            return Err(SuiError::AuthorityUpdateFailure);
-        }
-
-        self.batch_channels = Some((batch_sender, broadcast_sender));
-        Ok(())
-    }
-
     /// Get a broadcast receiver for updates
-    pub fn subscribe(&self) -> Result<BroadcastReceiver, SuiError> {
-        self.batch_channels
-            .as_ref()
-            .map(|(_, tx)| tx.subscribe())
-            .ok_or_else(|| SuiError::GenericAuthorityError {
-                error: "No broadcast subscriptions allowed for this authority.".to_string(),
-            })
+    pub fn subscribe_batch(&self) -> BroadcastReceiver {
+        self.batch_channels.subscribe()
     }
 
     /// The logic to check one object against a reference, and return the object if all is well
@@ -542,8 +525,7 @@ impl AuthorityState {
         );
         // Update the database in an atomic manner
 
-        self
-            .update_state(temporary_store, certificate, signed_effects)
+        self.update_state(temporary_store, certificate, signed_effects)
             .instrument(tracing::debug_span!("db_update_state"))
             .await // Returns the OrderInfoResponse
     }
@@ -750,14 +732,21 @@ impl AuthorityState {
         genesis_packages: Vec<Vec<CompiledModule>>,
         genesis_ctx: &mut TxContext,
     ) -> Self {
-        let state = AuthorityState::new_without_genesis(committee, name, secret, store).await;
+        let state = AuthorityState::new_without_genesis(committee, name, secret, store.clone()).await;
 
-        for genesis_modules in genesis_packages {
-            state
-                .store_package_and_init_modules_for_genesis(genesis_ctx, genesis_modules)
-                .await
-                .expect("We expect publishing the Genesis packages to not fail");
+        // Only initialize an empty database.
+        if store
+            .database_is_empty()
+            .expect("Database read should not fail.")
+        {
+            for genesis_modules in genesis_packages {
+                state
+                    .store_package_and_init_modules_for_genesis(genesis_ctx, genesis_modules)
+                    .await
+                    .expect("We expect publishing the Genesis packages to not fail");
+            }
         }
+
         state
     }
 
@@ -767,29 +756,36 @@ impl AuthorityState {
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
     ) -> Self {
+
+        let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
 
-        Self {
+        let mut state = AuthorityState {
             committee,
             name,
             secret,
             _native_functions: native_functions.clone(),
             move_vm: adapter::new_move_vm(native_functions)
                 .expect("We defined natives to not fail here"),
-            _database: store,
-            batch_channels: None,
+            _database: store.clone(),
+            batch_channels: tx,
+            batch_notifier: Arc::new(
+                authority_notifier::TransactionNotifier::new(store.clone())
+                    .expect("Notifier cannot start."),
+            ),
             consensus_guardrail: AtomicUsize::new(0),
-        }
+        };
+
+        state
+            .init_batches_from_database()
+            .expect("Init batches failed!");
+
+        state
     }
 
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {
         self._database.clone()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn batch_sender(&self) -> &BatchSender {
-        &self.batch_channels.as_ref().unwrap().0
     }
 
     async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
@@ -850,7 +846,7 @@ impl AuthorityState {
         ) {
             return Err(*error);
         };
-        self._database
+        self.db()
             .update_objects_state_for_genesis(temporary_store, ctx.digest())
     }
 
@@ -891,23 +887,14 @@ impl AuthorityState {
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let ticket_opt = self
-            .batch_channels
-            .as_ref()
-            .map(|(sender, _)| sender.ticket());
-        let seq_opt = ticket_opt.as_ref().map(|ticket| ticket.ticket());
-
-        let transaction_digest = signed_effects.effects.transaction_digest;
-        let response =
-            self._database
-                .update_state(temporary_store, certificate, signed_effects, seq_opt)?;
-
-        // If there is a notifier registered, notify:
-        if let Some(mut ticket) = ticket_opt {
-            ticket.send(transaction_digest);
-        }
-
-        Ok(response)
+        let notifier_ticket = self.batch_notifier.ticket()?;
+        self._database.update_state(
+            temporary_store,
+            certificate,
+            signed_effects,
+            Some(notifier_ticket.seq()),
+        )
+        // implicitely we drop the ticket here and that notifes the batch manager
     }
 
     /// Get a read reference to an object/seq lock

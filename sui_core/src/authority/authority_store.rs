@@ -35,7 +35,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// This is a map between the object ID and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
-    objects: DBMap<ObjectID, Object>,
+    pub(crate) objects: DBMap<ObjectID, Object>, // TODO: remove pub
 
     /// Stores all history versions of all objects.
     /// This is not needed by an authority, but is needed by a replica.
@@ -48,7 +48,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// to None. The safety of consistent broadcast depend on each honest authority never changing
     /// the lock once it is set. After a certificate for this object is processed it can be
     /// forgotten.
-    transaction_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
+    pub(crate) transaction_lock: DBMap<ObjectRef, Option<TransactionDigest>>, // TODO: remove pub
 
     /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
@@ -66,7 +66,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// certificates that have been successfully processed by this authority. This set of certificates
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
-    certificates: DBMap<TransactionDigest, CertifiedTransaction>,
+    pub(crate) certificates: DBMap<TransactionDigest, CertifiedTransaction>, // TODO: remove pub
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
@@ -271,6 +271,16 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .map_err(|e| e.into())
     }
 
+    /// Returns true if there are no objects in the database
+    pub fn database_is_empty(&self) -> SuiResult<bool> {
+        Ok(self
+            .objects
+            .iter()
+            .skip_to(&ObjectID::ZERO)?
+            .next()
+            .is_none())
+    }
+
     pub fn next_sequence_number(&self) -> Result<TxSequenceNumber, SuiError> {
         Ok(self
             .executed_sequence
@@ -279,6 +289,11 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .next()
             .map(|(v, _)| v + 1u64)
             .unwrap_or(0))
+    }
+
+    #[cfg(test)]
+    pub fn side_sequence(&self, seq: TxSequenceNumber, digest: &TransactionDigest) {
+        self.executed_sequence.insert(&seq, digest).unwrap();
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
