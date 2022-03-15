@@ -3,17 +3,16 @@
     "title": "MAIN CONCEPTS",
     "items": [
       {
-        "label": "Selections",
-        "link": "build/transactions"
+        "label": "Tutorial",
+        "link": "explore/tutorials"
       },
       {
-        "label": "Dynamic properties",
-        "link": "learn/sui-compared"
+        "label": "Examples",
+        "link": "explore/examples"
       },
       {
-        "label": "Events",
-        "link": "https://www.google.com/",
-        "external": true
+        "label": "Prototypes",
+        "link": "explore/prototypes"
       }
     ]
   },
@@ -21,54 +20,46 @@
     "learn": [
       {
         "label": "About Sui",
-        "fileName": "learn/how-sui-works"
+        "fileName": "learn/about-sui"
       },
       {
-        "label": "Terminology",
-        "fileName": "learn/how-sui-works"
-      },
-      {
-        "label": "Why Move?",
+        "label": "How Sui Move differs from Core Move"
         "fileName": "learn/sui-move-diffs"
       },
       {
-        "label": "What Makes Sui Different?",
+        "label": "How Sui Works",
+        "fileName": "learn/how-sui-works"
+      },
+      {
+        "label": "Sui Compared to Other Blockchains"
         "fileName": "learn/sui-compared"
       },
       {
-        "title": "How Sui works",
-        "items": [
-          {
-            "label": "Security",
-            "fileName": "learn/sui-compared"
-          },
-          {
-            "label": "Storage",
-            "fileName": "learn/sui-compared"
-          },
-          {
-            "label": "Limitations",
-            "fileName": "learn/sui-compared"
-          }
-        ]
+        "label": "Understand Sui Security"
+        "fileName": "learn/sui-security"
       },
       {
         "label": "Sui White Paper",
-        "fileName": "learn/how-sui-works"
+        "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf"
+        "external": true
       }
     ],
     "build": [
       {
-        "label": "Install",
-        "fileName": "build/authorities"
-      },
-      {
-        "label": "Smart Contracts with Move",
+        "label": "Smart Contracts with Move"
         "fileName": "build/move"
       },
       {
         "label": "Wallet",
         "fileName": "build/wallet"
+      },
+      {
+        "label": "Authorities",
+        "fileName": "build/authorities"
+      },
+      {
+        "label": "SuiJSON",
+        "fileName": "build/sui-json"
       },
       {
         "label": "Objects",
@@ -81,49 +72,35 @@
     ],
     "explore": [
       {
-        "title": "Examples",
-        "items": [
-          {
-            "label": "Mint NFT with Additional Mutable Fields",
-            "fileName": "build/move"
-          },
-          {
-            "label": "Transfer, Bundle, and Wrap NFTs",
-            "fileName": "explore/observability"
-          },
-          {
-            "label": "Use Ethereum NFTs in Sui?",
-            "fileName": "sui-json"
-          }
-        ]
+        "label": "Tutorial",
+        "fileName": "explore/tutorials"
+      },
+      {
+        "label": "Prototypes",
+        "fileName": "explore/prototypes"
+      },
+      {
+        "label": "Examples",
+        "fileName": "explore/examples"
       }
     ],
-
     "contribute": [
-
-      {
-        "label": "Community",
-        "link": "https://www.google.com/",
-        "external": true
-      },
       {
         "label": "Logging",
-        "link": "https://www.google.com/",
-        "external": true
+        "fileName": "contribute/observability"
       },
       {
-        "label": "About Mysten Labs",
-        "link": "https://www.google.com/",
-        "external": true
-      },
-      {
-        "label": "Contributing to Sui",
-        "link": "https://www.google.com/",
-        "external": true
+        "label": "Research Papers",
+        "fileName": "contribute/research-papers"
       },
       {
         "label": "Code of Conduct",
         "fileName": "contribute/code-of-conduct"
+      },
+      {
+        "label": "About Mysten Labs",
+        "link": "https://mystenlabs.com/"
+        "external": true
       }
     ]
   }
