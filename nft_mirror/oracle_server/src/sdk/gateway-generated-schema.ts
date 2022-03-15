@@ -30,9 +30,17 @@ export interface paths {
          */
         post: operations['call'];
     };
+    '/docs': {
+        /** Generate OpenAPI documentation. */
+        get: operations['docs'];
+    };
     '/object_info': {
         /** Returns the object information for a specified object. */
         get: operations['object_info'];
+    };
+    '/object_schema': {
+        /** Returns the schema for a specified object. */
+        get: operations['object_schema'];
     };
     '/objects': {
         /** Returns list of objects owned by an address. */
@@ -101,7 +109,7 @@ export interface components {
         /** @description Request containing the information required to execute a move module. */
         CallRequest: {
             /** @description Required; JSON representation of the arguments */
-            args: unknown[];
+            args: components['schemas']['SuiJsonValue'][];
             /** @description Required; Name of the function to be called in the move module */
             function: string;
             /**
@@ -117,6 +125,13 @@ export interface components {
             packageObjectId: string;
             /** @description Required; Hex code as string representing the sender's address */
             sender: string;
+            /** @description Optional; The argument types to be parsed */
+            typeArgs?: string[] | null;
+        };
+        /** @description Response containing the API documentation. */
+        DocumentationResponse: {
+            /** @description A JSON object containing the OpenAPI definition for this API. */
+            documentation: unknown;
         };
         /** @description Response containing the resulting wallet & network config of the provided genesis configuration. */
         GenesisResponse: {
@@ -158,6 +173,12 @@ export interface components {
             /** @description Sequence number of the object */
             version: string;
         };
+        /** @description Response containing the information of an object schema if found, otherwise an error is returned. */
+        ObjectSchemaResponse: {
+            /** @description JSON representation of the object schema */
+            schema: unknown;
+        };
+        SuiJsonValue: unknown;
         /** @description Request containing the address that requires a sync. */
         SyncRequest: {
             /** @description Required; Hex code as string representing the address */
@@ -235,6 +256,17 @@ export interface operations {
             };
         };
     };
+    /** Generate OpenAPI documentation. */
+    docs: {
+        responses: {
+            /** successful operation */
+            200: {
+                content: {
+                    'application/json': components['schemas']['DocumentationResponse'];
+                };
+            };
+        };
+    };
     /** Returns the object information for a specified object. */
     object_info: {
         parameters: {
@@ -247,6 +279,22 @@ export interface operations {
             200: {
                 content: {
                     'application/json': components['schemas']['ObjectInfoResponse'];
+                };
+            };
+        };
+    };
+    /** Returns the schema for a specified object. */
+    object_schema: {
+        parameters: {
+            query: {
+                objectId: string;
+            };
+        };
+        responses: {
+            /** successful operation */
+            200: {
+                content: {
+                    'application/json': components['schemas']['ObjectSchemaResponse'];
                 };
             };
         };
