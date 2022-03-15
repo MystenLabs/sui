@@ -213,7 +213,10 @@ impl AuthorityState {
         let input_objects = transaction.input_objects();
 
         // These IDs act as authenticators that can own other objects.
-        let objects = self.fetch_objects(&input_objects).instrument(tracing::trace_span!("cert_db_get_objects")).await?;
+        let objects = self
+            .fetch_objects(&input_objects)
+            .instrument(tracing::trace_span!("cert_db_get_objects"))
+            .await?;
 
         let owned_object_authenticators: HashSet<_> = objects
             .iter()
@@ -348,7 +351,8 @@ impl AuthorityState {
             .in_scope(|| certificate.check(&self.committee))?;
 
         self.process_certificate(confirmation_transaction)
-                .instrument(tracing::debug_span!("process_cert_inner")).await
+            .instrument(tracing::debug_span!("process_cert_inner"))
+            .await
     }
 
     async fn check_shared_locks(
@@ -425,7 +429,10 @@ impl AuthorityState {
         let transaction = certificate.transaction.clone();
         let transaction_digest = transaction.digest();
 
-        let objects_by_kind: Vec<_> = self.check_locks(&transaction).instrument(tracing::trace_span!("cert_check_locks")).await?;
+        let objects_by_kind: Vec<_> = self
+            .check_locks(&transaction)
+            .instrument(tracing::trace_span!("cert_check_locks"))
+            .await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.

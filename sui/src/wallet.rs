@@ -53,11 +53,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
     let format = tracing_subscriber::fmt::layer()
-        .with_level(false)
-        .with_target(false)
-        .with_thread_ids(false)
         .with_thread_names(false)
-        .without_time()
         .with_writer(non_blocking)
         .compact();
 
