@@ -219,7 +219,7 @@ impl WalletCommands {
                 let gas_object_read = context.gateway.get_object_info(*gas).await?;
                 let gas_object = gas_object_read.object()?;
                 let sender = gas_object.owner.get_owner_address()?;
-                let gas_obj_ref = gas_object.to_object_reference();
+                let gas_obj_ref = gas_object.compute_object_reference();
 
                 let compiled_modules = build_move_package_to_bytes(Path::new(path))?;
                 let (cert, effects) = context
@@ -299,13 +299,13 @@ impl WalletCommands {
                     .get_object_info(*gas)
                     .await?
                     .into_object()?
-                    .to_object_reference();
+                    .compute_object_reference();
 
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
                 for obj_id in object_ids {
                     let obj_info = context.gateway.get_object_info(obj_id).await?;
-                    object_args_refs.push(obj_info.object()?.to_object_reference());
+                    object_args_refs.push(obj_info.object()?.compute_object_reference());
                 }
 
                 let (cert, effects) = context

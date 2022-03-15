@@ -309,7 +309,7 @@ impl AccountState {
     pub fn insert_object(&self, object: Object) -> SuiResult {
         self.store
             .objects
-            .insert(&object.to_object_reference(), &object)?;
+            .insert(&object.compute_object_reference(), &object)?;
         Ok(())
     }
 
@@ -319,7 +319,7 @@ impl AccountState {
         option_layout: Option<MoveStructLayout>,
         option_cert: Option<CertifiedTransaction>,
     ) -> SuiResult {
-        let object_ref = object.to_object_reference();
+        let object_ref = object.compute_object_reference();
         let (object_id, _seqnum, _) = object_ref;
 
         self.store.object_refs.insert(&object_id, &object_ref)?;
@@ -616,7 +616,7 @@ where
         while let Some(resp) = receiver.recv().await {
             // Persists them to disk
             if let Ok(o) = resp {
-                err_object_refs.remove(&o.to_object_reference());
+                err_object_refs.remove(&o.compute_object_reference());
                 account.insert_object(o)?;
             }
         }

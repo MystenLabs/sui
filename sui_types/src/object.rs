@@ -356,7 +356,7 @@ impl Object {
         matches!(&self.data, Data::Package(_))
     }
 
-    pub fn to_object_reference(&self) -> ObjectRef {
+    pub fn compute_object_reference(&self) -> ObjectRef {
         (self.id(), self.version(), self.digest())
     }
 
