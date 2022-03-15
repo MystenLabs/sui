@@ -8,11 +8,9 @@ Here are Sui's key features:
 
 - Causal order vs total order (enables massively parallel execution)
 
-- Move and object-centric data model (enables composable objects/NFTs)
+- [Sui's variant of Move](../build/move.md) and its object-centric data model (enables composable objects/NFTs)
 
-- Asset-centric programming model
-
-- Easier developer experience with the blockchain-oriented Move programming language
+- Easier developer experience with the blockchain-oriented [Move programming language](https://github.com/MystenLabs/awesome-move)
 
 
 ## Authorities vs validators/miners
