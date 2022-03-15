@@ -20,6 +20,7 @@ use move_core_types::identifier::Identifier;
 use move_core_types::parser::parse_type_tag;
 use move_core_types::value::MoveStructLayout;
 use schemars::JsonSchema;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::task::{self, JoinHandle};
@@ -31,6 +32,7 @@ use sui::keystore::Keystore;
 use sui::sui_commands;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
 use sui::wallet_commands::SimpleTransactionSigner;
+use sui_core::authority_aggregator::AsyncResult;
 use sui_core::gateway_state::GatewayClient;
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
@@ -39,6 +41,8 @@ use sui_types::messages::{ExecutionStatus, TransactionEffects};
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
+
+mod internal;
 
 const REST_SERVER_PORT: u16 = 5000;
 const REST_SERVER_ADDR_IPV4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
@@ -102,7 +106,7 @@ struct ServerContext {
     server_state: Arc<Mutex<Option<ServerState>>>,
 }
 
-struct ServerState {
+pub struct ServerState {
     config: NetworkConfig,
     gateway: GatewayClient,
     keystore: Arc<RwLock<Box<dyn Keystore>>>,
@@ -222,6 +226,7 @@ async fn genesis(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<GenesisResponse>, HttpError> {
     let context = rqctx.context();
+    // Using a new working dir for genesis, this directory will be deleted when stop end point is called.
     let working_dir = PathBuf::from(".").join(format!("{}", ObjectID::random()));
 
     if context.server_state.lock().unwrap().is_some() {
@@ -247,9 +252,6 @@ async fn genesis(
         })?;
 
     let authorities = network_config.get_authority_infos();
-    // Need to use a random id because rocksdb locks on current process which
-    // means even if the directory is deleted the lock will remain causing an
-    // IO Error when a restart is attempted.
     let gateway = GatewayType::Embedded(EmbeddedGatewayConfig {
         authorities,
         db_folder_path: working_dir.join("client_db"),
@@ -290,78 +292,7 @@ network has been started on testnet or main-net.
 async fn sui_start(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<String>, HttpError> {
-    let context = rqctx.context();
-
-    let mut state = context.take_server_state()?;
-    if !state.authority_handles.is_empty() {
-        context.set_server_state(state);
-        return Err(custom_http_error(
-            StatusCode::FORBIDDEN,
-            String::from("Sui network is already running."),
-        ));
-    }
-
-    let committee = Committee::new(
-        state
-            .config
-            .authorities
-            .iter()
-            .map(|info| (*info.key_pair.public_key_bytes(), info.stake))
-            .collect(),
-    );
-    let mut handles = FuturesUnordered::new();
-
-    for authority in &state.config.authorities {
-        let server =
-            sui_commands::make_server(authority, &committee, vec![], &[], state.config.buffer_size)
-                .await
-                .map_err(|error| {
-                    custom_http_error(
-                        StatusCode::CONFLICT,
-                        format!("Unable to make server: {error}"),
-                    )
-                })?;
-        handles.push(async move {
-            match server.spawn().await {
-                Ok(server) => Ok(server),
-                Err(err) => {
-                    return Err(custom_http_error(
-                        StatusCode::FAILED_DEPENDENCY,
-                        format!("Failed to start server: {}", err),
-                    ));
-                }
-            }
-        })
-    }
-
-    let num_authorities = handles.len();
-    info!("Started {} authorities", num_authorities);
-
-    while let Some(spawned_server) = handles.next().await {
-        state.authority_handles.push(task::spawn(async {
-            if let Err(err) = spawned_server.unwrap().join().await {
-                error!("Server ended with an error: {}", err);
-            }
-        }));
-    }
-
-    for address in state.addresses.clone() {
-        state
-            .gateway
-            .sync_account_state(address)
-            .await
-            .map_err(|err| {
-                custom_http_error(
-                    StatusCode::FAILED_DEPENDENCY,
-                    format!("Sync error: {:?}", err),
-                )
-            })?;
-    }
-    context.set_server_state(state);
-    Ok(HttpResponseOk(format!(
-        "Started {} authorities",
-        num_authorities
-    )))
+    with_state_no_param(rqctx, internal::sui_start).await
 }
 
 /**
@@ -379,11 +310,13 @@ async fn sui_stop(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     let server_context = rqctx.context();
+    // Taking state object without returning ownership
     let state = server_context.take_server_state()?;
 
     for authority_handle in state.authority_handles {
         authority_handle.abort();
     }
+    // Delete everything from working dir
     fs::remove_dir_all(state.working_dir).ok();
     Ok(HttpResponseUpdatedNoContent())
 }
@@ -393,7 +326,7 @@ Response containing the managed addresses for this client.
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct GetAddressResponse {
+pub struct GetAddressResponse {
     /** Vector of hex codes as strings representing the managed addresses */
     addresses: Vec<String>,
 }
@@ -409,27 +342,7 @@ Retrieve all managed addresses for this client.
 async fn get_addresses(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
-    let server_context = rqctx.context();
-    let mut state = server_context.take_server_state()?;
-    // TODO: Speed up sync operations by kicking them off concurrently.
-    // Also need to investigate if this should be an automatic sync or manually triggered.
-    let addresses = state.addresses.clone();
-    for address in &addresses {
-        if let Err(err) = state.gateway.sync_account_state(*address).await {
-            server_context.set_server_state(state);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Can't create client state: {err}"),
-            ));
-        }
-    }
-    server_context.set_server_state(state);
-    Ok(HttpResponseOk(GetAddressResponse {
-        addresses: addresses
-            .into_iter()
-            .map(|address| format!("{}", address))
-            .collect(),
-    }))
+    with_state_no_param(rqctx, internal::get_addresses).await
 }
 
 /**
@@ -437,7 +350,7 @@ Request containing the address of which objecst are to be retrieved.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct GetObjectsRequest {
+pub struct GetObjectsRequest {
     /** Required; Hex code as string representing the address */
     address: String,
 }
@@ -461,7 +374,7 @@ Returns the list of objects owned by an address.
  */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct GetObjectsResponse {
+pub struct GetObjectsResponse {
     objects: Vec<Object>,
 }
 
@@ -477,33 +390,7 @@ async fn get_objects(
     rqctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectsRequest>,
 ) -> Result<HttpResponseOk<GetObjectsResponse>, HttpError> {
-    let server_context = rqctx.context();
-
-    let get_objects_params = query.into_inner();
-    let address = get_objects_params.address;
-
-    let mut state = server_context.take_server_state()?;
-
-    let address = &decode_bytes_hex(address.as_str()).map_err(|error| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            format!("Could not decode address from hex {error}"),
-        )
-    })?;
-
-    let object_refs = state.gateway.get_owned_objects(*address);
-
-    server_context.set_server_state(state);
-    Ok(HttpResponseOk(GetObjectsResponse {
-        objects: object_refs
-            .iter()
-            .map(|(object_id, sequence_number, object_digest)| Object {
-                object_id: object_id.to_string(),
-                version: format!("{:?}", sequence_number),
-                object_digest: format!("{:?}", object_digest),
-            })
-            .collect::<Vec<Object>>(),
-    }))
+    with_state(rqctx, query.into_inner(), internal::get_objects).await
 }
 
 /**
@@ -514,7 +401,7 @@ otherwise we look for it in the shared object store.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct GetObjectSchemaRequest {
+pub struct GetObjectSchemaRequest {
     /** Required; Hex code as string representing the object id */
     object_id: String,
 }
@@ -525,7 +412,7 @@ is returned.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct ObjectSchemaResponse {
+pub struct ObjectSchemaResponse {
     /** JSON representation of the object schema */
     schema: serde_json::Value,
 }
@@ -542,54 +429,7 @@ async fn object_schema(
     rqctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectSchemaRequest>,
 ) -> Result<HttpResponseOk<ObjectSchemaResponse>, HttpError> {
-    let server_context = rqctx.context();
-    let object_info_params = query.into_inner();
-
-    let state = server_context.take_server_state()?;
-
-    let object_id = match ObjectID::try_from(object_info_params.object_id) {
-        Ok(object_id) => object_id,
-        Err(error) => {
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("{error}"),
-            ));
-        }
-    };
-
-    let layout = match state.gateway.get_object_info(object_id).await {
-        Ok(ObjectRead::Exists(_, _, layout)) => layout,
-        Ok(ObjectRead::Deleted(_)) => {
-            server_context.set_server_state(state);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Object ({object_id}) was deleted."),
-            ));
-        }
-        Ok(ObjectRead::NotExists(_)) => {
-            server_context.set_server_state(state);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Object ({object_id}) does not exist."),
-            ));
-        }
-        Err(error) => {
-            server_context.set_server_state(state);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Error while getting object info: {:?}", error),
-            ));
-        }
-    };
-
-    server_context.set_server_state(state);
-    match serde_json::to_value(layout) {
-        Ok(schema) => Ok(HttpResponseOk(ObjectSchemaResponse { schema })),
-        Err(e) => Err(custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            format!("Error while getting object info: {:?}", e),
-        )),
-    }
+    with_state(rqctx, query.into_inner(), internal::object_schema).await
 }
 
 /**
@@ -600,7 +440,7 @@ otherwise we look for it in the shared object store.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct GetObjectInfoRequest {
+pub struct GetObjectInfoRequest {
     /** Required; Hex code as string representing the object id */
     object_id: String,
 }
@@ -611,7 +451,7 @@ is returned.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct ObjectInfoResponse {
+pub struct ObjectInfoResponse {
     /** Hex code as string representing the owner's address */
     owner: String,
     /** Sequence number of the object */
@@ -638,38 +478,7 @@ async fn object_info(
     rqctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectInfoRequest>,
 ) -> Result<HttpResponseOk<ObjectInfoResponse>, HttpError> {
-    let server_context = rqctx.context();
-    let object_info_params = query.into_inner();
-
-    let state = server_context.take_server_state()?;
-
-    let object_id = match ObjectID::try_from(object_info_params.object_id) {
-        Ok(object_id) => object_id,
-        Err(error) => {
-            server_context.set_server_state(state);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("{error}"),
-            ));
-        }
-    };
-
-    let (_, object, layout) = get_object_info(&state, object_id).await?;
-
-    let object_data = object.to_json(&layout).unwrap_or_else(|_| json!(""));
-
-    server_context.set_server_state(state);
-    Ok(HttpResponseOk(ObjectInfoResponse {
-        owner: format!("{:?}", object.owner),
-        version: format!("{:?}", object.version().value()),
-        id: format!("{:?}", object.id()),
-        readonly: format!("{:?}", object.is_read_only()),
-        obj_type: object
-            .data
-            .type_()
-            .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
-        data: object_data,
-    }))
+    with_state(rqctx, query.into_inner(), internal::object_info).await
 }
 
 /**
@@ -677,7 +486,7 @@ Request containing the information needed to execute a transfer transaction.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct TransferTransactionRequest {
+pub struct TransferTransactionRequest {
     /** Required; Hex code as string representing the address to be sent from */
     from_address: String,
     /** Required; Hex code as string representing the object id */
@@ -694,7 +503,7 @@ associated with the transaction that verifies the transaction.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct TransactionResponse {
+pub struct TransactionResponse {
     /** Integer representing the actual cost of the transaction */
     gas_used: u64,
     /** JSON representation of the list of resulting effects on the object */
@@ -728,72 +537,7 @@ async fn transfer_object(
     rqctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<TransferTransactionRequest>,
 ) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
-    let server_context = rqctx.context();
-    let mut state = server_context.take_server_state()?;
-
-    let transfer_order_params = request.into_inner();
-    let to_address =
-        decode_bytes_hex(transfer_order_params.to_address.as_str()).map_err(|error| {
-            custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Could not decode to address from hex {error}"),
-            )
-        })?;
-    let object_id = ObjectID::try_from(transfer_order_params.object_id)
-        .map_err(|error| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{error}")))?;
-    let gas_object_id = ObjectID::try_from(transfer_order_params.gas_object_id)
-        .map_err(|error| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{error}")))?;
-    let owner = decode_bytes_hex(transfer_order_params.from_address.as_str()).map_err(|error| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            format!("Could not decode address from hex {error}"),
-        )
-    })?;
-
-    let tx_signer = Box::pin(SimpleTransactionSigner {
-        keystore: state.keystore.clone(),
-    });
-
-    let (cert, effects, gas_used) = match state
-        .gateway
-        .transfer_coin(owner, object_id, gas_object_id, to_address, tx_signer)
-        .await
-    {
-        Ok((cert, effects)) => {
-            let gas_used = match effects.status {
-                // TODO: handle the actual return value stored in
-                // ExecutionStatus::Success
-                ExecutionStatus::Success { gas_used, .. } => gas_used,
-                ExecutionStatus::Failure { gas_used, error } => {
-                    server_context.set_server_state(state);
-                    return Err(custom_http_error(
-                        StatusCode::FAILED_DEPENDENCY,
-                        format!(
-                            "Error transferring object: {:#?}, gas used {}",
-                            error, gas_used
-                        ),
-                    ));
-                }
-            };
-            (cert, effects, gas_used)
-        }
-        Err(err) => {
-            server_context.set_server_state(state);
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Transfer error: {err}"),
-            ));
-        }
-    };
-
-    let object_effects_summary = get_object_effects(&state, effects).await?;
-
-    server_context.set_server_state(state);
-    Ok(HttpResponseOk(TransactionResponse {
-        gas_used,
-        object_effects_summary: json!(object_effects_summary),
-        certificate: json!(cert),
-    }))
+    with_state(rqctx, request.into_inner(), internal::transfer_object).await
 }
 
 /**
@@ -845,7 +589,7 @@ Request containing the information required to execute a move module.
 */
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct CallRequest {
+pub struct CallRequest {
     /** Required; Hex code as string representing the sender's address */
     sender: String,
     /** Required; Hex code as string representing Move module location */
@@ -892,17 +636,7 @@ async fn call(
     rqctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<CallRequest>,
 ) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
-    let server_context = rqctx.context();
-    let call_params = request.into_inner();
-
-    let mut state = server_context.take_server_state()?;
-
-    let transaction_response = handle_move_call(call_params, &mut state)
-        .await
-        .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))?;
-
-    server_context.set_server_state(state);
-    Ok(HttpResponseOk(transaction_response))
+    with_state(rqctx, request.into_inner(), internal::call).await
 }
 
 /**
@@ -911,7 +645,7 @@ Request containing the address that requires a sync.
 // TODO: This call may not be required. Sync should not need to be triggered by user.
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-struct SyncRequest {
+pub struct SyncRequest {
     /** Required; Hex code as string representing the address */
     address: String,
 }
@@ -926,34 +660,39 @@ on all objects owned by each address that is managed by this client state.
     tags = [ "wallet" ],
 }]
 async fn sync(
-    rqctx: Arc<RequestContext<ServerContext>>,
+    ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<SyncRequest>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
+    with_state(ctx, request.into_inner(), internal::sync).await
+}
+
+async fn with_state<R, S: JsonSchema + Send + Sync + DeserializeOwned, F>(
+    rqctx: Arc<RequestContext<ServerContext>>,
+    params: S,
+    func: F,
+) -> Result<R, HttpError>
+where
+    F: Fn(&mut ServerState, S) -> AsyncResult<R, HttpError>,
+{
     let server_context = rqctx.context();
-    let sync_params = request.into_inner();
-
     let mut state = server_context.take_server_state()?;
-
-    let address = decode_bytes_hex(sync_params.address.as_str()).map_err(|error| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            format!("Could not decode to address from hex {error}"),
-        )
-    })?;
-
-    state
-        .gateway
-        .sync_account_state(address)
-        .await
-        .map_err(|err| {
-            custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("Can't create client state: {err}"),
-            )
-        })?;
-
+    let result = func(&mut state, params).await;
     server_context.set_server_state(state);
-    Ok(HttpResponseUpdatedNoContent())
+    result
+}
+
+async fn with_state_no_param<R, F>(
+    ctx: Arc<RequestContext<ServerContext>>,
+    func: F,
+) -> Result<R, HttpError>
+where
+    F: Fn(&mut ServerState) -> AsyncResult<R, HttpError>,
+{
+    let server_context = ctx.context();
+    let mut state = server_context.take_server_state()?;
+    let result = func(&mut state).await;
+    server_context.set_server_state(state);
+    result
 }
 
 async fn get_object_effects(
@@ -1089,108 +828,6 @@ async fn get_object_info(
         }
     };
     Ok((object_ref, object, layout))
-}
-
-async fn handle_move_call(
-    call_params: CallRequest,
-    state: &mut ServerState,
-) -> Result<TransactionResponse, anyhow::Error> {
-    let module = Identifier::from_str(&call_params.module.to_owned())?;
-    let function = Identifier::from_str(&call_params.function.to_owned())?;
-    let args = call_params.args;
-    let type_args = call_params
-        .type_args
-        .unwrap_or_default()
-        .iter()
-        .map(|type_arg| parse_type_tag(type_arg))
-        .collect::<Result<Vec<_>, _>>()?;
-    let gas_budget = call_params.gas_budget;
-    let gas_object_id = ObjectID::try_from(call_params.gas_object_id)?;
-    let package_object_id = ObjectID::from_hex_literal(&call_params.package_object_id)?;
-
-    let sender: SuiAddress = decode_bytes_hex(call_params.sender.as_str())?;
-
-    let (package_object_ref, package_object, _) = get_object_info(state, package_object_id).await?;
-
-    // Extract the input args
-    let (object_ids, pure_args) =
-        resolve_move_function_args(&package_object, module.clone(), function.clone(), args)?;
-
-    info!("Resolved fn to: \n {:?} & {:?}", object_ids, pure_args);
-
-    // Fetch all the objects needed for this call
-    let mut input_objs = vec![];
-    for obj_id in object_ids.clone() {
-        let (_, object, _) = get_object_info(state, obj_id).await?;
-        input_objs.push(object);
-    }
-
-    // Pass in the objects for a deeper check
-    resolve_and_type_check(
-        package_object.clone(),
-        &module,
-        &function,
-        &type_args,
-        input_objs,
-        pure_args.clone(),
-    )?;
-
-    // Fetch the object info for the gas obj
-    let (gas_obj_ref, _, _) = get_object_info(state, gas_object_id).await?;
-
-    // Fetch the objects for the object args
-    let mut object_args_refs = Vec::new();
-    for obj_id in object_ids {
-        let (object_ref, _, _) = get_object_info(state, obj_id).await?;
-        object_args_refs.push(object_ref);
-    }
-
-    let tx_signer = Box::pin(SimpleTransactionSigner {
-        keystore: state.keystore.clone(),
-    });
-
-    let (cert, effects, gas_used) = match state
-        .gateway
-        .move_call(
-            sender,
-            package_object_ref,
-            module.to_owned(),
-            function.to_owned(),
-            type_args.clone(),
-            gas_obj_ref,
-            object_args_refs,
-            // TODO: Populate shared object args. sui/issue#719
-            vec![],
-            pure_args,
-            gas_budget,
-            tx_signer,
-        )
-        .await
-    {
-        Ok((cert, effects)) => {
-            let gas_used = match effects.status {
-                // TODO: handle the actual return value stored in
-                // ExecutionStatus::Success
-                ExecutionStatus::Success { gas_used, .. } => gas_used,
-                ExecutionStatus::Failure { gas_used, error } => {
-                    let context = format!("Error calling move function, gas used {gas_used}");
-                    return Err(anyhow::Error::new(error).context(context));
-                }
-            };
-            (cert, effects, gas_used)
-        }
-        Err(err) => {
-            return Err(err);
-        }
-    };
-
-    let object_effects_summary = get_object_effects(state, effects).await?;
-
-    Ok(TransactionResponse {
-        gas_used,
-        object_effects_summary: json!(object_effects_summary),
-        certificate: json!(cert),
-    })
 }
 
 fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpError {
