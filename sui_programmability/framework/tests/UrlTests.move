@@ -11,7 +11,7 @@ module Sui::UrlTests {
         // url strings are not currently validated
         let url_str = ASCII::string(x"414243454647");
 
-        let url = Url::new_unsafe_url(url_str);
+        let url = Url::new_unsafe(url_str);
         assert!(Url::inner_url(&url) == url_str, URL_STRING_MISMATCH);
     }
 
@@ -23,7 +23,7 @@ module Sui::UrlTests {
         // length too short
         let hash = x"badf012345";
 
-        let url = Url::new_unsafe_url(url_str);
+        let url = Url::new_unsafe(url_str);
         let _ = Url::new_unsafe_url_commitment(url, hash);
     }
 
@@ -34,7 +34,7 @@ module Sui::UrlTests {
         // 32 bytes
         let hash = x"1234567890123456789012345678901234567890abcdefabcdefabcdefabcdef";
 
-        let url = Url::new_unsafe_url(url_str);
+        let url = Url::new_unsafe(url_str);
         let url_commit = Url::new_unsafe_url_commitment(url, hash);
 
         assert!(Url::url_commitment_resource_hash(&url_commit) == hash, EHASH_LENGTH_MISMATCH);
