@@ -2,29 +2,26 @@
 title: Sui Prototypes
 ---
 
-Here are two short gaming prototypes that demonstrate the speed, scalability, and rich interactions made possible with mutable, expressive NFTs:
+Here are two short gaming prototypes that demonstrate the speed, scalability, and rich interactions made possible with mutable, expressive NFTs: [Sui Monstar and Sui Battler](https://sui.io/sui_monstar).
 
 
-
-* [Sui Monstar](https://sui.io/sui_monstar)
-* [Sui Battler](https:/sui.io/sui_battler)
-
-
-## Sui and Gaming
+## Sui and gaming
 
 Gaming as one of the first verticals for rapid web3 adoption is a popular talking point. However, existing web3 games are arguably regarded more as investments than games, with user retention impacted by market conditions rather than the games themselves.
 
-To have good games, you need good game developers and builders, people who know how to build games and create fun, user-centric experiences. There is a wealth of talent eager to build in web3, but its creativity has been hindered by platform limitations and the pains of learning a new programming language.
+So what is missing from existing web3 games? Firstly, a successful web3 game must offer an experience wholly different from any web1 or web2 games. To truly shine, web3 games must, in a meaningful way, take advantage of the benefits of fully on-chain, dynamic and composable digital assets with verifiable ownership. These features can power incredible and imaginative gameplay and ecosystems, creating immense value and engagement.
 
-With Sui, we believe game developers should not be limited by the platform performance or fees, and they should be able to create whatever experience they imagine. Importantly, developing great games should not require game dev's to be experts in writing smart contracts. Rather they should focus on what they are good at, building cool games for gamers
+Secondly, great games require experienced game developers and builders–people who know how to build games and create fun, user-centric experiences. There is a wealth of talent eager to build in web3, but its creativity has been hindered by platform limitations and the pains of learning a new programming language.
+
+With Sui, we believe game developers should not be limited by the platform performance or fees, and they should be able to create whatever experience they imagine. Importantly, developing great games should not require game developers to also be experts in writing smart contracts. Rather they should focus on what they are good at, building cool games for gamers.
 
 
-## Smart Contracts Optional
+## Smart contracts optional
 
 [Move](https://github.com/MystenLabs/awesome-move/blob/main/README.md) is simply awesome: it’s safe, expressive and immune from reentrancy; but move expertise is not required to build meaningful experiences on Sui. To make it easy for developers and creators to start using Sui for gaming, we will be releasing gaming SDKs that address common use cases and game asset-related features.
 
 
-## How We Did It
+## How we did it
 
 To create these prototypes, we worked with game development studio Geniteam, who built the prototypes with the Unity SDK along with Sui [APIs](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1).
 
@@ -36,10 +33,9 @@ Once Geniteam communicated their idea with us, we created the proposed data mode
 Here are the three APIs Geniteam used, along with the smart contracts to create and update monster (named MonStars in the prototype).
 
 
-### API Move Call - Create Monster
+### API Move call - Create Monster
 
-POST `/call `with body:
-
+POST `/call` with body:
 
 ```
     {
@@ -62,13 +58,9 @@ POST `/call `with body:
 ```
 
 
+### API Move call - Update Monster
 
-### <code>} \
- \
-<strong>API Move Call - Update Monster</strong></code>
-
-POST `/call `with body:
-
+POST `/call` with body:
 
 ```
     {
@@ -90,18 +82,14 @@ POST `/call `with body:
        "gasBudget": 2000
 ```
 
+### API Move call - Read Monster Data
+
+```
+GET /object_info?objectId={{monster_id}}
+```
 
 
-### `} \
- \
-`API Move Call - Read Monster Data
-
-GET /object_info?objectId=<code><em>{{monster_id}}</em> \
-</code>
-
-
-### Smart Contract: Create Monster
-
+### Smart contract: Create Monster
 
 ```
    struct Monster has key, store {
@@ -122,11 +110,7 @@ GET /object_info?objectId=<code><em>{{monster_id}}</em> \
         // ID of the applied cosmetic at this slot
         applied_monster_cosmetic_1_id: Option<ID>,    
     }
-```
 
-
-
-```
     // Create a Monster and add it to the Farm's collection of Monsters
     public fun create_monster(_player: &mut Player,
                               farm: &mut Farm,
@@ -184,12 +168,7 @@ GET /object_info?objectId=<code><em>{{monster_id}}</em> \
     }
 ```
 
-
-
-###  \
-**Smart Contract: Update Monster** \
-
-
+###  Smart contract: Update Monster
 
 ```
     // Update the attributes of a monster
@@ -211,18 +190,11 @@ GET /object_info?objectId=<code><em>{{monster_id}}</em> \
     }
 ```
 
-
- \
-
-
-
 ## Protype 1 Sui Monstar
 
-The first prototype is Sui Monstar[link], a pet simulation game.
+The first prototype is [Sui Monstar](https://sui.io/sui_monstar), a pet simulation game.
 
 Gameplay:
-
-
 
 * Play, feed and dress up your canine and feline friends.
 * Evolve your pets with affinity runes!
@@ -231,43 +203,41 @@ Gameplay:
 
 In Sui Monstar, capture cute monstars and watch them get closer to you as you feed and interact with them. These monstars, your farm, and accessories are all NFTs on-chain. As you play through the game, attributes such as health, friendliness, and accessories are all updated live.
 
-[insert images from explorer of a dog and then an evolved dog, highlighting that it’s still the same NFT]
+![Update NFT properties](images/image1.png "image_tooltip")
+*Equip elemental runes to your Monstar and watch your NFT evolve with updated properties*
+
+TODO: Add image path above.
 
 That’s not all, as your Monstar become stronger, you can use them to help you battle…in the next prototype>>>
 
-
 ## Prototype 2 Sui Battler
 
-Welcome to Sui Battler [link], where your cute monstars transform into warriors!
+Welcome to [Sui Battler](https://sui.io/sui_monstar), where your cute monstars transform into warriors!
 
 Gameplay:
-
-
 
 * Battle waves of enemies and gain experience and power-ups.
 * Get help from your own pet in Sui Monstar.
 * Evolve your pet in Sui Monstar and unlock special battle abilities.
 * Your monstars record the history of your battle on-chain!
 
-[insert image of a monstar card along with the matching explorer view, highlighting experience and wave count]
+![Unlock special abilities](images/image2.png "image_tooltip")
+*Evolve your MonStars to unlock special abilities*
 
-[insert image of an evolved white fire cat helping in-game]
+TODO: Add image path above.
 
-
-## Why This Matters
-
-
+## Why this matters
 
 * Mutable NFTs means richer and more creative gameplay. No more complicated workarounds or burning NFTs, losing all your data and history, in order to “modify” NFTs.
 * Usability-focused APIs make building on Sui easy.
 * Unparalleled scalability and instant settlement mean changes, asset status, balance and ownerships can happen instantly live along with gameplay. No more lag or workarounds.
 * Creativity is the limit. Creators can freely use their assets across various applications and games.
-
+* Fully on-chain, composable NFTs with rich history make possible the next generation of game economies.
 
 ## Further reading
 
-
-
-* See the entire unity project here[link to github].
+* See the entire Unity project here [link to github].
 * Check out Sui [APIs](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1).
 * Learn about Sui [objects](https://github.com/MystenLabs/sui/blob/main/doc/src/build/objects.md).
+
+TODO: Fix Unity link above.
