@@ -1,0 +1,130 @@
+{
+  "sideMenu": {
+    "title": "MAIN CONCEPTS",
+    "items": [
+      {
+        "label": "Selections",
+        "link": "build/transactions"
+      },
+      {
+        "label": "Dynamic properties",
+        "link": "learn/sui-compared"
+      },
+      {
+        "label": "Events",
+        "link": "https://www.google.com/",
+        "external": true
+      }
+    ]
+  },
+  "docs": {
+    "learn": [
+      {
+        "label": "About Sui",
+        "fileName": "learn/how-sui-works"
+      },
+      {
+        "label": "Terminology",
+        "fileName": "learn/how-sui-works"
+      },
+      {
+        "label": "Why Move?",
+        "fileName": "learn/sui-move-diffs"
+      },
+      {
+        "label": "What Makes Sui Different?",
+        "fileName": "learn/sui-compared"
+      },
+      {
+        "title": "How Sui works",
+        "items": [
+          {
+            "label": "Security",
+            "fileName": "learn/sui-compared"
+          },
+          {
+            "label": "Storage",
+            "fileName": "learn/sui-compared"
+          },
+          {
+            "label": "Limitations",
+            "fileName": "learn/sui-compared"
+          }
+        ]
+      },
+      {
+        "label": "Sui White Paper",
+        "fileName": "learn/how-sui-works"
+      }
+    ],
+    "build": [
+      {
+        "label": "Install",
+        "fileName": "build/authorities"
+      },
+      {
+        "label": "Smart Contracts with Move",
+        "fileName": "build/move"
+      },
+      {
+        "label": "Wallet",
+        "fileName": "build/wallet"
+      },
+      {
+        "label": "Objects",
+        "fileName": "build/objects"
+      },
+      {
+        "label": "Transactions",
+        "fileName": "build/transactions"
+      }
+    ],
+    "explore": [
+      {
+        "title": "Examples",
+        "items": [
+          {
+            "label": "Mint NFT with Additional Mutable Fields",
+            "fileName": "build/move"
+          },
+          {
+            "label": "Transfer, Bundle, and Wrap NFTs",
+            "fileName": "explore/observability"
+          },
+          {
+            "label": "Use Ethereum NFTs in Sui?",
+            "fileName": "sui-json"
+          }
+        ]
+      }
+    ],
+
+    "contribute": [
+
+      {
+        "label": "Community",
+        "link": "https://www.google.com/",
+        "external": true
+      },
+      {
+        "label": "Logging",
+        "link": "https://www.google.com/",
+        "external": true
+      },
+      {
+        "label": "About Mysten Labs",
+        "link": "https://www.google.com/",
+        "external": true
+      },
+      {
+        "label": "Contributing to Sui",
+        "link": "https://www.google.com/",
+        "external": true
+      },
+      {
+        "label": "Code of Conduct",
+        "fileName": "contribute/code-of-conduct"
+      }
+    ]
+  }
+}
