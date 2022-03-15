@@ -34,7 +34,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// This is a map between the object ID and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
-    objects: DBMap<ObjectID, Object>, 
+    objects: DBMap<ObjectID, Object>,
 
     /// Stores all history versions of all objects.
     /// This is not needed by an authority, but is needed by a replica.
@@ -47,7 +47,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// to None. The safety of consistent broadcast depend on each honest authority never changing
     /// the lock once it is set. After a certificate for this object is processed it can be
     /// forgotten.
-    transaction_lock: DBMap<ObjectRef, Option<TransactionDigest>>, 
+    transaction_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
@@ -65,7 +65,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
     /// certificates that have been successfully processed by this authority. This set of certificates
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
-    certificates: DBMap<TransactionDigest, CertifiedTransaction>, 
+    certificates: DBMap<TransactionDigest, CertifiedTransaction>,
 
     /// The map between the object ref of objects processed at all versions and the transaction
     /// digest of the certificate that lead to the creation of this version of the object.
