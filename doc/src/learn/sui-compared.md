@@ -12,12 +12,12 @@ Here are Sui's key features:
 
 - Asset-centric programming model
 
-- Easier developer experience
+- Easier developer experience with the blockchain-oriented Move programming language
 
 
 ## Authorities vs validators/miners
 
-An authority plays a role similar to "validators" or "miners" in other blockchain systems. The key distinction between these roles (and the reason we insist on using a separate term) is that validators/miners are *active*, whereas authorities are *passive* for the main type of Sui transaction. Broadly speaking, to deal with a transfer:
+An authority plays a role similar to "validators" or "miners" in other blockchain systems. The key distinction between these roles (and the reason we insist on using a separate term) is that validators/miners are *active*, whereas authorities are *passive* for the main type of Sui transaction involving single-writer objects. Broadly speaking, to deal with a transfer:
 
 * Miners/validators continuously participate in a global consensus protocol that requires multiple rounds of all-to-all communication between the participants. The goal is typically to agree on a *totally ordered* block of transactions and the result of their execution.
 
@@ -25,24 +25,24 @@ An authority plays a role similar to "validators" or "miners" in other blockchai
 
 ## Causal order vs total order
 
-Unlike most existing blockchain systems (and as the reader may have guessed from the description of write requests above), Sui does not impose a total order on the transactions submitted by clients. Instead, transactions are *causally* ordered--if a transaction `T1` produces output objects `O1` that are used as input objects in a transaction `T2`, an authority must execute `T1` before it executes `T2`. Note that `T2` need not use these objects directly for a causal relationship to exist--e.g., `T1` might produce output objects which are then used by `T3`, and `T2` might use `T3`'s output objects. However, transactions with no causal relationship can be processed by Sui authorities in any order.
+Unlike most existing blockchain systems (and as the reader may have guessed from the description of write requests above), Sui does not always impose a total order on the transactions submitted by clients, with shared objects being the exception. Instead, most transactions are *causally* ordered--if a transaction `T1` produces output objects `O1` that are used as input objects in a transaction `T2`, an authority must execute `T1` before it executes `T2`. Note that `T2` need not use these objects directly for a causal relationship to exist--e.g., `T1` might produce output objects which are then used by `T3`, and `T2` might use `T3`'s output objects. However, transactions with no causal relationship can be processed by Sui authorities in any order.
 
 ## Writes
 
-In a traditional blockchain, the problem is that there is a single increment for the entire blockchain's world. This design mutualizes the ceremony of reaching consensus across required parties, which is effective yet costly and slow. Sui - a [proof-of-stake (PoS)](https://en.wikipedia.org/wiki/Proof_of_stake) blockchain - reduces this cost and latency by optimizing for the typical transaction sending assets to another account.
+In a traditional blockchain, the problem is that there is a single increment for the entire blockchain's world. This design mutualizes the ceremony of reaching consensus across required parties, which is effective yet slow. Sui - a [proof-of-stake (PoS)](https://en.wikipedia.org/wiki/Proof_of_stake) blockchain - reduces this cost and latency by optimizing for the typical transaction sending assets to another account.
 
 Sui recognizes the only view needed to judge whether single-writer transactions are suitable is of that sender’s account. Sui does not need information from the rest of the world. Further, Sui supports more complex transactions with its object-centric focus and Move’s strong ownership model; these complex transitions can determine what part of the blockchain world must be seen to confirm transaction suitability and validity.
 
 In this manner, Sui enables multi-lane processing and eliminates [head-of-line blocking](https://en.wikipedia.org/wiki/Head-of-line_blocking). No longer must all other transactions in the world wait for the completion of the first transaction’s increment in a single lane. Sui provides a lane of the appropriate breadth for each transaction: simple sends require viewing only the sender account; more complex transactions may need to see more of the world’s state - but not all of it, and they will need to declare the required views explicitly.
 
-Sui’s architecture minimizes the impact of checking the validity of a transaction: each sender can send only one, non-equivocating transaction at a time. And that transaction blocks no one else on the network from sending transactions. Sui assumes complex, interdependent transactions are the exception rather than the rule; most transactions are independent from one another. Sui and Move represent all of these transactions faithfully.
+Sui’s architecture minimizes the impact of checking the validity of a transaction: each sender can send only one, non-equivocating transaction at a time. And that transaction blocks no one else on the network from sending transactions. Sui assumes complex, interdependent transactions are the exception rather than the rule; most transactions are independent from one another, merely making payments online. Sui and Move represent all of these transactions faithfully.
 
-Because Sui limits the sender to one transaction at a time, it is imperative the transactions finish quickly. Sui offers these optimizations to speed transaction completion:
+Because Sui limits the sender to one transaction at a time, it is imperative the transactions finalize quickly. Sui offers these optimizations to speed transaction completion:
 
-* Simpler algorithms are used to determine state, since less of the world’s state must be evaluated. These algorithms are based upon [Byzantine Consistent Broadcast](https://link.springer.com/book/10.1007/978-3-642-15260-3).
-* Transaction sessions are interactive to ensure at-once processing and vote gathering. Instead of an asynchronous fire-and-forget model where transactions may take minutes or even hours, Sui transactions can finish in under a second.
+* Simpler algorithms are used to determine state, since less of the world’s state must be ascertained. These algorithms are based upon [Byzantine Consistent Broadcast](https://link.springer.com/book/10.1007/978-3-642-15260-3).
+* Transaction sessions are interactive to ensure at-once processing and vote gathering. Instead of a fire-and-forget model where transactions may take minutes or even hours, Sui transactions can finish in under a second.
 
-A traditional blockchain client operates via a single send request and awaits approval of the transaction, polling the validators for an answer sometime later. Either end users or the gateway must do a little more work and then get: low latency and better security. Simple broadcast transactions are completed instantly. Remember, no private keys are ever exchanged.
+A traditional blockchain client operates via a single send request and awaits approval of the transaction, polling the validators for an answer sometime later. Either end users or the gateway must do a little more work and then get: low latency and better security. Simple broadcast transactions are completed immediately. Remember, no private keys are ever revealed.
 
 ## Reads
 
@@ -77,4 +77,3 @@ Where this can become problematic is in transactions where objects are mutable b
 - an open-order, where several traders may fulfill the same proposed trade.
 
 In this case, ordering transactions with respect to each other is vital to lead to a valid resolution, but no actor's action depends on the other. The way Sui resolves this is to resort to a consensus mechanism. While Sui's chosen consensus mechanism will be efficient and high-throughput (as in, e.g. [Narwhal & Tusk](https://arxiv.org/abs/2105.11827)), it still obeys the asymptotics and limitations of any consensus algorithm : polynomial worst-case complexity, requiring active inter-authority messages, etc.
-
