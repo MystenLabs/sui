@@ -1,10 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::{AuthorityStore, StableSyncAuthoritySigner};
+use crate::authority::StableSyncAuthoritySigner;
 use std::sync::Arc;
 use sui_types::base_types::*;
 use sui_types::batch::*;
+use sui_types::datastore::AuthorityStore;
 use sui_types::error::{SuiError, SuiResult};
 
 use std::collections::BTreeMap;

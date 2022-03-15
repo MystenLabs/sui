@@ -16,6 +16,7 @@ use sui_adapter::genesis;
 use sui_core::{authority::*, authority_server::AuthorityServer};
 use sui_network::{network::NetworkClient, transport};
 use sui_types::crypto::{get_key_pair, AuthoritySignature, Signature};
+use sui_types::datastore::AuthorityStore;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::{base_types::*, committee::*, messages::*, object::Object, serialize::*};
 use tokio::runtime::Runtime;

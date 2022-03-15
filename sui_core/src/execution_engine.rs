@@ -3,16 +3,15 @@
 
 use std::sync::Arc;
 
-use crate::authority::AuthorityTemporaryStore;
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use sui_adapter::adapter;
 use sui_types::{
     base_types::{SuiAddress, TxContext},
+    datastore::{AuthorityTemporaryStore, BackingPackageStore, Storage},
     error::{SuiError, SuiResult},
     gas,
     messages::{ExecutionStatus, Transaction, TransactionKind},
     object::Object,
-    storage::{BackingPackageStore, Storage},
 };
 
 pub fn execute_transaction<S: BackingPackageStore>(

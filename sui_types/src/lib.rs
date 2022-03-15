@@ -18,6 +18,7 @@ pub mod batch;
 pub mod coin;
 pub mod committee;
 pub mod crypto;
+pub mod datastore;
 pub mod event;
 pub mod gas;
 pub mod gas_coin;
@@ -26,7 +27,6 @@ pub mod messages;
 pub mod move_package;
 pub mod object;
 pub mod serialize;
-pub mod storage;
 
 /// 0x1-- account address where Move stdlib modules are stored
 /// Same as the ObjectID

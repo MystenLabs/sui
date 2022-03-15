@@ -10,6 +10,12 @@ use crate::{
     object::Object,
 };
 
+mod sui_store;
+pub use sui_store::AuthorityStore;
+
+mod temporary_store;
+pub use temporary_store::AuthorityTemporaryStore;
+
 #[derive(Debug, PartialEq)]
 pub enum DeleteKind {
     /// An object is provided in the call input, and gets deleted.

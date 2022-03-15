@@ -10,11 +10,12 @@ use futures::future::join_all;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
 use structopt::StructOpt;
+use sui_types::datastore::AuthorityStore;
 use tracing::{error, info};
 
 use sui_adapter::adapter::generate_package_id;
 use sui_adapter::genesis;
-use sui_core::authority::{AuthorityState, AuthorityStore};
+use sui_core::authority::AuthorityState;
 use sui_core::authority_server::AuthorityServer;
 use sui_types::base_types::{SequenceNumber, TxContext};
 use sui_types::committee::Committee;

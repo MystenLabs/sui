@@ -12,10 +12,10 @@ use std::{mem, path::PathBuf};
 use sui_types::{
     base_types::{self, SequenceNumber},
     crypto::get_key_pair,
+    datastore::{BackingPackageStore, Storage},
     error::SuiResult,
     gas_coin::GAS,
     object::{Data, Owner},
-    storage::{BackingPackageStore, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 

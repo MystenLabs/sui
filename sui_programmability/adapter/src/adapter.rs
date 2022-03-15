@@ -8,6 +8,7 @@ use move_binary_format::{errors::PartialVMResult, file_format::CompiledModule};
 use sui_framework::EventType;
 use sui_types::{
     base_types::*,
+    datastore::{DeleteKind, Storage},
     error::{SuiError, SuiResult},
     event::Event,
     gas,
@@ -15,7 +16,6 @@ use sui_types::{
     messages::ExecutionStatus,
     move_package::*,
     object::{MoveObject, Object, Owner},
-    storage::{DeleteKind, Storage},
 };
 use sui_verifier::verifier;
 

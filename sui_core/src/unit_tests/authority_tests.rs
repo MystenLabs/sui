@@ -17,10 +17,10 @@ use sui_types::{
     crypto::{get_key_pair, Signature},
     gas::{calculate_module_publish_cost, get_gas_balance},
     messages::Transaction,
-    object::{GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
+    object::{Data, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
 };
 
-use std::fs;
+use std::{collections::BTreeMap, fs};
 use std::{convert::TryInto, env};
 
 pub fn system_maxfiles() -> usize {

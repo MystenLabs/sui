@@ -4,7 +4,7 @@
 #![allow(clippy::same_item_push)] // get_key_pair returns random elements
 
 use super::*;
-use crate::authority::{AuthorityState, AuthorityStore};
+use crate::authority::AuthorityState;
 use crate::gateway_state::gateway_store::AccountStore;
 use crate::gateway_state::{
     AccountState, AsyncTransactionSigner, GatewayAPI, GatewayState, StableSyncTransactionSigner,
@@ -21,6 +21,7 @@ use sui_adapter::genesis;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
 use sui_types::crypto::{get_key_pair, KeyPair};
+use sui_types::datastore::AuthorityStore;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
 use typed_store::Map;

@@ -2,14 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 
+use move_core_types::language_storage::ModuleId;
+use move_core_types::resolver::ModuleResolver;
 use rocksdb::Options;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 
-use sui_types::base_types::SequenceNumber;
-use sui_types::batch::{SignedBatch, TxSequenceNumber};
+use crate::base_types::{ObjectDigest, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
+use crate::batch::{SignedBatch, TxSequenceNumber};
+use crate::error::SuiError;
+use crate::messages::{
+    CertifiedTransaction, SignedTransaction, SignedTransactionEffects, Transaction,
+    TransactionInfoResponse,
+};
 use tracing::warn;
 use typed_store::rocks::{open_cf, DBBatch, DBMap};
 

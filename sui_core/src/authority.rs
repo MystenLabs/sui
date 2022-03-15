@@ -4,13 +4,10 @@
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
-use move_core_types::{
-    language_storage::{ModuleId, StructTag},
-    resolver::{ModuleResolver, ResourceResolver},
-};
+use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{BTreeSet, HashMap, HashSet, VecDeque},
     pin::Pin,
     sync::Arc,
 };
@@ -20,11 +17,11 @@ use sui_types::{
     batch::UpdateItem,
     committee::Committee,
     crypto::AuthoritySignature,
+    datastore::{AuthorityStore, AuthorityTemporaryStore},
     error::{SuiError, SuiResult},
-    fp_bail, fp_ensure, gas,
+    fp_ensure, gas,
     messages::*,
-    object::{Data, Object, Owner},
-    storage::{BackingPackageStore, DeleteKind, Storage},
+    object::{Object, Owner},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use tracing::*;
@@ -41,12 +38,6 @@ pub mod authority_tests;
 #[cfg(test)]
 #[path = "unit_tests/move_integration_tests.rs"]
 pub mod move_integration_tests;
-
-mod temporary_store;
-pub use temporary_store::AuthorityTemporaryStore;
-
-mod authority_store;
-pub use authority_store::AuthorityStore;
 
 // based on https://github.com/diem/move/blob/62d48ce0d8f439faa83d05a4f5cd568d4bfcb325/language/tools/move-cli/src/sandbox/utils/mod.rs#L50
 const MAX_GAS_BUDGET: u64 = 18446744073709551615 / 1000 - 1;
