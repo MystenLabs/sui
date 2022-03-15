@@ -43,6 +43,11 @@ pub fn all_natives(
         ("TestScenario", "num_events", test_scenario::num_events),
         (
             "TestScenario",
+            "update_object",
+            test_scenario::update_object,
+        ),
+        (
+            "TestScenario",
             "transferred_object_ids",
             test_scenario::transferred_object_ids,
         ),
@@ -78,9 +83,8 @@ pub fn all_natives(
 
 // Object { id: VersionedID { id: UniqueID { id: ID { bytes: address } } } .. }
 // Extract the first field of the struct 4 times to get the id bytes.
-pub fn get_object_id_bytes(object: Value) -> AccountAddress {
-    let id_bytes = get_nested_struct_field(object, &[0, 0, 0, 0]);
-    id_bytes.value_as::<AccountAddress>().unwrap()
+pub fn get_object_id(object: Value) -> Value {
+    get_nested_struct_field(object, &[0, 0, 0, 0])
 }
 
 // Extract a field valye that's nested inside value `v`. The offset of each nesting

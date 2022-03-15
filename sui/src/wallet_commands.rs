@@ -1,21 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::{Config, WalletConfig};
-use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
-use core::fmt;
-use std::fmt::{Debug, Display, Formatter};
-use std::path::Path;
-use sui_core::client::{AsyncTransactionSigner, GatewayClient};
-use sui_framework::build_move_package_to_bytes;
-use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
-use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{
-    CertifiedTransaction, ExecutionStatus, TransactionData, TransactionEffects,
-};
-use sui_types::move_package::resolve_and_type_check;
-use sui_types::object::ObjectRead::Exists;
 
-use crate::keystore::Keystore;
+use core::fmt;
+use std::fmt::{Debug, Display, Formatter, Write};
+use std::path::Path;
+use std::sync::{Arc, RwLock};
+use std::time::Instant;
+
 use anyhow::anyhow;
 use async_trait::async_trait;
 use colored::Colorize;
@@ -25,15 +16,26 @@ use move_core_types::language_storage::TypeTag;
 use move_core_types::parser::parse_type_tag;
 use serde::ser::Error;
 use serde::Serialize;
-use std::fmt::Write;
-use std::sync::{Arc, RwLock};
-use std::time::Instant;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
-use sui_core::client::client_responses::{MergeCoinResponse, SplitCoinResponse};
-use sui_types::crypto::{Signable, Signature};
-use sui_types::object::ObjectRead;
 use tracing::info;
+
+use sui_core::gateway_state::gateway_responses::{MergeCoinResponse, SplitCoinResponse};
+use sui_core::gateway_state::{AsyncTransactionSigner, GatewayClient};
+use sui_framework::build_move_package_to_bytes;
+use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
+use sui_types::crypto::{Signable, Signature};
+use sui_types::gas_coin::GasCoin;
+use sui_types::messages::{
+    CertifiedTransaction, ExecutionStatus, TransactionData, TransactionEffects,
+};
+use sui_types::move_package::resolve_and_type_check;
+use sui_types::object::ObjectRead;
+use sui_types::object::ObjectRead::Exists;
+
+use crate::config::{Config, WalletConfig};
+use crate::keystore::Keystore;
+use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
 
 #[derive(StructOpt)]
 #[structopt(name = "", rename_all = "kebab-case")]
@@ -183,6 +185,7 @@ pub enum WalletCommands {
 pub struct SimpleTransactionSigner {
     pub keystore: Arc<RwLock<Box<dyn Keystore>>>,
 }
+
 // A simple signer callback implementation, which signs the content without validation.
 #[async_trait]
 impl AsyncTransactionSigner for SimpleTransactionSigner {
@@ -355,7 +358,7 @@ impl WalletCommands {
             }
 
             WalletCommands::SyncClientState { address } => {
-                context.gateway.sync_client_state(*address).await?;
+                context.gateway.sync_account_state(*address).await?;
                 WalletCommandResult::SyncClientState
             }
             WalletCommands::NewAddress => {
@@ -365,7 +368,7 @@ impl WalletCommands {
                 WalletCommandResult::NewAddress(address)
             }
             WalletCommands::Gas { address } => {
-                context.gateway.sync_client_state(*address).await?;
+                context.gateway.sync_account_state(*address).await?;
                 let object_refs = context.gateway.get_owned_objects(*address);
 
                 // TODO: We should ideally fetch the objects from local cache

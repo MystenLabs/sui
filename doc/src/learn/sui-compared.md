@@ -6,8 +6,6 @@ This is a high-level overview of the differences in approach between Sui and oth
 
 Here are Sui's key features:
 
-- High throughput and low latency
-
 - Causal order vs total order (enables massively parallel execution)
 
 - Move and object-centric data model (enables composable objects/NFTs)

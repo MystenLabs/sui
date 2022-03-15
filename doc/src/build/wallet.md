@@ -38,7 +38,7 @@ such other object transfers or smart contract (Move) calls. These
 numbers represent a sample configuration and have been chosen somewhat
 arbitrarily; the process of generating the genesis state can be
 customized with additional accounts, objects, code, etc. as described
-in [Genesis customization](#genesis-customization).
+in [Genesis customization](#customize-genesis).
 
 The network configuration is stored in `network.conf` and
 can be used subsequently to start the network. `wallet.conf` and `wallet.key` are
@@ -90,10 +90,10 @@ in the wallet configuration (with some values omitted):
 }
 ```
 The `accounts` variable contains the account's address the wallet manages.
-`gateway` contains the information of the Sui network that the wallet will be connecting to, 
+`gateway` contains the information of the Sui network that the wallet will be connecting to,
 currently only `Embedded` gateway type is supported.
 
-The `authorities` variable is part of the embedded gateway configuration, it contains Sui network 
+The `authorities` variable is part of the embedded gateway configuration, it contains Sui network
 authorities' name, host and port information. It is used to establish connections to the Sui network.
 
 Note `send_timeout`, `recv_timeout` and `buffer_size` are the network
@@ -102,17 +102,17 @@ database. This database stores all the transaction data, certificates
 and object data belonging to the account.
 
 #### Sui Network Gateway
-The Sui network gateway is an abstraction layer that acts as the entry point to the Sui network. 
+The Sui network gateway is an abstraction layer that acts as the entry point to the Sui network.
 Different gateway implementation can be use by the application layer base on their use cases.
 
 ##### Embedded Gateway
-As the name suggests, embedded gateway embeds the gateway logic into the application; 
-all data will be stored locally and the application will make direct 
+As the name suggests, embedded gateway embeds the gateway logic into the application;
+all data will be stored locally and the application will make direct
 connection to the authorities.
 
 #### Key management
-The key pairs are stored in `wallet.key`. However, this is not secure 
-and shouldn't be used in a production environment. We have plans to 
+The key pairs are stored in `wallet.key`. However, this is not secure
+and shouldn't be used in a production environment. We have plans to
 implement more secure key management and support hardware signing in a future release.
 
 :warning: **Do not use in production**: Keys are stored in file!
@@ -122,7 +122,7 @@ implement more secure key management and support hardware signing in a future re
 Run the following command to start the local Sui network:
 
 ```shell
-./sui start 
+./sui start
 ```
 
 or
@@ -152,7 +152,7 @@ or
 ```
 
 The wallet config file path defaults to `./wallet.conf` if not
-specified.  
+specified.
 
 The following commands are supported by the interactive wallet:
 
@@ -221,12 +221,12 @@ The output shows a confirmation after the account has been created:
 ```
 Created new keypair for address : F456EBEF195E4A231488DF56B762AC90695BE2DD
 ```
-  
+
 #### Add existing accounts to `wallet.conf` manually.
 
-If you have an existing key pair from an old wallet config, you can copy the account 
-address manually to the new `wallet.conf`'s accounts section, and add the key pair to the keystore file; 
-you won't be able to mutate objects if the account key is missing from the keystore. 
+If you have an existing key pair from an old wallet config, you can copy the account
+address manually to the new `wallet.conf`'s accounts section, and add the key pair to the keystore file;
+you won't be able to mutate objects if the account key is missing from the keystore.
 
 Restart the Sui wallet after the modification; the new accounts will appear in the wallet if you query the addresses.
 
@@ -247,7 +247,7 @@ FLAGS:
 OPTIONS:
         --address <address>    Address owning the objects
 ```
-To view the objects owned by the accounts created in genesis, run the following command (substitute the address with one of the genesis addresses in your wallet): 
+To view the objects owned by the accounts created in genesis, run the following command (substitute the address with one of the genesis addresses in your wallet):
 ```shell
 ./wallet --no-shell objects --address 0999FD9EEE3AD557112182E7CB5747A253132000
 ```
@@ -287,7 +287,7 @@ ID: C7CC5FA26A039CFA03B32FA56414DFCE19BA318C
 Readonly: false
 Type: 0x2::Coin::Coin<0x2::GAS::GAS>
 ```
-The result shows some basic information about the object, the owner, 
+The result shows some basic information about the object, the owner,
 version, ID, if the object is immutable and the type of the object.
 If you need a deeper look into the object, you can use the `--json`
 flag to view the raw JSON representation of the object.
@@ -305,8 +305,8 @@ If you inspect a newly created account, you would expect the account does not ow
 Showing 0 results.
 
 ```
-To add objects to the account, you can [invoke a move function](#calling-move-code), 
-or you can transfer one of the existing objects from the genesis account to the new account using a dedicated wallet command. 
+To add objects to the account, you can [invoke a move function](#calling-move-code),
+or you can transfer one of the existing objects from the genesis account to the new account using a dedicated wallet command.
 We will explore how to transfer objects using the wallet in this section.
 
 `transfer` command usage:
@@ -324,8 +324,8 @@ OPTIONS:
         --object-id <object-id>    Object to transfer, in 20 bytes Hex string
         --to <to>                  Recipient address
 ```
-To transfer an object to a recipient, you will need the recipient's address, 
-the object ID of the object that you want to transfer, 
+To transfer an object to a recipient, you will need the recipient's address,
+the object ID of the object that you want to transfer,
 and the gas object' ID for the transaction fee payment.
 
 Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`.
@@ -352,8 +352,8 @@ Showing 1 results.
 ```
 
 ## Merging and splitting coin objects
-Overtime, the account might receive coins from other accounts and will become unmanageable when 
-the number of coins grows; contrarily, the account might need to split the coins for payment or 
+Overtime, the account might receive coins from other accounts and will become unmanageable when
+the number of coins grows; contrarily, the account might need to split the coins for payment or
 for transfer to another account.
 
 We can use the `merge-coin` command and `split-coin` command to consolidate or split coins, respectively.
@@ -375,8 +375,8 @@ OPTIONS:
         --gas-budget <gas-budget>          Gas budget for this call
         --primary-coin <primary-coin>      Coin to merge into, in 20 bytes Hex string
 ```
-Here is an example of how to merge coins. To merge coins, you will need at lease three coin objects - 
-two coin objects for merging, and one for the gas payment. 
+Here is an example of how to merge coins. To merge coins, you will need at lease three coin objects -
+two coin objects for merging, and one for the gas payment.
 You also need to specify the maximum gas budget that should be expanded for the coin merge operations.
 Let us examine objects owned by address `FF4480C3BB1E1B15CF245667B8448D930D2A05BB`
 and use the first coin (gas) object as the one to be the result of the merge, the second one to be merged, and the third one to be used as payment:
@@ -423,7 +423,7 @@ OPTIONS:
         --gas <gas>                  ID of the gas object for gas payment, in 20 bytes Hex string
         --gas-budget <gas-budget>    Gas budget for this call
 ```
-For splitting coins, you will need at lease two coins to execute the `split-coin` command, 
+For splitting coins, you will need at lease two coins to execute the `split-coin` command,
 one coin to split, one for the gas payment.
 
 Let us examine objects owned by address `8F89E566BFB2F68DE0DB8E64F8335D957792A7E8`:
@@ -437,7 +437,7 @@ Showing 5 results.
 (F6E964C7856DAE054A99761213E3BB2F1717F37D, SequenceNumber(0), o#90143cc803a9c678cc1720c1d14eb4d1e06d6160ebbb0b98add48d6231306cf2)
 ```
 
-Here is an example of splitting coins, we are splitting out three new coins from the original coin (first one on the list above), 
+Here is an example of splitting coins, we are splitting out three new coins from the original coin (first one on the list above),
 with values of 1000, 5000 and 3000 respectively; note that the `--amounts` argument accepts list of values.
 We use the second coin on the list to pay for this transaction.
 
@@ -489,7 +489,7 @@ public fun transfer(c: Coin::Coin<GAS>, recipient: address, _ctx: &mut TxContext
 
 Please note that there is no real need to use a Move call to transfer
 objects as this can be accomplish with a built-in wallet
-[command](#transfering-objects) - we chose this example due to its
+[command](#transferring-objects) - we chose this example due to its
 simplicity.
 
 
@@ -525,9 +525,9 @@ parameters one-by-one:
 - `--function` - name of the function to be called
 - `--module` - name of the module containing the function
 - `--package` - ID of the package object where the module containing
-  the function is located ([remember](#a-quick-look-at-the-gas-module)
+  the function is located. (Remember
   that the ID of the genesis Sui package containing the GAS module is
-  defined in its manifest file, and is equal to `0x2`)
+  defined in its manifest file, and is equal to `0x2`.)
 - `args` - a list of function arguments:
   - ID of the gas object representing the `c` parameter of the `transfer`
     function
@@ -537,7 +537,7 @@ parameters one-by-one:
 - `--gas-budget` - a decimal value expressing how much gas we are
   willing to pay for the `transfer` call to be completed to avoid
   accidental drain of all gas in the gas pay)
-  
+
 Note the third argument to the `transfer` function representing
 `TxContext` does not have to be specified explicitly - it
 is a required argument for all functions callable from Sui and is
@@ -610,7 +610,7 @@ It's the path to the `my_move_package` as per the
 object that will be used to pay for publishing the package (we use the
 same gas object we used to pay for the function call in the
 [Calling Move code](#calling-move-code)) section, and gas budget to put
-an upper limit (we use 1000 as our gas budget. 
+an upper limit (we use 1000 as our gas budget.
 
 Let us use the same address for publishing that we used for calling Move code in the previous [section](#calling-move-code) (`E7EFB976F10753666C821400FD9554B766363317`) which now has 4 objecst left:
 
@@ -629,7 +629,7 @@ that the location of the package's sources is in the `PATH_TO_PACKAGE`
 environment variable):
 
 ``` shell
-./wallet --no-shell publish --path $PATH_TO_PACKAGE/my_move_package --gas  7154ECD49047FC4554D38C41C92DF91736D5A906 --gas-budget 1000
+./wallet --no-shell publish --path $PATH_TO_PACKAGE/my_move_package --gas  7154ECD49047FC4554D38C41C92DF91736D5A906 --gas-budget 30000
 ```
 
 The result of running this command should look as follows:
@@ -717,7 +717,7 @@ Example `genesis.conf`:
 ```
 
 All attributes in `genesis.conf` are optional, and default values
-will be used if the attributes are not provided.  
+will be used if the attributes are not provided.
 For example, the
 config shown below will create a network of four authorities, and
 pre-populate two gas objects for four newly generated accounts:

@@ -1,6 +1,6 @@
 /// Example of a game character with basic attributes, inventory, and
 /// associated logic.
-module Games::Hero {
+module HeroGame::Hero {
     use Sui::Coin::{Self, Coin};
     use Sui::Event;
     use Sui::ID::{Self, ID, VersionedID};
@@ -34,7 +34,7 @@ module Games::Hero {
     /// For healing wounded heroes
     struct Potion has key, store {
         id: VersionedID,
-        /// Effectivenss of the potion
+        /// Effectiveness of the potion
         potency: u64
     }
 
@@ -206,7 +206,7 @@ module Games::Hero {
         let value = Coin::value(&payment);
         // ensure the user pays enough for the sword
         assert!(value >= MIN_SWORD_COST, EINSUFFICIENT_FUNDS);
-        // pay the admin for ths sword
+        // pay the admin for this sword
         Transfer::transfer(payment, admin());
 
         // magic of the sword is proportional to the amount you paid, up to
@@ -225,7 +225,7 @@ module Games::Hero {
         Transfer::transfer(hero, TxContext::sender(ctx))
     }
 
-    /// Anyone can create a hero if they have a sword. All heros start with the
+    /// Anyone can create a hero if they have a sword. All heroes start with the
     /// same attributes.
     public fun create_hero(sword: Sword, ctx: &mut TxContext): Hero {
         Hero {

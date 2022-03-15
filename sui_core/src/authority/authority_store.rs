@@ -6,8 +6,8 @@ use rocksdb::Options;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::path::Path;
-
 use std::sync::atomic::AtomicU64;
+
 use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use tracing::warn;
@@ -179,6 +179,23 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         }
     }
 
+    /// Returns true if we have a signed_effects structure for this transaction digest
+    pub fn signed_effects_exists(&self, transaction_digest: &TransactionDigest) -> SuiResult<bool> {
+        self.signed_effects
+            .contains_key(transaction_digest)
+            .map_err(|e| e.into())
+    }
+
+    /// Returns true if we have a signed_effects structure for this transaction digest
+    pub fn signed_transaction_exists(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        self.signed_transactions
+            .contains_key(transaction_digest)
+            .map_err(|e| e.into())
+    }
+
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
     fn acquire_locks(&self, _input_objects: &[ObjectRef]) -> Vec<parking_lot::MutexGuard<'_, ()>> {
         let num_locks = self.lock_table.len();
@@ -304,11 +321,28 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     pub fn sequenced(
         &self,
         transaction_digest: TransactionDigest,
-        object_id: ObjectID,
-    ) -> Result<Option<SequenceNumber>, SuiError> {
-        self.sequenced
-            .get(&(transaction_digest, object_id))
-            .map_err(SuiError::from)
+        object_ids: &[ObjectID],
+    ) -> Result<Vec<Option<SequenceNumber>>, SuiError> {
+        let keys: Vec<_> = object_ids
+            .iter()
+            .map(|objid| (transaction_digest, *objid))
+            .collect();
+
+        self.sequenced.multi_get(&keys[..]).map_err(SuiError::from)
+    }
+
+    /// Read a lock for a specific (transaction, shared object) pair.
+    pub fn all_shared_locks(
+        &self,
+        transaction_digest: TransactionDigest,
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
+        Ok(self
+            .sequenced
+            .iter()
+            .skip_to(&(transaction_digest, ObjectID::ZERO))?
+            .take_while(|((tx, _objid), _ver)| *tx == transaction_digest)
+            .map(|((_tx, objid), ver)| (objid, ver))
+            .collect())
     }
 
     // Methods to mutate the store
@@ -348,7 +382,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     ///
     pub fn set_transaction_lock(
         &self,
-        mutable_input_objects: &[ObjectRef],
+        owned_input_objects: &[ObjectRef],
         signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
         let tx_digest = signed_transaction.transaction.digest();
@@ -357,7 +391,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .batch()
             .insert_batch(
                 &self.transaction_lock,
-                mutable_input_objects
+                owned_input_objects
                     .iter()
                     .map(|obj_ref| (obj_ref, Some(tx_digest))),
             )?
@@ -368,48 +402,50 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
 
         // This is the critical region: testing the locks and writing the
         // new locks must be atomic, and not writes should happen in between.
+        let mut need_write = false;
         {
-            // Aquire the lock to ensure no one else writes when we are in here.
+            // Acquire the lock to ensure no one else writes when we are in here.
             // MutexGuards are unlocked on drop (ie end of this block)
-            let _mutexes = self.acquire_locks(mutable_input_objects);
+            let _mutexes = self.acquire_locks(owned_input_objects);
 
-            let locks = self.transaction_lock.multi_get(mutable_input_objects)?;
+            let locks = self.transaction_lock.multi_get(owned_input_objects)?;
 
-            for (obj_ref, lock) in mutable_input_objects.iter().zip(locks) {
+            for lock in locks {
                 // The object / version must exist, and therefore lock initialized.
                 let lock = lock.ok_or(SuiError::TransactionLockDoesNotExist)?;
 
                 if let Some(previous_tx_digest) = lock {
                     if previous_tx_digest != tx_digest {
-                        let prev_transaction = self
-                            .get_transaction_lock(obj_ref)?
-                            .expect("If we have a lock we should have a transaction.");
-
                         warn!(prev_tx_digest =? previous_tx_digest,
                               cur_tx_digest =? tx_digest,
                               "Conflicting transaction!  Lock state changed in unexpected way");
-                        // TODO: modify ConflictingTransaction to only return the transaction digest here.
                         return Err(SuiError::ConflictingTransaction {
-                            pending_transaction: prev_transaction.transaction,
+                            pending_transaction: previous_tx_digest,
                         });
                     }
+                } else {
+                    need_write |= true;
                 }
             }
 
-            // Atomic write of all locks
-            lock_batch.write().map_err(|e| e.into())
+            if need_write {
+                // Atomic write of all locks
+                lock_batch.write()?
+            }
 
             // Implicit: drop(_mutexes);
         } // End of critical region
+
+        Ok(())
     }
 
     /// Updates the state resulting from the execution of a certificate.
     ///
     /// Internally it checks that all locks for active inputs are at the correct
     /// version, and then writes locks, objects, certificates, parents atomically.
-    pub fn update_state(
+    pub fn update_state<S>(
         &self,
-        temporary_store: AuthorityTemporaryStore,
+        temporary_store: AuthorityTemporaryStore<S>,
         certificate: CertifiedTransaction,
         signed_effects: SignedTransactionEffects,
     ) -> Result<(TxSequenceNumber, TransactionInfoResponse), SuiError> {
@@ -453,9 +489,9 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     }
 
     /// Persist temporary storage to DB for genesis modules
-    pub fn update_objects_state_for_genesis(
+    pub fn update_objects_state_for_genesis<S>(
         &self,
-        temporary_store: AuthorityTemporaryStore,
+        temporary_store: AuthorityTemporaryStore<S>,
         transaction_digest: TransactionDigest,
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
@@ -465,10 +501,10 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     }
 
     /// Helper function for updating the objects in the state
-    fn batch_update_objects(
+    fn batch_update_objects<S>(
         &self,
         mut write_batch: DBBatch,
-        temporary_store: AuthorityTemporaryStore,
+        temporary_store: AuthorityTemporaryStore<S>,
         transaction_digest: TransactionDigest,
         should_sequence: bool,
     ) -> Result<Option<TxSequenceNumber>, SuiError> {
@@ -689,7 +725,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Retrieves batches including transactions within a range.
     ///
     /// This function returns all signed batches that enclose the requested transaction
-    /// including the batch preceeding the first requested transaction, the batch including
+    /// including the batch preceding the first requested transaction, the batch including
     /// the last requested transaction (if there is one) and all batches in between.
     ///
     /// Transactions returned include all transactions within the batch that include the
@@ -789,22 +825,40 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     }
 }
 
-impl ModuleResolver for AuthorityStore {
+impl<const ALL_OBJ_VER: bool> BackingPackageStore for SuiDataStore<ALL_OBJ_VER> {
+    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        let package = self.get_object(package_id)?;
+        if let Some(obj) = &package {
+            fp_ensure!(
+                obj.is_package(),
+                SuiError::BadObjectType {
+                    error: format!("Package expected, Move object found: {}", package_id),
+                }
+            );
+        }
+        Ok(package)
+    }
+}
+
+impl<const ALL_OBJ_VER: bool> ModuleResolver for SuiDataStore<ALL_OBJ_VER> {
     type Error = SuiError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        match self.get_object(&ObjectID::from(*module_id.address()))? {
-            Some(o) => match &o.data {
-                Data::Package(c) => Ok(c
+        // TODO: We should cache the deserialized modules to avoid
+        // fetching from the store / re-deserializing them everytime.
+        // https://github.com/MystenLabs/sui/issues/809
+        Ok(self
+            .get_package(&ObjectID::from(*module_id.address()))?
+            .and_then(|package| {
+                // unwrap safe since get_package() ensures it's a package object.
+                package
+                    .data
+                    .try_as_package()
+                    .unwrap()
                     .serialized_module_map()
                     .get(module_id.name().as_str())
                     .cloned()
-                    .map(|m| m.into_vec())),
-                _ => Err(SuiError::BadObjectType {
-                    error: "Expected module object".to_string(),
-                }),
-            },
-            None => Ok(None),
-        }
+                    .map(|m| m.into_vec())
+            }))
     }
 }

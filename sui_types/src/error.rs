@@ -6,7 +6,6 @@ use std::fmt::Debug;
 use thiserror::Error;
 
 use crate::base_types::*;
-use crate::messages::Transaction;
 use move_binary_format::errors::PartialVMError;
 use serde::{Deserialize, Serialize};
 
@@ -45,8 +44,12 @@ pub enum SuiError {
     UnexpectedOwnerType,
     #[error("Shared mutable object not yet supported")]
     UnsupportedSharedObjectError,
+    #[error("Object used as shared is not shared.")]
+    NotSharedObjectError,
     #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transerred to an account address first before deletion")]
     DeleteObjectOwnedObject,
+    #[error("The shared locks for this transaction have not yet been set.")]
+    SharedObjectLockNotSetObject,
 
     // Signature verification
     #[error("Signature is not valid: {}", error)]
@@ -66,7 +69,9 @@ pub enum SuiError {
         expected_sequence: SequenceNumber,
     },
     #[error("Conflicting transaction already received: {pending_transaction:?}")]
-    ConflictingTransaction { pending_transaction: Transaction },
+    ConflictingTransaction {
+        pending_transaction: TransactionDigest,
+    },
     #[error("Transaction was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransaction,
     #[error("Transaction transaction processing failed: {err}")]
