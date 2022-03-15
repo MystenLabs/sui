@@ -52,7 +52,7 @@ Indeed, Sui uses *causal order*, not total order. Every object in Sui has a vers
 
 Since changes create new objects with a new version, Sui creates a narrow family tree starting from genesis. In Sui, as in life, you are most interested in your specific family, not the entire world’s genetic history. Sui relies upon no view of other family trees, only the one tied to the account making the transaction.
 
-By contrat, in a traditional blockchain, all families are ordered against one another to calculate a *total order*. This then requires querying a massive blob for the precise information needed, and disk I/O becomes a blocker. Some blockchains now require SSDs on their validators as a result.
+By contrast, in a traditional blockchain, all families are ordered against one another to calculate a *total order*. This then requires querying a massive blob for the precise information needed, and disk I/O becomes a blocker. Some blockchains now require SSDs on their validators as a result.
 
 ## Sui's limitations
 
