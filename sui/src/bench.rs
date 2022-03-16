@@ -170,7 +170,7 @@ impl ClientServerBenchmark {
         opts.enable_statistics();
         opts.set_stats_dump_period_sec(5);
         opts.set_enable_pipelined_write(true);
-        
+
         // NOTE: turn off the WAL, but is not guaranteed to
         // recover from a crash. Keep turned off to max safety,
         // but keep as an option if we periodically flush WAL
@@ -183,6 +183,7 @@ impl ClientServerBenchmark {
         // Seed user accounts.
         let rt = Runtime::new().unwrap();
 
+        println!("Init Authority.");
         let state = rt.block_on(async {
             AuthorityState::new(
                 committee.clone(),
@@ -201,8 +202,7 @@ impl ClientServerBenchmark {
         let account_gas_objects: Vec<_> = (0u64..(self.num_accounts as u64))
             .into_par_iter()
             .map(|x| {
-
-                let mut obj_id = [0; 20]; 
+                let mut obj_id = [0; 20];
                 obj_id[..8].clone_from_slice(&x.to_be_bytes()[..8]);
                 let object_id: ObjectID = ObjectID::from(obj_id);
                 let object = if self.use_move {
@@ -218,7 +218,7 @@ impl ClientServerBenchmark {
 
                 assert!(object.version() == SequenceNumber::from(0));
 
-                let mut gas_object_id = [0; 20]; 
+                let mut gas_object_id = [0; 20];
                 gas_object_id[8..16].clone_from_slice(&x.to_be_bytes()[..8]);
                 let gas_object_id = ObjectID::from(gas_object_id);
                 let gas_object = Object::with_id_owner_for_testing(gas_object_id, address);
@@ -228,11 +228,10 @@ impl ClientServerBenchmark {
             })
             .collect();
 
-        // A massive clone
+        // Bulk load objects
         let all_objects: Vec<_> = account_gas_objects
             .iter()
-            .map(|((_, gas, _), obj)| [gas, obj])
-            .flatten()
+            .flat_map(|((_, gas, _), obj)| [gas, obj])
             .collect();
         store_bis.bulk_object_insert(&all_objects[..]).unwrap();
 

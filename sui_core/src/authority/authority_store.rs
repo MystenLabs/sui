@@ -149,7 +149,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         options.set_row_cache(&row_cache);
         options.set_table_cache_num_shard_bits(10);
         options.set_compression_type(rocksdb::DBCompressionType::None);
-        
+
         let mut point_lookup = options.clone();
         point_lookup.optimize_for_point_lookup(1024 * 1024);
         point_lookup.set_memtable_whole_key_filtering(true);
@@ -744,7 +744,6 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
 
             // Atomic write of all locks & other data
             write_batch.write()?;
-            
 
             // implicit: drop(_mutexes);
         } // End of critical region
