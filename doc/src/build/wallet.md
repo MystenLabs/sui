@@ -11,30 +11,13 @@ interface, *Wallet CLI*.
 
 ## Setup
 
-### Installing the binaries
-
-Sui is written in Rust, and we are using Cargo to build and manage the dependencies.
-As a prerequisite, you will need to [install cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) 
-in order to build and install Sui on your machine.
-
-Check out the [Sui GitHub](https://github.com/MystenLabs/sui) repository.
-
-To install the `sui` and `wallet` binaries, use the following commands.
-```shell
-cargo install --git ssh://git@github.com/MystenLabs/sui.git
-```
-or 
-```shell
-cargo install --path <Path to Sui project>/sui
-```
-
-This will install `sui` and `wallet` binaries in `~/.cargo/bin`directory that can be executed directly.
+Follow the instructions to [install Sui binaries](install.md).
 
 ## Genesis
 ```shell
 sui genesis
 ```
-NOTE: For logs, set `RUST_LOG=debug` before invoking `./sui genesis`.
+NOTE: For logs, set `RUST_LOG=debug` before invoking `sui genesis`.
 
 The `genesis` command creates four authorities and five user accounts
 each with five gas objects. These are Sui [objects](objects.md) used
@@ -134,7 +117,7 @@ or
 ```shell
 sui start --config [config file path]
 ```
-NOTE: For logs, set `RUST_LOG=debug` before invoking `./sui start`.
+NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
 
 The network config file path defaults to `./network.conf` if not
 specified.

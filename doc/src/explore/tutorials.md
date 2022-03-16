@@ -4,28 +4,23 @@ title: An end-to-end tutorial of playing TicTacToe on Sui
 
 In this tutorial, we will demonstrate an end-to-end process of starting a Sui network locally, connecting to it through our demo wallet app, publishing a TicTacToe game on Sui, and playing it to the end.
 
-## Start the network
-In the Sui repository, build Sui:
-```
-$ cargo build
-```
-The Sui binary will be in the `target/debug` directory. For the rest of the tutorial, we will stay inside this directory.
-First of all, generate a genesis config that the network will use:
-```
-$ cd target/debug
-./sui genesis
-```
-Note that if you have already run the above command once before (perhaps when trying out the wallet), then you can skip it.
-It will generate three config files:
-- network.conf: contains the config of the authorities.
-- wallet.conf: contains the config of a few pre-generated accounts.
-- wallet.key: contains the private keys of the accounts in the wallet.
+## Setup
 
-Now start the network:
-```
-$ ./sui start
-```
-This command starts the Sui network. It won't print anything, but don't worry it's running.
+Follow the instructions to [install Sui binaries](../build/install.md).
+Then follow the instructions to [create
+Sui genesis](../build/wallet.md#genesis) by running the `sui genesis`
+command.
+
+Finally, [start the Sui network](../build/wallet.md#starting-the-network)
+by running the `sui start` command. After completing
+these steps, you will have a running local Sui instance and the
+`wallet` command used in the remainder of this tutorial in your path.
+
+Please make sure that you run the `wallet` command in the directory
+where wallet configuration is located or by passing wallet's
+configuration file as a parameter, as described in the `wallet`
+[command description](../build/wallet.md#using-the-wallet).
+
 
 ## Gather Accounts and Gas Objects
 Now switch to a new terminal window (keep the above running).
@@ -49,7 +44,7 @@ export PLAYER_O=251CF224B6BA3A019D04B6041357C20490F7A322
 
 For each of these addresses, let's discover their gas objects for each account address:
 ```
-$ ./wallet --no-shell gas --address $ADMIN
+$ wallet --no-shell gas --address $ADMIN
                 Object ID                 |  Version   |  Gas Value
 ----------------------------------------------------------------------
  38B89FE9F4A4823F1406938E87A8767CBD7F0B93 |     0      |   100000
@@ -57,7 +52,7 @@ $ ./wallet --no-shell gas --address $ADMIN
  6AB7D15F41B28FF1EBF6D32499214BBD9035D1EB |     0      |   100000
  800F2704E22637A036C4325B539D711BB83CA6C2 |     0      |   100000
  D2F52301D5343DD2C1FA076401BC6283C3E4AA34 |     0      |   100000
-$ ./wallet --no-shell gas --address $PLAYER_X
+$ wallet --no-shell gas --address $PLAYER_X
                 Object ID                 |  Version   |  Gas Value
 ----------------------------------------------------------------------
  6F675038CAA48184707DBBE95ACFBA2030E87CD8 |     0      |   100000
@@ -65,7 +60,7 @@ $ ./wallet --no-shell gas --address $PLAYER_X
  9FED1FC3D21F284DC53DE87C0E19718971D96D8C |     0      |   100000
  E293F935F015C23216867442DB4E712518E7CAB7 |     0      |   100000
  F19384C06AE538F9C3C9D9762002B4DAEA49FE3A |     0      |   100000
-$ ./wallet --no-shell gas --address $PLAYER_O
+$ wallet --no-shell gas --address $PLAYER_O
                 Object ID                 |  Version   |  Gas Value
 ----------------------------------------------------------------------
  2110ADFB7BAF889A05EA6F5889AF7724299F9BED |     0      |   100000
@@ -84,7 +79,7 @@ export O_GAS=2110ADFB7BAF889A05EA6F5889AF7724299F9BED
 ## Publish the TicTacToe game on Sui
 We implemented a TicTacToe game in [TicTacToe.move](../../../sui_programmability/examples/games/sources/TicTacToe.move). To publish the game, we run the publish command and specify the path to the game package:
 ```
-$ ./wallet --no-shell publish --path ../../sui_programmability/examples/games --gas $ADMIN_GAS --gas-budget 30000
+$ wallet --no-shell publish --path ../../sui_programmability/examples/games --gas $ADMIN_GAS --gas-budget 30000
 ----- Certificate ----
 Signed Authorities : ...
 Transaction Kind : Publish
@@ -112,7 +107,7 @@ Because the admin owns the gameboard, each individual player cannot place a mark
 Now let's begin the game!
 First of all, let's create a game:
 ```
-$ ./wallet --no-shell call --package $PACKAGE --module TicTacToe --function create_game --args \"0x$PLAYER_X\" \"0x$PLAYER_O\" --gas $ADMIN_GAS --gas-budget 1000
+$ wallet --no-shell call --package $PACKAGE --module TicTacToe --function create_game --args \"0x$PLAYER_X\" \"0x$PLAYER_O\" --gas $ADMIN_GAS --gas-budget 1000
 ----- Certificate ----
 Signed Authorities : ...
 Transaction Kind : Call
@@ -134,21 +129,21 @@ Mutated Objects:
 ```
 The above call created 3 objects. For each object, it printed out a tuple of 3 values (object_id, version, object_digest). Object ID is what we care about here. Since we don't have a real application here to display things for us, we need a bit of object printing magic to figure out which object is which. Let's print out the metadata of each created object (replace the object ID with what you see on your screen):
 ```
-$ ./wallet --no-shell object --id 5851B7EA07B93E68696BC0CF811D2E266DFB880D
+$ wallet --no-shell object --id 5851B7EA07B93E68696BC0CF811D2E266DFB880D
 Owner: AddressOwner(k#251cf224b6ba3a019d04b6041357c20490f7a322)
 Version: 1
 ID: 5851B7EA07B93E68696BC0CF811D2E266DFB880D
 Readonly: false
 Type: 0xa613a7ff8cb03e0dfc0d157e232bba50c5f19d17::TicTacToe::MarkMintCap
 
-$ ./wallet --no-shell object --id A6D3B507D4533822E690291166891D42694A2721
+$ wallet --no-shell object --id A6D3B507D4533822E690291166891D42694A2721
 Owner: AddressOwner(k#7b61da6aaced7f28c1187d998955f10464beae55)
 Version: 1
 ID: A6D3B507D4533822E690291166891D42694A2721
 Readonly: false
 Type: 0xa613a7ff8cb03e0dfc0d157e232bba50c5f19d17::TicTacToe::MarkMintCap
 
-$ ./wallet --no-shell object --id F1B8161BD97D3CD6627E739AD675089C5ACFB452
+$ wallet --no-shell object --id F1B8161BD97D3CD6627E739AD675089C5ACFB452
 Owner: AddressOwner(k#ecf53ce22d1b2fb588573924057e9addad1d8385)
 Version: 1
 ID: F1B8161BD97D3CD6627E739AD675089C5ACFB452
@@ -173,7 +168,7 @@ public fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address, row: 
 ```
 The `cap` argument will be Player X's capability object (XCAP), and `game_address` argument will be the admin's address (ADMIN):
 ```
-$ ./wallet --no-shell call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$XCAP\" \"0x$ADMIN\" 1 1 --gas $X_GAS --gas-budget 1000
+$ wallet --no-shell call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$XCAP\" \"0x$ADMIN\" 1 1 --gas $X_GAS --gas-budget 1000
 
 ----- Certificate ----
 Signed Authorities : ...
@@ -199,7 +194,7 @@ public fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext);
 ```
 The first argument is the game board, and the second argument is the mark the admin just received from the player. We will call this function (replace the second argument with the Mark object ID above):
 ```
-$ ./wallet --no-shell call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0xAE3CE9176F1A8C1F21D922722486DF667FA00394\" --gas $ADMIN_GAS --gas-budget 1000
+$ wallet --no-shell call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0xAE3CE9176F1A8C1F21D922722486DF667FA00394\" --gas $ADMIN_GAS --gas-budget 1000
 ```
 The gameboard now looks like this (this won't be printed out, so keep it in your imagination):
 ```
@@ -210,7 +205,7 @@ _|X|_
 
 Player O now tries to put a mark at (0, 0) (note, in the second call, the second argument comes from the created objects in the first call):
 ```
-$ ./wallet --no-shell call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$OCAP\" \"0x$ADMIN\" 0 0 --gas $O_GAS --gas-budget 1000
+$ wallet --no-shell call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$OCAP\" \"0x$ADMIN\" 0 0 --gas $O_GAS --gas-budget 1000
 ----- Certificate ----
 ...
 ----- Transaction Effects ----
@@ -219,7 +214,7 @@ Created Objects:
 7A16D266DAD41145F34649258BC1F744D147BF2F SequenceNumber(1) o#58cb018be98dd828c10f5b2045329f6ec4dab56c5a90e719ad225f0bc195908a
 ...
 
-$ ./wallet --no-shell call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0x7A16D266DAD41145F34649258BC1F744D147BF2F\" --gas $ADMIN_GAS --gas-budget 1000
+$ wallet --no-shell call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0x7A16D266DAD41145F34649258BC1F744D147BF2F\" --gas $ADMIN_GAS --gas-budget 1000
 ----- Certificate ----
 ...
 ----- Transaction Effects ----
@@ -235,7 +230,7 @@ _|X|_
 
 Player X puts a mark at (0, 2):
 ```
-$ ./wallet --no-shell call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$XCAP\" \"0x$ADMIN\" 0 2 --gas $X_GAS --gas-budget 1000
+$ wallet --no-shell call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$XCAP\" \"0x$ADMIN\" 0 2 --gas $X_GAS --gas-budget 1000
 
 ----- Certificate ----
 ...
@@ -245,7 +240,7 @@ Created Objects:
 2875D50BD9021ED2009A1278C7CB6D4C876FFF6A SequenceNumber(1) o#d4371b72e77bfc07bd088a9113ef7bf870198066649f6c9e9e4abf5f7a7fbd2a
 ...
 
-$ ./wallet --no-shell call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0x2875D50BD9021ED2009A1278C7CB6D4C876FFF6A\" --gas $ADMIN_GAS --gas-budget 1000
+$ wallet --no-shell call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0x2875D50BD9021ED2009A1278C7CB6D4C876FFF6A\" --gas $ADMIN_GAS --gas-budget 1000
 
 ...
 ```
@@ -258,7 +253,7 @@ _|X|_
 
 Player O places a mark at (1, 0):
 ```
-$ ./wallet --no-shell call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$OCAP\" \"0x$ADMIN\" 1 0 --gas $O_GAS --gas-budget 1000
+$ wallet --no-shell call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$OCAP\" \"0x$ADMIN\" 1 0 --gas $O_GAS --gas-budget 1000
 ----- Certificate ----
 ...
 ----- Transaction Effects ----
@@ -267,7 +262,7 @@ Created Objects:
 4F7391F172063D87013DD9DC95B8BD45C35FD2D9 SequenceNumber(1) o#ee7ba8ea66e574d7636e159da9f33c96d724d71f141a57a1e4929b2b928c298d
 ...
 
-$ ./wallet --no-shell call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0x4F7391F172063D87013DD9DC95B8BD45C35FD2D9\" --gas $ADMIN_GAS --gas-budget 1000
+$ wallet --no-shell call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0x4F7391F172063D87013DD9DC95B8BD45C35FD2D9\" --gas $ADMIN_GAS --gas-budget 1000
 ...
 ```
 The gameboard now looks like:
@@ -278,7 +273,7 @@ O|X|_
 ```
 This is a chance for Player X to win! X now mints the winning mark at (2, 0):
 ```
-$ ./wallet --no-shell call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$XCAP\" \"0x$ADMIN\" 2 0 --gas $X_GAS --gas-budget 1000
+$ wallet --no-shell call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args \"0x$XCAP\" \"0x$ADMIN\" 2 0 --gas $X_GAS --gas-budget 1000
 ----- Certificate ----
 ...
 ----- Transaction Effects ----
@@ -289,7 +284,7 @@ AA7A6624E16E5E447801462FF6614013FC4AD156 SequenceNumber(1) o#e5e1b15f03531db118e
 ```
 And then finally the admin places the winning mark:
 ```
-$ ./wallet --no-shell call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0xAA7A6624E16E5E447801462FF6614013FC4AD156\" --gas $ADMIN_GAS --gas-budget 1000
+$ wallet --no-shell call --package $PACKAGE --module TicTacToe --function place_mark --args \"0x$GAME\" \"0xAA7A6624E16E5E447801462FF6614013FC4AD156\" --gas $ADMIN_GAS --gas-budget 1000
 ----- Certificate ----
 ...
 ----- Transaction Effects ----
@@ -301,7 +296,7 @@ Mutated Objects:
 ```
 Cool! The last transaction created a new object. Let's find out what object was created:
 ```
-$ ./wallet --no-shell object --id 54B58C0D5B14A269B1CD424B3CCAB1E315C43343
+$ wallet --no-shell object --id 54B58C0D5B14A269B1CD424B3CCAB1E315C43343
 
 Owner: AddressOwner(k#7b61da6aaced7f28c1187d998955f10464beae55)
 Version: 1
