@@ -301,17 +301,18 @@ For convenience, make sure the path to Sui binaries
 (`sui/target/release`), including the sui-move command used throughout
 this tutorial, is part of your system path.
 
-Now proceed to creating a package directory structure and an
-empty manifest file following the
+Now proceed to creating a package directory structure (in the current directory) with an
+empty manifest file and an empty module source file following the
 [Move code organization](#move-code-organization)
 described earlier:
 
 ``` shell
 mkdir -p my_move_package/sources
+mkdir -p my_move_package/sources/M1.move
 touch my_move_package/Move.toml
 ```
 
-The directory structure should now be:
+The directory structure should now be (please note that directories at the same indentation level in the figure below should also be at the same level in the file system):
 
 ```
 current_directory
@@ -357,8 +358,11 @@ in this package.
 
 If we want to access sword attributes from a different package, we
 need to add accessor functions to our module similar to the `value`
-function in the Coin package described in
-[Move functions](#move-functions):
+function in the Coin package described in [Move
+functions](#move-functions) (please make sure you add these functions,
+and all the following code in this tutorial, in the scope of our
+package - between curly braces starting and ending the package
+definition):
 
 ``` rust
     public fun magic(self: &Sword): u64 {
@@ -378,17 +382,17 @@ to facilitate [package publishing](wallet.md#publish-packages).
 
 ```
 [package]
-name = "MyMovePackage"
+name = "MyFirstPackage"
 version = "0.0.1"
 
 [dependencies]
 Sui = { local = "../sui/sui_programmability/framework/" }
 
 [addresses]
-MyMovePackage = "0x0"
+MyFirstPackage = "0x0"
 
 [dev-addresses]
-MyMovePackage = "0x0"
+MyFirstPackage = "0x0"
 ```
 
 We can now go to the directory containing our package and build it:
@@ -430,7 +434,7 @@ that no tests have ran because we have not written any yet!
 ``` shell
 BUILDING MoveStdlib
 BUILDING Sui
-BUILDING MyMovePackage
+BUILDING MyFirstPackage
 Running Move unit tests
 Test result: OK. Total tests: 0; passed: 0; failed: 0
 ```
@@ -490,7 +494,7 @@ error[E06001]: unused value without 'drop'
 29 │ │             magic: 42,
 30 │ │             strength: 7,
 31 │ │         };
-   │ ╰─────────' The type 'MyMovePackage::M1::Sword' does not have the ability 'drop'
+   │ ╰─────────' The type 'MyFirstPackage::M1::Sword' does not have the ability 'drop'
    · │
 34 │           assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
    │                                                                   ^ Invalid return
@@ -542,7 +546,7 @@ successful test has been run:
 ``` shell
 BUILDING MoveStdlib
 BUILDING Sui
-BUILDING MyMovePackage
+BUILDING MyFirstPackage
 Running Move unit tests
 [ PASS    ] 0x0::M1::test_sword_create
 Test result: OK. Total tests: 1; passed: 1; failed: 0
@@ -719,7 +723,7 @@ successful tests for our module:
 ``` shell
 BUILDING MoveStdlib
 BUILDING Sui
-BUILDING MyMovePackage
+BUILDING MyFirstPackage
 Running Move unit tests
 [ PASS    ] 0x0::M1::test_sword_create
 [ PASS    ] 0x0::M1::test_sword_transactions
