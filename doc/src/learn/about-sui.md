@@ -15,12 +15,12 @@ With existing platforms, users pay a huge tax as network usage increases due to 
 
 ## Unparalleled scalability, immediate settlement
 
-Sui scales horizontally as the demands of Dapps increase. Validators can add more workers to increase the networking, storage
+Sui scales horizontally as the demands of Dapps increase. Authorities (nodes) can add more workers to increase the networking, storage
 and compute capacity of the network. We are proud to say that Sui is the first proof of stake, decentralized blockchain that scales
 beyond the transaction processing capacities of established rails such as VISA & SWIFT while executing safe, turing complete smart contracts.
 
-For example, a network of validators each running an Apple Macbook Pro worker achieves 30,000 TPS with sub second finality. Sui’s linear
-scalability means validators increase network throughput by adding more workers to meet network demands. This results in low gas fees even
+For example, a network of authorities each running an Apple Macbook Pro worker achieves 30,000 TPS with sub second finality. Sui’s linear
+scalability means authorities increase network throughput by adding more workers to meet network demands. This results in low gas fees even
 during periods of high network traffic because the network is able to increase capacity to meet demand. This type of scalability is in sharp
 contrast to how blockchains are typically designed.
 
