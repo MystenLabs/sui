@@ -108,16 +108,13 @@ As we can see, when defining a module we specify the module name
 is used to uniquely identify a module in Move source code (e.g., to be
 able to use if from other modules). The package name is globally
 unique, but different packages can contain modules with the same name.
+Module names are not unique, but combined with unique package name renders
+a unique combination.
 
 For example, if you have package "P" that has been published, you cannot
 publish another package named "P". At the same time you can have module
 "P1::M1", "P2::M1", and "P1::M2" but not another, say, "P1::M1" in the system
 at the same time.
-
-TODO: Clarify this last sentence. How is the package name globally
-unique then? Or are you saying the aforementioned *combination* is
-globally unique?
-
 
 In addition to having a presence at the source code level, as we
 discussed in [Move code organization](#move-code-organization), a
