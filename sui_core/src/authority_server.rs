@@ -318,7 +318,9 @@ where
                 here for well behaved clients.
             */
             if let Err(err) = one_chunk {
-                channel.sink().send(serialize_error(&err).into()).await;
+                // If the response channel is closed there is no much we can do 
+                // to handle the error result.
+                let _ = channel.sink().send(serialize_error(&err).into()).await;
                 return;
             }
             let mut one_chunk = one_chunk.unwrap();
