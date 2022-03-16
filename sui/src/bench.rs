@@ -332,7 +332,7 @@ impl ClientServerBenchmark {
 
         let max_in_flight = self.max_in_flight / connections as usize;
         info!("Number of TCP connections: {}", connections);
-        info!("Set max_in_flight to {}", max_in_flight);
+        info!("Max_in_flight: {}", max_in_flight);
 
         info!("Sending requests."); 
         if self.max_in_flight > 0 {
