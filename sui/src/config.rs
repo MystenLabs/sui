@@ -2,27 +2,29 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::gateway::{EmbeddedGatewayConfig, GatewayType};
-use crate::keystore::KeystoreType;
-use anyhow::anyhow;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
+use std::fs::{self, File};
+use std::io::BufReader;
+use std::ops::{Deref, DerefMut};
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::hex::Hex;
 use serde_with::serde_as;
-use std::fmt::Write;
-use std::fmt::{Display, Formatter};
-use std::fs::{self, File};
-use std::io::BufReader;
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use tracing::log::trace;
+
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_network::network::PortAllocator;
-use sui_network::transport;
 use sui_types::base_types::*;
 use sui_types::crypto::{get_key_pair, KeyPair};
-use tracing::log::trace;
+
+use crate::gateway::GatewayType;
+use crate::keystore::KeystoreType;
 
 const DEFAULT_WEIGHT: usize = 1;
 const DEFAULT_GAS_AMOUNT: u64 = 100000;
@@ -107,42 +109,16 @@ pub struct WalletConfig {
     pub accounts: Vec<SuiAddress>,
     pub keystore: KeystoreType,
     pub gateway: GatewayType,
-
-    #[serde(skip)]
-    config_path: PathBuf,
 }
 
-impl Config for WalletConfig {
-    fn create(path: &Path) -> Result<Self, anyhow::Error> {
-        let working_dir = path
-            .parent()
-            .ok_or_else(|| anyhow!("Cannot determine parent directory."))?;
-        Ok(WalletConfig {
-            accounts: Vec::new(),
-            keystore: KeystoreType::File(working_dir.join("wallet.ks")),
-            gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
-                db_folder_path: working_dir.join("client_db"),
-                ..Default::default()
-            }),
-            config_path: path.to_path_buf(),
-        })
-    }
-
-    fn set_config_path(&mut self, path: &Path) {
-        self.config_path = path.to_path_buf();
-    }
-
-    fn config_path(&self) -> &Path {
-        &self.config_path
-    }
-}
+impl Config for WalletConfig {}
 
 impl Display for WalletConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
 
-        writeln!(writer, "Config path : {:?}", self.config_path)?;
         writeln!(writer, "Managed addresses : {}", self.accounts.len())?;
+        writeln!(writer, "{}", self.keystore)?;
         write!(writer, "{}", self.gateway)?;
 
         write!(f, "{}", writer)
@@ -154,42 +130,34 @@ pub struct NetworkConfig {
     pub authorities: Vec<AuthorityPrivateInfo>,
     pub buffer_size: usize,
     pub loaded_move_packages: Vec<(PathBuf, ObjectID)>,
-    #[serde(skip)]
-    config_path: PathBuf,
 }
 
-impl Config for NetworkConfig {
-    fn create(path: &Path) -> Result<Self, anyhow::Error> {
-        Ok(Self {
-            authorities: vec![],
-            buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE.to_string().parse()?,
-            loaded_move_packages: vec![],
-            config_path: path.to_path_buf(),
-        })
-    }
+impl Config for NetworkConfig {}
 
-    fn set_config_path(&mut self, path: &Path) {
-        self.config_path = path.to_path_buf();
-    }
-
-    fn config_path(&self) -> &Path {
-        &self.config_path
+impl NetworkConfig {
+    pub fn get_authority_infos(&self) -> Vec<AuthorityInfo> {
+        self.authorities
+            .iter()
+            .map(|info| AuthorityInfo {
+                name: *info.key_pair.public_key_bytes(),
+                host: info.host.clone(),
+                base_port: info.port,
+            })
+            .collect()
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct GenesisConfig {
     pub authorities: Vec<AuthorityPrivateInfo>,
     pub accounts: Vec<AccountConfig>,
     pub move_packages: Vec<PathBuf>,
-    #[serde(default = "default_sui_framework_lib")]
     pub sui_framework_lib_path: PathBuf,
-    #[serde(default = "default_move_framework_lib")]
     pub move_framework_lib_path: PathBuf,
-    #[serde(skip)]
-    config_path: PathBuf,
 }
+
+impl Config for GenesisConfig {}
 
 #[derive(Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -215,24 +183,14 @@ fn default_gas_value() -> u64 {
     DEFAULT_GAS_AMOUNT
 }
 
-fn default_sui_framework_lib() -> PathBuf {
-    PathBuf::from(DEFAULT_FRAMEWORK_PATH)
-}
-
-fn default_move_framework_lib() -> PathBuf {
-    PathBuf::from(DEFAULT_FRAMEWORK_PATH)
-        .join("deps")
-        .join("move-stdlib")
-}
-
 const DEFAULT_NUMBER_OF_AUTHORITIES: usize = 4;
 const DEFAULT_NUMBER_OF_ACCOUNT: usize = 5;
 const DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT: usize = 5;
 
 impl GenesisConfig {
-    pub fn default_genesis(path: &Path) -> Result<Self, anyhow::Error> {
+    pub fn default_genesis(working_dir: &Path) -> Result<Self, anyhow::Error> {
         GenesisConfig::custom_genesis(
-            path,
+            working_dir,
             DEFAULT_NUMBER_OF_AUTHORITIES,
             DEFAULT_NUMBER_OF_ACCOUNT,
             DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT,
@@ -240,14 +198,11 @@ impl GenesisConfig {
     }
 
     pub fn custom_genesis(
-        path: &Path,
+        working_dir: &Path,
         num_authorities: usize,
         num_accounts: usize,
         num_objects_per_account: usize,
     ) -> Result<Self, anyhow::Error> {
-        let working_dir = path
-            .parent()
-            .ok_or_else(|| anyhow!("Cannot resolve file path."))?;
         let mut authorities = Vec::new();
         for _ in 0..num_authorities {
             // Get default authority config from deserialization logic.
@@ -274,32 +229,22 @@ impl GenesisConfig {
         Ok(Self {
             authorities,
             accounts,
-            move_packages: vec![],
-            sui_framework_lib_path: default_sui_framework_lib(),
-            move_framework_lib_path: default_move_framework_lib(),
-            config_path: path.to_path_buf(),
+            ..Default::default()
         })
     }
 }
 
-impl Config for GenesisConfig {
-    fn create(path: &Path) -> Result<Self, anyhow::Error> {
-        Ok(Self {
+impl Default for GenesisConfig {
+    fn default() -> Self {
+        Self {
             authorities: vec![],
             accounts: vec![],
-            config_path: path.to_path_buf(),
             move_packages: vec![],
-            sui_framework_lib_path: default_sui_framework_lib(),
-            move_framework_lib_path: default_move_framework_lib(),
-        })
-    }
-
-    fn set_config_path(&mut self, path: &Path) {
-        self.config_path = path.to_path_buf()
-    }
-
-    fn config_path(&self) -> &Path {
-        &self.config_path
+            sui_framework_lib_path: PathBuf::from(DEFAULT_FRAMEWORK_PATH),
+            move_framework_lib_path: PathBuf::from(DEFAULT_FRAMEWORK_PATH)
+                .join("deps")
+                .join("move-stdlib"),
+        }
     }
 }
 
@@ -307,39 +252,47 @@ pub trait Config
 where
     Self: DeserializeOwned + Serialize,
 {
-    fn read_or_create(path: &Path) -> Result<Self, anyhow::Error> {
-        let path_buf = PathBuf::from(path);
-        Ok(if path_buf.exists() {
-            Self::read(path)?
-        } else {
-            trace!("Config file not found, creating new config '{:?}'", path);
-            let new_config = Self::create(path)?;
-            new_config.write(path)?;
-            new_config
-        })
+    fn persisted(self, path: &Path) -> PersistedConfig<Self> {
+        PersistedConfig {
+            inner: self,
+            path: path.to_path_buf(),
+        }
     }
+}
 
-    fn read(path: &Path) -> Result<Self, anyhow::Error> {
+pub struct PersistedConfig<C> {
+    inner: C,
+    path: PathBuf,
+}
+
+impl<C> PersistedConfig<C>
+where
+    C: Config,
+{
+    pub fn read(path: &Path) -> Result<C, anyhow::Error> {
         trace!("Reading config from '{:?}'", path);
         let reader = BufReader::new(File::open(path)?);
-        let mut config: Self = serde_json::from_reader(reader)?;
-        config.set_config_path(path);
-        Ok(config)
+        Ok(serde_json::from_reader(reader)?)
     }
 
-    fn write(&self, path: &Path) -> Result<(), anyhow::Error> {
-        trace!("Writing config to '{:?}'", path);
-        let config = serde_json::to_string_pretty(self).unwrap();
-        fs::write(path, config).expect("Unable to write to config file");
+    pub fn save(&self) -> Result<(), anyhow::Error> {
+        trace!("Writing config to '{:?}'", &self.path);
+        let config = serde_json::to_string_pretty(&self.inner)?;
+        fs::write(&self.path, config)?;
         Ok(())
     }
+}
 
-    fn save(&self) -> Result<(), anyhow::Error> {
-        self.write(self.config_path())
+impl<C> Deref for PersistedConfig<C> {
+    type Target = C;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
+}
 
-    fn create(path: &Path) -> Result<Self, anyhow::Error>;
-
-    fn set_config_path(&mut self, path: &Path);
-    fn config_path(&self) -> &Path;
+impl<C> DerefMut for PersistedConfig<C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
 }
