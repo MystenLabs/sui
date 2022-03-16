@@ -1,6 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use core::fmt;
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::path::Path;
@@ -35,7 +34,7 @@ use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::ObjectRead;
 use sui_types::object::ObjectRead::Exists;
 
-use crate::config::{Config, WalletConfig};
+use crate::config::{Config, PersistedConfig, WalletConfig};
 use crate::keystore::Keystore;
 use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
 
@@ -436,13 +435,15 @@ impl WalletCommands {
 }
 
 pub struct WalletContext {
-    pub config: WalletConfig,
+    pub config: PersistedConfig<WalletConfig>,
     pub keystore: Arc<RwLock<Box<dyn Keystore>>>,
     pub gateway: GatewayClient,
 }
 
 impl WalletContext {
-    pub fn new(config: WalletConfig) -> Result<Self, anyhow::Error> {
+    pub fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
+        let config: WalletConfig = PersistedConfig::read(config_path)?;
+        let config = config.persisted(config_path);
         let keystore = Arc::new(RwLock::new(config.keystore.init()?));
         let gateway = config.gateway.init();
         let context = Self {
