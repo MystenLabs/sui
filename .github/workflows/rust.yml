@@ -70,7 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        toolchain: [stable, nightly]
+        toolchain: [stable]
         os: [ubuntu]
     steps:
       - uses: actions/checkout@v2
