@@ -74,18 +74,18 @@ jobs:
         os: [ubuntu]
     steps:
       - uses: actions/checkout@v2
-        if: needs.diff.outputs.isRust == 'true' && ${{matrix.toolchain}} != 'nightly'
+        if: needs.diff.outputs.isRust == 'true' && matrix.toolchain != 'nightly'
       - name: Install rust
-        if: needs.diff.outputs.isRust == 'true' && ${{matrix.toolchain}} != 'nightly'
+        if: needs.diff.outputs.isRust == 'true' && matrix.toolchain != 'nightly'
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{matrix.toolchain}}
           profile: minimal
           override: true
       - uses: Swatinem/rust-cache@v1
-        if: needs.diff.outputs.isRust == 'true' && ${{matrix.toolchain}} != 'nightly'
+        if: needs.diff.outputs.isRust == 'true' && matrix.toolchain != 'nightly'
       - name: Test
-        if: needs.diff.outputs.isRust == 'true' && ${{matrix.toolchain}} != 'nightly'
+        if: needs.diff.outputs.isRust == 'true' && matrix.toolchain != 'nightly'
         uses: actions-rs/cargo@v1
         with:
           command: test
