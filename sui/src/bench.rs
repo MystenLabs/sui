@@ -334,7 +334,7 @@ impl ClientServerBenchmark {
         info!("Number of TCP connections: {}", connections);
         info!("Set max_in_flight to {}", max_in_flight);
 
-        info!("Sending requests.");
+        info!("Sending requests."); 
         if self.max_in_flight > 0 {
             let mass_client = NetworkClient::new(
                 self.host.clone(),
