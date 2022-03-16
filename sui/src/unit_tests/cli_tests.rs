@@ -1,18 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use super::*;
-use move_core_types::identifier::Identifier;
-use serde_json::{json, Value};
+
 use std::fs::read_dir;
 use std::ops::Add;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str;
 use std::time::Duration;
+
+use move_core_types::identifier::Identifier;
+use serde_json::{json, Value};
+use tempfile::TempDir;
+use tokio::task;
+use tokio::task::JoinHandle;
+use tracing_test::traced_test;
+
 use sui::config::{
-    AccountConfig, AuthorityPrivateInfo, GenesisConfig, NetworkConfig, ObjectConfig, WalletConfig,
-    AUTHORITIES_DB_NAME,
+    AccountConfig, AuthorityPrivateInfo, Config, GenesisConfig, NetworkConfig, ObjectConfig,
+    PersistedConfig, WalletConfig, AUTHORITIES_DB_NAME,
 };
-use sui::gateway::GatewayType;
+use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 use sui::keystore::{KeystoreType, SuiKeystore};
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
@@ -21,10 +27,8 @@ use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::TransactionEffects;
 use sui_types::object::{Object, ObjectRead, GAS_VALUE_FOR_TESTING};
-use tempfile::TempDir;
-use tokio::task;
-use tokio::task::JoinHandle;
-use tracing_test::traced_test;
+
+use super::*;
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
 const AIRDROP_SOURCE_CONTRACT_ADDRESS: &str = "bc4ca0eda7647a8ab7c2061c2e118a18a936f13d";
@@ -48,20 +52,24 @@ macro_rules! retry_assert {
 #[traced_test]
 #[tokio::test]
 async fn test_genesis() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
-    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
+    let temp_dir = tempfile::tempdir()?;
+    let working_dir = temp_dir.path();
+    let config = working_dir.join("network.conf");
 
     // Start network without authorities
-    let start = SuiCommand::Start.execute(&mut config).await;
+    let start = SuiCommand::Start { config }.execute().await;
     assert!(matches!(start, Err(..)));
     // Genesis
-    SuiCommand::Genesis { config: None }
-        .execute(&mut config)
-        .await?;
+    SuiCommand::Genesis {
+        working_dir: working_dir.to_path_buf(),
+        config: None,
+    }
+    .execute()
+    .await?;
     assert!(logs_contain("Network genesis completed."));
 
     // Get all the new file names
-    let files = read_dir(working_dir.path())?
+    let files = read_dir(working_dir)?
         .flat_map(|r| r.map(|file| file.file_name().to_str().unwrap().to_owned()))
         .collect::<Vec<_>>();
 
@@ -72,15 +80,15 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     assert!(files.contains(&"wallet.key".to_string()));
 
     // Check network.conf
-    let network_conf = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
+    let network_conf = PersistedConfig::<NetworkConfig>::read(&working_dir.join("network.conf"))?;
     assert_eq!(4, network_conf.authorities.len());
 
     // Check wallet.conf
-    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let wallet_conf = PersistedConfig::<WalletConfig>::read(&working_dir.join("wallet.conf"))?;
 
-    if let GatewayType::Embedded(config) = wallet_conf.gateway {
+    if let GatewayType::Embedded(config) = &wallet_conf.gateway {
         assert_eq!(4, config.authorities.len());
-        assert_eq!(working_dir.path().join("client_db"), config.db_folder_path);
+        assert_eq!(working_dir.join("client_db"), config.db_folder_path);
     } else {
         panic!()
     }
@@ -88,21 +96,34 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     assert_eq!(5, wallet_conf.accounts.len());
 
     // Genesis 2nd time should fail
-    let result = SuiCommand::Genesis { config: None }
-        .execute(&mut config)
-        .await;
+    let result = SuiCommand::Genesis {
+        working_dir: working_dir.to_path_buf(),
+        config: None,
+    }
+    .execute()
+    .await;
     assert!(matches!(result, Err(..)));
 
-    working_dir.close()?;
+    temp_dir.close()?;
     Ok(())
 }
 
 #[traced_test]
 #[tokio::test]
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
-    let working_dir = tempfile::tempdir()?;
+    let temp_dir = tempfile::tempdir()?;
+    let working_dir = temp_dir.path();
 
-    let mut wallet_config = WalletConfig::create(&working_dir.path().join("wallet.conf"))?;
+    let wallet_config = WalletConfig {
+        accounts: vec![],
+        keystore: KeystoreType::File(working_dir.join("wallet.key")),
+        gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
+            db_folder_path: working_dir.join("client_db"),
+            ..Default::default()
+        }),
+    };
+    let wallet_conf_path = working_dir.join("wallet.conf");
+    let mut wallet_config = wallet_config.persisted(&wallet_conf_path);
 
     // Add 3 accounts
     for _ in 0..3 {
@@ -111,7 +132,9 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             address
         });
     }
-    let mut context = WalletContext::new(wallet_config)?;
+    wallet_config.save()?;
+
+    let mut context = WalletContext::new(&wallet_conf_path)?;
 
     // Print all addresses
     WalletCommands::Addresses
@@ -120,7 +143,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         .print(true);
 
     // Check log output contains all addresses
-    for address in context.config.accounts {
+    for address in &context.config.accounts {
         assert!(logs_contain(&*format!("{}", address)));
     }
 
@@ -133,7 +156,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
 
-    let network = start_network(working_dir.path(), 10101, None).await?;
+    let network = start_network(working_dir.path(), 10800, None).await?;
     // Wait for authorities to come alive.
     retry_assert!(
         logs_contain("Listening to TCP traffic on 127.0.0.1"),
@@ -167,10 +190,14 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     let token = airdrop_call_move_and_get_created_object(args, gas_object_id, &mut context).await?;
 
     // Verify the airdrop token
-    assert_eq!(token["contents"]["type"], ("0x2::CrossChainAirdrop::NFT"));
-    let fields = &token["contents"]["fields"];
     assert_eq!(
-        fields["source_token_id"]["fields"]["id"],
+        token["contents"]["type"],
+        ("0x2::NFT::NFT<0x2::CrossChainAirdrop::ERC721>")
+    );
+    let nft_data = &token["contents"]["fields"]["data"];
+    let erc721_metadata = &nft_data["fields"]["metadata"];
+    assert_eq!(
+        erc721_metadata["fields"]["token_id"]["fields"]["id"],
         AIRDROP_SOURCE_TOKEN_ID
     );
 
@@ -192,15 +219,21 @@ async fn airdrop_get_wallet_context_with_oracle(
         244, 88, 202, 115, 9, 82, 3, 184, 18, 236, 128, 199, 22, 37, 255, 146, 103, 34, 0, 240,
         255, 163, 60, 174,
     ]);
-    let mut wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let wallet_conf_path = working_dir.path().join("wallet.conf");
+    let wallet_conf: WalletConfig = PersistedConfig::read(&wallet_conf_path)?;
+    let mut wallet_conf = wallet_conf.persisted(&wallet_conf_path);
     let path = match &wallet_conf.keystore {
         KeystoreType::File(path) => path,
         _ => panic!("Unexpected KeystoreType"),
     };
     let mut store = SuiKeystore::load_or_create(path)?;
     store.add_key(oracle_address, keypair)?;
-    Vec::push(&mut wallet_conf.accounts, oracle_address);
-    Ok((oracle_address, WalletContext::new(wallet_conf)?))
+    store.save(path)?;
+
+    wallet_conf.accounts.push(oracle_address);
+    wallet_conf.save()?;
+
+    Ok((oracle_address, WalletContext::new(&wallet_conf_path)?))
 }
 
 async fn airdrop_get_oracle_object(
@@ -286,9 +319,8 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     );
 
     // Create Wallet context.
-    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address = *wallet_conf.accounts.first().unwrap();
-    let mut context = WalletContext::new(wallet_conf)?;
+    let mut context = WalletContext::new(&working_dir.path().join("wallet.conf"))?;
+    let address = context.config.accounts.first().cloned().unwrap();
 
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
@@ -319,8 +351,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
     // Create and save genesis config file
     // Create 4 authorities, 1 account with 1 gas object with custom id
-    let genesis_path = working_dir.path().join("genesis.conf");
-    let mut config = GenesisConfig::default_genesis(&genesis_path)?;
+    let mut config = GenesisConfig::default_genesis(working_dir.path())?;
     config.accounts.clear();
     let object_id = ObjectID::random();
     config.accounts.push(AccountConfig {
@@ -340,11 +371,11 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     );
 
     // Wallet config
-    let wallet_conf = WalletConfig::read(&working_dir.path().join("wallet.conf"))?;
-    assert_eq!(1, wallet_conf.accounts.len());
 
-    let address = *wallet_conf.accounts.first().unwrap();
-    let mut context = WalletContext::new(wallet_conf)?;
+    let mut context = WalletContext::new(&working_dir.path().join("wallet.conf"))?;
+    assert_eq!(1, context.config.accounts.len());
+    let address = context.config.accounts.first().cloned().unwrap();
+
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
         .execute(&mut context)
@@ -379,12 +410,15 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
         105, 254, 59, 163,
     ]);
 
-    let working_dir = tempfile::tempdir()?;
+    let temp_dir = tempfile::tempdir()?;
+    let working_dir = temp_dir.path();
     // Create and save genesis config file
     // Create 4 authorities and 1 account
-    let genesis_path = working_dir.path().join("genesis.conf");
+    let genesis_path = working_dir.join("genesis.conf");
     let num_authorities = 4;
-    let mut config = GenesisConfig::custom_genesis(&genesis_path, num_authorities, 0, 0)?;
+    let config = GenesisConfig::custom_genesis(working_dir, num_authorities, 0, 0)?;
+    let mut config = config.persisted(&genesis_path);
+
     config.accounts.clear();
     config.accounts.push(AccountConfig {
         address: Some(address),
@@ -398,28 +432,27 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_2"));
     config.save()?;
 
-    // Create empty network config for genesis
-    let mut config = NetworkConfig::read_or_create(&working_dir.path().join("network.conf"))?;
-
     // Genesis
     SuiCommand::Genesis {
+        working_dir: working_dir.to_path_buf(),
         config: Some(genesis_path),
     }
-    .execute(&mut config)
+    .execute()
     .await?;
 
     assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids
-    let network_conf = NetworkConfig::read(&working_dir.path().join("network.conf"))?;
+    let network_conf = PersistedConfig::<NetworkConfig>::read(&working_dir.join("network.conf"))?;
     assert_eq!(2, network_conf.loaded_move_packages.len());
 
     // Make sure we log out package id
-    for (_, id) in network_conf.loaded_move_packages {
+    for (_, id) in &network_conf.loaded_move_packages {
         assert!(logs_contain(&*format!("{}", id)));
     }
 
     // Start network
-    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+    let config = working_dir.join("network.conf");
+    let network = task::spawn(async move { SuiCommand::Start { config }.execute().await });
 
     // Wait for authorities to come alive.
     retry_assert!(
@@ -428,9 +461,12 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     );
 
     // Create Wallet context.
-    let mut wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
+    let wallet_conf_path = working_dir.join("wallet.conf");
+    let wallet_conf: WalletConfig = PersistedConfig::read(&wallet_conf_path)?;
+    let mut wallet_conf = wallet_conf.persisted(&wallet_conf_path);
     wallet_conf.accounts = vec![address];
-    let mut context = WalletContext::new(wallet_conf)?;
+    wallet_conf.save()?;
+    let mut context = WalletContext::new(&wallet_conf_path)?;
 
     // Make sure init() is executed correctly for custom_genesis_package_2::M1
     let move_objects = get_move_objects(&mut context, address).await?;
@@ -456,9 +492,9 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     );
 
     // Create Wallet context.
-    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address = *wallet_conf.accounts.first().unwrap();
-    let mut context = WalletContext::new(wallet_conf)?;
+    let wallet_conf = working_dir.path().join("wallet.conf");
+    let mut context = WalletContext::new(&wallet_conf)?;
+    let address = context.config.accounts.first().cloned().unwrap();
 
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
@@ -499,11 +535,10 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     );
 
     // Create Wallet context.
-    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address = *wallet_conf.accounts.first().unwrap();
-    let recipient = *wallet_conf.accounts.get(1).unwrap();
-
-    let mut context = WalletContext::new(wallet_conf)?;
+    let wallet_conf = working_dir.path().join("wallet.conf");
+    let mut context = WalletContext::new(&wallet_conf)?;
+    let address = context.config.accounts.first().cloned().unwrap();
+    let recipient = context.config.accounts.get(1).cloned().unwrap();
 
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
@@ -662,12 +697,12 @@ async fn start_network(
     starting_port: u16,
     genesis: Option<GenesisConfig>,
 ) -> Result<JoinHandle<Result<(), anyhow::Error>>, anyhow::Error> {
-    let network_conf_path = &working_dir.join("network.conf");
-    let genesis_conf_path = &working_dir.join("genesis.conf");
+    let working_dir = working_dir.to_path_buf();
+    let network_conf_path = working_dir.join("network.conf");
+    let genesis_conf_path = working_dir.join("genesis.conf");
 
-    let mut config = NetworkConfig::read_or_create(network_conf_path)?;
     let mut port_allocator = PortAllocator::new(starting_port);
-    let mut genesis_config = genesis.unwrap_or(GenesisConfig::default_genesis(genesis_conf_path)?);
+    let mut genesis_config = genesis.unwrap_or(GenesisConfig::default_genesis(&working_dir)?);
     let authorities = genesis_config
         .authorities
         .iter()
@@ -680,18 +715,25 @@ async fn start_network(
         })
         .collect();
     genesis_config.authorities = authorities;
+
+    let genesis_config = genesis_config.persisted(&genesis_conf_path);
     genesis_config.save()?;
 
     SuiCommand::Genesis {
-        config: Some(genesis_conf_path.to_path_buf()),
+        working_dir,
+        config: Some(genesis_conf_path),
     }
-    .execute(&mut config)
+    .execute()
     .await?;
 
-    let mut config = NetworkConfig::read(network_conf_path)?;
-
     // Start network
-    let network = task::spawn(async move { SuiCommand::Start.execute(&mut config).await });
+    let network = task::spawn(async move {
+        SuiCommand::Start {
+            config: network_conf_path,
+        }
+        .execute()
+        .await
+    });
     Ok(network)
 }
 
@@ -709,11 +751,11 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     );
 
     // Create Wallet context.
-    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address1 = *wallet_conf.accounts.first().unwrap();
-    let address2 = *wallet_conf.accounts.get(1).unwrap();
+    let wallet_conf = working_dir.path().join("wallet.conf");
 
-    let mut context = WalletContext::new(wallet_conf)?;
+    let mut context = WalletContext::new(&wallet_conf)?;
+    let address1 = context.config.accounts.first().cloned().unwrap();
+    let address2 = context.config.accounts.get(1).cloned().unwrap();
 
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address: address1 }
@@ -893,9 +935,9 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     );
 
     // Create Wallet context.
-    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address = *wallet_conf.accounts.first().unwrap();
-    let mut context = WalletContext::new(wallet_conf)?;
+    let wallet_conf = working_dir.path().join("wallet.conf");
+    let mut context = WalletContext::new(&wallet_conf)?;
+    let address = context.config.accounts.first().cloned().unwrap();
 
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
@@ -923,70 +965,41 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let dumy_obj = Object::with_id_owner_for_testing(ObjectID::random(), address);
-    // Get the created objects
-    let (mut created_obj1, mut created_obj2) = (
-        dumy_obj.to_object_reference(),
-        dumy_obj.to_object_reference(),
-    );
-
-    if let WalletCommandResult::Publish(
-        _,
-        TransactionEffects {
-            created: new_objs, ..
-        },
-    ) = resp
-    {
-        (created_obj1, created_obj2) = (new_objs.get(0).unwrap().0, new_objs.get(1).unwrap().0);
+    let (package, created_obj) = if let WalletCommandResult::Publish(resppnse) = resp {
+        (
+            resppnse.package,
+            resppnse.created_objects[0].compute_object_reference(),
+        )
     } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false);
+        unreachable!("Invaldi response");
     };
 
     // One is the actual module, while the other is the object created at init
     retry_assert!(
-        logs_contain(&format!("{:02X}", created_obj1.0)),
+        logs_contain(&format!("{}", package.0)),
         Duration::from_millis(5000)
     );
     retry_assert!(
-        logs_contain(&format!("{:02X}", created_obj2.0)),
+        logs_contain(&format!("{}", created_obj.0)),
         Duration::from_millis(5000)
     );
 
     // Check the objects
-    // Init with some value to satisfy the type checker
-    let mut cr_obj1 = dumy_obj.clone();
-
-    let resp = WalletCommands::Object { id: created_obj1.0 }
+    let resp = WalletCommands::Object { id: package.0 }
         .execute(&mut context)
         .await?;
-    if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
-        cr_obj1 = object;
-    } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false)
-    };
+    assert!(matches!(
+        resp,
+        WalletCommandResult::Object(ObjectRead::Exists(..))
+    ));
 
-    let mut cr_obj2 = dumy_obj;
-
-    let resp = WalletCommands::Object { id: created_obj2.0 }
+    let resp = WalletCommands::Object { id: created_obj.0 }
         .execute(&mut context)
         .await?;
-    if let WalletCommandResult::Object(ObjectRead::Exists(_, object, _)) = resp {
-        cr_obj2 = object;
-    } else {
-        // Fail this way because Panic! causes test issues
-        assert!(false)
-    };
-
-    let (pkg, obj) = if cr_obj1.is_package() {
-        (cr_obj1, cr_obj2)
-    } else {
-        (cr_obj2, cr_obj1)
-    };
-
-    assert!(pkg.is_package());
-    assert!(!obj.is_package());
+    assert!(matches!(
+        resp,
+        WalletCommandResult::Object(ObjectRead::Exists(..))
+    ));
 
     network.abort();
     Ok(())
@@ -1006,12 +1019,11 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     );
 
     // Create Wallet context.
-    let wallet_conf = WalletConfig::read_or_create(&working_dir.path().join("wallet.conf"))?;
-    let address = *wallet_conf.accounts.first().unwrap();
-    let recipient = *wallet_conf.accounts.get(1).unwrap();
+    let wallet_conf = working_dir.path().join("wallet.conf");
 
-    let mut context = WalletContext::new(wallet_conf)?;
-
+    let mut context = WalletContext::new(&wallet_conf)?;
+    let address = context.config.accounts.first().cloned().unwrap();
+    let recipient = context.config.accounts.get(1).cloned().unwrap();
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
         .execute(&mut context)
@@ -1044,8 +1056,8 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
         } else {
             assert!(false);
             (
-                dumy_obj.to_object_reference(),
-                dumy_obj.to_object_reference(),
+                dumy_obj.compute_object_reference(),
+                dumy_obj.compute_object_reference(),
             )
         };
 

@@ -79,8 +79,8 @@ async fn test_handle_transfer_transaction_bad_signature() {
         sender,
         &sender_key,
         recipient,
-        object.to_object_reference(),
-        gas_object.to_object_reference(),
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
     );
     let (_unknown_address, unknown_key) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone();
@@ -97,13 +97,13 @@ async fn test_handle_transfer_transaction_bad_signature() {
         .unwrap()
         .unwrap();
     assert!(authority_state
-        .get_transaction_lock(&object.to_object_reference())
+        .get_transaction_lock(&object.compute_object_reference())
         .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_transaction_lock(&object.to_object_reference())
+        .get_transaction_lock(&object.compute_object_reference())
         .await
         .unwrap()
         .is_none());
@@ -133,8 +133,8 @@ async fn test_handle_transfer_transaction_unknown_sender() {
         unknown_address,
         &unknown_key,
         recipient,
-        object.to_object_reference(),
-        gas_object.to_object_reference(),
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
     );
 
     assert!(authority_state
@@ -148,13 +148,13 @@ async fn test_handle_transfer_transaction_unknown_sender() {
         .unwrap()
         .unwrap();
     assert!(authority_state
-        .get_transaction_lock(&object.to_object_reference())
+        .get_transaction_lock(&object.compute_object_reference())
         .await
         .unwrap()
         .is_none());
 
     assert!(authority_state
-        .get_transaction_lock(&object.to_object_reference())
+        .get_transaction_lock(&object.compute_object_reference())
         .await
         .unwrap()
         .is_none());
@@ -210,8 +210,8 @@ async fn test_handle_transfer_transaction_ok() {
         sender,
         &sender_key,
         recipient,
-        object.to_object_reference(),
-        gas_object.to_object_reference(),
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
     );
 
     let test_object = authority_state
@@ -242,7 +242,7 @@ async fn test_handle_transfer_transaction_ok() {
         .unwrap()
         .unwrap();
     let pending_confirmation = authority_state
-        .get_transaction_lock(&object.to_object_reference())
+        .get_transaction_lock(&object.compute_object_reference())
         .await
         .unwrap()
         .unwrap();
@@ -289,7 +289,7 @@ async fn test_transfer_immutable() {
         &sender_key,
         recipient,
         package_object_ref,
-        gas_object.to_object_reference(),
+        gas_object.compute_object_reference(),
     );
     let result = authority_state
         .handle_transaction(transfer_transaction.clone())
@@ -318,17 +318,14 @@ async fn test_handle_transfer_zero_balance() {
     let gas_object_id = ObjectID::random();
     let gas_object =
         Object::with_id_owner_gas_for_testing(gas_object_id, SequenceNumber::new(), sender, 0);
-    authority_state
-        .init_transaction_lock((gas_object_id, 0.into(), gas_object.digest()))
-        .await;
-    let gas_object_ref = gas_object.to_object_reference();
+    let gas_object_ref = gas_object.compute_object_reference();
     authority_state.insert_object(gas_object).await;
 
     let transfer_transaction = init_transfer_transaction(
         sender,
         &sender_key,
         recipient,
-        object.to_object_reference(),
+        object.compute_object_reference(),
         gas_object_ref,
     );
 
@@ -395,7 +392,7 @@ async fn test_publish_dependent_module_ok() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
-    let gas_payment_object_ref = gas_payment_object.to_object_reference();
+    let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
     let genesis_module_objects = genesis::clone_genesis_packages();
     let genesis_module = match &genesis_module_objects[0].data {
@@ -448,7 +445,7 @@ async fn test_publish_module_no_dependencies_ok() {
     let gas_seq = SequenceNumber::new();
     let gas_payment_object =
         Object::with_id_owner_gas_for_testing(gas_payment_object_id, gas_seq, sender, gas_balance);
-    let gas_payment_object_ref = gas_payment_object.to_object_reference();
+    let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
     let module = file_format::empty_module();
@@ -486,7 +483,7 @@ async fn test_publish_non_existing_dependent_module() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
-    let gas_payment_object_ref = gas_payment_object.to_object_reference();
+    let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // create a genesis state that contains the gas object and genesis modules
     let genesis_module_objects = genesis::clone_genesis_packages();
     let genesis_module = match &genesis_module_objects[0].data {
@@ -552,7 +549,7 @@ async fn test_publish_module_insufficient_gas() {
         sender,
         gas_balance,
     );
-    let gas_payment_object_ref = gas_payment_object.to_object_reference();
+    let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
 
     let module = file_format::empty_module();
@@ -626,7 +623,7 @@ async fn test_handle_move_transaction_insufficient_budget() {
     let (sender, sender_key) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
-    let gas_payment_object_ref = gas_payment_object.to_object_reference();
+    let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     // find the function Object::create and call it to create a new object
     let genesis_package_objects = genesis::clone_genesis_packages();
     let package_object_ref =
@@ -683,8 +680,8 @@ async fn test_handle_transfer_transaction_double_spend() {
         sender,
         &sender_key,
         recipient,
-        object.to_object_reference(),
-        gas_object.to_object_reference(),
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
     );
 
     let signed_transaction = authority_state
@@ -719,8 +716,8 @@ async fn test_handle_confirmation_transaction_unknown_sender() {
         sender,
         &sender_key,
         recipient,
-        object.to_object_reference(),
-        gas_object.to_object_reference(),
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
         &authority_state,
     );
 
@@ -772,8 +769,8 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
         sender,
         &sender_key,
         recipient,
-        object.to_object_reference(),
-        gas_object.to_object_reference(),
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
         &authority_state,
     );
 
@@ -835,8 +832,8 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
         address,
         &key,
         address,
-        object.to_object_reference(),
-        gas_object.to_object_reference(),
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
         &authority_state,
     );
     let response = authority_state
@@ -880,17 +877,15 @@ async fn test_handle_confirmation_transaction_gas() {
             sender,
             gas,
         );
-        authority_state
-            .init_transaction_lock((gas_object_id, 0.into(), gas_object.digest()))
-            .await;
-        let gas_object_ref = gas_object.to_object_reference();
+
+        let gas_object_ref = gas_object.compute_object_reference();
         authority_state.insert_object(gas_object).await;
 
         let certified_transfer_transaction = init_certified_transfer_transaction(
             sender,
             &sender_key,
             recipient,
-            object.to_object_reference(),
+            object.compute_object_reference(),
             gas_object_ref,
             &authority_state,
         );
@@ -937,8 +932,8 @@ async fn test_handle_confirmation_transaction_ok() {
         sender,
         &sender_key,
         recipient,
-        object.to_object_reference(),
-        gas_object.to_object_reference(),
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
         &authority_state,
     );
 
@@ -1026,8 +1021,8 @@ async fn test_handle_confirmation_transaction_idempotent() {
         sender,
         &sender_key,
         recipient,
-        object.to_object_reference(),
-        gas_object.to_object_reference(),
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
         &authority_state,
     );
 
@@ -1341,9 +1336,6 @@ async fn test_authority_persist() {
     let obj = Object::with_id_owner_for_testing(object_id, recipient);
 
     // Store an object
-    authority
-        .init_transaction_lock((object_id, 0.into(), obj.digest()))
-        .await;
     authority.insert_object(obj).await;
 
     // Close the authority
@@ -1414,9 +1406,6 @@ pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>
     let state = init_state().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
-        state
-            .init_transaction_lock((object_id, 0.into(), obj.digest()))
-            .await;
         state.insert_object(obj).await;
     }
     state
@@ -1424,11 +1413,8 @@ pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>
 
 pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I) -> AuthorityState {
     let state = init_state().await;
-
     for o in objects {
-        let obj_ref = o.to_object_reference();
         state.insert_object(o).await;
-        state.init_transaction_lock(obj_ref).await;
     }
     state
 }
@@ -1481,7 +1467,7 @@ fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> Ob
         .find_map(|o| match o.data.try_as_package() {
             Some(p) => {
                 if p.serialized_module_map().keys().any(|name| name == module) {
-                    Some(o.to_object_reference())
+                    Some(o.compute_object_reference())
                 } else {
                     None
                 }
@@ -1505,7 +1491,7 @@ pub async fn call_move(
     pure_args: Vec<Vec<u8>>,
 ) -> SuiResult<TransactionEffects> {
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
-    let gas_object_ref = gas_object.unwrap().to_object_reference();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
     let mut object_args = vec![];
     for id in object_arg_ids {
         object_args.push(
@@ -1514,7 +1500,7 @@ pub async fn call_move(
                 .await
                 .unwrap()
                 .unwrap()
-                .to_object_reference(),
+                .compute_object_reference(),
         );
     }
     let data = TransactionData::new_move_call(
@@ -1599,7 +1585,7 @@ async fn shared_object() {
     // Initialize an authority with a (owned) gas object and a shared object.
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-    let gas_object_ref = gas_object.to_object_reference();
+    let gas_object_ref = gas_object.compute_object_reference();
 
     let shared_object_id = ObjectID::random();
     let shared_object = {

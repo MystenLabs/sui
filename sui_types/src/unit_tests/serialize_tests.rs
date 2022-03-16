@@ -231,7 +231,7 @@ fn test_info_response() {
             layout: None,
         }),
         parent_certificate: None,
-        requested_object_reference: Some(object.to_object_reference()),
+        requested_object_reference: Some(object.compute_object_reference()),
     };
     let resp2 = resp1.clone();
     let resp3 = resp1.clone();

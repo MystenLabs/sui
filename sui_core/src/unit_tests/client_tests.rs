@@ -22,7 +22,7 @@ use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
 use sui_types::crypto::{get_key_pair, KeyPair};
 use sui_types::gas_coin::GasCoin;
-use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION};
+use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING};
 use typed_store::Map;
 
 use signature::{Error, Signer};
@@ -385,10 +385,6 @@ async fn fund_account(
             let object = Object::with_id_owner_for_testing(object_id, address);
             let client_ref = authority.0.as_ref().try_lock().unwrap();
             created_objects.insert(object_id, object.clone());
-
-            let object_ref: ObjectRef = (object_id, 0.into(), object.digest());
-
-            client_ref.init_transaction_lock(object_ref).await;
             client_ref.insert_object(object).await;
         }
     }
@@ -833,7 +829,7 @@ async fn test_move_calls_object_create() {
             .next()
             .unwrap()
             .1
-            .to_object_reference();
+            .compute_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
@@ -894,7 +890,7 @@ async fn test_move_calls_object_transfer() {
             .next()
             .unwrap()
             .1
-            .to_object_reference();
+            .compute_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
@@ -984,7 +980,7 @@ async fn test_move_calls_freeze_object() {
             .next()
             .unwrap()
             .1
-            .to_object_reference();
+            .compute_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
@@ -1073,7 +1069,7 @@ async fn test_move_calls_object_delete() {
             .next()
             .unwrap()
             .1
-            .to_object_reference();
+            .compute_object_reference();
 
     // When creating an ObjectBasics object, we provide the value (u64) and address which will own the object
     let pure_args = vec![
@@ -1141,22 +1137,6 @@ async fn test_move_calls_object_delete() {
     }
 }
 
-async fn get_package_obj(
-    client: &mut GatewayState<LocalAuthorityClient>,
-    objects: &[(ObjectRef, Owner)],
-    gas_object_ref: &ObjectRef,
-) -> Option<ObjectRead> {
-    let mut pkg_obj_opt = None;
-    for (new_obj_ref, _) in objects {
-        assert_ne!(gas_object_ref, new_obj_ref);
-        let new_obj = client.get_object_info(new_obj_ref.0).await.unwrap();
-        if let Data::Package(_) = new_obj.object().unwrap().data {
-            pkg_obj_opt = Some(new_obj);
-        }
-    }
-    pkg_obj_opt
-}
-
 #[tokio::test]
 async fn test_module_publish_and_call_good() {
     // Init the states
@@ -1173,14 +1153,14 @@ async fn test_module_publish_and_call_good() {
             .next()
             .unwrap()
             .1
-            .to_object_reference();
+            .compute_object_reference();
 
     // Provide path to well formed package sources
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
     hero_path.push_str("/src/unit_tests/data/hero/");
 
     let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
-    let pub_res = client
+    let response = client
         .publish(
             addr1,
             compiled_modules,
@@ -1188,48 +1168,21 @@ async fn test_module_publish_and_call_good() {
             GAS_VALUE_FOR_TESTING / 2,
             signature_callback(&key1),
         )
-        .await;
-
-    let (_, published_effects) = pub_res.unwrap();
-
-    assert!(matches!(
-        published_effects.status,
-        ExecutionStatus::Success { .. }
-    ));
-
-    // A package obj and two objects resulting from two
-    // initializer runs in different modules should be created.
-    assert_eq!(published_effects.created.len(), 3);
-
-    // Verify gas obj
-    assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
-
-    for (new_obj_ref, _) in &published_effects.created {
-        assert_ne!(gas_object_ref, *new_obj_ref);
-    }
-
-    // find the package object and inspect it
-
-    let new_obj = get_package_obj(&mut client, &published_effects.created, &gas_object_ref)
         .await
         .unwrap();
 
-    // Version should be 1 for all modules
-    assert_eq!(new_obj.object().unwrap().version(), OBJECT_START_VERSION);
-    // Must be immutable
-    assert!(new_obj.object().unwrap().is_read_only());
+    // Two objects resulting from two initializer runs in different modules should be created.
+    assert_eq!(response.created_objects.len(), 2);
 
-    // StructTag type is not defined for package
-    assert!(new_obj.object().unwrap().type_().is_none());
+    // Verify gas obj
+    assert_eq!(response.updated_gas.id(), gas_object_ref.0);
 
-    // Data should be castable as a package
-    assert!(new_obj.object().unwrap().data.try_as_package().is_some());
+    let package = response.package;
 
     // This gets the treasury cap for the coin and gives it to the sender
     let mut tres_cap_opt = None;
-    for (new_obj_ref, _) in &published_effects.created {
-        let new_obj = client.get_object_info(new_obj_ref.0).await.unwrap();
-        if let Data::Move(move_obj) = &new_obj.object().unwrap().data {
+    for new_obj in &response.created_objects {
+        if let Data::Move(move_obj) = &new_obj.data {
             if move_obj.type_.module == Identifier::new("Coin").unwrap()
                 && move_obj.type_.name == Identifier::new("TreasuryCap").unwrap()
             {
@@ -1244,18 +1197,18 @@ async fn test_module_publish_and_call_good() {
     let (gas_object_ref, gas_object) = client_object(&mut client, gas_object_id).await;
 
     // Confirm we own this object
-    assert_eq!(tres_cap_obj_info.object().unwrap().owner, gas_object.owner);
+    assert_eq!(tres_cap_obj_info.owner, gas_object.owner);
 
     //Try to call a function in TrustedCoin module
     let call_resp = client
         .move_call(
             addr1,
-            new_obj.object().unwrap().to_object_reference(),
+            package,
             ident_str!("TrustedCoin").to_owned(),
             ident_str!("mint").to_owned(),
             vec![],
             gas_object_ref,
-            vec![tres_cap_obj_info.object().unwrap().to_object_reference()],
+            vec![tres_cap_obj_info.compute_object_reference()],
             vec![],
             vec![42u64.to_le_bytes().to_vec()],
             1000,
@@ -1299,7 +1252,7 @@ async fn test_module_publish_file_path() {
             .next()
             .unwrap()
             .1
-            .to_object_reference();
+            .compute_object_reference();
 
     // Compile
     let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
@@ -1308,7 +1261,7 @@ async fn test_module_publish_file_path() {
     hero_path.push_str("/src/unit_tests/data/hero/Hero.move");
 
     let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
-    let pub_resp = client
+    let response = client
         .publish(
             addr1,
             compiled_modules,
@@ -1316,45 +1269,19 @@ async fn test_module_publish_file_path() {
             GAS_VALUE_FOR_TESTING / 2,
             signature_callback(&key1),
         )
-        .await;
-
-    let (_, published_effects) = pub_resp.unwrap();
-
-    assert!(matches!(
-        published_effects.status,
-        ExecutionStatus::Success { .. }
-    ));
+        .await
+        .unwrap();
 
     // Even though we provided a path to Hero.move, the builder is
     // able to find the package root build all in the package,
     // including TrustedCoin module
     //
-    // Consequently,a package obj and two objects resulting from two
+    // Consequently, two objects resulting from two
     // initializer runs in different modules should be created.
-    assert_eq!(published_effects.created.len(), 3);
+    assert_eq!(response.created_objects.len(), 2);
 
     // Verify gas
-    assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
-
-    for (new_obj_ref, _) in &published_effects.created {
-        assert_ne!(gas_object_ref, *new_obj_ref);
-    }
-    // find the package object and inspect it
-
-    let new_obj = get_package_obj(&mut client, &published_effects.created, &gas_object_ref)
-        .await
-        .unwrap();
-
-    // Version should be 1 for all modules
-    assert_eq!(new_obj.object().unwrap().version(), OBJECT_START_VERSION);
-    // Must be immutable
-    assert!(new_obj.object().unwrap().is_read_only());
-
-    // StructTag type is not defined for package
-    assert!(new_obj.object().unwrap().type_().is_none());
-
-    // Data should be castable as a package
-    assert!(new_obj.object().unwrap().data.try_as_package().is_some());
+    assert_eq!(response.updated_gas.id(), gas_object_ref.0);
 }
 
 #[tokio::test]
@@ -1409,7 +1336,7 @@ async fn test_transfer_object_error() {
     get_account(&client, sender)
         .store()
         .object_refs
-        .insert(&obj.id(), &obj.to_object_reference())
+        .insert(&obj.id(), &obj.compute_object_reference())
         .unwrap();
 
     let result = client
@@ -1533,7 +1460,7 @@ async fn test_object_store() {
             .unwrap()
             .1
             .clone();
-    let gas_object_ref = gas_object.clone().to_object_reference();
+    let gas_object_ref = gas_object.clone().compute_object_reference();
     // Ensure that object store is empty
     assert!(get_account(&client, addr1).store().objects.is_empty());
 
@@ -1567,7 +1494,7 @@ async fn test_object_store() {
     hero_path.push_str("/src/unit_tests/data/hero/");
 
     let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path)).unwrap();
-    let pub_res = client
+    let response = client
         .publish(
             addr1,
             compiled_modules,
@@ -1575,31 +1502,15 @@ async fn test_object_store() {
             GAS_VALUE_FOR_TESTING / 2,
             signature_callback(&key1),
         )
-        .await;
-
-    let (_, published_effects) = pub_res.as_ref().unwrap();
-
-    assert!(matches!(
-        published_effects.status,
-        ExecutionStatus::Success { .. }
-    ));
-
-    // A package obj and two objects resulting from two
-    // initializer runs in different modules should be created.
-    assert_eq!(published_effects.created.len(), 3);
-
-    // Verify gas obj
-    assert_eq!(published_effects.gas_object.0 .0, gas_object_ref.0);
-
-    for (new_obj_ref, _) in &published_effects.created {
-        assert_ne!(gas_object_ref, *new_obj_ref);
-    }
-
-    // find the package object and inspect it
-
-    let _new_obj = get_package_obj(&mut client, &published_effects.created, &gas_object_ref)
         .await
         .unwrap();
+
+    // Two objects resulting from two
+    // initializer runs in different modules should be created.
+    assert_eq!(response.created_objects.len(), 2);
+
+    // Verify gas obj
+    assert_eq!(response.updated_gas.id(), gas_object_ref.0);
 
     // New gas object should be in storage, so 1 new items, plus 3 from before
     // The published package is not in the store because it's not owned by anyone.
@@ -1740,7 +1651,7 @@ async fn auth_object(authority: &LocalAuthorityClient, object_id: ObjectID) -> (
         .unwrap();
 
     let object = response.object_and_lock.unwrap().object;
-    (object.to_object_reference(), object)
+    (object.compute_object_reference(), object)
 }
 
 #[tokio::test]
@@ -2298,7 +2209,7 @@ async fn test_transfer_pending_transactions() {
     get_account(&client, sender)
         .store()
         .object_refs
-        .insert(&obj.id(), &obj.to_object_reference())
+        .insert(&obj.id(), &obj.compute_object_reference())
         .unwrap();
 
     let result = client

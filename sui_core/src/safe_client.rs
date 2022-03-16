@@ -135,7 +135,7 @@ impl<C> SafeClient<C> {
                     // Since we are requesting the latest version, we should validate that if the object's
                     // reference actually match with the one from the responded object reference.
                     fp_ensure!(
-                        object_and_lock.object.to_object_reference() == obj_ref,
+                        object_and_lock.object.compute_object_reference() == obj_ref,
                         SuiError::ByzantineAuthoritySuspicion {
                             authority: self.address
                         }

@@ -1,0 +1,111 @@
+{
+  "sideMenu": {
+    "title": "MAIN CONCEPTS",
+    "items": [
+      {
+        "label": "Tutorial",
+        "link": "explore/tutorials"
+      },
+      {
+        "label": "Examples",
+        "link": "explore/examples"
+      },
+      {
+        "label": "Prototypes",
+        "link": "explore/prototypes"
+      }
+    ]
+  },
+  "docs": {
+    "learn": [
+      {
+        "label": "About Sui",
+        "fileName": "learn/about-sui"
+      },
+      {
+        "label": "How Sui Move differs from Core Move"
+        "fileName": "learn/sui-move-diffs"
+      },
+      {
+        "label": "How Sui Works",
+        "fileName": "learn/how-sui-works"
+      },
+      {
+        "label": "Sui Compared to Other Blockchains"
+        "fileName": "learn/sui-compared"
+      },
+      {
+        "label": "Understand Sui Security"
+        "fileName": "learn/sui-security"
+      },
+      {
+        "label": "Sui White Paper",
+        "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf"
+        "external": true
+      }
+    ],
+    "build": [
+      {
+        "label": "Install"
+        "fileName": "build/install"
+      },
+      {
+        "label": "Smart Contracts with Move"
+        "fileName": "build/move"
+      },
+      {
+        "label": "Wallet",
+        "fileName": "build/wallet"
+      },
+      {
+        "label": "Authorities",
+        "fileName": "build/authorities"
+      },
+      {
+        "label": "SuiJSON",
+        "fileName": "build/sui-json"
+      },
+      {
+        "label": "Objects",
+        "fileName": "build/objects"
+      },
+      {
+        "label": "Transactions",
+        "fileName": "build/transactions"
+      }
+    ],
+    "explore": [
+      {
+        "label": "Tutorial",
+        "fileName": "explore/tutorials"
+      },
+      {
+        "label": "Prototypes",
+        "fileName": "explore/prototypes"
+      },
+      {
+        "label": "Examples",
+        "fileName": "explore/examples"
+      }
+    ],
+    "contribute": [
+      {
+        "label": "Logging",
+        "fileName": "contribute/observability"
+      },
+      {
+        "label": "Research Papers",
+        "fileName": "contribute/research-papers"
+      },
+      {
+        "label": "Code of Conduct",
+        "fileName": "contribute/code-of-conduct"
+      },
+      {
+        "label": "About Mysten Labs",
+        "link": "https://mystenlabs.com/"
+        "external": true
+      }
+    ]
+  }
+}

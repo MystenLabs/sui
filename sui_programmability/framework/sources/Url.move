@@ -29,7 +29,7 @@ module Sui::Url {
     // === constructors ===
 
     /// Create a `Url`, with no validation
-    public fun new_unsafe_url(url: String): Url {
+    public fun new_unsafe(url: String): Url {
         Url { url }
     }
 

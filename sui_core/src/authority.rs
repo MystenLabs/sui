@@ -599,7 +599,7 @@ impl AuthorityState {
                             // Read only objects have no locks.
                             None
                         } else {
-                            self.get_transaction_lock(&object.to_object_reference())
+                            self.get_transaction_lock(&object.compute_object_reference())
                                 .await?
                         };
                         let layout = match request_layout {
@@ -790,13 +790,6 @@ impl AuthorityState {
     }
 
     // Helper function to manage transaction_locks
-
-    /// Initialize a transaction lock for an object/sequence to None
-    pub async fn init_transaction_lock(&self, object_ref: ObjectRef) {
-        self._database
-            .init_transaction_lock(object_ref)
-            .expect("TODO: propagate the error")
-    }
 
     /// Set the transaction lock to a specific transaction
     pub async fn set_transaction_lock(

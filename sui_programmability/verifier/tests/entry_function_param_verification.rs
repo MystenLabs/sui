@@ -15,19 +15,20 @@ use move_binary_format::{
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use sui_verifier::param_typecheck_verifier::verify_module;
+use sui_verifier::entry_function_param_verifier::verify_module;
 
 fn add_function(
     builder: &mut ModuleBuilder,
     name: &str,
     parameters: Vec<SignatureToken>,
+    ret: Vec<SignatureToken>,
     type_parameters: Vec<AbilitySet>,
 ) {
     builder.add_function_verbose(
         builder.get_self_index(),
         name,
         parameters,
-        vec![],
+        ret,
         type_parameters,
         Visibility::Public,
         CodeUnit {
@@ -90,7 +91,7 @@ fn format_assert_msg(module: &CompiledModule) -> String {
 #[test]
 fn single_param() {
     /*
-    public foo<Ty0>(loc0: Ty0, loc1: &mut TxContext) {
+    public foo<Ty0>(loc0: Ty0, loc1: &mut TxContext): u64 {
     }
 
     it's a valid entry function and verification should FAIL due to
@@ -107,6 +108,7 @@ fn single_param() {
             SignatureToken::TypeParameter(0),
             tx_context_param(tx_context),
         ],
+        vec![SignatureToken::U64],
         vec![AbilitySet::EMPTY],
     );
 
@@ -137,6 +139,7 @@ fn single_param_key() {
             SignatureToken::TypeParameter(0),
             tx_context_param(tx_context),
         ],
+        vec![],
         vec![AbilitySet::EMPTY | Ability::Key],
     );
 
@@ -183,6 +186,7 @@ fn single_template_object_param() {
             ),
             tx_context_param(tx_context),
         ],
+        vec![],
         vec![AbilitySet::EMPTY],
     );
 
@@ -230,6 +234,7 @@ fn template_and_template_object_params() {
             ),
             tx_context_param(tx_context),
         ],
+        vec![],
         vec![AbilitySet::EMPTY | Ability::Key, AbilitySet::EMPTY],
     );
 
@@ -273,6 +278,7 @@ fn template_param_after_primitive() {
             SignatureToken::TypeParameter(0),
             tx_context_param(tx_context),
         ],
+        vec![],
         vec![AbilitySet::EMPTY],
     );
 
@@ -304,6 +310,7 @@ fn single_template_vector_param() {
             SignatureToken::Vector(Box::new(SignatureToken::TypeParameter(0))),
             tx_context_param(tx_context),
         ],
+        vec![],
         vec![AbilitySet::EMPTY],
     );
 
@@ -337,6 +344,7 @@ fn nested_template_vector_param() {
             )))),
             tx_context_param(tx_context),
         ],
+        vec![],
         vec![AbilitySet::EMPTY],
     );
 
@@ -368,6 +376,7 @@ fn single_template_vector_param_key() {
             SignatureToken::Vector(Box::new(SignatureToken::TypeParameter(0))),
             tx_context_param(tx_context),
         ],
+        vec![],
         vec![AbilitySet::EMPTY | Ability::Key],
     );
 
@@ -400,6 +409,7 @@ fn nested_template_vector_param_key() {
             )))),
             tx_context_param(tx_context),
         ],
+        vec![],
         vec![AbilitySet::EMPTY | Ability::Key],
     );
 

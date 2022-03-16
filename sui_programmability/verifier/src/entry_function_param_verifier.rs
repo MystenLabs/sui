@@ -21,7 +21,7 @@ pub fn verify_module(module: &CompiledModule) -> SuiResult {
 /// We first identify functions that can be entry functions by looking
 /// for functions with the following properties:
 /// 1. Public
-/// 2. No return value
+/// 2. Primitive return types (or vector of such up to 2 levels of nesting)
 /// 3. Parameter order: objects, primitives, &mut TxContext
 ///
 /// Note that this can be ambiguous in presence of the following
@@ -41,14 +41,23 @@ pub fn check_params(module: &CompiledModule) -> SuiResult {
         // find candidate entry functions and checke their parameters
         // (ignore other functions)
         if func_def.visibility != Visibility::Public {
-            // a non-public function cannot be called from Sui
+            // it's not an entry function as a non-public function
+            // cannot be called from Sui
             continue;
         }
         let handle = view.function_handle_at(func_def.function);
-        if !view.signature_at(handle.return_).is_empty() {
-            // entry functions do not return values
+
+        if view
+            .signature_at(handle.return_)
+            .0
+            .iter()
+            .any(|ret_type| !is_entry_ret_type(ret_type))
+        {
+            // it's not an entry function as it returns a value of
+            // types unsupported in entry functions
             continue;
         }
+
         let params = view.signature_at(handle.parameters);
         let param_num = match is_entry_candidate(&view, params) {
             Some(v) => v,
@@ -106,7 +115,7 @@ fn is_entry_candidate(view: &BinaryIndexedView, params: &Signature) -> Option<us
     // param, but we already checked this one)
     let mut primitive_params_phase = false; // becomes true once we start seeing primitive type params
     for p in &params.0[0..params.len() - 1] {
-        if is_primitive_type(p) {
+        if is_primitive(p) {
             primitive_params_phase = true;
         } else {
             obj_params_num += 1;
@@ -138,11 +147,31 @@ fn is_entry_candidate(view: &BinaryIndexedView, params: &Signature) -> Option<us
 /// Checks if a given parameter is of a primitive type. It's a mirror
 /// of the is_primitive function in the adapter module that operates
 /// on Type-s.
-fn is_primitive_type(p: &SignatureToken) -> bool {
+fn is_primitive(p: &SignatureToken) -> bool {
+    // nested vectors of primitive types are OK to arbitrary nesting
+    // level
+    is_primitive_internal(p, 0, u32::MAX)
+}
+
+// Checks if a given type is the correct entry function return type. It's a mirror
+/// of the is_entry_ret_type function in the adapter module that
+/// operates on Type-s.
+pub fn is_entry_ret_type(t: &SignatureToken) -> bool {
+    // allow vectors of vectors but no deeper nesting
+    is_primitive_internal(t, 0, 2)
+}
+
+fn is_primitive_internal(p: &SignatureToken, depth: u32, max_depth: u32) -> bool {
     use SignatureToken::*;
     match p {
         Bool | U8 | U64 | U128 | Address => true,
-        Vector(t) => is_primitive_type(t),
+        Vector(t) => {
+            if depth < max_depth {
+                is_primitive_internal(t, depth + 1, max_depth)
+            } else {
+                false
+            }
+        }
         Signer
         | Struct(_)
         | StructInstantiation(..)

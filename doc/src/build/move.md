@@ -83,10 +83,10 @@ user-defined coin types, which are custom assets define in the Move
 language. Sui framework code contains the `Coin` module supporting
 creation and management of custom coins. The `Coin` module is
 located in the
-[sui_programmability/framework/sources/Coin.move](../../../sui_programmability/framework/sources/Coin.move)
+[sui_programmability/framework/sources/Coin.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Coin.move)
 file. As you would expect, the manifest file describing how to build the
 package containing the `Coin` module is located in the corresponding
-[sui_programmability/framework/Move.toml](../../../sui_programmability/framework/Move.toml)
+[sui_programmability/framework/Move.toml](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/Move.toml)
 file.
 
 Let's see what module definition in the `Coin` module file looks like:
@@ -108,16 +108,13 @@ As we can see, when defining a module we specify the module name
 is used to uniquely identify a module in Move source code (e.g., to be
 able to use if from other modules). The package name is globally
 unique, but different packages can contain modules with the same name.
+Module names are not unique, but combined with unique package name renders
+a unique combination.
 
 For example, if you have package "P" that has been published, you cannot
 publish another package named "P". At the same time you can have module
 "P1::M1", "P2::M1", and "P1::M2" but not another, say, "P1::M1" in the system
 at the same time.
-
-TODO: Clarify this last sentence. How is the package name globally
-unique then? Or are you saying the aforementioned *combination* is
-globally unique?
-
 
 In addition to having a presence at the source code level, as we
 discussed in [Move code organization](#move-code-organization), a
@@ -158,7 +155,7 @@ in the Move book.
 In order for a Move struct type to define a Sui object type such as
 `Coin`, its first field must be `id: VersionedID`, which is a
 struct type defined in the
-[ID module](../../../sui_programmability/framework/sources/ID.move). The
+[ID module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/ID.move). The
 Move struct type must
 also have the `key` ability, which allows the object to be persisted
 in Sui's global storage. Abilities of a Move struct are listed after
@@ -186,7 +183,7 @@ In particular, one type of custom coin already defined in Sui is
 `Coin<GAS>`, which represents a token used to pay for gas used in Sui
 computations - in this case, the concrete type used to parameterize the
 `Coin` struct is the `GAS` struct in the
-[Coin module](../../../sui_programmability/framework/sources/Coin.move):
+[Coin module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Coin.move):
 
 ``` rust
 struct GAS has drop {}
@@ -201,7 +198,7 @@ section describing how to
 Similarly to other popular programming languages, the main unit of
 computation in Move is a function. Let us look at one of the simplest
 functions defined in the
-[Coin module](../../../sui_programmability/framework/sources/Coin.move), that is
+[Coin module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Coin.move), that is
 the `value` function.
 
 ``` rust
@@ -243,7 +240,7 @@ One of the basic operations in Sui is transfer of gas objects between
 [addresses](https://github.com/diem/move/blob/main/language/documentation/book/src/address.md)
 representing individual users. And one of the
 simplest entry functions is defined in the GAS
-[module](../../../sui_programmability/framework/sources/GAS.move) to
+[module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/GAS.move) to
 implement gas object transfer:
 
 ```rust
@@ -265,7 +262,7 @@ In general, an entry function, must satisfy the following properties:
   - one or more primitive types (or vectors of such types)
   - a mutable reference to an instance of the `TxContext` struct
   defined in the
-  [TxContext module](../../../sui_programmability/framework/sources/TxContext.move)
+  [TxContext module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TxContext.move)
 
 More, concretely, the `transfer` function is public, has no return
 value, and has three parameters:
@@ -284,9 +281,12 @@ wallet in [Calling Move code](wallet.md#calling-move-code).
 
 ## Writing a package
 
-In order to be able to build a Move package and run code defined in
-this package, first clone the Sui repository to the current directory
-and [build Sui binaries](wallet.md#build-the-binaries).
+In order to build a Move package and run code defined in
+this package, first [install Sui binaries](install.md).
+Please clone the repository as
+described in the installation instructions as this tutorial assumes that you have a clone of Sui's repository in your current directory, and the code example
+developed in this tutorial can also be found in the
+[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/tutorial/sources/M1.move) file.
 
 The directory structure used in this tutorial should at the moment
 look as follows (assuming Sui has been cloned to a directory called
@@ -301,17 +301,18 @@ For convenience, make sure the path to Sui binaries
 (`sui/target/release`), including the sui-move command used throughout
 this tutorial, is part of your system path.
 
-Now proceed to creating a package directory structure and an
-empty manifest file following the
+Now proceed to creating a package directory structure (in the current directory) with an
+empty manifest file and an empty module source file following the
 [Move code organization](#move-code-organization)
 described earlier:
 
 ``` shell
 mkdir -p my_move_package/sources
+mkdir -p my_move_package/sources/M1.move
 touch my_move_package/Move.toml
 ```
 
-The directory structure should now be:
+The directory structure should now be (please note that directories at the same indentation level in the figure below should also be at the same level in the file system):
 
 ```
 current_directory
@@ -351,14 +352,17 @@ Since we are developing a fantasy game, in addition to the mandatory
 `Coin` struct), our asset has both `magic` and `strength` fields
 describing its respective attribute values. Please note that we need
 to import the
-[ID package](../../../sui_programmability/framework/sources/ID.move) from
+[ID package](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/ID.move) from
 Sui framework to gain access to the `VersionedID` struct type defined
 in this package.
 
 If we want to access sword attributes from a different package, we
 need to add accessor functions to our module similar to the `value`
-function in the Coin package described in
-[Move functions](#move-functions):
+function in the Coin package described in [Move
+functions](#move-functions) (please make sure you add these functions,
+and all the following code in this tutorial, in the scope of our
+package - between curly braces starting and ending the package
+definition):
 
 ``` rust
     public fun magic(self: &Sword): u64 {
@@ -378,17 +382,17 @@ to facilitate [package publishing](wallet.md#publish-packages).
 
 ```
 [package]
-name = "MyMovePackage"
+name = "MyFirstPackage"
 version = "0.0.1"
 
 [dependencies]
 Sui = { local = "../sui/sui_programmability/framework/" }
 
 [addresses]
-MyMovePackage = "0x0"
+MyFirstPackage = "0x0"
 
 [dev-addresses]
-MyMovePackage = "0x0"
+MyFirstPackage = "0x0"
 ```
 
 We can now go to the directory containing our package and build it:
@@ -430,7 +434,7 @@ that no tests have ran because we have not written any yet!
 ``` shell
 BUILDING MoveStdlib
 BUILDING Sui
-BUILDING MyMovePackage
+BUILDING MyFirstPackage
 Running Move unit tests
 Test result: OK. Total tests: 0; passed: 0; failed: 0
 ```
@@ -490,7 +494,7 @@ error[E06001]: unused value without 'drop'
 29 │ │             magic: 42,
 30 │ │             strength: 7,
 31 │ │         };
-   │ ╰─────────' The type 'MyMovePackage::M1::Sword' does not have the ability 'drop'
+   │ ╰─────────' The type 'MyFirstPackage::M1::Sword' does not have the ability 'drop'
    · │
 34 │           assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
    │                                                                   ^ Invalid return
@@ -519,7 +523,7 @@ problem is to transfer ownership of the sword.
 
 In order to get our test to work, we then add the following line to
 the beginning of our testing function to import the
-[Transfer module](../../../sui_programmability/framework/sources/Transfer.move):
+[Transfer module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Transfer.move):
 
 ``` rust
         use Sui::Transfer;
@@ -542,7 +546,7 @@ successful test has been run:
 ``` shell
 BUILDING MoveStdlib
 BUILDING Sui
-BUILDING MyMovePackage
+BUILDING MyFirstPackage
 Running Move unit tests
 [ PASS    ] 0x0::M1::test_sword_create
 Test result: OK. Total tests: 1; passed: 1; failed: 0
@@ -576,7 +580,7 @@ transactions within a single test (e.g. one transaction creating an
 object and the other one transferring it).
 
 Sui-specific testing is supported via the
-[TestScenario module](../../../sui_programmability/framework/sources/TestScenario.move)
+[TestScenario module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TestScenario.move)
 that provides Sui-related testing functionality otherwise unavailable
 in *pure Move* and its
 [testing framework](https://github.com/diem/move/blob/main/language/documentation/book/src/unit-testing.md).
@@ -719,7 +723,7 @@ successful tests for our module:
 ``` shell
 BUILDING MoveStdlib
 BUILDING Sui
-BUILDING MyMovePackage
+BUILDING MyFirstPackage
 Running Move unit tests
 [ PASS    ] 0x0::M1::test_sword_create
 [ PASS    ] 0x0::M1::test_sword_transactions
@@ -872,7 +876,7 @@ encounter compilation errors in the existing tests due to the
 required for the tests to run again as an exercise for the reader. The
 entire source code for the package we have developed (with all the
 tests properly adjusted) can be found in
-[M1.move](../../../sui_programmability/tutorial/sources/M1.move).
+[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/tutorial/sources/M1.move).
 
 ## Sui Move Library
 Sui provides a list of Move library functions that allows us to manipulate objects in Sui.
@@ -885,7 +889,7 @@ Objects in Sui can have different ownership types. Specifically, they are:
 - Shared and mutable (work-in-progress).
 
 **Transfer to Address**
-The [`Transfer`](../../../sui_programmability/framework/sources/Transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
+The [`Transfer`](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
 
 The most common case is to transfer an object to an account address. For example, when a new object is created, it is typically transferred to an account address so that the address owns the object. To transfer an object `obj` to an account address `recipient`:
 ```
@@ -951,7 +955,7 @@ To make an object `obj` shared and mutable, one can call:
 Transfer::share_object(obj);
 ```
 After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, such an object cannot be deleted, transferred or embedded in another object as a field.
-Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](../../../sui_programmability/examples/games/sources/TicTacToe.move) vs [Shared Object](../../../sui_programmability/examples/games/sources/TicTacToeV2.move).
+Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move) vs [Shared Object](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToeV2.move).
 
 ### Transaction Context
 `TxContext` module provides a few important APIs that operate based on the current transaction context.

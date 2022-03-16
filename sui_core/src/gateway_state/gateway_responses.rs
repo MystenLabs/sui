@@ -6,6 +6,7 @@ use serde::Serialize;
 use std::fmt;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
+use sui_types::base_types::ObjectRef;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::CertifiedTransaction;
 use sui_types::object::Object;
@@ -66,6 +67,42 @@ impl Display for MergeCoinResponse {
 
         let coin = GasCoin::try_from(&self.updated_coin).map_err(fmt::Error::custom)?;
         writeln!(writer, "Updated Coin : {}", coin)?;
+        let gas_coin = GasCoin::try_from(&self.updated_gas).map_err(fmt::Error::custom)?;
+        writeln!(writer, "Updated Gas : {}", gas_coin)?;
+        write!(f, "{}", writer)
+    }
+}
+
+#[derive(Serialize)]
+pub struct PublishResponse {
+    /// Certificate of the transaction
+    pub certificate: CertifiedTransaction,
+    /// The newly published package object reference.
+    pub package: ObjectRef,
+    /// List of Move objects created as part of running the module initializers in the package
+    pub created_objects: Vec<Object>,
+    /// The updated gas payment object after deducting payment
+    pub updated_gas: Object,
+}
+
+impl Display for PublishResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        writeln!(writer, "----- Certificate ----")?;
+        write!(writer, "{}", self.certificate)?;
+        writeln!(writer, "----- Publish Results ----")?;
+        writeln!(
+            writer,
+            "The newly published package object: {:?}",
+            self.package
+        )?;
+        writeln!(
+            writer,
+            "List of objects created by running module initializers:"
+        )?;
+        for obj in &self.created_objects {
+            writeln!(writer, "{}", obj)?;
+        }
         let gas_coin = GasCoin::try_from(&self.updated_gas).map_err(fmt::Error::custom)?;
         writeln!(writer, "Updated Gas : {}", gas_coin)?;
         write!(f, "{}", writer)
