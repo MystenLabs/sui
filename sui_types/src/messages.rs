@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature};
+use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature, VerificationObligation};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
@@ -587,6 +587,16 @@ impl Transaction {
         self.signature.check(&self.data, self.data.sender)
     }
 
+    pub fn add_to_verification_obligation(&self,  obligation: &mut VerificationObligation) -> SuiResult<()> {
+        let (message, signature, public_key) = self.signature.get_verification_inputs(&self.data, self.data.sender)?;
+        let idx = obligation.messages.len();
+        obligation.messages.push(message);
+        obligation.public_keys.push(public_key);
+        obligation.signatures.push(signature);
+        obligation.message_index.push(idx);
+        Ok(())
+    }
+
     pub fn sender_address(&self) -> SuiAddress {
         self.data.sender
     }
@@ -771,6 +781,8 @@ impl<'a> SignatureAggregator<'a> {
     }
 }
 
+use crate::crypto::Signable;
+
 impl CertifiedTransaction {
     pub fn new(transaction: Transaction) -> CertifiedTransaction {
         CertifiedTransaction {
@@ -830,6 +842,60 @@ impl CertifiedTransaction {
             &committee.expanded_keys,
         )
     }
+
+    pub fn add_to_verification_obligation(&self, committee: &Committee, obligation: &mut VerificationObligation) -> SuiResult<()> {
+        
+        // First check the quorum is sufficient
+
+        let mut weight = 0;
+        let mut used_authorities = HashSet::new();
+        for (authority, _) in self.signatures.iter() {
+            // Check that each authority only appears once.
+            fp_ensure!(
+                !used_authorities.contains(authority),
+                SuiError::CertificateAuthorityReuse
+            );
+            used_authorities.insert(*authority);
+            // Update weight.
+            let voting_rights = committee.weight(authority);
+            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
+            weight += voting_rights;
+        }
+        fp_ensure!(
+            weight >= committee.quorum_threshold(),
+            SuiError::CertificateRequiresQuorum
+        );
+
+
+        // Create obligations for the committee signatures
+
+        let mut message = Vec::new();
+        self.transaction.data.write(&mut message);
+
+        let idx = obligation.messages.len();
+        obligation.messages.push(message);
+
+        for tuple in self.signatures.iter() {
+            let (authority, signature) = tuple;
+            // do we know, or can we build a valid public key?
+            match committee.expanded_keys.get(authority) {
+                Some(v) => obligation.public_keys.push(*v),
+                None => {
+                    let public_key = (*authority).try_into()?;
+                    obligation.public_keys.push(public_key);
+                }
+            }
+
+            // build a signature
+            obligation.signatures.push(signature.0);
+
+            // collect the message
+            obligation.message_index.push(idx);
+        }
+
+        Ok(())
+    }
+
 }
 
 impl Display for CertifiedTransaction {

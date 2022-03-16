@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
-use std::io;
+use std::{collections::VecDeque, io};
 use sui_network::{
     network::NetworkServer,
     transport::{spawn_server, MessageHandler, RwChannel, SpawnedServer},
 };
-use sui_types::{batch::UpdateItem, error::*, messages::*, serialize::*};
+use sui_types::{batch::UpdateItem, error::*, messages::*, serialize::*, crypto::VerificationObligation};
 
 use crate::authority_batch::BatchManager;
 use futures::{SinkExt, StreamExt};
@@ -255,25 +255,84 @@ where
     A: 'static + RwChannel<'a> + Unpin + Send,
 {
     async fn handle_messages(&self, mut channel: A) -> () {
-        loop {
-            let buffer = match channel.stream().next().await {
-                Some(Ok(buffer)) => buffer,
-                Some(Err(err)) => {
-                    // We expect some EOF or disconnect error at the end.
-                    error!("Error while reading TCP stream: {}", err);
-                    break;
-                }
-                None => {
-                    break;
-                }
-            };
 
-            if let Some(reply) = self.handle_one_message(&buffer[..], &mut channel).await {
-                let status = channel.sink().send(reply.into()).await;
-                if let Err(error) = status {
-                    error!("Failed to send query response: {}", error);
-                }
-            };
+        /*
+            Take messages in chunks of CHUNK_SIZE and parses them, keeps also the
+            original bytes for later use, and reports any errors. Special care is 
+            taken to turn all errors into SuiError.
+        */
+
+        while let Some(one_chunk) = channel
+            .stream()
+            .map(
+                |msg_bytes_result| 
+                    msg_bytes_result.map_err(|_| SuiError::InvalidDecoding)
+                        .and_then(
+                         |msg_bytes|
+                                deserialize_message(&msg_bytes[..]).map_err(|_| SuiError::InvalidDecoding)
+                                .map(|msg| (msg, msg_bytes))))
+            .ready_chunks(12)
+            .next()
+            .await
+        {
+            /*
+                We structure this as a function to catch any errors using the ? operator.
+                This block for each Transaction and Certificate updates a verification
+                obligation structure, and returns an error either if the collection in the 
+                obligation went wrong or the verification of the signatures went wrong.
+            */
+
+            let one_chunk : Result<_, SuiError> = (|| {
+
+                let one_chunk: Result<VecDeque<_>, _> = one_chunk.into_iter().collect();
+                let one_chunk = one_chunk?;
+
+                // Now create a verification obligation, and check it for the whole chunk
+                let mut obligation = VerificationObligation::default();
+                let load_verification : Result<Vec<()>, SuiError> = one_chunk.iter().map(|item| { 
+                        let (message, _) = item;
+                        match message {
+                            SerializedMessage::Transaction(message) => {
+                                message.add_to_verification_obligation(&mut obligation)?;
+                            }
+                            SerializedMessage::Cert(message) => {
+                                message.add_to_verification_obligation(&self.state.committee, &mut obligation)?;
+                            },
+                            _ => {}
+                        };
+                    Ok(())
+                }).collect();
+
+                load_verification?;
+                obligation.verify_all()?;
+
+                Ok(one_chunk)
+            })();
+
+            /*
+                If this is an error send back the error and drop the connection.
+                Here we make the choice to bail out as soon as either any parsing
+                or signature / commitee verification operation fails. The client
+                should know better than give invalid input. All conditions can be
+                trivially checked on the client side, so there should be no surprises
+                here for well behaved clients.
+            */
+            if let Err(err) = one_chunk {
+                channel.sink().send(serialize_error(&err).into()).await;
+                return;
+            }
+            let mut one_chunk = one_chunk.unwrap();
+
+            // Process each message
+            while let Some((_message, buffer)) = one_chunk.pop_front() {
+
+                if let Some(reply) = self.handle_one_message(&buffer[..], &mut channel).await {
+                    let status = channel.sink().send(reply.into()).await;
+                    if let Err(error) = status {
+                        error!("Failed to send query response: {}", error);
+                    }
+                };
+            }
         }
     }
 }
