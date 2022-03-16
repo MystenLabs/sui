@@ -698,18 +698,7 @@ impl AuthorityState {
         genesis_packages: Vec<Vec<CompiledModule>>,
         genesis_ctx: &mut TxContext,
     ) -> Self {
-        let native_functions =
-            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-        let state = AuthorityState {
-            committee,
-            name,
-            secret,
-            _native_functions: native_functions.clone(),
-            move_vm: adapter::new_move_vm(native_functions)
-                .expect("We defined natives to not fail here"),
-            _database: store,
-            batch_channels: None,
-        };
+        let state = AuthorityState::new_without_genesis(committee, name, secret, store).await;
 
         for genesis_modules in genesis_packages {
             state
@@ -718,6 +707,27 @@ impl AuthorityState {
                 .expect("We expect publishing the Genesis packages to not fail");
         }
         state
+    }
+
+    pub async fn new_without_genesis(
+        committee: Committee,
+        name: AuthorityName,
+        secret: StableSyncAuthoritySigner,
+        store: Arc<AuthorityStore>,
+    ) -> Self {
+        let native_functions =
+            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+
+        AuthorityState {
+            committee,
+            name,
+            secret,
+            _native_functions: native_functions.clone(),
+            move_vm: adapter::new_move_vm(native_functions)
+                .expect("We defined natives to not fail here"),
+            _database: store,
+            batch_channels: None,
+        }
     }
 
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {
