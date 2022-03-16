@@ -91,10 +91,6 @@ module Basics::Lock {
     }
 }
 
-/// This is a test module that implements a simple test scenario:
-/// 1. U1 locks a Treasure inside a lock;
-/// 2. U1 gives a Key to U2;
-/// 3. U2 opens the Lock and takes the Treasure;
 #[test_only]
 module Basics::LockTest {
     use Sui::ID::VersionedID;
