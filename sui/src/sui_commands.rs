@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::anyhow;
@@ -10,12 +10,15 @@ use futures::future::join_all;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
 use structopt::StructOpt;
+use tokio::task;
+use tokio::task::JoinHandle;
 use tracing::{error, info};
 
 use sui_adapter::adapter::generate_package_id;
 use sui_adapter::genesis;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
+use sui_network::transport::SpawnedServer;
 use sui_network::transport::DEFAULT_MAX_DATAGRAM_SIZE;
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
 use sui_types::committee::Committee;
@@ -49,7 +52,10 @@ pub enum SuiCommand {
 impl SuiCommand {
     pub async fn execute(&self) -> Result<(), anyhow::Error> {
         match self {
-            SuiCommand::Start { config } => start_network(config).await,
+            SuiCommand::Start { config } => {
+                let config: NetworkConfig = PersistedConfig::read(config)?;
+                create_network(&config).await?.start().await?
+            }
             SuiCommand::Genesis {
                 working_dir,
                 config: path,
@@ -64,7 +70,6 @@ impl SuiCommand {
                         return Err(anyhow!("Cannot run genesis on a existing network, please delete network config file and try again."));
                     }
                 }
-
                 let genesis_conf = if let Some(path) = path {
                     PersistedConfig::read(path)?
                 } else {
@@ -99,8 +104,7 @@ impl SuiCommand {
     }
 }
 
-async fn start_network(config_path: &Path) -> Result<(), anyhow::Error> {
-    let config: NetworkConfig = PersistedConfig::read(config_path)?;
+pub async fn create_network(config: &NetworkConfig) -> Result<SuiNetwork, anyhow::Error> {
     if config.authorities.is_empty() {
         return Err(anyhow!(
             "No authority configured for the network, please run genesis."
@@ -110,7 +114,6 @@ async fn start_network(config_path: &Path) -> Result<(), anyhow::Error> {
         "Starting network with {} authorities",
         config.authorities.len()
     );
-    let mut handles = Vec::new();
 
     let committee = Committee::new(
         config
@@ -120,27 +123,37 @@ async fn start_network(config_path: &Path) -> Result<(), anyhow::Error> {
             .collect(),
     );
 
+    let mut spawned_authorities = Vec::new();
     for authority in &config.authorities {
         let server = make_server(authority, &committee, config.buffer_size).await?;
-
-        handles.push(async move {
-            let spawned_server = match server.spawn().await {
-                Ok(server) => server,
-                Err(err) => {
-                    error!("Failed to start server: {}", err);
-                    return;
-                }
-            };
-            if let Err(err) = spawned_server.join().await {
-                error!("Server ended with an error: {}", err);
-            }
-        });
+        spawned_authorities.push(server.spawn().await?);
     }
+    Ok(SuiNetwork {
+        spawned_authorities,
+    })
+}
 
-    info!("Started {} authorities", handles.len());
-    join_all(handles).await;
-    info!("All server stopped.");
-    Ok(())
+pub struct SuiNetwork {
+    pub spawned_authorities: Vec<SpawnedServer>,
+}
+
+impl SuiNetwork {
+    pub fn start(self) -> JoinHandle<Result<(), anyhow::Error>> {
+        task::spawn(async move {
+            let mut handles = Vec::new();
+            for spawned_server in self.spawned_authorities {
+                handles.push(async move {
+                    if let Err(err) = spawned_server.join().await {
+                        error!("Server ended with an error: {}", err);
+                    }
+                });
+            }
+            info!("Started {} authorities", handles.len());
+            join_all(handles).await;
+            info!("All server stopped.");
+            Ok(())
+        })
+    }
 }
 
 pub async fn genesis(

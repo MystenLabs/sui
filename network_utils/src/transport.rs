@@ -52,6 +52,7 @@ pub trait RwChannel<'a> {
 pub struct SpawnedServer {
     complete: futures::channel::oneshot::Sender<()>,
     handle: tokio::task::JoinHandle<Result<(), std::io::Error>>,
+    binding_port: u16,
 }
 
 impl SpawnedServer {
@@ -65,6 +66,10 @@ impl SpawnedServer {
         self.complete.send(()).unwrap();
         self.handle.await??;
         Ok(())
+    }
+
+    pub fn get_port(&self) -> u16 {
+        self.binding_port
     }
 }
 
@@ -86,22 +91,23 @@ where
     S: MessageHandler<TcpDataStream> + Send + Sync + 'static,
 {
     let (complete, receiver) = futures::channel::oneshot::channel();
-    let handle = {
-        // see https://fly.io/blog/the-tokio-1-x-upgrade/#tcplistener-from_std-needs-to-be-set-to-nonblocking
-        let std_listener = std::net::TcpListener::bind(address)?;
+    // see https://fly.io/blog/the-tokio-1-x-upgrade/#tcplistener-from_std-needs-to-be-set-to-nonblocking
+    let std_listener = std::net::TcpListener::bind(address)?;
 
-        if let Ok(local_addr) = std_listener.local_addr() {
-            let host = local_addr.ip();
-            let port = local_addr.port();
-            info!("Listening to TCP traffic on {host}:{port}");
-        }
+    let local_addr = std_listener.local_addr()?;
+    let host = local_addr.ip();
+    let port = local_addr.port();
+    info!("Listening to TCP traffic on {}:{}", host, port);
 
-        std_listener.set_nonblocking(true)?;
-        let listener = TcpListener::from_std(std_listener)?;
+    std_listener.set_nonblocking(true)?;
+    let listener = TcpListener::from_std(std_listener)?;
 
-        tokio::spawn(run_tcp_server(listener, state, receiver, buffer_size))
-    };
-    Ok(SpawnedServer { complete, handle })
+    let handle = tokio::spawn(run_tcp_server(listener, state, receiver, buffer_size));
+    Ok(SpawnedServer {
+        complete,
+        handle,
+        binding_port: port,
+    })
 }
 
 /// An implementation of DataStream based on TCP.
