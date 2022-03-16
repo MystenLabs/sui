@@ -2,7 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature, VerificationObligation};
+use crate::crypto::{
+    sha3_hash, AuthoritySignature, BcsSignable, Signature, VerificationObligation,
+};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
@@ -587,11 +589,17 @@ impl Transaction {
         self.signature.check(&self.data, self.data.sender)
     }
 
-    pub fn add_to_verification_obligation(&self,  obligation: &mut VerificationObligation) -> SuiResult<()> {
-        let (message, signature, public_key) = self.signature.get_verification_inputs(&self.data, self.data.sender)?;
+    pub fn add_to_verification_obligation(
+        &self,
+        obligation: &mut VerificationObligation,
+    ) -> SuiResult<()> {
+        let (message, signature, public_key) = self
+            .signature
+            .get_verification_inputs(&self.data, self.data.sender)?;
         let idx = obligation.messages.len();
         obligation.messages.push(message);
-        obligation.public_keys.push(public_key);
+        let key = obligation.lookup_public_key(&public_key)?;
+        obligation.public_keys.push(key);
         obligation.signatures.push(signature);
         obligation.message_index.push(idx);
         Ok(())
@@ -843,8 +851,11 @@ impl CertifiedTransaction {
         )
     }
 
-    pub fn add_to_verification_obligation(&self, committee: &Committee, obligation: &mut VerificationObligation) -> SuiResult<()> {
-        
+    pub fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+    ) -> SuiResult<()> {
         // First check the quorum is sufficient
 
         let mut weight = 0;
@@ -865,7 +876,6 @@ impl CertifiedTransaction {
             weight >= committee.quorum_threshold(),
             SuiError::CertificateRequiresQuorum
         );
-
 
         // Create obligations for the committee signatures
 
@@ -895,7 +905,6 @@ impl CertifiedTransaction {
 
         Ok(())
     }
-
 }
 
 impl Display for CertifiedTransaction {

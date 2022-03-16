@@ -8,7 +8,9 @@ use sui_network::{
     network::NetworkServer,
     transport::{spawn_server, MessageHandler, RwChannel, SpawnedServer},
 };
-use sui_types::{batch::UpdateItem, error::*, messages::*, serialize::*, crypto::VerificationObligation};
+use sui_types::{
+    batch::UpdateItem, crypto::VerificationObligation, error::*, messages::*, serialize::*,
+};
 
 use crate::authority_batch::BatchManager;
 use futures::{SinkExt, StreamExt};
@@ -159,38 +161,31 @@ impl AuthorityServer {
 
     async fn handle_one_message<'a, 'b, A>(
         &'a self,
-        buffer: &'a [u8],
+        message: SerializedMessage,
         channel: &mut A,
     ) -> Option<Vec<u8>>
     where
         A: RwChannel<'b>,
     {
-        let result = deserialize_message(buffer);
-        let reply = match result {
-            Err(_) => Err(SuiError::InvalidDecoding),
-            Ok(result) => {
-                match result {
-                    SerializedMessage::Transaction(message) => {
-                        let tx_digest = message.digest();
-                        // No allocations: it's a 'static str!
-                        let tx_kind = message.data.kind_as_str();
-                        self.state
-                            .handle_transaction(*message)
-                            .instrument(tracing::debug_span!("process_tx", ?tx_digest, tx_kind))
-                            .await
-                            .map(|info| Some(serialize_transaction_info(&info)))
-                    }
-                    SerializedMessage::Cert(message) => {
-                        // Cache the transaction digest
-                        let tx_digest = *message.digest();
-                        // Get the kind
-                        let tx_kind = message.transaction.data.kind_as_str();
-
-                        let confirmation_transaction = ConfirmationTransaction {
-                            certificate: *message,
-                        };
-                        match self
-                            .state
+        let reply = match message {
+            SerializedMessage::Transaction(message) => {
+                let tx_digest = message.digest();
+                // No allocations: it's a 'static str!
+                let tx_kind = message.data.kind_as_str();
+                self.state
+                    .handle_transaction(*message)
+                    .instrument(tracing::debug_span!("process_tx", ?tx_digest, tx_kind))
+                    .await
+                    .map(|info| Some(serialize_transaction_info(&info)))
+            }
+            SerializedMessage::Cert(message) => {
+                let confirmation_transaction = ConfirmationTransaction {
+                    certificate: message.as_ref().clone(),
+                };
+                let tx_kind = message.transaction.data.kind_as_str();
+                let tx_digest = *message.digest();
+                match self
+                .state
                             .handle_confirmation_transaction(confirmation_transaction)
                             .instrument(tracing::debug_span!("process_cert", ?tx_digest, tx_kind))
                             .await
@@ -201,30 +196,28 @@ impl AuthorityServer {
                             }
                             Err(error) => Err(error),
                         }
-                    }
-                    SerializedMessage::AccountInfoReq(message) => self
-                        .state
-                        .handle_account_info_request(*message)
-                        .await
-                        .map(|info| Some(serialize_account_info_response(&info))),
-                    SerializedMessage::ObjectInfoReq(message) => self
-                        .state
-                        .handle_object_info_request(*message)
-                        .await
-                        .map(|info| Some(serialize_object_info_response(&info))),
-                    SerializedMessage::TransactionInfoReq(message) => self
-                        .state
-                        .handle_transaction_info_request(*message)
-                        .await
-                        .map(|info| Some(serialize_transaction_info(&info))),
-                    SerializedMessage::BatchInfoReq(message) => self
-                        .handle_batch_streaming(*message, channel)
-                        .await
-                        .map(|_| None),
-
-                    _ => Err(SuiError::UnexpectedMessage),
-                }
             }
+            SerializedMessage::AccountInfoReq(message) => self
+                .state
+                .handle_account_info_request(*message)
+                .await
+                .map(|info| Some(serialize_account_info_response(&info))),
+            SerializedMessage::ObjectInfoReq(message) => self
+                .state
+                .handle_object_info_request(*message)
+                .await
+                .map(|info| Some(serialize_object_info_response(&info))),
+            SerializedMessage::TransactionInfoReq(message) => self
+                .state
+                .handle_transaction_info_request(*message)
+                .await
+                .map(|info| Some(serialize_transaction_info(&info))),
+            SerializedMessage::BatchInfoReq(message) => self
+                .handle_batch_streaming(*message, channel)
+                .await
+                .map(|_| None),
+
+            _ => Err(SuiError::UnexpectedMessage),
         };
 
         self.server.increment_packets_processed();
@@ -255,22 +248,23 @@ where
     A: 'static + RwChannel<'a> + Unpin + Send,
 {
     async fn handle_messages(&self, mut channel: A) -> () {
-
         /*
             Take messages in chunks of CHUNK_SIZE and parses them, keeps also the
-            original bytes for later use, and reports any errors. Special care is 
+            original bytes for later use, and reports any errors. Special care is
             taken to turn all errors into SuiError.
         */
 
         while let Some(one_chunk) = channel
             .stream()
-            .map(
-                |msg_bytes_result| 
-                    msg_bytes_result.map_err(|_| SuiError::InvalidDecoding)
-                        .and_then(
-                         |msg_bytes|
-                                deserialize_message(&msg_bytes[..]).map_err(|_| SuiError::InvalidDecoding)
-                                .map(|msg| (msg, msg_bytes))))
+            .map(|msg_bytes_result| {
+                msg_bytes_result
+                    .map_err(|_| SuiError::InvalidDecoding)
+                    .and_then(|msg_bytes| {
+                        deserialize_message(&msg_bytes[..])
+                            .map_err(|_| SuiError::InvalidDecoding)
+                            .map(|msg| (msg, msg_bytes))
+                    })
+            })
             .ready_chunks(16)
             .next()
             .await
@@ -278,30 +272,35 @@ where
             /*
                 We structure this as a function to catch any errors using the ? operator.
                 This block for each Transaction and Certificate updates a verification
-                obligation structure, and returns an error either if the collection in the 
+                obligation structure, and returns an error either if the collection in the
                 obligation went wrong or the verification of the signatures went wrong.
             */
 
-            let one_chunk : Result<_, SuiError> = (|| {
-
+            let one_chunk: Result<_, SuiError> = (|| {
                 let one_chunk: Result<VecDeque<_>, _> = one_chunk.into_iter().collect();
                 let one_chunk = one_chunk?;
 
                 // Now create a verification obligation, and check it for the whole chunk
                 let mut obligation = VerificationObligation::default();
-                let load_verification : Result<Vec<()>, SuiError> = one_chunk.iter().map(|item| { 
+                let load_verification: Result<Vec<()>, SuiError> = one_chunk
+                    .iter()
+                    .map(|item| {
                         let (message, _) = item;
                         match message {
                             SerializedMessage::Transaction(message) => {
                                 message.add_to_verification_obligation(&mut obligation)?;
                             }
                             SerializedMessage::Cert(message) => {
-                                message.add_to_verification_obligation(&self.state.committee, &mut obligation)?;
-                            },
+                                message.add_to_verification_obligation(
+                                    &self.state.committee,
+                                    &mut obligation,
+                                )?;
+                            }
                             _ => {}
                         };
-                    Ok(())
-                }).collect();
+                        Ok(())
+                    })
+                    .collect();
 
                 load_verification?;
                 obligation.verify_all()?;
@@ -318,7 +317,7 @@ where
                 here for well behaved clients.
             */
             if let Err(err) = one_chunk {
-                // If the response channel is closed there is no much we can do 
+                // If the response channel is closed there is no much we can do
                 // to handle the error result.
                 let _ = channel.sink().send(serialize_error(&err).into()).await;
                 return;
@@ -326,9 +325,8 @@ where
             let mut one_chunk = one_chunk.unwrap();
 
             // Process each message
-            while let Some((_message, buffer)) = one_chunk.pop_front() {
-
-                if let Some(reply) = self.handle_one_message(&buffer[..], &mut channel).await {
+            while let Some((_message, _buffer)) = one_chunk.pop_front() {
+                if let Some(reply) = self.handle_one_message(_message, &mut channel).await {
                     let status = channel.sink().send(reply.into()).await;
                     if let Err(error) = status {
                         error!("Failed to send query response: {}", error);
