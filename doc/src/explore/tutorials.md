@@ -82,7 +82,7 @@ export O_GAS=2110ADFB7BAF889A05EA6F5889AF7724299F9BED
 ```
 
 ## Publish the TicTacToe game on Sui
-We implemented a TicTacToe game in [TicTacToe.move](../../../sui_programmability/examples/games/sources/TicTacToe.move). To publish the game, we run the publish command and specify the path to the game package:
+We implemented a TicTacToe game in [TicTacToe.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move). To publish the game, we run the publish command and specify the path to the game package:
 ```
 $ ./wallet --no-shell publish --path ../../sui_programmability/examples/games --gas $ADMIN_GAS --gas-budget 30000
 ----- Certificate ----
@@ -107,7 +107,7 @@ As a high level, the game works as following:
 2. Each player takes turns to send a *Mark* object to the admin indicating where they want to place their mark.
 3. The admin, upon receiving marks (in practice, this is done through monitoring events), places the mark to the gameboard.
 4. (2) and (3) repeats until game ends.
-Because the admin owns the gameboard, each individual player cannot place a mark directly on the gameboard (they don't own the object, and hence cannot mutate it, see [Object Model](../build/objects.md)), each mark placement is split to 2 steps, that each player first sends a mark, and then the admin places the mark. A sample gameplay can also be found in the [TicTacToeTests](../../../sui_programmability/examples/games/tests/TicTacToeTests.move).
+Because the admin owns the gameboard, each individual player cannot place a mark directly on the gameboard (they don't own the object, and hence cannot mutate it, see [Object Model](../build/objects.md)), each mark placement is split to 2 steps, that each player first sends a mark, and then the admin places the mark. A sample gameplay can also be found in the [TicTacToeTests](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/tests/TicTacToeTests.move).
 
 Now let's begin the game!
 First of all, let's create a game:
