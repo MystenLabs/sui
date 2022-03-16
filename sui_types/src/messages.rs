@@ -854,7 +854,7 @@ impl CertifiedTransaction {
     pub fn add_to_verification_obligation(
         &self,
         committee: &Committee,
-        obligation: &mut VerificationObligation,
+        mut obligation: &mut VerificationObligation,
     ) -> SuiResult<()> {
         // First check the quorum is sufficient
 
@@ -876,6 +876,9 @@ impl CertifiedTransaction {
             weight >= committee.quorum_threshold(),
             SuiError::CertificateRequiresQuorum
         );
+
+        // Add the obligation of the transaction
+        self.transaction.add_to_verification_obligation(&mut obligation)?;
 
         // Create obligations for the committee signatures
 
