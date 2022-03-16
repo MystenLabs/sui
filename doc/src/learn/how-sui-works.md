@@ -2,7 +2,7 @@
 title: How Sui Works
 ---
 
-This page summarizes [Move](../build/move.md) operates and is intended for potential adopters of Sui so they may decide whether it fits your use cases. See How Sui Differs for a high-level overview of the differences in approach between Sui and other blockchain systems.
+This page summarizes [Wallet](../build/wallet.md) operates and is intended for potential adopters of Sui so they may decide whether it fits your use cases. See How Sui Differs for a high-level overview of the differences in approach between Sui and other blockchain systems.
 
 ## tl;dr
 
