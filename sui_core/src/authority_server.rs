@@ -29,7 +29,7 @@ mod server_tests;
 /*
     The number of input chunks the authority will try to process in parallel.
 */
-const CHUNK_SIZE : usize = 100;
+const CHUNK_SIZE : usize = 36;
 
 pub struct AuthorityServer {
     server: NetworkServer,
