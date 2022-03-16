@@ -271,7 +271,7 @@ where
                          |msg_bytes|
                                 deserialize_message(&msg_bytes[..]).map_err(|_| SuiError::InvalidDecoding)
                                 .map(|msg| (msg, msg_bytes))))
-            .ready_chunks(12)
+            .ready_chunks(16)
             .next()
             .await
         {

@@ -427,10 +427,7 @@ pub struct VerificationObligation {
 impl VerificationObligation {
 
     pub fn verify_all(&self) -> SuiResult<()> {
-
-        println!("Verify batch size: {}", self.message_index.len());
         let messages_inner : Vec<_> = self.message_index.iter().map(|idx| &self.messages[*idx][..]).collect();
-
         dalek::verify_batch(
             &messages_inner[..],
             &self.signatures[..],
