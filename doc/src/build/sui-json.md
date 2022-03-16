@@ -6,6 +6,9 @@ title: SuiJSON
 
 *SuiJSON* is a JSON-based format with restrictions that allow Sui to align JSON inputs more closely with Move Call arguments.
 
+Note that *SuiJSON* is a not a generalized serialization format for Sui but only a way to constrain Move Call arguments which have special restrictions.
+
+
 This table shows the restrictions placed on JSON types to make them SuiJSON compatible:
 
 <table>
