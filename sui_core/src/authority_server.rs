@@ -26,6 +26,11 @@ use tokio::sync::broadcast::error::RecvError;
 #[path = "unit_tests/server_tests.rs"]
 mod server_tests;
 
+/*
+    The number of input chunks the authority will try to process in parallel.
+*/
+const CHUNK_SIZE : usize = 24;
+
 pub struct AuthorityServer {
     server: NetworkServer,
     pub state: AuthorityState,
@@ -242,6 +247,9 @@ impl AuthorityServer {
     }
 }
 
+use rand::rngs::OsRng;
+use rand::RngCore;
+
 #[async_trait]
 impl<'a, A> MessageHandler<A> for AuthorityServer
 where
@@ -265,7 +273,7 @@ where
                             .map(|msg| (msg, msg_bytes))
                     })
             })
-            .ready_chunks(16)
+            .ready_chunks(CHUNK_SIZE)
             .next()
             .await
         {
@@ -275,6 +283,12 @@ where
                 obligation structure, and returns an error either if the collection in the
                 obligation went wrong or the verification of the signatures went wrong.
             */
+
+            // Print 5% for stats
+            let random_u64 = OsRng.next_u64() % 100;
+            if random_u64 < 2 {
+                info!("Server Chunk Size: {}", one_chunk.len())
+            }
 
             let one_chunk: Result<_, SuiError> = (|| {
                 let one_chunk: Result<VecDeque<_>, _> = one_chunk.into_iter().collect();
