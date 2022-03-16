@@ -284,9 +284,6 @@ async fn make_server_with_genesis_ctx(
     .await;
 
     for object in preload_objects {
-        state
-            .init_transaction_lock(object.compute_object_reference())
-            .await;
         state.insert_object(object.clone()).await;
     }
 

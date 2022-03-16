@@ -8,8 +8,7 @@ use bytes::Bytes;
 use futures::stream::StreamExt;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
-use rand::rngs::StdRng;
-use rand::Rng;
+use rayon::prelude::*;
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use sui_adapter::genesis;
@@ -167,14 +166,26 @@ impl ClientServerBenchmark {
 
         let mut opts = Options::default();
         opts.increase_parallelism(self.db_cpus as i32);
-        let store = Arc::new(AuthorityStore::open(path, None));
+        opts.set_write_buffer_size(256 * 1024 * 1024);
+        opts.enable_statistics();
+        opts.set_stats_dump_period_sec(5);
+        opts.set_enable_pipelined_write(true);
+
+        // NOTE: turn off the WAL, but is not guaranteed to
+        // recover from a crash. Keep turned off to max safety,
+        // but keep as an option if we periodically flush WAL
+        // manually.
+        // opts.set_manual_wal_flush(true);
+
+        let store = Arc::new(AuthorityStore::open(path, Some(opts)));
+        let store_bis = store.clone();
 
         // Seed user accounts.
         let rt = Runtime::new().unwrap();
-        let mut account_objects = Vec::new();
-        let mut gas_objects = Vec::new();
+
+        println!("Init Authority.");
         let state = rt.block_on(async {
-            let state = AuthorityState::new(
+            AuthorityState::new(
                 committee.clone(),
                 public_auth0,
                 Arc::pin(secret_auth0),
@@ -182,107 +193,122 @@ impl ClientServerBenchmark {
                 genesis::clone_genesis_compiled_modules(),
                 &mut genesis::get_genesis_context(),
             )
-            .await;
-            let mut rnd = <StdRng as rand::SeedableRng>::seed_from_u64(0);
-            for _ in 0..self.num_accounts {
-                let (address, keypair) = get_key_pair();
+            .await
+        });
 
-                let object_id: ObjectID = ObjectID::random();
+        println!("Generate empty store with Genesis.");
+        let (address, keypair) = get_key_pair();
+
+        let account_gas_objects: Vec<_> = (0u64..(self.num_accounts as u64))
+            .into_par_iter()
+            .map(|x| {
+                let mut obj_id = [0; 20];
+                obj_id[..8].clone_from_slice(&x.to_be_bytes()[..8]);
+                let object_id: ObjectID = ObjectID::from(obj_id);
                 let object = if self.use_move {
                     Object::with_id_owner_gas_coin_object_for_testing(
-                        ObjectID::random(),
+                        object_id,
                         SequenceNumber::new(),
                         address,
-                        rnd.gen::<u64>(),
+                        x,
                     )
                 } else {
                     Object::with_id_owner_for_testing(object_id, address)
                 };
 
                 assert!(object.version() == SequenceNumber::from(0));
-                let object_ref = object.compute_object_reference();
-                state.init_transaction_lock(object_ref).await;
-                account_objects.push((address, object.clone(), keypair));
-                state.insert_object(object).await;
 
-                let gas_object_id = ObjectID::random();
+                let mut gas_object_id = [0; 20];
+                gas_object_id[8..16].clone_from_slice(&x.to_be_bytes()[..8]);
+                let gas_object_id = ObjectID::from(gas_object_id);
                 let gas_object = Object::with_id_owner_for_testing(gas_object_id, address);
                 assert!(gas_object.version() == SequenceNumber::from(0));
-                let gas_object_ref = gas_object.compute_object_reference();
-                state.init_transaction_lock(gas_object_ref).await;
-                gas_objects.push(gas_object.clone());
-                state.insert_object(gas_object).await;
-            }
-            state
-        });
+
+                ((address, object, &keypair), gas_object)
+            })
+            .collect();
+
+        // Bulk load objects
+        let all_objects: Vec<_> = account_gas_objects
+            .iter()
+            .flat_map(|((_, gas, _), obj)| [gas, obj])
+            .collect();
+        store_bis.bulk_object_insert(&all_objects[..]).unwrap();
 
         info!("Preparing transactions.");
         // Make one transaction per account (transfer transaction + confirmation).
-        let mut transactions: Vec<Bytes> = Vec::new();
-        let mut next_recipient: SuiAddress = get_key_pair().0;
-        for ((account_addr, object, secret), gas_obj) in account_objects.iter().zip(gas_objects) {
-            let object_ref = object.compute_object_reference();
-            let gas_object_ref = gas_obj.compute_object_reference();
 
-            let data = if self.use_move {
-                // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
-                let framework_obj_ref = (
-                    ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-                    SequenceNumber::new(),
-                    ObjectDigest::new([0; 32]),
-                );
+        let transactions: Vec<_> = account_gas_objects
+            .par_iter()
+            .map(|((account_addr, object, secret), gas_obj)| {
+                let next_recipient: SuiAddress = get_key_pair().0;
 
-                TransactionData::new_move_call(
-                    *account_addr,
-                    framework_obj_ref,
-                    ident_str!("GAS").to_owned(),
-                    ident_str!("transfer").to_owned(),
-                    Vec::new(),
-                    gas_object_ref,
-                    vec![object_ref],
-                    vec![],
-                    vec![bcs::to_bytes(&AccountAddress::from(next_recipient)).unwrap()],
-                    1000,
-                )
-            } else {
-                TransactionData::new_transfer(
-                    next_recipient,
-                    object_ref,
-                    *account_addr,
-                    gas_object_ref,
-                )
-            };
-            let signature = Signature::new(&data, secret);
-            let transaction = Transaction::new(data, signature);
+                let object_ref = object.compute_object_reference();
+                let gas_object_ref = gas_obj.compute_object_reference();
 
-            // Set the next recipient to current
-            next_recipient = *account_addr;
+                let data = if self.use_move {
+                    // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
+                    let framework_obj_ref = (
+                        ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+                        SequenceNumber::new(),
+                        ObjectDigest::new([0; 32]),
+                    );
 
-            // Serialize transaction
-            let serialized_transaction = serialize_transaction(&transaction);
-            assert!(!serialized_transaction.is_empty());
+                    TransactionData::new_move_call(
+                        *account_addr,
+                        framework_obj_ref,
+                        ident_str!("GAS").to_owned(),
+                        ident_str!("transfer").to_owned(),
+                        Vec::new(),
+                        gas_object_ref,
+                        vec![object_ref],
+                        vec![],
+                        vec![bcs::to_bytes(&AccountAddress::from(next_recipient)).unwrap()],
+                        1000,
+                    )
+                } else {
+                    TransactionData::new_transfer(
+                        next_recipient,
+                        object_ref,
+                        *account_addr,
+                        gas_object_ref,
+                    )
+                };
+                let signature = Signature::new(&data, *secret);
+                let transaction = Transaction::new(data, signature);
 
-            // Make certificate
-            let mut certificate = CertifiedTransaction {
-                transaction,
-                signatures: Vec::new(),
-            };
-            for i in 0..committee.quorum_threshold() {
-                let (pubx, secx) = keys.get(i).unwrap();
-                let sig = AuthoritySignature::new(&certificate.transaction.data, secx);
-                certificate.signatures.push((*pubx, sig));
-            }
+                // Serialize transaction
+                let serialized_transaction = serialize_transaction(&transaction);
+                assert!(!serialized_transaction.is_empty());
 
-            let serialized_certificate = serialize_cert(&certificate);
-            assert!(!serialized_certificate.is_empty());
+                let mut transactions: Vec<Bytes> = Vec::new();
 
-            if self.benchmark_type != BenchmarkType::CertsOnly {
-                transactions.push(serialized_transaction.into());
-            }
-            if self.benchmark_type != BenchmarkType::TransactionsOnly {
-                transactions.push(serialized_certificate.into());
-            }
-        }
+                if self.benchmark_type != BenchmarkType::CertsOnly {
+                    transactions.push(serialized_transaction.into());
+                }
+
+                if self.benchmark_type != BenchmarkType::TransactionsOnly {
+                    // Make certificate
+                    let mut certificate = CertifiedTransaction {
+                        transaction,
+                        signatures: Vec::with_capacity(committee.quorum_threshold()),
+                    };
+                    for i in 0..committee.quorum_threshold() {
+                        let (pubx, secx) = keys.get(i).unwrap();
+                        let sig = AuthoritySignature::new(&certificate.transaction.data, secx);
+                        certificate.signatures.push((*pubx, sig));
+                    }
+
+                    let serialized_certificate = serialize_cert(&certificate);
+                    assert!(!serialized_certificate.is_empty());
+
+                    transactions.push(serialized_certificate.into());
+                }
+
+                transactions
+            })
+            .flatten()
+            .collect();
 
         (state, transactions)
     }
@@ -306,7 +332,7 @@ impl ClientServerBenchmark {
 
         let max_in_flight = self.max_in_flight / connections as usize;
         info!("Number of TCP connections: {}", connections);
-        info!("Set max_in_flight to {}", max_in_flight);
+        info!("Max_in_flight: {}", max_in_flight);
 
         info!("Sending requests.");
         if self.max_in_flight > 0 {
