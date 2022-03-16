@@ -83,10 +83,10 @@ user-defined coin types, which are custom assets define in the Move
 language. Sui framework code contains the `Coin` module supporting
 creation and management of custom coins. The `Coin` module is
 located in the
-[sui_programmability/framework/sources/Coin.move](../../../sui_programmability/framework/sources/Coin.move)
+[sui_programmability/framework/sources/Coin.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Coin.move)
 file. As you would expect, the manifest file describing how to build the
 package containing the `Coin` module is located in the corresponding
-[sui_programmability/framework/Move.toml](../../../sui_programmability/framework/Move.toml)
+[sui_programmability/framework/Move.toml](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/Move.toml)
 file.
 
 Let's see what module definition in the `Coin` module file looks like:
@@ -158,7 +158,7 @@ in the Move book.
 In order for a Move struct type to define a Sui object type such as
 `Coin`, its first field must be `id: VersionedID`, which is a
 struct type defined in the
-[ID module](../../../sui_programmability/framework/sources/ID.move). The
+[ID module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/ID.move). The
 Move struct type must
 also have the `key` ability, which allows the object to be persisted
 in Sui's global storage. Abilities of a Move struct are listed after
@@ -186,7 +186,7 @@ In particular, one type of custom coin already defined in Sui is
 `Coin<GAS>`, which represents a token used to pay for gas used in Sui
 computations - in this case, the concrete type used to parameterize the
 `Coin` struct is the `GAS` struct in the
-[Coin module](../../../sui_programmability/framework/sources/Coin.move):
+[Coin module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Coin.move):
 
 ``` rust
 struct GAS has drop {}
@@ -201,7 +201,7 @@ section describing how to
 Similarly to other popular programming languages, the main unit of
 computation in Move is a function. Let us look at one of the simplest
 functions defined in the
-[Coin module](../../../sui_programmability/framework/sources/Coin.move), that is
+[Coin module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Coin.move), that is
 the `value` function.
 
 ``` rust
@@ -243,7 +243,7 @@ One of the basic operations in Sui is transfer of gas objects between
 [addresses](https://github.com/diem/move/blob/main/language/documentation/book/src/address.md)
 representing individual users. And one of the
 simplest entry functions is defined in the GAS
-[module](../../../sui_programmability/framework/sources/GAS.move) to
+[module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/GAS.move) to
 implement gas object transfer:
 
 ```rust
@@ -265,7 +265,7 @@ In general, an entry function, must satisfy the following properties:
   - one or more primitive types (or vectors of such types)
   - a mutable reference to an instance of the `TxContext` struct
   defined in the
-  [TxContext module](../../../sui_programmability/framework/sources/TxContext.move)
+  [TxContext module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TxContext.move)
 
 More, concretely, the `transfer` function is public, has no return
 value, and has three parameters:
@@ -350,7 +350,7 @@ Since we are developing a fantasy game, in addition to the mandatory
 `Coin` struct), our asset has both `magic` and `strength` fields
 describing its respective attribute values. Please note that we need
 to import the
-[ID package](../../../sui_programmability/framework/sources/ID.move) from
+[ID package](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/ID.move) from
 Sui framework to gain access to the `VersionedID` struct type defined
 in this package.
 
@@ -381,7 +381,7 @@ name = "MyMovePackage"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../sui/sui_programmability/framework/" }
+Sui = { local = "https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/" }
 
 [addresses]
 MyMovePackage = "0x0"
@@ -518,7 +518,7 @@ problem is to transfer ownership of the sword.
 
 In order to get our test to work, we then add the following line to
 the beginning of our testing function to import the
-[Transfer module](../../../sui_programmability/framework/sources/Transfer.move):
+[Transfer module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Transfer.move):
 
 ``` rust
         use Sui::Transfer;
@@ -575,7 +575,7 @@ transactions within a single test (e.g. one transaction creating an
 object and the other one transferring it).
 
 Sui-specific testing is supported via the
-[TestScenario module](../../../sui_programmability/framework/sources/TestScenario.move)
+[TestScenario module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TestScenario.move)
 that provides Sui-related testing functionality otherwise unavailable
 in *pure Move* and its
 [testing framework](https://github.com/diem/move/blob/main/language/documentation/book/src/unit-testing.md).
@@ -871,7 +871,7 @@ encounter compilation errors in the existing tests due to the
 required for the tests to run again as an exercise for the reader. The
 entire source code for the package we have developed (with all the
 tests properly adjusted) can be found in
-[M1.move](../../../sui_programmability/tutorial/sources/M1.move).
+[M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/tutorial/sources/M1.move).
 
 ## Sui Move Library
 Sui provides a list of Move library functions that allows us to manipulate objects in Sui.
@@ -884,7 +884,7 @@ Objects in Sui can have different ownership types. Specifically, they are:
 - Shared and mutable (work-in-progress).
 
 **Transfer to Address**
-The [`Transfer`](../../../sui_programmability/framework/sources/Transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
+The [`Transfer`](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
 
 The most common case is to transfer an object to an account address. For example, when a new object is created, it is typically transferred to an account address so that the address owns the object. To transfer an object `obj` to an account address `recipient`:
 ```
@@ -950,7 +950,7 @@ To make an object `obj` shared and mutable, one can call:
 Transfer::share_object(obj);
 ```
 After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, such an object cannot be deleted, transferred or embedded in another object as a field.
-Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](../../../sui_programmability/examples/games/sources/TicTacToe.move) vs [Shared Object](../../../sui_programmability/examples/games/sources/TicTacToeV2.move).
+Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move) vs. [Shared Object](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToeV2.move).
 
 ### Transaction Context
 `TxContext` module provides a few important APIs that operate based on the current transaction context.
