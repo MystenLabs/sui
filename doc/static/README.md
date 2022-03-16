@@ -6,5 +6,5 @@ Refrence this directory in your markdown file
 
 ```
 
-![Table Of Content image](/static/md_assets/tableOfcontent.jpg "Table Of Content image")]
+![Table Of Content image](/static/tableOfcontent.jpg "Table Of Content image")]
 ```
