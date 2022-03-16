@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-    AlchemyMethods,
+    AlchemyWeb3,
     createAlchemyWeb3,
     GetNftsParams,
     Nft as AlchemyNft,
@@ -44,7 +44,7 @@ export interface NFTInfo {
  * Utility class for fetching NFT info
  */
 export class NFTFetcher {
-    /** @internal */ _alchemy: AlchemyMethods;
+    /** @internal */ _alchemy: AlchemyWeb3;
 
     constructor() {
         this._alchemy = this.getAlchemyAPI();
@@ -64,21 +64,25 @@ export class NFTFetcher {
     }
 
     private async getNFTsByAddress(params: GetNftsParams): Promise<NFT[]> {
-        const alchemy = this.getAlchemyAPI();
-        const nfts = await alchemy.getNfts(params);
-        return nfts.ownedNfts.map((a) =>
-            this.extractFieldsFromAlchemyNFT(a as AlchemyNft)
+        const nfts = await this._alchemy.alchemy.getNfts(params);
+        return await Promise.all(
+            nfts.ownedNfts.map((a) =>
+                this.extractFieldsFromAlchemyNFT(a as AlchemyNft)
+            )
         );
     }
 
-    private extractFieldsFromAlchemyNFT(alchemyNft: AlchemyNft): NFT {
+    private async extractFieldsFromAlchemyNFT(
+        alchemyNft: AlchemyNft
+    ): Promise<NFT> {
         // TODO: look into using gateway uri https://docs.alchemy.com/alchemy/guides/nft-api-faq#understanding-nft-metadata
         const {
-            title: name,
+            title,
             metadata,
             id: { tokenId: token_id },
             contract: { address: contract_address },
         } = alchemyNft;
+        const name = (await this.getTokenName(contract_address)) ?? title;
         return {
             contract_address,
             name,
@@ -87,11 +91,27 @@ export class NFTFetcher {
         };
     }
 
-    private getAlchemyAPI(): AlchemyMethods {
+    private getAlchemyAPI(): AlchemyWeb3 {
         // TODO: implement pagination
         const api_key = process.env.ALCHEMY_API_KEY || 'demo';
         return createAlchemyWeb3(
             `https://eth-mainnet.alchemyapi.io/v2/${api_key}`
-        ).alchemy;
+        );
+    }
+
+    private async getTokenName(tokenContract: string) {
+        try {
+            const contractABI = require('./erc721.abi.json');
+            const contractObject = new (this.getAlchemyAPI().eth.Contract)(
+                contractABI,
+                tokenContract
+            );
+            return await contractObject.methods.name().call();
+        } catch (err) {
+            console.error(
+                `Encountered error fetching name for contract ${tokenContract}: ${err}`
+            );
+            return '';
+        }
     }
 }
