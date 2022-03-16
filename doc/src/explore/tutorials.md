@@ -6,19 +6,20 @@ In this tutorial, we will demonstrate an end-to-end process of starting a Sui ne
 
 ## Setup
 
-Follow the instructions provided [here](../build/install.md) to
-install Sui binaries. Then follow subsequent instructions to create
-Sui genesis by running the [`sui genesis`
-command](../build/wallet.md#genesis) and to start the Sui network by
-running the [`sui start`
-command](../build/wallet.md#starting-the-network). After completing
-these steps you will have a running local Sui instance and the
+Follow the instructions to [install Sui binaries](../build/install.md).
+Then follow the instructions to [create
+Sui genesis](../build/wallet.md#genesis) by running the `sui genesis`
+command.
+
+Finally, [start the Sui network](../build/wallet.md#starting-the-network)
+by running the `sui start` command. After completing
+these steps, you will have a running local Sui instance and the
 `wallet` command used in the remainder of this tutorial in your path.
 
 Please make sure that you run the `wallet` command in the directory
 where wallet configuration is located or by passing wallet's
 configuration file as a parameter, as described in the `wallet`
-command [description](../build/wallet.md#using-the-wallet).
+[command description](../build/wallet.md#using-the-wallet).
 
 
 ## Gather Accounts and Gas Objects
