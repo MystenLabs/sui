@@ -8,8 +8,6 @@ use bytes::Bytes;
 use futures::stream::StreamExt;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
-use rand::rngs::StdRng;
-use rand::Rng;
 use rayon::prelude::*;
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
@@ -172,6 +170,11 @@ impl ClientServerBenchmark {
         opts.enable_statistics();
         opts.set_stats_dump_period_sec(5);
         opts.set_enable_pipelined_write(true);
+        
+        // NOTE: turn off the WAL, but is not guaranteed to
+        // recover from a crash. Keep turned off to max safety,
+        // but keep as an option if we periodically flush WAL
+        // manually.
         // opts.set_manual_wal_flush(true);
 
         let store = Arc::new(AuthorityStore::open(path, Some(opts)));
@@ -180,38 +183,8 @@ impl ClientServerBenchmark {
         // Seed user accounts.
         let rt = Runtime::new().unwrap();
 
-        let account_gas_objects: Vec<_> = (0..self.num_accounts)
-            .into_par_iter()
-            .map(|x| {
-                let mut rnd = <StdRng as rand::SeedableRng>::seed_from_u64((x as u64) * 25519);
-
-                let (address, keypair) = get_key_pair();
-
-                let object_id: ObjectID = ObjectID::random();
-                let object = if self.use_move {
-                    Object::with_id_owner_gas_coin_object_for_testing(
-                        ObjectID::random(),
-                        SequenceNumber::new(),
-                        address,
-                        rnd.gen::<u64>(),
-                    )
-                } else {
-                    Object::with_id_owner_for_testing(object_id, address)
-                };
-
-                assert!(object.version() == SequenceNumber::from(0));
-
-                let _ = store_bis.insert_object(object.clone());
-                let gas_object_id = ObjectID::random();
-                let gas_object = Object::with_id_owner_for_testing(gas_object_id, address);
-                assert!(gas_object.version() == SequenceNumber::from(0));
-                let _ = store_bis.insert_object(gas_object.clone());
-                ((address, object, keypair), gas_object)
-            })
-            .collect();
-
         let state = rt.block_on(async {
-            let state = AuthorityState::new(
+            AuthorityState::new(
                 committee.clone(),
                 public_auth0,
                 Arc::pin(secret_auth0),
@@ -219,10 +192,49 @@ impl ClientServerBenchmark {
                 genesis::clone_genesis_compiled_modules(),
                 &mut genesis::get_genesis_context(),
             )
-            .await;
-
-            state
+            .await
         });
+
+        println!("Generate empty store with Genesis.");
+        let (address, keypair) = get_key_pair();
+
+        let account_gas_objects: Vec<_> = (0u64..(self.num_accounts as u64))
+            .into_par_iter()
+            .map(|x| {
+
+                let mut obj_id = [0; 20]; 
+                obj_id[..8].clone_from_slice(&x.to_be_bytes()[..8]);
+                let object_id: ObjectID = ObjectID::from(obj_id);
+                let object = if self.use_move {
+                    Object::with_id_owner_gas_coin_object_for_testing(
+                        object_id,
+                        SequenceNumber::new(),
+                        address,
+                        x,
+                    )
+                } else {
+                    Object::with_id_owner_for_testing(object_id, address)
+                };
+
+                assert!(object.version() == SequenceNumber::from(0));
+
+                let mut gas_object_id = [0; 20]; 
+                gas_object_id[8..16].clone_from_slice(&x.to_be_bytes()[..8]);
+                let gas_object_id = ObjectID::from(gas_object_id);
+                let gas_object = Object::with_id_owner_for_testing(gas_object_id, address);
+                assert!(gas_object.version() == SequenceNumber::from(0));
+
+                ((address, object, &keypair), gas_object)
+            })
+            .collect();
+
+        // A massive clone
+        let all_objects: Vec<_> = account_gas_objects
+            .iter()
+            .map(|((_, gas, _), obj)| [gas, obj])
+            .flatten()
+            .collect();
+        store_bis.bulk_object_insert(&all_objects[..]).unwrap();
 
         info!("Preparing transactions.");
         // Make one transaction per account (transfer transaction + confirmation).
@@ -263,7 +275,7 @@ impl ClientServerBenchmark {
                         gas_object_ref,
                     )
                 };
-                let signature = Signature::new(&data, secret);
+                let signature = Signature::new(&data, *secret);
                 let transaction = Transaction::new(data, signature);
 
                 // Serialize transaction
@@ -280,7 +292,7 @@ impl ClientServerBenchmark {
                     // Make certificate
                     let mut certificate = CertifiedTransaction {
                         transaction,
-                        signatures: Vec::new(),
+                        signatures: Vec::with_capacity(committee.quorum_threshold()),
                     };
                     for i in 0..committee.quorum_threshold() {
                         let (pubx, secx) = keys.get(i).unwrap();

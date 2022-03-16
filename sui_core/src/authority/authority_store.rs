@@ -22,7 +22,7 @@ pub type AuthorityStore = SuiDataStore<false>;
 #[allow(dead_code)]
 pub type ReplicaStore = SuiDataStore<true>;
 
-const NUM_SHARDS: usize = 2048;
+const NUM_SHARDS: usize = 4096;
 
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
@@ -140,10 +140,23 @@ pub fn open_cf_opts<P: AsRef<Path>>(
 impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Open an authority store by directory path
     pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> AuthorityStore {
-        let options = db_options.unwrap_or_default();
+        let mut options = db_options.unwrap_or_default();
 
+        /* The table cache is locked for updates and this determines the number
+           of shareds, ie 2^10. Increase in case of lock contentions.
+        */
+        let row_cache = rocksdb::Cache::new_lru_cache(1_000_000).expect("Cache is ok");
+        options.set_row_cache(&row_cache);
+        options.set_table_cache_num_shard_bits(10);
+        options.set_compression_type(rocksdb::DBCompressionType::None);
+        
         let mut point_lookup = options.clone();
         point_lookup.optimize_for_point_lookup(1024 * 1024);
+        point_lookup.set_memtable_whole_key_filtering(true);
+
+        let transform = rocksdb::SliceTransform::create("bytes_8_to_16", |key| &key[8..16], None);
+        point_lookup.set_prefix_extractor(transform);
+        point_lookup.set_memtable_prefix_bloom_ratio(0.2);
 
         let db = open_cf_opts(
             &path,
@@ -404,7 +417,6 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         let object_ref = object.compute_object_reference();
         self.objects.insert(&object_ref.0, &object)?;
 
-        // Indert lock
         self.transaction_lock.get_or_insert(&object_ref, || None)?;
 
         // Update the index
@@ -412,13 +424,49 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             self.owner_index
                 .insert(&(address, object_ref.0), &object_ref)?;
         }
-
         // Update the parent
         self.parent_sync
             .insert(&object_ref, &object.previous_transaction)?;
 
         // We only side load objects with a genesis parent transaction.
         debug_assert!(object.previous_transaction == TransactionDigest::genesis());
+
+        Ok(())
+    }
+
+    /// This function is used by the bench.rs script, and should not be used in other contexts
+    /// In particular it does not check the old locks before inserting new ones, so the objects
+    /// must be new.
+    pub fn bulk_object_insert(&self, objects: &[&Object]) -> SuiResult<()> {
+        let batch = self.objects.batch();
+        let ref_and_objects: Vec<_> = objects
+            .iter()
+            .map(|o| (o.compute_object_reference(), o))
+            .collect();
+
+        batch
+            .insert_batch(
+                &self.objects,
+                ref_and_objects.iter().map(|(oref, o)| (oref.0, **o)),
+            )?
+            .insert_batch(
+                &self.transaction_lock,
+                ref_and_objects.iter().map(|(oref, _)| (oref, None)),
+            )?
+            .insert_batch(
+                &self.owner_index,
+                ref_and_objects.iter().filter_map(|(oref, o)| {
+                    o.get_single_owner()
+                        .map(|address| ((address, oref.0), oref))
+                }),
+            )?
+            .insert_batch(
+                &self.parent_sync,
+                ref_and_objects
+                    .iter()
+                    .map(|(oref, o)| (oref, o.previous_transaction)),
+            )?
+            .write()?;
 
         Ok(())
     }
@@ -696,6 +744,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
 
             // Atomic write of all locks & other data
             write_batch.write()?;
+            
 
             // implicit: drop(_mutexes);
         } // End of critical region
