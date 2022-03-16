@@ -284,8 +284,12 @@ wallet in [Calling Move code](wallet.md#calling-move-code).
 
 ## Writing a package
 
-In order to be able to build a Move package and run code defined in this package 
-first install Sui binaries as described [here](wallet.md#installing-the-binaries).
+In order to be able to build a Move package and run code defined in
+this package first install Sui binaries as described
+[here](install.md) (you may choose to clone the repository as
+described in the installation instructions as the code example
+developed in this tutorial can be found in the
+[repository](../../../sui_programmability/tutorial/sources/M1.move)).
 
 The directory structure used in this tutorial should at the moment
 look as follows (assuming Sui has been cloned to a directory called
