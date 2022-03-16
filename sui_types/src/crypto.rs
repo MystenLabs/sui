@@ -403,7 +403,7 @@ where
     }
 }
 
-pub type PubKeyLookup =  HashMap<PublicKeyBytes, PublicKey>;
+pub type PubKeyLookup = HashMap<PublicKeyBytes, PublicKey>;
 
 pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     let mut digest = Sha3_256::default();
@@ -414,7 +414,7 @@ pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
 
 #[derive(Default)]
 pub struct VerificationObligation {
-    lookup : PubKeyLookup,
+    lookup: PubKeyLookup,
     pub messages: Vec<Vec<u8>>,
     pub message_index: Vec<usize>,
     pub signatures: Vec<dalek::Signature>,
@@ -422,19 +422,16 @@ pub struct VerificationObligation {
 }
 
 impl VerificationObligation {
-
     pub fn new(lookup: PubKeyLookup) -> VerificationObligation {
-        let mut obl = VerificationObligation::default();
-        obl.lookup = lookup;
-        obl
+        VerificationObligation { lookup , ..Default::default() }
     }
 
     pub fn lookup_public_key(&mut self, key_bytes: &PublicKeyBytes) -> Result<PublicKey, SuiError> {
         match self.lookup.get(key_bytes) {
-            Some(v) => Ok(v.clone()),
+            Some(v) => Ok(*v),
             None => {
                 let public_key = (*key_bytes).try_into()?;
-                self.lookup.insert(key_bytes.clone(), public_key);
+                self.lookup.insert(*key_bytes, public_key);
                 Ok(public_key)
             }
         }
