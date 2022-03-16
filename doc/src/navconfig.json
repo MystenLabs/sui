@@ -46,6 +46,10 @@
     ],
     "build": [
       {
+        "label": "Install"
+        "fileName": "build/install"
+      },
+      {
         "label": "Smart Contracts with Move"
         "fileName": "build/move"
       },
