@@ -114,10 +114,12 @@ struct ServerContext {
 }
 
 pub struct ServerState {
-    config: NetworkConfig,
     gateway: GatewayClient,
-    keystore: Arc<RwLock<Box<dyn Keystore>>>,
+    // The fields below are for genesis and starting demo network.
+    // TODO: Remove these fields when we fully transform rest_server into GatewayServer.
     addresses: Vec<SuiAddress>,
+    config: NetworkConfig,
+    keystore: Arc<RwLock<Box<dyn Keystore>>>,
     working_dir: PathBuf,
     // Server handles that will be used to restart authorities.
     authority_handles: Vec<JoinHandle<()>>,
@@ -379,13 +381,7 @@ async fn sui_stop(
     let server_context = rqctx.context();
     // Taking state object without returning ownership
     let mut state = server_context.server_state.lock().await;
-    let state = state.as_mut().ok_or_else(|| {
-        custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
-            "Server state does not exist. Please make a POST request to `sui/genesis/` and `sui/start/` to bootstrap the network."
-                .to_string(),
-        )
-    })?;
+    let state = state.as_mut().ok_or_else(server_state_error)?;
 
     for authority_handle in &state.authority_handles {
         authority_handle.abort();
@@ -752,7 +748,9 @@ async fn transfer_object(
     {
         Ok((cert, effects)) => {
             let gas_used = match effects.status {
-                ExecutionStatus::Success { gas_used } => gas_used,
+                // TODO: handle the actual return value stored in
+                // ExecutionStatus::Success
+                ExecutionStatus::Success { gas_used, .. } => gas_used,
                 ExecutionStatus::Failure { gas_used, error } => {
                     return Err(custom_http_error(
                         StatusCode::FAILED_DEPENDENCY,
@@ -1149,7 +1147,9 @@ async fn handle_move_call(
     {
         Ok((cert, effects)) => {
             let gas_used = match effects.status {
-                ExecutionStatus::Success { gas_used } => gas_used,
+                // TODO: handle the actual return value stored in
+                // ExecutionStatus::Success
+                ExecutionStatus::Success { gas_used, .. } => gas_used,
                 ExecutionStatus::Failure { gas_used, error } => {
                     let context = format!("Error calling move function, gas used {gas_used}");
                     return Err(anyhow::Error::new(error).context(context));
