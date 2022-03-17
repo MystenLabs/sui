@@ -2,7 +2,7 @@
 title: Local REST Server & REST API Quick Start
 ---
 
-Welcome to the Sui REST API. 
+Welcome to the Sui REST API quick start. 
 
 This document will walk you through setting up your own local Sui REST Server and using the Sui REST API to interact with a local Sui network. This guide is useful for users that are interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to [wallet](wallet.md) documentation.  
 
@@ -19,20 +19,18 @@ Follow the instructions to [install Sui binaries](install.md).
 
 Use the following command to start a local server
 ```shell
-./rest_server
+$ rest_server
+
+INFO listening, local_addr: 127.0.0.1:5000
 ```
 NOTE: For additional logs, set `RUST_LOG=debug` before invoking `./rest_server`
 
-Export a local user variable to store the hostname + port of the local rest server. This will be useful when issuing the curl commands below.
+Export a local user variable to store the harcoded hostname + port that the local rest server starts with. This will be useful when issuing the curl commands below.
 ```shell
-export SUI_GATEWAY_HOST=http://127.0.0.1:5000
+$ export SUI_GATEWAY_HOST=http://127.0.0.1:5000
 ```
 
 To initialize and start the network, you need to invoke the /sui/genesis and /sui/start endpoint as mentioned below.
-
-## Connect to remote REST Server
-
-Coming soon: Connect to Sui devnet, testnet, or mainnet
 
 ## Sui REST API
 
@@ -40,12 +38,14 @@ Coming soon: Connect to Sui devnet, testnet, or mainnet
 
 The recomended way to test the Sui REST API is to use Postman. 
 
-Use variables rather than copy-pasting addresses & object ids for each call. We have provided a sample Postman runbook for you to use. Import the collection into your workspace and fire calls at the network.
+Postman is an API paltform for building and using APIs. Postman provides an alternative solution to accessing APIs over issuing curl commands in a terminal. You can use variables rather than copy-pasting addresses & object ids for each call in a terminal. We have provided a sample Postman runbook for you to use. Click `Run in Postman`, login and import the collection into your workspace and fire calls at the network.
 
 Note:
-- Running against localhost requires you to use the desktop version of Postman.
-- Sample Postman runbook has test scripts setup to automatically strip the JSON response and set variables for future calls. (i.e. owner, gas_object_id, coin, object, to)
-- Refer to [Postman](https://learning.postman.com/docs/getting-started/introduction/) documentation for more information.
+- After clicking the button above, create an account with Postman if you don't already have one. After doing so you will be able to import the sample collection into your workspace.
+- Running against localhost requires you to use the desktop version of Postman which is free to download.
+- Our sample Postman runbook has test scripts setup to automatically strip the JSON response and set variables for future calls. (i.e. owner, gas_object_id, coin, object, to)
+- Refer to [Run in Postman](https://learning.postman.com/docs/publishing-your-api/run-in-postman/introduction-run-button/) documentation, for more information on using the button above.
+- Refer to [Postman](https://learning.postman.com/docs/getting-started/introduction/) documentation for more general usage information.
 
 ### Sui Network Endpoints
 
@@ -179,3 +179,8 @@ curl --location --request POST $SUI_GATEWAY_HOST/sync \
     "address": "{{address}}"
 }' | json_pp
 ```
+
+
+## Connect to Remote REST Server
+
+Coming soon - alternative ways of working with Sui's REST API. Connect to Sui devnet, testnet, or mainnet! 
