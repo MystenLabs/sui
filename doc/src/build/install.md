@@ -11,7 +11,7 @@ If you'd like to install only Sui binaries (`sui`, `wallet`, and
 `sui-move`), use the following command:
 
 ```shell
-cargo install --git ssh://git@github.com/MystenLabs/sui.git
+cargo install --git https://git@github.com/MystenLabs/sui.git
 ```
 
 Alternatively, clone the [Sui
@@ -20,7 +20,7 @@ install` with the repository clone:
 
 ```shell
 git clone https://github.com/MystenLabs/sui.git
-cargo install --path sui
+cargo install --path sui/sui
 ```
 
 In both cases, this will install `sui`, `wallet`, and `sui-move`
