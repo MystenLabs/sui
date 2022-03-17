@@ -53,7 +53,7 @@ Sui votes result in *[eventual consistency](https://en.wikipedia.org/wiki/Eventu
 
 This means we do not insist by default on two authorities having the same state: Sui transactions do not reach authorities in a well-specified total order, so that two authorities can be at different stages of completely replicating the set of transactions that went through the system.
 
-Sui’s high throughput and low latency is unrivaled. Other blockchains that operate from a [proof of work](https://en.wikipedia.org/wiki/Proof_of_work), for instance, may take an hour or more to reach consensus across the required six blocks due to a lack of deterministic finality.
+Sui’s high throughput and low latency is unrivaled. Other blockchains for instance, may take an hour or more to reach consensus across the required average of six blocks recommended to reach finality.
 
 And the Sui model encourages third parties to assist with transaction submissions. For example, if you run an app (say, game) on the blockchain and have many users, you can manage transaction submission on behalf of those users. You as the app owner may use the servers where you store the state of the game to run the Sui Gateway service.
 
