@@ -104,7 +104,6 @@ module Basics::LockTest {
         id: VersionedID
     }
 
-    /// The test itself.
     #[test]
     fun test_lock() {
         let user1 = @0x1;
