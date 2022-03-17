@@ -4,31 +4,16 @@ title: Local REST Server & REST API Quick Start
 
 Welcome to the Sui REST API. 
 
-This document will walk you through setting up your own local Sui REST Server and using the Sui REST API to interact with a local Sui network. This guide is useful for users that are interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to [wallet](https://github.com/MystenLabs/sui/blob/df4bbfa2d6672b884e9afc25b71d1f6243428dde/doc/src/build/wallet.md) documentation.  
+This document will walk you through setting up your own local Sui REST Server and using the Sui REST API to interact with a local Sui network. This guide is useful for users that are interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to [wallet](wallet.md) documentation.  
 
 Full [API documentation](https://app.swaggerhub.com/apis/MystenLabs/sui-api) can
 be found on SwaggerHub.
 
 ## Local Rest Server Setup
 
-### Installing the binaries
+## Setup
 
-Sui is written in Rust and we are using Cargo to build and manage the dependencies.
-As a prerequisite, you will need to [install cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) 
-in order to build and install Sui on your machine.
-
-Check out the [Sui GitHub](https://github.com/MystenLabs/sui) repository.
-
-To install the `rest_server` binary, use the following commands.
-```shell
-cargo install --git ssh://git@github.com/MystenLabs/sui.git
-```
-or 
-```shell
-cargo install --path <Path to Sui project>/sui
-```
-
-This will install the `rest_server` binary in `~/.cargo/bin` directory that can be executed directly.
+Follow the instructions to [install Sui binaries](install.md).
 
 ### Start local REST Server
 
@@ -67,8 +52,8 @@ Note:
 #### POST /sui/genesis
 
 The `genesis` command creates four authorities and five user accounts
-each with five gas objects. These are Sui [objects](https://github.com/MystenLabs/sui/blob/cef5136b9af3dfdb767d0cc77d61356f1df6ff96/doc/src/build/objects.md) used
-to pay for Sui [transactions](https://github.com/MystenLabs/sui/blob/5c48a87ceee35ccbf0d6276bb3ef17bf5a0eb7d5/doc/src/build/transactions.md#native-transaction),
+each with five gas objects. These are Sui [objects](objects.md) used
+to pay for Sui [transactions](transactions.md#transaction-metadata),
 such as object transfers or smart contract (Move) calls.
 
 ```shell
@@ -141,7 +126,7 @@ Transfer object from one address to another. Gas will be paid using the gas
 provided in the request. This will be done through a native transfer
 transaction that does not require Move VM executions, hence is much cheaper.
 
-Refer to [transactions](https://github.com/MystenLabs/sui/blob/5c48a87ceee35ccbf0d6276bb3ef17bf5a0eb7d5/doc/src/build/transactions.md#native-transaction) documentation for more information about a native transfer.
+Refer to [transactions](transactions.md#native-transaction) documentation for more information about a native transfer.
 
 ```shell
 curl --location --request POST $SUI_GATEWAY_HOST/transfer \
@@ -154,7 +139,7 @@ curl --location --request POST $SUI_GATEWAY_HOST/transfer \
 }' | json_pp
 ```
 Notes:
-- Non-coin objects cannot be transferred natively and will require a Move call. Refer to [Move](https://github.com/MystenLabs/sui/blob/df4bbfa2d6672b884e9afc25b71d1f6243428dde/doc/src/build/move.md#move-structs) documentation to learn more about coin objects.
+- Non-coin objects cannot be transferred natively and will require a Move call. Refer to [Move](move.md#move-structs) documentation to learn more about coin objects.
 
 #### POST /call
 
@@ -180,7 +165,7 @@ curl --location --request POST $SUI_GATEWAY_HOST/call \
 ```
 Notes:
 - A Publish endpoint is in the works, but for now the only way to add a new module is to have it included as part of genesis. To do this add your Move module to  `sui_programmability/framework/sources` before you hit the genesis endpoint. Once you have done this you will be able to use `"packageObjectId": "0x2"` in the call endpoint to find your Move module.
-- To learn more about what `args` are accepted in a Move call, refer to [sui-json](https://github.com/MystenLabs/sui/blob/6b6cc14f14a8cd71b87b560524373bd0faa2689c/doc/src/build/sui-json.md) documentation for further information.
+- To learn more about what `args` are accepted in a Move call, refer to [sui-json](sui-json.md) documentation for further information.
 
 #### POST /sync
 
