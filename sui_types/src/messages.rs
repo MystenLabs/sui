@@ -26,6 +26,8 @@ use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
+// use once_cell::unsync::Lazy;
+use once_cell::sync::OnceCell;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Transfer {
@@ -173,7 +175,7 @@ pub struct CertifiedTransaction {
     // This is a cache of an otherwise expensive to compute value.
     // DO NOT serialize or deserialize from the network or disk.
     #[serde(skip)]
-    pub transaction_digest: Option<TransactionDigest>,
+    transaction_digest: OnceCell<TransactionDigest>,
 
     pub transaction: Transaction,
     pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
@@ -736,11 +738,7 @@ impl<'a> SignatureAggregator<'a> {
             committee,
             weight: 0,
             used_authorities: HashSet::new(),
-            partial: CertifiedTransaction {
-                transaction_digest: None,
-                transaction,
-                signatures: Vec::new(),
-            },
+            partial: CertifiedTransaction::new(transaction),
         }
     }
 
@@ -775,22 +773,29 @@ impl<'a> SignatureAggregator<'a> {
 }
 
 impl CertifiedTransaction {
-    /// Get the transaction digest and write it to the cache
-    pub fn cached_digest(&mut self) -> TransactionDigest {
-        if let Some(tx_digest) = self.transaction_digest {
-            return tx_digest;
+    pub fn new(transaction: Transaction) -> CertifiedTransaction {
+        CertifiedTransaction {
+            transaction_digest: OnceCell::new(),
+            transaction,
+            signatures: Vec::new(),
         }
-        let tx_digest = self.transaction.digest();
-        self.transaction_digest = Some(tx_digest);
-        tx_digest
     }
 
-    /// Try the transaction digest but do not write back in cache
-    pub fn try_cached_digest(&self) -> TransactionDigest {
-        if let Some(tx_digest) = self.transaction_digest {
-            return tx_digest;
+    pub fn new_with_signatures(
+        transaction: Transaction,
+        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    ) -> CertifiedTransaction {
+        CertifiedTransaction {
+            transaction_digest: OnceCell::new(),
+            transaction,
+            signatures,
         }
-        self.transaction.digest()
+    }
+
+    /// Get the transaction digest and write it to the cache
+    pub fn digest(&mut self) -> &TransactionDigest {
+        self.transaction_digest
+            .get_or_init(|| self.transaction.digest())
     }
 
     /// Verify the certificate.

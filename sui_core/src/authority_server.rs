@@ -182,7 +182,7 @@ impl AuthorityServer {
                     }
                     SerializedMessage::Cert(mut message) => {
                         // Cache the transaction digest
-                        let digest = message.cached_digest();
+                        let digest = *message.digest();
                         // Get the kind
                         let tx_kind = message.transaction.data.kind_as_str();
 

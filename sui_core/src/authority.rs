@@ -341,7 +341,7 @@ impl AuthorityState {
         &self,
         mut confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
-        let transaction_digest = confirmation_transaction.certificate.cached_digest();
+        let transaction_digest = *confirmation_transaction.certificate.digest();
         let certificate = &confirmation_transaction.certificate;
 
         // Ensure an idempotent answer.
@@ -427,7 +427,7 @@ impl AuthorityState {
         confirmation_transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let mut certificate = confirmation_transaction.certificate;
-        let transaction_digest = certificate.cached_digest();
+        let transaction_digest = *certificate.digest();
         let transaction = &certificate.transaction;
 
         let objects_by_kind: Vec<_> = self.check_locks(transaction).await?;
@@ -512,7 +512,7 @@ impl AuthorityState {
         }
 
         // Ensure it is the first time we see this certificate.
-        let transaction_digest = certificate.cached_digest();
+        let transaction_digest = *certificate.digest();
         if self._database.sequenced(
             transaction_digest,
             certificate.transaction.shared_input_objects(),

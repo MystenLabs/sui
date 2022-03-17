@@ -146,11 +146,7 @@ async fn extract_cert(
     let stake: usize = votes.iter().map(|(name, _)| committee.weight(name)).sum();
     assert!(stake >= committee.quorum_threshold());
 
-    CertifiedTransaction {
-        transaction_digest: None,
-        transaction: transaction.unwrap(),
-        signatures: votes,
-    }
+    CertifiedTransaction::new_with_signatures(transaction.unwrap(), votes)
 }
 
 #[cfg(test)]

@@ -171,11 +171,7 @@ fn test_cert() {
         ),
         &sender_key,
     );
-    let mut cert = CertifiedTransaction {
-        transaction_digest: None,
-        transaction,
-        signatures: Vec::new(),
-    };
+    let mut cert = CertifiedTransaction::new(transaction);
 
     for _ in 0..3 {
         let (_, authority_key) = get_key_pair();
@@ -211,11 +207,7 @@ fn test_info_response() {
     let (_, auth_key) = get_key_pair();
     let vote = SignedTransaction::new(transaction.clone(), *auth_key.public_key_bytes(), &auth_key);
 
-    let mut cert = CertifiedTransaction {
-        transaction_digest: None,
-        transaction,
-        signatures: Vec::new(),
-    };
+    let mut cert = CertifiedTransaction::new(transaction);
 
     for _ in 0..3 {
         let (_, authority_key) = get_key_pair();
@@ -345,11 +337,7 @@ fn test_time_cert() {
         ),
         &sender_key,
     );
-    let mut cert = CertifiedTransaction {
-        transaction_digest: None,
-        transaction,
-        signatures: Vec::new(),
-    };
+    let mut cert = CertifiedTransaction::new(transaction);
 
     use std::collections::HashMap;
     let mut cache = HashMap::new();
