@@ -25,8 +25,6 @@ In core Move, global storage is part of the programming model and can be accesse
 
 But on-chain storage is expensive and limited (not optimized for storage and indexing). Current blockchains cannot scale to handle storage-heavy applications such as marketplaces and social apps.
 
-TODO: Review/edit the impetus above and include similar reasoning for each item below.
-
 So there is no global storage in Sui Move. None of the global storage-related operations are allowed in Sui Move. (We have a bytecode verifier for this to detect violations.) Instead, storage happens exclusively within Sui. When we publish a module, the newly published module is stored in Sui storage, instead of Move storage. Similarly, newly created objects are stored in Sui storage. _This also means that when we need to read an object in Move, we cannot rely on global storage operations but instead Sui must explicitly pass all objects that need to be accessed into Move._
 
 ## Addresses represent Object IDs
