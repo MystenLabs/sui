@@ -89,7 +89,7 @@ package containing the `Coin` module is located in the corresponding
 [sui_programmability/framework/Move.toml](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/Move.toml)
 file.
 
-Let's see what module definition in the `Coin` module file looks like:
+Let's see how module definition appears in the `Coin` module file:
 
 ```rust
 module Sui::Coin {
@@ -386,7 +386,7 @@ name = "MyFirstPackage"
 version = "0.0.1"
 
 [dependencies]
-Sui = { local = "../sui/sui_programmability/framework/" }
+Sui = { local = "https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/" }
 
 [addresses]
 MyFirstPackage = "0x0"
@@ -955,7 +955,8 @@ To make an object `obj` shared and mutable, one can call:
 Transfer::share_object(obj);
 ```
 After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, such an object cannot be deleted, transferred or embedded in another object as a field.
-Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move) vs [Shared Object](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToeV2.move).
+
+Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move) vs. [Shared Object](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToeV2.move).
 
 ### Transaction Context
 `TxContext` module provides a few important APIs that operate based on the current transaction context.
