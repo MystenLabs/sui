@@ -73,7 +73,11 @@ See
 [Package Layout and Manifest Syntax](https://github.com/diem/move/blob/main/language/documentation/book/src/packages.md#package-layout-and-manifest-syntax)
 for more information on package layout.
 
-We are now ready to look at some Move code!
+We are now ready to look at some Move code! You can either keep
+following the tutorial for an introductory description of the main
+Move language constructs and instructions on how to write and test
+your first Move package, or you can dive straight into various Move
+code [examples](../explore/examples.md).
 
 ## First look at Move source code
 
@@ -149,7 +153,7 @@ type, such as an integer type, or of a struct type.
 
 You can read more about
 Move [primitive types](https://github.com/diem/move/blob/main/language/documentation/book/src/SUMMARY.md#primitive-types)
-and [structs](https://github.com/diem/move/blob/main/language/documentation/book/src/structs-and-resources.md))
+and [structs](https://github.com/diem/move/blob/main/language/documentation/book/src/structs-and-resources.md)
 in the Move book.
 
 In order for a Move struct type to define a Sui object type such as
@@ -220,8 +224,8 @@ enforces an invariant that struct instance arguments passed by
 read-only references (as opposed to mutable references) cannot be
 modified in the body of a function.
 
-Read more about Move
-[references](https://github.com/diem/move/blob/main/language/documentation/book/src/references.md#references)).
+You can read more about Move
+[references](https://github.com/diem/move/blob/main/language/documentation/book/src/references.md#references) in the Move book.
 
 We will show how to call Move functions from other functions and how
 to define the new ones in the section describing how to
@@ -261,8 +265,7 @@ In general, an entry function, must satisfy the following properties:
   - one or more Sui objects (or vectors of objects)
   - one or more primitive types (or vectors of such types)
   - a mutable reference to an instance of the `TxContext` struct
-  defined in the
-  [TxContext module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TxContext.move)
+  defined in the [TxContext module](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/TxContext.move)
 
 More, concretely, the `transfer` function is public, has no return
 value, and has three parameters:
@@ -377,7 +380,7 @@ definition):
 In order to build a package containing this simple module, we need to
 put some required metadata into the `Move.toml` file, including package
 name, package version, local dependency path to locate Sui framework
-code, and package numeric ID, which must be 0x0 for user-defined modules
+code, and package numeric ID, which must be `0x0` for user-defined modules
 to facilitate [package publishing](wallet.md#publish-packages).
 
 ```
@@ -556,9 +559,9 @@ Test result: OK. Total tests: 1; passed: 1; failed: 0
 **TIPS**
 If you only want to run a subset of the unittests, you can filter by test name using the `--filter` option. Example:
 ```
-sui-move test --filter hero
+sui-move test --filter sword
 ```
-The above command will run all tests whose name contains "hero".
+The above command will run all tests whose name contains "sword".
 You can discover more testing options through:
 ```
 sui-move test -h
@@ -973,10 +976,6 @@ To obtain the current transaction sender's account address:
 ```
 TxContext::sender(ctx)
 ```
-
-### Collection
-
-### NFT
 
 ## Next steps
 
