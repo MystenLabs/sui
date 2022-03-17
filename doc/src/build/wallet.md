@@ -29,7 +29,7 @@ customized with additional accounts, objects, code, etc. as described
 in [Genesis customization](#customize-genesis).
 
 The network configuration is stored in `network.conf` and
-can be used subsequently to start the network. `wallet.conf` and `wallet.key` are
+can be used subsequently to start the network. The `wallet.conf` and `wallet.key` are
 also created to be used by the Sui wallet to manage the
 newly created accounts.
 
@@ -77,9 +77,9 @@ in the wallet configuration (with some values omitted):
   }
 }
 ```
-The `accounts` variable contains the account's address the wallet manages.
+The `accounts` variable contains the account's address that the wallet manages.
 `gateway` contains the information of the Sui network that the wallet will be connecting to,
-currently only `Embedded` gateway type is supported.
+currently only `embedded` gateway type is supported.
 
 The `authorities` variable is part of the embedded gateway configuration, it contains Sui network
 authorities' name, host and port information. It is used to establish connections to the Sui network.
@@ -310,7 +310,7 @@ $ wallet --no-shell objects --address F456EBEF195E4A231488DF56B762AC90695BE2DD
 Showing 0 results.
 
 ```
-To add objects to the account, you can [invoke a move function](#calling-move-code),
+To add objects to the account, you can [invoke a Move function](#calling-move-code),
 or you can transfer one of the existing objects from the genesis account to the new account using a dedicated wallet command.
 We will explore how to transfer objects using the wallet in this section.
 
@@ -331,7 +331,7 @@ OPTIONS:
 ```
 To transfer an object to a recipient, you will need the recipient's address,
 the object ID of the object that you want to transfer,
-and the gas object' ID for the transaction fee payment.
+and the gas object ID for the transaction fee payment.
 
 Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`.
 ```shell
