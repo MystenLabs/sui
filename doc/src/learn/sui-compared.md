@@ -74,7 +74,7 @@ The checkpoints carry cryptographic signatures that guarantee they form a consen
 Move’s strong ownership model ensures only the owner may change (mutate) the state of their objects (assets). They may transfer those objects to another user who may then modify those objects. By default, in Sui everything is owned by someone. You cannot touch someone else’s state. Only you can change state, such as transferring ownership of objects.
 
 Where this can become problematic is in transactions where objects are mutable by two writers. This may include the following use cases:
-- a time-bound auction, where several bidders must enter their bid before a deadline
-- an open-order, where several traders may fulfill the same proposed trade
+* a time-bound auction, where several bidders must enter their bid before a deadline
+* an open-order, where several traders may fulfill the same proposed trade
 
 In this case, ordering transactions with respect to each other is vital to lead to a valid resolution, but no actor's action depends on the other. The way Sui resolves this is to resort to a consensus mechanism. While Sui's chosen consensus mechanism will be efficient and high-throughput (as in, e.g. [Narwhal & Tusk](https://arxiv.org/abs/2105.11827)), it still obeys the asymptotics and limitations of any consensus algorithm : polynomial worst-case complexity, requiring active inter-authority messages, etc.
