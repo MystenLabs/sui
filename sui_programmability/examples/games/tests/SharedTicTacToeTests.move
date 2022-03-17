@@ -1,7 +1,7 @@
 #[test_only]
-module Games::TicTacToeV2Tests {
+module Games::SharedTicTacToeTests {
     use Sui::TestScenario::{Self, Scenario};
-    use Games::TicTacToeV2::{Self, TicTacToe, Trophy};
+    use Games::SharedTicTacToe::{Self, TicTacToe, Trophy};
 
     const SEND_MARK_FAILED: u64 = 0;
     const UNEXPECTED_WINNER: u64 = 1;
@@ -16,7 +16,7 @@ module Games::TicTacToeV2Tests {
 
         // Anyone can create a game, because the game object will be eventually shared.
         let scenario = &mut TestScenario::begin(&player_x);
-        TicTacToeV2::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
+        SharedTicTacToe::create_game(copy player_x, copy player_o, TestScenario::ctx(scenario));
         // Player1 places an X in (1, 1).
         place_mark(1, 1, &player_x, scenario);
         /*
@@ -84,8 +84,8 @@ module Games::TicTacToeV2Tests {
         let status;
         {
             let game = TestScenario::remove_object<TicTacToe>(scenario);
-            TicTacToeV2::place_mark(&mut game, row, col, TestScenario::ctx(scenario));
-            status = TicTacToeV2::get_status(&game);
+            SharedTicTacToe::place_mark(&mut game, row, col, TestScenario::ctx(scenario));
+            status = SharedTicTacToe::get_status(&game);
             TestScenario::return_object(scenario, game);
         };
         status
