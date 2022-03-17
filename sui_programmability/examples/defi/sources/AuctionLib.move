@@ -40,18 +40,9 @@ module DeFi::AuctionUtils {
         ID::inner(&auction.id)
     }
 
-//    public(friend) fun to_sell<T: key + store>(auction: &mut Auction<T>): &mut Option<T> {
-//       &mut auction.to_sell
-//    }
-
     public(friend) fun auction_owner<T: key + store>(auction: &Auction<T>): address {
         auction.owner
     }
-
-//    public(friend) fun bid_data<T: key + store>(auction: &mut Auction<T>): &mut Option<BidData> {
-//       &mut auction.bid_data
-//    }
-
 
     /// Creates an auction. This is executed by the owner of the asset to be
     /// auctioned.
@@ -101,9 +92,6 @@ module DeFi::AuctionUtils {
     /// Ends the auction - transfers item to the currently highest
     /// bidder or to the original owner if no bids have been placed.
     fun end_auction<T: key + store>(to_sell: &mut Option<T>, owner: address, bid_data: &mut Option<BidData>) {
-//        let Auction { id, to_sell, owner, bid_data } = auction;
-//        ID::delete(id);
-
         let item = Option::extract(to_sell);
         if (Option::is_some<BidData>(bid_data)) {
             // bids have been placed - send funds to the original item
@@ -115,9 +103,6 @@ module DeFi::AuctionUtils {
             // no bids placed - send the item back to the original owner
             Transfer::transfer(item, owner);
         };
-        // there is no bid data left regardless of the result, but the
-        // option still needs to be destroyed
-//        Option::destroy_none(bid_data);
     }
 
     /// Ends auction and destroys auction object (can only be used if
