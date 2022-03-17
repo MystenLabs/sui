@@ -15,6 +15,10 @@ use tracing::*;
 use std::io;
 use tokio::time;
 
+use futures::stream;
+use futures::SinkExt;
+use futures::StreamExt;
+
 #[derive(Clone)]
 pub struct NetworkClient {
     base_address: String,
@@ -76,54 +80,45 @@ impl NetworkClient {
     async fn batch_send_one_chunk(
         &self,
         requests: Vec<Bytes>,
-        max_in_flight: u64,
+        _max_in_flight: u64,
     ) -> Result<Vec<Bytes>, io::Error> {
         let address = format!("{}:{}", self.base_address, self.base_port);
-        let mut stream = connect(address, self.buffer_size).await?;
-        let mut requests = requests.iter();
-        let mut in_flight: u64 = 0;
+        let stream = connect(address, self.buffer_size).await?;
         let mut responses = Vec::new();
 
+        let total = requests.len();
+
+        let (mut read_stream, mut write_stream) = (stream.framed_read, stream.framed_write);
+
+        let mut requests = stream::iter(requests.into_iter().map(Ok));
+        tokio::spawn(async move { write_stream.send_all(&mut requests).await });
+
+        let mut received = 0;
         loop {
-            while in_flight < max_in_flight {
-                let request = match requests.next() {
-                    None => {
-                        if in_flight == 0 {
-                            return Ok(responses);
-                        }
-                        // No more entries to send.
-                        break;
-                    }
-                    Some(request) => request,
-                };
-                let status = time::timeout(self.send_timeout, stream.write_data(request)).await;
-                if let Err(error) = status {
-                    error!("Failed to send request: {}", error);
-                    continue;
-                }
-                in_flight += 1;
-            }
-            if requests.len() % 5000 == 0 && requests.len() > 0 {
-                info!("In flight {} Remaining {}", in_flight, requests.len());
-            }
-            match time::timeout(self.recv_timeout, stream.read_data()).await {
+            match time::timeout(self.recv_timeout, read_stream.next()).await {
                 Ok(Some(Ok(buffer))) => {
-                    in_flight -= 1;
+                    received += 1;
+
+                    if received % 5000 == 0 && received > 0 {
+                        info!("Received {}", received);
+                    }
                     responses.push(Bytes::from(buffer));
                 }
                 Ok(Some(Err(error))) => {
                     error!("Received error response: {}", error);
+                    received += 1;
                 }
                 Ok(None) => {
                     info!("Socket closed by server");
                     return Ok(responses);
                 }
                 Err(error) => {
-                    error!(
-                        "Timeout while receiving response: {} (in flight: {})",
-                        error, in_flight
-                    );
+                    error!("Timeout while receiving response: {}", error);
                 }
+            }
+
+            if received == total {
+                return Ok(responses);
             }
         }
     }

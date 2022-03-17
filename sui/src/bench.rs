@@ -59,7 +59,7 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "4000000")]
     send_timeout_us: u64,
     /// Timeout for receiving responses (us)
-    #[structopt(long, default_value = "4000000")]
+    #[structopt(long, default_value = "40000000")]
     recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
     #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR)]
@@ -117,7 +117,7 @@ fn main() {
     thread::spawn(move || {
         let runtime = Builder::new_multi_thread()
             .enable_all()
-            .thread_stack_size(15 * 1024 * 1024)
+            .thread_stack_size(32 * 1024 * 1024)
             .build()
             .unwrap();
 
@@ -132,7 +132,8 @@ fn main() {
     // Make a single-core runtime for the client.
     let runtime = Builder::new_multi_thread()
         .enable_all()
-        .thread_stack_size(15 * 1024 * 1024)
+        .thread_stack_size(32 * 1024 * 1024)
+        .worker_threads(8)
         .build()
         .unwrap();
     runtime.block_on(benchmark.launch_client(connections, transactions));

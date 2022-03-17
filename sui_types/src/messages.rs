@@ -854,7 +854,7 @@ impl CertifiedTransaction {
     pub fn add_to_verification_obligation(
         &self,
         committee: &Committee,
-        mut obligation: &mut VerificationObligation,
+        obligation: &mut VerificationObligation,
     ) -> SuiResult<()> {
         // First check the quorum is sufficient
 
@@ -878,7 +878,8 @@ impl CertifiedTransaction {
         );
 
         // Add the obligation of the transaction
-        self.transaction.add_to_verification_obligation(&mut obligation)?;
+        self.transaction
+            .add_to_verification_obligation(obligation)?;
 
         // Create obligations for the committee signatures
 

@@ -29,7 +29,7 @@ mod server_tests;
 /*
     The number of input chunks the authority will try to process in parallel.
 */
-const CHUNK_SIZE : usize = 36;
+const CHUNK_SIZE: usize = 36;
 
 pub struct AuthorityServer {
     server: NetworkServer,
@@ -246,9 +246,6 @@ impl AuthorityServer {
         }
     }
 }
-
-use rand::rngs::OsRng;
-use rand::RngCore;
 
 #[async_trait]
 impl<'a, A> MessageHandler<A> for AuthorityServer

@@ -423,7 +423,10 @@ pub struct VerificationObligation {
 
 impl VerificationObligation {
     pub fn new(lookup: PubKeyLookup) -> VerificationObligation {
-        VerificationObligation { lookup , ..Default::default() }
+        VerificationObligation {
+            lookup,
+            ..Default::default()
+        }
     }
 
     pub fn lookup_public_key(&mut self, key_bytes: &PublicKeyBytes) -> Result<PublicKey, SuiError> {
