@@ -26,8 +26,10 @@ module DeFi::AuctionUtils {
     /// auctioneer.
     struct Auction<T:  key + store> has key {
         id: VersionedID,
-        /// Item to be sold.
-        to_sell: T,
+        /// Item to be sold. It only really needs to be wrapped in
+        /// Option if Auction represents a shared object but we do it
+        /// for single-owner Auctions for better code re-use.
+        to_sell: Option<T>,
         /// Owner of the time to be sold.
         owner: address,
         /// Data representing the highest bid (starts with no bid)
@@ -38,9 +40,18 @@ module DeFi::AuctionUtils {
         ID::inner(&auction.id)
     }
 
+//    public(friend) fun to_sell<T: key + store>(auction: &mut Auction<T>): &mut Option<T> {
+//       &mut auction.to_sell
+//    }
+
     public(friend) fun auction_owner<T: key + store>(auction: &Auction<T>): address {
         auction.owner
     }
+
+//    public(friend) fun bid_data<T: key + store>(auction: &mut Auction<T>): &mut Option<BidData> {
+//       &mut auction.bid_data
+//    }
+
 
     /// Creates an auction. This is executed by the owner of the asset to be
     /// auctioned.
@@ -50,7 +61,7 @@ module DeFi::AuctionUtils {
         // answer is that it's checked by the runtime.
         Auction<T> {
             id,
-            to_sell,
+            to_sell: Option::some(to_sell),
             owner: TxContext::sender(ctx),
             bid_data: Option::none(),
         }
@@ -89,23 +100,46 @@ module DeFi::AuctionUtils {
 
     /// Ends the auction - transfers item to the currently highest
     /// bidder or to the original owner if no bids have been placed.
-    public fun end_auction<T: key + store>(auction: Auction<T>) {
-        let Auction { id, to_sell, owner, bid_data } = auction;
-        ID::delete(id);
+    fun end_auction<T: key + store>(to_sell: &mut Option<T>, owner: address, bid_data: &mut Option<BidData>) {
+//        let Auction { id, to_sell, owner, bid_data } = auction;
+//        ID::delete(id);
 
-        if (Option::is_some<BidData>(&bid_data)) {
+        let item = Option::extract(to_sell);
+        if (Option::is_some<BidData>(bid_data)) {
             // bids have been placed - send funds to the original item
             // owner and the item to the highest bidder
-            let BidData { funds, highest_bidder } = Option::extract(&mut bid_data);
+            let BidData { funds, highest_bidder } = Option::extract(bid_data);
             Transfer::transfer(funds, owner);
-            Transfer::transfer(to_sell, highest_bidder);
+            Transfer::transfer(item, highest_bidder);
         } else {
             // no bids placed - send the item back to the original owner
-            Transfer::transfer(to_sell, owner);
+            Transfer::transfer(item, owner);
         };
         // there is no bid data left regardless of the result, but the
         // option still needs to be destroyed
-        Option::destroy_none(bid_data);
+//        Option::destroy_none(bid_data);
     }
+
+    /// Ends auction and destroys auction object (can only be used if
+    /// Auction is single-owner object) - transfers item to the
+    /// currently highest bidder or to the original owner if no bids
+    /// have been placed.
+    public fun end_and_destroy_auction<T: key + store>(auction: Auction<T>) {
+        let Auction { id, to_sell, owner, bid_data } = auction;
+        ID::delete(id);
+
+        end_auction(&mut to_sell, owner, &mut bid_data);
+
+        Option::destroy_none(bid_data);
+        Option::destroy_none(to_sell);
+    }
+
+    /// Ends auction (should only be used if Auction is a shared
+    /// object) - transfers item to the currently highest bidder or to
+    /// the original owner if no bids have been placed.
+    public fun end_shared_auction<T: key + store>(auction: &mut Auction<T>) {
+        end_auction(&mut auction.to_sell, auction.owner, &mut auction.bid_data);
+    }
+
 
 }

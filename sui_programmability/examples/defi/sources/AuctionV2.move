@@ -57,9 +57,10 @@ module DeFi::AuctionV2 {
     /// bidder or back to the original owner if no bids have been
     /// placed. This is executed by the owner of the asset to be
     /// auctioned.
-    public fun end_auction<T: key + store>(auction: Auction<T>, ctx: &mut TxContext) {
-        assert!(TxContext::sender(ctx) == AuctionUtils::auction_owner(&auction), EWRONG_OWNER);
-        AuctionUtils::end_auction(auction);
+    public fun end_auction<T: key + store>(auction: &mut Auction<T>, ctx: &mut TxContext) {
+        let owner = AuctionUtils::auction_owner(auction);
+        assert!(TxContext::sender(ctx) == owner, EWRONG_OWNER);
+        AuctionUtils::end_shared_auction(auction);
     }
 
 }

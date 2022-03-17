@@ -65,7 +65,7 @@ module DeFi::AuctionTests {
         let auction_id = *ID::inner(&id);
         Auction::create_auction(to_sell, id, auctioneer, ctx);
 
-        // a transaction by the first bidder to create an put a bid
+        // a transaction by the first bidder to create and put a bid
         TestScenario::next_tx(scenario, &bidder1);
         {
             let coin = TestScenario::remove_object<Coin<GAS>>(scenario);
@@ -83,7 +83,7 @@ module DeFi::AuctionTests {
 
             TestScenario::return_object(scenario, auction);
         };
-        // a transaction by the second bidder to create an put a bid (a
+        // a transaction by the second bidder to create and put a bid (a
         // bid will fail as it has the same value as that of the first
         // bidder's)
         TestScenario::next_tx(scenario, &bidder2);
@@ -108,6 +108,7 @@ module DeFi::AuctionTests {
         TestScenario::next_tx(scenario, &auctioneer);
         {
             let auction = TestScenario::remove_object<Auction<SomeItemToSell>>(scenario);
+
             Auction::end_auction(auction, TestScenario::ctx(scenario));
         };
 
@@ -116,7 +117,9 @@ module DeFi::AuctionTests {
         TestScenario::next_tx(scenario, &bidder1);
         {
             let acquired_item = TestScenario::remove_object<SomeItemToSell>(scenario);
+
             assert!(acquired_item.value == 42, EWRONG_ITEM_VALUE);
+
             TestScenario::return_object(scenario, acquired_item);
         };
     }

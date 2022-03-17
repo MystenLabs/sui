@@ -94,6 +94,6 @@ module DeFi::Auction {
     /// bidder or to the original owner if no bids have been
     /// placed. This is executed by the auctioneer.
     public fun end_auction<T: key + store>(auction: Auction<T>, _ctx: &mut TxContext) {
-        AuctionUtils::end_auction(auction);
+        AuctionUtils::end_and_destroy_auction(auction);
     }
 }
