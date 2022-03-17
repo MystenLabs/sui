@@ -25,7 +25,7 @@
           },
           {
             "title": "SDK Reference",
-            "link": "https://app.swaggerhub.com/apis/MystenLabs/sui-api/"
+            "link": "https://app.swaggerhub.com/apis/MystenLabs/sui-api/",
             "external": true
           },
           {
@@ -158,12 +158,12 @@
         "name": "Build with Examples",
         "sublist": [{
             "name": "Hold an auction ->",
-            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/Auction.move"
+            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/Auction.move",
             "external": true
           },
-        "sublist": [{
+          {
             "name": "Try A flash loan for any Coin type ->",
-            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/FlashLender.move"
+            "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/FlashLender.move",
             "external": true
           },
           {
