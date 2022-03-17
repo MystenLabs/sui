@@ -378,15 +378,21 @@ async fn sui_stop(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     let server_context = rqctx.context();
-    // Taking state object without returning ownership
-    let mut state = server_context.server_state.lock().await;
-    let state = state.as_mut().ok_or_else(server_state_error)?;
+    {
+        // Taking state object without returning ownership
+        let mut state = server_context.server_state.lock().await;
+        let state = state.as_mut().ok_or_else(server_state_error)?;
 
-    for authority_handle in &state.authority_handles {
-        authority_handle.abort();
+        for authority_handle in &state.authority_handles {
+            authority_handle.abort();
+        }
+
+        // Delete everything from working dir
+        fs::remove_dir_all(&state.working_dir).ok();
     }
-    // Delete everything from working dir
-    fs::remove_dir_all(&state.working_dir).ok();
+    // Clear server state
+    *server_context.server_state.lock().await = None;
+
     Ok(HttpResponseUpdatedNoContent())
 }
 
@@ -451,6 +457,8 @@ JSON representation of an object in the Sui network.
 struct Object {
     /** Hex code as string representing the object id */
     object_id: String,
+    /** Type of object, i.e. Coin */
+    obj_type: String,
     /** Object version */
     version: String,
     /** Hash of the object's contents used for local validation */
@@ -490,16 +498,28 @@ async fn get_objects(
     })?;
 
     let object_refs = state.gateway.get_owned_objects(*address);
-    Ok(HttpResponseOk(GetObjectsResponse {
-        objects: object_refs
-            .iter()
-            .map(|(object_id, sequence_number, object_digest)| Object {
-                object_id: object_id.to_string(),
-                version: format!("{:?}", sequence_number),
-                object_digest: format!("{:?}", object_digest),
-            })
-            .collect::<Vec<Object>>(),
-    }))
+    let mut objects = vec![];
+    for (object_id, sequence_number, object_digest) in object_refs {
+        let object = match get_object_info(state, object_id).await {
+            Ok((_, object, _)) => object,
+            Err(error) => {
+                return Err(error);
+            }
+        };
+        let obj_type = object
+            .data
+            .type_()
+            .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_));
+
+        objects.push(Object {
+            object_id: object_id.to_string(),
+            obj_type,
+            version: format!("{:?}", sequence_number),
+            object_digest: format!("{:?}", object_digest),
+        });
+    }
+
+    Ok(HttpResponseOk(GetObjectsResponse { objects }))
 }
 
 /**
