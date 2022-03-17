@@ -74,10 +74,8 @@ See
 for more information on package layout.
 
 We are now ready to look at some Move code! You can either keep
-following the tutorial for an introductory description of the main
-Move language constructs and instructions on how to write and test
-your first Move package, or you can dive straight into various Move
-code [examples](../explore/examples.md).
+reading for an introductory description of the main
+Move language constructs or you can jump straight into the code by [writing a simple Move package](#writing-a-package), and check out additional code [examples](../explore/examples.md).
 
 ## First look at Move source code
 
