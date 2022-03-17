@@ -32,5 +32,5 @@ As with transactions, we note that the process of sharing a certificate with aut
 
 ## Further reading
 
-* Transactions take objects as input and produced objects as output--check out the [objects](objects.md) section to learn more about the structure and attributes of objects.
-* Sui supports several different transaction types--see the [transactions](transactions.md) section for full details.
+* Transactions take objects as input and produce objects as output&mdash;check out the [objects](objects.md) section to learn more about the structure and attributes of objects.
+* Sui supports several different transaction types&mdash;see the [transactions](transactions.md) section for full details.
