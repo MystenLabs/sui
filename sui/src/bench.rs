@@ -133,7 +133,7 @@ fn main() {
     let runtime = Builder::new_multi_thread()
         .enable_all()
         .thread_stack_size(32 * 1024 * 1024)
-        .worker_threads(8)
+        .worker_threads(usize::min(num_cpus::get(), 24))
         .build()
         .unwrap();
     runtime.block_on(benchmark.launch_client(connections, transactions));
