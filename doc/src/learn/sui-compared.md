@@ -47,7 +47,9 @@ A traditional blockchain client operates via a single send request and awaits ap
 
 Now that you know how Sui handles writes, you should remarks its management of reads follows the same object model.
 
-Indeed, Sui uses *causal order*, not total order. Every object in Sui has a version, and every valid transaction results in new versions for the objects it touches. For example, an addition to an NFT would result in a new object. The transaction may have several objects as dependents. Objects come with its *family history*, a generational set of new versioned objects.
+If you are interested in a specific set of objects and their history, Sui reads are authenticated at a high granularity and served with a low average latency. If you instead need a * totality* property to, for example, conduct continuous whole-chain audits, Sui offers periodic checkpoints that support this use case.
+
+Sui uses *causal order*, not total order. Every object in Sui has a version, and every valid transaction results in new versions for the objects it touches. For example, an addition to an NFT would result in a new object. The transaction may have several objects as dependents. Objects come with its *family history*, a generational set of new versioned objects.
 
 Since changes create new objects with a new version, Sui creates a narrow family tree starting from genesis. In Sui, as in life, you are most interested in your specific family, not the entire world’s genetic history. Sui relies upon no view of other family trees, only the one tied to the account making the transaction.
 
