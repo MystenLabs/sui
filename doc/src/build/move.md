@@ -89,7 +89,7 @@ package containing the `Coin` module is located in the corresponding
 [sui_programmability/framework/Move.toml](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/Move.toml)
 file.
 
-Let's see what module definition in the `Coin` module file looks like:
+Let's see how module definition appears in the `Coin` module file:
 
 ```rust
 module Sui::Coin {
