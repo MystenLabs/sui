@@ -25,15 +25,13 @@ In core Move, global storage is part of the programming model and can be accesse
 
 But on-chain storage is expensive and limited (not optimized for storage and indexing). Current blockchains cannot scale to handle storage-heavy applications such as marketplaces and social apps.
 
-TODO: Review/edit the impetus above and include similar reasoning for each item below.
-
 So there is no global storage in Sui Move. None of the global storage-related operations are allowed in Sui Move. (We have a bytecode verifier for this to detect violations.) Instead, storage happens exclusively within Sui. When we publish a module, the newly published module is stored in Sui storage, instead of Move storage. Similarly, newly created objects are stored in Sui storage. _This also means that when we need to read an object in Move, we cannot rely on global storage operations but instead Sui must explicitly pass all objects that need to be accessed into Move._
 
 ## Addresses represent Object IDs
 
 In Move, there is a special _address_ type. This type is used to represent account addresses in core Move. Core Move needs to know the address of an account when dealing with the global storage. The _address_ type is 16 bytes, which is sufficient for the core Move security model.
 
-In Sui, since we don’t support global storage in Move, we don’t need the _address_ type to represent user accounts. Instead, we use the _address_ type to represent the Object ID. Refer to the [ID.move](https://github.com/MystenLabs/fastnft/blob/main/sui_programmability/framework/sources/ID.move) file in Sui framework for an understanding of address use.
+In Sui, since we don’t support global storage in Move, we don’t need the _address_ type to represent user accounts. Instead, we use the _address_ type to represent the Object ID. Refer to the [ID.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/framework/sources/ID.move) file in Sui framework for an understanding of address use.
 
 ## Object with key ability, globally unique IDs
 
