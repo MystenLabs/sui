@@ -1,42 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import {
-    AlchemyMethods,
-    createAlchemyWeb3,
-    Nft as AlchemyNft,
-} from '@alch/alchemy-web3';
 
-interface NFT {
-    /**
-     * A descriptive name for the NFT
-     */
-    name: string;
-
-    /**
-     * The address of the collection contract
-     */
-    contract_address: string;
-
-    /**
-     * The token id associated with the source contract address
-     */
-    token_id: string;
-
-    /**
-     *  Uri representing the location of the NFT media asset. The uri often
-     *  links to an image. The uri is parsed from the metadata and can be
-     *  standard URLs pointing to images on conventional servers, IPFS, or
-     *  Arweave. The image format can be SVGs, PNGs, JPEGs, etc.
-     */
-    media_uri?: string;
-}
-
-interface NFTInfo {
-    token: NFT;
-    claim_status: 'none' | 'claimed';
-    destination_sui_address?: string;
-    sui_explorer_link?: string;
-}
+import { NFTFetcher, NFTInfo } from '../common/nftFetcher';
 
 /**
  *  NFTs owned by the address
@@ -78,51 +43,12 @@ export class NFTService {
     public async get(
         source_chain_owner_address: string
     ): Promise<NFTGetResponse> {
-        const nftInfo = await this.getNFTInfo(source_chain_owner_address);
+        const fetcher = new NFTFetcher();
+        const nftInfo = await fetcher.getNFTInfoByAddress(
+            source_chain_owner_address
+        );
         return {
             results: nftInfo,
         };
-    }
-
-    private async getNFTInfo(address: string): Promise<NFTInfo[]> {
-        const nfts = await this.getNFTsByAddress(address);
-        return nfts.map((token) => ({
-            token,
-            // TODO: check db to see if airdrop has been claimed or not
-            claim_status: 'none',
-        }));
-    }
-
-    private async getNFTsByAddress(address: string): Promise<NFT[]> {
-        const alchemy = this.getAlchemyAPI();
-        const nfts = await alchemy.getNfts({ owner: address });
-        console.log(nfts.totalCount);
-        return nfts.ownedNfts.map((a) =>
-            this.extractFieldsFromAlchemyNFT(a as AlchemyNft)
-        );
-    }
-
-    private extractFieldsFromAlchemyNFT(alchemyNft: AlchemyNft): NFT {
-        // TODO: look into using gateway uri https://docs.alchemy.com/alchemy/guides/nft-api-faq#understanding-nft-metadata
-        const {
-            title: name,
-            metadata,
-            id: { tokenId: token_id },
-            contract: { address: contract_address },
-        } = alchemyNft;
-        return {
-            contract_address,
-            name,
-            token_id,
-            media_uri: metadata?.image,
-        };
-    }
-
-    private getAlchemyAPI(): AlchemyMethods {
-        // TODO: implement pagination
-        const api_key = process.env.ALCHEMY_API_KEY || 'demo';
-        return createAlchemyWeb3(
-            `https://eth-mainnet.alchemyapi.io/v2/${api_key}`
-        ).alchemy;
     }
 }
