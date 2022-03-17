@@ -1,5 +1,5 @@
 ---
-title: Examples of Sui Smart Contracts 
+title: Examples of Sui Smart Contracts
 ---
 
 Find sample Sui smart contract implementations in the [sui_programmability/examples](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples) directory. Here is a rundown of existing examples.
@@ -19,8 +19,7 @@ how (e.g.) a fiat-backed stablecoin would work.
 
 ## Games
 
-In the [Games](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games) example, try out and modify toy games built on top of Sui! These include classic Tic Tac Toe
-, rock paper scissors, and various versions of an adventure game (Hero).
+In the [Games](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games) example, try out and modify toy games built on top of Sui! These include classic Tic Tac Toe, rock paper scissors, and various versions of an adventure game (Hero).
 
 ## NFTs
 
