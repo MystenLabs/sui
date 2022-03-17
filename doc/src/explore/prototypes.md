@@ -203,7 +203,7 @@ Gameplay:
 
 In Sui Monstar, capture cute monstars and watch them get closer to you as you feed and interact with them. These monstars, your farm, and accessories are all NFTs on-chain. As you play through the game, attributes such as health, friendliness, and accessories are all updated live.
 
-![Update NFT properties](/static/nft-properties.png "Equip elemental runes to your Monstar")
+![Update NFT properties](https://docs.sui.io/nft-properties.png "Equip elemental runes to your Monstar")
 *Equip elemental runes to your Monstar and watch your NFT evolve with updated properties*
 
 That’s not all! As your Monstar become stronger, you can use them to help you battle…in the next prototype>>>
@@ -219,7 +219,7 @@ Gameplay:
 * Evolve your pet in Sui Monstar and unlock special battle abilities.
 * Your monstars record the history of your battle on-chain!
 
-![Unlock special abilities](/static/special-abilities.png "Evolve your Monstars")
+![Unlock special abilities](https://docs.sui.io/special-abilities.png "Evolve your Monstars")
 *Evolve your Monstars to unlock special abilities*
 
 ## Why this matters
