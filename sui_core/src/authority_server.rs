@@ -180,7 +180,7 @@ impl AuthorityServer {
                             .await
                             .map(|info| Some(serialize_transaction_info(&info)))
                     }
-                    SerializedMessage::Cert(mut message) => {
+                    SerializedMessage::Cert(message) => {
                         // Cache the transaction digest
                         let digest = *message.digest();
                         // Get the kind

@@ -153,7 +153,7 @@ pub struct TxContext {
 }
 
 impl TxContext {
-    pub fn new(sender: &SuiAddress, digest: TransactionDigest) -> Self {
+    pub fn new(sender: &SuiAddress, digest: &TransactionDigest) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
             digest: digest.0.to_vec(),
@@ -197,7 +197,7 @@ impl TxContext {
     pub fn random_for_testing_only() -> Self {
         Self::new(
             &SuiAddress::random_for_testing_only(),
-            TransactionDigest::random(),
+            &TransactionDigest::random(),
         )
     }
 

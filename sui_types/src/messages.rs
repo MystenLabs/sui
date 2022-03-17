@@ -793,7 +793,7 @@ impl CertifiedTransaction {
     }
 
     /// Get the transaction digest and write it to the cache
-    pub fn digest(&mut self) -> &TransactionDigest {
+    pub fn digest(&self) -> &TransactionDigest {
         self.transaction_digest
             .get_or_init(|| self.transaction.digest())
     }

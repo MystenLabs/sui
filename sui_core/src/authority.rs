@@ -339,14 +339,14 @@ impl AuthorityState {
     /// Confirm a transfer.
     pub async fn handle_confirmation_transaction(
         &self,
-        mut confirmation_transaction: ConfirmationTransaction,
+        confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         let transaction_digest = *confirmation_transaction.certificate.digest();
         let certificate = &confirmation_transaction.certificate;
 
         // Ensure an idempotent answer.
-        if self._database.signed_effects_exists(&transaction_digest)? {
-            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+        if self._database.signed_effects_exists(transaction_digest)? {
+            let transaction_info = self.make_transaction_info(transaction_digest).await?;
             return Ok(transaction_info);
         }
 
@@ -358,7 +358,7 @@ impl AuthorityState {
 
     async fn check_shared_locks(
         &self,
-        transaction_digest: TransactionDigest,
+        transaction_digest: &TransactionDigest,
         transaction: &Transaction,
         inputs: &[(InputObjectKind, Object)],
     ) -> Result<(), SuiError> {
@@ -426,7 +426,7 @@ impl AuthorityState {
         &self,
         confirmation_transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let mut certificate = confirmation_transaction.certificate;
+        let certificate = confirmation_transaction.certificate;
         let transaction_digest = *certificate.digest();
         let transaction = &certificate.transaction;
 
@@ -435,7 +435,7 @@ impl AuthorityState {
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
         let _shared_objects = self
-            .check_shared_locks(transaction_digest, transaction, &objects_by_kind)
+            .check_shared_locks(&transaction_digest, transaction, &objects_by_kind)
             .await?;
         // inputs.extend(shared_objects);
 
@@ -455,7 +455,7 @@ impl AuthorityState {
             .collect();
 
         // Insert into the certificates map
-        let mut tx_ctx = TxContext::new(&transaction.sender_address(), transaction_digest);
+        let mut tx_ctx = TxContext::new(&transaction.sender_address(), &transaction_digest);
 
         let gas_object_id = transaction.gas_payment_object_ref().0;
         let mut temporary_store =
@@ -502,7 +502,7 @@ impl AuthorityState {
     /// called by a single task (ie. the task handling consensus outputs).
     pub async fn handle_consensus_certificate(
         &self,
-        mut certificate: CertifiedTransaction,
+        certificate: CertifiedTransaction,
     ) -> SuiResult<()> {
         // Ensure it is a shared object certificate
         if !certificate.transaction.contains_shared_object() {
@@ -514,7 +514,7 @@ impl AuthorityState {
         // Ensure it is the first time we see this certificate.
         let transaction_digest = *certificate.digest();
         if self._database.sequenced(
-            transaction_digest,
+            &transaction_digest,
             certificate.transaction.shared_input_objects(),
         )?[0]
             .is_some()
@@ -529,7 +529,7 @@ impl AuthorityState {
         // We thus need to make sure someone (if not the client) can continue the protocol.
         // Also atomically lock the shared objects for this particular transaction.
         self._database
-            .persist_certificate_and_lock_shared_objects(transaction_digest, certificate)
+            .persist_certificate_and_lock_shared_objects(&transaction_digest, certificate)
     }
 
     pub async fn handle_transaction_info_request(
