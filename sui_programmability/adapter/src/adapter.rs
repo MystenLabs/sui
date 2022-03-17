@@ -73,7 +73,6 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     object_args: Vec<Object>,
     pure_args: Vec<Vec<u8>>,
     gas_budget: u64,
-    mut gas_object: Object,
     ctx: &mut TxContext,
 ) -> SuiResult<ExecutionStatus> {
     // object_owner_map maps from object ID to its exclusive object owner.
@@ -108,7 +107,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 
     let mut args = args;
     args.push(ctx.to_vec());
-    match execute_internal(
+    Ok(execute_internal(
         vm,
         state_view,
         &module_id,
@@ -121,20 +120,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         gas_budget,
         ctx,
         return_types,
-    ) {
-        ExecutionStatus::Failure { gas_used, error } => {
-            exec_failure!(gas_used, *error)
-        }
-        ExecutionStatus::Success { gas_used, results } => {
-            match gas::try_deduct_gas(&mut gas_object, gas_used) {
-                Ok(()) => {
-                    state_view.write_object(gas_object);
-                    Ok(ExecutionStatus::Success { gas_used, results })
-                }
-                Err(err) => exec_failure!(gas_budget, err),
-            }
-        }
-    }
+    ))
 }
 
 /// This function calls into Move VM to execute a Move function
@@ -328,7 +314,6 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     module_bytes: Vec<Vec<u8>>,
     ctx: &mut TxContext,
     gas_budget: u64,
-    mut gas_object: Object,
 ) -> SuiResult<ExecutionStatus> {
     let result = module_bytes
         .iter()
@@ -393,18 +378,10 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
     };
 
     let total_gas_used = gas_used_for_publish + gas_used_for_init;
-    // successful execution of both publishing operation and or all
-    // (optional) initializer calls
-    match gas::try_deduct_gas(&mut gas_object, total_gas_used) {
-        Ok(()) => {
-            state_view.write_object(gas_object);
-            Ok(ExecutionStatus::Success {
-                gas_used: total_gas_used,
-                results: vec![],
-            })
-        }
-        Err(err) => exec_failure!(gas_budget, err),
-    }
+    Ok(ExecutionStatus::Success {
+        gas_used: total_gas_used,
+        results: vec![],
+    })
 }
 
 /// Store package in state_view and call module initializers

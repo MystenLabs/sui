@@ -294,12 +294,7 @@ async fn test_transfer_immutable() {
     let result = authority_state
         .handle_transaction(transfer_transaction.clone())
         .await;
-    assert_eq!(
-        result.unwrap_err(),
-        SuiError::LockErrors {
-            errors: vec![SuiError::TransferSharedError]
-        }
-    );
+    assert_eq!(result.unwrap_err(), SuiError::TransferImmutableError);
 }
 
 #[tokio::test]
@@ -563,9 +558,7 @@ async fn test_publish_module_insufficient_gas() {
         .handle_transaction(transaction.clone())
         .await
         .unwrap_err();
-    assert!(response
-        .to_string()
-        .contains("Gas balance is 9, smaller than the budget 10 for move operation"));
+    assert!(matches!(response, SuiError::InsufficientGas { .. }));
 }
 
 #[tokio::test]
@@ -1458,7 +1451,7 @@ fn init_certified_transfer_transaction(
         .unwrap()
 }
 
-fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> ObjectRef {
+pub fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> ObjectRef {
     genesis_objects
         .iter()
         .find_map(|o| match o.data.try_as_package() {
@@ -1656,7 +1649,7 @@ async fn shared_object() {
 
     let shared_object_version = authority
         .db()
-        .sequenced(&transaction_digest, &[shared_object_id])
+        .sequenced(&transaction_digest, [shared_object_id].iter())
         .unwrap()[0]
         .unwrap();
     assert_eq!(shared_object_version, SequenceNumber::new());
@@ -1670,7 +1663,7 @@ async fn shared_object() {
 
     let shared_object_lock = authority
         .db()
-        .sequenced(&transaction_digest, &[shared_object_id])
+        .sequenced(&transaction_digest, [shared_object_id].iter())
         .unwrap()[0];
     assert!(shared_object_lock.is_none());
 

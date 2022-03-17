@@ -730,7 +730,7 @@ where
         // Find out which objects are required by this transaction and
         // ensure they are synced on authorities.
         let required_ids: Vec<ObjectID> = transaction
-            .input_objects()
+            .input_objects()?
             .iter()
             .map(|o| o.object_id())
             .collect();
