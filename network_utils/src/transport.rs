@@ -20,8 +20,8 @@ use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
 mod transport_tests;
 
 /// Suggested buffer size
-pub const DEFAULT_MAX_DATAGRAM_SIZE: usize = 5_000_000;
-pub const DEFAULT_MAX_DATAGRAM_SIZE_STR: &str = "5000000";
+pub const DEFAULT_MAX_DATAGRAM_SIZE: usize = 65000;
+pub const DEFAULT_MAX_DATAGRAM_SIZE_STR: &str = "65000";
 
 /// The handler required to create a service.
 #[async_trait]
