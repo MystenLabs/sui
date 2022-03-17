@@ -2,7 +2,7 @@
 title: An end-to-end tutorial of playing TicTacToe on Sui
 ---
 
-In this tutorial, we will demonstrate an end-to-end process of starting a Sui network locally, connecting to it through our demo wallet app, publishing a TicTacToe game on Sui, and playing it to the end.
+In this tutorial, we demonstrate an end-to-end process of starting a Sui network locally, connecting to it through our demo wallet app, publishing a TicTacToe game on Sui, and playing it to the end.
 
 ## Start the network
 In the Sui repository, build Sui:
