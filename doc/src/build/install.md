@@ -20,7 +20,7 @@ install` with the repository clone:
 
 ```shell
 git clone https://github.com/MystenLabs/sui.git
-cargo install --path sui
+cargo install --path sui/sui
 ```
 
 In both cases, this will install `sui`, `wallet`, and `sui-move`
