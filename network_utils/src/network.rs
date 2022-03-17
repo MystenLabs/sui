@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::transport::*;
-use bytes::Bytes;
-use futures::future::FutureExt;
+use bytes::{Bytes, BytesMut};
 use std::{
     net::TcpListener,
     sync::atomic::{AtomicUsize, Ordering},
@@ -13,7 +12,7 @@ use sui_types::{error::*, serialize::*};
 use tracing::*;
 
 use std::io;
-use tokio::time;
+use tokio::{task::JoinError, time};
 
 use futures::stream;
 use futures::SinkExt;
@@ -81,56 +80,40 @@ impl NetworkClient {
         &self,
         requests: Vec<Bytes>,
         _max_in_flight: u64,
-    ) -> Result<Vec<Bytes>, io::Error> {
+    ) -> Vec<Result<BytesMut, std::io::Error>> {
         let address = format!("{}:{}", self.base_address, self.base_port);
-        let stream = connect(address, self.buffer_size).await?;
-        let mut responses = Vec::new();
-
+        let stream = connect(address, self.buffer_size)
+            .await
+            .expect("Must be able to connect.");
         let total = requests.len();
 
-        let (mut read_stream, mut write_stream) = (stream.framed_read, stream.framed_write);
+        let (read_stream, mut write_stream) = (stream.framed_read, stream.framed_write);
 
         let mut requests = stream::iter(requests.into_iter().map(Ok));
         tokio::spawn(async move { write_stream.send_all(&mut requests).await });
 
         let mut received = 0;
-        loop {
-            match time::timeout(self.recv_timeout, read_stream.next()).await {
-                Ok(Some(Ok(buffer))) => {
-                    received += 1;
+        let responses: Vec<Result<BytesMut, std::io::Error>> = read_stream
+            .take_while(|_buf| {
+                received += 1;
+                if received % 5000 == 0 && received > 0 {
+                    info!("Received {}", received);
+                }
+                let xcontinue = received < total;
+                futures::future::ready(xcontinue)
+            })
+            .collect()
+            .await;
 
-                    if received % 5000 == 0 && received > 0 {
-                        info!("Received {}", received);
-                    }
-                    responses.push(Bytes::from(buffer));
-                }
-                Ok(Some(Err(error))) => {
-                    error!("Received error response: {}", error);
-                    received += 1;
-                }
-                Ok(None) => {
-                    info!("Socket closed by server");
-                    return Ok(responses);
-                }
-                Err(error) => {
-                    error!("Timeout while receiving response: {}", error);
-                }
-            }
-
-            if received == total {
-                return Ok(responses);
-            }
-        }
+        responses
     }
 
-    pub fn batch_send<I>(
+    pub fn batch_send(
         &self,
-        requests: I,
+        requests: Vec<Bytes>,
         connections: usize,
         max_in_flight: u64,
-    ) -> impl futures::stream::Stream<Item = Vec<Bytes>>
-    where
-        I: IntoIterator<Item = Bytes>,
+    ) -> impl futures::stream::Stream<Item = Result<Vec<Result<BytesMut, std::io::Error>>, JoinError>>
     {
         let handles = futures::stream::FuturesUnordered::new();
 
@@ -145,17 +128,14 @@ impl NetworkClient {
                         "Sending TCP requests to {}:{}",
                         client.base_address, client.base_port,
                     );
-                    let responses = client
-                        .batch_send_one_chunk(requests, max_in_flight)
-                        .await
-                        .unwrap_or_else(|_| Vec::new());
+                    let responses = client.batch_send_one_chunk(requests, max_in_flight).await;
+                    // .unwrap_or_else(|_| Vec::new());
                     info!(
                         "Done sending TCP requests to {}:{}",
                         client.base_address, client.base_port,
                     );
                     responses
-                })
-                .then(|x| async { x.unwrap_or_else(|_| Vec::new()) }),
+                }), // .then(|x| async { x.unwrap_or_else(|_| Vec::new()) }),
             );
         }
 

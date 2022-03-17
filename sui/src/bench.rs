@@ -345,6 +345,7 @@ impl ClientServerBenchmark {
             let time_start = Instant::now();
             let responses = mass_client
                 .batch_send(transactions, connections, max_in_flight as u64)
+                .map(|x| x.unwrap())
                 .concat()
                 .await;
             elapsed_time = time_start.elapsed().as_micros();
@@ -352,7 +353,7 @@ impl ClientServerBenchmark {
             info!("Received {} responses.", responses.len(),);
             // Check the responses for errors
             for resp in &responses {
-                let reply_message = deserialize_message(&resp[..]);
+                let reply_message = deserialize_message(&(resp.as_ref().unwrap())[..]);
                 match reply_message {
                     Ok(SerializedMessage::TransactionResp(res)) => {
                         if let Some(e) = res.signed_effects {
