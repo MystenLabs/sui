@@ -313,15 +313,14 @@ async fn sui_start(
     let mut handles = FuturesUnordered::new();
 
     for authority in &state.config.authorities {
-        let server =
-            sui_commands::make_server(authority, &committee, vec![], &[], state.config.buffer_size)
-                .await
-                .map_err(|error| {
-                    custom_http_error(
-                        StatusCode::CONFLICT,
-                        format!("Unable to make server: {error}"),
-                    )
-                })?;
+        let server = sui_commands::make_server(authority, &committee, state.config.buffer_size)
+            .await
+            .map_err(|error| {
+                custom_http_error(
+                    StatusCode::CONFLICT,
+                    format!("Unable to make server: {error}"),
+                )
+            })?;
         handles.push(async move {
             match server.spawn().await {
                 Ok(server) => Ok(server),
