@@ -14,6 +14,7 @@ module Sui::CrossChainAirdropTests {
     const ETOKEN_ID_CLAIMED: u64 = 0;
     const EOBJECT_NOT_FOUND: u64 = 1;
 
+    const ORACLE_ADDRESS: address = @0x1000;
     const RECIPIENT_ADDRESS: address = @0x10;
     const SOURCE_CONTRACT_ADDRESS: vector<u8> = x"BC4CA0EdA7647A8aB7C2061c2E118A18a936f13D";
     const SOURCE_TOKEN_ID: u64 = 101;
@@ -48,13 +49,12 @@ module Sui::CrossChainAirdropTests {
     }
 
     fun init(): (Scenario, address) {
-        let oracle_address = CrossChainAirdrop::oracle_address();
-        let scenario = TestScenario::begin(&oracle_address);
+        let scenario = TestScenario::begin(&ORACLE_ADDRESS);
         {
             let ctx = TestScenario::ctx(&mut scenario);
             CrossChainAirdrop::test_init(ctx);
         };
-        (scenario, oracle_address)
+        (scenario, ORACLE_ADDRESS)
     }
 
     fun claim_token(scenario: &mut Scenario, oracle_address: &address, token_id: u64) {

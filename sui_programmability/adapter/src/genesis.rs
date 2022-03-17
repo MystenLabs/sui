@@ -30,7 +30,11 @@ pub fn clone_genesis_packages() -> Vec<Object> {
 }
 
 pub fn get_genesis_context() -> TxContext {
-    TxContext::new(&SuiAddress::default(), TransactionDigest::genesis())
+    get_genesis_context_with_custom_address(&SuiAddress::default())
+}
+
+pub fn get_genesis_context_with_custom_address(address: &SuiAddress) -> TxContext {
+    TxContext::new(address, TransactionDigest::genesis())
 }
 
 /// Create and return objects wrapping the genesis modules for sui

@@ -46,10 +46,6 @@ module Sui::CrossChainAirdrop {
         metadata: ERC721Metadata,
     }
 
-    /// Address of the Oracle
-    // TODO: Change this to something else before testnet launch
-    const ORACLE_ADDRESS: address = @0xCEF1A51D2AA1226E54A1ACB85CFC58A051125A49;
-
     // Error codes
 
     /// Trying to claim a token that has already been claimed
@@ -57,13 +53,12 @@ module Sui::CrossChainAirdrop {
 
     /// Create the `Orcacle` capability and hand it off to the oracle
     fun init(ctx: &mut TxContext) {
-        let oracle = oracle_address();
         Transfer::transfer(
             CrossChainAirdropOracle {
                 id: TxContext::new_id(ctx),
                 managed_contracts: Vector::empty(),
             },
-            oracle
+            TxContext::sender(ctx)
         )
     }
 
@@ -127,10 +122,6 @@ module Sui::CrossChainAirdrop {
             index = index + 1;
         };
         false
-    }
-
-    public fun oracle_address(): address {
-        ORACLE_ADDRESS
     }
 
     #[test_only]
