@@ -157,12 +157,6 @@ impl AuthorityState {
                     }
                 );
 
-                // If the object is the gas object, check that it is an owned object
-                // and there is enough gas.
-                if object_kind.object_id() == transaction.gas_payment_object_ref().0 {
-                    gas::check_gas_requirement(transaction, object)?;
-                }
-
                 // If the object is the transfer object, check that it is not shared object.
                 if let TransactionKind::Transfer(t) = &transaction.data.kind {
                     if object_kind.object_id() == t.object_ref.0 {
@@ -202,6 +196,25 @@ impl AuthorityState {
             }
         };
         Ok(())
+    }
+
+    fn check_gas_requirement(
+        transaction: &Transaction,
+        input_objects: &[(InputObjectKind, Object)],
+    ) -> SuiResult {
+        // The last object in the input objects is always the gas object by construction.
+        let gas_object = &input_objects[input_objects.len() - 1].1;
+        match &transaction.data.kind {
+            TransactionKind::Transfer(_) => {
+                // The first object in the input objects is always the transfer object by construction.
+                let transfer_object = &input_objects[0].1;
+                gas::check_transfer_gas_requirement(gas_object, transfer_object)
+            }
+            TransactionKind::Call(op) => gas::check_move_gas_requirement(gas_object, op.gas_budget),
+            TransactionKind::Publish(op) => {
+                gas::check_move_gas_requirement(gas_object, op.gas_budget)
+            }
+        }
     }
 
     /// Check all the objects used in the transaction against the database, and ensure
@@ -257,6 +270,8 @@ impl AuthorityState {
         }
 
         fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
+
+        Self::check_gas_requirement(transaction, &all_objects)?;
 
         Ok(all_objects)
     }

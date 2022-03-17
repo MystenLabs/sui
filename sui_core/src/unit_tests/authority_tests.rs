@@ -332,10 +332,10 @@ async fn test_handle_transfer_zero_balance() {
     let result = authority_state
         .handle_transaction(transfer_transaction.clone())
         .await;
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Gas balance is 0, smaller than minimum requirement of 8 for object transfer."));
+    assert!(matches!(
+        result.unwrap_err(),
+        SuiError::InsufficientGas { .. }
+    ));
 }
 
 pub async fn send_and_confirm_transaction(
@@ -869,7 +869,7 @@ async fn test_handle_confirmation_transaction_gas() {
             .unwrap()
             .unwrap();
 
-        // Create a gas object with insufficient balance.
+        // Create a gas object with balance.
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_gas_for_testing(
             gas_object_id,
@@ -895,15 +895,12 @@ async fn test_handle_confirmation_transaction_gas() {
                 certified_transfer_transaction.clone(),
             ))
             .await
-            .unwrap()
-            .signed_effects
-            .unwrap()
-            .effects
-            .status
     };
     let result = run_test_with_gas(10).await;
-    let err_string = result.unwrap_err().1.to_string();
-    assert!(err_string.contains("Gas balance is 10, not enough to pay 18"));
+    assert!(matches!(
+        result.unwrap_err(),
+        SuiError::InsufficientGas { .. }
+    ));
     // This will execute sufccessfully.
     let result = run_test_with_gas(20).await;
     result.unwrap();
