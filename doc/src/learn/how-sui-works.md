@@ -51,7 +51,7 @@ Sui votes result in *[eventual consistency](https://en.wikipedia.org/wiki/Eventu
 
 [Eventual delivery](https://hal.inria.fr/inria-00609399/document) is achieved through eventual consistency. If one honest authority certifies the transaction, all of the other honest authorities will, as well. One of the components that is missing from eventual consistency is the witnessing of the convergence.
 
-This means we do not insist by default on two authorities having the same state. This would be possible only by halting input transactions, which is impractical. So transactions arrive in no particular order, and views of the authorities into those transactions are limited. Sui transactions do not reach authorities in a well-specified total order, so that two authorities can be at different stages of completely replicating the set of transactions that went through the system.
+This means we do not insist by default on two authorities having the same state: Sui transactions do not reach authorities in a well-specified total order, so that two authorities can be at different stages of completely replicating the set of transactions that went through the system.
 
 Sui’s high throughput and low latency is unrivaled. Other blockchains that operate from a [proof of work](https://en.wikipedia.org/wiki/Proof_of_work), for instance, may take an hour or more to reach consensus across the required six blocks due to a lack of deterministic finality.
 
