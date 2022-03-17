@@ -182,7 +182,7 @@ impl AuthorityServer {
                     }
                     SerializedMessage::Cert(message) => {
                         // Cache the transaction digest
-                        let digest = *message.digest();
+                        let tx_digest = *message.digest();
                         // Get the kind
                         let tx_kind = message.transaction.data.kind_as_str();
 
@@ -192,9 +192,7 @@ impl AuthorityServer {
                         match self
                             .state
                             .handle_confirmation_transaction(confirmation_transaction)
-                            .instrument(tracing::debug_span!("process_cert",
-                                                             tx_digest =? digest,
-                                                             tx_kind))
+                            .instrument(tracing::debug_span!("process_cert", ?tx_digest, tx_kind))
                             .await
                         {
                             Ok(info) => {
