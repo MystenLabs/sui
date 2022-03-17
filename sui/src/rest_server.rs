@@ -378,20 +378,16 @@ async fn sui_stop(
     rqctx: Arc<RequestContext<ServerContext>>,
 ) -> Result<HttpResponseUpdatedNoContent, HttpError> {
     let server_context = rqctx.context();
-    {
-        // Taking state object without returning ownership
-        let mut state = server_context.server_state.lock().await;
-        let state = state.as_mut().ok_or_else(server_state_error)?;
+    // Taking state object without returning ownership
+    let mut state = server_context.server_state.lock().await;
+    let state = state.take().ok_or_else(server_state_error)?;
 
-        for authority_handle in &state.authority_handles {
-            authority_handle.abort();
-        }
-
-        // Delete everything from working dir
-        fs::remove_dir_all(&state.working_dir).ok();
+    for authority_handle in &state.authority_handles {
+        authority_handle.abort();
     }
-    // Clear server state
-    *server_context.server_state.lock().await = None;
+
+    // Delete everything from working dir
+    fs::remove_dir_all(&state.working_dir).ok();
 
     Ok(HttpResponseUpdatedNoContent())
 }
