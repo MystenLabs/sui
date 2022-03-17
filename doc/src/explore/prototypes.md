@@ -18,19 +18,19 @@ With Sui, we believe game developers should not be limited by the platform perfo
 
 ## Smart contracts optional
 
-[Move](https://github.com/MystenLabs/awesome-move/blob/main/README.md) is simply awesome: it’s safe, expressive and immune from reentrancy; but move expertise is not required to build meaningful experiences on Sui. To make it easy for developers and creators to start using Sui for gaming, we will be releasing gaming SDKs that address common use cases and game asset-related features.
+[Move](https://github.com/MystenLabs/awesome-move/blob/main/README.md) is simply awesome: it’s safe, expressive and immune from reentrancy; but Move expertise is not required to build meaningful experiences on Sui. To make it easy for developers and creators to start using Sui for gaming, we will be releasing gaming SDKs that address common use cases and game asset-related features.
 
 
 ## How we did it
 
 To create these prototypes, we worked with game development studio Geniteam, who built the prototypes with the Unity SDK along with Sui [APIs](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1).
 
-Geniteam developers that worked on this collaboration are not smart contract or move developers. With this project, we started gathering data on what is the best way to design SDKs that make it easy to start building on Sui.
+Geniteam developers that worked on this collaboration are not smart contract or Move developers. With this project, we started gathering data on what is the best way to design SDKs that make it easy to start building on Sui.
 
-Once Geniteam communicated their idea with us, we created the proposed data model and shared simple APIs. With these APIs, Geniteam was able to mint fully on-chain NFTs that are able to mutate, own other on-chain assets, and freely transfer to other applications. Gameplay is then powered by APIs calls that allow them to read and write to update the NFTs. \
+Once Geniteam communicated their idea with us, we created the proposed data model and shared simple APIs. With these APIs, Geniteam was able to mint fully on-chain NFTs that are able to mutate, own other on-chain assets, and freely transfer to other applications. Gameplay is then powered by APIs calls that allow them to read and write to update the NFTs. 
 
 
-Here are the three APIs Geniteam used, along with the smart contracts to create and update monster (named MonStars in the prototype).
+Here are the three APIs Geniteam used, along with the smart contracts to create and update monster (named MonStars in the prototype):
 
 
 ### API Move call - Create Monster
@@ -206,7 +206,7 @@ In Sui Monstar, capture cute monstars and watch them get closer to you as you fe
 ![Update NFT properties](/static/md-assets/nft-properties.png "Equip elemental runes to your Monstar")
 *Equip elemental runes to your Monstar and watch your NFT evolve with updated properties*
 
-That’s not all, as your Monstar become stronger, you can use them to help you battle…in the next prototype>>>
+That’s not all! As your Monstar become stronger, you can use them to help you battle…in the next prototype>>>
 
 ## Prototype 2 Sui Battler
 
