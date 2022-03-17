@@ -8,7 +8,7 @@ module DeFi::SharedAuctionTests {
     use Sui::TestScenario::Self;
     use Sui::TxContext::{Self, TxContext};
 
-    use DeFi::AuctionV2;
+    use DeFi::SharedAuction;
     use DeFi::AuctionUtils::Auction;
 
 
@@ -59,7 +59,7 @@ module DeFi::SharedAuctionTests {
                 id: TxContext::new_id(ctx),
                 value: 42,
             };
-            AuctionV2::create_auction(to_sell, ctx);
+            SharedAuction::create_auction(to_sell, ctx);
         };
 
         // a transaction by the first bidder to put a bid
@@ -68,7 +68,7 @@ module DeFi::SharedAuctionTests {
             let coin = TestScenario::remove_object<Coin<GAS>>(scenario);
             let auction = TestScenario::remove_object<Auction<SomeItemToSell>>(scenario);
 
-            AuctionV2::bid(coin, &mut auction, TestScenario::ctx(scenario));
+            SharedAuction::bid(coin, &mut auction, TestScenario::ctx(scenario));
 
             TestScenario::return_object(scenario, auction);
         };
@@ -81,7 +81,7 @@ module DeFi::SharedAuctionTests {
             let coin = TestScenario::remove_object<Coin<GAS>>(scenario);
             let auction = TestScenario::remove_object<Auction<SomeItemToSell>>(scenario);
 
-            AuctionV2::bid(coin, &mut auction, TestScenario::ctx(scenario));
+            SharedAuction::bid(coin, &mut auction, TestScenario::ctx(scenario));
 
             TestScenario::return_object(scenario, auction);
         };
@@ -104,7 +104,7 @@ module DeFi::SharedAuctionTests {
 
             // pass auction as mutable reference as its a shared
             // object that cannot be deleted
-            AuctionV2::end_auction(&mut auction, TestScenario::ctx(scenario));
+            SharedAuction::end_auction(&mut auction, TestScenario::ctx(scenario));
 
             TestScenario::return_object(scenario, auction);
         };

@@ -22,7 +22,7 @@
 ///   - otherwise the funds accumulated in the auction go to the owner
 ///   and the item goes to the bidder that won the auction
 
-module DeFi::AuctionV2 {
+module DeFi::SharedAuction {
     use Sui::Coin::Coin;
     use Sui::GAS::GAS;
     use Sui::Transfer;

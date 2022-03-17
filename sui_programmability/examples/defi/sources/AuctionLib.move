@@ -12,7 +12,7 @@ module DeFi::AuctionUtils {
     use Sui::TxContext::{Self,TxContext};
 
     friend DeFi::Auction;
-    friend DeFi::AuctionV2;
+    friend DeFi::SharedAuction;
 
     /// Stores information about an auction bid.
     struct BidData has store {
