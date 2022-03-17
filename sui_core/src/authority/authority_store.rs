@@ -551,7 +551,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         let mut write_batch = self.transaction_lock.batch();
 
         // Store the certificate indexed by transaction digest
-        let transaction_digest: TransactionDigest = *certificate.digest();
+        let transaction_digest: &TransactionDigest = certificate.digest();
         write_batch = write_batch.insert_batch(
             &self.certificates,
             std::iter::once((transaction_digest, &certificate)),

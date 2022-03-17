@@ -345,8 +345,8 @@ impl AuthorityState {
         let certificate = &confirmation_transaction.certificate;
 
         // Ensure an idempotent answer.
-        if self._database.signed_effects_exists(transaction_digest)? {
-            let transaction_info = self.make_transaction_info(transaction_digest).await?;
+        if self._database.signed_effects_exists(&transaction_digest)? {
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
 
