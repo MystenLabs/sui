@@ -10,7 +10,7 @@ Sui scales horizontally with no upper bound to meet application demand while mai
 
 Sui takes a significant leap in scalability by enabling parallel agreement on causally independent transactions. Sui authorities commit such transactions using Byzantine consistent broadcast, eliminating global consensus's overhead without sacrificing safety and liveness guarantees.
 
-This breakthrough is only possible with Sui's novel data model. Thanks to its object-centric view and Move’s strong ownership types, dependencies are explicitly encoded. As a result, Sui both agrees on and executes transactions on most objects in parallel, while a minority of transactions that affect shared state are ordered via Byzantine fault tolerant consensus and executed in parallel.
+This breakthrough is possible only with Sui's novel data model. Thanks to its object-centric view and Move’s strong ownership types, dependencies are explicitly encoded. As a result, Sui both agrees on and executes transactions on most objects in parallel, while a minority of transactions that affect shared state are ordered via Byzantine fault tolerant consensus and executed in parallel.
 
 ### Highlights
 
@@ -19,15 +19,15 @@ This breakthrough is only possible with Sui's novel data model. Thanks to its ob
 * Ability to define rich and composable on-chain assets
 * Better user experience for web3 apps
 
-Sui is the only blockchain today that can scale with the growth of web3 while achieving industry-leading performance, cost, programmability, and usability. As we push towards mainnet launch during the next few months, we will demonstrate capacity beyond the transaction processing capabilities of established systems – traditional and blockchain alike. We see Sui as the first internet-scale programmable blockchain platform, a foundational layer for web3.  
+Sui is the only blockchain today that can scale with the growth of web3 while achieving industry-leading performance, cost, programmability, and usability. As we push towards mainnet launch, we will demonstrate capacity beyond the transaction processing capabilities of established systems – traditional and blockchain alike. We see Sui as the first internet-scale programmable blockchain platform, a foundational layer for web3.  
 
 ## Unparalleled scalability, immediate settlement
 
-Today users of existing blockchains pay a considerable tax as network usage increases due to limited throughput. In addition, high latency limits the responsiveness of applications. These factors contribute to the bad user experiences that are all too common in web3:
+Today, users of existing blockchains pay a considerable tax as network usage increases due to limited throughput. In addition, high latency limits the responsiveness of applications. These factors contribute to the bad user experiences that are all too common in web3:
 
 * Games are slow and prohibitively expensive to play
-* Investors lose funds when they can’t liquidate undercollateralized loans in DeFi
-* High volume, low value per transaction mass-market services like micropayments and coupons are priced out of the network
+* Investors lose funds when they can’t liquidate undercollateralized loans in Decentralized Finance (DeFi)
+* High-volume, low-value, per-transaction mass-market services like micropayments and coupons are priced out of the network
 * Artificially high floor prices on assets due to high gas prices
 
 Sui scales horizontally to meet the demands of applications. Network capacity grows in proportion to the increase in Sui authorities' processing power by adding workers, resulting in low gas fees even during high network traffic. This scalability characteristic is in sharp contrast to other blockchains with rigid bottlenecks.
@@ -54,16 +54,14 @@ Rich on-chain assets will enable new applications and economies based on utility
 
 ## Better user experience for web3 apps
 
-We want to make Sui the most accessible smart contracts platform, empowering developers to create great user experiences in web3. To usher in the next billion users, we will empower developers with various tools to take advantage of the power of the Sui blockchain. The Sui Development Kit (SDK) will enable developers to build without boundaries.
+We want to make Sui the most accessible smart contract platform, empowering developers to create great user experiences in web3. To usher in the next billion users, we will empower developers with various tools to take advantage of the power of the Sui blockchain. The Sui Development Kit (SDK) will enable developers to build without boundaries.
 
 ## Build cool stuff
 
-Here are some cool things you can do now and some applications that will become possible over the next few weeks and months.
+Here are some cool things you can do now and some applications that will become possible over the next few weeks and months. Sui enables developers to define and build:
 
-* Sui enables developers to define and build:
-* On-chain DeFi and TradFi primitives:  enabling real-time, low latency on-chain trading
+* On-chain DeFi and Traditional Finance (TradFi) primitives:  enabling real-time, low latency on-chain trading
 * Reward and loyalty programs: deploying mass airdrops that reach millions of people through low-cost transactions
 * Complex games and business logic: implementing on-chain logic transparently, extending the functionality of assets, and delivering value beyond pure scarcity
 * Asset tokenization services: making ownership of everything from property deeds to collectibles to medical and educational records perform seamlessly at scale
 * Decentralized social media networks: empowering creator-owned media, posts, likes, and networks with privacy and interoperability in mind
-
