@@ -33,7 +33,7 @@ use sui::keystore::Keystore;
 use sui::sui_commands;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
 use sui::wallet_commands::SimpleTransactionSigner;
-use sui_core::gateway_state::GatewayClient;
+use sui_core::gateway_state::{AsyncTransactionSigner, GatewayClient};
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
 use sui_types::event::Event;
@@ -755,11 +755,21 @@ async fn transfer_object(
         keystore: state.keystore.clone(),
     });
 
-    let (cert, effects, gas_used) = match state
-        .gateway
-        .transfer_coin(owner, object_id, gas_object_id, to_address, tx_signer)
-        .await
-    {
+    let response: Result<_, anyhow::Error> = async {
+        let sig_req = state
+            .gateway
+            .transfer_coin(owner, object_id, gas_object_id, to_address)
+            .await?;
+        let signature = tx_signer.sign(&owner, sig_req.data).await?;
+        Ok(state
+            .gateway
+            .execute_transaction(sig_req.digest, signature)
+            .await?
+            .to_effect_response()?)
+    }
+    .await;
+
+    let (cert, effects, gas_used) = match response {
         Ok((cert, effects)) => {
             let gas_used = match effects.status {
                 // TODO: handle the actual return value stored in
@@ -1147,24 +1157,33 @@ async fn handle_move_call(
         keystore: state.keystore.clone(),
     });
 
-    let (cert, effects, gas_used) = match state
-        .gateway
-        .move_call(
-            sender,
-            package_object_ref,
-            module.to_owned(),
-            function.to_owned(),
-            type_args.clone(),
-            gas_obj_ref,
-            object_args_refs,
-            // TODO: Populate shared object args. sui/issue#719
-            vec![],
-            pure_args,
-            gas_budget,
-            tx_signer,
-        )
-        .await
-    {
+    let response: Result<_, anyhow::Error> = async {
+        let sig_req = state
+            .gateway
+            .move_call(
+                sender,
+                package_object_ref,
+                module.to_owned(),
+                function.to_owned(),
+                type_args.clone(),
+                gas_obj_ref,
+                object_args_refs,
+                // TODO: Populate shared object args. sui/issue#719
+                vec![],
+                pure_args,
+                gas_budget,
+            )
+            .await?;
+        let signature = tx_signer.sign(&sender, sig_req.data).await?;
+        Ok(state
+            .gateway
+            .execute_transaction(sig_req.digest, signature)
+            .await?
+            .to_effect_response()?)
+    }
+    .await;
+
+    let (cert, effects, gas_used) = match response {
         Ok((cert, effects)) => {
             let gas_used = match effects.status {
                 // TODO: handle the actual return value stored in

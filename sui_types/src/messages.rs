@@ -293,6 +293,18 @@ impl TransactionData {
     pub fn kind_as_str(&self) -> &'static str {
         self.kind.variant_name()
     }
+
+    pub fn digest(&self) -> TransactionDigest {
+        TransactionDigest::new(sha3_hash(self))
+    }
+
+    pub fn gas(&self) -> ObjectRef {
+        self.gas_payment
+    }
+
+    pub fn signer(&self) -> SuiAddress {
+        self.sender
+    }
 }
 
 /// An transaction signed by a client. signature is applied on data.
@@ -850,7 +862,7 @@ impl Transaction {
 
     // Derive a cryptographic hash of the transaction.
     pub fn digest(&self) -> TransactionDigest {
-        TransactionDigest::new(sha3_hash(&self.data))
+        self.data.digest()
     }
 
     pub fn input_objects_in_compiled_modules(

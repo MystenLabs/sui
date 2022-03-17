@@ -273,6 +273,8 @@ pub enum SuiError {
 
     #[error("Authority state can be modified by a single consensus client at the time")]
     OnlyOneConsensusClientPermitted,
+    #[error("Transaction data not found. Transaction digest: {digest:?}")]
+    TransactionNotFound { digest: TransactionDigest },
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

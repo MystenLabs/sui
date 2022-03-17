@@ -223,16 +223,16 @@ impl WalletCommands {
                 let gas_obj_ref = gas_object.compute_object_reference();
 
                 let compiled_modules = build_move_package_to_bytes(Path::new(path))?;
+                let signature_req = context
+                    .gateway
+                    .publish(sender, compiled_modules, gas_obj_ref, *gas_budget)
+                    .await?;
+                let signature = tx_signer.sign(&sender, signature_req.data).await?;
                 let response = context
                     .gateway
-                    .publish(
-                        sender,
-                        compiled_modules,
-                        gas_obj_ref,
-                        *gas_budget,
-                        tx_signer,
-                    )
-                    .await?;
+                    .execute_transaction(signature_req.digest, signature)
+                    .await?
+                    .to_publish_response()?;
 
                 WalletCommandResult::Publish(response)
             }
@@ -306,7 +306,7 @@ impl WalletCommands {
                     object_args_refs.push(obj_info.object()?.compute_object_reference());
                 }
 
-                let (cert, effects) = context
+                let sig_req = context
                     .gateway
                     .move_call(
                         sender,
@@ -319,9 +319,15 @@ impl WalletCommands {
                         vec![],
                         pure_args,
                         *gas_budget,
-                        tx_signer,
                     )
                     .await?;
+                let signature = tx_signer.sign(&sender, sig_req.data).await?;
+                let (cert, effects) = context
+                    .gateway
+                    .execute_transaction(sig_req.digest, signature)
+                    .await?
+                    .to_effect_response()?;
+
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
                     return Err(anyhow!("Error calling module: {:#?}", effects.status));
                 }
@@ -335,10 +341,17 @@ impl WalletCommands {
 
                 let time_start = Instant::now();
 
+                let sig_req = context
+                    .gateway
+                    .transfer_coin(from, *object_id, *gas, *to)
+                    .await?;
+                let signature = tx_signer.sign(&from, sig_req.data).await?;
                 let (cert, effects) = context
                     .gateway
-                    .transfer_coin(from, *object_id, *gas, *to, tx_signer)
-                    .await?;
+                    .execute_transaction(sig_req.digest, signature)
+                    .await?
+                    .to_effect_response()?;
+
                 let time_total = time_start.elapsed().as_micros();
 
                 if matches!(effects.status, ExecutionStatus::Failure { .. }) {
@@ -395,17 +408,16 @@ impl WalletCommands {
                 let gas_object = gas_object_info.object()?;
                 let signer = gas_object.owner.get_owner_address()?;
 
+                let sig_req = context
+                    .gateway
+                    .split_coin(signer, *coin_id, amounts.clone(), *gas, *gas_budget)
+                    .await?;
+                let signature = tx_signer.sign(&signer, sig_req.data).await?;
                 let response = context
                     .gateway
-                    .split_coin(
-                        signer,
-                        *coin_id,
-                        amounts.clone(),
-                        *gas,
-                        *gas_budget,
-                        tx_signer,
-                    )
-                    .await?;
+                    .execute_transaction(sig_req.digest, signature)
+                    .await?
+                    .to_split_coin_response()?;
                 WalletCommandResult::SplitCoin(response)
             }
             WalletCommands::MergeCoin {
@@ -417,17 +429,17 @@ impl WalletCommands {
                 let gas_object_info = context.gateway.get_object_info(*gas).await?;
                 let gas_object = gas_object_info.object()?;
                 let signer = gas_object.owner.get_owner_address()?;
+                let sig_req = context
+                    .gateway
+                    .merge_coins(signer, *primary_coin, *coin_to_merge, *gas, *gas_budget)
+                    .await?;
+                let signature = tx_signer.sign(&signer, sig_req.data).await?;
                 let response = context
                     .gateway
-                    .merge_coins(
-                        signer,
-                        *primary_coin,
-                        *coin_to_merge,
-                        *gas,
-                        *gas_budget,
-                        tx_signer,
-                    )
-                    .await?;
+                    .execute_transaction(sig_req.digest, signature)
+                    .await?
+                    .to_merge_coin_response()?;
+
                 WalletCommandResult::MergeCoin(response)
             }
         })
