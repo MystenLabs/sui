@@ -2,7 +2,7 @@
 title: Sui Prototypes
 ---
 
-Here are two short gaming prototypes that demonstrate the speed, scalability, and rich interactions made possible with mutable, expressive NFTs: [Sui Monstar and Sui Battler](https://sui.io/sui_monstar).
+Here are two short gaming prototypes that demonstrate the speed, scalability, and rich interactions made possible with mutable, expressive NFTs: [Sui Monstar and Sui Battler](https://sui.io/monstar).
 
 
 ## Sui and gaming
@@ -210,7 +210,7 @@ That’s not all! As your Monstar become stronger, you can use them to help you 
 
 ## Prototype 2 Sui Battler
 
-Welcome to [Sui Battler](https://sui.io/sui_monstar), where your cute monstars transform into warriors!
+Welcome to [Sui Battler](https://sui.io/monstar), where your cute monstars transform into warriors!
 
 Gameplay:
 
@@ -232,8 +232,6 @@ Gameplay:
 
 ## Further reading
 
-* See the entire Unity project here [link to github].
+* See the entire [Unity project](https://github.com/MystenLabs/sui-monstars)
 * Check out Sui [APIs](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1).
 * Learn about Sui [objects](https://github.com/MystenLabs/sui/blob/main/doc/src/build/objects.md).
-
-TODO: Fix Unity link above.
