@@ -41,7 +41,7 @@ Sui authorities agree on and execute transactions in parallel with high throughp
 
 ## Overview
 
-Sui, which is written in Rust, supports smart contracts written in Move .Sui addresses the primary hindrance to blockchain growth: [head-of-line blocking](https://en.wikipedia.org/wiki/Head-of-line_blocking). Blockchain nodes manage an *accumulator* that represents the state of the entire blockchain, such as the latest certified transactions. Validators participate in a consensus protocol to add an update to that state reflecting the transaction’s modification to blocks (add, remove, mutate).
+Sui, which is written in Rust, supports smart contracts written in Move. Sui addresses the primary hindrance to blockchain growth: [head-of-line blocking](https://en.wikipedia.org/wiki/Head-of-line_blocking). Blockchain nodes manage an *accumulator* that represents the state of the entire blockchain, such as the latest certified transactions. Validators participate in a consensus protocol to add an update to that state reflecting the transaction’s modification to blocks (add, remove, mutate).
 
 That consensus protocol leads to an agreement on the state of the blockchain before the increment, the validity and suitability of the state update itself, and the state of the blockchain after the increment. On a periodic basis, these increments are collected in the accumulator.
 
