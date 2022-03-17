@@ -1,5 +1,6 @@
-# SoWork x Sui
-
+---
+title: SoWork x Sui
+---
 
 With a mission to move work from the Earth to the Cloud, [SoWork](https://sowork.com/) is building The Workplace Metaverse - the place where great teams ❤️ to work. SoWork has selected Sui as the underlying chain powering the various assets–such as land, items, and achievements–in the SoWork Metaverse.
 
