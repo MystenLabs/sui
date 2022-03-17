@@ -23,7 +23,7 @@
         "fileName": "learn/about-sui"
       },
       {
-        "label": "How Sui Move differs from Core Move"
+        "label": "How Sui Move differs from Core Move",
         "fileName": "learn/sui-move-diffs"
       },
       {
@@ -31,26 +31,26 @@
         "fileName": "learn/how-sui-works"
       },
       {
-        "label": "Sui Compared to Other Blockchains"
+        "label": "Sui Compared to Other Blockchains",
         "fileName": "learn/sui-compared"
       },
       {
-        "label": "Understand Sui Security"
+        "label": "Understand Sui Security",
         "fileName": "learn/sui-security"
       },
       {
         "label": "Sui White Paper",
-        "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf"
+        "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf",
         "external": true
       }
     ],
     "build": [
       {
-        "label": "Install"
+        "label": "Install",
         "fileName": "build/install"
       },
       {
-        "label": "Smart Contracts with Move"
+        "label": "Smart Contracts with Move",
         "fileName": "build/move"
       },
       {
@@ -103,7 +103,7 @@
       },
       {
         "label": "About Mysten Labs",
-        "link": "https://mystenlabs.com/"
+        "link": "https://mystenlabs.com/",
         "external": true
       }
     ]
