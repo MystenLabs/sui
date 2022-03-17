@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use move_core_types::identifier::Identifier;
 use serde_json::{json, Value};
-use tempfile::TempDir;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tracing_test::traced_test;
@@ -19,7 +18,7 @@ use sui::config::{
     PersistedConfig, WalletConfig, AUTHORITIES_DB_NAME,
 };
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
-use sui::keystore::{KeystoreType, SuiKeystore};
+use sui::keystore::KeystoreType;
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_network::network::PortAllocator;
@@ -164,8 +163,11 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     );
 
     // Create Wallet context with the oracle account
-    let (oracle_address, mut context) = airdrop_get_wallet_context_with_oracle(working_dir).await?;
+    let wallet_conf_path = working_dir.path().join("wallet.conf");
+    let mut context = WalletContext::new(&wallet_conf_path)?;
+
     let recipient_address = *context.config.accounts.first().unwrap();
+    let oracle_address = *context.config.accounts.last().unwrap();
 
     // Assemble the move call to claim the airdrop
     let oracle_obj_str = format!(
@@ -185,8 +187,8 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
         args.push(SuiJsonValue::new(a.clone()).unwrap());
     }
 
+    let gas_object_id = get_gas_object(oracle_address, &mut context).await?;
     // Claim the airdrop
-    let gas_object_id = transfer_gas(recipient_address, oracle_address, &mut context).await?;
     let token = airdrop_call_move_and_get_created_object(args, gas_object_id, &mut context).await?;
 
     // Verify the airdrop token
@@ -208,45 +210,18 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn airdrop_get_wallet_context_with_oracle(
-    working_dir: TempDir,
-) -> Result<(SuiAddress, WalletContext), anyhow::Error> {
-    use sui_types::crypto::get_key_pair_from_bytes;
-
-    let (oracle_address, keypair) = get_key_pair_from_bytes(&[
-        143, 102, 49, 171, 56, 173, 188, 83, 154, 218, 98, 200, 173, 252, 53, 239, 131, 210, 147,
-        14, 4, 24, 132, 151, 178, 0, 167, 89, 176, 90, 106, 176, 208, 47, 8, 58, 177, 56, 246, 192,
-        244, 88, 202, 115, 9, 82, 3, 184, 18, 236, 128, 199, 22, 37, 255, 146, 103, 34, 0, 240,
-        255, 163, 60, 174,
-    ]);
-    let wallet_conf_path = working_dir.path().join("wallet.conf");
-    let wallet_conf: WalletConfig = PersistedConfig::read(&wallet_conf_path)?;
-    let mut wallet_conf = wallet_conf.persisted(&wallet_conf_path);
-    let path = match &wallet_conf.keystore {
-        KeystoreType::File(path) => path,
-        _ => panic!("Unexpected KeystoreType"),
-    };
-    let mut store = SuiKeystore::load_or_create(path)?;
-    store.add_key(oracle_address, keypair)?;
-    store.save(path)?;
-
-    wallet_conf.accounts.push(oracle_address);
-    wallet_conf.save()?;
-
-    Ok((oracle_address, WalletContext::new(&wallet_conf_path)?))
-}
-
 async fn airdrop_get_oracle_object(
     address: SuiAddress,
     context: &mut WalletContext,
 ) -> Result<ObjectID, anyhow::Error> {
-    WalletCommands::SyncClientState { address }
-        .execute(context)
-        .await?
-        .print(true);
-    let object_refs = context.gateway.get_owned_objects(address);
-    assert_eq!(object_refs.len(), 1);
-    Ok(object_refs.first().unwrap().0)
+    let move_objects = get_move_objects_by_type(
+        context,
+        address,
+        "CrossChainAirdrop::CrossChainAirdropOracle",
+    )
+    .await?;
+    assert_eq!(move_objects.len(), 1);
+    Ok(move_objects.first().unwrap().0)
 }
 
 async fn airdrop_call_move_and_get_created_object(
@@ -282,27 +257,17 @@ async fn airdrop_call_move_and_get_created_object(
     get_move_object(context, minted_token_id).await
 }
 
-async fn transfer_gas(
-    from: SuiAddress,
-    to: SuiAddress,
+async fn get_gas_object(
+    address: SuiAddress,
     context: &mut WalletContext,
 ) -> Result<ObjectID, anyhow::Error> {
-    let gas_objects_result = WalletCommands::Gas { address: from }
-        .execute(context)
-        .await?;
+    let gas_objects_result = WalletCommands::Gas { address }.execute(context).await?;
 
     let gas_objects = match gas_objects_result {
         WalletCommandResult::Gas(objs) => objs,
         _ => panic!("unexpected WalletCommandResult"),
     };
 
-    WalletCommands::Transfer {
-        to,
-        object_id: *gas_objects[0].id(),
-        gas: *gas_objects[1].id(),
-    }
-    .execute(context)
-    .await?;
     Ok(*gas_objects[0].id())
 }
 
@@ -401,29 +366,14 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
 #[traced_test]
 #[tokio::test]
 async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Error> {
-    use sui_types::crypto::get_key_pair_from_bytes;
-
-    let (address, _) = get_key_pair_from_bytes(&[
-        10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
-        92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
-        90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
-        105, 254, 59, 163,
-    ]);
-
     let temp_dir = tempfile::tempdir()?;
     let working_dir = temp_dir.path();
     // Create and save genesis config file
     // Create 4 authorities and 1 account
     let genesis_path = working_dir.join("genesis.conf");
     let num_authorities = 4;
-    let config = GenesisConfig::custom_genesis(working_dir, num_authorities, 0, 0)?;
+    let config = GenesisConfig::custom_genesis(working_dir, num_authorities, 1, 1)?;
     let mut config = config.persisted(&genesis_path);
-
-    config.accounts.clear();
-    config.accounts.push(AccountConfig {
-        address: Some(address),
-        gas_objects: vec![],
-    });
     config
         .move_packages
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_1"));
@@ -463,18 +413,12 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     // Create Wallet context.
     let wallet_conf_path = working_dir.join("wallet.conf");
     let wallet_conf: WalletConfig = PersistedConfig::read(&wallet_conf_path)?;
-    let mut wallet_conf = wallet_conf.persisted(&wallet_conf_path);
-    wallet_conf.accounts = vec![address];
-    wallet_conf.save()?;
+    let address = *wallet_conf.accounts.last().unwrap();
     let mut context = WalletContext::new(&wallet_conf_path)?;
 
     // Make sure init() is executed correctly for custom_genesis_package_2::M1
-    let move_objects = get_move_objects(&mut context, address).await?;
+    let move_objects = get_move_objects_by_type(&mut context, address, "M1::Object").await?;
     assert_eq!(move_objects.len(), 1);
-    assert!(move_objects[0]["contents"]["type"]
-        .to_string()
-        .contains("M1::Object"));
-
     network.abort();
     Ok(())
 }
@@ -647,10 +591,22 @@ fn extract_gas_info(s: &str) -> Option<(ObjectID, SequenceNumber, u64)> {
     ))
 }
 
+async fn get_move_objects_by_type(
+    context: &mut WalletContext,
+    address: SuiAddress,
+    type_substr: &str,
+) -> Result<Vec<(ObjectID, Value)>, anyhow::Error> {
+    let objects = get_move_objects(context, address).await?;
+    Ok(objects
+        .into_iter()
+        .filter(|(_, obj)| obj["contents"]["type"].to_string().contains(type_substr))
+        .collect())
+}
+
 async fn get_move_objects(
     context: &mut WalletContext,
     address: SuiAddress,
-) -> Result<Vec<Value>, anyhow::Error> {
+) -> Result<Vec<(ObjectID, Value)>, anyhow::Error> {
     // Sync client to retrieve objects from the network.
     WalletCommands::SyncClientState { address }
         .execute(context)
@@ -664,7 +620,7 @@ async fn get_move_objects(
         WalletCommandResult::Objects(object_refs) => {
             let mut objs = vec![];
             for (id, ..) in object_refs {
-                objs.push(get_move_object(context, id).await?);
+                objs.push((id, get_move_object(context, id).await?));
             }
             Ok(objs)
         }
