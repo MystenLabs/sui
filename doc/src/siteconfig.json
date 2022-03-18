@@ -162,7 +162,7 @@
             "external": true
           },
         "sublist": [{
-            "name": "Try A flash loan for any Coin type ->",
+            "name": "Try A flash loan ->",
             "url": "https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/FlashLender.move"
             "external": true
           },
