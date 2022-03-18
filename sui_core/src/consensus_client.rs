@@ -3,6 +3,7 @@
 
 use crate::authority::AuthorityState;
 use bytes::Bytes;
+use std::cmp::Ordering;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use sui_network::transport;
@@ -49,7 +50,7 @@ impl ConsensusClient {
     /// It is safety-critical that we process the consensus outputs in the right order.
     async fn synchronize(&mut self) -> SuiResult<()> {
         // TODO [issue #932]: [liveness-critical] Implement the synchronizer.
-        return Ok(());
+        Ok(())
     }
 
     /// Process a single sequenced certificate.
@@ -76,14 +77,18 @@ impl ConsensusClient {
         };
 
         // Check that the latest consensus index is as expected; otherwise synchronize.
-        if self.last_consensus_index < consensus_index {
-            log::debug!("Authority is synchronizing missed sequenced certificates");
-            self.synchronize().await?;
-            return Ok(());
-        } else if self.last_consensus_index > consensus_index {
-            // Something is very wrong. Liveness may be lost (but not safety).
-            log::error!("Consensus index of authority bigger than expected");
-            return Ok(());
+        match self.last_consensus_index.cmp(&consensus_index) {
+            Ordering::Greater => {
+                // Something is very wrong. Liveness may be lost (but not safety).
+                log::error!("Consensus index of authority bigger than expected");
+                return Ok(());
+            }
+            Ordering::Less => {
+                log::debug!("Authority is synchronizing missed sequenced certificates");
+                self.synchronize().await?;
+                return Ok(());
+            }
+            Ordering::Equal => (),
         }
 
         // Update the latest consensus index. The authority state will atomically
