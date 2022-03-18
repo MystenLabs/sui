@@ -25,7 +25,7 @@ For more information, see [Authorities vs validators/miners](how-sui-works.md#au
 ### Causal order
 
 [Causal order](https://www.scattered-thoughts.net/writing/causal-ordering/) is a representation of the relationship between transactions
-and the objects they produce, laid out as dependencies. Authorities cannot execute a transaction dependent on object created by a prior
+and the objects they produce, laid out as dependencies. Authorities cannot execute a transaction dependent on objects created by a prior
 transaction that has not finished. Rather than total order, Sui uses causal order.
 
 For more information, see [Causal order vs total order](how-sui-works.md#causal-order-vs-total-order). 
