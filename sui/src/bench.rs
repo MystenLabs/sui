@@ -221,7 +221,7 @@ impl ClientServerBenchmark {
                 };
 
                 let mut gas_object_id = [0; 20];
-                gas_object_id[8..16].clone_from_slice(&(offset).to_be_bytes()[..8]);
+                gas_object_id[8..16].clone_from_slice(&(offset + x).to_be_bytes()[..8]);
                 let gas_object_id = ObjectID::from(gas_object_id);
                 let gas_object = Object::with_id_owner_for_testing(gas_object_id, address);
                 assert!(gas_object.version() == SequenceNumber::from(0));
