@@ -10,7 +10,6 @@ use std::time::Duration;
 use move_core_types::identifier::Identifier;
 use serde_json::{json, Value};
 use tempfile::TempDir;
-use tokio::task::JoinHandle;
 use tracing_test::traced_test;
 
 use sui::config::{
@@ -19,7 +18,7 @@ use sui::config::{
 };
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
-use sui::sui_commands::{create_network, genesis};
+use sui::sui_commands::{genesis, SuiNetwork};
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
@@ -201,7 +200,7 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     // TODO: verify the other string fields once SuiJSON has better support for rendering
     // string fields
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -296,7 +295,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
         assert!(logs_contain(format!("{}", object_id).as_str()))
     }
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -342,7 +341,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         Duration::from_millis(5000)
     );
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -385,7 +384,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     // Make sure init() is executed correctly for custom_genesis_package_2::M1
     let move_objects = get_move_objects_by_type(&mut context, address, "M1::Object").await?;
     assert_eq!(move_objects.len(), 1);
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -423,7 +422,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
         Duration::from_millis(5000)
     );
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -521,7 +520,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
         Ok(())
     });
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -606,7 +605,7 @@ async fn get_move_object(
 async fn start_test_network(
     working_dir: &Path,
     genesis_config: Option<GenesisConfig>,
-) -> Result<JoinHandle<Result<(), anyhow::Error>>, anyhow::Error> {
+) -> Result<SuiNetwork, anyhow::Error> {
     let working_dir = working_dir.to_path_buf();
     let network_path = working_dir.join("network.conf");
     let wallet_path = working_dir.join("wallet.conf");
@@ -629,7 +628,7 @@ async fn start_test_network(
     genesis_config.authorities = authorities;
 
     let (network_config, accounts, keystore) = genesis(genesis_config).await?;
-    let network = create_network(&network_config).await?;
+    let network = SuiNetwork::start(&network_config).await?;
 
     let network_config = network_config.persisted(&network_path);
     network_config.save()?;
@@ -658,8 +657,8 @@ async fn start_test_network(
     .persisted(&wallet_path)
     .save()?;
 
-    // Start network
-    Ok(network.start())
+    // Return network handle
+    Ok(network)
 }
 
 #[allow(clippy::assertions_on_constants)]
@@ -836,7 +835,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     );
     assert!(logs_contain("Created Objects:"));
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -915,7 +914,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         WalletCommandResult::Object(ObjectRead::Exists(..))
     ));
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -1021,6 +1020,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     assert_eq!(gas.get_single_owner().unwrap(), address);
     assert_eq!(obj.get_single_owner().unwrap(), recipient);
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }

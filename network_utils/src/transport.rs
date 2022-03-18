@@ -4,6 +4,7 @@
 
 use futures::{Sink, SinkExt, Stream, StreamExt};
 use std::io::ErrorKind;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpSocket;
 use tokio::net::{TcpListener, TcpStream};
@@ -50,9 +51,9 @@ pub trait RwChannel<'a> {
 
 /// The result of spawning a server is oneshot channel to kill it and a handle to track completion.
 pub struct SpawnedServer {
-    complete: futures::channel::oneshot::Sender<()>,
+    tx_cancellation: futures::channel::oneshot::Sender<()>,
     handle: tokio::task::JoinHandle<Result<(), std::io::Error>>,
-    binding_port: u16,
+    local_addr: SocketAddr,
 }
 
 impl SpawnedServer {
@@ -63,13 +64,13 @@ impl SpawnedServer {
     }
 
     pub async fn kill(self) -> Result<(), std::io::Error> {
-        self.complete.send(()).unwrap();
+        self.tx_cancellation.send(()).unwrap();
         self.handle.await??;
         Ok(())
     }
 
     pub fn get_port(&self) -> u16 {
-        self.binding_port
+        self.local_addr.port()
     }
 }
 
@@ -90,23 +91,27 @@ pub async fn spawn_server<S>(
 where
     S: MessageHandler<TcpDataStream> + Send + Sync + 'static,
 {
-    let (complete, receiver) = futures::channel::oneshot::channel();
-    // see https://fly.io/blog/the-tokio-1-x-upgrade/#tcplistener-from_std-needs-to-be-set-to-nonblocking
+    let (tx_cancellation, rx_cancellation) = futures::channel::oneshot::channel();
     let std_listener = std::net::TcpListener::bind(address)?;
 
     let local_addr = std_listener.local_addr()?;
     let host = local_addr.ip();
     let port = local_addr.port();
-    info!("Listening to TCP traffic on {}:{}", host, port);
-
+    info!("Listening to TCP traffic on {host}:{port}");
+    // see https://fly.io/blog/the-tokio-1-x-upgrade/#tcplistener-from_std-needs-to-be-set-to-nonblocking
     std_listener.set_nonblocking(true)?;
     let listener = TcpListener::from_std(std_listener)?;
 
-    let handle = tokio::spawn(run_tcp_server(listener, state, receiver, buffer_size));
+    let handle = tokio::spawn(run_tcp_server(
+        listener,
+        state,
+        rx_cancellation,
+        buffer_size,
+    ));
     Ok(SpawnedServer {
-        complete,
+        tx_cancellation,
         handle,
-        binding_port: port,
+        local_addr,
     })
 }
 

@@ -10,8 +10,6 @@ use futures::future::join_all;
 use move_binary_format::CompiledModule;
 use move_package::BuildConfig;
 use structopt::StructOpt;
-use tokio::task;
-use tokio::task::JoinHandle;
 use tracing::{error, info};
 
 use sui_adapter::adapter::generate_package_id;
@@ -54,7 +52,10 @@ impl SuiCommand {
         match self {
             SuiCommand::Start { config } => {
                 let config: NetworkConfig = PersistedConfig::read(config)?;
-                create_network(&config).await?.start().await?
+                SuiNetwork::start(&config)
+                    .await?
+                    .wait_for_completion()
+                    .await
             }
             SuiCommand::Genesis {
                 working_dir,
@@ -104,55 +105,61 @@ impl SuiCommand {
     }
 }
 
-pub async fn create_network(config: &NetworkConfig) -> Result<SuiNetwork, anyhow::Error> {
-    if config.authorities.is_empty() {
-        return Err(anyhow!(
-            "No authority configured for the network, please run genesis."
-        ));
-    }
-    info!(
-        "Starting network with {} authorities",
-        config.authorities.len()
-    );
-
-    let committee = Committee::new(
-        config
-            .authorities
-            .iter()
-            .map(|info| (*info.key_pair.public_key_bytes(), info.stake))
-            .collect(),
-    );
-
-    let mut spawned_authorities = Vec::new();
-    for authority in &config.authorities {
-        let server = make_server(authority, &committee, config.buffer_size).await?;
-        spawned_authorities.push(server.spawn().await?);
-    }
-    Ok(SuiNetwork {
-        spawned_authorities,
-    })
-}
-
 pub struct SuiNetwork {
     pub spawned_authorities: Vec<SpawnedServer>,
 }
 
 impl SuiNetwork {
-    pub fn start(self) -> JoinHandle<Result<(), anyhow::Error>> {
-        task::spawn(async move {
-            let mut handles = Vec::new();
-            for spawned_server in self.spawned_authorities {
-                handles.push(async move {
-                    if let Err(err) = spawned_server.join().await {
-                        error!("Server ended with an error: {}", err);
-                    }
-                });
-            }
-            info!("Started {} authorities", handles.len());
-            join_all(handles).await;
-            info!("All server stopped.");
-            Ok(())
+    pub async fn start(config: &NetworkConfig) -> Result<Self, anyhow::Error> {
+        if config.authorities.is_empty() {
+            return Err(anyhow!(
+                "No authority configured for the network, please run genesis."
+            ));
+        }
+        info!(
+            "Starting network with {} authorities",
+            config.authorities.len()
+        );
+
+        let committee = Committee::new(
+            config
+                .authorities
+                .iter()
+                .map(|info| (*info.key_pair.public_key_bytes(), info.stake))
+                .collect(),
+        );
+
+        let mut spawned_authorities = Vec::new();
+        for authority in &config.authorities {
+            let server = make_server(authority, &committee, config.buffer_size).await?;
+            spawned_authorities.push(server.spawn().await?);
+        }
+        info!("Started {} authorities", spawned_authorities.len());
+
+        Ok(Self {
+            spawned_authorities,
         })
+    }
+
+    pub async fn kill(self) -> Result<(), anyhow::Error> {
+        for spawned_server in self.spawned_authorities {
+            spawned_server.kill().await?;
+        }
+        Ok(())
+    }
+
+    pub async fn wait_for_completion(self) -> Result<(), anyhow::Error> {
+        let mut handles = Vec::new();
+        for spawned_server in self.spawned_authorities {
+            handles.push(async move {
+                if let Err(err) = spawned_server.join().await {
+                    error!("Server ended with an error: {}", err);
+                }
+            });
+        }
+        join_all(handles).await;
+        info!("All servers stopped.");
+        Ok(())
     }
 }
 
