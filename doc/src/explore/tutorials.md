@@ -7,7 +7,7 @@ In this tutorial, we demonstrate an end-to-end process of starting a Sui network
 ## Setup
 
 Follow the instructions to [install Sui
-binaries](../build/install.md). Please clone the repository as
+binaries](../build/install.md) and clone the repository as
 described in the installation instructions as this tutorial assumes
 that you have a clone of Sui's repository.
 
