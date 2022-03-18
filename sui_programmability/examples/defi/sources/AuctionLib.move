@@ -2,7 +2,7 @@
 /// English auction (https://en.wikipedia.org/wiki/English_auction),
 /// one using single-owner objects only and the other using shared
 /// objects.
-module DeFi::AuctionUtils {
+module DeFi::AuctionLib {
     use Std::Option::{Self, Option};
 
     use Sui::Coin::{Self, Coin};
