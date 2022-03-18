@@ -28,6 +28,9 @@ mod server_tests;
 
 /*
     The number of input chunks the authority will try to process in parallel.
+
+    TODO: provide a configuration parameter to allow authority operators to
+    set it, or a dynamic mechanism to adapt it according to observed workload.
 */
 const CHUNK_SIZE: usize = 36;
 
@@ -245,6 +248,47 @@ impl AuthorityServer {
             }
         }
     }
+
+    /// For each Transaction and Certificate updates a verification
+    /// obligation structure, and returns an error either if the collection in the
+    /// obligation went wrong or the verification of the signatures went wrong.
+    fn batch_verify_one_chunk(
+        &self,
+        one_chunk: Vec<Result<(SerializedMessage, BytesMut), SuiError>>,
+    ) -> Result<VecDeque<(SerializedMessage, BytesMut)>, SuiError> {
+        let one_chunk: Result<Vec<_>, _> = one_chunk.into_iter().collect();
+        let one_chunk = one_chunk?;
+
+        // Now create a verification obligation
+        let mut obligation = VerificationObligation::default();
+        let load_verification: Result<VecDeque<(SerializedMessage, BytesMut)>, SuiError> =
+            one_chunk
+                .into_iter()
+                .map(|mut item| {
+                    let (message, _message_bytes) = &mut item;
+                    match message {
+                        SerializedMessage::Transaction(message) => {
+                            message.is_checked = true;
+                            message.add_to_verification_obligation(&mut obligation)?;
+                        }
+                        SerializedMessage::Cert(message) => {
+                            message.is_checked = true;
+                            message.add_to_verification_obligation(
+                                &self.state.committee,
+                                &mut obligation,
+                            )?;
+                        }
+                        _ => {}
+                    };
+                    Ok(item)
+                })
+                .collect();
+
+        // Check the obligations and the verification is
+        let one_chunk = load_verification?;
+        obligation.verify_all()?;
+        Ok(one_chunk)
+    }
 }
 
 #[async_trait]
@@ -275,48 +319,9 @@ where
             .await
         {
             /*
-                We structure this as a function to catch any errors using the ? operator.
-
-                This block for each Transaction and Certificate updates a verification
-                obligation structure, and returns an error either if the collection in the
-                obligation went wrong or the verification of the signatures went wrong.
+                Very the signatures of the chunk as a whole
             */
-
-            let one_chunk: Result<_, SuiError> = (|| {
-                let one_chunk: Result<Vec<_>, _> = one_chunk.into_iter().collect();
-                let one_chunk = one_chunk?;
-
-                // Now create a verification obligation
-                let mut obligation = VerificationObligation::default();
-                let load_verification: Result<VecDeque<(SerializedMessage, BytesMut)>, SuiError> =
-                    one_chunk
-                        .into_iter()
-                        .map(|mut item| {
-                            let (message, _message_bytes) = &mut item;
-                            match message {
-                                SerializedMessage::Transaction(message) => {
-                                    message.is_checked = true;
-                                    message.add_to_verification_obligation(&mut obligation)?;
-                                }
-                                SerializedMessage::Cert(message) => {
-                                    message.is_checked = true;
-                                    message.add_to_verification_obligation(
-                                        &self.state.committee,
-                                        &mut obligation,
-                                    )?;
-                                }
-                                _ => {}
-                            };
-                            Ok(item)
-                        })
-                        .collect();
-
-                // Check the obligations and the verification is
-                let one_chunk = load_verification?;
-                obligation.verify_all()?;
-
-                Ok(one_chunk)
-            })();
+            let one_chunk = self.batch_verify_one_chunk(one_chunk);
 
             /*
                 If this is an error send back the error and drop the connection.

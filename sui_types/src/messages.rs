@@ -155,11 +155,15 @@ pub struct Transaction {
     pub data: TransactionData,
     pub signature: Signature,
 }
-/*
+/* TODO: check this legacy static check is not needed as an invariant
+         elsewhere. The tests pass but invariant checks without docs
+         should not be removed without a note to check.
+
 const_assert_eq!(
     size_of::<TransactionData>() + size_of::<Signature>(),
     size_of::<Transaction>()
 );
+
 */
 
 /// An transaction signed by a single authority
