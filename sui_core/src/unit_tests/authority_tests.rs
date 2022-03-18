@@ -1475,7 +1475,7 @@ fn init_certified_transfer_transaction(
         .unwrap()
 }
 
-fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> ObjectRef {
+pub fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> ObjectRef {
     genesis_objects
         .iter()
         .find_map(|o| match o.data.try_as_package() {
@@ -1667,7 +1667,7 @@ async fn shared_object() {
 
     // Sequence the certificate to assign a sequence number to the shared object.
     authority
-        .handle_consensus_certificate(certificate)
+        .handle_consensus_certificate(&certificate, /* last_consensus_index */ SequenceNumber::new())
         .await
         .unwrap();
 

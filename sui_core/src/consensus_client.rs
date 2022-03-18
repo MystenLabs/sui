@@ -6,9 +6,14 @@ use bytes::Bytes;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use sui_network::transport;
+use sui_types::base_types::SequenceNumber;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::ConfirmationTransaction;
+use sui_types::messages::{ConfirmationTransaction, ConsensusOutput};
 use sui_types::serialize::{deserialize_message, SerializedMessage};
+
+#[cfg(test)]
+#[path = "unit_tests/consensus_tests.rs"]
+pub mod consensus_tests;
 
 /// The `ConsensusClient` receives certificates sequenced by the consensus and updates
 /// the authority's database. The client assumes that the messages it receives have
@@ -18,16 +23,16 @@ pub struct ConsensusClient {
     /// The (global) authority state to update the locks of shared objects.
     state: Arc<AuthorityState>,
     /// The index of the latest consensus message we processed.
-    latest_consensus_index: u64,
+    last_consensus_index: SequenceNumber,
 }
 
 impl ConsensusClient {
     /// Create a new consensus handler with the input authority state.
     pub fn new(state: Arc<AuthorityState>) -> SuiResult<Self> {
+        let last_consensus_index = state.last_consensus_index()?;
         Ok(Self {
             state,
-            // TODO: Read this field from the store.
-            latest_consensus_index: 0,
+            last_consensus_index,
         })
     }
 
@@ -37,33 +42,62 @@ impl ConsensusClient {
             let _ = handler.synchronize().await;
             handler.run(address, buffer_size).await;
         });
+        log::info!("Consensus client connecting to {}", address);
     }
 
     /// Synchronize with the consensus in case we missed part of its output sequence.
     /// It is safety-critical that we process the consensus outputs in the right order.
     async fn synchronize(&mut self) -> SuiResult<()> {
-        // TODO: Implement the synchronizer.
-        unimplemented!();
+        // TODO: [liveness-critical] Implement the synchronizer.
+        return Ok(());
     }
 
     /// Process a single sequenced certificate.
     async fn handle_consensus_message(&mut self, bytes: Bytes) -> SuiResult<()> {
+        // We first deserialize the consensus output message. If deserialization fails
+        // we may be have a liveness issue. We stop processing of this certificate to
+        // ensure safety, and the synchronizer will try again to ask for that certificate.
+        let (consensus_message, consensus_index) = match deserialize_message(&*bytes) {
+            Ok(SerializedMessage::ConsensusOutput(value)) => {
+                let ConsensusOutput {
+                    message,
+                    sequencer_number,
+                } = *value;
+                (message, sequencer_number)
+            }
+            Ok(_) => {
+                log::error!("{}", SuiError::UnexpectedMessage);
+                return Err(SuiError::UnexpectedMessage);
+            }
+            Err(e) => {
+                log::error!("Failed to deserialize consensus output {}", e);
+                return Err(SuiError::InvalidDecoding);
+            }
+        };
+
         // Check that the latest consensus index is as expected; otherwise synchronize.
-        // TODO: Get the current consensus index from consensus.
-        let consensus_index = 0;
-        if self.latest_consensus_index != consensus_index {
+        if self.last_consensus_index < consensus_index {
+            log::debug!("Authority is synchronizing missed sequenced certificates");
             self.synchronize().await?;
+            return Ok(());
+        } else if self.last_consensus_index > consensus_index {
+            // Something is very wrong. Liveness may be lost (but not safety).
+            log::error!("Consensus index of authority bigger than expected");
             return Ok(());
         }
 
         // Update the latest consensus index. The authority state will atomically
-        // update it in the storage when processing the certificate.
-        self.latest_consensus_index += 1;
+        // update it in the storage when processing the certificate. It is important to
+        // increment the consensus index before deserializing the certificate because
+        // the consensus core will increment its own index regardless of deserialization
+        // failures.
+        self.last_consensus_index = self.last_consensus_index.increment();
 
         // The consensus simply orders bytes, so we first need to deserialize the
         // certificate. If the deserialization fail it is safe to ignore the
-        // certificate since all correct authorities will do the same.
-        let confirmation = match deserialize_message(&*bytes) {
+        // certificate since all correct authorities will do the same. Remember that a
+        // bad authority or client may input random bytes to the consensus.
+        let confirmation = match deserialize_message(&*consensus_message) {
             Ok(SerializedMessage::Cert(certificate)) => ConfirmationTransaction {
                 certificate: *certificate,
             },
@@ -77,9 +111,15 @@ impl ConsensusClient {
             }
         };
 
-        // Process the certificate to set the locks on the shared objects.
+        // Process the certificate to set the locks on the shared objects. It also
+        // atomically update the last consensus index in storage. It is safety-critical
+        // that only this task calls the function below. Safety is preserved even if an
+        // authority crashes before this point but after having processed a number of
+        // badly serialized certificates, but the synchronizer will have to do more work.
         let certificate = confirmation.certificate;
-        self.state.handle_consensus_certificate(&certificate).await
+        self.state
+            .handle_consensus_certificate(&certificate, self.last_consensus_index)
+            .await
     }
 
     /// Main loop connecting to the consensus. This mainly acts as a light client.
@@ -121,7 +161,8 @@ impl ConsensusClient {
                         // shared objects that are different from other authorities. It
                         // is however safe to ask for that certificate again and re-process
                         // it (the core is idempotent).
-                        self.latest_consensus_index -= 1;
+                        self.last_consensus_index =
+                            self.last_consensus_index.decrement().unwrap();
                     }
                     // Log the errors that are the client's fault (not ours). This is
                     // only for debug purposes: all correct authorities will do the same.

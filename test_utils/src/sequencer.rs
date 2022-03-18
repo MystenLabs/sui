@@ -9,6 +9,9 @@ use futures::SinkExt;
 use std::net::SocketAddr;
 use std::time::Duration;
 use sui_network::transport::{MessageHandler, RwChannel};
+use sui_types::base_types::SequenceNumber;
+use sui_types::messages::ConsensusOutput;
+use sui_types::serialize::serialize_consensus_output;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::sleep;
 
@@ -27,56 +30,75 @@ pub struct Sequencer {
 }
 
 impl Sequencer {
+    /// Spawn a new sequencer. The sequencer is made of a number of component each running
+    /// in their own tokio task.
     pub async fn spawn(sequencer: Self) {
         let (tx_input, rx_input) = channel(100);
         let (tx_subscriber, rx_subscriber) = channel(100);
 
         // Spawn the sequencer core.
-        let core = SequencerCore {
-            rx_input,
-            rx_subscriber,
-        };
-        SequencerCore::spawn(core, sequencer.consensus_delay);
+        tokio::spawn(async move {
+            SequencerCore::new(rx_input, rx_subscriber)
+                .run(sequencer.consensus_delay)
+                .await;
+        });
 
         // Spawn the server receiving input messages to order.
-        let input_server = InputServer { tx_input };
-        sui_network::transport::spawn_server(
-            &sequencer.input_address.to_string(),
-            input_server,
-            sequencer.buffer_size,
-        )
-        .await
-        .unwrap();
+        tokio::spawn(async move {
+            let input_server = InputServer { tx_input };
+            sui_network::transport::spawn_server(
+                &sequencer.input_address.to_string(),
+                input_server,
+                sequencer.buffer_size,
+            )
+            .await
+            .unwrap()
+            .join()
+            .await
+            .unwrap();
+        });
 
         // Spawn the server receiving subscribers to the output of the sequencer.
-        let subscriber_server = SubscriberServer { tx_subscriber };
-        sui_network::transport::spawn_server(
-            &sequencer.subscriber_address.to_string(),
-            subscriber_server,
-            sequencer.buffer_size,
-        )
-        .await
-        .unwrap();
+        tokio::spawn(async move {
+            let subscriber_server = SubscriberServer { tx_subscriber };
+            sui_network::transport::spawn_server(
+                &sequencer.subscriber_address.to_string(),
+                subscriber_server,
+                sequencer.buffer_size,
+            )
+            .await
+            .unwrap()
+            .join()
+            .await
+            .unwrap();
+        });
     }
 }
 
 /// The core of the sequencer, totally ordering input bytes.
 pub struct SequencerCore<Message> {
     /// Receive users' certificates to sequence
-    pub rx_input: Receiver<Message>,
+    rx_input: Receiver<Message>,
     /// Receive subscribers to update with the output of the sequence.
-    pub rx_subscriber: Receiver<Sender<Message>>,
+    rx_subscriber: Receiver<Sender<(Message, SequenceNumber)>>,
+    /// The global consensus index.
+    consensus_index: SequenceNumber,
 }
 
 impl<Message> SequencerCore<Message>
 where
     Message: Clone + Send + Sync + 'static,
 {
-    /// Spawn the core sequencer in a new tokio task.
-    pub fn spawn(mut core: Self, consensus_delay: Duration) {
-        tokio::spawn(async move {
-            core.run(consensus_delay).await;
-        });
+    /// Create a new sequencer core instance.
+    pub fn new(
+        rx_input: Receiver<Message>,
+        rx_subscriber: Receiver<Sender<(Message, SequenceNumber)>>,
+    ) -> Self {
+        Self {
+            rx_input,
+            rx_subscriber,
+            consensus_index: SequenceNumber::new(),
+        }
     }
 
     /// Simply wait for a fixed delay and then returns the input.
@@ -86,7 +108,7 @@ where
     }
 
     /// Main loop ordering input bytes.
-    async fn run(&mut self, consensus_delay: Duration) {
+    pub async fn run(&mut self, consensus_delay: Duration) {
         let mut waiting = FuturesUnordered::new();
         let mut subscribers = Vec::new();
         loop {
@@ -99,17 +121,23 @@ where
                 // Receive subscribers to update with the sequencer's output.
                 Some(sender) = self.rx_subscriber.recv() => {
                     subscribers.push(sender);
-                }
+                },
 
                 // Bytes are ready to be delivered, notify the subscribers.
                 Some(message) = waiting.next() => {
-                    let mut dropped = Vec::new();
+                    // Notify the subscribers of the new output.
+                    let mut to_drop = Vec::new();
                     for (i, subscriber) in subscribers.iter().enumerate() {
-                        if subscriber.send(message.clone()).await.is_err() {
-                            dropped.push(i);
+                        if subscriber.send((message.clone(), self.consensus_index)).await.is_err() {
+                            to_drop.push(i);
                         }
                     }
-                    for index in dropped {
+
+                    // Increment the consensus index.
+                    self.consensus_index = self.consensus_index.increment();
+
+                    // Cleanup the list subscribers that dropped connection.
+                    for index in to_drop {
                         subscribers.remove(index);
                     }
                 }
@@ -150,6 +178,12 @@ where
             if self.tx_input.send(buffer.freeze()).await.is_err() {
                 panic!("Failed to sequence input bytes");
             }
+
+            // Send an acknowledgment to the client.
+            if stream.sink().send(Bytes::from("Ok")).await.is_err() {
+                log::debug!("Failed to send ack to client");
+                break;
+            }
         }
     }
 }
@@ -160,7 +194,7 @@ where
 /// sending until the message is delivered. This is safety-critical.
 struct SubscriberServer {
     /// Notify the sequencer's core of a new subscriber.
-    pub tx_subscriber: Sender<Sender<Bytes>>,
+    pub tx_subscriber: Sender<Sender<(Bytes, SequenceNumber)>>,
 }
 
 #[async_trait]
@@ -178,8 +212,13 @@ where
             .expect("Failed to send new subscriber to core");
 
         // Update the subscriber every time a certificate is sequenced.
-        while let Some(certificate) = rx_output.recv().await {
-            if stream.sink().send(certificate.into()).await.is_err() {
+        while let Some((bytes, consensus_index)) = rx_output.recv().await {
+            let message = ConsensusOutput {
+                message: bytes.to_vec(),
+                sequencer_number: consensus_index,
+            };
+            let serialized = serialize_consensus_output(&message);
+            if stream.sink().send(Bytes::from(serialized)).await.is_err() {
                 log::debug!("Connection dropped by subscriber");
                 break;
             }

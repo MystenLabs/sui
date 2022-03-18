@@ -495,13 +495,16 @@ impl AuthorityState {
     pub async fn handle_consensus_certificate(
         &self,
         certificate: &CertifiedTransaction,
+        last_consensus_index: SequenceNumber,
     ) -> SuiResult<()> {
         let transaction = &certificate.transaction;
 
         // Ensure it is a shared object certificate
         if !transaction.contains_shared_object() {
-            // TODO: Maybe add a warning here, no respectable authority should
-            // have sequenced this.
+            log::debug!(
+                "Transaction without shared object has been sequenced: {:?}",
+                transaction
+            );
             return Ok(());
         }
 
@@ -518,13 +521,18 @@ impl AuthorityState {
         // Check the certificate.
         certificate.check(&self.committee)?;
 
-        // Persist the certificate. We are about to lock one or more shared object.
+        // Persist the certificate since we are about to lock one or more shared object.
         // We thus need to make sure someone (if not the client) can continue the protocol.
-        // Also atomically lock the shared objects for this particular transaction.
+        // Also atomically lock the shared objects for this particular transaction and
+        // increment the last consensus index. Note that a single process can ever call
+        // this function and that the last consensus index is also kept in memory. It is
+        // thus ok to only persist now (despite this function may have returned earlier).
+        // In the worst case, the synchronizer of the consensus client will catch up.
         self._database.persist_certificate_and_lock_shared_objects(
             transaction_digest,
             transaction,
             certificate.clone(),
+            last_consensus_index,
         )
     }
 
@@ -857,6 +865,10 @@ impl AuthorityState {
         object_id: ObjectID,
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self._database.get_latest_parent_entry(object_id)
+    }
+
+    pub fn last_consensus_index(&self) -> SuiResult<SequenceNumber> {
+        self._database.last_consensus_index()
     }
 }
 
