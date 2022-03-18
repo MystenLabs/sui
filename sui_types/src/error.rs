@@ -4,6 +4,7 @@
 
 use std::fmt::Debug;
 use thiserror::Error;
+use typed_store::rocks::TypedStoreError;
 
 use crate::base_types::*;
 use move_binary_format::errors::PartialVMError;
@@ -26,9 +27,8 @@ macro_rules! fp_ensure {
 }
 pub(crate) use fp_ensure;
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 /// Custom error type for Sui.
-
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 #[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
@@ -235,7 +235,7 @@ pub enum SuiError {
         error: Box<SuiError>,
     },
     #[error("Storage error")]
-    StorageError(#[from] typed_store::rocks::TypedStoreError),
+    StorageError(#[from] TypedStoreError),
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
     #[error("Authority Error: {error:?}")]
