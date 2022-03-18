@@ -11,7 +11,7 @@
 // to take turns to place the marker, there won't be a significant overhead in practice.
 // As we can see, by using shared mutable object, the implementation is much
 // simpler than the other implementation.
-module Games::TicTacToeV2 {
+module Games::SharedTicTacToe {
     use Std::Vector;
 
     use Sui::ID::{Self, ID, VersionedID};
