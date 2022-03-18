@@ -607,7 +607,9 @@ impl Transaction {
             return Ok(());
         }
 
-        self.signature.check(&self.data, self.data.sender)
+        let mut obligation = VerificationObligation::default();
+        self.add_to_verification_obligation(&mut obligation)?;
+        obligation.verify_all().map(|_| ())
     }
 
     pub fn add_to_verification_obligation(
@@ -850,36 +852,9 @@ impl CertifiedTransaction {
             return Ok(());
         }
 
-        // Check the quorum.
-        let mut weight = 0;
-        let mut used_authorities = HashSet::new();
-        for (authority, _) in self.signatures.iter() {
-            // Check that each authority only appears once.
-            fp_ensure!(
-                !used_authorities.contains(authority),
-                SuiError::CertificateAuthorityReuse
-            );
-            used_authorities.insert(*authority);
-            // Update weight.
-            let voting_rights = committee.weight(authority);
-            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
-            weight += voting_rights;
-        }
-        fp_ensure!(
-            weight >= committee.quorum_threshold(),
-            SuiError::CertificateRequiresQuorum
-        );
-        // All that is left is checking signatures!
-        // one user signature
-        self.transaction
-            .signature
-            .check(&self.transaction.data, self.transaction.data.sender)?;
-        // a batch of authority signatures
-        AuthoritySignature::verify_batch(
-            &self.transaction.data,
-            &self.signatures,
-            &committee.expanded_keys,
-        )
+        let mut obligation = VerificationObligation::default();
+        self.add_to_verification_obligation(committee, &mut obligation)?;
+        obligation.verify_all().map(|_| ())
     }
 
     pub fn add_to_verification_obligation(
