@@ -204,7 +204,7 @@ Gameplay:
 In Sui Monstar, capture cute monstars and watch them get closer to you as you feed and interact with them. These monstars, your farm, and accessories are all NFTs on-chain. As you play through the game, attributes such as health, friendliness, and accessories are all updated live.
 
 <section class="sui-dev-video">
-   <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/watch?v=sAMT5x8W3B8?autoplay=1"  frameborder="0"></iframe>
+   <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/sAMT5x8W3B8?autoplay=1"  frameborder="0"></iframe>
 </section>
 
 ![Update NFT properties](../../static/nft-properties.png "Equip elemental runes to your Monstar")
