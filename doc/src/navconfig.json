@@ -95,6 +95,10 @@
         "label": "Examples",
         "fileName": "explore/examples"
       }
+      {
+        "label": "SoWork x Sui",
+        "fileName": "explore/sowork"
+      }
     ],
     "contribute": [
       {
