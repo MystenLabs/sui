@@ -34,6 +34,3 @@ move-core-types = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc7
 move-disassembler = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
 move-ir-types = { git = "https://github.com/diem/move", rev = "2ef516919d5bbc728a57a2c0073b85c46d9fcf5a" }
 sha2 = "0.10.2"
-
-[features]
-sui_perf = ["ed25519-dalek/simd_backend", "ed25519-dalek/asm"]
