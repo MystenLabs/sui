@@ -350,7 +350,9 @@ impl AuthorityState {
         }
 
         // Check the certificate and retrieve the transfer data.
-        confirmation_transaction.certificate.check(&self.committee)?;
+        confirmation_transaction
+            .certificate
+            .check(&self.committee)?;
 
         self.process_certificate(confirmation_transaction).await
     }

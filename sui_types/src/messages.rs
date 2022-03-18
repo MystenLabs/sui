@@ -591,7 +591,11 @@ impl Transaction {
     }
 
     pub fn new(data: TransactionData, signature: Signature) -> Self {
-        Transaction { is_checked: false, data, signature }
+        Transaction {
+            is_checked: false,
+            data,
+            signature,
+        }
     }
 
     pub fn check_signature(&self) -> Result<(), SuiError> {
@@ -600,9 +604,9 @@ impl Transaction {
         // to be set to true manually, and is not set by calling this
         // "check" function.
         if self.is_checked {
-            return Ok(())
+            return Ok(());
         }
-        
+
         self.signature.check(&self.data, self.data.sender)
     }
 
@@ -838,13 +842,12 @@ impl CertifiedTransaction {
 
     /// Verify the certificate.
     pub fn check(&self, committee: &Committee) -> Result<(), SuiError> {
-
         // We use this flag to see if someone has checked this before
         // and therefore we can skip the check. Note that the flag has
         // to be set to true manually, and is not set by calling this
         // "check" function.
         if self.is_checked {
-            return Ok(())
+            return Ok(());
         }
 
         // Check the quorum.

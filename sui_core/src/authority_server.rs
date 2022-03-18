@@ -190,17 +190,17 @@ impl AuthorityServer {
                 let tx_kind = message.transaction.data.kind_as_str();
                 let tx_digest = *message.digest();
                 match self
-                .state
-                            .handle_confirmation_transaction(confirmation_transaction)
-                            .instrument(tracing::debug_span!("process_cert", ?tx_digest, tx_kind))
-                            .await
-                        {
-                            Ok(info) => {
-                                // Response
-                                Ok(Some(serialize_transaction_info(&info)))
-                            }
-                            Err(error) => Err(error),
-                        }
+                    .state
+                    .handle_confirmation_transaction(confirmation_transaction)
+                    .instrument(tracing::debug_span!("process_cert", ?tx_digest, tx_kind))
+                    .await
+                {
+                    Ok(info) => {
+                        // Response
+                        Ok(Some(serialize_transaction_info(&info)))
+                    }
+                    Err(error) => Err(error),
+                }
             }
             SerializedMessage::AccountInfoReq(message) => self
                 .state
@@ -288,27 +288,28 @@ where
 
                 // Now create a verification obligation
                 let mut obligation = VerificationObligation::default();
-                let load_verification: Result<VecDeque<(SerializedMessage, BytesMut)>, SuiError> = one_chunk
-                    .into_iter()
-                    .map(|mut item| {
-                        let (message, _message_bytes) = &mut item;
-                        match message {
-                            SerializedMessage::Transaction(message) => {
-                                message.is_checked = true;
-                                message.add_to_verification_obligation(&mut obligation)?;
-                            }
-                            SerializedMessage::Cert(message) => {
-                                message.is_checked = true;
-                                message.add_to_verification_obligation(
-                                    &self.state.committee,
-                                    &mut obligation,
-                                )?;
-                            }
-                            _ => {}
-                        };
-                        Ok(item)
-                    })
-                    .collect();
+                let load_verification: Result<VecDeque<(SerializedMessage, BytesMut)>, SuiError> =
+                    one_chunk
+                        .into_iter()
+                        .map(|mut item| {
+                            let (message, _message_bytes) = &mut item;
+                            match message {
+                                SerializedMessage::Transaction(message) => {
+                                    message.is_checked = true;
+                                    message.add_to_verification_obligation(&mut obligation)?;
+                                }
+                                SerializedMessage::Cert(message) => {
+                                    message.is_checked = true;
+                                    message.add_to_verification_obligation(
+                                        &self.state.committee,
+                                        &mut obligation,
+                                    )?;
+                                }
+                                _ => {}
+                            };
+                            Ok(item)
+                        })
+                        .collect();
 
                 // Check the obligations and the verification is
                 let one_chunk = load_verification?;
