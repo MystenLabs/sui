@@ -112,8 +112,8 @@ async fn handle_consensus_output() {
         .await
         .unwrap();
 
-    // Wait for the certificate to be processed.
-    tokio::task::yield_now().await;
-    tokio::time::sleep(std::time::Duration::from_millis(1_000)).await;
+    // Wait for the certificate to be processed and ensure the last consensus index 
+    // has been updated.
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     assert_eq!(state.db().last_consensus_index().unwrap(), SequenceNumber::from(1));
 }

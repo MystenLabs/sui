@@ -90,7 +90,7 @@ impl ConsensusClient {
         // update it in the storage when processing the certificate. It is important to
         // increment the consensus index before deserializing the certificate because
         // the consensus core will increment its own index regardless of deserialization
-        // failures.
+        // or other protocol-specific failures.
         self.last_consensus_index = self.last_consensus_index.increment();
 
         // The consensus simply orders bytes, so we first need to deserialize the
