@@ -56,11 +56,10 @@ impl ConsensusHandler {
             };
 
             // Process the certificate to set the locks on the shared objects.
-            let certificate = &confirmation.certificate;
             let result = self
                 .server
                 .state
-                .handle_consensus_certificate(certificate)
+                .handle_consensus_certificate(confirmation.certificate)
                 .await;
             match &result {
                 // Log the errors that are our faults (not the client's).

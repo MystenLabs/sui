@@ -419,7 +419,7 @@ async fn test_publish_dependent_module_ok() {
     let signature = Signature::new(&data, &sender_key);
     let transaction = Transaction::new(data, signature);
 
-    let dependent_module_id = TxContext::new(&sender, transaction.digest()).fresh_id();
+    let dependent_module_id = TxContext::new(&sender, &transaction.digest()).fresh_id();
 
     // Object does not exist
     assert!(authority
@@ -456,7 +456,7 @@ async fn test_publish_module_no_dependencies_ok() {
     let data = TransactionData::new_module(sender, gas_payment_object_ref, module_bytes, MAX_GAS);
     let signature = Signature::new(&data, &sender_key);
     let transaction = Transaction::new(data, signature);
-    let _module_object_id = TxContext::new(&sender, transaction.digest()).fresh_id();
+    let _module_object_id = TxContext::new(&sender, &transaction.digest()).fresh_id();
     let response = send_and_confirm_transaction(&authority, transaction)
         .await
         .unwrap();
@@ -1653,13 +1653,13 @@ async fn shared_object() {
 
     // Sequence the certificate to assign a sequence number to the shared object.
     authority
-        .handle_consensus_certificate(&certificate)
+        .handle_consensus_certificate(certificate)
         .await
         .unwrap();
 
     let shared_object_version = authority
         .db()
-        .sequenced(transaction_digest, &[shared_object_id])
+        .sequenced(&transaction_digest, &[shared_object_id])
         .unwrap()[0]
         .unwrap();
     assert_eq!(shared_object_version, SequenceNumber::new());
@@ -1673,7 +1673,7 @@ async fn shared_object() {
 
     let shared_object_lock = authority
         .db()
-        .sequenced(transaction_digest, &[shared_object_id])
+        .sequenced(&transaction_digest, &[shared_object_id])
         .unwrap()[0];
     assert!(shared_object_lock.is_none());
 

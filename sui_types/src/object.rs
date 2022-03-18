@@ -468,7 +468,7 @@ impl Object {
     /// like this: `S<T>`.
     /// Returns the inner parameter type `T`.
     pub fn get_move_template_type(&self) -> SuiResult<TypeTag> {
-        let move_struct = self.data.type_().ok_or(SuiError::TypeError {
+        let move_struct = self.data.type_().ok_or_else(|| SuiError::TypeError {
             error: "Object must be a Move object".to_owned(),
         })?;
         fp_ensure!(
