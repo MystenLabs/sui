@@ -25,7 +25,7 @@ remainder of this tutorial we will assume that you are executing the
 
 
 ## Gather Accounts and Gas Objects
-Now switch to a new terminal window (keep the above running).
+
 First take a look at the account addresses we own in our wallet:
 ```
 $ wallet --no-shell addresses
