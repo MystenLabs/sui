@@ -342,7 +342,6 @@ impl AuthorityState {
         confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         let transaction_digest = *confirmation_transaction.certificate.digest();
-        let certificate = &confirmation_transaction.certificate;
 
         // Ensure an idempotent answer.
         if self._database.signed_effects_exists(&transaction_digest)? {
@@ -351,7 +350,9 @@ impl AuthorityState {
         }
 
         // Check the certificate and retrieve the transfer data.
-        certificate.check(&self.committee)?;
+        confirmation_transaction
+            .certificate
+            .check(&self.committee)?;
 
         self.process_certificate(confirmation_transaction).await
     }
