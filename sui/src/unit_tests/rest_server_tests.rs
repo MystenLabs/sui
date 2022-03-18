@@ -29,33 +29,20 @@ async fn test_concurrency() -> Result<(), anyhow::Error> {
 
     testctx
         .client_testctx
-        .make_request(
-            Method::POST,
-            "/sui/genesis",
-            None as Option<()>,
-            StatusCode::OK,
-        )
+        .make_request_no_body(Method::POST, "/sui/genesis", StatusCode::OK)
         .await
         .expect("expected success");
 
     testctx
         .client_testctx
-        .make_request(
-            Method::POST,
-            "/sui/start",
-            None as Option<()>,
-            StatusCode::OK,
-        )
+        .make_request_no_body(Method::POST, "/sui/start", StatusCode::OK)
         .await
         .expect("expected success");
 
     let task = (0..10).map(|_| {
-        testctx.client_testctx.make_request(
-            Method::GET,
-            "/addresses",
-            None as Option<()>,
-            StatusCode::OK,
-        )
+        testctx
+            .client_testctx
+            .make_request_no_body(Method::GET, "/addresses", StatusCode::OK)
     });
 
     let task = task
@@ -68,12 +55,7 @@ async fn test_concurrency() -> Result<(), anyhow::Error> {
     // Clean up
     testctx
         .client_testctx
-        .make_request(
-            Method::POST,
-            "/sui/stop",
-            None as Option<()>,
-            StatusCode::NO_CONTENT,
-        )
+        .make_request_no_body(Method::POST, "/sui/stop", StatusCode::NO_CONTENT)
         .await
         .expect("expected success");
 

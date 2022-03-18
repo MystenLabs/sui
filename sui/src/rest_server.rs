@@ -278,7 +278,6 @@ async fn genesis(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
             network_config: network_config_json,
         },
     )
-    .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))
 }
 
 /**
@@ -362,7 +361,6 @@ async fn sui_start(ctx: Arc<RequestContext<ServerContext>>) -> Result<Response<B
         StatusCode::OK,
         format!("Started {} authorities", num_authorities),
     )
-    .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))
 }
 
 /**
@@ -438,7 +436,6 @@ async fn get_addresses(
                 .collect(),
         },
     )
-    .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{err}")))
 }
 
 /**
@@ -522,7 +519,6 @@ async fn get_objects(
     }
 
     custom_http_response(StatusCode::OK, GetObjectsResponse { objects })
-        .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{err}")))
 }
 
 /**
@@ -604,7 +600,6 @@ async fn object_schema(
     })?;
 
     custom_http_response(StatusCode::OK, ObjectSchemaResponse { schema })
-        .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{err}")))
 }
 
 /**
@@ -676,7 +671,6 @@ async fn object_info(
             data: object_data,
         },
     )
-    .map_err(|err| custom_http_error(StatusCode::NOT_FOUND, format!("{err}")))
 }
 
 /**
@@ -801,7 +795,6 @@ async fn transfer_object(
             certificate: json!(cert),
         },
     )
-    .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{err}")))
 }
 
 /**
@@ -908,7 +901,6 @@ async fn call(
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))?;
     custom_http_response(StatusCode::OK, transaction_response)
-        .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{err}")))
 }
 
 /**
@@ -1199,8 +1191,10 @@ async fn handle_move_call(
 fn custom_http_response<T: Serialize + JsonSchema>(
     status_code: StatusCode,
     response_body: T,
-) -> Result<Response<Body>, anyhow::Error> {
-    let body: Body = serde_json::to_string(&response_body)?.into();
+) -> Result<Response<Body>, HttpError> {
+    let body: Body = serde_json::to_string(&response_body)
+        .map_err(|err| custom_http_error(StatusCode::INTERNAL_SERVER_ERROR, format!("{err}")))?
+        .into();
     let res = Response::builder()
         .status(status_code)
         .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
