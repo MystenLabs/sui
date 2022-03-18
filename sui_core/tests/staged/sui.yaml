@@ -44,6 +44,70 @@ BatchInfoRequest:
 BatchInfoResponseItem:
   NEWTYPESTRUCT:
     TYPENAME: UpdateItem
+CallResult:
+  ENUM:
+    0:
+      Bool:
+        NEWTYPE: BOOL
+    1:
+      U8:
+        NEWTYPE: U8
+    2:
+      U64:
+        NEWTYPE: U64
+    3:
+      U128:
+        NEWTYPE: U128
+    4:
+      Address:
+        NEWTYPE:
+          TYPENAME: AccountAddress
+    5:
+      BoolVec:
+        NEWTYPE:
+          SEQ: BOOL
+    6:
+      U8Vec:
+        NEWTYPE:
+          SEQ: U8
+    7:
+      U64Vec:
+        NEWTYPE:
+          SEQ: U64
+    8:
+      U128Vec:
+        NEWTYPE:
+          SEQ: U128
+    9:
+      AddrVec:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: AccountAddress
+    10:
+      BoolVecVec:
+        NEWTYPE:
+          SEQ: BOOL
+    11:
+      U8VecVec:
+        NEWTYPE:
+          SEQ:
+            SEQ: U8
+    12:
+      U64VecVec:
+        NEWTYPE:
+          SEQ:
+            SEQ: U64
+    13:
+      U128VecVec:
+        NEWTYPE:
+          SEQ:
+            SEQ: U128
+    14:
+      AddrVecVec:
+        NEWTYPE:
+          SEQ:
+            SEQ:
+              TYPENAME: AccountAddress
 CertifiedTransaction:
   STRUCT:
     - transaction:
@@ -74,6 +138,9 @@ ExecutionStatus:
       Success:
         STRUCT:
           - gas_used: U64
+          - results:
+              SEQ:
+                TYPENAME: CallResult
     1:
       Failure:
         STRUCT:
@@ -388,7 +455,7 @@ SuiError:
       ConflictingTransaction:
         STRUCT:
           - pending_transaction:
-              TYPENAME: Transaction
+              TYPENAME: TransactionDigest
     15:
       ErrorWhileProcessingTransaction: UNIT
     16:
@@ -418,7 +485,7 @@ SuiError:
               TYPENAME: ObjectID
           - err: STR
     23:
-      MissingEalierConfirmations:
+      MissingEarlierConfirmations:
         STRUCT:
           - object_id:
               TYPENAME: ObjectID
@@ -487,7 +554,7 @@ SuiError:
     46:
       CannotSendClientMessageError: UNIT
     47:
-      SubscriptionItemsDropedError:
+      SubscriptionItemsDroppedError:
         NEWTYPE: U64
     48:
       SubscriptionServiceClosed: UNIT
@@ -630,9 +697,9 @@ SuiError:
     86:
       TooManyIncorrectAuthorities: UNIT
     87:
-      IncorrectGasSplit: UNIT
-    88:
-      IncorrectGasMerge: UNIT
+      InconsistentGatewayResult:
+        STRUCT:
+          - error: STR
 Transaction:
   STRUCT:
     - data:

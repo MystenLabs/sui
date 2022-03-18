@@ -12,7 +12,7 @@ use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
 
 use crate::base_types::SuiAddress;
-use crate::error::SuiError;
+use crate::error::{SuiError, SuiResult};
 
 // TODO: Make sure secrets are not copyable and movable to control where they are in memory
 #[derive(Debug)]
@@ -247,13 +247,46 @@ impl Signature {
                 error: error.to_string(),
             })
     }
+
+    pub fn get_verification_inputs<T>(
+        &self,
+        value: &T,
+        author: SuiAddress,
+    ) -> Result<(Vec<u8>, ed25519_dalek::Signature, PublicKeyBytes), SuiError>
+    where
+        T: Signable<Vec<u8>>,
+    {
+        // Is this signature emitted by the expected author?
+        let public_key_bytes: [u8; ed25519_dalek::PUBLIC_KEY_LENGTH] = self
+            .public_key_bytes()
+            .try_into()
+            .expect("byte lengths match");
+        let received_addr = SuiAddress::from(&PublicKeyBytes(public_key_bytes));
+        if received_addr != author {
+            return Err(SuiError::IncorrectSigner);
+        }
+
+        // deserialize the signature
+        let signature =
+            ed25519_dalek::Signature::from_bytes(self.signature_bytes()).map_err(|err| {
+                SuiError::InvalidSignature {
+                    error: err.to_string(),
+                }
+            })?;
+
+        // serialize the message (see BCS serialization for determinism)
+        let mut message = Vec::new();
+        value.write(&mut message);
+
+        Ok((message, signature, PublicKeyBytes(public_key_bytes)))
+    }
 }
 
 /// A signature emitted by an authority. It's useful to decouple this from user signatures,
 /// as their set of supported schemes will probably diverge
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
 
-pub struct AuthoritySignature(dalek::Signature);
+pub struct AuthoritySignature(pub dalek::Signature);
 
 impl AsRef<[u8]> for AuthoritySignature {
     fn as_ref(&self) -> &[u8] {
@@ -370,9 +403,58 @@ where
     }
 }
 
+pub type PubKeyLookup = HashMap<PublicKeyBytes, PublicKey>;
+
 pub fn sha3_hash<S: Signable<Sha3_256>>(signable: &S) -> [u8; 32] {
     let mut digest = Sha3_256::default();
     signable.write(&mut digest);
     let hash = digest.finalize();
     hash.into()
+}
+
+#[derive(Default)]
+pub struct VerificationObligation {
+    lookup: PubKeyLookup,
+    pub messages: Vec<Vec<u8>>,
+    pub message_index: Vec<usize>,
+    pub signatures: Vec<dalek::Signature>,
+    pub public_keys: Vec<dalek::PublicKey>,
+}
+
+impl VerificationObligation {
+    pub fn new(lookup: PubKeyLookup) -> VerificationObligation {
+        VerificationObligation {
+            lookup,
+            ..Default::default()
+        }
+    }
+
+    pub fn lookup_public_key(&mut self, key_bytes: &PublicKeyBytes) -> Result<PublicKey, SuiError> {
+        match self.lookup.get(key_bytes) {
+            Some(v) => Ok(*v),
+            None => {
+                let public_key = (*key_bytes).try_into()?;
+                self.lookup.insert(*key_bytes, public_key);
+                Ok(public_key)
+            }
+        }
+    }
+
+    pub fn verify_all(self) -> SuiResult<PubKeyLookup> {
+        let messages_inner: Vec<_> = self
+            .message_index
+            .iter()
+            .map(|idx| &self.messages[*idx][..])
+            .collect();
+        dalek::verify_batch(
+            &messages_inner[..],
+            &self.signatures[..],
+            &self.public_keys[..],
+        )
+        .map_err(|error| SuiError::InvalidSignature {
+            error: format!("{}", error),
+        })?;
+
+        Ok(self.lookup)
+    }
 }

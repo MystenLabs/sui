@@ -22,7 +22,7 @@ our latest design, inspired from previous works below.
 ## Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus
 
 * **Link:** https://arxiv.org/abs/2105.11827
-* **Publication: **EuroSys, 2022
+* **Publication:** EuroSys, 2022
 * **Relevance:** The consensus system that we will likely use to support shared-objects in Sui.
 * **Summary:** We propose separating the task of reliable transaction dissemination from transaction ordering to enable high-performance Byzantine
   fault-tolerant quorum-based consensus. We design and evaluate a mempool protocol, Narwhal, specializing in high-throughput reliable dissemination
@@ -60,7 +60,7 @@ our latest design, inspired from previous works below.
 * **Summary:** We present Bullshark, the first directed acyclic graph (DAG) based Byzantine Fault Tolerant (BFT) protocol that is optimized for partial synchrony.
   Bullshark inherits all the desired properties of its predecessor (DAG-Rider) such as optimal amortized complexity, asynchronous liveness, zero-overhead,
   and post-quantum safety; but at the same time Bullshark provides a practical low-latency fast-path that exploits synchronous periods. In addition, we introduce
-  a standalone partially synchronous version of Bullshark and evaluate it against the state of the art. The resulting protocol is embarrassingly simple (20 LOC
+  a standalone partially synchronous version of Bullshark and evaluate it against the state of the art. The resulting protocol is embarrassingly simple 20 LOC
   on top of a DAG-based mempool implementation) and highly efficient, achieving for example, 125k transactions per second and 2 seconds latency with 50 nodes.
 
 ## Be Aware of Your Leaders 

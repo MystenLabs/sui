@@ -4,7 +4,7 @@
 use anyhow::Result;
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
-use move_binary_format::{errors::PartialVMResult, file_format::CompiledModule};
+use move_binary_format::{errors::PartialVMResult, file_format::CompiledModule, normalized::Type};
 use sui_framework::EventType;
 use sui_types::{
     base_types::*,
@@ -12,7 +12,7 @@ use sui_types::{
     event::Event,
     gas,
     id::VersionedID,
-    messages::ExecutionStatus,
+    messages::{CallResult, ExecutionStatus},
     move_package::*,
     object::{MoveObject, Object, Owner},
     storage::{DeleteKind, Storage},
@@ -91,6 +91,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         args,
         mutable_ref_objects,
         by_value_objects,
+        return_types,
     } = match resolve_and_type_check(
         package_object,
         module,
@@ -119,15 +120,16 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         object_owner_map,
         gas_budget,
         ctx,
+        return_types,
     ) {
         ExecutionStatus::Failure { gas_used, error } => {
             exec_failure!(gas_used, *error)
         }
-        ExecutionStatus::Success { gas_used } => {
+        ExecutionStatus::Success { gas_used, results } => {
             match gas::try_deduct_gas(&mut gas_object, gas_used) {
                 Ok(()) => {
                     state_view.write_object(gas_object);
-                    Ok(ExecutionStatus::Success { gas_used })
+                    Ok(ExecutionStatus::Success { gas_used, results })
                 }
                 Err(err) => exec_failure!(gas_budget, err),
             }
@@ -154,6 +156,7 @@ fn execute_internal<
     object_owner_map: HashMap<SuiAddress, SuiAddress>,
     gas_budget: u64, // gas budget for the current call operation
     ctx: &mut TxContext,
+    return_types: Vec<Type>,
 ) -> ExecutionStatus {
     // TODO: Update Move gas constants to reflect the gas fee on sui.
     let cost_table = &move_vm_types::gas_schedule::INITIAL_COST_SCHEDULE;
@@ -179,14 +182,13 @@ fn execute_internal<
             mut mutable_ref_values,
             gas_used,
         } => {
-            // we already checked that the function had no return types in resolve_and_type_check--it should
-            // also not return any values at runtime
-            debug_assert!(return_values.is_empty());
             // Sui Move programs should never touch global state, so ChangeSet should be empty
             debug_assert!(change_set.accounts().is_empty());
             // Input ref parameters we put in should be the same number we get out, plus one for the &mut TxContext
             debug_assert!(mutable_ref_objects.len() + 1 == mutable_ref_values.len());
             debug_assert!(gas_used <= gas_budget);
+
+            let return_values = process_return_values(&return_values, &return_types);
 
             // When this function is used during publishing, it
             // may be executed several times, with objects being
@@ -233,6 +235,7 @@ fn execute_internal<
             } else {
                 ExecutionStatus::Success {
                     gas_used: total_gas,
+                    results: return_values,
                 }
             }
         }
@@ -244,6 +247,77 @@ fn execute_internal<
             },
         ),
     }
+}
+
+fn process_return_values(values: &[Vec<u8>], return_types: &[Type]) -> Vec<CallResult> {
+    let mut results = vec![];
+    debug_assert!(values.len() == return_types.len());
+
+    for (idx, r) in return_types.iter().enumerate() {
+        match r {
+            // debug_assert-s for missing arms should be OK here as we
+            // already checked in
+            // MovePackage::check_and_get_entry_function that no other
+            // types can exist in the signature
+
+            // see CallResults struct comments for why this is
+            // implemented the way it is
+            Type::Bool => results.push(CallResult::Bool(
+                bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+            )),
+            Type::U8 => results.push(CallResult::U8(
+                bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+            )),
+            Type::U64 => results.push(CallResult::U64(
+                bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+            )),
+            Type::U128 => results.push(CallResult::U128(
+                bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+            )),
+            Type::Address => results.push(CallResult::Address(
+                bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+            )),
+            Type::Vector(t) => match &**t {
+                Type::Bool => results.push(CallResult::BoolVec(
+                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                )),
+                Type::U8 => results.push(CallResult::U8Vec(
+                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                )),
+                Type::U64 => results.push(CallResult::U64Vec(
+                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                )),
+                Type::U128 => results.push(CallResult::U128Vec(
+                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                )),
+                Type::Address => results.push(CallResult::AddrVec(
+                    bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                )),
+                Type::Vector(inner_t) => match &**inner_t {
+                    Type::Bool => results.push(CallResult::BoolVecVec(
+                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                    )),
+                    Type::U8 => results.push(CallResult::U8VecVec(
+                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                    )),
+                    Type::U64 => results.push(CallResult::U64VecVec(
+                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                    )),
+                    Type::U128 => results.push(CallResult::U128VecVec(
+                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                    )),
+                    Type::Address => results.push(CallResult::AddrVecVec(
+                        bcs::from_bytes(values.get(idx).unwrap()).unwrap(),
+                    )),
+                    _ => debug_assert!(false),
+                },
+                _ => debug_assert!(false),
+            },
+            _ => debug_assert!(false),
+        }
+    }
+
+    results
 }
 
 /// Similar to execute(), only returns Err if there are system issues.
@@ -278,7 +352,10 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         exec_failure!(
             gas::MIN_MOVE,
             SuiError::InsufficientGas {
-                error: "Gas budget insufficient to publish a package".to_string(),
+                error: format!(
+                    "Gas cost to publish the package is {}, exceeding the budget which is {}",
+                    gas_used_for_publish, gas_budget
+                ),
             }
         );
     }
@@ -307,8 +384,10 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
         ctx,
         gas_budget - gas_used_for_publish,
     ) {
-        ExecutionStatus::Success { gas_used } => gas_used,
+        ExecutionStatus::Success { gas_used, .. } => gas_used,
         ExecutionStatus::Failure { gas_used, error } => {
+            // TODO: We should't charge the full publish cost when this failed.
+            // Instead we should only charge the cost to run bytecode verification.
             exec_failure!(gas_used + gas_used_for_publish, *error)
         }
     };
@@ -321,6 +400,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
             state_view.write_object(gas_object);
             Ok(ExecutionStatus::Success {
                 gas_used: total_gas_used,
+                results: vec![],
             })
         }
         Err(err) => exec_failure!(gas_budget, err),
@@ -380,8 +460,9 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
             HashMap::new(),
             current_gas_budget,
             ctx,
+            vec![], // no return types for module initializers
         ) {
-            ExecutionStatus::Success { gas_used } => gas_used,
+            ExecutionStatus::Success { gas_used, .. } => gas_used,
             ExecutionStatus::Failure { gas_used, error } => {
                 return ExecutionStatus::Failure {
                     gas_used: gas_used + total_gas_used,
@@ -400,6 +481,7 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
 
     ExecutionStatus::Success {
         gas_used: total_gas_used,
+        results: vec![],
     }
 }
 

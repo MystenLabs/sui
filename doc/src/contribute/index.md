@@ -2,7 +2,7 @@
 title: Contributing to Sui
 ---
 
-To contribute, ensure you have the latest version of the codebase. To clone the repository, run the following:
+Now that you understand Sui, consider helping the project. To contribute to Sui, ensure you have the latest version of the codebase. To clone the repository, run the following:
 ```bash
 git clone https://github.com/mystenlabs/sui.git
 cd sui
@@ -26,6 +26,6 @@ To submit your pull request:
 
 * Learn [about Mysten Labs](https://mystenlabs.com/) the company on our public site.
 * Read the [Sui Smart Contract Platform](../../paper/sui.pdf) white paper.
-* * Implementing [logging](observability.md) in Sui to observe the behavior of your development.
-* Find related [research papers](research-papers.md).
-* See and adhere to our [code of conduct](code-of-conduct.md).
+* Implementing [logging](../contribute/observability.md) in Sui to observe the behavior of your development.
+* Find related [research papers](../contribute/research-papers.md).
+* See and adhere to our [code of conduct](../contribute/code-of-conduct.md).

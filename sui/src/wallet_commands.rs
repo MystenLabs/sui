@@ -1,6 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use core::fmt;
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::path::Path;
@@ -20,7 +19,9 @@ use structopt::clap::AppSettings;
 use structopt::StructOpt;
 use tracing::info;
 
-use sui_core::gateway_state::gateway_responses::{MergeCoinResponse, SplitCoinResponse};
+use sui_core::gateway_state::gateway_responses::{
+    MergeCoinResponse, PublishResponse, SplitCoinResponse,
+};
 use sui_core::gateway_state::{AsyncTransactionSigner, GatewayClient};
 use sui_framework::build_move_package_to_bytes;
 use sui_types::base_types::{decode_bytes_hex, ObjectID, ObjectRef, SuiAddress};
@@ -33,7 +34,7 @@ use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::ObjectRead;
 use sui_types::object::ObjectRead::Exists;
 
-use crate::config::{Config, WalletConfig};
+use crate::config::{Config, PersistedConfig, WalletConfig};
 use crate::keystore::Keystore;
 use crate::sui_json::{resolve_move_function_args, SuiJsonValue};
 
@@ -219,10 +220,10 @@ impl WalletCommands {
                 let gas_object_read = context.gateway.get_object_info(*gas).await?;
                 let gas_object = gas_object_read.object()?;
                 let sender = gas_object.owner.get_owner_address()?;
-                let gas_obj_ref = gas_object.to_object_reference();
+                let gas_obj_ref = gas_object.compute_object_reference();
 
                 let compiled_modules = build_move_package_to_bytes(Path::new(path))?;
-                let (cert, effects) = context
+                let response = context
                     .gateway
                     .publish(
                         sender,
@@ -233,10 +234,7 @@ impl WalletCommands {
                     )
                     .await?;
 
-                if matches!(effects.status, ExecutionStatus::Failure { .. }) {
-                    return Err(anyhow!("Error publishing module: {:#?}", effects.status));
-                };
-                WalletCommandResult::Publish(cert, effects)
+                WalletCommandResult::Publish(response)
             }
 
             WalletCommands::Object { id } => {
@@ -299,13 +297,13 @@ impl WalletCommands {
                     .get_object_info(*gas)
                     .await?
                     .into_object()?
-                    .to_object_reference();
+                    .compute_object_reference();
 
                 // Fetch the objects for the object args
                 let mut object_args_refs = Vec::new();
                 for obj_id in object_ids {
                     let obj_info = context.gateway.get_object_info(obj_id).await?;
-                    object_args_refs.push(obj_info.object()?.to_object_reference());
+                    object_args_refs.push(obj_info.object()?.compute_object_reference());
                 }
 
                 let (cert, effects) = context
@@ -437,13 +435,15 @@ impl WalletCommands {
 }
 
 pub struct WalletContext {
-    pub config: WalletConfig,
+    pub config: PersistedConfig<WalletConfig>,
     pub keystore: Arc<RwLock<Box<dyn Keystore>>>,
     pub gateway: GatewayClient,
 }
 
 impl WalletContext {
-    pub fn new(config: WalletConfig) -> Result<Self, anyhow::Error> {
+    pub fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
+        let config: WalletConfig = PersistedConfig::read(config_path)?;
+        let config = config.persisted(config_path);
         let keystore = Arc::new(RwLock::new(config.keystore.init()?));
         let gateway = config.gateway.init();
         let context = Self {
@@ -459,8 +459,8 @@ impl Display for WalletCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
         match self {
-            WalletCommandResult::Publish(cert, effects) => {
-                write!(writer, "{}", write_cert_and_effects(cert, effects)?)?;
+            WalletCommandResult::Publish(response) => {
+                write!(writer, "{}", response)?;
             }
             WalletCommandResult::Object(object_read) => {
                 let object = object_read.object().map_err(fmt::Error::custom)?;
@@ -569,7 +569,7 @@ impl WalletCommandResult {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum WalletCommandResult {
-    Publish(CertifiedTransaction, TransactionEffects),
+    Publish(PublishResponse),
     Object(ObjectRead),
     Call(CertifiedTransaction, TransactionEffects),
     Transfer(

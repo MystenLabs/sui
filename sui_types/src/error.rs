@@ -4,9 +4,9 @@
 
 use std::fmt::Debug;
 use thiserror::Error;
+use typed_store::rocks::TypedStoreError;
 
 use crate::base_types::*;
-use crate::messages::Transaction;
 use move_binary_format::errors::PartialVMError;
 use serde::{Deserialize, Serialize};
 
@@ -27,9 +27,8 @@ macro_rules! fp_ensure {
 }
 pub(crate) use fp_ensure;
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 /// Custom error type for Sui.
-
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 #[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
@@ -70,7 +69,9 @@ pub enum SuiError {
         expected_sequence: SequenceNumber,
     },
     #[error("Conflicting transaction already received: {pending_transaction:?}")]
-    ConflictingTransaction { pending_transaction: Transaction },
+    ConflictingTransaction {
+        pending_transaction: TransactionDigest,
+    },
     #[error("Transaction was processed but no signature was produced by authority")]
     ErrorWhileProcessingTransaction,
     #[error("Transaction transaction processing failed: {err}")]
@@ -88,7 +89,7 @@ pub enum SuiError {
     #[error("Object fetch failed for {object_id:?}, err {err:?}.")]
     ObjectFetchFailed { object_id: ObjectID, err: String },
     #[error("Object {object_id:?} at old version: {current_sequence_number:?}")]
-    MissingEalierConfirmations {
+    MissingEarlierConfirmations {
         object_id: ObjectID,
         current_sequence_number: VersionNumber,
     },
@@ -148,12 +149,12 @@ pub enum SuiError {
     TooManyItemsError(u64),
     #[error("The range specified is invalid.")]
     InvalidSequenceRangeError,
-    #[error("No batches mached the range requested.")]
+    #[error("No batches matched the range requested.")]
     NoBatchesFoundError,
     #[error("The channel to repond to the client returned an error.")]
     CannotSendClientMessageError,
     #[error("Subscription service had to drop {0} items")]
-    SubscriptionItemsDropedError(u64),
+    SubscriptionItemsDroppedError(u64),
     #[error("Subscription service closed.")]
     SubscriptionServiceClosed,
 
@@ -234,7 +235,7 @@ pub enum SuiError {
         error: Box<SuiError>,
     },
     #[error("Storage error")]
-    StorageError(#[from] typed_store::rocks::TypedStoreError),
+    StorageError(#[from] TypedStoreError),
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
     #[error("Authority Error: {error:?}")]
@@ -257,10 +258,8 @@ pub enum SuiError {
     IncorrectRecipientError,
     #[error("Too many authority errors were detected.")]
     TooManyIncorrectAuthorities,
-    #[error("Inconsistent gas coin split result.")]
-    IncorrectGasSplit,
-    #[error("Inconsistent gas coin merge result.")]
-    IncorrectGasMerge,
+    #[error("Inconsistent results observed in the Gateway. This should not happen and typically means there is a bug in the Sui implementation. Details: {error:?}")]
+    InconsistentGatewayResult { error: String },
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

@@ -2,7 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature};
+use crate::crypto::{
+    sha3_hash, AuthoritySignature, BcsSignable, Signature, VerificationObligation,
+};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
@@ -12,13 +14,17 @@ use super::{base_types::*, batch::*, committee::Committee, error::*, event::Even
 mod messages_tests;
 
 use move_binary_format::{access::ModuleAccess, CompiledModule};
-use move_core_types::{identifier::Identifier, language_storage::TypeTag, value::MoveStructLayout};
+use move_core_types::{
+    account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
+    value::MoveStructLayout,
+};
 use name_variant::NamedVariant;
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use static_assertions::const_assert_eq;
+// use static_assertions::const_assert_eq;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
-use std::mem::size_of;
+//use std::mem::size_of;
 use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
@@ -142,13 +148,23 @@ impl TransactionData {
 // TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
 pub struct Transaction {
+    // Deserialization sets this to "false"
+    #[serde(skip)]
+    pub is_checked: bool,
+
     pub data: TransactionData,
     pub signature: Signature,
 }
+/* TODO: check this legacy static check is not needed as an invariant
+         elsewhere. The tests pass but invariant checks without docs
+         should not be removed without a note to check.
+
 const_assert_eq!(
     size_of::<TransactionData>() + size_of::<Signature>(),
     size_of::<Transaction>()
 );
+
+*/
 
 /// An transaction signed by a single authority
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
@@ -167,6 +183,14 @@ pub struct SignedTransaction {
 ///
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CertifiedTransaction {
+    // This is a cache of an otherwise expensive to compute value.
+    // DO NOT serialize or deserialize from the network or disk.
+    #[serde(skip)]
+    transaction_digest: OnceCell<TransactionDigest>,
+    // Deserialization sets this to "false"
+    #[serde(skip)]
+    pub is_checked: bool,
+
     pub transaction: Transaction,
     pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
 }
@@ -199,7 +223,7 @@ pub struct AccountInfoRequest {
 /// This reads historic data and sends the batch and transactions in the
 /// database starting at the batch that includes `start`,
 /// and then listens to new transactions until a batch equal or
-/// is over the batch end marker.  
+/// is over the batch end marker.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct BatchInfoRequest {
     pub start: TxSequenceNumber,
@@ -321,11 +345,39 @@ pub struct TransactionInfoResponse {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum CallResult {
+    Bool(bool),
+    U8(u8),
+    U64(u64),
+    U128(u128),
+    Address(AccountAddress),
+    // these are not ideal but there is no other way to deserialize
+    // vectors encoded in BCS (you need a full type before this can be
+    // done)
+    BoolVec(Vec<bool>),
+    U8Vec(Vec<u8>),
+    U64Vec(Vec<u64>),
+    U128Vec(Vec<u128>),
+    AddrVec(Vec<AccountAddress>),
+    BoolVecVec(Vec<bool>),
+    U8VecVec(Vec<Vec<u8>>),
+    U64VecVec(Vec<Vec<u64>>),
+    U128VecVec(Vec<Vec<u128>>),
+    AddrVecVec(Vec<Vec<AccountAddress>>),
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ExecutionStatus {
     // Gas used in the success case.
-    Success { gas_used: u64 },
+    Success {
+        gas_used: u64,
+        results: Vec<CallResult>,
+    },
     // Gas used in the failed case, and the error.
-    Failure { gas_used: u64, error: Box<SuiError> },
+    Failure {
+        gas_used: u64,
+        error: Box<SuiError>,
+    },
 }
 
 impl ExecutionStatus {
@@ -344,9 +396,9 @@ impl ExecutionStatus {
         matches!(self, ExecutionStatus::Failure { .. })
     }
 
-    pub fn unwrap(self) -> u64 {
+    pub fn unwrap(self) -> (u64, Vec<CallResult>) {
         match self {
-            ExecutionStatus::Success { gas_used } => gas_used,
+            ExecutionStatus::Success { gas_used, results } => (gas_used, results),
             ExecutionStatus::Failure { .. } => {
                 panic!("Unable to unwrap() on {:?}", self);
             }
@@ -365,7 +417,7 @@ impl ExecutionStatus {
     /// Returns the gas used from the status
     pub fn gas_used(&self) -> u64 {
         match &self {
-            ExecutionStatus::Success { gas_used } => *gas_used,
+            ExecutionStatus::Success { gas_used, .. } => *gas_used,
             ExecutionStatus::Failure { gas_used, .. } => *gas_used,
         }
     }
@@ -543,11 +595,41 @@ impl Transaction {
     }
 
     pub fn new(data: TransactionData, signature: Signature) -> Self {
-        Transaction { data, signature }
+        Transaction {
+            is_checked: false,
+            data,
+            signature,
+        }
     }
 
     pub fn check_signature(&self) -> Result<(), SuiError> {
-        self.signature.check(&self.data, self.data.sender)
+        // We use this flag to see if someone has checked this before
+        // and therefore we can skip the check. Note that the flag has
+        // to be set to true manually, and is not set by calling this
+        // "check" function.
+        if self.is_checked {
+            return Ok(());
+        }
+
+        let mut obligation = VerificationObligation::default();
+        self.add_to_verification_obligation(&mut obligation)?;
+        obligation.verify_all().map(|_| ())
+    }
+
+    pub fn add_to_verification_obligation(
+        &self,
+        obligation: &mut VerificationObligation,
+    ) -> SuiResult<()> {
+        let (message, signature, public_key) = self
+            .signature
+            .get_verification_inputs(&self.data, self.data.sender)?;
+        let idx = obligation.messages.len();
+        obligation.messages.push(message);
+        let key = obligation.lookup_public_key(&public_key)?;
+        obligation.public_keys.push(key);
+        obligation.signatures.push(signature);
+        obligation.message_index.push(idx);
+        Ok(())
     }
 
     pub fn sender_address(&self) -> SuiAddress {
@@ -700,10 +782,7 @@ impl<'a> SignatureAggregator<'a> {
             committee,
             weight: 0,
             used_authorities: HashSet::new(),
-            partial: CertifiedTransaction {
-                transaction,
-                signatures: Vec::new(),
-            },
+            partial: CertifiedTransaction::new(transaction),
         }
     }
 
@@ -737,10 +816,58 @@ impl<'a> SignatureAggregator<'a> {
     }
 }
 
+use crate::crypto::Signable;
+
 impl CertifiedTransaction {
+    pub fn new(transaction: Transaction) -> CertifiedTransaction {
+        CertifiedTransaction {
+            transaction_digest: OnceCell::new(),
+            is_checked: false,
+            transaction,
+            signatures: Vec::new(),
+        }
+    }
+
+    pub fn new_with_signatures(
+        transaction: Transaction,
+        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    ) -> CertifiedTransaction {
+        CertifiedTransaction {
+            transaction_digest: OnceCell::new(),
+            is_checked: false,
+            transaction,
+            signatures,
+        }
+    }
+
+    /// Get the transaction digest and write it to the cache
+    pub fn digest(&self) -> &TransactionDigest {
+        self.transaction_digest
+            .get_or_init(|| self.transaction.digest())
+    }
+
     /// Verify the certificate.
     pub fn check(&self, committee: &Committee) -> Result<(), SuiError> {
-        // Check the quorum.
+        // We use this flag to see if someone has checked this before
+        // and therefore we can skip the check. Note that the flag has
+        // to be set to true manually, and is not set by calling this
+        // "check" function.
+        if self.is_checked {
+            return Ok(());
+        }
+
+        let mut obligation = VerificationObligation::default();
+        self.add_to_verification_obligation(committee, &mut obligation)?;
+        obligation.verify_all().map(|_| ())
+    }
+
+    pub fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+    ) -> SuiResult<()> {
+        // First check the quorum is sufficient
+
         let mut weight = 0;
         let mut used_authorities = HashSet::new();
         for (authority, _) in self.signatures.iter() {
@@ -759,17 +886,38 @@ impl CertifiedTransaction {
             weight >= committee.quorum_threshold(),
             SuiError::CertificateRequiresQuorum
         );
-        // All that is left is checking signatures!
-        // one user signature
+
+        // Add the obligation of the transaction
         self.transaction
-            .signature
-            .check(&self.transaction.data, self.transaction.data.sender)?;
-        // a batch of authority signatures
-        AuthoritySignature::verify_batch(
-            &self.transaction.data,
-            &self.signatures,
-            &committee.expanded_keys,
-        )
+            .add_to_verification_obligation(obligation)?;
+
+        // Create obligations for the committee signatures
+
+        let mut message = Vec::new();
+        self.transaction.data.write(&mut message);
+
+        let idx = obligation.messages.len();
+        obligation.messages.push(message);
+
+        for tuple in self.signatures.iter() {
+            let (authority, signature) = tuple;
+            // do we know, or can we build a valid public key?
+            match committee.expanded_keys.get(authority) {
+                Some(v) => obligation.public_keys.push(*v),
+                None => {
+                    let public_key = (*authority).try_into()?;
+                    obligation.public_keys.push(public_key);
+                }
+            }
+
+            // build a signature
+            obligation.signatures.push(signature.0);
+
+            // collect the message
+            obligation.message_index.push(idx);
+        }
+
+        Ok(())
     }
 }
 
