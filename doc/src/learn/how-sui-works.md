@@ -63,7 +63,7 @@ Instead of the app users attempting to send transactions to multiple authorities
 
 ## Blockchains
 
-Blockchains validators collectively build a shared accumulator: a representation of the state of the blockchain, a chain to which they add increments over time, called blocks. In blockchains that offer deterministic finality, every time validators want to make an incremental addition to the blockchain, i.e. a block proposal, they sequence the proposal. This protocol lets them form an agreement over the current state of the chain, whether the proposed increment is valid, and what the state of the chain will be after the new addition. 
+Blockchain validators collectively build a shared accumulator: a representation of the state of the blockchain, a chain to which they add increments over time, called blocks. In blockchains that offer deterministic finality, every time validators want to make an incremental addition to the blockchain, i.e. a block proposal, they sequence the proposal. This protocol lets them form an agreement over the current state of the chain, whether the proposed increment is valid, and what the state of the chain will be after the new addition. 
 
 This method of maintaining common state over time has known practical success over the last 14 years or so, using a wealth of theory from the last 50 years of research in the field of Byzantine Fault Tolerant distributed systems. 
 
