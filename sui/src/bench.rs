@@ -9,6 +9,7 @@ use futures::stream::StreamExt;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use rayon::prelude::*;
+use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use sui_adapter::genesis;
@@ -49,9 +50,9 @@ struct ClientServerBenchmark {
     /// Size of the Sui committee. Minimum size is 4 to tolerate one fault
     #[structopt(long, default_value = "10")]
     committee_size: usize,
-    /// Maximum number of requests in flight (0 for blocking client)
-    #[structopt(long, default_value = "0")]
-    max_in_flight: usize,
+    /// Forces sending transactions one at a time
+    #[structopt(long)]
+    single_operation: bool,
     /// Number of accounts and transactions used in the benchmark
     #[structopt(long, default_value = "40000")]
     num_accounts: usize,
@@ -199,12 +200,14 @@ impl ClientServerBenchmark {
 
         info!("Generate empty store with Genesis.");
         let (address, keypair) = get_key_pair();
+        // Lets not collide with genesis objects.
+        let offset = 10000;
 
         let account_gas_objects: Vec<_> = (0u64..(self.num_accounts as u64))
             .into_par_iter()
             .map(|x| {
                 let mut obj_id = [0; 20];
-                obj_id[..8].clone_from_slice(&x.to_be_bytes()[..8]);
+                obj_id[..8].clone_from_slice(&(offset+x).to_be_bytes()[..8]);
                 let object_id: ObjectID = ObjectID::from(obj_id);
                 let object = if self.use_move {
                     Object::with_id_owner_gas_coin_object_for_testing(
@@ -217,10 +220,8 @@ impl ClientServerBenchmark {
                     Object::with_id_owner_for_testing(object_id, address)
                 };
 
-                assert!(object.version() == SequenceNumber::from(0));
-
                 let mut gas_object_id = [0; 20];
-                gas_object_id[8..16].clone_from_slice(&x.to_be_bytes()[..8]);
+                gas_object_id[8..16].clone_from_slice(&(offset).to_be_bytes()[..8]);
                 let gas_object_id = ObjectID::from(gas_object_id);
                 let gas_object = Object::with_id_owner_for_testing(gas_object_id, address);
                 assert!(gas_object.version() == SequenceNumber::from(0));
@@ -316,7 +317,7 @@ impl ClientServerBenchmark {
         server.spawn().await.unwrap()
     }
 
-    async fn launch_client(&self, connections: usize, mut transactions: Vec<Bytes>) {
+    async fn launch_client(&self, connections: usize, transactions: Vec<Bytes>) {
         // Give the server time to be ready
         time::sleep(Duration::from_millis(1000)).await;
 
@@ -328,13 +329,9 @@ impl ClientServerBenchmark {
         let items_number = transactions.len() / transaction_len_factor;
         let mut elapsed_time: u128 = 0;
 
-        if self.max_in_flight != 0 {
-            warn!("Option max-in-flight is now ignored.")
-        }
         info!("Number of TCP connections: {}", connections);
-
         info!("Sending requests.");
-        if self.max_in_flight > 0 {
+        if !self.single_operation {
             let mass_client = NetworkClient::new(
                 self.host.clone(),
                 self.port,
@@ -379,16 +376,16 @@ impl ClientServerBenchmark {
                 Duration::from_micros(self.recv_timeout_us),
             );
 
-            while !transactions.is_empty() {
+            let mut transactions : VecDeque<_> = transactions.into_iter().collect();
+            while let Some(transaction) = transactions.pop_front() {
                 if transactions.len() % 1000 == 0 {
                     info!("Process message {}...", transactions.len());
                 }
-                let transaction = transactions.pop().unwrap();
-
+                
                 let time_start = Instant::now();
                 let resp = client.send_recv_bytes(transaction.to_vec()).await;
                 elapsed_time += time_start.elapsed().as_micros();
-                let status = deserialize_object_info(resp.unwrap());
+                let status = resp.map(|msg| deserialize_object_info(msg));
 
                 match status {
                     Ok(info) => {
