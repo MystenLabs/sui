@@ -9,14 +9,15 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
-use dropshot::{endpoint, Query, TypedBody};
+use dropshot::{endpoint, Query, TypedBody, CONTENT_TYPE_JSON};
 use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError, HttpResponseOk,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
 };
 use futures::lock::Mutex;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use hyper::StatusCode;
+use http::Response;
+use hyper::{Body, StatusCode};
 use move_core_types::identifier::Identifier;
 use move_core_types::parser::parse_type_tag;
 use move_core_types::value::MoveStructLayout;
@@ -221,9 +222,7 @@ network has been started on testnet or mainnet.
     path = "/sui/genesis",
     tags = [ "debug" ],
 }]
-async fn genesis(
-    rqctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseOk<GenesisResponse>, HttpError> {
+async fn genesis(rqctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body>, HttpError> {
     let context = rqctx.context();
     // Using a new working dir for genesis, this directory will be deleted when stop end point is called.
     let working_dir = PathBuf::from(".").join(format!("{}", ObjectID::random()));
@@ -272,10 +271,13 @@ async fn genesis(
 
     *context.server_state.lock().await = Some(state);
 
-    Ok(HttpResponseOk(GenesisResponse {
-        addresses: addresses_json,
-        network_config: network_config_json,
-    }))
+    custom_http_response(
+        StatusCode::OK,
+        GenesisResponse {
+            addresses: addresses_json,
+            network_config: network_config_json,
+        },
+    )
 }
 
 /**
@@ -289,9 +291,7 @@ network has been started on testnet or main-net.
     path = "/sui/start",
     tags = [ "debug" ],
 }]
-async fn sui_start(
-    ctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseOk<String>, HttpError> {
+async fn sui_start(ctx: Arc<RequestContext<ServerContext>>) -> Result<Response<Body>, HttpError> {
     let mut state = ctx.context().server_state.lock().await;
     let state = state.as_mut().ok_or_else(server_state_error)?;
 
@@ -357,10 +357,10 @@ async fn sui_start(
                 )
             })?;
     }
-    Ok(HttpResponseOk(format!(
-        "Started {} authorities",
-        num_authorities
-    )))
+    custom_http_response(
+        StatusCode::OK,
+        format!("Started {} authorities", num_authorities),
+    )
 }
 
 /**
@@ -412,7 +412,7 @@ Retrieve all managed addresses for this client.
 }]
 async fn get_addresses(
     ctx: Arc<RequestContext<ServerContext>>,
-) -> Result<HttpResponseOk<GetAddressResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let mut state = ctx.context().server_state.lock().await;
     let state = state.as_mut().ok_or_else(server_state_error)?;
 
@@ -422,17 +422,20 @@ async fn get_addresses(
     for address in &addresses {
         if let Err(err) = state.gateway.sync_account_state(*address).await {
             return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
+                StatusCode::NOT_FOUND,
                 format!("Can't create client state: {err}"),
             ));
         }
     }
-    Ok(HttpResponseOk(GetAddressResponse {
-        addresses: addresses
-            .into_iter()
-            .map(|address| format!("{}", address))
-            .collect(),
-    }))
+    custom_http_response(
+        StatusCode::OK,
+        GetAddressResponse {
+            addresses: addresses
+                .into_iter()
+                .map(|address| format!("{}", address))
+                .collect(),
+        },
+    )
 }
 
 /**
@@ -481,14 +484,14 @@ Returns list of objects owned by an address.
 async fn get_objects(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectsRequest>,
-) -> Result<HttpResponseOk<GetObjectsResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let mut state = ctx.context().server_state.lock().await;
     let state = state.as_mut().ok_or_else(server_state_error)?;
     let get_objects_params = query.into_inner();
     let address = get_objects_params.address;
     let address = &decode_bytes_hex(address.as_str()).map_err(|error| {
         custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
+            StatusCode::BAD_REQUEST,
             format!("Could not decode address from hex {error}"),
         )
     })?;
@@ -515,7 +518,7 @@ async fn get_objects(
         });
     }
 
-    Ok(HttpResponseOk(GetObjectsResponse { objects }))
+    custom_http_response(StatusCode::OK, GetObjectsResponse { objects })
 }
 
 /**
@@ -553,7 +556,7 @@ Returns the schema for a specified object.
 async fn object_schema(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectSchemaRequest>,
-) -> Result<HttpResponseOk<ObjectSchemaResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let mut state = ctx.context().server_state.lock().await;
     let state = state.as_mut().ok_or_else(server_state_error)?;
     let object_info_params = query.into_inner();
@@ -562,7 +565,7 @@ async fn object_schema(
         Ok(object_id) => object_id,
         Err(error) => {
             return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
+                StatusCode::BAD_REQUEST,
                 format!("{error}"),
             ));
         }
@@ -572,31 +575,31 @@ async fn object_schema(
         Ok(ObjectRead::Exists(_, _, layout)) => layout,
         Ok(ObjectRead::Deleted(_)) => {
             return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
+                StatusCode::NOT_FOUND,
                 format!("Object ({object_id}) was deleted."),
             ));
         }
         Ok(ObjectRead::NotExists(_)) => {
             return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
+                StatusCode::NOT_FOUND,
                 format!("Object ({object_id}) does not exist."),
             ));
         }
         Err(error) => {
             return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
+                StatusCode::NOT_FOUND,
                 format!("Error while getting object info: {:?}", error),
             ));
         }
     };
-
-    match serde_json::to_value(layout) {
-        Ok(schema) => Ok(HttpResponseOk(ObjectSchemaResponse { schema })),
-        Err(e) => Err(custom_http_error(
+    let schema = serde_json::to_value(layout).map_err(|error| {
+        custom_http_error(
             StatusCode::FAILED_DEPENDENCY,
-            format!("Error while getting object info: {:?}", e),
-        )),
-    }
+            format!("Error while getting object info: {:?}", error),
+        )
+    })?;
+
+    custom_http_response(StatusCode::OK, ObjectSchemaResponse { schema })
 }
 
 /**
@@ -644,34 +647,30 @@ Returns the object information for a specified object.
 async fn object_info(
     ctx: Arc<RequestContext<ServerContext>>,
     query: Query<GetObjectInfoRequest>,
-) -> Result<HttpResponseOk<ObjectInfoResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let mut state = ctx.context().server_state.lock().await;
     let state = state.as_mut().ok_or_else(server_state_error)?;
 
     let object_info_params = query.into_inner();
-    let object_id = match ObjectID::try_from(object_info_params.object_id) {
-        Ok(object_id) => object_id,
-        Err(error) => {
-            return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
-                format!("{error}"),
-            ));
-        }
-    };
+    let object_id = ObjectID::try_from(object_info_params.object_id)
+        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
 
     let (_, object, layout) = get_object_info(state, object_id).await?;
     let object_data = object.to_json(&layout).unwrap_or_else(|_| json!(""));
-    Ok(HttpResponseOk(ObjectInfoResponse {
-        owner: format!("{:?}", object.owner),
-        version: format!("{:?}", object.version().value()),
-        id: format!("{:?}", object.id()),
-        readonly: format!("{:?}", object.is_read_only()),
-        obj_type: object
-            .data
-            .type_()
-            .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
-        data: object_data,
-    }))
+    custom_http_response(
+        StatusCode::OK,
+        &ObjectInfoResponse {
+            owner: format!("{:?}", object.owner),
+            version: format!("{:?}", object.version().value()),
+            id: format!("{:?}", object.id()),
+            readonly: format!("{:?}", object.is_read_only()),
+            obj_type: object
+                .data
+                .type_()
+                .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
+            data: object_data,
+        },
+    )
 }
 
 /**
@@ -729,7 +728,7 @@ Example TransferTransactionRequest
 async fn transfer_object(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<TransferTransactionRequest>,
-) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let mut state = ctx.context().server_state.lock().await;
     let state = state.as_mut().ok_or_else(server_state_error)?;
     let transfer_order_params = request.into_inner();
@@ -737,17 +736,17 @@ async fn transfer_object(
     let to_address =
         decode_bytes_hex(transfer_order_params.to_address.as_str()).map_err(|error| {
             custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
+                StatusCode::BAD_REQUEST,
                 format!("Could not decode to address from hex {error}"),
             )
         })?;
     let object_id = ObjectID::try_from(transfer_order_params.object_id)
-        .map_err(|error| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{error}")))?;
+        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
     let gas_object_id = ObjectID::try_from(transfer_order_params.gas_object_id)
-        .map_err(|error| custom_http_error(StatusCode::FAILED_DEPENDENCY, format!("{error}")))?;
+        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
     let owner = decode_bytes_hex(transfer_order_params.from_address.as_str()).map_err(|error| {
         custom_http_error(
-            StatusCode::FAILED_DEPENDENCY,
+            StatusCode::BAD_REQUEST,
             format!("Could not decode address from hex {error}"),
         )
     })?;
@@ -768,7 +767,7 @@ async fn transfer_object(
                 ExecutionStatus::Success { gas_used, .. } => gas_used,
                 ExecutionStatus::Failure { gas_used, error } => {
                     return Err(custom_http_error(
-                        StatusCode::FAILED_DEPENDENCY,
+                        StatusCode::CONFLICT,
                         format!(
                             "Error transferring object: {:#?}, gas used {}",
                             error, gas_used
@@ -780,7 +779,7 @@ async fn transfer_object(
         }
         Err(err) => {
             return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
+                StatusCode::CONFLICT,
                 format!("Transfer error: {err}"),
             ));
         }
@@ -788,11 +787,14 @@ async fn transfer_object(
 
     let object_effects_summary = get_object_effects(state, effects).await?;
 
-    Ok(HttpResponseOk(TransactionResponse {
-        gas_used,
-        object_effects_summary: json!(object_effects_summary),
-        certificate: json!(cert),
-    }))
+    custom_http_response(
+        StatusCode::OK,
+        TransactionResponse {
+            gas_used,
+            object_effects_summary: json!(object_effects_summary),
+            certificate: json!(cert),
+        },
+    )
 }
 
 /**
@@ -890,7 +892,7 @@ Example CallRequest
 async fn call(
     ctx: Arc<RequestContext<ServerContext>>,
     request: TypedBody<CallRequest>,
-) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
+) -> Result<Response<Body>, HttpError> {
     let mut state = ctx.context().server_state.lock().await;
     let state = state.as_mut().ok_or_else(server_state_error)?;
 
@@ -898,7 +900,7 @@ async fn call(
     let transaction_response = handle_move_call(call_params, state)
         .await
         .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))?;
-    Ok(HttpResponseOk(transaction_response))
+    custom_http_response(StatusCode::OK, transaction_response)
 }
 
 /**
@@ -942,7 +944,7 @@ async fn sync(
         .await
         .map_err(|err| {
             custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
+                StatusCode::BAD_REQUEST,
                 format!("Can't create client state: {err}"),
             )
         })?;
@@ -1064,19 +1066,19 @@ async fn get_object_info(
         Ok(ObjectRead::Exists(object_ref, object, layout)) => (object_ref, object, layout),
         Ok(ObjectRead::Deleted(_)) => {
             return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
+                StatusCode::NOT_FOUND,
                 format!("Object ({object_id}) was deleted."),
             ));
         }
         Ok(ObjectRead::NotExists(_)) => {
             return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
+                StatusCode::NOT_FOUND,
                 format!("Object ({object_id}) does not exist."),
             ));
         }
         Err(error) => {
             return Err(custom_http_error(
-                StatusCode::FAILED_DEPENDENCY,
+                StatusCode::NOT_FOUND,
                 format!("Error while getting object info: {:?}", error),
             ));
         }
@@ -1184,6 +1186,21 @@ async fn handle_move_call(
         object_effects_summary: json!(object_effects_summary),
         certificate: json!(cert),
     })
+}
+
+fn custom_http_response<T: Serialize + JsonSchema>(
+    status_code: StatusCode,
+    response_body: T,
+) -> Result<Response<Body>, HttpError> {
+    let body: Body = serde_json::to_string(&response_body)
+        .map_err(|err| custom_http_error(StatusCode::INTERNAL_SERVER_ERROR, format!("{err}")))?
+        .into();
+    let res = Response::builder()
+        .status(status_code)
+        .header(http::header::CONTENT_TYPE, CONTENT_TYPE_JSON)
+        .header(http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .body(body)?;
+    Ok(res)
 }
 
 fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpError {
