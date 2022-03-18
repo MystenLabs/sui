@@ -1,15 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use ed25519_dalek::ed25519::signature;
-use ed25519_dalek::{ed25519, Signer};
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt::Write;
+use std::fmt::{Display, Formatter};
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+
+use ed25519_dalek::ed25519::signature;
+use ed25519_dalek::{ed25519, Signer};
+use serde::{Deserialize, Serialize};
+
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{get_key_pair, KeyPair, Signature};
 
@@ -33,10 +37,22 @@ impl KeystoreType {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+impl Display for KeystoreType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        match self {
+            KeystoreType::File(path) => {
+                writeln!(writer, "Keystore Type : File")?;
+                write!(writer, "Keystore Path : {:?}", path)?;
+                write!(f, "{}", writer)
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Default)]
 pub struct SuiKeystore {
     keys: BTreeMap<SuiAddress, KeyPair>,
-    path: PathBuf,
 }
 
 impl Keystore for SuiKeystore {
@@ -53,7 +69,6 @@ impl Keystore for SuiKeystore {
     fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error> {
         let (address, keypair) = get_key_pair();
         self.keys.insert(address, keypair);
-        self.save()?;
         Ok(address)
     }
 }
@@ -72,21 +87,21 @@ impl SuiKeystore {
             .map(|key| (SuiAddress::from(key.public_key_bytes()), key))
             .collect();
 
-        Ok(Self {
-            keys,
-            path: path.to_path_buf(),
-        })
+        Ok(Self { keys })
     }
 
-    pub fn save(&self) -> Result<(), anyhow::Error> {
+    pub fn save(&self, path: &Path) -> Result<(), anyhow::Error> {
         let store = serde_json::to_string_pretty(&self.keys.values().collect::<Vec<_>>()).unwrap();
-        Ok(fs::write(&self.path, store)?)
+        Ok(fs::write(path, store)?)
     }
 
     pub fn add_key(&mut self, address: SuiAddress, keypair: KeyPair) -> Result<(), anyhow::Error> {
         self.keys.insert(address, keypair);
-        self.save()?;
         Ok(())
+    }
+
+    pub fn addresses(&self) -> Vec<SuiAddress> {
+        self.keys.keys().cloned().collect()
     }
 }
 

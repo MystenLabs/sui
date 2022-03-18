@@ -13,15 +13,15 @@ use async_trait::async_trait;
 use tracing::*;
 
 use bytes::{Bytes, BytesMut};
-use tokio_util::codec::{Framed, LengthDelimitedCodec};
+use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
 
 #[cfg(test)]
 #[path = "unit_tests/transport_tests.rs"]
 mod transport_tests;
 
 /// Suggested buffer size
-pub const DEFAULT_MAX_DATAGRAM_SIZE: usize = 65507;
-pub const DEFAULT_MAX_DATAGRAM_SIZE_STR: &str = "65507";
+pub const DEFAULT_MAX_DATAGRAM_SIZE: usize = 650000;
+pub const DEFAULT_MAX_DATAGRAM_SIZE_STR: &str = "650000";
 
 /// The handler required to create a service.
 #[async_trait]
@@ -104,9 +104,13 @@ where
     Ok(SpawnedServer { complete, handle })
 }
 
+use tokio::net::tcp::OwnedReadHalf;
+use tokio::net::tcp::OwnedWriteHalf;
+
 /// An implementation of DataStream based on TCP.
 pub struct TcpDataStream {
-    framed: Framed<TcpStream, LengthDelimitedCodec>,
+    pub framed_read: FramedRead<OwnedReadHalf, LengthDelimitedCodec>,
+    pub framed_write: FramedWrite<OwnedWriteHalf, LengthDelimitedCodec>,
 }
 
 impl TcpDataStream {
@@ -123,37 +127,49 @@ impl TcpDataStream {
     }
 
     fn from_tcp_stream(stream: TcpStream, max_data_size: usize) -> TcpDataStream {
-        let framed = Framed::new(
-            stream,
+        let (read_half, write_half) = stream.into_split();
+
+        let framed_read = FramedRead::new(
+            read_half,
             LengthDelimitedCodec::builder()
                 .max_frame_length(max_data_size)
                 .new_codec(),
         );
 
-        Self { framed }
+        let framed_write = FramedWrite::new(
+            write_half,
+            LengthDelimitedCodec::builder()
+                .max_frame_length(max_data_size)
+                .new_codec(),
+        );
+
+        Self {
+            framed_read,
+            framed_write,
+        }
     }
 
     // TODO: Eliminate vecs and use Byte, ByteBuf
 
     pub async fn write_data<'a>(&'a mut self, buffer: &'a [u8]) -> Result<(), std::io::Error> {
-        self.framed.send(buffer.to_vec().into()).await
+        self.framed_write.send(buffer.to_vec().into()).await
     }
 
     pub async fn read_data(&mut self) -> Option<Result<Vec<u8>, std::io::Error>> {
-        let result = self.framed.next().await;
+        let result = self.framed_read.next().await;
         result.map(|v| v.map(|w| w.to_vec()))
     }
 }
 
 impl<'a> RwChannel<'a> for TcpDataStream {
-    type W = Framed<TcpStream, LengthDelimitedCodec>;
-    type R = Framed<TcpStream, LengthDelimitedCodec>;
+    type W = FramedWrite<OwnedWriteHalf, LengthDelimitedCodec>;
+    type R = FramedRead<OwnedReadHalf, LengthDelimitedCodec>;
 
     fn sink(&mut self) -> &mut Self::W {
-        &mut self.framed
+        &mut self.framed_write
     }
     fn stream(&mut self) -> &mut Self::R {
-        &mut self.framed
+        &mut self.framed_read
     }
 }
 

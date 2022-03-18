@@ -26,7 +26,7 @@ async fn handle_consensus_output() {
     // Initialize an authority with a (owned) gas object and a shared object.
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-    let gas_object_ref = gas_object.to_object_reference();
+    let gas_object_ref = gas_object.compute_object_reference();
 
     let shared_object_id = ObjectID::random();
     let shared_object = {

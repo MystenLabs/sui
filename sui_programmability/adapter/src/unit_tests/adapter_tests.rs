@@ -1012,9 +1012,6 @@ fn test_simple_call() {
         gas_object.clone(),
         GAS_BUDGET,
     );
-    // TODO: to be honest I am not sure why this flush is needed but
-    // without it, the following assertion below fails:
-    // assert!(obj.owner.is_address(&addr));
     storage.flush();
 
     // call published module function
@@ -1167,4 +1164,161 @@ fn test_publish_init_param() {
 
     // only a package object should have been crated
     assert_eq!(storage.created().len(), 1);
+}
+
+#[test]
+/// Tests calls to entry functions returning values.
+fn test_call_ret() {
+    let native_functions =
+        sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+    let genesis_objects = genesis::clone_genesis_packages();
+    let mut storage = InMemoryStorage::new(genesis_objects);
+
+    // crate gas object for payment
+    let gas_object =
+        Object::with_id_owner_for_testing(ObjectID::random(), base_types::SuiAddress::default());
+
+    // publish modules at a given path
+    publish_from_src(
+        &mut storage,
+        &native_functions,
+        "src/unit_tests/data/call_ret",
+        gas_object.clone(),
+        GAS_BUDGET,
+    );
+    storage.flush();
+
+    // call published module function returning a u64 (42)
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_u64",
+        gas_object.clone(),
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_64 = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::U64(val) = results.get(0).unwrap() {
+            if val == &42 {
+                success_64 = true;
+            }
+        }
+    }
+
+    // call published module function returning an address (0x42)
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_addr",
+        gas_object.clone(),
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_addr = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::Address(val) = results.get(0).unwrap() {
+            if val.to_hex_literal() == "0x42" {
+                success_addr = true;
+            }
+        }
+    }
+
+    // call published module function returning two values: a u64 (42)
+    // and an address (0x42)
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_tuple",
+        gas_object.clone(),
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_tuple = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::U64(val1) = results.get(0).unwrap() {
+            if let CallResult::Address(val2) = results.get(1).unwrap() {
+                if val1 == &42 && val2.to_hex_literal() == "0x42" {
+                    success_tuple = true;
+                }
+            }
+        }
+    }
+
+    // call published module function returning a vector
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_vec",
+        gas_object.clone(),
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_vec = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::U64Vec(val) = results.get(0).unwrap() {
+            if val.len() == 2 && val.get(0).unwrap() == &42 && val.get(1).unwrap() == &7 {
+                success_vec = true;
+            }
+        }
+    }
+
+    // call published module function returning a vector of vectors
+    let response = call(
+        &mut storage,
+        &native_functions,
+        "M1",
+        "get_vec_vec",
+        gas_object,
+        GAS_BUDGET,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    );
+    let mut success_vec_vec = false;
+    if let ExecutionStatus::Success {
+        gas_used: _,
+        results,
+    } = response.unwrap()
+    {
+        if let CallResult::U64VecVec(val) = results.get(0).unwrap() {
+            if val.len() == 1
+                && val.get(0).unwrap().len() == 2
+                && val.get(0).unwrap().get(0).unwrap() == &42
+                && val.get(0).unwrap().get(1).unwrap() == &7
+            {
+                success_vec_vec = true;
+            }
+        }
+    }
+
+    assert!(success_64 && success_addr && success_tuple && success_vec && success_vec_vec);
 }

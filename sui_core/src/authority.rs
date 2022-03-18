@@ -110,7 +110,7 @@ impl AuthorityState {
         self.batch_channels
             .as_ref()
             .map(|(_, tx)| tx.subscribe())
-            .ok_or(SuiError::GenericAuthorityError {
+            .ok_or_else(|| SuiError::GenericAuthorityError {
                 error: "No broadcast subscriptions allowed for this authority.".to_string(),
             })
     }
@@ -157,12 +157,6 @@ impl AuthorityState {
                     }
                 );
 
-                // If the object is the gas object, check that it is an owned object
-                // and there is enough gas.
-                if object_kind.object_id() == transaction.gas_payment_object_ref().0 {
-                    gas::check_gas_requirement(transaction, object)?;
-                }
-
                 // If the object is the transfer object, check that it is not shared object.
                 if let TransactionKind::Transfer(t) = &transaction.data.kind {
                     if object_kind.object_id() == t.object_ref.0 {
@@ -202,6 +196,25 @@ impl AuthorityState {
             }
         };
         Ok(())
+    }
+
+    fn check_gas_requirement(
+        transaction: &Transaction,
+        input_objects: &[(InputObjectKind, Object)],
+    ) -> SuiResult {
+        // The last object in the input objects is always the gas object by construction.
+        let gas_object = &input_objects[input_objects.len() - 1].1;
+        match &transaction.data.kind {
+            TransactionKind::Transfer(_) => {
+                // The first object in the input objects is always the transfer object by construction.
+                let transfer_object = &input_objects[0].1;
+                gas::check_transfer_gas_requirement(gas_object, transfer_object)
+            }
+            TransactionKind::Call(op) => gas::check_move_gas_requirement(gas_object, op.gas_budget),
+            TransactionKind::Publish(op) => {
+                gas::check_move_gas_requirement(gas_object, op.gas_budget)
+            }
+        }
     }
 
     /// Check all the objects used in the transaction against the database, and ensure
@@ -258,6 +271,8 @@ impl AuthorityState {
 
         fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
 
+        Self::check_gas_requirement(transaction, &all_objects)?;
+
         Ok(all_objects)
     }
 
@@ -289,6 +304,15 @@ impl AuthorityState {
         // Check the sender's signature.
         transaction.check_signature()?;
         let transaction_digest = transaction.digest();
+
+        // Ensure an idempotent answer.
+        if self
+            ._database
+            .signed_transaction_exists(&transaction_digest)?
+        {
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+            return Ok(transaction_info);
+        }
 
         let owned_objects: Vec<_> = self
             .check_locks(&transaction)
@@ -332,25 +356,25 @@ impl AuthorityState {
         &self,
         confirmation_transaction: ConfirmationTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
-        let certificate = &confirmation_transaction.certificate;
-        let transaction = &certificate.transaction;
-        let transaction_digest = transaction.digest();
+        let transaction_digest = *confirmation_transaction.certificate.digest();
 
         // Ensure an idempotent answer.
-        let transaction_info = self.make_transaction_info(&transaction_digest).await?;
-        if transaction_info.signed_effects.is_some() {
+        if self._database.signed_effects_exists(&transaction_digest)? {
+            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
             return Ok(transaction_info);
         }
 
         // Check the certificate and retrieve the transfer data.
-        certificate.check(&self.committee)?;
+        confirmation_transaction
+            .certificate
+            .check(&self.committee)?;
 
         self.process_certificate(confirmation_transaction).await
     }
 
     async fn check_shared_locks(
         &self,
-        transaction_digest: TransactionDigest,
+        transaction_digest: &TransactionDigest,
         transaction: &Transaction,
         inputs: &[(InputObjectKind, Object)],
     ) -> Result<(), SuiError> {
@@ -419,15 +443,15 @@ impl AuthorityState {
         confirmation_transaction: ConfirmationTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let certificate = confirmation_transaction.certificate;
-        let transaction = certificate.transaction.clone();
-        let transaction_digest = transaction.digest();
+        let transaction_digest = *certificate.digest();
+        let transaction = &certificate.transaction;
 
-        let objects_by_kind: Vec<_> = self.check_locks(&transaction).await?;
+        let objects_by_kind: Vec<_> = self.check_locks(transaction).await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
         let _shared_objects = self
-            .check_shared_locks(transaction_digest, &transaction, &objects_by_kind)
+            .check_shared_locks(&transaction_digest, transaction, &objects_by_kind)
             .await?;
         // inputs.extend(shared_objects);
 
@@ -447,14 +471,14 @@ impl AuthorityState {
             .collect();
 
         // Insert into the certificates map
-        let mut tx_ctx = TxContext::new(&transaction.sender_address(), transaction_digest);
+        let mut tx_ctx = TxContext::new(&transaction.sender_address(), &transaction_digest);
 
         let gas_object_id = transaction.gas_payment_object_ref().0;
         let mut temporary_store =
             AuthorityTemporaryStore::new(self._database.clone(), &inputs, tx_ctx.digest());
         let status = execution_engine::execute_transaction(
             &mut temporary_store,
-            transaction,
+            transaction.clone(),
             inputs,
             &mut tx_ctx,
             &self.move_vm,
@@ -497,22 +521,21 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         last_consensus_index: SequenceNumber,
     ) -> SuiResult<()> {
-        let transaction = &certificate.transaction;
-
         // Ensure it is a shared object certificate
-        if !transaction.contains_shared_object() {
+        if !certificate.transaction.contains_shared_object() {
             log::debug!(
                 "Transaction without shared object has been sequenced: {:?}",
-                transaction
+                certificate.transaction
             );
             return Ok(());
         }
 
         // Ensure it is the first time we see this certificate.
-        let transaction_digest = transaction.digest();
-        if self
-            ._database
-            .sequenced(transaction_digest, transaction.shared_input_objects())?[0]
+        let transaction_digest = *certificate.digest();
+        if self._database.sequenced(
+            &transaction_digest,
+            certificate.transaction.shared_input_objects(),
+        )?[0]
             .is_some()
         {
             return Ok(());
@@ -529,8 +552,7 @@ impl AuthorityState {
         // thus ok to only persist now (despite this function may have returned earlier).
         // In the worst case, the synchronizer of the consensus client will catch up.
         self._database.persist_certificate_and_lock_shared_objects(
-            transaction_digest,
-            transaction,
+            &transaction_digest,
             certificate.clone(),
             last_consensus_index,
         )
@@ -598,7 +620,7 @@ impl AuthorityState {
                             // Read only objects have no locks.
                             None
                         } else {
-                            self.get_transaction_lock(&object.to_object_reference())
+                            self.get_transaction_lock(&object.compute_object_reference())
                                 .await?
                         };
                         let layout = match request_layout {
@@ -697,18 +719,7 @@ impl AuthorityState {
         genesis_packages: Vec<Vec<CompiledModule>>,
         genesis_ctx: &mut TxContext,
     ) -> Self {
-        let native_functions =
-            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
-        let state = AuthorityState {
-            committee,
-            name,
-            secret,
-            _native_functions: native_functions.clone(),
-            move_vm: adapter::new_move_vm(native_functions)
-                .expect("We defined natives to not fail here"),
-            _database: store,
-            batch_channels: None,
-        };
+        let state = AuthorityState::new_without_genesis(committee, name, secret, store).await;
 
         for genesis_modules in genesis_packages {
             state
@@ -717,6 +728,27 @@ impl AuthorityState {
                 .expect("We expect publishing the Genesis packages to not fail");
         }
         state
+    }
+
+    pub async fn new_without_genesis(
+        committee: Committee,
+        name: AuthorityName,
+        secret: StableSyncAuthoritySigner,
+        store: Arc<AuthorityStore>,
+    ) -> Self {
+        let native_functions =
+            sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
+
+        AuthorityState {
+            committee,
+            name,
+            secret,
+            _native_functions: native_functions.clone(),
+            move_vm: adapter::new_move_vm(native_functions)
+                .expect("We defined natives to not fail here"),
+            _database: store,
+            batch_channels: None,
+        }
     }
 
     pub(crate) fn db(&self) -> Arc<AuthorityStore> {
@@ -789,13 +821,6 @@ impl AuthorityState {
     }
 
     // Helper function to manage transaction_locks
-
-    /// Initialize a transaction lock for an object/sequence to None
-    pub async fn init_transaction_lock(&self, object_ref: ObjectRef) {
-        self._database
-            .init_transaction_lock(object_ref)
-            .expect("TODO: propagate the error")
-    }
 
     /// Set the transaction lock to a specific transaction
     pub async fn set_transaction_lock(

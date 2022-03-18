@@ -32,7 +32,7 @@ use std::{
     pin::Pin,
 };
 
-use self::gateway_responses::{MergeCoinResponse, SplitCoinResponse};
+use self::gateway_responses::*;
 
 /// A trait for supplying transaction signature asynchronously.
 ///
@@ -191,7 +191,7 @@ pub trait GatewayAPI {
         gas_object_ref: ObjectRef,
         gas_budget: u64,
         tx_signer: StableSyncTransactionSigner,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error>;
+    ) -> Result<PublishResponse, anyhow::Error>;
 
     /// Split the coin object (identified by `coin_object_ref`) into
     /// multiple new coins. The amount of each new coin is specified in
@@ -309,7 +309,7 @@ impl AccountState {
     pub fn insert_object(&self, object: Object) -> SuiResult {
         self.store
             .objects
-            .insert(&object.to_object_reference(), &object)?;
+            .insert(&object.compute_object_reference(), &object)?;
         Ok(())
     }
 
@@ -319,7 +319,7 @@ impl AccountState {
         option_layout: Option<MoveStructLayout>,
         option_cert: Option<CertifiedTransaction>,
     ) -> SuiResult {
-        let object_ref = object.to_object_reference();
+        let object_ref = object.compute_object_reference();
         let (object_id, _seqnum, _) = object_ref;
 
         self.store.object_refs.insert(&object_id, &object_ref)?;
@@ -616,7 +616,7 @@ where
         while let Some(resp) = receiver.recv().await {
             // Persists them to disk
             if let Ok(o) = resp {
-                err_object_refs.remove(&o.to_object_reference());
+                err_object_refs.remove(&o.compute_object_reference());
                 account.insert_object(o)?;
             }
         }
@@ -731,12 +731,56 @@ where
         gas_object_ref: ObjectRef,
         gas_budget: u64,
         tx_signer: StableSyncTransactionSigner,
-    ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
+    ) -> Result<PublishResponse, anyhow::Error> {
         let data = TransactionData::new_module(signer, gas_object_ref, package_bytes, gas_budget);
         let signature = tx_signer.sign(&signer, data.clone()).await?;
 
-        self.execute_transaction(Transaction::new(data, signature))
-            .await
+        let (certificate, effects) = self
+            .execute_transaction(Transaction::new(data, signature))
+            .await?;
+        if let ExecutionStatus::Failure { gas_used: _, error } = effects.status {
+            return Err(error.into());
+        }
+        fp_ensure!(
+            effects.mutated.len() == 1,
+            SuiError::InconsistentGatewayResult {
+                error: format!(
+                    "Expecting only one object mutated (the gas), seeing {} mutated",
+                    effects.mutated.len()
+                ),
+            }
+            .into()
+        );
+        let updated_gas = self
+            .get_object_info(gas_object_ref.0)
+            .await?
+            .into_object()?;
+        let mut package = None;
+        let mut created_objects = vec![];
+        for (obj_ref, _) in effects.created {
+            let object = self.get_object_info(obj_ref.0).await?.into_object()?;
+            if object.is_package() {
+                fp_ensure!(
+                    package.is_none(),
+                    SuiError::InconsistentGatewayResult {
+                        error: "More than one package created".to_owned(),
+                    }
+                    .into()
+                );
+                package = Some(obj_ref);
+            } else {
+                created_objects.push(object);
+            }
+        }
+        let package = package.ok_or(SuiError::InconsistentGatewayResult {
+            error: "No package created".to_owned(),
+        })?;
+        Ok(PublishResponse {
+            certificate,
+            package,
+            created_objects,
+            updated_gas,
+        })
     }
 
     async fn split_coin(
@@ -783,7 +827,10 @@ where
             effects.mutated.len() == 2     // coin and gas
                && created.len() == split_amounts.len()
                && created.iter().all(|(_, owner)| owner == &signer),
-            SuiError::IncorrectGasSplit.into()
+            SuiError::InconsistentGatewayResult {
+                error: "Unexpected split outcome".to_owned()
+            }
+            .into()
         );
         let updated_coin = self
             .get_object_info(coin_object_ref.0)
@@ -843,7 +890,10 @@ where
         }
         fp_ensure!(
             effects.mutated.len() == 2, // coin and gas
-            SuiError::IncorrectGasMerge.into()
+            SuiError::InconsistentGatewayResult {
+                error: "Unexpected split outcome".to_owned()
+            }
+            .into()
         );
         let updated_coin = self.get_object_info(primary_coin.0).await?.into_object()?;
         let updated_gas = self.get_object_info(gas_payment.0).await?.into_object()?;
