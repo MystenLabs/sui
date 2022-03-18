@@ -9,7 +9,7 @@ module DeFi::SharedAuctionTests {
     use Sui::TxContext::{Self, TxContext};
 
     use DeFi::SharedAuction;
-    use DeFi::AuctionUtils::Auction;
+    use DeFi::AuctionLib::Auction;
 
 
     const COIN_VALUE: u64 = 100;

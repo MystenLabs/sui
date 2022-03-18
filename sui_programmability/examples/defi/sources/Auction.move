@@ -37,7 +37,7 @@ module DeFi::Auction {
     use Sui::Transfer;
     use Sui::TxContext::{Self,TxContext};
 
-    use DeFi::AuctionUtils::{Self, Auction};
+    use DeFi::AuctionLib::{Self, Auction};
 
 
     // Error codes.
@@ -64,7 +64,7 @@ module DeFi::Auction {
     /// moment. This is executed by the owner of the asset to be
     /// auctioned.
     public fun create_auction<T: key + store>(to_sell: T, id: VersionedID, auctioneer: address, ctx: &mut TxContext) {
-        let auction = AuctionUtils::create_auction(id, to_sell, ctx);
+        let auction = AuctionLib::create_auction(id, to_sell, ctx);
         Transfer::transfer(auction, auctioneer);
     }
 
@@ -86,14 +86,14 @@ module DeFi::Auction {
     public fun update_auction<T: key + store>(auction: &mut Auction<T>, bid: Bid, _ctx: &mut TxContext) {
         let Bid { id, bidder, auction_id, coin } = bid;
         ID::delete(id);
-        assert!(AuctionUtils::auction_id(auction) == &auction_id, EWRONG_AUCTION);
-        AuctionUtils::update_auction(auction, bidder, coin);
+        assert!(AuctionLib::auction_id(auction) == &auction_id, EWRONG_AUCTION);
+        AuctionLib::update_auction(auction, bidder, coin);
     }
 
     /// Ends the auction - transfers item to the currently highest
     /// bidder or to the original owner if no bids have been
     /// placed. This is executed by the auctioneer.
     public fun end_auction<T: key + store>(auction: Auction<T>, _ctx: &mut TxContext) {
-        AuctionUtils::end_and_destroy_auction(auction);
+        AuctionLib::end_and_destroy_auction(auction);
     }
 }

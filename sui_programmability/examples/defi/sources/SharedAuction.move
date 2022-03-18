@@ -28,7 +28,7 @@ module DeFi::SharedAuction {
     use Sui::Transfer;
     use Sui::TxContext::{Self,TxContext};
 
-    use DeFi::AuctionUtils::{Self, Auction};
+    use DeFi::AuctionLib::{Self, Auction};
 
     // Error codes.
 
@@ -40,7 +40,7 @@ module DeFi::SharedAuction {
     /// Creates an auction. This is executed by the owner of the asset
     /// to be auctioned.
     public fun create_auction<T: key + store >(to_sell: T, ctx: &mut TxContext) {
-        let auction = AuctionUtils::create_auction(TxContext::new_id(ctx), to_sell, ctx);
+        let auction = AuctionLib::create_auction(TxContext::new_id(ctx), to_sell, ctx);
         Transfer::share_object(auction);
     }
 
@@ -50,7 +50,7 @@ module DeFi::SharedAuction {
     /// bidder.
     public fun bid<T: key + store>(coin: Coin<GAS>, auction: &mut Auction<T>, ctx: &mut TxContext) {
         let bidder = TxContext::sender(ctx);
-        AuctionUtils::update_auction(auction, bidder, coin);
+        AuctionLib::update_auction(auction, bidder, coin);
     }
 
     /// Ends the auction - transfers item to the currently highest
@@ -58,9 +58,9 @@ module DeFi::SharedAuction {
     /// placed. This is executed by the owner of the asset to be
     /// auctioned.
     public fun end_auction<T: key + store>(auction: &mut Auction<T>, ctx: &mut TxContext) {
-        let owner = AuctionUtils::auction_owner(auction);
+        let owner = AuctionLib::auction_owner(auction);
         assert!(TxContext::sender(ctx) == owner, EWRONG_OWNER);
-        AuctionUtils::end_shared_auction(auction);
+        AuctionLib::end_shared_auction(auction);
     }
 
 }

@@ -9,7 +9,7 @@ module DeFi::AuctionTests {
     use Sui::TxContext::{Self, TxContext};
 
     use DeFi::Auction::{Self, Bid};
-    use DeFi::AuctionUtils::Auction;
+    use DeFi::AuctionLib::Auction;
 
     // Error codes.
     const EWRONG_ITEM_VALUE: u64 = 1;
