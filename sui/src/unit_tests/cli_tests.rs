@@ -9,8 +9,6 @@ use std::time::Duration;
 
 use move_core_types::identifier::Identifier;
 use serde_json::{json, Value};
-use tokio::task;
-use tokio::task::JoinHandle;
 use tracing_test::traced_test;
 
 use sui::config::{
@@ -19,9 +17,9 @@ use sui::config::{
 };
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
 use sui::keystore::KeystoreType;
+use sui::sui_commands::{genesis, SuiNetwork};
 use sui::sui_json::SuiJsonValue;
 use sui::wallet_commands::{WalletCommandResult, WalletCommands, WalletContext};
-use sui_network::network::PortAllocator;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::get_key_pair;
 use sui_types::messages::TransactionEffects;
@@ -155,12 +153,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
 
-    let network = start_network(working_dir.path(), 10800, None).await?;
-    // Wait for authorities to come alive.
-    retry_assert!(
-        logs_contain("Listening to TCP traffic on 127.0.0.1"),
-        Duration::from_millis(5000)
-    );
+    let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context with the oracle account
     let wallet_conf_path = working_dir.path().join("wallet.conf");
@@ -206,7 +199,7 @@ async fn test_cross_chain_airdrop() -> Result<(), anyhow::Error> {
     // TODO: verify the other string fields once SuiJSON has better support for rendering
     // string fields
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -276,12 +269,7 @@ async fn get_gas_object(
 async fn test_objects_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
 
-    let network = start_network(working_dir.path(), 10100, None).await?;
-    // Wait for authorities to come alive.
-    retry_assert!(
-        logs_contain("Listening to TCP traffic on 127.0.0.1"),
-        Duration::from_millis(5000)
-    );
+    let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
     let mut context = WalletContext::new(&working_dir.path().join("wallet.conf"))?;
@@ -306,7 +294,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
         assert!(logs_contain(format!("{}", object_id).as_str()))
     }
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -327,16 +315,9 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         }],
     });
 
-    let network = start_network(working_dir.path(), 10200, Some(config)).await?;
-
-    // Wait for authorities to come alive.
-    retry_assert!(
-        logs_contain("Listening to TCP traffic on 127.0.0.1"),
-        Duration::from_millis(5000)
-    );
+    let network = start_test_network(working_dir.path(), Some(config)).await?;
 
     // Wallet config
-
     let mut context = WalletContext::new(&working_dir.path().join("wallet.conf"))?;
     assert_eq!(1, context.config.accounts.len());
     let address = context.config.accounts.first().cloned().unwrap();
@@ -359,7 +340,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
         Duration::from_millis(5000)
     );
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -370,25 +351,17 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     let working_dir = temp_dir.path();
     // Create and save genesis config file
     // Create 4 authorities and 1 account
-    let genesis_path = working_dir.join("genesis.conf");
     let num_authorities = 4;
-    let config = GenesisConfig::custom_genesis(working_dir, num_authorities, 1, 1)?;
-    let mut config = config.persisted(&genesis_path);
+    let mut config = GenesisConfig::custom_genesis(working_dir, num_authorities, 1, 1)?;
     config
         .move_packages
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_1"));
     config
         .move_packages
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_2"));
-    config.save()?;
 
-    // Genesis
-    SuiCommand::Genesis {
-        working_dir: working_dir.to_path_buf(),
-        config: Some(genesis_path),
-    }
-    .execute()
-    .await?;
+    // Start network
+    let network = start_test_network(working_dir, Some(config)).await?;
 
     assert!(logs_contain("Loading 2 Move packages"));
     // Checks network config contains package ids
@@ -400,16 +373,6 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
         assert!(logs_contain(&*format!("{}", id)));
     }
 
-    // Start network
-    let config = working_dir.join("network.conf");
-    let network = task::spawn(async move { SuiCommand::Start { config }.execute().await });
-
-    // Wait for authorities to come alive.
-    retry_assert!(
-        logs_contain("Listening to TCP traffic on 127.0.0.1"),
-        Duration::from_millis(5000)
-    );
-
     // Create Wallet context.
     let wallet_conf_path = working_dir.join("wallet.conf");
     let wallet_conf: WalletConfig = PersistedConfig::read(&wallet_conf_path)?;
@@ -419,7 +382,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     // Make sure init() is executed correctly for custom_genesis_package_2::M1
     let move_objects = get_move_objects_by_type(&mut context, address, "M1::Object").await?;
     assert_eq!(move_objects.len(), 1);
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -428,12 +391,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
 async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
 
-    let network = start_network(working_dir.path(), 10300, None).await?;
-    // Wait for authorities to come alive.
-    retry_assert!(
-        logs_contain("Listening to TCP traffic on 127.0.0.1"),
-        Duration::from_millis(5000)
-    );
+    let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join("wallet.conf");
@@ -462,7 +420,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
         Duration::from_millis(5000)
     );
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -470,13 +428,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_gas_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let network = start_network(working_dir.path(), 10400, None).await?;
-
-    // Wait for authorities to come alive.
-    retry_assert!(
-        logs_contain("Listening to TCP traffic on 127.0.0.1"),
-        Duration::from_millis(5000)
-    );
+    let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join("wallet.conf");
@@ -566,7 +518,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
         Ok(())
     });
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -648,48 +600,62 @@ async fn get_move_object(
     }
 }
 
-async fn start_network(
+async fn start_test_network(
     working_dir: &Path,
-    starting_port: u16,
-    genesis: Option<GenesisConfig>,
-) -> Result<JoinHandle<Result<(), anyhow::Error>>, anyhow::Error> {
+    genesis_config: Option<GenesisConfig>,
+) -> Result<SuiNetwork, anyhow::Error> {
     let working_dir = working_dir.to_path_buf();
-    let network_conf_path = working_dir.join("network.conf");
-    let genesis_conf_path = working_dir.join("genesis.conf");
+    let network_path = working_dir.join("network.conf");
+    let wallet_path = working_dir.join("wallet.conf");
+    let keystore_path = working_dir.join("wallet.key");
+    let db_folder_path = working_dir.join("client_db");
 
-    let mut port_allocator = PortAllocator::new(starting_port);
-    let mut genesis_config = genesis.unwrap_or(GenesisConfig::default_genesis(&working_dir)?);
+    let mut genesis_config =
+        genesis_config.unwrap_or(GenesisConfig::default_genesis(&working_dir)?);
     let authorities = genesis_config
         .authorities
         .iter()
         .map(|info| AuthorityPrivateInfo {
             key_pair: info.key_pair.copy(),
             host: info.host.clone(),
-            port: port_allocator.next_port().unwrap(),
+            port: 0,
             db_path: info.db_path.clone(),
             stake: info.stake,
         })
         .collect();
     genesis_config.authorities = authorities;
 
-    let genesis_config = genesis_config.persisted(&genesis_conf_path);
-    genesis_config.save()?;
+    let (network_config, accounts, keystore) = genesis(genesis_config).await?;
+    let network = SuiNetwork::start(&network_config).await?;
 
-    SuiCommand::Genesis {
-        working_dir,
-        config: Some(genesis_conf_path),
+    let network_config = network_config.persisted(&network_path);
+    network_config.save()?;
+    keystore.save(&keystore_path)?;
+
+    let authorities = network_config.get_authority_infos();
+    let authorities = authorities
+        .into_iter()
+        .zip(&network.spawned_authorities)
+        .map(|(mut info, server)| {
+            info.base_port = server.get_port();
+            info
+        })
+        .collect();
+
+    // Create wallet.conf with stated authorities port
+    WalletConfig {
+        accounts,
+        keystore: KeystoreType::File(keystore_path),
+        gateway: GatewayType::Embedded(EmbeddedGatewayConfig {
+            db_folder_path,
+            authorities,
+            ..Default::default()
+        }),
     }
-    .execute()
-    .await?;
+    .persisted(&wallet_path)
+    .save()?;
 
-    // Start network
-    let network = task::spawn(async move {
-        SuiCommand::Start {
-            config: network_conf_path,
-        }
-        .execute()
-        .await
-    });
+    // Return network handle
     Ok(network)
 }
 
@@ -698,13 +664,7 @@ async fn start_network(
 #[tokio::test]
 async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
-    let network = start_network(working_dir.path(), 10500, None).await?;
-
-    // Wait for authorities to come alive.
-    retry_assert!(
-        logs_contain("Listening to TCP traffic on 127.0.0.1"),
-        Duration::from_millis(5000)
-    );
+    let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join("wallet.conf");
@@ -873,7 +833,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     );
     assert!(logs_contain("Created Objects:"));
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -883,12 +843,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
 
-    let network = start_network(working_dir.path(), 10600, None).await?;
-    // Wait for authorities to come alive.
-    retry_assert!(
-        logs_contain("Listening to TCP traffic on 127.0.0.1"),
-        Duration::from_millis(5000)
-    );
+    let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join("wallet.conf");
@@ -957,7 +912,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         WalletCommandResult::Object(ObjectRead::Exists(..))
     ));
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
 
@@ -967,12 +922,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let working_dir = tempfile::tempdir()?;
 
-    let network = start_network(working_dir.path(), 10700, None).await?;
-    // Wait for authorities to come alive.
-    retry_assert!(
-        logs_contain("Listening to TCP traffic on 127.0.0.1"),
-        Duration::from_millis(5000)
-    );
+    let network = start_test_network(working_dir.path(), None).await?;
 
     // Create Wallet context.
     let wallet_conf = working_dir.path().join("wallet.conf");
@@ -1068,6 +1018,6 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     assert_eq!(gas.get_single_owner().unwrap(), address);
     assert_eq!(obj.get_single_owner().unwrap(), recipient);
 
-    network.abort();
+    network.kill().await?;
     Ok(())
 }
