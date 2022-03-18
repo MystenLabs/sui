@@ -50,7 +50,7 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "10")]
     committee_size: usize,
     /// Maximum number of requests in flight (0 for blocking client)
-    #[structopt(long, default_value = "1000")]
+    #[structopt(long, default_value = "0")]
     max_in_flight: usize,
     /// Number of accounts and transactions used in the benchmark
     #[structopt(long, default_value = "40000")]
@@ -59,7 +59,7 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "4000000")]
     send_timeout_us: u64,
     /// Timeout for receiving responses (us)
-    #[structopt(long, default_value = "4000000")]
+    #[structopt(long, default_value = "40000000")]
     recv_timeout_us: u64,
     /// Maximum size of datagrams received and sent (bytes)
     #[structopt(long, default_value = transport::DEFAULT_MAX_DATAGRAM_SIZE_STR)]
@@ -117,7 +117,7 @@ fn main() {
     thread::spawn(move || {
         let runtime = Builder::new_multi_thread()
             .enable_all()
-            .thread_stack_size(15 * 1024 * 1024)
+            .thread_stack_size(32 * 1024 * 1024)
             .build()
             .unwrap();
 
@@ -132,7 +132,8 @@ fn main() {
     // Make a single-core runtime for the client.
     let runtime = Builder::new_multi_thread()
         .enable_all()
-        .thread_stack_size(15 * 1024 * 1024)
+        .thread_stack_size(32 * 1024 * 1024)
+        .worker_threads(usize::min(num_cpus::get(), 24))
         .build()
         .unwrap();
     runtime.block_on(benchmark.launch_client(connections, transactions));
@@ -183,7 +184,7 @@ impl ClientServerBenchmark {
         // Seed user accounts.
         let rt = Runtime::new().unwrap();
 
-        println!("Init Authority.");
+        info!("Init Authority.");
         let state = rt.block_on(async {
             AuthorityState::new(
                 committee.clone(),
@@ -196,7 +197,7 @@ impl ClientServerBenchmark {
             .await
         });
 
-        println!("Generate empty store with Genesis.");
+        info!("Generate empty store with Genesis.");
         let (address, keypair) = get_key_pair();
 
         let account_gas_objects: Vec<_> = (0u64..(self.num_accounts as u64))
@@ -327,9 +328,10 @@ impl ClientServerBenchmark {
         let items_number = transactions.len() / transaction_len_factor;
         let mut elapsed_time: u128 = 0;
 
-        let max_in_flight = self.max_in_flight / connections as usize;
+        if self.max_in_flight != 0 {
+            warn!("Option max-in-flight is now ignored.")
+        }
         info!("Number of TCP connections: {}", connections);
-        info!("Max_in_flight: {}", max_in_flight);
 
         info!("Sending requests.");
         if self.max_in_flight > 0 {
@@ -343,7 +345,8 @@ impl ClientServerBenchmark {
 
             let time_start = Instant::now();
             let responses = mass_client
-                .batch_send(transactions, connections, max_in_flight as u64)
+                .batch_send(transactions, connections, 0)
+                .map(|x| x.unwrap())
                 .concat()
                 .await;
             elapsed_time = time_start.elapsed().as_micros();
@@ -351,7 +354,7 @@ impl ClientServerBenchmark {
             info!("Received {} responses.", responses.len(),);
             // Check the responses for errors
             for resp in &responses {
-                let reply_message = deserialize_message(&resp[..]);
+                let reply_message = deserialize_message(&(resp.as_ref().unwrap())[..]);
                 match reply_message {
                     Ok(SerializedMessage::TransactionResp(res)) => {
                         if let Some(e) = res.signed_effects {
