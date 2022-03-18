@@ -33,7 +33,7 @@ module Sui::Bag {
     // TODO: this is a placeholder number
     const DEFAULT_MAX_CAPACITY: u64 = 65536;
 
-    struct Bag has key {
+    struct Bag has key, store {
         id: VersionedID,
         objects: vector<ID>,
         max_capacity: u64,
