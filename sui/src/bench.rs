@@ -50,7 +50,7 @@ struct ClientServerBenchmark {
     #[structopt(long, default_value = "10")]
     committee_size: usize,
     /// Maximum number of requests in flight (0 for blocking client)
-    #[structopt(long, default_value = "1000")]
+    #[structopt(long, default_value = "0")]
     max_in_flight: usize,
     /// Number of accounts and transactions used in the benchmark
     #[structopt(long, default_value = "40000")]
@@ -184,7 +184,7 @@ impl ClientServerBenchmark {
         // Seed user accounts.
         let rt = Runtime::new().unwrap();
 
-        println!("Init Authority.");
+        info!("Init Authority.");
         let state = rt.block_on(async {
             AuthorityState::new(
                 committee.clone(),
@@ -197,7 +197,7 @@ impl ClientServerBenchmark {
             .await
         });
 
-        println!("Generate empty store with Genesis.");
+        info!("Generate empty store with Genesis.");
         let (address, keypair) = get_key_pair();
 
         let account_gas_objects: Vec<_> = (0u64..(self.num_accounts as u64))
@@ -328,10 +328,12 @@ impl ClientServerBenchmark {
         let items_number = transactions.len() / transaction_len_factor;
         let mut elapsed_time: u128 = 0;
 
-        let max_in_flight = self.max_in_flight / connections as usize;
+        if self.max_in_flight != 0 {
+            warn!("Option max-in-flight is now ignored.")
+        }
         info!("Number of TCP connections: {}", connections);
-        info!("Max_in_flight: {}", max_in_flight);
 
+        
         info!("Sending requests.");
         if self.max_in_flight > 0 {
             let mass_client = NetworkClient::new(
@@ -344,7 +346,7 @@ impl ClientServerBenchmark {
 
             let time_start = Instant::now();
             let responses = mass_client
-                .batch_send(transactions, connections, max_in_flight as u64)
+                .batch_send(transactions, connections, 0)
                 .map(|x| x.unwrap())
                 .concat()
                 .await;
