@@ -17,6 +17,7 @@ use move_core_types::{
     value::MoveStructLayout,
 };
 use name_variant::NamedVariant;
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use static_assertions::const_assert_eq;
 use std::fmt::Write;
@@ -26,7 +27,6 @@ use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
 };
-use once_cell::sync::OnceCell;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct Transfer {
