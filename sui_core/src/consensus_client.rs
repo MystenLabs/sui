@@ -48,7 +48,7 @@ impl ConsensusClient {
     /// Synchronize with the consensus in case we missed part of its output sequence.
     /// It is safety-critical that we process the consensus outputs in the right order.
     async fn synchronize(&mut self) -> SuiResult<()> {
-        // TODO: [liveness-critical] Implement the synchronizer.
+        // TODO [issue #932]: [liveness-critical] Implement the synchronizer.
         return Ok(());
     }
 
@@ -124,7 +124,7 @@ impl ConsensusClient {
 
     /// Main loop connecting to the consensus. This mainly acts as a light client.
     async fn run(&mut self, address: SocketAddr, buffer_size: usize) {
-        // TODO: Do not try to reconnect immediately after the connection fails, use some
+        // TODO [issue #931]: Do not try to reconnect immediately after the connection fails, use some
         // sort of back off. We may also move this logic to `sui-network::transport` to
         // expose a 'stream client' or something like that.
         'main: loop {
@@ -161,8 +161,7 @@ impl ConsensusClient {
                         // shared objects that are different from other authorities. It
                         // is however safe to ask for that certificate again and re-process
                         // it (the core is idempotent).
-                        self.last_consensus_index =
-                            self.last_consensus_index.decrement().unwrap();
+                        self.last_consensus_index = self.last_consensus_index.decrement().unwrap();
                     }
                     // Log the errors that are the client's fault (not ours). This is
                     // only for debug purposes: all correct authorities will do the same.

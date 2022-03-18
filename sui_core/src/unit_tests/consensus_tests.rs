@@ -3,11 +3,13 @@ use crate::authority::authority_tests::get_genesis_package_by_module;
 use crate::authority::authority_tests::init_state_with_objects;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use std::time::Duration;
 use sui_adapter::genesis;
 use sui_network::transport;
 use sui_types::base_types::{ObjectID, TransactionDigest};
-use sui_types::crypto::{get_key_pair, Signature};
+use sui_types::crypto::{get_key_pair_from_rng, Signature};
 use sui_types::messages::{SignatureAggregator, Transaction, TransactionData};
 use sui_types::object::{Data, Object, Owner};
 use sui_types::serialize::serialize_cert;
@@ -18,7 +20,8 @@ const NETWORK_BUFFER_SIZE: usize = 65_000;
 
 #[tokio::test]
 async fn handle_consensus_output() {
-    let (sender, keypair) = get_key_pair();
+    let mut rng = StdRng::from_seed([0; 32]);
+    let (sender, keypair) = get_key_pair_from_rng(&mut rng);
 
     // Initialize an authority with a (owned) gas object and a shared object.
     let gas_object_id = ObjectID::random();
@@ -83,7 +86,7 @@ async fn handle_consensus_output() {
     let serialized_certificate = serialize_cert(&certificate);
 
     // Spawn a sequencer.
-    // TODO: Use a port allocator to avoid port conflicts.
+    // TODO [issue #932]: Use a port allocator to avoid port conflicts.
     let consensus_input_address = "127.0.0.1:1309".parse().unwrap();
     let consensus_subscriber_address = "127.0.0.1:1310".parse().unwrap();
     let sequencer = Sequencer {
@@ -112,8 +115,11 @@ async fn handle_consensus_output() {
         .await
         .unwrap();
 
-    // Wait for the certificate to be processed and ensure the last consensus index 
+    // Wait for the certificate to be processed and ensure the last consensus index
     // has been updated.
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    assert_eq!(state.db().last_consensus_index().unwrap(), SequenceNumber::from(1));
+    assert_eq!(
+        state.db().last_consensus_index().unwrap(),
+        SequenceNumber::from(1)
+    );
 }

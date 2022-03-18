@@ -138,7 +138,7 @@ pub fn get_key_pair() -> (SuiAddress, KeyPair) {
     get_key_pair_from_rng(&mut OsRng)
 }
 
-/// Generate a keypair from the specified RNG (useful for testing).
+/// Generate a keypair from the specified RNG (useful for testing with seedable rngs).
 pub fn get_key_pair_from_rng<R>(csprng: &mut R) -> (SuiAddress, KeyPair)
 where
     R: rand::CryptoRng + rand::RngCore,
