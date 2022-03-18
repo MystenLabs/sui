@@ -23,6 +23,10 @@
         "fileName": "learn/about-sui"
       },
       {
+        "label": "Sui Glossary",
+        "fileName": "learn/sui-glossary"
+      },
+      {
         "label": "Why Move?",
         "fileName": "learn/why-move"
       },
