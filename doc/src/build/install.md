@@ -7,11 +7,11 @@ dependencies.  As a prerequisite, you will need to [install
 Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 version 1.59.0 or higher in order to build and install Sui on your machine.
 
-If you'd like to install only Sui binaries (`sui`, `wallet`, and
-`sui-move`), use the following command:
+If you'd like to install only Sui binaries (`sui`, `wallet`,
+`sui-move`, and `rest_server`), use the following command:
 
 ```shell
-cargo install --git https://git@github.com/MystenLabs/sui.git
+cargo install --git https://github.com/MystenLabs/sui.git
 ```
 
 Alternatively, clone the [Sui
@@ -23,5 +23,5 @@ git clone https://github.com/MystenLabs/sui.git
 cargo install --path sui/sui
 ```
 
-In both cases, this will install `sui`, `wallet`, and `sui-move`
+In both cases, this will install `sui`, `wallet`, `sui-move`, and `rest_server`
 binaries in a `~/.cargo/bin` directory that can be executed directly.
