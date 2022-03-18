@@ -8,7 +8,9 @@ use http::{Method, StatusCode};
 
 use crate::{create_api, ServerContext};
 
-#[tokio::test]
+// TODO: Dropshot hardcodes header checks in their test_utils. Disabling test until
+// this issue is resolved. https://github.com/oxidecomputer/dropshot/issues/299
+#[allow(dead_code)]
 async fn test_concurrency() -> Result<(), anyhow::Error> {
     let api = create_api();
 
