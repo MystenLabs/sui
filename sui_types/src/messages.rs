@@ -21,10 +21,10 @@ use move_core_types::{
 use name_variant::NamedVariant;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use static_assertions::const_assert_eq;
+// use static_assertions::const_assert_eq;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
-use std::mem::size_of;
+//use std::mem::size_of;
 use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
@@ -148,13 +148,19 @@ impl TransactionData {
 // TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
 pub struct Transaction {
+    // Deserialization sets this to "false"
+    #[serde(skip)]
+    pub is_checked: bool,
+
     pub data: TransactionData,
     pub signature: Signature,
 }
+/*
 const_assert_eq!(
     size_of::<TransactionData>() + size_of::<Signature>(),
     size_of::<Transaction>()
 );
+*/
 
 /// An transaction signed by a single authority
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
@@ -177,6 +183,9 @@ pub struct CertifiedTransaction {
     // DO NOT serialize or deserialize from the network or disk.
     #[serde(skip)]
     transaction_digest: OnceCell<TransactionDigest>,
+    // Deserialization sets this to "false"
+    #[serde(skip)]
+    pub is_checked: bool,
 
     pub transaction: Transaction,
     pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
@@ -582,10 +591,18 @@ impl Transaction {
     }
 
     pub fn new(data: TransactionData, signature: Signature) -> Self {
-        Transaction { data, signature }
+        Transaction { is_checked: false, data, signature }
     }
 
     pub fn check_signature(&self) -> Result<(), SuiError> {
+        // We use this flag to see if someone has checked this before
+        // and therefore we can skip the check. Note that the flag has
+        // to be set to true manually, and is not set by calling this
+        // "check" function.
+        if self.is_checked {
+            return Ok(())
+        }
+        
         self.signature.check(&self.data, self.data.sender)
     }
 
@@ -795,6 +812,7 @@ impl CertifiedTransaction {
     pub fn new(transaction: Transaction) -> CertifiedTransaction {
         CertifiedTransaction {
             transaction_digest: OnceCell::new(),
+            is_checked: false,
             transaction,
             signatures: Vec::new(),
         }
@@ -806,6 +824,7 @@ impl CertifiedTransaction {
     ) -> CertifiedTransaction {
         CertifiedTransaction {
             transaction_digest: OnceCell::new(),
+            is_checked: false,
             transaction,
             signatures,
         }
@@ -819,6 +838,15 @@ impl CertifiedTransaction {
 
     /// Verify the certificate.
     pub fn check(&self, committee: &Committee) -> Result<(), SuiError> {
+
+        // We use this flag to see if someone has checked this before
+        // and therefore we can skip the check. Note that the flag has
+        // to be set to true manually, and is not set by calling this
+        // "check" function.
+        if self.is_checked {
+            return Ok(())
+        }
+
         // Check the quorum.
         let mut weight = 0;
         let mut used_authorities = HashSet::new();

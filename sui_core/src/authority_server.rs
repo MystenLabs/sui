@@ -19,7 +19,7 @@ use std::time::Duration;
 use tracing::*;
 
 use async_trait::async_trait;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use tokio::sync::broadcast::error::RecvError;
 
 #[cfg(test)]
@@ -276,26 +276,29 @@ where
         {
             /*
                 We structure this as a function to catch any errors using the ? operator.
+
                 This block for each Transaction and Certificate updates a verification
                 obligation structure, and returns an error either if the collection in the
                 obligation went wrong or the verification of the signatures went wrong.
             */
 
             let one_chunk: Result<_, SuiError> = (|| {
-                let one_chunk: Result<VecDeque<_>, _> = one_chunk.into_iter().collect();
+                let one_chunk: Result<Vec<_>, _> = one_chunk.into_iter().collect();
                 let one_chunk = one_chunk?;
 
-                // Now create a verification obligation, and check it for the whole chunk
+                // Now create a verification obligation
                 let mut obligation = VerificationObligation::default();
-                let load_verification: Result<Vec<()>, SuiError> = one_chunk
-                    .iter()
-                    .map(|item| {
-                        let (message, _) = item;
+                let load_verification: Result<VecDeque<(SerializedMessage, BytesMut)>, SuiError> = one_chunk
+                    .into_iter()
+                    .map(|mut item| {
+                        let (message, _message_bytes) = &mut item;
                         match message {
                             SerializedMessage::Transaction(message) => {
+                                message.is_checked = true;
                                 message.add_to_verification_obligation(&mut obligation)?;
                             }
                             SerializedMessage::Cert(message) => {
+                                message.is_checked = true;
                                 message.add_to_verification_obligation(
                                     &self.state.committee,
                                     &mut obligation,
@@ -303,11 +306,12 @@ where
                             }
                             _ => {}
                         };
-                        Ok(())
+                        Ok(item)
                     })
                     .collect();
 
-                load_verification?;
+                // Check the obligations and the verification is
+                let one_chunk = load_verification?;
                 obligation.verify_all()?;
 
                 Ok(one_chunk)
