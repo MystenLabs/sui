@@ -207,7 +207,7 @@ impl ClientServerBenchmark {
             .into_par_iter()
             .map(|x| {
                 let mut obj_id = [0; 20];
-                obj_id[..8].clone_from_slice(&(offset+x).to_be_bytes()[..8]);
+                obj_id[..8].clone_from_slice(&(offset + x).to_be_bytes()[..8]);
                 let object_id: ObjectID = ObjectID::from(obj_id);
                 let object = if self.use_move {
                     Object::with_id_owner_gas_coin_object_for_testing(
@@ -376,16 +376,16 @@ impl ClientServerBenchmark {
                 Duration::from_micros(self.recv_timeout_us),
             );
 
-            let mut transactions : VecDeque<_> = transactions.into_iter().collect();
+            let mut transactions: VecDeque<_> = transactions.into_iter().collect();
             while let Some(transaction) = transactions.pop_front() {
                 if transactions.len() % 1000 == 0 {
                     info!("Process message {}...", transactions.len());
                 }
-                
+
                 let time_start = Instant::now();
                 let resp = client.send_recv_bytes(transaction.to_vec()).await;
                 elapsed_time += time_start.elapsed().as_micros();
-                let status = resp.map(|msg| deserialize_object_info(msg));
+                let status = resp.map(deserialize_object_info);
 
                 match status {
                     Ok(info) => {
