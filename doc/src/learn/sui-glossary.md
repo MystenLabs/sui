@@ -16,7 +16,7 @@ An authority in Sui plays a passive role analogous to the more active role of va
 authorities do not continuously participate in the consensus protocol but are called into action only when receiving a transaction or
 certificate.
 
-For more information, see [Authorities vs validators/miners](how-sui-works.md#authorities-vs-validators-miners).
+For more information, see [Authorities vs validators/miners](sui-compared#authorities-vs-validatorsminers).
 
 
 ### Causal order
@@ -25,7 +25,7 @@ For more information, see [Authorities vs validators/miners](how-sui-works.md#au
 and the objects they produce, laid out as dependencies. Authorities cannot execute a transaction dependent on objects created by a prior
 transaction that has not finished. Rather than total order, Sui uses causal order (a partial order).
 
-For more information, see [Causal order vs total order](how-sui-works.md#causal-order-vs-total-order). 
+For more information, see [Causal order vs total order](sui-compared#causal-order-vs-total-order). 
 
 
 ### Certificate
@@ -108,7 +108,7 @@ Single-writer objects are owned by one account. In Sui, transactions affecting o
 
 [Total order](https://en.wikipedia.org/wiki/Total_order) refers to the ordered presentation of the history of all transactions processed by a traditional blockchain up to a given time. This is maintained by many blockchain systems, as the only way to process transactions. In contrast, Sui uses a causal (partial) order wherever possible and safe.
 
-For more information, see [Causal order vs total order](how-sui-works.md#causal-order-vs-total-order). 
+For more information, see [Causal order vs total order](sui-compared#causal-order-vs-total-order). 
 
 
 ### Transfer
