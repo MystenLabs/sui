@@ -1,16 +1,22 @@
 #[test_only]
-module DeFi::AuctionTests {
+module DeFi::SharedAuctionTests {
     use Std::Vector;
 
     use Sui::Coin::{Self, Coin};
     use Sui::GAS::GAS;
-    use Sui::ID::{Self, VersionedID};
+    use Sui::ID::VersionedID;
     use Sui::TestScenario::Self;
     use Sui::TxContext::{Self, TxContext};
 
-    use DeFi::Auction::{Self, Auction, Bid};
+    use DeFi::SharedAuction;
+    use DeFi::AuctionLib::Auction;
 
-    const WRONG_ITEM_VALUE: u64 = 1;
+
+    const COIN_VALUE: u64 = 100;
+
+    // Error codes.
+    const EWRONG_ITEM_VALUE: u64 = 1;
+    const EWRONG_COIN_VALUE: u64 = 1;
 
     // Example of an object type that could be sold at an auction.
     struct SomeItemToSell has key, store {
@@ -24,20 +30,20 @@ module DeFi::AuctionTests {
     fun init(ctx: &mut TxContext, bidders: vector<address>) {
         while (!Vector::is_empty(&bidders)) {
             let bidder = Vector::pop_back(&mut bidders);
-            let coin = Coin::mint_for_testing(100, ctx);
+            let coin = Coin::mint_for_testing(COIN_VALUE, ctx);
             Coin::transfer<GAS>(coin, bidder);
         };
     }
 
     #[test]
     public fun simple_auction_test() {
-        let auctioneer = @0xABBA;
+        let admin = @0xABBA; // needed only to initialize "state of the world"
         let owner = @0xACE;
         let bidder1 = @0xFACE;
         let bidder2 = @0xCAFE;
 
 
-        let scenario = &mut TestScenario::begin(&auctioneer);
+        let scenario = &mut TestScenario::begin(&admin);
         {
             let bidders = Vector::empty();
             Vector::push_back(&mut bidders, bidder1);
@@ -48,65 +54,59 @@ module DeFi::AuctionTests {
         // a transaction by the item owner to put it for auction
         TestScenario::next_tx(scenario, &owner);
         let ctx = TestScenario::ctx(scenario);
-        let to_sell = SomeItemToSell {
-            id: TxContext::new_id(ctx),
-            value: 42,
+        {
+            let to_sell = SomeItemToSell {
+                id: TxContext::new_id(ctx),
+                value: 42,
+            };
+            SharedAuction::create_auction(to_sell, ctx);
         };
-        // generate unique auction ID (it would be more natural to
-        // generate one in crate_auction and return it, but we cannot
-        // do this at the moment)
-        let id = TxContext::new_id(ctx);
-        // we need to dereference (copy) right here rather wherever
-        // auction_id is used - otherwise id would still be considered
-        // borrowed and could not be passed argument to a function
-        // consuming it
-        let auction_id = *ID::inner(&id);
-        Auction::create_auction(to_sell, id, auctioneer, ctx);
 
-        // a transaction by the first bidder to create an put a bid
+        // a transaction by the first bidder to put a bid
         TestScenario::next_tx(scenario, &bidder1);
         {
             let coin = TestScenario::remove_object<Coin<GAS>>(scenario);
-
-            Auction::bid(coin, auction_id, auctioneer, TestScenario::ctx(scenario));
-        };
-
-        // a transaction by the auctioneer to update state of the auction
-        TestScenario::next_tx(scenario, &auctioneer);
-        {
             let auction = TestScenario::remove_object<Auction<SomeItemToSell>>(scenario);
 
-            let bid = TestScenario::remove_object<Bid>(scenario);
-            Auction::update_auction(&mut auction, bid, TestScenario::ctx(scenario));
+            SharedAuction::bid(coin, &mut auction, TestScenario::ctx(scenario));
 
             TestScenario::return_object(scenario, auction);
         };
-        // a transaction by the second bidder to create an put a bid (a
-        // bid will fail as it has the same value as that of the first
+
+        // a transaction by the second bidder to put a bid (a bid will
+        // fail as it has the same value as that of the first
         // bidder's)
         TestScenario::next_tx(scenario, &bidder2);
         {
             let coin = TestScenario::remove_object<Coin<GAS>>(scenario);
-
-            Auction::bid(coin, auction_id, auctioneer, TestScenario::ctx(scenario));
-        };
-
-        // a transaction by the auctioneer to update state of the auction
-        TestScenario::next_tx(scenario, &auctioneer);
-        {
             let auction = TestScenario::remove_object<Auction<SomeItemToSell>>(scenario);
 
-            let bid = TestScenario::remove_object<Bid>(scenario);
-            Auction::update_auction(&mut auction, bid, TestScenario::ctx(scenario));
+            SharedAuction::bid(coin, &mut auction, TestScenario::ctx(scenario));
 
             TestScenario::return_object(scenario, auction);
         };
 
-        // a transaction by the auctioneer to end auction
-        TestScenario::next_tx(scenario, &auctioneer);
+        // a transaction by the second bidder to verify that the funds
+        // have been returned (as a result of the failed bid).
+        TestScenario::next_tx(scenario, &bidder2);
+        {
+            let coin = TestScenario::remove_object<Coin<GAS>>(scenario);
+
+            assert!(Coin::value(&coin) == COIN_VALUE, EWRONG_COIN_VALUE);
+
+            TestScenario::return_object(scenario, coin);
+        };
+
+        // a transaction by the owner to end auction
+        TestScenario::next_tx(scenario, &owner);
         {
             let auction = TestScenario::remove_object<Auction<SomeItemToSell>>(scenario);
-            Auction::end_auction(auction, TestScenario::ctx(scenario));
+
+            // pass auction as mutable reference as its a shared
+            // object that cannot be deleted
+            SharedAuction::end_auction(&mut auction, TestScenario::ctx(scenario));
+
+            TestScenario::return_object(scenario, auction);
         };
 
         // a transaction to check if the first bidder won (as the
@@ -114,7 +114,9 @@ module DeFi::AuctionTests {
         TestScenario::next_tx(scenario, &bidder1);
         {
             let acquired_item = TestScenario::remove_object<SomeItemToSell>(scenario);
-            assert!(acquired_item.value == 42, WRONG_ITEM_VALUE);
+
+            assert!(acquired_item.value == 42, EWRONG_ITEM_VALUE);
+
             TestScenario::return_object(scenario, acquired_item);
         };
     }
