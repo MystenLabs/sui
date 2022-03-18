@@ -899,7 +899,7 @@ async fn call(
     let call_params = request.into_inner();
     let transaction_response = handle_move_call(call_params, state)
         .await
-        .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))?;
+        .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
     custom_http_response(StatusCode::OK, transaction_response)
 }
 
