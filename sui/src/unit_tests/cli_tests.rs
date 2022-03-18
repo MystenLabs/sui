@@ -9,7 +9,6 @@ use std::time::Duration;
 
 use move_core_types::identifier::Identifier;
 use serde_json::{json, Value};
-use tempfile::TempDir;
 use tracing_test::traced_test;
 
 use sui::config::{
@@ -353,8 +352,7 @@ async fn test_custom_genesis_with_custom_move_package() -> Result<(), anyhow::Er
     // Create and save genesis config file
     // Create 4 authorities and 1 account
     let num_authorities = 4;
-    let config = GenesisConfig::custom_genesis(working_dir, num_authorities, 1, 1)?;
-    let mut config = config.persisted(&genesis_path);
+    let mut config = GenesisConfig::custom_genesis(working_dir, num_authorities, 1, 1)?;
     config
         .move_packages
         .push(PathBuf::from(TEST_DATA_DIR).join("custom_genesis_package_1"));
