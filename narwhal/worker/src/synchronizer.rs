@@ -187,6 +187,9 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
                     },
                     PrimaryWorkerMessage::RequestBatch(digest) => {
                         self.handle_request_batch(digest).await;
+                    },
+                    PrimaryWorkerMessage::DeleteBatches(digests) => {
+                        self.handle_delete_batches(digests).await;
                     }
                 },
 
@@ -252,6 +255,24 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
             _ => WorkerPrimaryMessage::Error(WorkerPrimaryError::RequestedBatchNotFound(
                 digest.clone(),
             )),
+        };
+
+        let serialised = bincode::serialize(&message).expect("Failed to serialise message");
+        self.tx_primary
+            .send(serialised)
+            .await
+            .expect("Failed to send message to primary channel");
+    }
+
+    async fn handle_delete_batches(&mut self, digests: Vec<Digest>) {
+        let message = match self.store.remove_all(digests.clone()).await {
+            Ok(_) => WorkerPrimaryMessage::DeletedBatches(digests),
+            Err(err) => {
+                error!("{}", err);
+                WorkerPrimaryMessage::Error(WorkerPrimaryError::ErrorWhileDeletingBatches(
+                    digests.clone(),
+                ))
+            }
         };
 
         let serialised = bincode::serialize(&message).expect("Failed to serialise message");

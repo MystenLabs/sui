@@ -108,6 +108,28 @@ pub fn batch() -> Batch {
     vec![transaction(), transaction()]
 }
 
+pub fn batch_with_transactions(num_of_transactions: usize) -> Batch {
+    let mut transactions = Vec::new();
+
+    for _ in 0..num_of_transactions {
+        transactions.push(transaction());
+    }
+
+    transactions
+}
+
+/// generate multiple fixture batches. The number of generated batches
+/// are dictated by the parameter num_of_batches.
+pub fn batches(num_of_batches: usize) -> Vec<Batch> {
+    let mut batches = Vec::new();
+
+    for i in 1..num_of_batches + 1 {
+        batches.push(batch_with_transactions(i));
+    }
+
+    batches
+}
+
 // Fixture
 pub fn serialized_batch() -> Vec<u8> {
     serialise_batch(batch())

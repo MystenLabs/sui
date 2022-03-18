@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::common::{
-    batch, batch_digest, committee_with_base_port, keys, listener, open_batch_store,
+    batch, batch_digest, batches, committee_with_base_port, keys, listener, open_batch_store,
     resolve_batch_digest, serialise_batch,
 };
 use crypto::ed25519::Ed25519PublicKey;
@@ -157,5 +157,75 @@ async fn test_request_batch_not_found() {
         }
     } else {
         panic!("Expected to successfully received a request batch");
+    }
+}
+
+#[tokio::test]
+async fn test_successful_batch_delete() {
+    let (tx_message, rx_message) = channel(1);
+    let (tx_primary, mut rx_primary) = channel(1);
+
+    let mut keys = keys();
+    let (name, _) = keys.pop().unwrap();
+    let id = 0;
+    let committee = committee_with_base_port(9_000);
+
+    // Create a new test store.
+    let store = open_batch_store();
+
+    // Spawn a `Synchronizer` instance.
+    Synchronizer::spawn(
+        name.clone(),
+        id,
+        committee.clone(),
+        store.clone(),
+        /* gc_depth */ 50, // Not used in this test.
+        /* sync_retry_delay */ 1_000_000, // Ensure it is not triggered.
+        /* sync_retry_nodes */ 3, // Not used in this test.
+        rx_message,
+        tx_primary,
+    );
+
+    // Create dummy batches and store them
+    let expected_batches = batches(10);
+    let mut batch_digests = Vec::new();
+
+    for batch in expected_batches.clone() {
+        let s = serialise_batch(batch);
+        let digest = resolve_batch_digest(s.clone());
+
+        batch_digests.push(digest.clone());
+
+        store.write(digest.clone(), s.clone()).await;
+    }
+
+    // WHEN we send a message to delete batches
+    let message = PrimaryWorkerMessage::<Ed25519PublicKey>::DeleteBatches(batch_digests.clone());
+
+    tx_message
+        .send(message)
+        .await
+        .expect("Should be able to send message");
+
+    // THEN we should receive the acknowledgement that the batches have been deleted
+    if let Ok(Some(message)) = timeout(Duration::from_secs(5), rx_primary.recv()).await {
+        match bincode::deserialize(&message).unwrap() {
+            WorkerPrimaryMessage::DeletedBatches(digests) => {
+                assert_eq!(digests, batch_digests);
+            }
+            _ => panic!("Unexpected message"),
+        }
+    } else {
+        panic!("Expected to successfully receive a deleted batches request");
+    }
+
+    // AND batches should be deleted
+    for batch in expected_batches {
+        let s = serialise_batch(batch);
+        let digest = resolve_batch_digest(s.clone());
+
+        let result = store.read(digest).await;
+        assert!(result.as_ref().is_ok());
+        assert!(result.unwrap().is_none());
     }
 }

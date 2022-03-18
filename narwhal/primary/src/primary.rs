@@ -58,6 +58,8 @@ pub enum PrimaryWorkerMessage<PublicKey> {
     Cleanup(Round),
     /// The primary requests a batch from the worker
     RequestBatch(Digest),
+    /// Delete the batches, dictated from the provided vector of digest, from the worker node
+    DeleteBatches(Vec<Digest>),
 }
 
 /// The messages sent by the workers to their primary.
@@ -69,6 +71,9 @@ pub enum WorkerPrimaryMessage {
     OthersBatch(Digest, WorkerId),
     /// The worker sends a requested batch
     RequestedBatch(Digest, Vec<Transaction>),
+    /// When batches are successfully deleted, this message is sent dictating the
+    /// batches that have been deleted from the worker.
+    DeletedBatches(Vec<Digest>),
     /// An error has been returned by worker
     Error(WorkerPrimaryError),
 }
@@ -77,6 +82,9 @@ pub enum WorkerPrimaryMessage {
 pub enum WorkerPrimaryError {
     #[error("Batch with id {0} has not been found")]
     RequestedBatchNotFound(Digest),
+
+    #[error("An error occurred while deleting batches. None deleted")]
+    ErrorWhileDeletingBatches(Vec<Digest>),
 }
 
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
@@ -329,12 +337,18 @@ impl MessageHandler for WorkerReceiverHandler {
                 }))
                 .await
                 .expect("Failed to send batch result"),
+            WorkerPrimaryMessage::DeletedBatches(_) => {
+                // TODO: send the deleted batches to the appropriate channel
+            }
             WorkerPrimaryMessage::Error(error) => match error.clone() {
                 WorkerPrimaryError::RequestedBatchNotFound(digest) => self
                     .tx_batches
                     .send(Err(BatchMessageError { id: digest }))
                     .await
                     .expect("Failed to send batch result"),
+                WorkerPrimaryError::ErrorWhileDeletingBatches(_) => {
+                    // TODO: send the error to the appropriate channel
+                }
             },
         }
         Ok(())
