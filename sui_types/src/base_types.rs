@@ -130,7 +130,7 @@ impl AsRef<[u8]> for SuiAddress {
 }
 
 // We use SHA3-256 hence 32 bytes here
-const TRANSACTION_DIGEST_LENGTH: usize = 32;
+pub const TRANSACTION_DIGEST_LENGTH: usize = 32;
 
 /// A transaction will have a (unique) digest.
 #[serde_as]

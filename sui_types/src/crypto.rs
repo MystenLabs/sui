@@ -161,7 +161,7 @@ pub fn get_key_pair_from_bytes(bytes: &[u8]) -> (SuiAddress, KeyPair) {
 }
 
 // TODO: replace this with a byte interpretation based on multicodec
-const SUI_SIGNATURE_LENGTH: usize =
+pub const SUI_SIGNATURE_LENGTH: usize =
     ed25519_dalek::PUBLIC_KEY_LENGTH + ed25519_dalek::SIGNATURE_LENGTH;
 
 #[serde_as]

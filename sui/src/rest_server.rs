@@ -7,7 +7,7 @@ use std::fs;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use dropshot::{endpoint, Query, TypedBody, CONTENT_TYPE_JSON};
 #[allow(unused_imports)]
@@ -15,8 +15,10 @@ use dropshot::{
     ApiDescription, ConfigDropshot, ConfigLogging, ConfigLoggingLevel, HttpError,
     HttpResponseUpdatedNoContent, HttpServerStarter, RequestContext,
 };
+use ed25519_dalek::ed25519::signature::Signature;
 use futures::lock::Mutex;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
+use futures::TryFutureExt;
 use http::Response;
 use hyper::{Body, StatusCode};
 use move_core_types::identifier::Identifier;
@@ -24,21 +26,24 @@ use move_core_types::parser::parse_type_tag;
 use move_core_types::value::MoveStructLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use sui_core::gateway_state::gateway_responses::PublishResponse;
 use sui_types::gas_coin::GasCoin;
 use tokio::task::{self, JoinHandle};
+use toml::Serializer;
 use tracing::{error, info};
 
 use sui::config::{GenesisConfig, NetworkConfig, PersistedConfig};
 use sui::gateway::{EmbeddedGatewayConfig, GatewayType};
-use sui::keystore::{Keystore, SuiKeystore};
 use sui::sui_commands;
 use sui::sui_json::{resolve_move_function_args, SuiJsonValue};
 use sui_core::gateway_state::GatewayClient;
 use sui_types::base_types::*;
 use sui_types::committee::Committee;
+use sui_types::crypto;
+use sui_types::crypto::SUI_SIGNATURE_LENGTH;
 use sui_types::event::Event;
+use sui_types::messages::TransactionEffects;
 use sui_types::messages::{ExecutionStatus, Transaction, TransactionEffects};
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::Object as SuiObject;
@@ -103,6 +108,7 @@ fn create_api() -> ApiDescription<ServerContext> {
     api.register(publish).unwrap();
     api.register(call).unwrap();
     api.register(sync).unwrap();
+    api.register(execute_transaction).unwrap();
 
     api
 }
@@ -122,7 +128,6 @@ pub struct ServerState {
     // TODO: Remove these fields when we fully transform rest_server into GatewayServer.
     addresses: Vec<SuiAddress>,
     config: NetworkConfig,
-    keystore: Arc<RwLock<Box<dyn Keystore>>>,
     working_dir: PathBuf,
     // Server handles that will be used to restart authorities.
     authority_handles: Vec<JoinHandle<()>>,
@@ -278,7 +283,6 @@ async fn genesis(
     let state = ServerState {
         config: network_config,
         gateway: gateway.init(),
-        keystore: Arc::new(RwLock::new(Box::new(keystore))),
         addresses: accounts,
         working_dir: working_dir.to_path_buf(),
         authority_handles: vec![],
@@ -706,7 +710,7 @@ struct TransferTransactionRequest {
     gas_budget: u64,
 }
 
-/**
+/*/**
 Response containing the summary of effects made on an object and the certificate
 associated with the transaction that verifies the transaction.
 */
@@ -719,7 +723,7 @@ struct TransactionResponse {
     object_effects_summary: serde_json::Value,
     /** JSON representation of the certificate verifying the transaction */
     certificate: serde_json::Value,
-}
+}*/
 
 /**
 Transfer object from one address to another. Gas will be paid using the gas
@@ -817,11 +821,10 @@ async fn transfer_object(
 
     custom_http_response(
         StatusCode::OK,
-        TransactionResponse {
-            gas_used,
-            object_effects_summary: json!(object_effects_summary),
-            certificate: json!(cert),
-        },
+        TransactionSignatureRequest(
+            serde_json::to_value(&sig_req)
+                .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, err.to_string()))?,
+        ),
     )
 }
 
@@ -942,6 +945,13 @@ struct SyncRequest {
     address: String,
 }
 
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct TransactionSignatureResponse {
+    tx_digest: String,
+    signature: String,
+}
+
 /**
 Synchronize client state with authorities. This will fetch the latest information
 on all objects owned by each address that is managed by this client state.
@@ -977,6 +987,44 @@ async fn sync(
             )
         })?;
     Ok(HttpResponseUpdatedNoContent())
+}
+
+/**
+Synchronize client state with authorities. This will fetch the latest information
+on all objects owned by each address that is managed by this client state.
+ */
+#[endpoint {
+method = POST,
+path = "/execute_transaction",
+tags = [ "wallet" ],
+}]
+async fn execute_transaction(
+    ctx: Arc<RequestContext<ServerContext>>,
+    response: TypedBody<TransactionSignatureResponse>,
+) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
+    let response = response.into_inner();
+    let mut state = ctx.context().server_state.lock().await;
+    let state = state.as_mut().ok_or_else(server_state_error)?;
+
+    let response: Result<_, anyhow::Error> = async {
+        let digest = decode_bytes_hex(&response.tx_digest)?;
+        let signature_byte: [u8; SUI_SIGNATURE_LENGTH] = decode_bytes_hex(&response.signature)?;
+
+        state
+            .gateway
+            .execute_transaction(
+                TransactionDigest::new(digest),
+                crypto::Signature::from_bytes(&signature_byte)?,
+            )
+            .await
+    }
+    .await;
+    let response = response
+        .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, err.to_string()))?;
+    Ok(HttpResponseOk(TransactionResponse(
+        serde_json::to_value(response)
+            .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, err.to_string()))?,
+    )))
 }
 
 async fn get_object_effects(
@@ -1163,7 +1211,7 @@ async fn handle_publish(
 async fn handle_move_call(
     call_params: CallRequest,
     state: &mut ServerState,
-) -> Result<TransactionResponse, anyhow::Error> {
+) -> Result<TransactionSignatureRequest, anyhow::Error> {
     let module = Identifier::from_str(&call_params.module.to_owned())?;
     let function = Identifier::from_str(&call_params.function.to_owned())?;
     let args = call_params.args;
@@ -1262,13 +1310,7 @@ async fn handle_move_call(
         }
     };
 
-    let object_effects_summary = get_object_effects(state, effects).await?;
-
-    Ok(TransactionResponse {
-        gas_used,
-        object_effects_summary: json!(object_effects_summary),
-        certificate: json!(cert),
-    })
+    Ok(TransactionSignatureRequest(serde_json::to_value(&sig_req)?))
 }
 
 fn publish_response_to_json(
@@ -1330,3 +1372,11 @@ fn custom_http_response<T: Serialize + JsonSchema>(
 fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpError {
     HttpError::for_client_error(None, status_code, message)
 }
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct TransactionSignatureRequest(Value);
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct TransactionResponse(Value);

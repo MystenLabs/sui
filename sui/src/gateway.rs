@@ -1,21 +1,31 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use anyhow::Error;
+use async_trait::async_trait;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde::Serialize;
 
 use sui_core::authority_client::AuthorityClient;
-use sui_core::gateway_state::{GatewayClient, GatewayState};
+use sui_core::gateway_state::gateway_responses::{
+    TransactionResponse, TransactionSignatureRequest,
+};
+use sui_core::gateway_state::{GatewayAPI, GatewayClient, GatewayState};
 use sui_network::network::NetworkClient;
 use sui_network::transport;
-use sui_types::base_types::AuthorityName;
+use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::Committee;
+use sui_types::crypto::Signature;
+use sui_types::error::SuiError;
+use sui_types::object::ObjectRead;
 
 use crate::config::AuthorityInfo;
 
@@ -117,5 +127,99 @@ impl Default for EmbeddedGatewayConfig {
             buffer_size: transport::DEFAULT_MAX_DATAGRAM_SIZE,
             db_folder_path: Default::default(),
         }
+    }
+}
+
+#[allow(dead_code, unused_variables)]
+struct RestGatewayClient {
+    url: String,
+}
+
+#[async_trait]
+#[allow(dead_code, unused_variables)]
+impl GatewayAPI for RestGatewayClient {
+    async fn execute_transaction(
+        &mut self,
+        digest: TransactionDigest,
+        signature: Signature,
+    ) -> Result<TransactionResponse, Error> {
+        todo!()
+    }
+
+    async fn transfer_coin(
+        &mut self,
+        signer: SuiAddress,
+        object_id: ObjectID,
+        gas_payment: ObjectID,
+        recipient: SuiAddress,
+    ) -> Result<TransactionSignatureRequest, Error> {
+        todo!()
+    }
+
+    async fn sync_account_state(&mut self, account_addr: SuiAddress) -> Result<(), Error> {
+        todo!()
+    }
+
+    async fn move_call(
+        &mut self,
+        signer: SuiAddress,
+        package_object_ref: ObjectRef,
+        module: Identifier,
+        function: Identifier,
+        type_arguments: Vec<TypeTag>,
+        gas_object_ref: ObjectRef,
+        object_arguments: Vec<ObjectRef>,
+        shared_object_arguments: Vec<ObjectID>,
+        pure_arguments: Vec<Vec<u8>>,
+        gas_budget: u64,
+    ) -> Result<TransactionSignatureRequest, Error> {
+        todo!()
+    }
+
+    async fn publish(
+        &mut self,
+        signer: SuiAddress,
+        package_bytes: Vec<Vec<u8>>,
+        gas_object_ref: ObjectRef,
+        gas_budget: u64,
+    ) -> Result<TransactionSignatureRequest, Error> {
+        todo!()
+    }
+
+    async fn split_coin(
+        &mut self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_amounts: Vec<u64>,
+        gas_payment: ObjectID,
+        gas_budget: u64,
+    ) -> Result<TransactionSignatureRequest, Error> {
+        todo!()
+    }
+
+    async fn merge_coins(
+        &mut self,
+        signer: SuiAddress,
+        primary_coin: ObjectID,
+        coin_to_merge: ObjectID,
+        gas_payment: ObjectID,
+        gas_budget: u64,
+    ) -> Result<TransactionSignatureRequest, Error> {
+        todo!()
+    }
+
+    async fn get_object_info(&self, object_id: ObjectID) -> Result<ObjectRead, Error> {
+        todo!()
+    }
+
+    fn get_owned_objects(&mut self, account_addr: SuiAddress) -> Vec<ObjectRef> {
+        todo!()
+    }
+
+    async fn download_owned_objects_not_in_db(
+        &mut self,
+        account_addr: SuiAddress,
+    ) -> Result<BTreeSet<ObjectRef>, SuiError> {
+        todo!()
     }
 }
