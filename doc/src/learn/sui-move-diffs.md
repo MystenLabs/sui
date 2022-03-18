@@ -6,8 +6,8 @@ This document describes the Sui programming model and highlights the differences
 
 In general, Move code written for other systems will work in Sui with these exceptions:
 
-* Global Storage operators
-* Key Abilities
+* [Global Storage operators](https://diem.github.io/move/global-storage-operators.html)
+* [Key Abilities](https://github.com/diem/move/blob/main/language/documentation/book/src/abilities.md#key)
 
 Here is a summary of key differences:
 
