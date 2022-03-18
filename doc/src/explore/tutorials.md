@@ -11,22 +11,28 @@ Then follow the instructions to [create
 Sui genesis](../build/wallet.md#genesis) by running the `sui genesis`
 command.
 
+TODO: Does it matter where the binaries are installed? And please tell them exactly where to run `sui genesis`. Is it OK to do so in the newly created `sui` directory? We should also make this clear in Install and Wallet, respectively.
+
 Finally, [start the Sui network](../build/wallet.md#starting-the-network)
 by running the `sui start` command. After completing
 these steps, you will have a running local Sui instance and the
 `wallet` command used in the remainder of this tutorial in your path.
+Simply leave the terminal with Sui running.
 
-Please make sure that you run the `wallet` command in the directory
+TODO: Can they run the process in background and use the same terminal?
+And I see no output. Should I?
+
+## Gather Accounts and Gas Objects
+Now switch to a new terminal window and keep the first terminal running.
+Make sure that you run the `wallet` command in the directory
 where wallet configuration is located or by passing wallet's
 configuration file as a parameter, as described in the `wallet`
 [command description](../build/wallet.md#using-the-wallet).
+This will be the same directory where you ran `sui genesis`.
 
-
-## Gather Accounts and Gas Objects
-Now switch to a new terminal window (keep the above running).
 First take a look at the account addresses we own in our wallet:
 ```
-$ ./wallet --no-shell addresses
+wallet --no-shell addresses
 Showing 5 results.
 ECF53CE22D1B2FB588573924057E9ADDAD1D8385
 7B61DA6AACED7F28C1187D998955F10464BEAE55
@@ -34,7 +40,7 @@ ECF53CE22D1B2FB588573924057E9ADDAD1D8385
 DB4C7667636471AFF396B900EB7B63FACAF629B6
 A6BBB1930E01495EE93CE912EA01C29695E07890
 ```
-Note that since these addresses are random generated, they will be different from what you see. We are going to need 3 addresses to play TicTacToe. Let's pick the first 3 addresses. Let's call them ADMIN, PLAYER_X and PLAYER_O.
+Note that since these addresses are random generated, they will be different from what you see. We are going to need three addresses to play TicTacToe. Let's pick the first three addresses. Let's call them ADMIN, PLAYER_X and PLAYER_O.
 Since we will be using these addresses and gas objects repeatedly in the rest of this tutorial, let's make them environment variables so that we don't have to retype them every time:
 ```
 export ADMIN=ECF53CE22D1B2FB588573924057E9ADDAD1D8385
@@ -44,7 +50,7 @@ export PLAYER_O=251CF224B6BA3A019D04B6041357C20490F7A322
 
 For each of these addresses, let's discover their gas objects for each account address:
 ```
-$ wallet --no-shell gas --address $ADMIN
+wallet --no-shell gas --address $ADMIN
                 Object ID                 |  Version   |  Gas Value
 ----------------------------------------------------------------------
  38B89FE9F4A4823F1406938E87A8767CBD7F0B93 |     0      |   100000
@@ -52,7 +58,8 @@ $ wallet --no-shell gas --address $ADMIN
  6AB7D15F41B28FF1EBF6D32499214BBD9035D1EB |     0      |   100000
  800F2704E22637A036C4325B539D711BB83CA6C2 |     0      |   100000
  D2F52301D5343DD2C1FA076401BC6283C3E4AA34 |     0      |   100000
-$ wallet --no-shell gas --address $PLAYER_X
+
+wallet --no-shell gas --address $PLAYER_X
                 Object ID                 |  Version   |  Gas Value
 ----------------------------------------------------------------------
  6F675038CAA48184707DBBE95ACFBA2030E87CD8 |     0      |   100000
@@ -60,7 +67,8 @@ $ wallet --no-shell gas --address $PLAYER_X
  9FED1FC3D21F284DC53DE87C0E19718971D96D8C |     0      |   100000
  E293F935F015C23216867442DB4E712518E7CAB7 |     0      |   100000
  F19384C06AE538F9C3C9D9762002B4DAEA49FE3A |     0      |   100000
-$ wallet --no-shell gas --address $PLAYER_O
+
+wallet --no-shell gas --address $PLAYER_O
                 Object ID                 |  Version   |  Gas Value
 ----------------------------------------------------------------------
  2110ADFB7BAF889A05EA6F5889AF7724299F9BED |     0      |   100000
@@ -89,6 +97,10 @@ The newly published package object: (A613A7FF8CB03E0DFC0D157E232BBA50C5F19D17, S
 List of objects created by running module initializers: []
 Updated Gas : Coin { id: 38B89FE9F4A4823F1406938E87A8767CBD7F0B93, value: 92939 }
 ```
+
+TODO: Won't the `../../sui_programmability/examples/games` path above need to change based upon where this is run? Assuming we settle upon running `sui genesis` in the new `sui` directory, this would merely be `sui_programmability/examples/games/sources/TicTacToe.move`, no?
+
+
 As we can see, the package was successfully published. Some gas was charged: the initial gas value was 10000, now it's 92939 (note: the current gas charging mechanism is rather arbitrary, we will come up with a gas mechanism shortly).
 The newly published package has the ID `A613A7FF8CB03E0DFC0D157E232BBA50C5F19D17`. Note that this ID will also be different in your terminal. We add the package to another environment variable:
 ```
