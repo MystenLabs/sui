@@ -16,17 +16,19 @@ by running the `sui start` command. After completing
 these steps, you will have a running local Sui instance and the
 `wallet` command used in the remainder of this tutorial in your path.
 
-Please make sure that you run the `wallet` command in the directory
-where wallet configuration is located or by passing wallet's
-configuration file as a parameter, as described in the `wallet`
-[command description](../build/wallet.md#using-the-wallet).
+We will follow the same convention as the one described in the [Sui
+setup instructions](../build/wallet.md#setup) and assume that Sui
+configuration files generated durind Sui genesis state creation are
+stored in the `"$SUI_ROOT"/sui_instance` directory, and **for the
+remainder of this tutorial we will assume that you are executing the
+`wallet` command in this directory**.
 
 
 ## Gather Accounts and Gas Objects
 Now switch to a new terminal window (keep the above running).
 First take a look at the account addresses we own in our wallet:
 ```
-$ ./wallet --no-shell addresses
+$ wallet --no-shell addresses
 Showing 5 results.
 ECF53CE22D1B2FB588573924057E9ADDAD1D8385
 7B61DA6AACED7F28C1187D998955F10464BEAE55
