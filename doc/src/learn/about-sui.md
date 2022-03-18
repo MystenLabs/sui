@@ -34,7 +34,7 @@ Sui scales horizontally to meet the demands of applications. Network capacity gr
 
 By design, Sui authorities (nodes) can effectively scale the network throughput infinitely to meet the demand of builders and creators. We believe Sui can do for web3 what broadband internet did for web2. 
 
-Note: As of Mar 12, 2022, an unoptimized single-worker Sui authority running on an 8-core M1 Macbook Pro can process 17,500 token transfer transactions per second (TPS). Performance scales linearly with the number of cores–the same machine processes 3,000 TPS in a single core configuration and increases by about 2,000 TPS with each additional core. . 
+Note: As of Mar 12, 2022, an unoptimized single-worker Sui authority running on an 8-core M1 Macbook Pro can process 20,000 token transfer transactions per second (TPS). Performance scales linearly with the number of cores–the same machine processes 4,000 TPS in a single core configuration and increases by about 2,000 TPS with each additional core.
 
 We will publish a full performance report for optimized Sui networks of various sizes when our testnet is released.
 
