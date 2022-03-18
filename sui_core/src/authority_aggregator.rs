@@ -805,10 +805,11 @@ where
                                     .push((name, inner_signed_transaction.signature));
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
-                                    state.certificate = Some(CertifiedTransaction {
-                                        transaction: transaction_ref.clone(),
-                                        signatures: state.signatures.clone(),
-                                    });
+                                    state.certificate =
+                                        Some(CertifiedTransaction::new_with_signatures(
+                                            transaction_ref.clone(),
+                                            state.signatures.clone(),
+                                        ));
                                 }
                             }
                             // If we get back an error, then we aggregate and check

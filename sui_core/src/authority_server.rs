@@ -181,16 +181,18 @@ impl AuthorityServer {
                             .map(|info| Some(serialize_transaction_info(&info)))
                     }
                     SerializedMessage::Cert(message) => {
-                        let confirmation_transaction = ConfirmationTransaction {
-                            certificate: message.as_ref().clone(),
-                        };
+                        // Cache the transaction digest
+                        let tx_digest = *message.digest();
+                        // Get the kind
                         let tx_kind = message.transaction.data.kind_as_str();
+
+                        let confirmation_transaction = ConfirmationTransaction {
+                            certificate: *message,
+                        };
                         match self
                             .state
                             .handle_confirmation_transaction(confirmation_transaction)
-                            .instrument(tracing::debug_span!("process_cert",
-                                                             tx_digest =? message.transaction.digest(),
-                                                             tx_kind))
+                            .instrument(tracing::debug_span!("process_cert", ?tx_digest, tx_kind))
                             .await
                         {
                             Ok(info) => {

@@ -381,12 +381,12 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Read a lock for a specific (transaction, shared object) pair.
     pub fn sequenced(
         &self,
-        transaction_digest: TransactionDigest,
+        transaction_digest: &TransactionDigest,
         object_ids: &[ObjectID],
     ) -> Result<Vec<Option<SequenceNumber>>, SuiError> {
         let keys: Vec<_> = object_ids
             .iter()
-            .map(|objid| (transaction_digest, *objid))
+            .map(|objid| (*transaction_digest, *objid))
             .collect();
 
         self.sequenced.multi_get(&keys[..]).map_err(SuiError::from)
@@ -395,13 +395,13 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Read a lock for a specific (transaction, shared object) pair.
     pub fn all_shared_locks(
         &self,
-        transaction_digest: TransactionDigest,
+        transaction_digest: &TransactionDigest,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
         Ok(self
             .sequenced
             .iter()
-            .skip_to(&(transaction_digest, ObjectID::ZERO))?
-            .take_while(|((tx, _objid), _ver)| *tx == transaction_digest)
+            .skip_to(&(*transaction_digest, ObjectID::ZERO))?
+            .take_while(|((tx, _objid), _ver)| tx == transaction_digest)
             .map(|((_tx, objid), ver)| (objid, ver))
             .collect())
     }
@@ -551,7 +551,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         let mut write_batch = self.transaction_lock.batch();
 
         // Store the certificate indexed by transaction digest
-        let transaction_digest: TransactionDigest = certificate.transaction.digest();
+        let transaction_digest: &TransactionDigest = certificate.digest();
         write_batch = write_batch.insert_batch(
             &self.certificates,
             std::iter::once((transaction_digest, &certificate)),
@@ -572,13 +572,13 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
 
         // Safe to unwrap since the "true" flag ensures we get a sequence value back.
         let seq: TxSequenceNumber = self
-            .batch_update_objects(write_batch, temporary_store, transaction_digest, true)?
+            .batch_update_objects(write_batch, temporary_store, *transaction_digest, true)?
             .unwrap();
 
         Ok((
             seq,
             TransactionInfoResponse {
-                signed_transaction: self.signed_transactions.get(&transaction_digest)?,
+                signed_transaction: self.signed_transactions.get(transaction_digest)?,
                 certified_transaction: Some(certificate),
                 signed_effects: Some(signed_effects),
             },
@@ -785,13 +785,13 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     pub fn remove_shared_objects_locks(
         &self,
         mut write_batch: DBBatch,
-        transaction_digest: TransactionDigest,
+        transaction_digest: &TransactionDigest,
         transaction: &Transaction,
     ) -> SuiResult<DBBatch> {
         let mut sequenced_to_delete = Vec::new();
         let mut schedule_to_delete = Vec::new();
         for object_id in transaction.shared_input_objects() {
-            sequenced_to_delete.push((transaction_digest, *object_id));
+            sequenced_to_delete.push((*transaction_digest, *object_id));
             if self.get_object(object_id)?.is_none() {
                 schedule_to_delete.push(object_id);
             }
@@ -804,17 +804,16 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// Lock a sequence number for the shared objects of the input transaction.
     pub fn persist_certificate_and_lock_shared_objects(
         &self,
-        transaction_digest: TransactionDigest,
-        transaction: &Transaction,
+        transaction_digest: &TransactionDigest,
         certificate: CertifiedTransaction,
     ) -> Result<(), SuiError> {
-        let certificate_to_write = std::iter::once((transaction_digest, certificate));
+        let certificate_to_write = std::iter::once((transaction_digest, &certificate));
 
         let mut sequenced_to_write = Vec::new();
         let mut schedule_to_write = Vec::new();
-        for id in transaction.shared_input_objects() {
+        for id in certificate.transaction.shared_input_objects() {
             let version = self.schedule.get(id)?.unwrap_or_default();
-            sequenced_to_write.push(((transaction_digest, *id), version));
+            sequenced_to_write.push(((*transaction_digest, *id), version));
             let next_version = version.increment();
             schedule_to_write.push((id, next_version));
         }

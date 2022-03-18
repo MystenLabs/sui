@@ -34,7 +34,7 @@ pub fn get_genesis_context() -> TxContext {
 }
 
 pub fn get_genesis_context_with_custom_address(address: &SuiAddress) -> TxContext {
-    TxContext::new(address, TransactionDigest::genesis())
+    TxContext::new(address, &TransactionDigest::genesis())
 }
 
 /// Create and return objects wrapping the genesis modules for sui

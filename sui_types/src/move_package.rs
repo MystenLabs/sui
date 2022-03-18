@@ -60,12 +60,12 @@ impl MovePackage {
     }
 
     pub fn module_id(&self, module: &Identifier) -> Result<ModuleId, SuiError> {
-        let ser =
-            self.serialized_module_map()
-                .get(module.as_str())
-                .ok_or(SuiError::ModuleNotFound {
-                    module_name: module.to_string(),
-                })?;
+        let ser = self
+            .serialized_module_map()
+            .get(module.as_str())
+            .ok_or_else(|| SuiError::ModuleNotFound {
+                module_name: module.to_string(),
+            })?;
         Ok(CompiledModule::deserialize(ser)?.self_id())
     }
 
@@ -75,16 +75,16 @@ impl MovePackage {
         module: &Identifier,
         function: &Identifier,
     ) -> Result<Function, SuiError> {
-        let bytes =
-            self.serialized_module_map()
-                .get(module.as_str())
-                .ok_or(SuiError::ModuleNotFound {
-                    module_name: module.to_string(),
-                })?;
+        let bytes = self
+            .serialized_module_map()
+            .get(module.as_str())
+            .ok_or_else(|| SuiError::ModuleNotFound {
+                module_name: module.to_string(),
+            })?;
         let m = CompiledModule::deserialize(bytes)
             .expect("Unwrap safe because Sui serializes/verifies modules before publishing them");
 
-        Function::new_from_name(&m, function).ok_or(SuiError::FunctionNotFound {
+        Function::new_from_name(&m, function).ok_or_else(|| SuiError::FunctionNotFound {
             error: format!(
                 "Could not resolve function '{}' in module {}::{}",
                 function,

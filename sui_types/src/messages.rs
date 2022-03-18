@@ -17,6 +17,7 @@ use move_core_types::{
     value::MoveStructLayout,
 };
 use name_variant::NamedVariant;
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use static_assertions::const_assert_eq;
 use std::fmt::Write;
@@ -170,6 +171,11 @@ pub struct SignedTransaction {
 ///
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CertifiedTransaction {
+    // This is a cache of an otherwise expensive to compute value.
+    // DO NOT serialize or deserialize from the network or disk.
+    #[serde(skip)]
+    transaction_digest: OnceCell<TransactionDigest>,
+
     pub transaction: Transaction,
     pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
 }
@@ -731,10 +737,7 @@ impl<'a> SignatureAggregator<'a> {
             committee,
             weight: 0,
             used_authorities: HashSet::new(),
-            partial: CertifiedTransaction {
-                transaction,
-                signatures: Vec::new(),
-            },
+            partial: CertifiedTransaction::new(transaction),
         }
     }
 
@@ -769,6 +772,31 @@ impl<'a> SignatureAggregator<'a> {
 }
 
 impl CertifiedTransaction {
+    pub fn new(transaction: Transaction) -> CertifiedTransaction {
+        CertifiedTransaction {
+            transaction_digest: OnceCell::new(),
+            transaction,
+            signatures: Vec::new(),
+        }
+    }
+
+    pub fn new_with_signatures(
+        transaction: Transaction,
+        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    ) -> CertifiedTransaction {
+        CertifiedTransaction {
+            transaction_digest: OnceCell::new(),
+            transaction,
+            signatures,
+        }
+    }
+
+    /// Get the transaction digest and write it to the cache
+    pub fn digest(&self) -> &TransactionDigest {
+        self.transaction_digest
+            .get_or_init(|| self.transaction.digest())
+    }
+
     /// Verify the certificate.
     pub fn check(&self, committee: &Committee) -> Result<(), SuiError> {
         // Check the quorum.
