@@ -20,7 +20,7 @@ See the [Wallet Quick Start](../build/wallet.md) for installation, querying the 
 
 Navigate and search this site however you see fit. Here is the order we recommend if you are new to Sui:
 
-1. Learn [about Sui](../learn/about-sui.md), how [Sui differs from Move](../learn/why-move.md), and [how Sui works](how-sui-works.md) starting in this very section.
+1. Learn [about Sui](../learn/about-sui.md), how [Sui differs from Move](../learn/why-move.md), and [how Sui works](../learn/how-sui-works.md) starting in this very section.
 1. [Build](../build/index.md) smart contracts, wallets, authorities, transactions, and more.
 1. [Explore](../explore/index.md) NFTs, make transfers, and see the Sui API.
 1. [Contribute](../contribute/index.md) to Sui by joining the community, making enhancements, and learning about Mysten Labs.
