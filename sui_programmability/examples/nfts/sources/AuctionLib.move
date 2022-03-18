@@ -2,7 +2,7 @@
 /// English auction (https://en.wikipedia.org/wiki/English_auction),
 /// one using single-owner objects only and the other using shared
 /// objects.
-module DeFi::AuctionLib {
+module NFTs::AuctionLib {
     use Std::Option::{Self, Option};
 
     use Sui::Coin::{Self, Coin};
@@ -11,8 +11,8 @@ module DeFi::AuctionLib {
     use Sui::Transfer;
     use Sui::TxContext::{Self,TxContext};
 
-    friend DeFi::Auction;
-    friend DeFi::SharedAuction;
+    friend NFTs::Auction;
+    friend NFTs::SharedAuction;
 
     /// Stores information about an auction bid.
     struct BidData has store {
