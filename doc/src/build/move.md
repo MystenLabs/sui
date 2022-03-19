@@ -939,7 +939,7 @@ This call also requires to have the `child_ref` as proof of original ownership.
 After this transfer, the object will be owned by `recipient`.
 
 More examples of how objects can be transferred and owned can be found in
-[ObjectOwner.move](../../../sui_core/src/unit_tests/data/object_owner/sources/ObjectOwner.move).
+[ObjectOwner.move](https://github.com/MystenLabs/sui/tree/main/sui_core/src/unit_tests/data/object_owner/sources/ObjectOwner.move).
 
 **Freeze an object**
 To make an object `obj` shared and immutable, one can call:
@@ -957,7 +957,7 @@ Transfer::share_object(obj);
 ```
 After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, such an object cannot be deleted, transferred or embedded in another object as a field.
 
-Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move) vs. [Shared Object](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToeV2.move).
+Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/TicTacToe.move) vs. [Shared Object](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/SharedTicTacToe.move).
 
 ### Transaction Context
 `TxContext` module provides a few important APIs that operate based on the current transaction context.
