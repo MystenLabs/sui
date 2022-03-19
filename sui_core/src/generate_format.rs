@@ -15,7 +15,9 @@ use sui_types::{
     batch::UpdateItem,
     crypto::{get_key_pair, AuthoritySignature, Signature},
     error::SuiError,
-    messages::{CallResult, ExecutionStatus, ObjectInfoRequestKind, TransactionKind},
+    messages::{
+        CallResult, ExecutionStatus, ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
+    },
     object::{Data, Owner},
     serialize,
 };
@@ -42,7 +44,7 @@ fn get_registry() -> Result<Registry> {
     let sig: Signature = kp.sign(b"hello world");
     tracer.trace_value(&mut samples, &sig)?;
 
-    // ObjectID and SuiAddres are the same length
+    // ObjectID and SuiAddress are the same length
     let addr_bytes: [u8; ObjectID::LENGTH] = addr.as_ref().try_into().unwrap();
     let oid = ObjectID::from(addr_bytes);
     tracer.trace_value(&mut samples, &oid)?;
@@ -62,6 +64,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<TypeTag>(&samples)?;
     tracer.trace_type::<TypedStoreError>(&samples)?;
     tracer.trace_type::<ObjectInfoRequestKind>(&samples)?;
+    tracer.trace_type::<SingleTransactionKind>(&samples)?;
     tracer.trace_type::<TransactionKind>(&samples)?;
     tracer.trace_type::<MoveStructLayout>(&samples)?;
     tracer.trace_type::<MoveTypeLayout>(&samples)?;

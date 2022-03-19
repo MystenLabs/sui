@@ -50,6 +50,8 @@ pub enum SuiError {
     DeleteObjectOwnedObject,
     #[error("The shared locks for this transaction have not yet been set.")]
     SharedObjectLockNotSetObject,
+    #[error("Invalid Batch Transaction: {}", error)]
+    InvalidBatchTransaction { error: String },
 
     // Signature verification
     #[error("Signature is not valid: {}", error)]
