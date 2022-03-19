@@ -517,6 +517,7 @@ where
                 SuiError::UnexpectedSequenceNumber {
                     object_id,
                     expected_sequence: next_sequence_number,
+                    given_sequence: object_kind.version(),
                 }
                 .into()
             );
