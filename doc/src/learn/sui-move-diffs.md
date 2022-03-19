@@ -13,7 +13,7 @@ Here is a summary of key differences:
 
 1. Sui uses its own [object-centric global storage](#object-centric-global-storage)
 2. Addresses [represent Object IDs](#addresses-represent-object-ids)
-3. Sui objects have [globally unique IDs](#Object-with-key-ability,-globally-unique-IDs)
+3. Sui objects have [globally unique IDs](#object-with-key-ability-globally-unique-ids)
 4. Sui has [module initializers (init)](#module-initializers)
 5. Sui [entry points take object references as input](#entry-points-take-object-references-as-input)
 
