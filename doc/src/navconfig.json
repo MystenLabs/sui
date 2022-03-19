@@ -1,6 +1,6 @@
 {
   "sideMenu": {
-    "title": "MAIN CONCEPTS",
+    "title": "QUICK LINKS",
     "items": [
       {
         "label": "Tutorial",
@@ -21,6 +21,14 @@
       {
         "label": "About Sui",
         "fileName": "learn/about-sui"
+      },
+      {
+        "label": "Sui Glossary",
+        "fileName": "learn/sui-glossary"
+      },
+      {
+        "label": "Why Move?",
+        "fileName": "learn/why-move"
       },
       {
         "label": "How Sui Move differs from Core Move"
@@ -86,6 +94,10 @@
       {
         "label": "Examples",
         "fileName": "explore/examples"
+      }
+      {
+        "label": "SoWork x Sui",
+        "fileName": "explore/sowork"
       }
     ],
     "contribute": [

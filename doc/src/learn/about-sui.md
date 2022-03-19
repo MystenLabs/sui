@@ -8,9 +8,9 @@ Sui is the first permissionless Layer 1 blockchain designed from the ground up t
 
 Sui scales horizontally with no upper bound to meet application demand while maintaining extremely low operating costs per transaction. Its system design breakthrough eliminates a critical bottleneck in existing blockchains: the need to achieve global consensus on a total-ordered list of transactions. This computation is wasteful given most transactions are not contending for the same resource against other transactions.
 
-Sui takes a significant leap in scalability by enabling parallel agreement on causally independent transactions. Sui authorities commit such transactions using Byzantine consistent broadcast, eliminating global consensus's overhead without sacrificing safety and liveness guarantees.
+Sui takes a significant leap in scalability by enabling parallel agreement on causally independent transactions. Sui authorities commit such transactions using Byzantine Consistent Broadcast, eliminating global consensus's overhead without sacrificing safety and liveness guarantees.
 
-This breakthrough is possible only with Sui's novel data model. Thanks to its object-centric view and Move’s strong ownership types, dependencies are explicitly encoded. As a result, Sui both agrees on and executes transactions on most objects in parallel, while a minority of transactions that affect shared state are ordered via Byzantine fault tolerant consensus and executed in parallel.
+This breakthrough is possible only with Sui's novel data model. Thanks to its object-centric view and Move’s strong ownership types, dependencies are explicitly encoded. As a result, Sui both agrees on and executes transactions on most objects in parallel, while a minority of transactions that affect shared state are ordered via Byzantine Fault Tolerant consensus and executed in parallel.
 
 ### Highlights
 
@@ -34,7 +34,7 @@ Sui scales horizontally to meet the demands of applications. Network capacity gr
 
 By design, Sui authorities (nodes) can effectively scale the network throughput infinitely to meet the demand of builders and creators. We believe Sui can do for web3 what broadband internet did for web2. 
 
-Note: As of Mar 12, 2022, an unoptimized single-worker Sui authority running on an 8-core M1 Macbook Pro can process 17,500 token transfer transactions per second (TPS). Performance scales linearly with the number of cores–the same machine processes 3,000 TPS in a single core configuration and increases by about 2,000 TPS with each additional core. . 
+Note: As of Mar 18, 2022, an unoptimized single-worker Sui authority running on an 8-core M1 Macbook Pro can process 20,000 token transfer transactions per second (TPS). Performance scales linearly with the number of cores–the same machine processes 4,000 TPS in a single core configuration and increases by about 2,000 TPS with each additional core.
 
 We will publish a full performance report for optimized Sui networks of various sizes when our testnet is released.
 

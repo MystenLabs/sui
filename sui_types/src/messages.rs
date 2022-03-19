@@ -2,7 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature};
+use crate::crypto::{
+    sha3_hash, AuthoritySignature, BcsSignable, Signature, VerificationObligation,
+};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
@@ -17,11 +19,12 @@ use move_core_types::{
     value::MoveStructLayout,
 };
 use name_variant::NamedVariant;
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use static_assertions::const_assert_eq;
+// use static_assertions::const_assert_eq;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
-use std::mem::size_of;
+//use std::mem::size_of;
 use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
@@ -145,13 +148,23 @@ impl TransactionData {
 // TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
 pub struct Transaction {
+    // Deserialization sets this to "false"
+    #[serde(skip)]
+    pub is_checked: bool,
+
     pub data: TransactionData,
     pub signature: Signature,
 }
+/* TODO: check this legacy static check is not needed as an invariant
+         elsewhere. The tests pass but invariant checks without docs
+         should not be removed without a note to check.
+
 const_assert_eq!(
     size_of::<TransactionData>() + size_of::<Signature>(),
     size_of::<Transaction>()
 );
+
+*/
 
 /// An transaction signed by a single authority
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
@@ -170,6 +183,14 @@ pub struct SignedTransaction {
 ///
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CertifiedTransaction {
+    // This is a cache of an otherwise expensive to compute value.
+    // DO NOT serialize or deserialize from the network or disk.
+    #[serde(skip)]
+    transaction_digest: OnceCell<TransactionDigest>,
+    // Deserialization sets this to "false"
+    #[serde(skip)]
+    pub is_checked: bool,
+
     pub transaction: Transaction,
     pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
 }
@@ -574,11 +595,41 @@ impl Transaction {
     }
 
     pub fn new(data: TransactionData, signature: Signature) -> Self {
-        Transaction { data, signature }
+        Transaction {
+            is_checked: false,
+            data,
+            signature,
+        }
     }
 
     pub fn check_signature(&self) -> Result<(), SuiError> {
-        self.signature.check(&self.data, self.data.sender)
+        // We use this flag to see if someone has checked this before
+        // and therefore we can skip the check. Note that the flag has
+        // to be set to true manually, and is not set by calling this
+        // "check" function.
+        if self.is_checked {
+            return Ok(());
+        }
+
+        let mut obligation = VerificationObligation::default();
+        self.add_to_verification_obligation(&mut obligation)?;
+        obligation.verify_all().map(|_| ())
+    }
+
+    pub fn add_to_verification_obligation(
+        &self,
+        obligation: &mut VerificationObligation,
+    ) -> SuiResult<()> {
+        let (message, signature, public_key) = self
+            .signature
+            .get_verification_inputs(&self.data, self.data.sender)?;
+        let idx = obligation.messages.len();
+        obligation.messages.push(message);
+        let key = obligation.lookup_public_key(&public_key)?;
+        obligation.public_keys.push(key);
+        obligation.signatures.push(signature);
+        obligation.message_index.push(idx);
+        Ok(())
     }
 
     pub fn sender_address(&self) -> SuiAddress {
@@ -731,10 +782,7 @@ impl<'a> SignatureAggregator<'a> {
             committee,
             weight: 0,
             used_authorities: HashSet::new(),
-            partial: CertifiedTransaction {
-                transaction,
-                signatures: Vec::new(),
-            },
+            partial: CertifiedTransaction::new(transaction),
         }
     }
 
@@ -768,10 +816,58 @@ impl<'a> SignatureAggregator<'a> {
     }
 }
 
+use crate::crypto::Signable;
+
 impl CertifiedTransaction {
+    pub fn new(transaction: Transaction) -> CertifiedTransaction {
+        CertifiedTransaction {
+            transaction_digest: OnceCell::new(),
+            is_checked: false,
+            transaction,
+            signatures: Vec::new(),
+        }
+    }
+
+    pub fn new_with_signatures(
+        transaction: Transaction,
+        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+    ) -> CertifiedTransaction {
+        CertifiedTransaction {
+            transaction_digest: OnceCell::new(),
+            is_checked: false,
+            transaction,
+            signatures,
+        }
+    }
+
+    /// Get the transaction digest and write it to the cache
+    pub fn digest(&self) -> &TransactionDigest {
+        self.transaction_digest
+            .get_or_init(|| self.transaction.digest())
+    }
+
     /// Verify the certificate.
     pub fn check(&self, committee: &Committee) -> Result<(), SuiError> {
-        // Check the quorum.
+        // We use this flag to see if someone has checked this before
+        // and therefore we can skip the check. Note that the flag has
+        // to be set to true manually, and is not set by calling this
+        // "check" function.
+        if self.is_checked {
+            return Ok(());
+        }
+
+        let mut obligation = VerificationObligation::default();
+        self.add_to_verification_obligation(committee, &mut obligation)?;
+        obligation.verify_all().map(|_| ())
+    }
+
+    pub fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+    ) -> SuiResult<()> {
+        // First check the quorum is sufficient
+
         let mut weight = 0;
         let mut used_authorities = HashSet::new();
         for (authority, _) in self.signatures.iter() {
@@ -790,17 +886,38 @@ impl CertifiedTransaction {
             weight >= committee.quorum_threshold(),
             SuiError::CertificateRequiresQuorum
         );
-        // All that is left is checking signatures!
-        // one user signature
+
+        // Add the obligation of the transaction
         self.transaction
-            .signature
-            .check(&self.transaction.data, self.transaction.data.sender)?;
-        // a batch of authority signatures
-        AuthoritySignature::verify_batch(
-            &self.transaction.data,
-            &self.signatures,
-            &committee.expanded_keys,
-        )
+            .add_to_verification_obligation(obligation)?;
+
+        // Create obligations for the committee signatures
+
+        let mut message = Vec::new();
+        self.transaction.data.write(&mut message);
+
+        let idx = obligation.messages.len();
+        obligation.messages.push(message);
+
+        for tuple in self.signatures.iter() {
+            let (authority, signature) = tuple;
+            // do we know, or can we build a valid public key?
+            match committee.expanded_keys.get(authority) {
+                Some(v) => obligation.public_keys.push(*v),
+                None => {
+                    let public_key = (*authority).try_into()?;
+                    obligation.public_keys.push(public_key);
+                }
+            }
+
+            // build a signature
+            obligation.signatures.push(signature.0);
+
+            // collect the message
+            obligation.message_index.push(idx);
+        }
+
+        Ok(())
     }
 }
 

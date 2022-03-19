@@ -47,7 +47,9 @@ A traditional blockchain client operates via a single send request and awaits ap
 
 Now that you know how Sui handles writes, you should remarks its management of reads follows the same object model.
 
-Indeed, Sui uses *causal order*, not total order. Every object in Sui has a version, and every valid transaction results in new versions for the objects it touches. For example, an addition to an NFT would result in a new object. The transaction may have several objects as dependents. Objects come with its *family history*, a generational set of new versioned objects.
+If you are interested in a specific set of objects and their history, Sui reads are authenticated at a high granularity and served with a low average latency. If you instead need a * totality* property to, for example, conduct continuous whole-chain audits, Sui offers periodic checkpoints that support this use case.
+
+Sui uses *causal order*, not total order. Every object in Sui has a version, and every valid transaction results in new versions for the objects it touches. For example, an addition to an NFT would result in a new object. The transaction may have several objects as dependents. Objects come with its *family history*, a generational set of new versioned objects.
 
 Since changes create new objects with a new version, Sui creates a narrow family tree starting from genesis. In Sui, as in life, you are most interested in your specific family, not the entire world’s genetic history. Sui relies upon no view of other family trees, only the one tied to the account making the transaction.
 
@@ -72,7 +74,7 @@ The checkpoints carry cryptographic signatures that guarantee they form a consen
 Move’s strong ownership model ensures only the owner may change (mutate) the state of their objects (assets). They may transfer those objects to another user who may then modify those objects. By default, in Sui everything is owned by someone. You cannot touch someone else’s state. Only you can change state, such as transferring ownership of objects.
 
 Where this can become problematic is in transactions where objects are mutable by two writers. This may include the following use cases:
-- a time-bound auction, where several bidders must enter their bid before a deadline
-- an open-order, where several traders may fulfill the same proposed trade
+* a time-bound auction, where several bidders must enter their bid before a deadline
+* an open-order, where several traders may fulfill the same proposed trade
 
 In this case, ordering transactions with respect to each other is vital to lead to a valid resolution, but no actor's action depends on the other. The way Sui resolves this is to resort to a consensus mechanism. While Sui's chosen consensus mechanism will be efficient and high-throughput (as in, e.g. [Narwhal & Tusk](https://arxiv.org/abs/2105.11827)), it still obeys the asymptotics and limitations of any consensus algorithm : polynomial worst-case complexity, requiring active inter-authority messages, etc.

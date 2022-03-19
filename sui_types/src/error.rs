@@ -4,6 +4,7 @@
 
 use std::fmt::Debug;
 use thiserror::Error;
+use typed_store::rocks::TypedStoreError;
 
 use crate::base_types::*;
 use move_binary_format::errors::PartialVMError;
@@ -26,9 +27,8 @@ macro_rules! fp_ensure {
 }
 pub(crate) use fp_ensure;
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 /// Custom error type for Sui.
-
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 #[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
@@ -54,19 +54,20 @@ pub enum SuiError {
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
-    #[error("Value was not signed by the correct sender")]
-    IncorrectSigner,
+    #[error("Value was not signed by the correct sender: {}", error)]
+    IncorrectSigner { error: String },
     #[error("Value was not signed by a known authority")]
     UnknownSigner,
     // Certificate verification
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
     #[error(
-        "The given sequence number must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
+        "The given sequence number ({given_sequence:?}) must match the next expected sequence ({expected_sequence:?}) number of the object ({object_id:?})"
     )]
     UnexpectedSequenceNumber {
         object_id: ObjectID,
         expected_sequence: SequenceNumber,
+        given_sequence: SequenceNumber,
     },
     #[error("Conflicting transaction already received: {pending_transaction:?}")]
     ConflictingTransaction {
@@ -235,7 +236,7 @@ pub enum SuiError {
         error: Box<SuiError>,
     },
     #[error("Storage error")]
-    StorageError(#[from] typed_store::rocks::TypedStoreError),
+    StorageError(#[from] TypedStoreError),
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
     #[error("Authority Error: {error:?}")]

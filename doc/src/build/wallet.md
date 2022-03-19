@@ -11,10 +11,21 @@ interface, *Wallet CLI*.
 
 ## Setup
 
-Follow the instructions to [install Sui binaries](install.md).
+Follow the instructions to [install Sui binaries](install.md). Then
+create a directory where your Sui configuration files will live - let
+us name this directory `sui_instance` and let us assume that it lives
+in another directory designated by the `$SUI_ROOT` environment
+variable:
+
+```shell
+cd "$SUI_ROOT"
+mkdir sui_instance
+```
 
 ## Genesis
+
 ```shell
+cd "$SUI_ROOT"/sui_instance
 sui genesis
 ```
 NOTE: For logs, set `RUST_LOG=debug` before invoking `sui genesis`.
@@ -29,7 +40,7 @@ customized with additional accounts, objects, code, etc. as described
 in [Genesis customization](#customize-genesis).
 
 The network configuration is stored in `network.conf` and
-can be used subsequently to start the network. `wallet.conf` and `wallet.key` are
+can be used subsequently to start the network. The `wallet.conf` and `wallet.key` are
 also created to be used by the Sui wallet to manage the
 newly created accounts.
 
@@ -77,9 +88,9 @@ in the wallet configuration (with some values omitted):
   }
 }
 ```
-The `accounts` variable contains the account's address the wallet manages.
+The `accounts` variable contains the account's address that the wallet manages.
 `gateway` contains the information of the Sui network that the wallet will be connecting to,
-currently only `Embedded` gateway type is supported.
+currently only `embedded` gateway type is supported.
 
 The `authorities` variable is part of the embedded gateway configuration, it contains Sui network
 authorities' name, host and port information. It is used to establish connections to the Sui network.
@@ -109,14 +120,21 @@ implement more secure key management and support hardware signing in a future re
 Run the following command to start the local Sui network:
 
 ```shell
+cd "$SUI_ROOT"/sui_instance
 sui start
 ```
 
-or
+You can also run this command in any directory if you provide a path
+to the directory where Sui configuration files are stored:
 
 ```shell
-sui start --config [config file path]
+sui start --config "$SUI_ROOT"/sui_instance
 ```
+
+Executing any of these two commands in a terminal window will result
+in no output but the terminal will be "blocked" by the running Sui
+instance (it will not return the command prompt).
+
 NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
 
 The network config file path defaults to `./network.conf` if not
@@ -143,16 +161,18 @@ The wallet can be started in two modes: interactive shell or command line interf
 
 ### Interactive shell
 
-To start the interactive shell:
+To start the interactive shell, execute the following (in a different terminal window than one used to execute `sui start`):
 
 ```shell
+cd "$SUI_ROOT"/sui_instance
 wallet
 ```
 
-or
+You can also run this command in any directory if you provide a path
+to the directory where Sui configuration files are stored:
 
 ```shell
-wallet --config [config file path]
+wallet --config "$SUI_ROOT"/sui_instance
 ```
 
 The wallet config file path defaults to `./wallet.conf` if not
@@ -175,6 +195,10 @@ The Sui interactive wallet supports the following shell functionality:
 The wallet can also be used without the interactive shell, which can be useful if 
 you want to pipe the output of the wallet to another application or invoke wallet 
 commands using scripts.
+
+**For the remainder of this tutorial we will assume that you are
+executing the `wallet` command in a directory where the Sui
+configuration files are stored (`"$SUI_ROOT"/sui_instance`).**
 
 ```shell
 USAGE:
@@ -310,7 +334,7 @@ $ wallet --no-shell objects --address F456EBEF195E4A231488DF56B762AC90695BE2DD
 Showing 0 results.
 
 ```
-To add objects to the account, you can [invoke a move function](#calling-move-code),
+To add objects to the account, you can [invoke a Move function](#calling-move-code),
 or you can transfer one of the existing objects from the genesis account to the new account using a dedicated wallet command.
 We will explore how to transfer objects using the wallet in this section.
 
@@ -331,7 +355,7 @@ OPTIONS:
 ```
 To transfer an object to a recipient, you will need the recipient's address,
 the object ID of the object that you want to transfer,
-and the gas object' ID for the transaction fee payment.
+and the gas object ID for the transaction fee payment.
 
 Here is an example transfer of an object to account `F456EBEF195E4A231488DF56B762AC90695BE2DD`.
 ```shell

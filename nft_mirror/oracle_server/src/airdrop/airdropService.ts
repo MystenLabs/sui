@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { NFTFetcher, NFTInfo } from '../common/nftFetcher';
 import { ValidateError } from 'tsoa';
 import { Connection } from '../sdk/gateway';
 
@@ -36,7 +37,7 @@ interface AirdropClaimInfo {
  *
  *
  * @example {
- *   "wallet_message": "{\"domain\":{\"chainId\":1,\"name\":\"SuiDrop\",\"version\":\"1\"},\"message\":{\"source_chain\":\"ethereum\",\"source_contract_address\":\"0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D\",\"source_token_id\":\"8937\",\"source_owner_address\":\"0x09dbc4a902199bbe7f7ec29b3714731786f2e878\",\"destination_sui_address\":\"0xa5e6dbcf33730ace6ec8b400ff4788c1f150ff7e\"},\"primaryType\":\"ClaimRequest\",\"types\":{\"EIP712Domain\":[{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"version\",\"type\":\"string\"},{\"name\":\"chainId\",\"type\":\"uint256\"}],\"ClaimRequest\":[{\"name\":\"source_chain\",\"type\":\"string\"},{\"name\":\"source_contract_address\",\"type\":\"string\"},{\"name\":\"source_token_id\",\"type\":\"string\"},{\"name\":\"source_owner_address\",\"type\":\"string\"},{\"name\":\"destination_sui_address\",\"type\":\"string\"}]}}",
+ *   "wallet_message": "{\"domain\":{\"chainId\":1,\"name\":\"SuiDrop\",\"version\":\"1\"},\"message\":{\"source_chain\":\"ethereum\",\"source_contract_address\":\"0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D\",\"source_token_id\":\"0x00000000000000000000000000000000000000000000000000000000000022e9\",\"source_owner_address\":\"0x09dbc4a902199bbe7f7ec29b3714731786f2e878\",\"destination_sui_address\":\"0xa5e6dbcf33730ace6ec8b400ff4788c1f150ff7e\"},\"primaryType\":\"ClaimRequest\",\"types\":{\"EIP712Domain\":[{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"version\",\"type\":\"string\"},{\"name\":\"chainId\",\"type\":\"uint256\"}],\"ClaimRequest\":[{\"name\":\"source_chain\",\"type\":\"string\"},{\"name\":\"source_contract_address\",\"type\":\"string\"},{\"name\":\"source_token_id\",\"type\":\"string\"},{\"name\":\"source_owner_address\",\"type\":\"string\"},{\"name\":\"destination_sui_address\",\"type\":\"string\"}]}}",
  *   "signature": "abc"
  * }
  */
@@ -58,7 +59,7 @@ export interface AirdropClaimRequest {
  * @example {
  *  "source_chain": "ethereum",
  *  "source_contract_address": "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D",
- *  "source_token_id": "101",
+ *  "source_token_id": "0x00000000000000000000000000000000000000000000000000000000000022e9",
  *  "sui_explorer_link": "http:127.0.0.1:8000/BC4CA0EdA7647A8a"
  * }
  */
@@ -89,11 +90,11 @@ export class AirdropService {
         const { wallet_message } = claimMessage;
         const data = JSON.parse(wallet_message);
         const claimInfo = this.parseClaimInfo(data);
-        // TODO: validate signature and ownership
+        const nftInfo = await this.validateRequest(claimInfo);
         const connection = new Connection(
             process.env.SUI_GATEWAY_ENDPOINT as string
         );
-        await this.executeMoveCall(connection, claimInfo);
+        await this.executeMoveCall(connection, claimInfo, nftInfo);
         return {
             source_chain: claimInfo.source_chain,
             source_contract_address: claimInfo.source_contract_address,
@@ -114,9 +115,53 @@ export class AirdropService {
         );
     }
 
+    async validateRequest(claimInfo: AirdropClaimInfo): Promise<NFTInfo> {
+        const {
+            source_contract_address: contract,
+            source_token_id: tokenId,
+            source_owner_address: owner,
+        } = claimInfo;
+
+        const results = await this.getNFTInfo(owner, contract, tokenId);
+
+        if (results.length > 1) {
+            throw new Error(
+                `More than two tokens share the same contract ` +
+                    `address and token id ${results}`
+            );
+        } else if (results.length === 0) {
+            throw new ValidateError(
+                {
+                    messages: {
+                        message: 'ownership not found',
+                        value: claimInfo,
+                    },
+                },
+                ''
+            );
+        }
+        const nftInfo = results[0];
+
+        if (nftInfo.claim_status !== 'none') {
+            throw new ValidateError(
+                {
+                    messages: {
+                        message: 'The token has been claimed',
+                        value: claimInfo,
+                    },
+                },
+                ''
+            );
+        }
+
+        // TODO: validate signature
+        return nftInfo;
+    }
+
     async executeMoveCall(
         connection: Connection,
-        claimInfo: AirdropClaimInfo
+        claimInfo: AirdropClaimInfo,
+        nftInfo: NFTInfo
     ): Promise<string> {
         const oracleAddress = process.env.ORACLE_ADDRESS as string;
         const [gasObjectId, oracleObjectId] = await this.getGasAndOracle(
@@ -126,20 +171,19 @@ export class AirdropService {
         const {
             destination_sui_address,
             source_contract_address,
-            source_token_id,
+            source_token_id: tokenIdHex,
         } = claimInfo;
 
-        // TODO: remove these hardcoded values in the next PR
-        const name = 'BoredApeYachtClub';
-        const tokenUri = 'ipfs://abc';
-
+        const tokenId = parseInt(tokenIdHex, 16);
+        console.log('token id', tokenId);
+        const { name, media_uri } = nftInfo.token;
         const args = [
             oracleObjectId,
             destination_sui_address,
             source_contract_address,
-            +source_token_id,
+            tokenId,
             name,
-            tokenUri,
+            media_uri,
         ];
 
         const [packageObjectId, module] = this.getPackageAndModule();
@@ -160,6 +204,19 @@ export class AirdropService {
         }
         console.info('Created object', created);
         return created[0].id;
+    }
+
+    async getNFTInfo(
+        owner: string,
+        contract: string,
+        tokenId: string
+    ): Promise<NFTInfo[]> {
+        const fetcher = new NFTFetcher();
+        const results = await fetcher.getNFTInfo({
+            owner,
+            contractAddresses: [contract],
+        });
+        return results.filter((info) => info.token.token_id === tokenId);
     }
 
     async getGasAndOracle(
