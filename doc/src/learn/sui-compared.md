@@ -2,7 +2,11 @@
 title: How Sui Differs from Other Blockchains
 ---
 
-This page summarizes how Sui compares with existing blockchains and is intended for potential adopters of Sui to decide whether it fits their use cases.
+This page summarizes how Sui compares with existing blockchains and is intended for potential adopters of Sui to decide whether it fits their use cases. Here are Sui's key features:
+
+* Causal order vs total order (enables massively parallel execution)
+* [Sui's variant of Move](../build/move.md) and its object-centric data model (enables composable objects/NFTs)
+* Easier developer experience with the blockchain-oriented [Move programming language](https://github.com/MystenLabs/awesome-move)
 
 ## Traditional blockchains
 
