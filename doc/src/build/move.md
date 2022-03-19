@@ -14,7 +14,7 @@ Move is an open source language for writing safe smart contracts. It
 was originally developed at Facebook to power the [Diem](https://github.com/diem/diem)
 blockchain. However, Move was designed as a platform-agnostic language
 to enable common libraries, tooling, and developer communities across
-blockchains with vastly different data and execution models. [Sui](../../../README.md),
+blockchains with vastly different data and execution models. [Sui](https://github.com/MystenLabs/sui/blob/main/README.md),
 [0L](https://github.com/OLSF/libra), and
 [Starcoin](https://github.com/starcoinorg/starcoin) are using Move,
 and there are also plans to integrate the language in several upcoming
@@ -23,7 +23,7 @@ and existing platforms (e.g.,
 
 
 The Move language documentation is available in the
-[Move Github](https://github.com/diem/move) repository and includes a
+[Move GitHub](https://github.com/diem/move) repository and includes a
 [tutorial](https://github.com/diem/move/blob/main/language/documentation/tutorial/README.md)
 and a
 [book](https://github.com/diem/move/blob/main/language/documentation/book/src/SUMMARY.md)
