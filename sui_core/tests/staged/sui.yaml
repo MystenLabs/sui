@@ -439,7 +439,9 @@ SuiError:
         STRUCT:
           - error: STR
     10:
-      IncorrectSigner: UNIT
+      IncorrectSigner:
+        STRUCT:
+          - error: STR
     11:
       UnknownSigner: UNIT
     12:
@@ -450,6 +452,8 @@ SuiError:
           - object_id:
               TYPENAME: ObjectID
           - expected_sequence:
+              TYPENAME: SequenceNumber
+          - given_sequence:
               TYPENAME: SequenceNumber
     14:
       ConflictingTransaction:
