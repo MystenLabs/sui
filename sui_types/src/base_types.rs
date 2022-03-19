@@ -397,6 +397,12 @@ impl std::fmt::Debug for ObjectDigest {
     }
 }
 
+impl AsRef<[u8]> for ObjectDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0[..]
+    }
+}
+
 impl std::fmt::Debug for TransactionDigest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let s = hex::encode(&self.0);

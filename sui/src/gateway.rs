@@ -15,16 +15,14 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use sui_core::authority_client::AuthorityClient;
-use sui_core::gateway_state::gateway_responses::{
-    TransactionResponse, TransactionSignatureRequest,
-};
+use sui_core::gateway_state::gateway_responses::TransactionResponse;
 use sui_core::gateway_state::{GatewayAPI, GatewayClient, GatewayState};
 use sui_network::network::NetworkClient;
 use sui_network::transport;
-use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
 use sui_types::committee::Committee;
-use sui_types::crypto::Signature;
 use sui_types::error::SuiError;
+use sui_types::messages::{Transaction, TransactionData};
 use sui_types::object::ObjectRead;
 
 use crate::config::AuthorityInfo;
@@ -138,11 +136,7 @@ struct RestGatewayClient {
 #[async_trait]
 #[allow(dead_code, unused_variables)]
 impl GatewayAPI for RestGatewayClient {
-    async fn execute_transaction(
-        &mut self,
-        digest: TransactionDigest,
-        signature: Signature,
-    ) -> Result<TransactionResponse, Error> {
+    async fn execute_transaction(&mut self, tx: Transaction) -> Result<TransactionResponse, Error> {
         todo!()
     }
 
@@ -152,7 +146,7 @@ impl GatewayAPI for RestGatewayClient {
         object_id: ObjectID,
         gas_payment: ObjectID,
         recipient: SuiAddress,
-    ) -> Result<TransactionSignatureRequest, Error> {
+    ) -> Result<TransactionData, Error> {
         todo!()
     }
 
@@ -172,7 +166,7 @@ impl GatewayAPI for RestGatewayClient {
         shared_object_arguments: Vec<ObjectID>,
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
-    ) -> Result<TransactionSignatureRequest, Error> {
+    ) -> Result<TransactionData, Error> {
         todo!()
     }
 
@@ -182,7 +176,7 @@ impl GatewayAPI for RestGatewayClient {
         package_bytes: Vec<Vec<u8>>,
         gas_object_ref: ObjectRef,
         gas_budget: u64,
-    ) -> Result<TransactionSignatureRequest, Error> {
+    ) -> Result<TransactionData, Error> {
         todo!()
     }
 
@@ -193,7 +187,7 @@ impl GatewayAPI for RestGatewayClient {
         split_amounts: Vec<u64>,
         gas_payment: ObjectID,
         gas_budget: u64,
-    ) -> Result<TransactionSignatureRequest, Error> {
+    ) -> Result<TransactionData, Error> {
         todo!()
     }
 
@@ -204,7 +198,7 @@ impl GatewayAPI for RestGatewayClient {
         coin_to_merge: ObjectID,
         gas_payment: ObjectID,
         gas_budget: u64,
-    ) -> Result<TransactionSignatureRequest, Error> {
+    ) -> Result<TransactionData, Error> {
         todo!()
     }
 

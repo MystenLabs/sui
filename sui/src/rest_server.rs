@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::fs;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -18,7 +17,6 @@ use dropshot::{
 use ed25519_dalek::ed25519::signature::Signature;
 use futures::lock::Mutex;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use futures::TryFutureExt;
 use http::Response;
 use hyper::{Body, StatusCode};
 use move_core_types::identifier::Identifier;
@@ -27,10 +25,9 @@ use move_core_types::value::MoveStructLayout;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sui_core::gateway_state::gateway_responses::PublishResponse;
-use sui_types::gas_coin::GasCoin;
+use serde_with::hex::Hex;
+use serde_with::serde_as;
 use tokio::task::{self, JoinHandle};
-use toml::Serializer;
 use tracing::{error, info};
 
 use sui::config::{GenesisConfig, NetworkConfig, PersistedConfig};
@@ -42,9 +39,7 @@ use sui_types::base_types::*;
 use sui_types::committee::Committee;
 use sui_types::crypto;
 use sui_types::crypto::SUI_SIGNATURE_LENGTH;
-use sui_types::event::Event;
-use sui_types::messages::TransactionEffects;
-use sui_types::messages::{ExecutionStatus, Transaction, TransactionEffects};
+use sui_types::messages::{Transaction, TransactionData};
 use sui_types::move_package::resolve_and_type_check;
 use sui_types::object::Object as SuiObject;
 use sui_types::object::ObjectRead;
@@ -515,33 +510,43 @@ async fn get_objects(
         )
     })?;
 
-    let object_refs = state.gateway.get_owned_objects(*address);
-    let mut objects = vec![];
-    for (object_id, version, object_digest) in object_refs {
-        let object = match get_object_info(state, object_id).await {
-            Ok((_, object, _)) => object,
-            Err(error) => {
-                return Err(error);
-            }
-        };
-        let obj_type = object
-            .data
-            .type_()
-            .map_or("Unknown Type".to_owned(), |type_| format!("{type_}"));
+    let objects = state
+        .gateway
+        .get_owned_objects(*address)
+        .into_iter()
+        .map(NamedObjectRef::from)
+        .collect();
+    let response = ObjectResponse { objects };
 
-        objects.push(Object {
-            object_id: object_id.to_string(),
-            obj_type,
-            version: version.into(),
-            object_digest: format!("{:?}", object_digest),
-        });
+    custom_http_response(StatusCode::OK, JsonResponse::from(response)?)
+}
+#[derive(Serialize)]
+struct ObjectResponse {
+    objects: Vec<NamedObjectRef>,
+}
+
+#[serde_as]
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NamedObjectRef {
+    object_id: ObjectID,
+    version: SequenceNumber,
+    #[serde_as(as = "Hex")]
+    digest: ObjectDigest,
+}
+
+impl NamedObjectRef {
+    fn from((object_id, version, digest): ObjectRef) -> Self {
+        Self {
+            object_id,
+            version,
+            digest,
+        }
     }
-
-    custom_http_response(StatusCode::OK, GetObjectsResponse { objects })
 }
 
 /**
-Request containing the object schema for which info is to be retrieved.
+    Request containing the object schema for which info is to be retrieved.
 
 If owner is specified we look for this object in that address's account store,
 otherwise we look for it in the shared object store.
@@ -710,21 +715,6 @@ struct TransferTransactionRequest {
     gas_budget: u64,
 }
 
-/*/**
-Response containing the summary of effects made on an object and the certificate
-associated with the transaction that verifies the transaction.
-*/
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct TransactionResponse {
-    /** Integer representing the actual cost of the transaction */
-    gas_used: u64,
-    /** JSON representation of the list of resulting effects on the object */
-    object_effects_summary: serde_json::Value,
-    /** JSON representation of the certificate verifying the transaction */
-    certificate: serde_json::Value,
-}*/
-
 /**
 Transfer object from one address to another. Gas will be paid using the gas
 provided in the request. This will be done through a native transfer
@@ -741,6 +731,7 @@ Example TransferTransactionRequest
     "gas_object_id": "96ABE602707B343B571AAAA23E3A4594934159A5"
 }
  */
+
 #[endpoint {
     method = POST,
     path = "/transfer",
@@ -752,80 +743,28 @@ async fn transfer_object(
 ) -> Result<Response<Body>, HttpError> {
     let mut state = ctx.context().server_state.lock().await;
     let state = state.as_mut().ok_or_else(server_state_error)?;
-    let transfer_order_params = request.into_inner();
+    let request = request.into_inner();
 
-    let to_address =
-        decode_bytes_hex(transfer_order_params.to_address.as_str()).map_err(|error| {
-            custom_http_error(
-                StatusCode::BAD_REQUEST,
-                format!("Could not decode to address from hex {error}"),
-            )
-        })?;
-    let object_id = ObjectID::try_from(transfer_order_params.object_id)
-        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
-    let gas_object_id = ObjectID::try_from(transfer_order_params.gas_object_id)
-        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, format!("{error}")))?;
-    let owner = decode_bytes_hex(transfer_order_params.from_address.as_str()).map_err(|error| {
-        custom_http_error(
-            StatusCode::BAD_REQUEST,
-            format!("Could not decode address from hex {error}"),
-        )
-    })?;
-    let gas_budget = transfer_order_params.gas_budget;
+    let signature_req = transfer_object_internal(state, request)
+        .await
+        .map_err(|error| custom_http_error(StatusCode::BAD_REQUEST, error.to_string()))?;
 
-    let response: Result<_, anyhow::Error> = async {
-        let data = state
-            .gateway
-            .transfer_coin(owner, object_id, gas_object_id, gas_budget, to_address)
-            .await?;
-        let signature = state
-            .keystore
-            .read()
-            .unwrap()
-            .sign(&owner, &data.to_bytes())?;
-        Ok(state
-            .gateway
-            .execute_transaction(Transaction::new(data, signature))
-            .await?
-            .to_effect_response()?)
-    }
-    .await;
+    custom_http_response(StatusCode::OK, JsonResponse::from(signature_req)?)
+}
 
-    let (cert, effects, gas_used) = match response {
-        Ok((cert, effects)) => {
-            let gas_used = match effects.status {
-                // TODO: handle the actual return value stored in
-                // ExecutionStatus::Success
-                ExecutionStatus::Success { gas_used, .. } => gas_used,
-                ExecutionStatus::Failure { gas_used, error } => {
-                    return Err(custom_http_error(
-                        StatusCode::CONFLICT,
-                        format!(
-                            "Error transferring object: {:#?}, gas used {}",
-                            error, gas_used
-                        ),
-                    ));
-                }
-            };
-            (cert, effects, gas_used)
-        }
-        Err(err) => {
-            return Err(custom_http_error(
-                StatusCode::CONFLICT,
-                format!("Transfer error: {err}"),
-            ));
-        }
-    };
+async fn transfer_object_internal(
+    state: &mut ServerState,
+    request: TransferTransactionRequest,
+) -> Result<TransactionData, anyhow::Error> {
+    let to_address = decode_bytes_hex(request.to_address.as_str())?;
+    let object_id = ObjectID::try_from(request.object_id)?;
+    let gas_object_id = ObjectID::try_from(request.gas_object_id)?;
+    let owner = decode_bytes_hex(request.from_address.as_str())?;
 
-    let object_effects_summary = get_object_effects(state, effects).await?;
-
-    custom_http_response(
-        StatusCode::OK,
-        TransactionSignatureRequest(
-            serde_json::to_value(&sig_req)
-                .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, err.to_string()))?,
-        ),
-    )
+    state
+        .gateway
+        .transfer_coin(owner, object_id, gas_object_id, to_address)
+        .await
 }
 
 /**
@@ -948,7 +887,7 @@ struct SyncRequest {
 #[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct TransactionSignatureResponse {
-    tx_digest: String,
+    data: Value,
     signature: String,
 }
 
@@ -1001,33 +940,31 @@ tags = [ "wallet" ],
 async fn execute_transaction(
     ctx: Arc<RequestContext<ServerContext>>,
     response: TypedBody<TransactionSignatureResponse>,
-) -> Result<HttpResponseOk<TransactionResponse>, HttpError> {
+) -> Result<HttpResponseOk<JsonResponse>, HttpError> {
     let response = response.into_inner();
     let mut state = ctx.context().server_state.lock().await;
     let state = state.as_mut().ok_or_else(server_state_error)?;
 
     let response: Result<_, anyhow::Error> = async {
-        let digest = decode_bytes_hex(&response.tx_digest)?;
+        let data = serde_json::from_value(response.data)?;
         let signature_byte: [u8; SUI_SIGNATURE_LENGTH] = decode_bytes_hex(&response.signature)?;
+        let signature = crypto::Signature::from_bytes(&signature_byte)?;
 
         state
             .gateway
-            .execute_transaction(
-                TransactionDigest::new(digest),
-                crypto::Signature::from_bytes(&signature_byte)?,
-            )
+            .execute_transaction(Transaction::new(data, signature))
             .await
     }
     .await;
     let response = response
         .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, err.to_string()))?;
-    Ok(HttpResponseOk(TransactionResponse(
+    Ok(HttpResponseOk(JsonResponse(
         serde_json::to_value(response)
             .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, err.to_string()))?,
     )))
 }
 
-async fn get_object_effects(
+/*async fn get_object_effects(
     state: &ServerState,
     transaction_effects: TransactionEffects,
 ) -> Result<HashMap<String, Vec<HashMap<String, String>>>, HttpError> {
@@ -1081,9 +1018,9 @@ async fn get_object_effects(
         get_events(transaction_effects.events)?,
     );
     Ok(object_effects_summary)
-}
+}*/
 
-fn get_events(events: Vec<Event>) -> Result<Vec<HashMap<String, String>>, HttpError> {
+/*fn get_events(events: Vec<Event>) -> Result<Vec<HashMap<String, String>>, HttpError> {
     let mut effects = Vec::new();
     for event in events {
         let mut effect: HashMap<String, String> = HashMap::new();
@@ -1092,9 +1029,9 @@ fn get_events(events: Vec<Event>) -> Result<Vec<HashMap<String, String>>, HttpEr
         effects.push(effect);
     }
     Ok(effects)
-}
+}*/
 
-async fn get_obj_ref_effects(
+/*async fn get_obj_ref_effects(
     state: &ServerState,
     object_refs: Vec<ObjectRef>,
 ) -> Result<Vec<HashMap<String, String>>, HttpError> {
@@ -1106,9 +1043,9 @@ async fn get_obj_ref_effects(
         effects.push(effect);
     }
     Ok(effects)
-}
+}*/
 
-async fn get_effect(
+/*async fn get_effect(
     state: &ServerState,
     object_id: ObjectID,
     sequence_number: SequenceNumber,
@@ -1135,7 +1072,7 @@ async fn get_effect(
     );
     effect.insert("object_digest".to_string(), format!("{:?}", object_digest));
     Ok(effect)
-}
+}*/
 
 async fn get_object_info(
     state: &ServerState,
@@ -1211,7 +1148,7 @@ async fn handle_publish(
 async fn handle_move_call(
     call_params: CallRequest,
     state: &mut ServerState,
-) -> Result<TransactionSignatureRequest, anyhow::Error> {
+) -> Result<JsonResponse, anyhow::Error> {
     let module = Identifier::from_str(&call_params.module.to_owned())?;
     let function = Identifier::from_str(&call_params.function.to_owned())?;
     let args = call_params.args;
@@ -1262,55 +1199,24 @@ async fn handle_move_call(
         object_args_refs.push(object_ref);
     }
 
-    let response: Result<_, anyhow::Error> = async {
-        let data = state
-            .gateway
-            .move_call(
-                sender,
-                package_object_ref,
-                module.to_owned(),
-                function.to_owned(),
-                type_args.clone(),
-                gas_obj_ref,
-                object_args_refs,
-                // TODO: Populate shared object args. sui/issue#719
-                vec![],
-                pure_args,
-                gas_budget,
-            )
-            .await?;
-        let signature = state
-            .keystore
-            .read()
-            .unwrap()
-            .sign(&sender, &data.to_bytes())?;
-        Ok(state
-            .gateway
-            .execute_transaction(Transaction::new(data, signature))
-            .await?
-            .to_effect_response()?)
-    }
-    .await;
+    let sig_req = state
+        .gateway
+        .move_call(
+            sender,
+            package_object_ref,
+            module.to_owned(),
+            function.to_owned(),
+            type_args.clone(),
+            gas_obj_ref,
+            object_args_refs,
+            // TODO: Populate shared object args. sui/issue#719
+            vec![],
+            pure_args,
+            gas_budget,
+        )
+        .await?;
 
-    let (cert, effects, gas_used) = match response {
-        Ok((cert, effects)) => {
-            let gas_used = match effects.status {
-                // TODO: handle the actual return value stored in
-                // ExecutionStatus::Success
-                ExecutionStatus::Success { gas_used, .. } => gas_used,
-                ExecutionStatus::Failure { gas_used, error } => {
-                    let context = format!("Error calling move function, gas used {gas_used}");
-                    return Err(anyhow::Error::new(error).context(context));
-                }
-            };
-            (cert, effects, gas_used)
-        }
-        Err(err) => {
-            return Err(err);
-        }
-    };
-
-    Ok(TransactionSignatureRequest(serde_json::to_value(&sig_req)?))
+    Ok(JsonResponse(serde_json::to_value(&sig_req)?))
 }
 
 fn publish_response_to_json(
@@ -1374,9 +1280,17 @@ fn custom_http_error(status_code: http::StatusCode, message: String) -> HttpErro
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct TransactionSignatureRequest(Value);
+#[serde(rename_all = "camelCase", transparent)]
+struct JsonResponse(Value);
 
-#[derive(Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct TransactionResponse(Value);
+impl JsonResponse {
+    fn from<T>(data: T) -> Result<Self, HttpError>
+    where
+        T: Serialize,
+    {
+        let json = serde_json::to_value(&data)
+            .map_err(|err| custom_http_error(StatusCode::FAILED_DEPENDENCY, err.to_string()))?;
+
+        Ok(Self(json))
+    }
+}
