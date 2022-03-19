@@ -78,7 +78,7 @@ struct ClientServerBenchmark {
     #[structopt(long)]
     use_move: bool,
     #[structopt(long, default_value = "100")]
-    batch_size: u64,
+    batch_size: usize,
 }
 #[derive(Debug, Clone, PartialEq, EnumString)]
 enum BenchmarkType {
@@ -108,7 +108,7 @@ fn main() {
         MIN_COMMITTEE_SIZE
     );
     assert_eq!(
-        benchmark.num_transactions as u64 % benchmark.batch_size,
+        benchmark.num_transactions % benchmark.batch_size,
         0,
         "num_transactions must integer divide batch_size",
     );
@@ -216,7 +216,7 @@ impl ClientServerBenchmark {
         let (address, keypair) = get_key_pair();
         // Lets not collide with genesis objects.
         let offset = 10000;
-        let tx_count = self.num_transactions as u64 / self.batch_size;
+        let tx_count = self.num_transactions / self.batch_size;
 
         let account_gas_objects: Vec<_> = (0..tx_count)
             .into_par_iter()
@@ -232,7 +232,7 @@ impl ClientServerBenchmark {
                             object_id,
                             SequenceNumber::new(),
                             address,
-                            x,
+                            1,
                         )
                     } else {
                         Object::with_id_owner_for_testing(object_id, address)
@@ -260,7 +260,7 @@ impl ClientServerBenchmark {
                 .iter()
                 .map(|o| o.id())
                 .collect::<HashSet<_>>()
-                .len() as u64,
+                .len(),
             tx_count * (self.batch_size + 1)
         );
         store_bis.bulk_object_insert(&all_objects[..]).unwrap();
@@ -313,6 +313,10 @@ impl ClientServerBenchmark {
                         gas_object_ref,
                     )
                 } else {
+                    assert!(
+                        single_kinds.len() == self.batch_size,
+                        "Inconsistent batch size"
+                    );
                     TransactionData::new(
                         TransactionKind::Batch(single_kinds),
                         address,
@@ -446,7 +450,7 @@ impl ClientServerBenchmark {
             "Completed benchmark for {}\nTotal time: {}us, items: {}, tx/sec: {}",
             self.benchmark_type,
             elapsed_time,
-            items_number * self.batch_size as usize,
+            items_number * self.batch_size,
             1_000_000.0 * (items_number as f64 * self.batch_size as f64) / (elapsed_time as f64)
         );
     }
