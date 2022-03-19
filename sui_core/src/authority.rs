@@ -145,6 +145,7 @@ impl AuthorityState {
                     SuiError::UnexpectedSequenceNumber {
                         object_id,
                         expected_sequence: object.version(),
+                        given_sequence: sequence_number,
                     }
                 );
 
@@ -175,14 +176,18 @@ impl AuthorityState {
                         // Check the owner is the transaction sender.
                         fp_ensure!(
                             transaction.sender_address() == owner,
-                            SuiError::IncorrectSigner
+                            SuiError::IncorrectSigner {
+                                error: format!("Object {:?} is owned by account address {:?}, but signer address is {:?}", object.id(), owner, transaction.sender_address()),
+                            }
                         );
                     }
                     Owner::ObjectOwner(owner) => {
                         // Check that the object owner is another mutable object in the input.
                         fp_ensure!(
                             owned_object_authenticators.contains(&owner),
-                            SuiError::IncorrectSigner
+                            SuiError::IncorrectSigner {
+                                error: format!("Object {:?} is owned by object {:?}, which is not in the input", object.id(), owner),
+                            }
                         );
                     }
                     Owner::SharedMutable => {
@@ -420,6 +425,7 @@ impl AuthorityState {
                         Some(SuiError::UnexpectedSequenceNumber {
                             object_id: *object_id,
                             expected_sequence: shared_locks[object_id],
+                            given_sequence: *version,
                         })
                     } else {
                         None
