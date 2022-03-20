@@ -99,7 +99,7 @@ impl NetworkClient {
                 if received % 5000 == 0 && received > 0 {
                     debug!("Received {}", received);
                 }
-                let xcontinue = received < total;
+                let xcontinue = received <= total;
                 futures::future::ready(xcontinue)
             })
             .collect()
