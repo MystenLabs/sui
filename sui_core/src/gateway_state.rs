@@ -5,7 +5,7 @@
 use crate::{authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use futures::future;
-use itertools::Itertools;
+
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::value::MoveStructLayout;
@@ -410,13 +410,10 @@ impl AccountState {
     /// The caller has to explicitly find which objects are locked
     /// TODO: always return true for immutable objects https://github.com/MystenLabs/sui/issues/305
     fn can_lock_or_unlock(&self, transaction: &Transaction) -> Result<bool, SuiError> {
-        let iter_matches = self.store.pending_transactions.multi_get(
-            &transaction
-                .input_objects()?
-                .iter()
-                .map(|q| q.object_id())
-                .collect_vec(),
-        )?;
+        let iter_matches = self
+            .store
+            .pending_transactions
+            .multi_get(transaction.input_objects()?.iter().map(|q| q.object_id()))?;
         if iter_matches.into_iter().any(|match_for_transaction| {
             matches!(match_for_transaction,
                 // If we find any transaction that isn't the given transaction, we cannot proceed
