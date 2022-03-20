@@ -26,6 +26,8 @@ use typed_store::Map;
 
 use std::collections::btree_map::Entry;
 use std::path::PathBuf;
+
+use std::sync::Arc;
 use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
@@ -522,17 +524,32 @@ where
         // Lock the objects in this transaction
         account.lock_pending_transaction_objects(&transaction)?;
 
-        // We can escape this function without unlocking. This could be dangerous
-        let result = self.execute_transaction_inner(&transaction).await;
+        let state = Arc::new(futures::lock::Mutex::new(self));
 
         // How do we handle errors on authority which lock objects?
         // Currently VM crash can keep objects locked, but we would like to avoid this.
         // TODO: https://github.com/MystenLabs/sui/issues/349
-        // https://github.com/MystenLabs/sui/issues/211
-        // https://github.com/MystenLabs/sui/issues/346
+        //       https://github.com/MystenLabs/sui/issues/211
+        //       https://github.com/MystenLabs/sui/issues/346
+        let _guard = scopeguard::guard(state.clone(), |store_ref| {
+            // This should work because the main lock has yielded by the time the guard is at unwinding
+            let mut store = store_ref
+                .try_lock()
+                .expect("Failed to acquire the store lock post TX execution");
+            let account = store
+                .get_or_create_account(transaction.sender_address())
+                .expect("lost the sender's account");
+            account
+                .unlock_pending_transaction_objects(&transaction)
+                .expect("failed to unlock pending transactions");
+        });
 
-        let account = self.get_or_create_account(transaction.sender_address())?;
-        account.unlock_pending_transaction_objects(&transaction)?;
+        // We can escape this function without unlocking. This could be dangerous
+        let result = {
+            let mut store = state.lock().await;
+            store.execute_transaction_inner(&transaction).await
+        };
+
         result
     }
 
