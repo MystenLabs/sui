@@ -105,6 +105,7 @@ fn main() {
         benchmark.committee_size,
         MIN_COMMITTEE_SIZE
     );
+
     let (state, transactions) = benchmark.make_structures();
 
     // Make multi-threaded runtime for the authority
@@ -114,6 +115,12 @@ fn main() {
     } else {
         num_cpus::get()
     };
+    if benchmark.benchmark_type == BenchmarkType::TransactionsAndCerts {
+        assert!(
+            (benchmark.num_accounts * 2 / connections) % 2 == 0,
+            "Each tx and their cert must be sent in order. Multiple TCP connections will break requests into chunks, and chunk size must be an even number so it doesn't break each tx and cert pair"
+        );
+    }
 
     thread::spawn(move || {
         let runtime = Builder::new_multi_thread()
