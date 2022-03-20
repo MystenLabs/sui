@@ -422,11 +422,9 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         transaction_digest: &TransactionDigest,
         object_ids: impl Iterator<Item = &'a ObjectID>,
     ) -> Result<Vec<Option<SequenceNumber>>, SuiError> {
-        let keys: Vec<_> = object_ids
-            .map(|objid| (*transaction_digest, *objid))
-            .collect();
+        let keys = object_ids.map(|objid| (*transaction_digest, *objid));
 
-        self.sequenced.multi_get(&keys[..]).map_err(SuiError::from)
+        self.sequenced.multi_get(keys).map_err(SuiError::from)
     }
 
     /// Read a lock for a specific (transaction, shared object) pair.
