@@ -84,7 +84,7 @@ module Sui::Transfer {
     /// Similar to transfer_to_object, to transfer an object to another object.
     /// However it does not return the ChildRef. This can be unsafe to use since there is
     /// no longer guarantee that the ID stored in the parent actually represent ownership.
-    public(friend) fun transfer_to_object_unsafe<T: key, R: key>(obj: T, owner: &mut R) {
+    public fun transfer_to_object_unsafe<T: key, R: key>(obj: T, owner: &mut R) {
         let ChildRef { child_id: _ } = transfer_to_object(obj, owner);
     }
 
