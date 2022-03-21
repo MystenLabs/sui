@@ -54,9 +54,12 @@ Because Sui focuses on managing specific objects rather than a single aggregatio
 
 As a consequence, a Sui authority – or any other entity with a copy of the state – can exhibit a causal history of an object, showing its history since genesis. Sui explicitly makes the bet that in most cases, the ordering of that causal history with the causal history of another object is irrelevant; and in the few cases where this information is relevant, Sui makes this relationship explicit in the data.
 
-Sui votes result in *[eventual consistency](https://hal.inria.fr/inria-00609399/document)* in the classical sense. Eventual consistency is achieved when two authorities who have seen the exact same set of transactions reach the same state.
+Sui guarantees transaction processing obeys *[eventual consistency](https://en.wikipedia.org/wiki/Eventual_consistency)* in the [classical sense](https://hal.inria.fr/inria-00609399/document). This breaks down in two parts:
 
-Eventual consistency is the union of Eventual delivery (if one honest replica applies an update, all honest replica eventually do) and Convergence (all honest replicas that apply the same updates reach the same state).  In our context, an *update* is  transaction.
+* Eventual delivery - if one honest authority processes a transactions, all other honest authorities will eventually do the same.
+* Convergence - two authorities that have seen the same set of transactions share the same view of the system (reach the same state).
+
+But contrary to a blockchain, Sui does not stop the flow of transactions in order to witness the convergence.
 
 ## Common transactions
 
