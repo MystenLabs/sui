@@ -23,7 +23,6 @@ impl Borrow<[u8]> for &Item {
     }
 }
 
-
 #[derive(Default, Clone, PartialEq, Eq)]
 pub struct Accumulator {
     accumulator: RistrettoPoint,
@@ -38,11 +37,12 @@ impl Accumulator {
         self.accumulator += point;
     }
 
-    pub fn insert_all<I, It>(&mut self, items: It) 
-        where It: Iterator<Item = I>,
-              I: Borrow<[u8]>,
+    pub fn insert_all<I, It>(&mut self, items: It)
+    where
+        It: Iterator<Item = I>,
+        I: Borrow<[u8]>,
     {
-        for i in items{
+        for i in items {
             self.insert(&i);
         }
     }
@@ -77,7 +77,10 @@ where
     pub items: BTreeSet<Item>,
 }
 
-impl<K> CheckpointWithItems<K> where K: Clone {
+impl<K> CheckpointWithItems<K>
+where
+    K: Clone,
+{
     pub fn new(key: K, sequence_number: u64) -> CheckpointWithItems<K> {
         CheckpointWithItems {
             key,
@@ -101,12 +104,18 @@ impl<K> CheckpointWithItems<K> where K: Clone {
 }
 
 #[derive(Clone)]
-pub struct WaypointDiff<K> where K: Clone {
+pub struct WaypointDiff<K>
+where
+    K: Clone,
+{
     pub first: CheckpointWithItems<K>,
     pub second: CheckpointWithItems<K>,
 }
 
-impl<K> WaypointDiff<K> where K: Clone {
+impl<K> WaypointDiff<K>
+where
+    K: Clone,
+{
     pub fn new<V>(
         first_key: K,
         first: Waypoint,
@@ -226,8 +235,10 @@ where
             let save_old_first = self.authority_waypoints[&first.key].items.clone();
 
             // Update the root
-            self.reference_waypoint.accumulator.insert_all(additional_first_items.iter());
-  
+            self.reference_waypoint
+                .accumulator
+                .insert_all(additional_first_items.iter());
+
             // Update existing keys
             for (_k, v) in &mut self.authority_waypoints {
                 let add_items = additional_first_items.clone();
