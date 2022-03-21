@@ -13,19 +13,19 @@ Try out [examples](../explore/examples.md) supplied by the Sui team to help you 
 ## Prototypes
 View projects built by third parties demonstrating the power of Sui.
 
-[Prototypes](../explore/prototypes.md) pre-alpha game prototypes that showcase the power of NFTs on Sui:
+[Prototypes](../explore/prototypes.md) - pre-alpha game prototypes that showcase the power of NFTs on Sui:
 <section class="sui-dev-video">
 
 <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/sAMT5x8W3B8?autoplay=0"  frameborder="0"></iframe>
 </section>
 
-[Panzerdogs x Sui](../explore/panzerdogs.md) is an NFT gaming project where users can own their in-game assets and use them to battle against each other in tanks. Brawl Stars x Tanks x Play-To-Earn.
+[Panzerdogs x Sui](../explore/panzerdogs.md) - an example of how the Sui infrastructure delivers a more integrated feedback loop between gameplay and NFT ownership.
 <section class="sui-dev-video">
  
 <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/Nx7hTb8dOb4?autoplay=0" frameborder="0"></iframe>
 </section>
 
-[SoWork x Sui](../explore/sowork.md) building features on Sui to power creative employee rewards and custom NFT mints via SoWork's mapmaker.
+[SoWork x Sui](../explore/sowork.md) - building features on Sui to power creative employee rewards and custom NFT mints via SoWork's mapmaker.
 <section class="sui-dev-video">
 
  <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/lwPMhpiyfmE?autoplay=0"  frameborder="0"></iframe>
