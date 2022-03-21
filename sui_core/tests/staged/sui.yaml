@@ -717,7 +717,13 @@ SuiError:
     86:
       IncorrectRecipientError: UNIT
     87:
-      TooManyIncorrectAuthorities: UNIT
+      TooManyIncorrectAuthorities:
+        STRUCT:
+          - errors:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: PublicKeyBytes
+                  - TYPENAME: SuiError
     88:
       InconsistentGatewayResult:
         STRUCT:
