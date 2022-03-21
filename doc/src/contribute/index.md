@@ -2,13 +2,17 @@
 title: Contributing to Sui
 ---
 
-Now that you understand Sui, consider helping the project. To contribute to Sui, ensure you have the latest version of the codebase. To clone the repository, run the following:
+Now that you understand Sui, consider helping the project. To contribute to Sui, ensure you have the latest version of the codebase.
+
+To clone the repository, run the following:
 ```bash
 git clone https://github.com/mystenlabs/sui.git
 cd sui
 cargo build --all --all-targets
 cargo test
 ```
+
+See [Install Sui](../build/install.md) for installation instructions and our [end-to-end tutorial](../explore/tutorials.md) to work with Sui immediately.
 
 ## Pull requests
 
