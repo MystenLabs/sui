@@ -10,9 +10,9 @@ use std::sync::Arc;
 use sui_network::transport;
 use sui_types::base_types::SequenceNumber;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::fp_ensure;
 use sui_types::messages::{ConfirmationTransaction, ConsensusOutput};
 use sui_types::serialize::{deserialize_message, SerializedMessage};
+use sui_types::{fp_bail, fp_ensure};
 use tokio::task::JoinHandle;
 
 #[cfg(test)]
@@ -58,11 +58,16 @@ impl ConsensusClient {
     }
 
     /// Spawn the consensus client in a new tokio task.
-    pub fn spawn(mut handler: Self, address: SocketAddr, buffer_size: usize) -> JoinHandle<()> {
+    pub fn spawn(
+        mut handler: Self,
+        address: SocketAddr,
+        buffer_size: usize,
+    ) -> JoinHandle<SuiResult<()>> {
         log::info!("Consensus client connecting to {}", address);
         tokio::spawn(async move {
-            let _ = handler.synchronize().await;
-            handler.run(address, buffer_size).await;
+            handler.synchronize().await?;
+            handler.run(address, buffer_size).await?;
+            Ok(())
         })
     }
 
@@ -143,19 +148,19 @@ impl ConsensusClient {
         // badly serialized certificates, but the synchronizer will have to do more work.
         let certificate = confirmation.certificate;
         self.state
-            .handle_consensus_certificate(&certificate, self.last_consensus_index)
+            .handle_consensus_certificate(certificate, self.last_consensus_index)
             .await
     }
 
     /// Main loop connecting to the consensus. This mainly acts as a light client.
-    async fn run(&mut self, address: SocketAddr, buffer_size: usize) {
+    async fn run(&mut self, address: SocketAddr, buffer_size: usize) -> SuiResult<()> {
         // TODO [issue #931]: Do not try to reconnect immediately after the connection fails, use some
         // sort of back off. We may also move this logic to `sui-network::transport` to
         // expose a 'stream client' or something like that.
         'main: loop {
             // Subscribe to the consensus' output.
             let mut connection = match transport::connect(address.to_string(), buffer_size).await {
-                Ok(stream) => stream,
+                Ok(connection) => connection,
                 Err(e) => {
                     log::warn!("Failed to subscribe to consensus output: {}", e);
                     continue 'main;
@@ -186,7 +191,7 @@ impl ConsensusClient {
                         // shared objects that are different from other authorities. It
                         // is however safe to ask for that certificate again and re-process
                         // it (the core is idempotent).
-                        self.last_consensus_index = self.last_consensus_index.decrement().unwrap();
+                        fp_bail!(SuiError::StorageError(e));
                     }
                     // Log the errors that are the client's fault (not ours). This is
                     // only for debug purposes: all correct authorities will do the same.

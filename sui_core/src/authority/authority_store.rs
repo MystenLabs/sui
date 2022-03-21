@@ -25,6 +25,7 @@ pub type ReplicaStore = SuiDataStore<true>;
 const NUM_SHARDS: usize = 4096;
 
 /// The key where the latest consensus index is stored in the database.
+// TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
 
 /// ALL_OBJ_VER determines whether we want to store all past
@@ -818,22 +819,22 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     /// last consensus index.
     pub fn persist_certificate_and_lock_shared_objects(
         &self,
-        transaction_digest: &TransactionDigest,
         certificate: CertifiedTransaction,
-        last_consensus_index: SequenceNumber,
+        global_certificate_index: SequenceNumber,
     ) -> Result<(), SuiError> {
+        let transaction_digest = certificate.transaction.digest();
         let certificate_to_write = std::iter::once((transaction_digest, &certificate));
 
         let mut sequenced_to_write = Vec::new();
         let mut schedule_to_write = Vec::new();
         for id in certificate.transaction.shared_input_objects() {
             let version = self.schedule.get(id)?.unwrap_or_default();
-            sequenced_to_write.push(((*transaction_digest, *id), version));
+            sequenced_to_write.push(((transaction_digest, *id), version));
             let next_version = version.increment();
             schedule_to_write.push((id, next_version));
         }
 
-        let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, last_consensus_index));
+        let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, global_certificate_index));
 
         let mut write_batch = self.sequenced.batch();
         write_batch = write_batch.insert_batch(&self.certificates, certificate_to_write)?;

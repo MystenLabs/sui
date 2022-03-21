@@ -1651,7 +1651,7 @@ async fn shared_object() {
     // Sequence the certificate to assign a sequence number to the shared object.
     authority
         .handle_consensus_certificate(
-            &certificate,
+            certificate,
             /* last_consensus_index */ SequenceNumber::new(),
         )
         .await

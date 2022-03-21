@@ -521,7 +521,7 @@ impl AuthorityState {
     /// called by a single task (ie. the task handling consensus outputs).
     pub async fn handle_consensus_certificate(
         &self,
-        certificate: &CertifiedTransaction,
+        certificate: CertifiedTransaction,
         last_consensus_index: SequenceNumber,
     ) -> SuiResult<()> {
         // Ensure it is a shared object certificate
@@ -554,11 +554,8 @@ impl AuthorityState {
         // this function and that the last consensus index is also kept in memory. It is
         // thus ok to only persist now (despite this function may have returned earlier).
         // In the worst case, the synchronizer of the consensus client will catch up.
-        self._database.persist_certificate_and_lock_shared_objects(
-            &transaction_digest,
-            certificate.clone(),
-            last_consensus_index,
-        )
+        self._database
+            .persist_certificate_and_lock_shared_objects(certificate, last_consensus_index)
     }
 
     pub async fn handle_transaction_info_request(
