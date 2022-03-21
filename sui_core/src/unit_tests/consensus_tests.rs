@@ -133,7 +133,7 @@ async fn test_guardrail() {
     let state = Arc::new(authority);
 
     // Create a first consensus client.
-    let _consensus_client = ConsensusClient::new(state.clone()).unwrap();
+    let _consensus_client = ConsensusClient::new(state).unwrap();
 
     // Create a second consensus client from the same state.
     let result = ConsensusClient::new(state.clone());
