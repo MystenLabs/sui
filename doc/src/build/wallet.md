@@ -11,10 +11,21 @@ interface, *Wallet CLI*.
 
 ## Setup
 
-Follow the instructions to [install Sui binaries](install.md).
+Follow the instructions to [install Sui binaries](install.md). Then
+create a directory where your Sui configuration files will live - let
+us name this directory `sui_instance` and let us assume that it lives
+in another directory designated by the `$SUI_ROOT` environment
+variable:
+
+```shell
+cd "$SUI_ROOT"
+mkdir sui_instance
+```
 
 ## Genesis
+
 ```shell
+cd "$SUI_ROOT"/sui_instance
 sui genesis
 ```
 NOTE: For logs, set `RUST_LOG=debug` before invoking `sui genesis`.
@@ -109,14 +120,21 @@ implement more secure key management and support hardware signing in a future re
 Run the following command to start the local Sui network:
 
 ```shell
+cd "$SUI_ROOT"/sui_instance
 sui start
 ```
 
-or
+You can also run this command in any directory if you provide a path
+to the directory where Sui configuration files are stored:
 
 ```shell
-sui start --config [config file path]
+sui start --config "$SUI_ROOT"/sui_instance
 ```
+
+Executing any of these two commands in a terminal window will result
+in no output but the terminal will be "blocked" by the running Sui
+instance (it will not return the command prompt).
+
 NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
 
 The network config file path defaults to `./network.conf` if not
@@ -143,16 +161,18 @@ The wallet can be started in two modes: interactive shell or command line interf
 
 ### Interactive shell
 
-To start the interactive shell:
+To start the interactive shell, execute the following (in a different terminal window than one used to execute `sui start`):
 
 ```shell
+cd "$SUI_ROOT"/sui_instance
 wallet
 ```
 
-or
+You can also run this command in any directory if you provide a path
+to the directory where Sui configuration files are stored:
 
 ```shell
-wallet --config [config file path]
+wallet --config "$SUI_ROOT"/sui_instance
 ```
 
 The wallet config file path defaults to `./wallet.conf` if not
@@ -175,6 +195,10 @@ The Sui interactive wallet supports the following shell functionality:
 The wallet can also be used without the interactive shell, which can be useful if 
 you want to pipe the output of the wallet to another application or invoke wallet 
 commands using scripts.
+
+**For the remainder of this tutorial we will assume that you are
+executing the `wallet` command in a directory where the Sui
+configuration files are stored (`"$SUI_ROOT"/sui_instance`).**
 
 ```shell
 USAGE:

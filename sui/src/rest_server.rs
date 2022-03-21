@@ -459,7 +459,7 @@ struct Object {
     /** Type of object, i.e. Coin */
     obj_type: String,
     /** Object version */
-    version: String,
+    version: u64,
     /** Hash of the object's contents used for local validation */
     object_digest: String,
 }
@@ -498,7 +498,7 @@ async fn get_objects(
 
     let object_refs = state.gateway.get_owned_objects(*address);
     let mut objects = vec![];
-    for (object_id, sequence_number, object_digest) in object_refs {
+    for (object_id, version, object_digest) in object_refs {
         let object = match get_object_info(state, object_id).await {
             Ok((_, object, _)) => object,
             Err(error) => {
@@ -513,7 +513,7 @@ async fn get_objects(
         objects.push(Object {
             object_id: object_id.to_string(),
             obj_type,
-            version: format!("{:?}", sequence_number),
+            version: version.into(),
             object_digest: format!("{:?}", object_digest),
         });
     }
@@ -899,7 +899,7 @@ async fn call(
     let call_params = request.into_inner();
     let transaction_response = handle_move_call(call_params, state)
         .await
-        .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{err}")))?;
+        .map_err(|err| custom_http_error(StatusCode::BAD_REQUEST, format!("{:#}", err)))?;
     custom_http_response(StatusCode::OK, transaction_response)
 }
 
@@ -1053,7 +1053,10 @@ async fn get_effect(
             .map_or("Unknown Type".to_owned(), |type_| format!("{}", type_)),
     );
     effect.insert("id".to_string(), object_id.to_string());
-    effect.insert("version".to_string(), format!("{:?}", sequence_number));
+    effect.insert(
+        "version".to_string(),
+        format!("{}", sequence_number.value()),
+    );
     effect.insert("object_digest".to_string(), format!("{:?}", object_digest));
     Ok(effect)
 }

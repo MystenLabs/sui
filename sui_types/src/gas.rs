@@ -34,7 +34,7 @@ pub fn check_transfer_gas_requirement(gas_object: &Object, transfer_object: &Obj
     )
 }
 
-pub fn check_move_gas_requirement(gas_object: &Object, gas_budget: u64) -> SuiResult {
+pub fn check_move_gas_requirement(gas_budget: u64) -> SuiResult {
     ok_or_gas_error!(
         gas_budget >= MIN_MOVE,
         format!(
@@ -42,14 +42,7 @@ pub fn check_move_gas_requirement(gas_object: &Object, gas_budget: u64) -> SuiRe
             gas_budget, MIN_MOVE
         )
     )?;
-    let balance = get_gas_balance(gas_object)?;
-    ok_or_gas_error!(
-        balance >= gas_budget,
-        format!(
-            "Gas balance is {}, smaller than the budget {} for move operation.",
-            balance, gas_budget
-        )
-    )
+    Ok(())
 }
 
 /// Try subtract the gas balance of \p gas_object by \p amount.

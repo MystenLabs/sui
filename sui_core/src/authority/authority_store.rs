@@ -393,13 +393,12 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     }
 
     /// Read a lock for a specific (transaction, shared object) pair.
-    pub fn sequenced(
+    pub fn sequenced<'a>(
         &self,
         transaction_digest: &TransactionDigest,
-        object_ids: &[ObjectID],
+        object_ids: impl Iterator<Item = &'a ObjectID>,
     ) -> Result<Vec<Option<SequenceNumber>>, SuiError> {
         let keys: Vec<_> = object_ids
-            .iter()
             .map(|objid| (*transaction_digest, *objid))
             .collect();
 
@@ -807,7 +806,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         for object_id in transaction.shared_input_objects() {
             sequenced_to_delete.push((*transaction_digest, *object_id));
             if self.get_object(object_id)?.is_none() {
-                schedule_to_delete.push(object_id);
+                schedule_to_delete.push(*object_id);
             }
         }
         write_batch = write_batch.delete_batch(&self.sequenced, sequenced_to_delete)?;
@@ -831,7 +830,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             let version = self.schedule.get(id)?.unwrap_or_default();
             sequenced_to_write.push(((transaction_digest, *id), version));
             let next_version = version.increment();
-            schedule_to_write.push((id, next_version));
+            schedule_to_write.push((*id, next_version));
         }
 
         let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, global_certificate_index));

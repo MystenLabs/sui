@@ -36,17 +36,29 @@ impl<S> AuthorityTemporaryStore<S> {
     /// initial objects.
     pub fn new(
         package_store: Arc<S>,
-        _input_objects: &'_ [Object],
+        input_objects: &[(InputObjectKind, Object)],
         tx_digest: TransactionDigest,
     ) -> Self {
         Self {
             package_store,
             tx_digest,
-            objects: _input_objects.iter().map(|v| (v.id(), v.clone())).collect(),
-            active_inputs: _input_objects
+            objects: input_objects
                 .iter()
-                .filter(|v| !v.is_read_only())
-                .map(|v| v.compute_object_reference())
+                .map(|(_, object)| (object.id(), object.clone()))
+                .collect(),
+            active_inputs: input_objects
+                .iter()
+                .filter_map(|(kind, object)| match kind {
+                    InputObjectKind::MovePackage(_) => None,
+                    InputObjectKind::OwnedMoveObject(object_ref) => {
+                        if object.is_read_only() {
+                            None
+                        } else {
+                            Some(*object_ref)
+                        }
+                    }
+                    InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
+                })
                 .collect(),
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
