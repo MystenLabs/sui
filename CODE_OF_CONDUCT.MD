@@ -22,6 +22,5 @@ diverse, inclusive, and healthy community.
 See the central [Sui Code of Conduct](doc/src/contribute/code-of-conduct.md) for
 full details.
 
-Our Code of Conduct is adapted from the [Contributor Covenant][homepage],
-version 2.1, available at
-[https://www.contributor-covenant.org/version/2/1/code_of_conduct.html][v2.1].
+Our Code of Conduct is adapted from the
+[Contributor Covenant version 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct.html).
