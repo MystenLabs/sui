@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::authority::authority_tests::get_genesis_package_by_module;
-use crate::authority::authority_tests::init_state_with_objects;
+use crate::authority::authority_tests::{init_state_with_objects, init_state};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use rand::rngs::StdRng;
@@ -125,4 +125,17 @@ async fn handle_consensus_output() {
         state.db().last_consensus_index().unwrap(),
         SequenceNumber::from(1)
     );
+}
+
+#[tokio::test]
+async fn test_guardrail() {
+    let authority = init_state().await;
+    let state = Arc::new(authority);
+
+    // Create a first consensus client.
+    let _consensus_client = ConsensusClient::new(state.clone()).unwrap();
+    
+    // Create a second consensus client from the same state.
+    let result = ConsensusClient::new(state.clone());
+    assert!(result.is_err());
 }

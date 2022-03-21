@@ -1383,7 +1383,7 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
 }
 
 #[cfg(test)]
-async fn init_state() -> AuthorityState {
+pub async fn init_state() -> AuthorityState {
     let (committee, _, authority_key, store) = init_state_parameters();
     AuthorityState::new(
         committee,

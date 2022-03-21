@@ -5,12 +5,15 @@ use crate::authority::AuthorityState;
 use bytes::Bytes;
 use std::cmp::Ordering;
 use std::net::SocketAddr;
+use std::sync::atomic::Ordering as AtomicOrdering;
 use std::sync::Arc;
 use sui_network::transport;
 use sui_types::base_types::SequenceNumber;
 use sui_types::error::{SuiError, SuiResult};
+use sui_types::fp_ensure;
 use sui_types::messages::{ConfirmationTransaction, ConsensusOutput};
 use sui_types::serialize::{deserialize_message, SerializedMessage};
+use tokio::task::JoinHandle;
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -27,10 +30,27 @@ pub struct ConsensusClient {
     last_consensus_index: SequenceNumber,
 }
 
+impl Drop for ConsensusClient {
+    fn drop(&mut self) {
+        self.state
+            .consensus_guardrail
+            .fetch_sub(1, AtomicOrdering::SeqCst);
+    }
+}
+
 impl ConsensusClient {
     /// Create a new consensus handler with the input authority state.
     pub fn new(state: Arc<AuthorityState>) -> SuiResult<Self> {
+        // Ensure there is a single consensus client modifying the state.
+        let status = state
+            .consensus_guardrail
+            .fetch_add(1, AtomicOrdering::SeqCst);
+        fp_ensure!(status == 0, SuiError::OnlyOneConsensusClientPermitted);
+
+        // Load the last consensus index from storage.
         let last_consensus_index = state.last_consensus_index()?;
+
+        // Return a consensus client only if all went well (safety-critical).
         Ok(Self {
             state,
             last_consensus_index,
@@ -38,12 +58,12 @@ impl ConsensusClient {
     }
 
     /// Spawn the consensus client in a new tokio task.
-    pub fn spawn(mut handler: Self, address: SocketAddr, buffer_size: usize) {
+    pub fn spawn(mut handler: Self, address: SocketAddr, buffer_size: usize) -> JoinHandle<()> {
+        log::info!("Consensus client connecting to {}", address);
         tokio::spawn(async move {
             let _ = handler.synchronize().await;
             handler.run(address, buffer_size).await;
-        });
-        log::info!("Consensus client connecting to {}", address);
+        })
     }
 
     /// Synchronize with the consensus in case we missed part of its output sequence.

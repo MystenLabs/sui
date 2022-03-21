@@ -260,6 +260,9 @@ pub enum SuiError {
     TooManyIncorrectAuthorities,
     #[error("Inconsistent results observed in the Gateway. This should not happen and typically means there is a bug in the Sui implementation. Details: {error:?}")]
     InconsistentGatewayResult { error: String },
+
+    #[error("Authority state can be modified by a single consensus client at the time")]
+    OnlyOneConsensusClientPermitted,
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

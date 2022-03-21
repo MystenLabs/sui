@@ -2,6 +2,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+    authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender},
+    execution_engine,
+};
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
@@ -9,6 +13,7 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
+use std::sync::atomic::AtomicUsize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     pin::Pin,
@@ -28,11 +33,6 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use tracing::*;
-
-use crate::{
-    authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender},
-    execution_engine,
-};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -82,6 +82,9 @@ pub struct AuthorityState {
     /// and create batches for this authority.
     /// Keep as None if there is no need for this.
     batch_channels: Option<(BatchSender, BroadcastSender)>,
+
+    /// Ensures there can only be a single consensus client is updating the state.
+    pub consensus_guardrail: AtomicUsize,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -739,7 +742,7 @@ impl AuthorityState {
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
 
-        AuthorityState {
+        Self {
             committee,
             name,
             secret,
@@ -748,6 +751,7 @@ impl AuthorityState {
                 .expect("We defined natives to not fail here"),
             _database: store,
             batch_channels: None,
+            consensus_guardrail: AtomicUsize::new(0),
         }
     }
 
