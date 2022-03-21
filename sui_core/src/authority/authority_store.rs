@@ -830,22 +830,21 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         let versions = self.schedule.multi_get(ids)?;
 
         let ids = certificate.transaction.shared_input_objects();
-        let sequenced_to_write = ids.cloned().zip(versions.iter()).map(|(id, v)| {
-            let version = match v {
-                Some(v) => *v,
-                None => SequenceNumber::new(),
-            };
-            ((transaction_digest, id), version)
-        });
+        let (sequenced_to_write, schedule_to_write): (Vec<_>, Vec<_>) = ids
+            .zip(versions.iter())
+            .map(|(id, v)| {
+                let version = v.unwrap_or_else(SequenceNumber::new);
 
-        let ids = certificate.transaction.shared_input_objects();
-        let schedule_to_write = ids.zip(versions.iter()).map(|(id, v)| {
-            let next_version = match v {
-                Some(v) => v.increment(),
-                None => SequenceNumber::from(1),
-            };
-            (*id, next_version)
-        });
+                let next_version = v
+                    .map(|v| v.increment())
+                    .unwrap_or_else(|| SequenceNumber::from(1));
+
+                let sequenced = ((transaction_digest, *id), version);
+                let scheduled = (id, next_version);
+
+                (sequenced, scheduled)
+            })
+            .unzip();
 
         // Make an iterator to update the last consensus index.
         let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, global_certificate_index));
