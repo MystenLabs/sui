@@ -16,3 +16,4 @@ Now that you've [learned about Sui](../learn/index.md), it's time to [install](.
   are also objects. Thus, Sui objects can be partitioned into two categories mutable data values and immutable packages.
 * [Transactions](../build/transactions.md) - All updates to the Sui ledger happen via a transaction. This section describes the transaction types
   supported by Sui and explains how their execution changes the ledger.
+* [Devnet](../build/devnet.md) - Dev network for Sui.
