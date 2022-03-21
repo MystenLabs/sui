@@ -1083,3 +1083,10 @@ impl ConfirmationTransaction {
 }
 
 impl BcsSignable for TransactionData {}
+
+#[derive(Serialize, Deserialize)]
+pub struct ConsensusOutput {
+    #[serde(with = "serde_bytes")]
+    pub message: Vec<u8>,
+    pub sequencer_number: SequenceNumber,
+}

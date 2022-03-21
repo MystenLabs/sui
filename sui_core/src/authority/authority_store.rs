@@ -24,6 +24,10 @@ pub type ReplicaStore = SuiDataStore<true>;
 
 const NUM_SHARDS: usize = 4096;
 
+/// The key where the latest consensus index is stored in the database.
+// TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
+const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
+
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
 /// them, but other entities such as replicas will.
@@ -93,6 +97,12 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
 
     /// A sequence of batches indexing into the sequence of executed transactions.
     pub batches: DBMap<TxSequenceNumber, SignedBatch>,
+
+    /// The following table is used to store a single value (the corresponding key is a constant). The value
+    /// represents the index of the latest consensus message this authority processed. This field is written
+    /// by a single process acting as consensus (light) client. It is used to ensure the authority processes  
+    /// every message output by consensus (and in the right order).
+    last_consensus_index: DBMap<u64, SequenceNumber>,
 
     /// The next available sequence number to use in the `executed sequence` table.
     pub next_sequence_number: AtomicU64,
@@ -174,6 +184,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
                 ("schedule", &options),
                 ("executed_sequence", &options),
                 ("batches", &options),
+                ("last_consensus_index", &options),
             ],
         )
         .expect("Cannot open DB.");
@@ -205,6 +216,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             sequenced,
             schedule,
             batches,
+            last_consensus_index,
         ) = reopen! (
             &db,
             "objects";<ObjectID, Object>,
@@ -217,7 +229,8 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             "signed_effects";<TransactionDigest, SignedTransactionEffects>,
             "sequenced";<(TransactionDigest, ObjectID), SequenceNumber>,
             "schedule";<ObjectID, SequenceNumber>,
-            "batches";<TxSequenceNumber, SignedBatch>
+            "batches";<TxSequenceNumber, SignedBatch>,
+            "last_consensus_index";<u64, SequenceNumber>
         );
         AuthorityStore {
             objects,
@@ -236,6 +249,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
                 .collect(),
             executed_sequence,
             batches,
+            last_consensus_index,
             next_sequence_number,
         }
     }
@@ -800,27 +814,32 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         Ok(write_batch)
     }
 
-    /// Lock a sequence number for the shared objects of the input transaction.
+    /// Lock a sequence number for the shared objects of the input transaction. Also update the
+    /// last consensus index.
     pub fn persist_certificate_and_lock_shared_objects(
         &self,
-        transaction_digest: &TransactionDigest,
         certificate: CertifiedTransaction,
+        global_certificate_index: SequenceNumber,
     ) -> Result<(), SuiError> {
+        let transaction_digest = certificate.transaction.digest();
         let certificate_to_write = std::iter::once((transaction_digest, &certificate));
 
         let mut sequenced_to_write = Vec::new();
         let mut schedule_to_write = Vec::new();
         for id in certificate.transaction.shared_input_objects() {
             let version = self.schedule.get(id)?.unwrap_or_default();
-            sequenced_to_write.push(((*transaction_digest, *id), version));
+            sequenced_to_write.push(((transaction_digest, *id), version));
             let next_version = version.increment();
             schedule_to_write.push((*id, next_version));
         }
+
+        let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, global_certificate_index));
 
         let mut write_batch = self.sequenced.batch();
         write_batch = write_batch.insert_batch(&self.certificates, certificate_to_write)?;
         write_batch = write_batch.insert_batch(&self.sequenced, sequenced_to_write)?;
         write_batch = write_batch.insert_batch(&self.schedule, schedule_to_write)?;
+        write_batch = write_batch.insert_batch(&self.last_consensus_index, index_to_write)?;
         write_batch.write().map_err(SuiError::from)
     }
 
@@ -924,6 +943,14 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .collect();
 
         Ok((batches, transactions))
+    }
+
+    /// Return the latest consensus index. It is used to bootstrap the consensus client.
+    pub fn last_consensus_index(&self) -> SuiResult<SequenceNumber> {
+        self.last_consensus_index
+            .get(&LAST_CONSENSUS_INDEX_ADDR)
+            .map(|x| x.unwrap_or_default())
+            .map_err(SuiError::from)
     }
 }
 
