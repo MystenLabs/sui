@@ -96,6 +96,10 @@
         "fileName": "explore/examples"
       },
       {
+        "label": "Panzerdogs x Sui",
+        "fileName": "explore/panzerdogs"
+      }
+      {
         "label": "SoWork x Sui",
         "fileName": "explore/sowork"
       }
