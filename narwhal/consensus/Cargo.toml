@@ -2,7 +2,7 @@
 name = "consensus"
 version = "0.1.0"
 license = "Apache-2.0"
-authors = ["Alberto Sonnino <asonnino@fb.com>"]
+authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 
 [dependencies]
