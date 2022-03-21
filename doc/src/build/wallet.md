@@ -140,6 +140,13 @@ NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
 The network config file path defaults to `./network.conf` if not
 specified.
 
+If you see errors when trying to start Sui network, particularly if
+you did not start with a fresh `"$SUI_ROOT"/sui_instance` (e.g, did
+[custom wallet configuration](#wallet-configuration) or
+started/restarted Sui instance multiple time), you should remove
+`"$SUI_ROOT"/sui_instance` directory containing configuration files
+and recreate [Sui genesis state](#genesis).
+
 ## Using the wallet
 The following commands are supported by the wallet:
 
