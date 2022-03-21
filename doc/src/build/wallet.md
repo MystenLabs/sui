@@ -11,11 +11,13 @@ interface, *Wallet CLI*.
 
 ## Setup
 
-Follow the instructions to [install Sui binaries](install.md). Then
-create a directory where your Sui configuration files will live - let
-us name this directory `sui_instance` and let us assume that it lives
-in another directory designated by the `$SUI_ROOT` environment
-variable:
+1. Follow the instructions to [install Sui binaries](install.md).
+1. Create a directory where all of your Sui-related work will reside.
+1. Create a $SUI_ROOT` environment variable pointing to that new directory:
+   ```
+   export SUI_ROOT=/path/to/directory
+   ```
+1. Create a `sui_instance` subdirectory in `$SUI_ROOT`:
 
 ```shell
 cd "$SUI_ROOT"
@@ -139,6 +141,13 @@ NOTE: For logs, set `RUST_LOG=debug` before invoking `sui start`.
 
 The network config file path defaults to `./network.conf` if not
 specified.
+
+If you see errors when trying to start Sui network, particularly if
+you did not start with a fresh `"$SUI_ROOT"/sui_instance` (e.g, did
+[custom wallet configuration](#wallet-configuration) or
+started/restarted Sui instance multiple time), you should remove
+`"$SUI_ROOT"/sui_instance` directory containing configuration files
+and recreate [Sui genesis state](#genesis).
 
 ## Using the wallet
 The following commands are supported by the wallet:
