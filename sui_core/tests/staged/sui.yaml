@@ -709,6 +709,8 @@ SuiError:
       InconsistentGatewayResult:
         STRUCT:
           - error: STR
+    88:
+      OnlyOneConsensusClientPermitted: UNIT
 Transaction:
   STRUCT:
     - data:
