@@ -39,6 +39,10 @@ use crate::{
 pub mod authority_tests;
 
 #[cfg(test)]
+#[path = "unit_tests/batch_transaction_tests.rs"]
+mod batch_transaction_tests;
+
+#[cfg(test)]
 #[path = "unit_tests/move_integration_tests.rs"]
 pub mod move_integration_tests;
 
@@ -145,6 +149,7 @@ impl AuthorityState {
                     SuiError::UnexpectedSequenceNumber {
                         object_id,
                         expected_sequence: object.version(),
+                        given_sequence: sequence_number,
                     }
                 );
 
@@ -157,16 +162,6 @@ impl AuthorityState {
                     }
                 );
 
-                // If the object is the transfer object, check that it is not shared object.
-                if let TransactionKind::Transfer(t) = &transaction.data.kind {
-                    if object_kind.object_id() == t.object_ref.0 {
-                        fp_ensure!(
-                            matches!(object.owner, Owner::AddressOwner(..)),
-                            SuiError::TransferSharedError
-                        );
-                    }
-                }
-
                 match object.owner {
                     Owner::SharedImmutable => {
                         // Nothing else to check for SharedImmutable.
@@ -175,18 +170,24 @@ impl AuthorityState {
                         // Check the owner is the transaction sender.
                         fp_ensure!(
                             transaction.sender_address() == owner,
-                            SuiError::IncorrectSigner
+                            SuiError::IncorrectSigner {
+                                error: format!("Object {:?} is owned by account address {:?}, but signer address is {:?}", object.id(), owner, transaction.sender_address()),
+                            }
                         );
                     }
                     Owner::ObjectOwner(owner) => {
                         // Check that the object owner is another mutable object in the input.
                         fp_ensure!(
                             owned_object_authenticators.contains(&owner),
-                            SuiError::IncorrectSigner
+                            SuiError::IncorrectSigner {
+                                error: format!("Object {:?} is owned by object {:?}, which is not in the input", object.id(), owner),
+                            }
                         );
                     }
                     Owner::SharedMutable => {
-                        return Err(SuiError::UnsupportedSharedObjectError);
+                        // This object is a mutable shared object. However the transaction
+                        // specifies it as an owned object. This is inconsistent.
+                        return Err(SuiError::NotSharedObjectError);
                     }
                 };
             }
@@ -198,23 +199,58 @@ impl AuthorityState {
         Ok(())
     }
 
+    /// This function does 3 things:
+    /// 1. Check if the gas object has enough balance to pay for this transaction.
+    ///   Since the transaction may be a batch transaction, we need to walk through
+    ///   each single transaction in it and accumulate their gas cost. For Move call
+    ///   and publish we can simply use their budget, for transfer we will calculate
+    ///   the cost on the spot since it's deterministic (See comments inside the function).
+    /// 2. Check if the gas budget for each single transction is above some minimum amount.
+    ///   This can help reduce DDos attacks.
+    /// 3. Check that the objects used in transfers are mutable. We put the check here
+    ///   because this is the most convenient spot to check.
     fn check_gas_requirement(
         transaction: &Transaction,
         input_objects: &[(InputObjectKind, Object)],
     ) -> SuiResult {
-        // The last object in the input objects is always the gas object by construction.
-        let gas_object = &input_objects[input_objects.len() - 1].1;
-        match &transaction.data.kind {
-            TransactionKind::Transfer(_) => {
-                // The first object in the input objects is always the transfer object by construction.
-                let transfer_object = &input_objects[0].1;
-                gas::check_transfer_gas_requirement(gas_object, transfer_object)
-            }
-            TransactionKind::Call(op) => gas::check_move_gas_requirement(gas_object, op.gas_budget),
-            TransactionKind::Publish(op) => {
-                gas::check_move_gas_requirement(gas_object, op.gas_budget)
+        let mut total_cost = 0;
+        let mut idx = 0;
+        for tx in transaction.single_transactions() {
+            match tx {
+                SingleTransactionKind::Transfer(_) => {
+                    // Index access safe because the inputs were constructed in order.
+                    let transfer_object = &input_objects[idx].1;
+                    fp_ensure!(
+                        !transfer_object.is_read_only(),
+                        SuiError::TransferImmutableError
+                    );
+                    // TODO: Make Transfer transaction to also contain gas_budget.
+                    // By @gdanezis: Now his is the only part of this function that requires
+                    // an input object besides the gas object. It would be a major win if we
+                    // can get rid of the requirement to have all objects to check the transfer
+                    // requirement. If we can go this, then we could execute this check before
+                    // we check for signatures.
+                    // This would allow us to shore up out DoS defences: we only need to do a
+                    // read on the gas object balance before we do anything expensive,
+                    // such as checking signatures.
+                    total_cost += gas::calculate_object_transfer_cost(transfer_object);
+                    idx += tx.input_object_count();
+                }
+                SingleTransactionKind::Call(op) => {
+                    gas::check_move_gas_requirement(op.gas_budget)?;
+                    total_cost += op.gas_budget;
+                    idx += tx.input_object_count();
+                }
+                SingleTransactionKind::Publish(op) => {
+                    gas::check_move_gas_requirement(op.gas_budget)?;
+                    total_cost += op.gas_budget;
+                    // No need to update idx because Publish cannot show up in batch.
+                }
             }
         }
+        // The last element in the inputs is always gas object.
+        let gas_object = &input_objects.last().unwrap().1;
+        gas::check_gas_balance(gas_object, total_cost)
     }
 
     /// Check all the objects used in the transaction against the database, and ensure
@@ -223,17 +259,34 @@ impl AuthorityState {
         &self,
         transaction: &Transaction,
     ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
-        let input_objects = transaction.input_objects();
+        let input_objects = transaction.input_objects()?;
 
         // These IDs act as authenticators that can own other objects.
         let objects = self.fetch_objects(&input_objects).await?;
-        let owned_object_authenticators: HashSet<_> = objects
-            .iter()
-            .flat_map(|opt_obj| match opt_obj {
-                Some(obj) if !obj.is_read_only() => Some(obj.id().into()),
-                _ => None,
-            })
-            .collect();
+
+        // Constructing the list of objects that could be used to authenticate other
+        // objects. Any mutable object (either shared or owned) can be used to
+        // authenticate other objects. Hence essentially we are building the list
+        // of mutable objects.
+        // We require that mutable objects cannot show up more than once.
+        // In [`SingleTransactionKind::input_objects`] we checked that there is no
+        // duplicate objects in the same SingleTransactionKind. However for a Batch
+        // Transaction, we still need to make sure that the same mutable object don't show
+        // up in more than one SingleTransactionKind.
+        // TODO: We should be able to allow the same shared mutable object to show up
+        // in more than one SingleTransactionKind. We need to ensure that their
+        // version number only increases once at the end of the Batch execution.
+        let mut owned_object_authenticators: HashSet<SuiAddress> = HashSet::new();
+        for object in objects.iter().flatten() {
+            if !object.is_read_only() {
+                fp_ensure!(
+                    owned_object_authenticators.insert(object.id().into()),
+                    SuiError::InvalidBatchTransaction {
+                        error: format!("Mutable object {} cannot appear in more than one single transactions in a batch", object.id()),
+                    }
+                );
+            }
+        }
 
         // Gather all objects and errors.
         let mut all_objects = Vec::with_capacity(input_objects.len());
@@ -247,7 +300,6 @@ impl AuthorityState {
                     continue;
                 }
             };
-
             // Check if the object contents match the type of lock we need for
             // this object.
             match self.check_one_lock(
@@ -262,17 +314,13 @@ impl AuthorityState {
                 }
             }
         }
-
         // If any errors with the locks were detected, we return all errors to give the client
         // a chance to update the authority if possible.
         if !errors.is_empty() {
             return Err(SuiError::LockErrors { errors });
         }
-
         fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
-
         Self::check_gas_requirement(transaction, &all_objects)?;
-
         Ok(all_objects)
     }
 
@@ -280,17 +328,6 @@ impl AuthorityState {
         &self,
         input_objects: &[InputObjectKind],
     ) -> Result<Vec<Option<Object>>, SuiError> {
-        // There is at least one input
-        fp_ensure!(
-            !input_objects.is_empty(),
-            SuiError::ObjectInputArityViolation
-        );
-        // Ensure that there are no duplicate inputs
-        let mut used = HashSet::new();
-        if !input_objects.iter().all(|o| used.insert(o.object_id())) {
-            return Err(SuiError::DuplicateObjectRefInput);
-        }
-
         let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
 
         self.get_objects(&ids[..]).await
@@ -420,6 +457,7 @@ impl AuthorityState {
                         Some(SuiError::UnexpectedSequenceNumber {
                             object_id: *object_id,
                             expected_sequence: shared_locks[object_id],
+                            given_sequence: *version,
                         })
                     } else {
                         None
@@ -446,7 +484,7 @@ impl AuthorityState {
         let transaction_digest = *certificate.digest();
         let transaction = &certificate.transaction;
 
-        let objects_by_kind: Vec<_> = self.check_locks(transaction).await?;
+        let objects_by_kind = self.check_locks(transaction).await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
@@ -460,14 +498,9 @@ impl AuthorityState {
             "Read inputs for transaction from DB"
         );
 
-        let inputs: Vec<_> = objects_by_kind
-            .into_iter()
-            .map(|(_, object)| object)
-            .collect();
-
-        let mut transaction_dependencies: BTreeSet<_> = inputs
+        let mut transaction_dependencies: BTreeSet<_> = objects_by_kind
             .iter()
-            .map(|object| object.previous_transaction)
+            .map(|(_, object)| object.previous_transaction)
             .collect();
 
         // Insert into the certificates map
@@ -475,11 +508,11 @@ impl AuthorityState {
 
         let gas_object_id = transaction.gas_payment_object_ref().0;
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self._database.clone(), &inputs, tx_ctx.digest());
+            AuthorityTemporaryStore::new(self._database.clone(), &objects_by_kind, tx_ctx.digest());
         let status = execution_engine::execute_transaction(
             &mut temporary_store,
             transaction.clone(),
-            inputs,
+            objects_by_kind,
             &mut tx_ctx,
             &self.move_vm,
             self._native_functions.clone(),
@@ -768,15 +801,34 @@ impl AuthorityState {
     ) -> SuiResult {
         debug_assert!(ctx.digest() == TransactionDigest::genesis());
         let inputs = Transaction::input_objects_in_compiled_modules(&modules);
-        let input_objects = self
-            .fetch_objects(&inputs)
-            .await?
+        let input_objects = self.fetch_objects(&inputs).await?;
+        // When publishing genesis packages, since the std framework packages all have
+        // non-zero addresses, [`Transaction::input_objects_in_compiled_modules`] will consider
+        // them as dependencies even though they are not. Hence input_objects contain objects
+        // that don't exist on-chain because they are yet to be published.
+        #[cfg(debug_assertions)]
+        {
+            let to_be_published_addresses: HashSet<_> = modules
+                .iter()
+                .map(|module| *module.self_id().address())
+                .collect();
+            assert!(
+                // An object either exists on-chain, or is one of the packages to be published.
+                inputs
+                    .iter()
+                    .zip(input_objects.iter())
+                    .all(|(kind, obj_opt)| obj_opt.is_some()
+                        || to_be_published_addresses.contains(&kind.object_id()))
+            );
+        }
+        let filtered = inputs
             .into_iter()
-            .flatten()
+            .zip(input_objects.into_iter())
+            .filter_map(|(input, object_opt)| object_opt.map(|object| (input, object)))
             .collect::<Vec<_>>();
 
         let mut temporary_store =
-            AuthorityTemporaryStore::new(self._database.clone(), &input_objects, ctx.digest());
+            AuthorityTemporaryStore::new(self._database.clone(), &filtered, ctx.digest());
         let package_id = ObjectID::from(*modules[0].self_id().address());
         let natives = self._native_functions.clone();
         let vm = adapter::verify_and_link(&temporary_store, &modules, package_id, natives)?;

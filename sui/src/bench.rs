@@ -9,7 +9,7 @@ use futures::stream::StreamExt;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use rayon::prelude::*;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::time::{Duration, Instant};
 use structopt::StructOpt;
 use sui_adapter::genesis;
@@ -53,11 +53,11 @@ struct ClientServerBenchmark {
     /// Forces sending transactions one at a time
     #[structopt(long)]
     single_operation: bool,
-    /// Number of accounts and transactions used in the benchmark
-    #[structopt(long, default_value = "40000")]
-    num_accounts: usize,
+    /// Number of transactions to be sent in the benchmark
+    #[structopt(long, default_value = "100000")]
+    num_transactions: usize,
     /// Timeout for sending queries (us)
-    #[structopt(long, default_value = "4000000")]
+    #[structopt(long, default_value = "40000000")]
     send_timeout_us: u64,
     /// Timeout for receiving responses (us)
     #[structopt(long, default_value = "40000000")]
@@ -77,6 +77,8 @@ struct ClientServerBenchmark {
     /// Use Move orders
     #[structopt(long)]
     use_move: bool,
+    #[structopt(long, default_value = "100")]
+    batch_size: usize,
 }
 #[derive(Debug, Clone, PartialEq, EnumString)]
 enum BenchmarkType {
@@ -105,6 +107,12 @@ fn main() {
         benchmark.committee_size,
         MIN_COMMITTEE_SIZE
     );
+    assert_eq!(
+        benchmark.num_transactions % benchmark.batch_size,
+        0,
+        "num_transactions must integer divide batch_size",
+    );
+
     let (state, transactions) = benchmark.make_structures();
 
     // Make multi-threaded runtime for the authority
@@ -114,6 +122,12 @@ fn main() {
     } else {
         num_cpus::get()
     };
+    if benchmark.benchmark_type == BenchmarkType::TransactionsAndCerts {
+        assert!(
+            (benchmark.num_transactions * 2 / connections) % 2 == 0,
+            "Each tx and their cert must be sent in order. Multiple TCP connections will break requests into chunks, and chunk size must be an even number so it doesn't break each tx and cert pair"
+        );
+    }
 
     thread::spawn(move || {
         let runtime = Builder::new_multi_thread()
@@ -202,23 +216,29 @@ impl ClientServerBenchmark {
         let (address, keypair) = get_key_pair();
         // Lets not collide with genesis objects.
         let offset = 10000;
+        let tx_count = self.num_transactions / self.batch_size;
 
-        let account_gas_objects: Vec<_> = (0u64..(self.num_accounts as u64))
+        let account_gas_objects: Vec<_> = (0..tx_count)
             .into_par_iter()
             .map(|x| {
-                let mut obj_id = [0; 20];
-                obj_id[..8].clone_from_slice(&(offset + x).to_be_bytes()[..8]);
-                let object_id: ObjectID = ObjectID::from(obj_id);
-                let object = if self.use_move {
-                    Object::with_id_owner_gas_coin_object_for_testing(
-                        object_id,
-                        SequenceNumber::new(),
-                        address,
-                        x,
-                    )
-                } else {
-                    Object::with_id_owner_for_testing(object_id, address)
-                };
+                let mut objects = vec![];
+                for i in 0..self.batch_size {
+                    let mut obj_id = [0; 20];
+                    obj_id[..8]
+                        .clone_from_slice(&(offset + x * self.batch_size + i).to_be_bytes()[..8]);
+                    let object_id: ObjectID = ObjectID::from(obj_id);
+                    let object = if self.use_move {
+                        Object::with_id_owner_gas_coin_object_for_testing(
+                            object_id,
+                            SequenceNumber::new(),
+                            address,
+                            1,
+                        )
+                    } else {
+                        Object::with_id_owner_for_testing(object_id, address)
+                    };
+                    objects.push(object);
+                }
 
                 let mut gas_object_id = [0; 20];
                 gas_object_id[8..16].clone_from_slice(&(offset + x).to_be_bytes()[..8]);
@@ -226,15 +246,23 @@ impl ClientServerBenchmark {
                 let gas_object = Object::with_id_owner_for_testing(gas_object_id, address);
                 assert!(gas_object.version() == SequenceNumber::from(0));
 
-                ((address, object, &keypair), gas_object)
+                (objects, gas_object)
             })
             .collect();
 
         // Bulk load objects
         let all_objects: Vec<_> = account_gas_objects
             .iter()
-            .flat_map(|((_, gas, _), obj)| [gas, obj])
+            .flat_map(|(objects, gas)| objects.iter().chain(std::iter::once(gas)))
             .collect();
+        assert_eq!(
+            all_objects
+                .iter()
+                .map(|o| o.id())
+                .collect::<HashSet<_>>()
+                .len(),
+            tx_count * (self.batch_size + 1)
+        );
         store_bis.bulk_object_insert(&all_objects[..]).unwrap();
 
         info!("Preparing transactions.");
@@ -242,41 +270,61 @@ impl ClientServerBenchmark {
 
         let transactions: Vec<_> = account_gas_objects
             .par_iter()
-            .map(|((account_addr, object, secret), gas_obj)| {
+            .map(|(objects, gas_obj)| {
                 let next_recipient: SuiAddress = get_key_pair().0;
+                let mut single_kinds = vec![];
+                for object in objects {
+                    let object_ref = object.compute_object_reference();
 
-                let object_ref = object.compute_object_reference();
+                    let kind = if self.use_move {
+                        // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
+                        let framework_obj_ref = (
+                            ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+                            SequenceNumber::new(),
+                            ObjectDigest::new([0; 32]),
+                        );
+
+                        SingleTransactionKind::Call(MoveCall {
+                            package: framework_obj_ref,
+                            module: ident_str!("GAS").to_owned(),
+                            function: ident_str!("transfer").to_owned(),
+                            type_arguments: Vec::new(),
+                            object_arguments: vec![object_ref],
+                            shared_object_arguments: vec![],
+                            pure_arguments: vec![bcs::to_bytes(&AccountAddress::from(
+                                next_recipient,
+                            ))
+                            .unwrap()],
+                            gas_budget: 1000,
+                        })
+                    } else {
+                        SingleTransactionKind::Transfer(Transfer {
+                            recipient: next_recipient,
+                            object_ref,
+                        })
+                    };
+                    single_kinds.push(kind);
+                }
                 let gas_object_ref = gas_obj.compute_object_reference();
-
-                let data = if self.use_move {
-                    // TODO: authority should not require seq# or digets for package in Move calls. Use dummy values
-                    let framework_obj_ref = (
-                        ObjectID::from(SUI_FRAMEWORK_ADDRESS),
-                        SequenceNumber::new(),
-                        ObjectDigest::new([0; 32]),
-                    );
-
-                    TransactionData::new_move_call(
-                        *account_addr,
-                        framework_obj_ref,
-                        ident_str!("GAS").to_owned(),
-                        ident_str!("transfer").to_owned(),
-                        Vec::new(),
+                let data = if self.batch_size == 1 {
+                    TransactionData::new(
+                        TransactionKind::Single(single_kinds.into_iter().next().unwrap()),
+                        address,
                         gas_object_ref,
-                        vec![object_ref],
-                        vec![],
-                        vec![bcs::to_bytes(&AccountAddress::from(next_recipient)).unwrap()],
-                        1000,
                     )
                 } else {
-                    TransactionData::new_transfer(
-                        next_recipient,
-                        object_ref,
-                        *account_addr,
+                    assert!(
+                        single_kinds.len() == self.batch_size,
+                        "Inconsistent batch size"
+                    );
+                    TransactionData::new(
+                        TransactionKind::Batch(single_kinds),
+                        address,
                         gas_object_ref,
                     )
                 };
-                let signature = Signature::new(&data, *secret);
+
+                let signature = Signature::new(&data, &keypair);
                 let transaction = Transaction::new(data, signature);
 
                 // Serialize transaction
@@ -402,8 +450,8 @@ impl ClientServerBenchmark {
             "Completed benchmark for {}\nTotal time: {}us, items: {}, tx/sec: {}",
             self.benchmark_type,
             elapsed_time,
-            items_number,
-            1_000_000.0 * (items_number as f64) / (elapsed_time as f64)
+            items_number * self.batch_size,
+            1_000_000.0 * (items_number as f64 * self.batch_size as f64) / (elapsed_time as f64)
         );
     }
 }

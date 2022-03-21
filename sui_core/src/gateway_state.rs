@@ -412,7 +412,7 @@ impl AccountState {
     fn can_lock_or_unlock(&self, transaction: &Transaction) -> Result<bool, SuiError> {
         let iter_matches = self.store.pending_transactions.multi_get(
             &transaction
-                .input_objects()
+                .input_objects()?
                 .iter()
                 .map(|q| q.object_id())
                 .collect_vec(),
@@ -445,7 +445,7 @@ impl AccountState {
             .pending_transactions
             .multi_insert(
                 transaction
-                    .input_objects()
+                    .input_objects()?
                     .iter()
                     .map(|e| (e.object_id(), transaction.clone())),
             )
@@ -463,7 +463,7 @@ impl AccountState {
         }
         self.store
             .pending_transactions
-            .multi_remove(transaction.input_objects().iter().map(|e| e.object_id()))
+            .multi_remove(transaction.input_objects()?.iter().map(|e| e.object_id()))
             .map_err(|e| e.into())
     }
 }
@@ -507,7 +507,7 @@ where
         transaction: Transaction,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
         let account = self.get_or_create_account(transaction.sender_address())?;
-        for object_kind in &transaction.input_objects() {
+        for object_kind in &transaction.input_objects()? {
             let object_id = object_kind.object_id();
             let next_sequence_number = account
                 .highest_known_version(&object_id)
@@ -517,6 +517,7 @@ where
                 SuiError::UnexpectedSequenceNumber {
                     object_id,
                     expected_sequence: next_sequence_number,
+                    given_sequence: object_kind.version(),
                 }
                 .into()
             );
