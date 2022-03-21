@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::sync::{Arc, RwLock};
 
 use itertools::Itertools;
@@ -19,7 +20,7 @@ pub struct Node<T> {
     value: T,
 }
 
-impl<T: std::fmt::Debug> Node<T> {
+impl<T: Sync + Send + std::fmt::Debug> Node<T> {
     /// Create a new DAG  node that contains the given value.
     pub fn new_leaf(value: T, compressible: bool) -> Self {
         Self::new(value, compressible, Vec::default())
@@ -89,22 +90,28 @@ impl<T: std::fmt::Debug> Node<T> {
             return;
         }
 
-        // Do the path compression.
         let mut res: Vec<NodeRef<T>> = Vec::new();
-        for parent in &self.parents {
-            // First, compress the path from the parent to some incompressible nodes. After this step, the parents of the
-            // parent node should be incompressible.
-            if parent
-                .read()
-                .expect("failed to acquire node read lock!")
-                .is_compressible()
-            {
+        // Do the path compression.
+        let (compressible, incompressible): (Vec<NodeRef<T>>, Vec<NodeRef<T>>) =
+            self.parents().into_iter().partition(|p| {
+                p.read()
+                    .expect("failed to acquire read lock!")
+                    .is_compressible()
+            });
+
+        res.extend(incompressible);
+        // First, compress the path from the parent to some incompressible nodes. After this step, the parents of the
+        // parent node should be incompressible.
+        let new_parents: Vec<_> = compressible
+            .par_iter()
+            .flat_map_iter(|parent| {
                 // there are no cycles!
                 {
                     let mut parent = parent.write().expect("failed to acquire node write lock");
 
                     parent.compress_path();
                 }
+
                 // parent is compressed: it's now trivial
                 debug_assert!(
                     parent
@@ -114,17 +121,14 @@ impl<T: std::fmt::Debug> Node<T> {
                     "{:?} is not trivial!",
                     parent.read().unwrap()
                 );
-                // we add its parents to the final parents result, enacting the path compression
-                res.extend(
-                    parent
-                        .read()
-                        .expect("failed to acquire node read lock!")
-                        .parents(),
-                )
-            } else {
-                res.push(parent.clone())
-            }
-        }
+                // we report its parents to the final parents result, enacting the path compression
+                parent
+                    .read()
+                    .expect("failed to acquire node read lock!")
+                    .parents()
+            })
+            .collect();
+        res.extend(new_parents);
 
         let res = res.into_iter().unique_by(|arc| Arc::as_ptr(arc)).collect();
         self.parents = res;

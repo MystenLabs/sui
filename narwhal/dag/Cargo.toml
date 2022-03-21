@@ -13,3 +13,4 @@ rayon = "1.5.1"
 [dev-dependencies]
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
+rayon = "1.5.1"
