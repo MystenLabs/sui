@@ -4,7 +4,7 @@ title: About Sui
 
 Sui is the first permissionless Layer 1 blockchain designed from the ground up to enable creators and developers to build experiences that cater to the next billion users in web3. Sui is horizontally scalable to support a wide range of application development with unrivaled speed at low cost.
 
-## What Sui is {#what-sui-is}
+## What Sui is
 
 Sui is a smart contract platform maintained by a permissionless set of authorities that play a role similar to validators or miners in other blockchain systems. 
 
