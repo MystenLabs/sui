@@ -67,12 +67,12 @@
         "fileName": "build/rest-api"
       },
       {
-        "label": "Authorities",
-        "fileName": "build/authorities"
-      },
-      {
         "label": "SuiJSON",
         "fileName": "build/sui-json"
+      },
+      {
+        "label": "Authorities",
+        "fileName": "build/authorities"
       },
       {
         "label": "Objects",
