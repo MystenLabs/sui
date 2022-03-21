@@ -125,5 +125,3 @@ Sui uses the state commitment that arrives upon epoch change. Sui requires a sin
 ## Conclusion
 
 In summary, Sui offers many performance and usability gains at the cost of some complexity in less common use cases. Direct sender transactions excel in Sui.
-
-TODO: Ask team to review this conclusion I felt was needed. Expand as desired.
