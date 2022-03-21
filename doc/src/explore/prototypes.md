@@ -25,9 +25,9 @@ With Sui, we believe game developers should not be limited by the platform perfo
 
 Created by game development studio Geniteam, these prototypes use both the Unity SDK and Sui [APIs](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1).
 
-Geniteam’s developers that worked on this collaboration are not smart contract nor move developers. To start, based on their input we created a data model and shared simple APIs. With these APIs, Geniteam was able to mint fully on-chain NFTs that are mutable, own other on-chain assets, and freely transfer to other applications.
+Geniteam’s developers that worked on this collaboration are neither smart contract nor Move developers. Based on their input we created a data model and shared simple APIs. With these APIs, Geniteam was able to mint fully on-chain NFTs that are mutable, own other on-chain assets, and freely transfer to other applications.
 
-Like any software project, the development process wasn’t pefect, and this pre-alpha build still contains bugs. However, with each bug fixed we learned insights on what game developers look for in a SDK. Sui is committed to buildng SDKs that are accessible for all levels of developers with varying degrees of smart contracts expertise. We welcome all inputs from developers experimenting on Sui, and projects like this are the first of many.
+This proof of concept build is meant to demonstrate the capabilities for game developers unlocked through Sui. We look forward to seeing what the creative minds in the gaming community come up with as we unveil additional capabilities in the upcoming months. With each bug fixed we learned insights on what game developers look for in a SDK. Sui is committed to building SDKs that are accessible for all levels of developers with varying degrees of smart contracts expertise.
 
 Here are examples of APIs we shared, along with the smart contracts to create and update monster (named MonStars in the prototype):
 
