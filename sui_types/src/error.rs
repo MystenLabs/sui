@@ -259,8 +259,10 @@ pub enum SuiError {
     ConcurrentTransactionError,
     #[error("Transfer should be received by us.")]
     IncorrectRecipientError,
-    #[error("Too many authority errors were detected.")]
-    TooManyIncorrectAuthorities,
+    #[error("Too many authority errors were detected: {:?}", errors)]
+    TooManyIncorrectAuthorities {
+        errors: Vec<(AuthorityName, SuiError)>,
+    },
     #[error("Inconsistent results observed in the Gateway. This should not happen and typically means there is a bug in the Sui implementation. Details: {error:?}")]
     InconsistentGatewayResult { error: String },
 }
