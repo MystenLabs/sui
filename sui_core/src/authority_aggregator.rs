@@ -849,37 +849,33 @@ where
                                 // Append to the list off errors
                                 state.errors.push(err);
                                 state.bad_stake += weight; // This is the bad stake counter
-                                if state.bad_stake > validity {
-                                    // Too many errors
-                                    debug!(
-                                        num_errors = state.errors.len(),
-                                        bad_stake = state.bad_stake,
-                                        "Too many errors, validity threshold exceeded. Errors={:?}",
-                                        state.errors
-                                    );
-                                    return Err(SuiError::QuorumNotReached {
-                                        errors: state.errors,
-                                    });
-                                }
                             }
                             // In case we don't get an error but also don't get a valid value
                             _ => {
                                 state.errors.push(SuiError::ErrorWhileProcessingTransaction);
                                 state.bad_stake += weight; // This is the bad stake counter
-                                if state.bad_stake > validity {
-                                    // Too many errors
-                                    debug!(
-                                        num_errors = state.errors.len(),
-                                        bad_stake = state.bad_stake,
-                                        "Too many errors, validity threshold exceeded. Errors={:?}",
-                                        state.errors
-                                    );
-                                    return Err(SuiError::QuorumNotReached {
-                                        errors: state.errors,
-                                    });
-                                }
                             }
                         };
+
+                        if state.bad_stake > validity {
+                            // Too many errors
+                            debug!(
+                                num_errors = state.errors.len(),
+                                bad_stake = state.bad_stake,
+                                "Too many errors, validity threshold exceeded. Errors={:?}",
+                                state.errors
+                            );
+                            let unique_errors: HashSet<_> = state.errors.into_iter().collect();
+                            // If no authority succeeded and all authorities returned the same error,
+                            // return that error.
+                            if unique_errors.len() == 1 && state.good_stake == 0 {
+                                return Err(unique_errors.into_iter().next().unwrap());
+                            } else {
+                                return Err(SuiError::QuorumNotReached {
+                                    errors: unique_errors.into_iter().collect(),
+                                });
+                            }
+                        }
 
                         // If we have a certificate, then finish, otherwise continue.
                         if state.certificate.is_some() {
