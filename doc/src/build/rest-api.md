@@ -192,9 +192,9 @@ objects only (including gas objects). Refer to
 more information about a native transfer. Non-coin objects cannot be
 transferred natively and require a [Move call](#post-call).
 
-You should replace `{{address}}` in the command above with an actual
-address value, for example one obtained from [`GET
-/addresses`](#get-addresses) (without quotes). You should also replace
+You should replace `{{owner_address}}` and {{to_address}}' in the
+command above with an actual address values, for example one obtained
+from [`GET /addresses`](#get-addresses). You should also replace
 `{{coin_object_id}}` and `{{gas_object_id}}` in the command above with
 an actual object ID, for example one obtained from [`GET
 /objects`](#get-objects) (from `objType` in the output of [`GET
@@ -257,6 +257,10 @@ curl --location --request POST $SUI_GATEWAY_HOST/sync \
     "address": "{{address}}"
 }' | json_pp
 ```
+
+You should replace `{{address}}` in the command above with an actual
+address values, for example one obtained from [`GET
+/addresses`](#get-addresses) (without quotes).
 
 This will fetch the latest information on all objects owned by each
 address that is managed by this server. This command has no output.
