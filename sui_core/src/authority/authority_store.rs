@@ -834,7 +834,6 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
             .zip(versions.iter())
             .map(|(id, v)| {
                 let version = v.unwrap_or_else(SequenceNumber::new);
-
                 let next_version = v
                     .map(|v| v.increment())
                     .unwrap_or_else(|| SequenceNumber::from(1));
