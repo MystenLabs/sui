@@ -26,3 +26,8 @@ View projects built by third parties demonstrating the power of Sui.
 
  <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/lwPMhpiyfmE?autoplay=0"  frameborder="0"></iframe>
 </section>
+
+[Panzerdogs x Sui](panzerdogs.md) an example of how the Sui infrastructure delivers a more integrated feedback loop between gameplay and NFT ownership.
+
+ <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/Nx7hTb8dOb4?autoplay=0"  frameborder="0"></iframe>
+
