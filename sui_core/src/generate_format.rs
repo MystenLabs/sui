@@ -1,11 +1,11 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use move_core_types::{
     language_storage::TypeTag,
     value::{MoveStructLayout, MoveTypeLayout},
 };
+use pretty_assertions::assert_str_eq;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use signature::Signer;
 use std::{fs::File, io::Write};
@@ -113,7 +113,7 @@ fn main() {
         Action::Test => {
             let reference = std::fs::read_to_string(FILE_PATH).unwrap();
             let content = serde_yaml::to_string(&registry).unwrap() + "\n";
-            assert_str::assert_str_eq!(&reference, &content);
+            assert_str_eq!(&reference, &content);
         }
     }
 }
