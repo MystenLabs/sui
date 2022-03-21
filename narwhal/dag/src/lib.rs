@@ -1,7 +1,8 @@
+use itertools::Itertools;
 use rayon::prelude::*;
 use std::sync::{Arc, RwLock};
 
-use itertools::Itertools;
+pub mod bft;
 
 pub type NodeRef<T> = Arc<RwLock<Node<T>>>;
 
@@ -59,10 +60,10 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
         }
     }
 
-    /// Get the parent nodes in a [`Vec`].
+    /// Get the parent nodes in a [`Vec`]. Note the "parents" are in the reverse of the usual tree structure.
     ///
     /// If this node is a leaf node, this function returns [`Vec::empty()`].
-    pub fn parents(&self) -> Vec<NodeRef<T>> {
+    pub fn raw_parents(&self) -> Vec<NodeRef<T>> {
         self.parents.to_vec()
     }
 
@@ -75,25 +76,26 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
     }
 
     /// Compress the path from this node to the next incompressible layer of the DAG.
+    /// Returns the parents of the node.
     ///
     /// After path compression, one of these three conditions holds:
     /// * This node is a leaf node;
     /// * This node has only incompressible parents, and keeps them;
     /// * This node has compressible parents, and after path compression, they are replaced by their closest incompressible ancestors.
-    pub fn compress_path(&mut self) {
+    pub fn parents(&mut self) -> Vec<NodeRef<T>> {
         // Quick check to bail the trivial situations out in which:
         // * `self` is itself a leaf node;
         // * The parent nodes of `self` are all incompressible node.
         //
         // In any of the two cases above, we don't have to do anything.
         if self.is_trivial() {
-            return;
+            return self.raw_parents();
         }
 
         let mut res: Vec<NodeRef<T>> = Vec::new();
         // Do the path compression.
         let (compressible, incompressible): (Vec<NodeRef<T>>, Vec<NodeRef<T>>) =
-            self.parents().into_iter().partition(|p| {
+            self.raw_parents().into_iter().partition(|p| {
                 p.read()
                     .expect("failed to acquire read lock!")
                     .is_compressible()
@@ -106,11 +108,11 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
             .par_iter()
             .flat_map_iter(|parent| {
                 // there are no cycles!
-                {
+                let these_new_parents: Vec<NodeRef<T>> = {
                     let mut parent = parent.write().expect("failed to acquire node write lock");
 
-                    parent.compress_path();
-                }
+                    parent.parents()
+                };
 
                 // parent is compressed: it's now trivial
                 debug_assert!(
@@ -122,18 +124,22 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
                     parent.read().unwrap()
                 );
                 // we report its parents to the final parents result, enacting the path compression
-                parent
-                    .read()
-                    .expect("failed to acquire node read lock!")
-                    .parents()
+                these_new_parents
             })
             .collect();
         res.extend(new_parents);
 
         let res = res.into_iter().unique_by(|arc| Arc::as_ptr(arc)).collect();
         self.parents = res;
-        debug_assert!(self.is_trivial())
+        debug_assert!(self.is_trivial());
+        self.raw_parents()
     }
+}
+
+pub fn bfs<T: Sync + Send + std::fmt::Debug>(
+    initial: NodeRef<T>,
+) -> impl Iterator<Item = NodeRef<T>> {
+    bft::Bft::new(initial, |node| node.write().unwrap().parents().into_iter())
 }
 
 #[cfg(test)]
@@ -194,7 +200,7 @@ mod tests {
         ) {
             assert!(dag.len() <= 10);
             assert!(dag.iter().all(|node| node.read().unwrap().height() <= 10));
-            assert!(dag.iter().all(|node| node.read().unwrap().parents().len() <= 10));
+            assert!(dag.iter().all(|node| node.read().unwrap().raw_parents().len() <= 10));
         }
 
         #[test]
@@ -203,10 +209,29 @@ mod tests {
         ) {
             let first = dag.first().unwrap();
             let initial_height = first.read().unwrap().height();
-            first.write().expect("failed to acquire write lock").compress_path();
+            first.write().expect("failed to acquire write lock").parents();
             let final_height = first.read().unwrap().height();
             assert!(final_height <= initial_height);
             assert!(first.read().unwrap().is_trivial())
         }
+
+        #[test]
+        fn test_path_compression_bfs(
+            dag in arb_dag_complete(10, 100)
+        ) {
+            let first = dag.first().unwrap();
+            let iter = bfs(first.clone());
+            // The first nodemay end up compressible
+            let mut is_first = true;
+            for node_ref in iter {
+                let node = node_ref.read().unwrap();
+                if !is_first {
+                assert!(node.is_leaf()|| !node.is_compressible())
+                }
+                is_first = false;
+            }
+
+        }
+
     }
 }
