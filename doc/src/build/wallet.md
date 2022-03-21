@@ -18,11 +18,10 @@ interface, *Wallet CLI*.
    export SUI_ROOT=/path/to/directory
    ```
 1. Create a `sui_instance` subdirectory in `$SUI_ROOT`:
-
-```shell
-cd "$SUI_ROOT"
-mkdir sui_instance
-```
+   ```shell
+   cd "$SUI_ROOT"
+   mkdir sui_instance
+   ```
 
 ## Genesis
 
