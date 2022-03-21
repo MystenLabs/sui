@@ -417,9 +417,8 @@ where
                                     errors: state
                                         .responses
                                         .into_iter()
-                                        .filter_map(|(_, response)| match response {
-                                            Ok(_) => None,
-                                            Err(err) => Some(err),
+                                        .filter_map(|(name, response)| {
+                                            response.err().map(|err| (name, err))
                                         })
                                         .collect(),
                                 });
@@ -528,7 +527,7 @@ where
             bad_weight: usize,
             object_map: BTreeMap<ObjectRef, Vec<AuthorityName>>,
             responded_authorities: Vec<AuthorityName>,
-            errors: Vec<SuiError>,
+            errors: Vec<(AuthorityName, SuiError)>,
         }
         let initial_state = OwnedObjectQueryState::default();
         let threshold = self.committee.quorum_threshold();
@@ -569,7 +568,7 @@ where
                                 }
                             }
                             Err(err) => {
-                                state.errors.push(err);
+                                state.errors.push((name, err));
                                 // We also keep an error weight counter, and if it exceeds 1/3
                                 // we return an error as it is likely we do not have enough
                                 // evidence to return a correct result.

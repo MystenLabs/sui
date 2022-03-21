@@ -721,7 +721,9 @@ SuiError:
         STRUCT:
           - errors:
               SEQ:
-                TYPENAME: SuiError
+                TUPLE:
+                  - TYPENAME: PublicKeyBytes
+                  - TYPENAME: SuiError
     88:
       InconsistentGatewayResult:
         STRUCT:
