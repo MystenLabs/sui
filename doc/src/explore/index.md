@@ -20,6 +20,10 @@ View projects built by third parties demonstrating the power of Sui.
 </section>
 
 [Panzerdogs x Sui](../explore/panzerdogs.md) is an NFT gaming project where users can own their in-game assets and use them to battle against each other in tanks. Brawl Stars x Tanks x Play-To-Earn.
+<section class="sui-dev-video">
+ 
+<iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/Nx7hTb8dOb4?autoplay=0" frameborder="0"></iframe>
+</section>
 
 [SoWork x Sui](../explore/sowork.md) building features on Sui to power creative employee rewards and custom NFT mints via SoWork's mapmaker.
 <section class="sui-dev-video">
