@@ -44,4 +44,4 @@ doc@mystenlabs.com
 
 You may also suggest changes to the docs directly in GitHub right here using the **Source Code** link below.
 
-Simply edit the file in question and generated a pull request. We will get back to you shortly.
+Simply edit the file in question and generate a pull request. We will get back to you shortly.
