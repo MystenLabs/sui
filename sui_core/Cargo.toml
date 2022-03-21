@@ -37,6 +37,10 @@ mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7c
 prometheus_exporter = "0.8.4"
 once_cell = "1.10.0"
 colored = "2.0.0"
+curve25519-dalek = { version = "3", default-features = false }
+structopt = "0.3.26"
+log = "0.4.14"
+
 
 sui-adapter = { path = "../crates/sui-adapter" }
 sui-framework = { path = "../sui_programmability/framework" }
