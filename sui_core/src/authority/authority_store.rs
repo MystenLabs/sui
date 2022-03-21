@@ -821,20 +821,36 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         certificate: CertifiedTransaction,
         global_certificate_index: SequenceNumber,
     ) -> Result<(), SuiError> {
+        // Make an iterator to save the certificate.
         let transaction_digest = certificate.transaction.digest();
         let certificate_to_write = std::iter::once((transaction_digest, &certificate));
 
-        let mut sequenced_to_write = Vec::new();
-        let mut schedule_to_write = Vec::new();
-        for id in certificate.transaction.shared_input_objects() {
-            let version = self.schedule.get(id)?.unwrap_or_default();
-            sequenced_to_write.push(((transaction_digest, *id), version));
-            let next_version = version.increment();
-            schedule_to_write.push((*id, next_version));
-        }
+        // Make an iterator to update the locks of the transaction's shared objects.
+        let ids = certificate.transaction.shared_input_objects();
+        let versions = self.schedule.multi_get(ids)?;
 
+        let ids = certificate.transaction.shared_input_objects();
+        let sequenced_to_write = ids.cloned().zip(versions.iter()).map(|(id, v)| {
+            let version = match v {
+                Some(v) => *v,
+                None => SequenceNumber::new(),
+            };
+            ((transaction_digest, id), version)
+        });
+
+        let ids = certificate.transaction.shared_input_objects();
+        let schedule_to_write = ids.zip(versions.iter()).map(|(id, v)| {
+            let next_version = match v {
+                Some(v) => v.increment(),
+                None => SequenceNumber::from(1),
+            };
+            (*id, next_version)
+        });
+
+        // Make an iterator to update the last consensus index.
         let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, global_certificate_index));
 
+        // Atomically store all elements.
         let mut write_batch = self.sequenced.batch();
         write_batch = write_batch.insert_batch(&self.certificates, certificate_to_write)?;
         write_batch = write_batch.insert_batch(&self.sequenced, sequenced_to_write)?;
