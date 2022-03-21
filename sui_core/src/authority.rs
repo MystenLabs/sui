@@ -732,7 +732,8 @@ impl AuthorityState {
         genesis_packages: Vec<Vec<CompiledModule>>,
         genesis_ctx: &mut TxContext,
     ) -> Self {
-        let state = AuthorityState::new_without_genesis(committee, name, secret, store.clone()).await;
+        let state =
+            AuthorityState::new_without_genesis(committee, name, secret, store.clone()).await;
 
         // Only initialize an empty database.
         if store
@@ -756,7 +757,6 @@ impl AuthorityState {
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
     ) -> Self {
-
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
@@ -771,7 +771,7 @@ impl AuthorityState {
             _database: store.clone(),
             batch_channels: tx,
             batch_notifier: Arc::new(
-                authority_notifier::TransactionNotifier::new(store.clone())
+                authority_notifier::TransactionNotifier::new(store)
                     .expect("Notifier cannot start."),
             ),
             consensus_guardrail: AtomicUsize::new(0),

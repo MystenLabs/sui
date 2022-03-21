@@ -617,7 +617,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         )?;
 
         Ok(TransactionInfoResponse {
-            signed_transaction: self.signed_transactions.get(&transaction_digest)?,
+            signed_transaction: self.signed_transactions.get(transaction_digest)?,
             certified_transaction: Some(certificate),
             signed_effects: Some(signed_effects),
         })
