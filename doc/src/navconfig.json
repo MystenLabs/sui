@@ -63,6 +63,10 @@
         "fileName": "build/wallet"
       },
       {
+        "label": "REST Server",
+        "fileName": "build/rest-api"
+      },
+      {
         "label": "Authorities",
         "fileName": "build/authorities"
       },
