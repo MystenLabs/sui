@@ -4,7 +4,7 @@ title: Sui-Related Research Papers
 
 This document contains a list of research papers that are relevant to Sui and have been co-authored by at least one member of the team.
 Some of the ideas of these papers are currently being integrated into Sui, others are in our roadmap, and others are not in our roadmap
-but could be integrated in the future. Start with the [Sui Smart Contract Platform](../../../doc/paper/sui.pdf) white paper, which contains
+but could be integrated in the future. Start with the [Sui Smart Contract Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper, which contains
 our latest design, inspired from previous works below.
 
 ## FastPay: High-Performance Byzantine Fault Tolerant Settlement 
