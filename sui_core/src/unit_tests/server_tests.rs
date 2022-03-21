@@ -15,19 +15,30 @@ use super::*;
 async fn test_start_stop_batch_subsystem() {
     let sender = dbg_addr(1);
     let object_id = dbg_object_id(1);
-    let authority_state = init_state_with_object_id(sender, object_id).await;
+    let mut authority_state = init_state_with_object_id(sender, object_id).await;
+    authority_state
+        .init_batches_from_database()
+        .expect("Init batches failed!");
 
-    let mut server = AuthorityServer::new("127.0.0.1".to_string(), 999, 65000, authority_state);
+    let server = Arc::new(AuthorityServer::new(
+        "127.0.0.1".to_string(),
+        999,
+        65000,
+        authority_state,
+    ));
     let join = server
         .spawn_batch_subsystem(1000, Duration::from_secs(5))
         .await
         .expect("Problem launching subsystem.");
 
     // Now drop the server to simulate the authority server ending processing.
+    server.state.batch_notifier.close();
     drop(server);
 
     // This should return immediately.
-    join.await.expect("Error stoping subsystem");
+    join.await
+        .expect("Error stoping subsystem")
+        .expect("Subsystem crashed?");
 }
 
 // Some infra to feed the server messages and receive responses.
@@ -118,7 +129,12 @@ async fn test_subscription() {
     let authority_state = init_state_with_object_id(sender, object_id).await;
 
     // Start the batch server
-    let mut server = AuthorityServer::new("127.0.0.1".to_string(), 998, 65000, authority_state);
+    let server = Arc::new(AuthorityServer::new(
+        "127.0.0.1".to_string(),
+        998,
+        65000,
+        authority_state,
+    ));
 
     let db = server.state.db().clone();
     let db2 = server.state.db().clone();
@@ -129,34 +145,30 @@ async fn test_subscription() {
         .expect("Problem launching subsystem.");
 
     let tx_zero = TransactionDigest::new([0; 32]);
-    for i in 0u64..105 {
+    for _i in 0u64..105 {
+        let ticket = server.state.batch_notifier.ticket().expect("all good");
         db.executed_sequence
-            .insert(&i, &tx_zero)
+            .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
-
-        server
-            .state
-            .batch_sender()
-            .send_item(i, tx_zero)
-            .await
-            .expect("Send to the channel.");
     }
+    println!("Sent tickets.");
 
     let (channel, (mut tx, mut rx)) = TestChannel::new();
-
-    let server = Arc::new(server);
 
     let inner_server1 = server.clone();
     let handle1 = tokio::spawn(async move {
         inner_server1.handle_messages(channel).await;
     });
 
+    println!("Started messahe handling.");
     // TEST 1: Get historical data
 
     let req = BatchInfoRequest { start: 12, end: 34 };
 
     let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
     tx.send(Ok(bytes)).await.expect("Problem sending");
+
+    println!("TEST1: Send request.");
 
     let mut num_batches = 0;
     let mut num_transactions = 0;
@@ -183,6 +195,8 @@ async fn test_subscription() {
     assert_eq!(4, num_batches);
     assert_eq!(30, num_transactions);
 
+    println!("TEST1: Finished.");
+
     // Test 2: Get subscription data
 
     // Add data in real time
@@ -190,18 +204,19 @@ async fn test_subscription() {
     let _handle2 = tokio::spawn(async move {
         for i in 105..150 {
             tokio::time::sleep(Duration::from_millis(20)).await;
+            let ticket = inner_server2
+                .state
+                .batch_notifier
+                .ticket()
+                .expect("all good");
             db2.executed_sequence
-                .insert(&i, &tx_zero)
+                .insert(&ticket.seq(), &tx_zero)
                 .expect("Failed to write.");
             println!("Send item {}", i);
-            inner_server2
-                .state
-                .batch_sender()
-                .send_item(i, tx_zero)
-                .await
-                .expect("Send to the channel.");
         }
     });
+
+    println!("TEST2: Sending realtime.");
 
     let req = BatchInfoRequest {
         start: 101,
@@ -210,6 +225,8 @@ async fn test_subscription() {
 
     let bytes: BytesMut = BytesMut::from(&serialize_batch_request(&req)[..]);
     tx.send(Ok(bytes)).await.expect("Problem sending");
+
+    println!("TEST2: Send request.");
 
     let mut num_batches = 0;
     let mut num_transactions = 0;
@@ -237,6 +254,9 @@ async fn test_subscription() {
     assert_eq!(3, num_batches);
     assert_eq!(20, num_transactions);
 
+    println!("TEST2: Finished.");
+
+    server.state.batch_notifier.close();
     drop(tx);
     handle1.await.expect("Problem closing task");
 }
