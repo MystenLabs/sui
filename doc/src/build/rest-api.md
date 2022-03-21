@@ -122,10 +122,10 @@ curl --location --request GET $SUI_GATEWAY_HOST'/objects?address={{address}}' | 
 ```
 
 You should replace `{{address}}` in the command above with an actual
-address values, for example one obtained from [`GET
+address value, for example one obtained from [`GET
 /addresses`](#get-addresses) (without quotes).
 
-The output you see should resemble the following (abbreviated to only show two objects):
+The output you see should resemble the following (abbreviated to show only two objects):
 
 ```shell
 {
@@ -148,13 +148,13 @@ The output you see should resemble the following (abbreviated to only show two o
 
 ### GET /object_info
 
-Return the object information for a specified object:
+Return the object information for a specified object, for example:
 
 ```shell
 curl --location --request GET $SUI_GATEWAY_HOST'/object_info?objectId={{object_id}}' | json_pp
 ```
 
-You should replace `{{object_id}}` in the command above with an
+Replace `{{object_id}}` in the command above with an
 actual object ID, for example one obtained from [`GET
 /objects`](#get-objects) (without quotes).
 
@@ -166,7 +166,7 @@ Return the schema for a specified object:
 curl --location --request GET $SUI_GATEWAY_HOST'/object_schema?objectId={{object_id}}' | json_pp
 ```
 
-You should replace `{{object_id}}` in the command above with an
+Replace `{{object_id}}` in the command above with an
 actual object ID, for example one obtained from [`GET
 /objects`](#get-objects) (without quotes).
 
@@ -186,19 +186,19 @@ curl --location --request POST $SUI_GATEWAY_HOST/transfer \
 }' | json_pp
 ```
 
-Native transfer supported by `POST /transfer` is supported for coin
+Native transfer by `POST /transfer` is supported for coin
 objects only (including gas objects). Refer to
 [transactions](transactions.md#native-transaction) documentation for
 more information about a native transfer. Non-coin objects cannot be
 transferred natively and require a [Move call](#post-call).
 
-You should replace `{{owner_address}}` and {{to_address}}' in the
-command above with an actual address values, for example one obtained
-from [`GET /addresses`](#get-addresses). You should also replace
+You should replace `{{address}}` in the command above with an actual
+address value, for example one obtained from [`GET
+/addresses`](#get-addresses) (without quotes). You should also replace
 `{{coin_object_id}}` and `{{gas_object_id}}` in the command above with
 an actual object ID, for example one obtained from [`GET
 /objects`](#get-objects) (from `objType` in the output of [`GET
-/objects`](#get-objects), you can see that all objects generated
+/objects`](#get-objects). You can see that all objects generated
 during genesis are of `Coin/GAS` type). For this call to work, objects
 represented by both `{{coin_object_id}}` and `{{gas_object_id}}` must
 be owned by the address represented by `{{owner_address}}`.
@@ -227,11 +227,10 @@ curl --location --request POST $SUI_GATEWAY_HOST/call \
 }' | json_pp
 ```
 
-
-Arguments are passed in and type will be inferred from function
+Arguments are passed in, and type will be inferred from function
 signature.  Gas usage is capped by the gas_budget. The `transfer`
-function is [described](wallet.md#calling-move-code) in more detail in
-the Sui Wallet documentation.
+function is described in more detail in
+the [Sui Wallet](wallet.md#calling-move-code) documentation.
 
 Calling the `transfer` function in the `GAS` module serves the same
 purpose as the native coin transfer ([`POST
@@ -258,11 +257,6 @@ curl --location --request POST $SUI_GATEWAY_HOST/sync \
     "address": "{{address}}"
 }' | json_pp
 ```
-
-You should replace `{{address}}` in the command above with an actual
-address values, for example one obtained from [`GET
-/addresses`](#get-addresses) (without quotes).
-
 
 This will fetch the latest information on all objects owned by each
 address that is managed by this server. This command has no output.
