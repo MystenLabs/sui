@@ -1,8 +1,7 @@
 {
   "sideMenu": {
     "title": "QUICK LINKS",
-    "items": [
-      {
+    "items": [{
         "label": "Tutorial",
         "link": "explore/tutorials"
       },
@@ -17,8 +16,7 @@
     ]
   },
   "docs": {
-    "learn": [
-      {
+    "learn": [{
         "label": "About Sui",
         "fileName": "learn/about-sui"
       },
@@ -31,7 +29,7 @@
         "fileName": "learn/why-move"
       },
       {
-        "label": "How Sui Move differs from Core Move"
+        "label": "How Sui Move differs from Core Move",
         "fileName": "learn/sui-move-diffs"
       },
       {
@@ -39,26 +37,25 @@
         "fileName": "learn/how-sui-works"
       },
       {
-        "label": "Sui Compared to Other Blockchains"
+        "label": "Sui Compared to Other Blockchains",
         "fileName": "learn/sui-compared"
       },
       {
-        "label": "Understand Sui Security"
+        "label": "Understand Sui Security",
         "fileName": "learn/sui-security"
       },
       {
         "label": "Sui White Paper",
-        "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf"
+        "link": "https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf",
         "external": true
       }
     ],
-    "build": [
-      {
-        "label": "Install"
+    "build": [{
+        "label": "Install",
         "fileName": "build/install"
       },
       {
-        "label": "Smart Contracts with Move"
+        "label": "Smart Contracts with Move",
         "fileName": "build/move"
       },
       {
@@ -82,8 +79,7 @@
         "fileName": "build/transactions"
       }
     ],
-    "explore": [
-      {
+    "explore": [{
         "label": "Tutorial",
         "fileName": "explore/tutorials"
       },
@@ -94,14 +90,13 @@
       {
         "label": "Examples",
         "fileName": "explore/examples"
-      }
+      },
       {
         "label": "SoWork x Sui",
         "fileName": "explore/sowork"
       }
     ],
-    "contribute": [
-      {
+    "contribute": [{
         "label": "Logging",
         "fileName": "contribute/observability"
       },
@@ -115,7 +110,7 @@
       },
       {
         "label": "About Mysten Labs",
-        "link": "https://mystenlabs.com/"
+        "link": "https://mystenlabs.com/",
         "external": true
       }
     ]
