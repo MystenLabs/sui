@@ -1376,7 +1376,7 @@ fn init_state_parameters() -> (Committee, SuiAddress, KeyPair, Arc<AuthorityStor
 }
 
 #[cfg(test)]
-async fn init_state() -> AuthorityState {
+pub async fn init_state() -> AuthorityState {
     let (committee, _, authority_key, store) = init_state_parameters();
     AuthorityState::new(
         committee,
@@ -1643,7 +1643,10 @@ async fn shared_object() {
 
     // Sequence the certificate to assign a sequence number to the shared object.
     authority
-        .handle_consensus_certificate(certificate)
+        .handle_consensus_certificate(
+            certificate,
+            /* last_consensus_index */ SequenceNumber::new(),
+        )
         .await
         .unwrap();
 

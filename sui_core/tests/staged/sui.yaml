@@ -117,6 +117,11 @@ CertifiedTransaction:
           TUPLE:
             - TYPENAME: PublicKeyBytes
             - TYPENAME: AuthoritySignature
+ConsensusOutput:
+  STRUCT:
+    - message: BYTES
+    - sequencer_number:
+        TYPENAME: SequenceNumber
 Data:
   ENUM:
     0:
@@ -368,6 +373,10 @@ SerializedMessage:
       BatchInfoResp:
         NEWTYPE:
           TYPENAME: BatchInfoResponseItem
+    12:
+      ConsensusOutput:
+        NEWTYPE:
+          TYPENAME: ConsensusOutput
 Signature:
   NEWTYPESTRUCT: BYTES
 SignedBatch:
@@ -728,6 +737,8 @@ SuiError:
       InconsistentGatewayResult:
         STRUCT:
           - error: STR
+    89:
+      OnlyOneConsensusClientPermitted: UNIT
 Transaction:
   STRUCT:
     - data:
