@@ -31,7 +31,7 @@ remainder of this tutorial we will assume that you are executing the
 
 ## Gather Accounts and Gas Objects
 
-Now switch to a new terminal window and keep the first terminal running.
+After completing the [Setup section](#setup) you should have a Sui instance running in a terminal window. Now switch to a new terminal window and keep the first terminal running.
 Make sure that you run the `wallet` command in the directory
 where wallet configuration is located or by passing wallet's
 configuration file as a parameter, as described in the `wallet`
