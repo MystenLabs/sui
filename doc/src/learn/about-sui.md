@@ -2,15 +2,27 @@
 title: About Sui
 ---
 
-Sui is the first permissionless Layer 1 blockchain designed from the ground up to enable creators and developers to build experiences that cater to the next billion users in web3. Sui is horizontally scalable to support a wide range of application development with unrivaled speed at low cost. 
+Sui is the first permissionless Layer 1 blockchain designed from the ground up to enable creators and developers to build experiences that cater to the next billion users in web3. Sui is horizontally scalable to support a wide range of application development with unrivaled speed at low cost.
+
+## What Sui is {#what-sui-is}
+
+Sui is a smart contract platform maintained by a permissionless set of authorities that play a role similar to validators or miners in other blockchain systems. 
+
+Sui offers scalability and unprecedented low-latency for common use cases. Sui makes the vast majority of transactions processable in parallel, which makes better use of processing resources, and offers the option to increase throughput with more resources. Sui forgoes consensus to instead use simpler and lower-latency primitives for common use cases, such as payment transactions and assets transfer. This is unprecedented in the blockchain world and enables a number of new latency-sensitive distributed applications, ranging from gaming to retail payment at physical points of sale. 
+
+Sui is written in [Rust](https://www.rust-lang.org) and supports smart contracts written in the [Move programming language ](https://golden.com/wiki/Move_(programming_language)-MNA4DZ6)to define assets that may have an owner. Move programs define operations on these assets including custom rules for their creation, the transfer of these assets to new owners, and operations that mutate assets.
+
+Sui has a native token called SUI, with a fixed supply. The SUI token is used to pay for gas, and is also used as [delegated stake on authorities](https://learn.bybit.com/blockchain/delegated-proof-of-stake-dpos/) within an epoch. The voting power of authorities within this epoch is a function of this delegated stake. Authorities are periodically reconfigured according to the stake delegated to them. In any epoch the set of authorities is [Byzantine fault tolerant](https://pmg.csail.mit.edu/papers/osdi99.pdf). At the end of the epoch, fees collected through all transactions processed are distributed to authorities according to their contribution to the operation of the system. Authorities can in turn share some of the fees as rewards to users that delegated stake to them. 
+
+Sui is backed by a number of state-of-the-art [peer-reviewed works](https://github.com/MystenLabs/sui/blob/main/doc/src/contribute/research-papers.md) and years of open source development.
  
 ## Parallel agreement - a breakthrough in system design
 
 Sui scales horizontally with no upper bound to meet application demand while maintaining extremely low operating costs per transaction. Its system design breakthrough eliminates a critical bottleneck in existing blockchains: the need to achieve global consensus on a total-ordered list of transactions. This computation is wasteful given most transactions are not contending for the same resource against other transactions.
 
-Sui takes a significant leap in scalability by enabling parallel agreement on causally independent transactions. Sui authorities commit such transactions using Byzantine consistent broadcast, eliminating global consensus's overhead without sacrificing safety and liveness guarantees.
+Sui takes a significant leap in scalability by enabling parallel agreement on causally independent transactions. Sui authorities commit such transactions using Byzantine Consistent Broadcast, eliminating global consensus's overhead without sacrificing safety and liveness guarantees.
 
-This breakthrough is possible only with Sui's novel data model. Thanks to its object-centric view and Move’s strong ownership types, dependencies are explicitly encoded. As a result, Sui both agrees on and executes transactions on most objects in parallel, while a minority of transactions that affect shared state are ordered via Byzantine fault tolerant consensus and executed in parallel.
+This breakthrough is possible only with Sui's novel data model. Thanks to its object-centric view and Move’s strong ownership types, dependencies are explicitly encoded. As a result, Sui both agrees on and executes transactions on most objects in parallel, while a minority of transactions that affect shared state are ordered via Byzantine Fault Tolerant consensus and executed in parallel.
 
 ### Highlights
 
@@ -34,15 +46,17 @@ Sui scales horizontally to meet the demands of applications. Network capacity gr
 
 By design, Sui authorities (nodes) can effectively scale the network throughput infinitely to meet the demand of builders and creators. We believe Sui can do for web3 what broadband internet did for web2. 
 
-Note: As of Mar 12, 2022, an unoptimized single-worker Sui authority running on an 8-core M1 Macbook Pro can process 17,500 token transfer transactions per second (TPS). Performance scales linearly with the number of cores–the same machine processes 3,000 TPS in a single core configuration and increases by about 2,000 TPS with each additional core. . 
+Note: As of Mar 19, 2022, an unoptimized single-worker Sui authority running on an 8-core M1 Macbook Pro can execute and commit 120,000 token transfer transactions per second (TPS). Throughput scales linearly with the number of cores–the same machine processes 25,000 TPS in a single core configuration.
 
-We will publish a full performance report for optimized Sui networks of various sizes when our testnet is released.
+This experiment uses a configuration where each client submits a batch of 100 transactions (i.e., transfers to 100 distinct recipients) with a single signature. This configuration captures the anticipated usage pattern of a highly scalable blockchain--e.g., a custodial wallet or game server operating at scale will likely need to submit hundreds or thousands of on-chain transactions per second. With a batch size of 1, an authority running on the same machine can process 20,000 TPS with 8 cores, and exhibits the same linear growth in throughput as more cores are added.
+
+We will publish a full performance report for optimized Sui networks in a variety of configurations when our testnet is released.
 
 ## A safe smart contract language accessible to mainstream developers
 
 Move smart contracts power Sui applications. Move is a programming language initially developed at Facebook for writing safe smart contracts. It is a platform-agnostic language that enables shared libraries, tooling, and developer communities across blockchains. 
 
-Move's design prevents issues such as [reentrancy](https://en.wikipedia.org/wiki/Reentrancy_(computing)) vulnerabilities, [poison tokens](https://www.theblockcrypto.com/post/112339/creative-attacker-steals-76000-in-rune-by-giving-out-free-tokens)), and [spoofed token approvals](https://www.theverge.com/2022/2/20/22943228/opensea-phishing-hack-smart-contract-bug-stolen-nft)) that attackers have leveraged to steal millions on other platforms. Its emphasis on safety and expressivity makes it easier for developers to transition from web2 to web3 without understanding the intricacies of the underlying infrastructure.
+Move's design prevents issues such as [reentrancy vulnerabilities](https://en.wikipedia.org/wiki/Reentrancy_(computing)), [poison tokens](https://www.theblockcrypto.com/post/112339/creative-attacker-steals-76000-in-rune-by-giving-out-free-tokens), and [spoofed token approvals](https://www.theverge.com/2022/2/20/22943228/opensea-phishing-hack-smart-contract-bug-stolen-nft) that attackers have leveraged to steal millions on other platforms. Its emphasis on safety and expressivity makes it easier for developers to transition from web2 to web3 without understanding the intricacies of the underlying infrastructure.
 
 We are confident that Move is well-positioned to become the de-facto execution environment not only for Sui but for every next-generation smart contract platform.
 

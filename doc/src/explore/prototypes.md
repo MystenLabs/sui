@@ -2,7 +2,7 @@
 title: Sui Prototypes
 ---
 
-Here are two short gaming prototypes that demonstrate the speed, scalability, and rich interactions made possible with mutable, expressive NFTs: [Sui Monstar and Sui Battler](https://sui.io/monstar).
+Here are two short gaming pre-alpha prototypes that demonstrate the speed, scalability, and rich interactions made possible with mutable, expressive NFTs. The first prototype [Sui Monstar](https://sui.io/monstar), is playable now.
 
 
 ## Sui and gaming
@@ -203,14 +203,18 @@ Gameplay:
 
 In Sui Monstar, capture cute monstars and watch them get closer to you as you feed and interact with them. These monstars, your farm, and accessories are all NFTs on-chain. As you play through the game, attributes such as health, friendliness, and accessories are all updated live.
 
-![Update NFT properties](/static/nft-properties.png "Equip elemental runes to your Monstar")
+<section class="sui-dev-video">
+   <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/sAMT5x8W3B8?autoplay=1"  frameborder="0"></iframe>
+</section>
+
+![Update NFT properties](../../static/nft-properties.png "Equip elemental runes to your Monstar")
 *Equip elemental runes to your Monstar and watch your NFT evolve with updated properties*
 
 That’s not all! As your Monstar become stronger, you can use them to help you battle…in the next prototype>>>
 
 ## Prototype 2 Sui Battler
 
-Welcome to [Sui Battler](https://sui.io/monstar), where your cute monstars transform into warriors!
+Welcome to Sui Battler, where your cute monstars transform into warriors!
 
 Gameplay:
 
@@ -219,7 +223,7 @@ Gameplay:
 * Evolve your pet in Sui Monstar and unlock special battle abilities.
 * Your monstars record the history of your battle on-chain!
 
-![Unlock special abilities](/static/special-abilities.png "Evolve your Monstars")
+![Unlock special abilities](../../static/special-abilities.png "Evolve your Monstars")
 *Evolve your Monstars to unlock special abilities*
 
 ## Why this matters

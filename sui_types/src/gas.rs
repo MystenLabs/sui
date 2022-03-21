@@ -2,12 +2,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::base_types::*;
 use crate::{
     error::{SuiError, SuiResult},
     gas_coin::GasCoin,
-    messages::{Transaction, TransactionKind},
-    object::{Object, Owner},
+    object::Object,
 };
 use std::convert::TryFrom;
 
@@ -24,42 +22,19 @@ macro_rules! ok_or_gas_error {
 pub const MIN_MOVE: u64 = 10;
 pub const MIN_OBJ_TRANSFER_GAS: u64 = 8;
 
-pub fn check_gas_requirement(transaction: &Transaction, gas_object: &Object) -> SuiResult {
-    debug_assert_eq!(transaction.gas_payment_object_ref().0, gas_object.id());
+pub fn check_transfer_gas_requirement(gas_object: &Object, transfer_object: &Object) -> SuiResult {
+    let balance = get_gas_balance(gas_object)?;
+    let cost = calculate_object_transfer_cost(transfer_object);
     ok_or_gas_error!(
-        matches!(gas_object.owner, Owner::AddressOwner(..)),
-        "Gas object must be owned by the signer".to_string()
-    )?;
-    match &transaction.data.kind {
-        TransactionKind::Transfer(_) => {
-            let balance = get_gas_balance(gas_object)?;
-            ok_or_gas_error!(
-                balance >= MIN_OBJ_TRANSFER_GAS,
-                format!(
-                    "Gas balance is {}, smaller than minimum requirement of {} for object transfer.",
-                    balance, MIN_OBJ_TRANSFER_GAS
-                )
-            )
-        }
-        TransactionKind::Call(op) => check_move_gas_requirement(
-            gas_object,
-            transaction.gas_payment_object_ref(),
-            op.gas_budget,
-        ),
-        TransactionKind::Publish(op) => check_move_gas_requirement(
-            gas_object,
-            transaction.gas_payment_object_ref(),
-            op.gas_budget,
-        ),
-    }
+        balance >= cost,
+        format!(
+            "Gas balance is {}, smaller than gas cost {} for object transfer.",
+            balance, cost
+        )
+    )
 }
 
-pub fn check_move_gas_requirement(
-    gas_object: &Object,
-    gas_payment: &ObjectRef,
-    gas_budget: u64,
-) -> SuiResult {
-    debug_assert_eq!(gas_payment.0, gas_object.id());
+pub fn check_move_gas_requirement(gas_budget: u64) -> SuiResult {
     ok_or_gas_error!(
         gas_budget >= MIN_MOVE,
         format!(
@@ -67,14 +42,7 @@ pub fn check_move_gas_requirement(
             gas_budget, MIN_MOVE
         )
     )?;
-    let balance = get_gas_balance(gas_object)?;
-    ok_or_gas_error!(
-        balance >= gas_budget,
-        format!(
-            "Gas balance is {}, smaller than the budget {} for move operation.",
-            balance, gas_budget
-        )
-    )
+    Ok(())
 }
 
 /// Try subtract the gas balance of \p gas_object by \p amount.

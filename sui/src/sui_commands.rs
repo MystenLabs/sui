@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::anyhow;
@@ -16,6 +16,7 @@ use sui_adapter::adapter::generate_package_id;
 use sui_adapter::genesis;
 use sui_core::authority::{AuthorityState, AuthorityStore};
 use sui_core::authority_server::AuthorityServer;
+use sui_network::transport::SpawnedServer;
 use sui_network::transport::DEFAULT_MAX_DATAGRAM_SIZE;
 use sui_types::base_types::{SequenceNumber, SuiAddress, TxContext};
 use sui_types::committee::Committee;
@@ -49,7 +50,13 @@ pub enum SuiCommand {
 impl SuiCommand {
     pub async fn execute(&self) -> Result<(), anyhow::Error> {
         match self {
-            SuiCommand::Start { config } => start_network(config).await,
+            SuiCommand::Start { config } => {
+                let config: NetworkConfig = PersistedConfig::read(config)?;
+                SuiNetwork::start(&config)
+                    .await?
+                    .wait_for_completion()
+                    .await
+            }
             SuiCommand::Genesis {
                 working_dir,
                 config: path,
@@ -64,13 +71,11 @@ impl SuiCommand {
                         return Err(anyhow!("Cannot run genesis on a existing network, please delete network config file and try again."));
                     }
                 }
-
                 let genesis_conf = if let Some(path) = path {
                     PersistedConfig::read(path)?
                 } else {
                     GenesisConfig::default_genesis(working_dir)?
                 };
-
                 let (network_config, accounts, keystore) = genesis(genesis_conf).await?;
                 info!("Network genesis completed.");
                 let network_config = network_config.persisted(&network_path);
@@ -99,48 +104,62 @@ impl SuiCommand {
     }
 }
 
-async fn start_network(config_path: &Path) -> Result<(), anyhow::Error> {
-    let config: NetworkConfig = PersistedConfig::read(config_path)?;
-    if config.authorities.is_empty() {
-        return Err(anyhow!(
-            "No authority configured for the network, please run genesis."
-        ));
+pub struct SuiNetwork {
+    pub spawned_authorities: Vec<SpawnedServer>,
+}
+
+impl SuiNetwork {
+    pub async fn start(config: &NetworkConfig) -> Result<Self, anyhow::Error> {
+        if config.authorities.is_empty() {
+            return Err(anyhow!(
+                "No authority configured for the network, please run genesis."
+            ));
+        }
+        info!(
+            "Starting network with {} authorities",
+            config.authorities.len()
+        );
+
+        let committee = Committee::new(
+            config
+                .authorities
+                .iter()
+                .map(|info| (*info.key_pair.public_key_bytes(), info.stake))
+                .collect(),
+        );
+
+        let mut spawned_authorities = Vec::new();
+        for authority in &config.authorities {
+            let server = make_server(authority, &committee, config.buffer_size).await?;
+            spawned_authorities.push(server.spawn().await?);
+        }
+        info!("Started {} authorities", spawned_authorities.len());
+
+        Ok(Self {
+            spawned_authorities,
+        })
     }
-    info!(
-        "Starting network with {} authorities",
-        config.authorities.len()
-    );
-    let mut handles = Vec::new();
 
-    let committee = Committee::new(
-        config
-            .authorities
-            .iter()
-            .map(|info| (*info.key_pair.public_key_bytes(), info.stake))
-            .collect(),
-    );
+    pub async fn kill(self) -> Result<(), anyhow::Error> {
+        for spawned_server in self.spawned_authorities {
+            spawned_server.kill().await?;
+        }
+        Ok(())
+    }
 
-    for authority in &config.authorities {
-        let server = make_server(authority, &committee, config.buffer_size).await?;
-
-        handles.push(async move {
-            let spawned_server = match server.spawn().await {
-                Ok(server) => server,
-                Err(err) => {
-                    error!("Failed to start server: {}", err);
-                    return;
+    pub async fn wait_for_completion(self) -> Result<(), anyhow::Error> {
+        let mut handles = Vec::new();
+        for spawned_server in self.spawned_authorities {
+            handles.push(async move {
+                if let Err(err) = spawned_server.join().await {
+                    error!("Server ended with an error: {}", err);
                 }
-            };
-            if let Err(err) = spawned_server.join().await {
-                error!("Server ended with an error: {}", err);
-            }
-        });
+            });
+        }
+        join_all(handles).await;
+        info!("All servers stopped.");
+        Ok(())
     }
-
-    info!("Started {} authorities", handles.len());
-    join_all(handles).await;
-    info!("All server stopped.");
-    Ok(())
 }
 
 pub async fn genesis(

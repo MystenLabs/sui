@@ -2,7 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable, Signature};
+use crate::crypto::{
+    sha3_hash, AuthoritySignature, BcsSignable, Signature, VerificationObligation,
+};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
@@ -11,6 +13,7 @@ use super::{base_types::*, batch::*, committee::Committee, error::*, event::Even
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
 
+use itertools::Either;
 use move_binary_format::{access::ModuleAccess, CompiledModule};
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
@@ -19,10 +22,10 @@ use move_core_types::{
 use name_variant::NamedVariant;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use static_assertions::const_assert_eq;
+// use static_assertions::const_assert_eq;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
-use std::mem::size_of;
+//use std::mem::size_of;
 use std::{
     collections::{BTreeSet, HashSet},
     hash::{Hash, Hasher},
@@ -57,8 +60,8 @@ pub struct MoveModulePublish {
     pub gas_budget: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, NamedVariant)]
-pub enum TransactionKind {
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum SingleTransactionKind {
     /// Initiate an object transfer between addresses
     Transfer(Transfer),
     /// Publish a new Move module
@@ -66,6 +69,157 @@ pub enum TransactionKind {
     /// Call a function in a published Move module
     Call(MoveCall),
     // .. more transaction types go here
+}
+
+impl SingleTransactionKind {
+    pub fn contains_shared_object(&self) -> bool {
+        match &self {
+            Self::Transfer(..) => false,
+            Self::Call(c) => !c.shared_object_arguments.is_empty(),
+            Self::Publish(..) => false,
+        }
+    }
+
+    pub fn shared_input_objects(&self) -> &[ObjectID] {
+        match &self {
+            Self::Call(c) => &c.shared_object_arguments,
+            _ => &[],
+        }
+    }
+
+    pub fn input_object_count(&self) -> usize {
+        match &self {
+            Self::Transfer(_) => 1,
+            Self::Call(c) => 1 + c.object_arguments.len() + c.shared_object_arguments.len(),
+            // We always special handle Publish, hence the result doesn't matter.
+            Self::Publish(_) => 0,
+        }
+    }
+
+    /// Return the metadata of each of the input objects for the transaction.
+    /// For a Move object, we attach the object reference;
+    /// for a Move package, we provide the object id only since they never change on chain.
+    /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
+    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
+        let input_objects = match &self {
+            Self::Transfer(t) => {
+                vec![InputObjectKind::OwnedMoveObject(t.object_ref)]
+            }
+            Self::Call(c) => {
+                let mut call_inputs = Vec::with_capacity(
+                    1 + c.object_arguments.len() + c.shared_object_arguments.len(),
+                );
+                call_inputs.extend(
+                    c.object_arguments
+                        .clone()
+                        .into_iter()
+                        .map(InputObjectKind::OwnedMoveObject)
+                        .collect::<Vec<_>>(),
+                );
+                call_inputs.extend(
+                    c.shared_object_arguments
+                        .iter()
+                        .cloned()
+                        .map(InputObjectKind::SharedMoveObject)
+                        .collect::<Vec<_>>(),
+                );
+                call_inputs.push(InputObjectKind::MovePackage(c.package.0));
+                call_inputs
+            }
+            Self::Publish(m) => {
+                // For module publishing, all the dependent packages are implicit input objects
+                // because they must all be on-chain in order for the package to publish.
+                // All authorities must have the same view of those dependencies in order
+                // to achieve consistent publish results.
+                let compiled_modules = m
+                    .modules
+                    .iter()
+                    .filter_map(|bytes| match CompiledModule::deserialize(bytes) {
+                        Ok(m) => Some(m),
+                        // We will ignore this error here and simply let latter execution
+                        // to discover this error again and fail the transaction.
+                        // It's preferable to let transaction fail and charge gas when
+                        // malformed package is provided.
+                        Err(_) => None,
+                    })
+                    .collect::<Vec<_>>();
+                Transaction::input_objects_in_compiled_modules(&compiled_modules)
+            }
+        };
+        // Ensure that there are no duplicate inputs. This cannot be removed because:
+        // In [`AuthorityState::check_locks`], we check that there are no duplicate mutable
+        // input objects, which would have made this check here unnecessary. However we
+        // do plan to allow mutable shared objects show up more than once in multiple single
+        // transactions down the line. Once we have that, we need check here to make sure
+        // the same mutable shared object doesn't show up more than once in the same single
+        // transaction.
+        let mut used = HashSet::new();
+        if !input_objects.iter().all(|o| used.insert(o.object_id())) {
+            return Err(SuiError::DuplicateObjectRefInput);
+        }
+        Ok(input_objects)
+    }
+}
+
+impl Display for SingleTransactionKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        match &self {
+            Self::Transfer(t) => {
+                writeln!(writer, "Transaction Kind : Transfer")?;
+                writeln!(writer, "Recipient : {}", t.recipient)?;
+                let (object_id, seq, digest) = t.object_ref;
+                writeln!(writer, "Object ID : {}", &object_id)?;
+                writeln!(writer, "Sequence Number : {:?}", seq)?;
+                writeln!(writer, "Object Digest : {}", encode_bytes_hex(&digest.0))?;
+            }
+            Self::Publish(p) => {
+                writeln!(writer, "Transaction Kind : Publish")?;
+                writeln!(writer, "Gas Budget : {}", p.gas_budget)?;
+            }
+            Self::Call(c) => {
+                writeln!(writer, "Transaction Kind : Call")?;
+                writeln!(writer, "Gas Budget : {}", c.gas_budget)?;
+                writeln!(writer, "Package ID : {}", c.package.0.to_hex_literal())?;
+                writeln!(writer, "Module : {}", c.module)?;
+                writeln!(writer, "Function : {}", c.function)?;
+                writeln!(writer, "Object Arguments : {:?}", c.object_arguments)?;
+                writeln!(writer, "Pure Arguments : {:?}", c.pure_arguments)?;
+                writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
+            }
+        }
+        write!(f, "{}", writer)
+    }
+}
+
+// TODO: Make SingleTransactionKind a Box
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, NamedVariant)]
+pub enum TransactionKind {
+    /// A single transaction.
+    Single(SingleTransactionKind),
+    /// A batch of single transactions.
+    Batch(Vec<SingleTransactionKind>),
+    // .. more transaction types go here
+}
+
+impl Display for TransactionKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut writer = String::new();
+        match &self {
+            Self::Single(s) => {
+                writeln!(writer, "{}", s)?;
+            }
+            Self::Batch(b) => {
+                writeln!(writer, "Transaction Kind : Batch")?;
+                writeln!(writer, "List of transactions in the batch:")?;
+                for kind in b {
+                    writeln!(writer, "{}", kind)?;
+                }
+            }
+        }
+        write!(f, "{}", writer)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -96,7 +250,7 @@ impl TransactionData {
         pure_arguments: Vec<Vec<u8>>,
         gas_budget: u64,
     ) -> Self {
-        let kind = TransactionKind::Call(MoveCall {
+        let kind = TransactionKind::Single(SingleTransactionKind::Call(MoveCall {
             package,
             module,
             function,
@@ -105,7 +259,7 @@ impl TransactionData {
             shared_object_arguments,
             pure_arguments,
             gas_budget,
-        });
+        }));
         Self::new(kind, sender, gas_payment)
     }
 
@@ -115,10 +269,10 @@ impl TransactionData {
         sender: SuiAddress,
         gas_payment: ObjectRef,
     ) -> Self {
-        let kind = TransactionKind::Transfer(Transfer {
+        let kind = TransactionKind::Single(SingleTransactionKind::Transfer(Transfer {
             recipient,
             object_ref,
-        });
+        }));
         Self::new(kind, sender, gas_payment)
     }
 
@@ -128,10 +282,10 @@ impl TransactionData {
         modules: Vec<Vec<u8>>,
         gas_budget: u64,
     ) -> Self {
-        let kind = TransactionKind::Publish(MoveModulePublish {
+        let kind = TransactionKind::Single(SingleTransactionKind::Publish(MoveModulePublish {
             modules,
             gas_budget,
-        });
+        }));
         Self::new(kind, sender, gas_payment)
     }
 
@@ -146,13 +300,23 @@ impl TransactionData {
 // TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
 pub struct Transaction {
+    // Deserialization sets this to "false"
+    #[serde(skip)]
+    pub is_checked: bool,
+
     pub data: TransactionData,
     pub signature: Signature,
 }
+/* TODO: check this legacy static check is not needed as an invariant
+         elsewhere. The tests pass but invariant checks without docs
+         should not be removed without a note to check.
+
 const_assert_eq!(
     size_of::<TransactionData>() + size_of::<Signature>(),
     size_of::<Transaction>()
 );
+
+*/
 
 /// An transaction signed by a single authority
 #[derive(Debug, Eq, Clone, Serialize, Deserialize)]
@@ -175,17 +339,20 @@ pub struct CertifiedTransaction {
     // DO NOT serialize or deserialize from the network or disk.
     #[serde(skip)]
     transaction_digest: OnceCell<TransactionDigest>,
+    // Deserialization sets this to "false"
+    #[serde(skip)]
+    pub is_checked: bool,
 
     pub transaction: Transaction,
     pub signatures: Vec<(AuthorityName, AuthoritySignature)>,
 }
 
 // Note: if you meet an error due to this line it may be because you need an Eq implementation for `CertifiedTransaction`,
-// or one of the structs that include it, i.e. `ConfirmationTransaction`, `TransactionInforResponse` or `ObjectInforResponse`.
+// or one of the structs that include it, i.e. `ConfirmationTransaction`, `TransactionInfoResponse` or `ObjectInfoResponse`.
 //
 // Please note that any such implementation must be agnostic to the exact set of signatures in the certificate, as
 // clients are allowed to equivocate on the exact nature of valid certificates they send to the system. This assertion
-// is a simple tool to make sure certifcates are accounted for correctly - should you remove it, you're on your own to
+// is a simple tool to make sure certificates are accounted for correctly - should you remove it, you're on your own to
 // maintain the invariant that valid certificates with distinct signatures are equivalent, but yet-unchecked
 // certificates that differ on signers aren't.
 //
@@ -580,11 +747,41 @@ impl Transaction {
     }
 
     pub fn new(data: TransactionData, signature: Signature) -> Self {
-        Transaction { data, signature }
+        Transaction {
+            is_checked: false,
+            data,
+            signature,
+        }
     }
 
     pub fn check_signature(&self) -> Result<(), SuiError> {
-        self.signature.check(&self.data, self.data.sender)
+        // We use this flag to see if someone has checked this before
+        // and therefore we can skip the check. Note that the flag has
+        // to be set to true manually, and is not set by calling this
+        // "check" function.
+        if self.is_checked {
+            return Ok(());
+        }
+
+        let mut obligation = VerificationObligation::default();
+        self.add_to_verification_obligation(&mut obligation)?;
+        obligation.verify_all().map(|_| ())
+    }
+
+    pub fn add_to_verification_obligation(
+        &self,
+        obligation: &mut VerificationObligation,
+    ) -> SuiResult<()> {
+        let (message, signature, public_key) = self
+            .signature
+            .get_verification_inputs(&self.data, self.data.sender)?;
+        let idx = obligation.messages.len();
+        obligation.messages.push(message);
+        let key = obligation.lookup_public_key(&public_key)?;
+        obligation.public_keys.push(key);
+        obligation.signatures.push(signature);
+        obligation.message_index.push(idx);
+        Ok(())
     }
 
     pub fn sender_address(&self) -> SuiAddress {
@@ -597,71 +794,58 @@ impl Transaction {
 
     pub fn contains_shared_object(&self) -> bool {
         match &self.data.kind {
-            TransactionKind::Transfer(..) => false,
-            TransactionKind::Call(c) => !c.shared_object_arguments.is_empty(),
-            TransactionKind::Publish(..) => false,
+            TransactionKind::Single(s) => s.contains_shared_object(),
+            TransactionKind::Batch(b) => b.iter().any(|kind| kind.contains_shared_object()),
         }
     }
 
-    pub fn shared_input_objects(&self) -> &[ObjectID] {
+    pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
         match &self.data.kind {
-            TransactionKind::Call(c) => &c.shared_object_arguments,
-            _ => &[],
+            TransactionKind::Single(s) => Either::Left(s.shared_input_objects().iter()),
+            TransactionKind::Batch(b) => {
+                Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
+            }
         }
     }
 
-    /// Return the metadata of each of the input objects for the transaction.
-    /// For a Move object, we attach the object reference;
-    /// for a Move package, we provide the object id only since they never change on chain.
-    /// TODO: use an iterator over references here instead of a Vec to avoid allocations.
-    pub fn input_objects(&self) -> Vec<InputObjectKind> {
+    pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
         let mut inputs = match &self.data.kind {
-            TransactionKind::Transfer(t) => {
-                vec![InputObjectKind::OwnedMoveObject(t.object_ref)]
-            }
-            TransactionKind::Call(c) => {
-                let mut call_inputs = Vec::with_capacity(2 + c.object_arguments.len());
-                call_inputs.extend(
-                    c.object_arguments
-                        .clone()
-                        .into_iter()
-                        .map(InputObjectKind::OwnedMoveObject)
-                        .collect::<Vec<_>>(),
-                );
-                call_inputs.extend(
-                    c.shared_object_arguments
-                        .iter()
-                        .cloned()
-                        .map(InputObjectKind::SharedMoveObject)
-                        .collect::<Vec<_>>(),
-                );
-                call_inputs.push(InputObjectKind::MovePackage(c.package.0));
-                call_inputs
-            }
-            TransactionKind::Publish(m) => {
-                // For module publishing, all the dependent packages are implicit input objects
-                // because they must all be on-chain in order for the package to publish.
-                // All authorities must have the same view of those dependencies in order
-                // to achieve consistent publish results.
-                let compiled_modules = m
-                    .modules
-                    .iter()
-                    .filter_map(|bytes| match CompiledModule::deserialize(bytes) {
-                        Ok(m) => Some(m),
-                        // We will ignore this error here and simply let latter execution
-                        // to discover this error again and fail the transaction.
-                        // It's preferrable to let transaction fail and charge gas when
-                        // malformed package is provided.
-                        Err(_) => None,
-                    })
-                    .collect::<Vec<_>>();
-                Transaction::input_objects_in_compiled_modules(&compiled_modules)
+            TransactionKind::Single(s) => s.input_objects()?,
+            TransactionKind::Batch(b) => {
+                let mut result = vec![];
+                for kind in b {
+                    fp_ensure!(
+                        !matches!(kind, &SingleTransactionKind::Publish(..)),
+                        SuiError::InvalidBatchTransaction {
+                            error: "Publish transaction is now allowed in Batch Transaction"
+                                .to_owned(),
+                        }
+                    );
+                    let sub = kind.input_objects()?;
+                    debug_assert_eq!(sub.len(), kind.input_object_count());
+                    result.extend(sub);
+                }
+                result
             }
         };
         inputs.push(InputObjectKind::OwnedMoveObject(
             *self.gas_payment_object_ref(),
         ));
-        inputs
+        Ok(inputs)
+    }
+
+    pub fn single_transactions(&self) -> impl Iterator<Item = &SingleTransactionKind> {
+        match &self.data.kind {
+            TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
+            TransactionKind::Batch(b) => Either::Right(b.iter()),
+        }
+    }
+
+    pub fn into_single_transactions(self) -> impl Iterator<Item = SingleTransactionKind> {
+        match self.data.kind {
+            TransactionKind::Single(s) => Either::Left(std::iter::once(s)),
+            TransactionKind::Batch(b) => Either::Right(b.into_iter()),
+        }
     }
 
     // Derive a cryptographic hash of the transaction.
@@ -771,10 +955,13 @@ impl<'a> SignatureAggregator<'a> {
     }
 }
 
+use crate::crypto::Signable;
+
 impl CertifiedTransaction {
     pub fn new(transaction: Transaction) -> CertifiedTransaction {
         CertifiedTransaction {
             transaction_digest: OnceCell::new(),
+            is_checked: false,
             transaction,
             signatures: Vec::new(),
         }
@@ -786,6 +973,7 @@ impl CertifiedTransaction {
     ) -> CertifiedTransaction {
         CertifiedTransaction {
             transaction_digest: OnceCell::new(),
+            is_checked: false,
             transaction,
             signatures,
         }
@@ -799,7 +987,26 @@ impl CertifiedTransaction {
 
     /// Verify the certificate.
     pub fn check(&self, committee: &Committee) -> Result<(), SuiError> {
-        // Check the quorum.
+        // We use this flag to see if someone has checked this before
+        // and therefore we can skip the check. Note that the flag has
+        // to be set to true manually, and is not set by calling this
+        // "check" function.
+        if self.is_checked {
+            return Ok(());
+        }
+
+        let mut obligation = VerificationObligation::default();
+        self.add_to_verification_obligation(committee, &mut obligation)?;
+        obligation.verify_all().map(|_| ())
+    }
+
+    pub fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+    ) -> SuiResult<()> {
+        // First check the quorum is sufficient
+
         let mut weight = 0;
         let mut used_authorities = HashSet::new();
         for (authority, _) in self.signatures.iter() {
@@ -818,17 +1025,38 @@ impl CertifiedTransaction {
             weight >= committee.quorum_threshold(),
             SuiError::CertificateRequiresQuorum
         );
-        // All that is left is checking signatures!
-        // one user signature
+
+        // Add the obligation of the transaction
         self.transaction
-            .signature
-            .check(&self.transaction.data, self.transaction.data.sender)?;
-        // a batch of authority signatures
-        AuthoritySignature::verify_batch(
-            &self.transaction.data,
-            &self.signatures,
-            &committee.expanded_keys,
-        )
+            .add_to_verification_obligation(obligation)?;
+
+        // Create obligations for the committee signatures
+
+        let mut message = Vec::new();
+        self.transaction.data.write(&mut message);
+
+        let idx = obligation.messages.len();
+        obligation.messages.push(message);
+
+        for tuple in self.signatures.iter() {
+            let (authority, signature) = tuple;
+            // do we know, or can we build a valid public key?
+            match committee.expanded_keys.get(authority) {
+                Some(v) => obligation.public_keys.push(*v),
+                None => {
+                    let public_key = (*authority).try_into()?;
+                    obligation.public_keys.push(public_key);
+                }
+            }
+
+            // build a signature
+            obligation.signatures.push(signature.0);
+
+            // collect the message
+            obligation.message_index.push(idx);
+        }
+
+        Ok(())
     }
 }
 
@@ -843,30 +1071,7 @@ impl Display for CertifiedTransaction {
                 .map(|(name, _)| name)
                 .collect::<Vec<_>>()
         )?;
-        match &self.transaction.data.kind {
-            TransactionKind::Transfer(t) => {
-                writeln!(writer, "Transaction Kind : Transfer")?;
-                writeln!(writer, "Recipient : {}", t.recipient)?;
-                let (object_id, seq, digest) = t.object_ref;
-                writeln!(writer, "Object ID : {}", &object_id)?;
-                writeln!(writer, "Sequence Number : {:?}", seq)?;
-                writeln!(writer, "Object Digest : {}", encode_bytes_hex(&digest.0))?;
-            }
-            TransactionKind::Publish(p) => {
-                writeln!(writer, "Transaction Kind : Publish")?;
-                writeln!(writer, "Gas Budget : {}", p.gas_budget)?;
-            }
-            TransactionKind::Call(c) => {
-                writeln!(writer, "Transaction Kind : Call")?;
-                writeln!(writer, "Gas Budget : {}", c.gas_budget)?;
-                writeln!(writer, "Package ID : {}", c.package.0.to_hex_literal())?;
-                writeln!(writer, "Module : {}", c.module)?;
-                writeln!(writer, "Function : {}", c.function)?;
-                writeln!(writer, "Object Arguments : {:?}", c.object_arguments)?;
-                writeln!(writer, "Pure Arguments : {:?}", c.pure_arguments)?;
-                writeln!(writer, "Type Arguments : {:?}", c.type_arguments)?;
-            }
-        }
+        write!(writer, "{}", &self.transaction.data.kind)?;
         write!(f, "{}", writer)
     }
 }
