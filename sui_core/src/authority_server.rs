@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
-use std::{collections::VecDeque, io};
+
+use std::collections::VecDeque;
+use std::{io, sync::Arc};
 use sui_network::{
     network::NetworkServer,
     transport::{spawn_server, MessageHandler, RwChannel, SpawnedServer},
@@ -12,7 +14,6 @@ use sui_types::{
     batch::UpdateItem, crypto::VerificationObligation, error::*, messages::*, serialize::*,
 };
 
-use crate::authority_batch::BatchManager;
 use futures::{SinkExt, StreamExt};
 
 use std::time::Duration;
@@ -55,23 +56,20 @@ impl AuthorityServer {
     /// Create a batch subsystem, register it with the authority state, and
     /// launch a task that manages it. Return the join handle of this task.
     pub async fn spawn_batch_subsystem(
-        &mut self,
+        self: &Arc<Self>,
         min_batch_size: u64,
         max_delay: Duration,
-    ) -> Result<tokio::task::JoinHandle<()>, SuiError> {
+    ) -> SuiResult<tokio::task::JoinHandle<SuiResult<()>>> {
         // Start the batching subsystem, and register the handles with the authority.
-        let (tx_sender, manager, (batch_sender, _batch_receiver)) =
-            BatchManager::new(self.state.db(), 1000);
+        // let last_batch = self.state.init_batches_from_database()?;
+        let local_server = self.clone();
 
-        let _batch_join_handle = manager
-            .start_service(
-                self.state.name,
-                self.state.secret.clone(),
-                min_batch_size,
-                max_delay,
-            )
-            .await?;
-        self.state.set_batch_sender(tx_sender, batch_sender)?;
+        let _batch_join_handle = tokio::task::spawn(async move {
+            local_server
+                .state
+                .run_batch_service(min_batch_size, max_delay)
+                .await
+        });
 
         Ok(_batch_join_handle)
     }
@@ -93,7 +91,7 @@ impl AuthorityServer {
         A: RwChannel<'b>,
     {
         // Register a subscriber to not miss any updates
-        let mut subscriber = self.state.subscribe()?;
+        let mut subscriber = self.state.subscribe_batch();
         let message_end = request.end;
 
         // Get the historical data requested

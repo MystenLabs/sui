@@ -99,6 +99,11 @@ pub enum SuiError {
     // Synchronization validation
     #[error("Transaction index must increase by one")]
     UnexpectedTransactionIndex,
+    #[error("Once one iterator is allowed on a stream at once.")]
+    ConcurrentIteratorError,
+    #[error("The notifier subsystem is closed.")]
+    ClosedNotifierError,
+
     // Account access
     #[error("No certificate with digest: {certificate_digest:?}")]
     CertificateNotfound {
