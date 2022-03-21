@@ -23,14 +23,13 @@ With Sui, we believe game developers should not be limited by the platform perfo
 
 ## How we did it
 
-To create these prototypes, we worked with game development studio Geniteam, who built the prototypes with the Unity SDK along with Sui [APIs](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1).
+Created by game development studio Geniteam, these prototypes use both the Unity SDK and Sui [APIs](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1).
 
-Geniteam developers that worked on this collaboration are not smart contract or Move developers. With this project, we started gathering data on what is the best way to design SDKs that make it easy to start building on Sui.
+Geniteam’s developers that worked on this collaboration are neither smart contract nor Move developers. Based on their input we created a data model and shared simple APIs. With these APIs, Geniteam was able to mint fully on-chain NFTs that are mutable, own other on-chain assets, and freely transfer to other applications.
 
-Once Geniteam communicated their idea with us, we created the proposed data model and shared simple APIs. With these APIs, Geniteam was able to mint fully on-chain NFTs that are able to mutate, own other on-chain assets, and freely transfer to other applications. Gameplay is then powered by APIs calls that allow them to read and write to update the NFTs. 
+This proof of concept build is meant to demonstrate the capabilities for game developers unlocked through Sui. We look forward to seeing what the creative minds in the gaming community come up with as we unveil additional capabilities in the upcoming months. With each bug fixed we learned insights on what game developers look for in a SDK. Sui is committed to building SDKs that are accessible for all levels of developers with varying degrees of smart contracts expertise.
 
-
-Here are the three APIs Geniteam used, along with the smart contracts to create and update monster (named MonStars in the prototype):
+Here are examples of APIs we shared, along with the smart contracts to create and update monster (named MonStars in the prototype):
 
 
 ### API Move call - Create Monster
@@ -204,7 +203,7 @@ Gameplay:
 In Sui Monstar, capture cute monstars and watch them get closer to you as you feed and interact with them. These monstars, your farm, and accessories are all NFTs on-chain. As you play through the game, attributes such as health, friendliness, and accessories are all updated live.
 
 <section class="sui-dev-video">
-   <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/sAMT5x8W3B8?autoplay=1"  frameborder="0"></iframe>
+   <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/sAMT5x8W3B8?autoplay=0"  frameborder="0"></iframe>
 </section>
 
 ![Update NFT properties](../../static/nft-properties.png "Equip elemental runes to your Monstar")
@@ -236,6 +235,5 @@ Gameplay:
 
 ## Further reading
 
-* See the entire [Unity project](https://github.com/MystenLabs/sui-monstars)
 * Check out Sui [APIs](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1).
 * Learn about Sui [objects](https://github.com/MystenLabs/sui/blob/main/doc/src/build/objects.md).
