@@ -11,16 +11,17 @@ interface, *Wallet CLI*.
 
 ## Setup
 
-Follow the instructions to [install Sui binaries](install.md). Then
-create a directory where your Sui configuration files will live - let
-us name this directory `sui_instance` and let us assume that it lives
-in another directory designated by the `$SUI_ROOT` environment
-variable:
-
-```shell
-cd "$SUI_ROOT"
-mkdir sui_instance
-```
+1. Follow the instructions to [install Sui binaries](install.md).
+1. Create a directory where all of your Sui-related work will reside.
+1. Create a $SUI_ROOT` environment variable pointing to that new directory:
+   ```
+   export SUI_ROOT=/path/to/directory
+   ```
+1. Create a `sui_instance` subdirectory in `$SUI_ROOT`:
+   ```shell
+   cd "$SUI_ROOT"
+   mkdir sui_instance
+   ```
 
 ## Genesis
 
