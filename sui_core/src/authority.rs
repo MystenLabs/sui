@@ -2,6 +2,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+    authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender},
+    execution_engine,
+};
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
 use move_core_types::{
@@ -9,6 +13,7 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_runtime::native_functions::NativeFunctionTable;
+use std::sync::atomic::AtomicUsize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     pin::Pin,
@@ -28,11 +33,6 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 use tracing::*;
-
-use crate::{
-    authority_batch::{BatchSender, BroadcastReceiver, BroadcastSender},
-    execution_engine,
-};
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -86,6 +86,9 @@ pub struct AuthorityState {
     /// and create batches for this authority.
     /// Keep as None if there is no need for this.
     batch_channels: Option<(BatchSender, BroadcastSender)>,
+
+    /// Ensures there can only be a single consensus client is updating the state.
+    pub consensus_guardrail: AtomicUsize,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -552,11 +555,14 @@ impl AuthorityState {
     pub async fn handle_consensus_certificate(
         &self,
         certificate: CertifiedTransaction,
+        last_consensus_index: SequenceNumber,
     ) -> SuiResult<()> {
         // Ensure it is a shared object certificate
         if !certificate.transaction.contains_shared_object() {
-            // TODO: Maybe add a warning here, no respectable authority should
-            // have sequenced this.
+            log::debug!(
+                "Transaction without shared object has been sequenced: {:?}",
+                certificate.transaction
+            );
             return Ok(());
         }
 
@@ -574,11 +580,15 @@ impl AuthorityState {
         // Check the certificate.
         certificate.check(&self.committee)?;
 
-        // Persist the certificate. We are about to lock one or more shared object.
+        // Persist the certificate since we are about to lock one or more shared object.
         // We thus need to make sure someone (if not the client) can continue the protocol.
-        // Also atomically lock the shared objects for this particular transaction.
+        // Also atomically lock the shared objects for this particular transaction and
+        // increment the last consensus index. Note that a single process can ever call
+        // this function and that the last consensus index is also kept in memory. It is
+        // thus ok to only persist now (despite this function may have returned earlier).
+        // In the worst case, the synchronizer of the consensus client will catch up.
         self._database
-            .persist_certificate_and_lock_shared_objects(&transaction_digest, certificate)
+            .persist_certificate_and_lock_shared_objects(certificate, last_consensus_index)
     }
 
     pub async fn handle_transaction_info_request(
@@ -762,7 +772,7 @@ impl AuthorityState {
         let native_functions =
             sui_framework::natives::all_natives(MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS);
 
-        AuthorityState {
+        Self {
             committee,
             name,
             secret,
@@ -771,6 +781,7 @@ impl AuthorityState {
                 .expect("We defined natives to not fail here"),
             _database: store,
             batch_channels: None,
+            consensus_guardrail: AtomicUsize::new(0),
         }
     }
 
@@ -932,6 +943,10 @@ impl AuthorityState {
         object_id: ObjectID,
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self._database.get_latest_parent_entry(object_id)
+    }
+
+    pub fn last_consensus_index(&self) -> SuiResult<SequenceNumber> {
+        self._database.last_consensus_index()
     }
 }
 
