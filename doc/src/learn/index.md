@@ -36,12 +36,3 @@ Take note of these related repositories of information to make best use of the k
   * [Examples](https://github.com/diem/move/tree/main/language/documentation/examples/experimental) - A set of samples, such as for [defining a coin](https://github.com/diem/move/tree/main/language/documentation/examples/experimental/basic-coin) and [swapping it](https://github.com/diem/move/tree/main/language/documentation/examples/experimental/coin-swap).
 * [Awesome Move](https://github.com/MystenLabs/awesome-move/blob/main/README.md) - A summary of resources related to Move, from blockchains through code samples.
 * [Sui API Reference](https://app.swaggerhub.com/apis/MystenLabs/sui-api/0.1 ) - The reference files for the Sui Rest API.
-
-## Provide feedback/make fixes
-
-Send us documentation fixes or requests for improvement at:
-doc@mystenlabs.com
-
-You may also suggest changes to the docs directly in GitHub right here using the **Source Code** link below.
-
-Simply edit the file in question and generated a pull request. We will get back to you shortly.
