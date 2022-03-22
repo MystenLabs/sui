@@ -4,7 +4,7 @@
 
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
-    execution_engine,
+    execution_engine, transaction_input_checker,
 };
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::ModuleCache;
@@ -26,9 +26,9 @@ use sui_types::{
     committee::Committee,
     crypto::AuthoritySignature,
     error::{SuiError, SuiResult},
-    fp_bail, fp_ensure, gas,
+    fp_bail, fp_ensure,
     messages::*,
-    object::{Data, Object, Owner},
+    object::{Data, Object},
     storage::{BackingPackageStore, DeleteKind, Storage},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -109,208 +109,15 @@ impl AuthorityState {
         self.batch_channels.subscribe()
     }
 
-    /// The logic to check one object against a reference, and return the object if all is well
-    /// or an error if not.
-    fn check_one_lock(
-        &self,
-        transaction: &Transaction,
-        object_kind: InputObjectKind,
-        object: &Object,
-        owned_object_authenticators: &HashSet<SuiAddress>,
-    ) -> SuiResult {
-        match object_kind {
-            InputObjectKind::MovePackage(package_id) => {
-                fp_ensure!(
-                    object.data.try_as_package().is_some(),
-                    SuiError::MoveObjectAsPackage {
-                        object_id: package_id
-                    }
-                );
-            }
-            InputObjectKind::OwnedMoveObject((object_id, sequence_number, object_digest)) => {
-                fp_ensure!(
-                    sequence_number <= SequenceNumber::MAX,
-                    SuiError::InvalidSequenceNumber
-                );
-
-                // Check that the seq number is the same
-                fp_ensure!(
-                    object.version() == sequence_number,
-                    SuiError::UnexpectedSequenceNumber {
-                        object_id,
-                        expected_sequence: object.version(),
-                        given_sequence: sequence_number,
-                    }
-                );
-
-                // Check the digest matches
-                fp_ensure!(
-                    object.digest() == object_digest,
-                    SuiError::InvalidObjectDigest {
-                        object_id,
-                        expected_digest: object_digest
-                    }
-                );
-
-                match object.owner {
-                    Owner::SharedImmutable => {
-                        // Nothing else to check for SharedImmutable.
-                    }
-                    Owner::AddressOwner(owner) => {
-                        // Check the owner is the transaction sender.
-                        fp_ensure!(
-                            transaction.sender_address() == owner,
-                            SuiError::IncorrectSigner {
-                                error: format!("Object {:?} is owned by account address {:?}, but signer address is {:?}", object.id(), owner, transaction.sender_address()),
-                            }
-                        );
-                    }
-                    Owner::ObjectOwner(owner) => {
-                        // Check that the object owner is another mutable object in the input.
-                        fp_ensure!(
-                            owned_object_authenticators.contains(&owner),
-                            SuiError::IncorrectSigner {
-                                error: format!("Object {:?} is owned by object {:?}, which is not in the input", object.id(), owner),
-                            }
-                        );
-                    }
-                    Owner::SharedMutable => {
-                        // This object is a mutable shared object. However the transaction
-                        // specifies it as an owned object. This is inconsistent.
-                        return Err(SuiError::NotSharedObjectError);
-                    }
-                };
-            }
-            InputObjectKind::SharedMoveObject(..) => {
-                // When someone locks an object as shared it must be shared already.
-                fp_ensure!(object.is_shared(), SuiError::NotSharedObjectError);
-            }
-        };
-        Ok(())
-    }
-
-    /// This function does 3 things:
-    /// 1. Check if the gas object has enough balance to pay for this transaction.
-    ///   Since the transaction may be a batch transaction, we need to walk through
-    ///   each single transaction in it and accumulate their gas cost. For Move call
-    ///   and publish we can simply use their budget, for transfer we will calculate
-    ///   the cost on the spot since it's deterministic (See comments inside the function).
-    /// 2. Check if the gas budget for each single transction is above some minimum amount.
-    ///   This can help reduce DDos attacks.
-    /// 3. Check that the objects used in transfers are mutable. We put the check here
-    ///   because this is the most convenient spot to check.
-    fn check_gas_requirement(
-        transaction: &Transaction,
-        input_objects: &[(InputObjectKind, Object)],
-    ) -> SuiResult {
-        let mut total_cost = 0;
-        let mut idx = 0;
-        for tx in transaction.single_transactions() {
-            match tx {
-                SingleTransactionKind::Transfer(_) => {
-                    // Index access safe because the inputs were constructed in order.
-                    let transfer_object = &input_objects[idx].1;
-                    fp_ensure!(
-                        !transfer_object.is_read_only(),
-                        SuiError::TransferImmutableError
-                    );
-                    // TODO: Make Transfer transaction to also contain gas_budget.
-                    // By @gdanezis: Now his is the only part of this function that requires
-                    // an input object besides the gas object. It would be a major win if we
-                    // can get rid of the requirement to have all objects to check the transfer
-                    // requirement. If we can go this, then we could execute this check before
-                    // we check for signatures.
-                    // This would allow us to shore up out DoS defences: we only need to do a
-                    // read on the gas object balance before we do anything expensive,
-                    // such as checking signatures.
-                    total_cost += gas::calculate_object_transfer_cost(transfer_object);
-                    idx += tx.input_object_count();
-                }
-                SingleTransactionKind::Call(op) => {
-                    gas::check_move_gas_requirement(op.gas_budget)?;
-                    total_cost += op.gas_budget;
-                    idx += tx.input_object_count();
-                }
-                SingleTransactionKind::Publish(op) => {
-                    gas::check_move_gas_requirement(op.gas_budget)?;
-                    total_cost += op.gas_budget;
-                    // No need to update idx because Publish cannot show up in batch.
-                }
-            }
-        }
-        // The last element in the inputs is always gas object.
-        let gas_object = &input_objects.last().unwrap().1;
-        gas::check_gas_balance(gas_object, total_cost)
-    }
-
-    /// Check all the objects used in the transaction against the database, and ensure
-    /// that they are all the correct version and number.
-    async fn check_locks(
+    async fn check_locks_and_gas(
         &self,
         transaction: &Transaction,
     ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
         let input_objects = transaction.input_objects()?;
-
         // These IDs act as authenticators that can own other objects.
         let objects = self.fetch_objects(&input_objects).await?;
-
-        // Constructing the list of objects that could be used to authenticate other
-        // objects. Any mutable object (either shared or owned) can be used to
-        // authenticate other objects. Hence essentially we are building the list
-        // of mutable objects.
-        // We require that mutable objects cannot show up more than once.
-        // In [`SingleTransactionKind::input_objects`] we checked that there is no
-        // duplicate objects in the same SingleTransactionKind. However for a Batch
-        // Transaction, we still need to make sure that the same mutable object don't show
-        // up in more than one SingleTransactionKind.
-        // TODO: We should be able to allow the same shared mutable object to show up
-        // in more than one SingleTransactionKind. We need to ensure that their
-        // version number only increases once at the end of the Batch execution.
-        let mut owned_object_authenticators: HashSet<SuiAddress> = HashSet::new();
-        for object in objects.iter().flatten() {
-            if !object.is_read_only() {
-                fp_ensure!(
-                    owned_object_authenticators.insert(object.id().into()),
-                    SuiError::InvalidBatchTransaction {
-                        error: format!("Mutable object {} cannot appear in more than one single transactions in a batch", object.id()),
-                    }
-                );
-            }
-        }
-
-        // Gather all objects and errors.
-        let mut all_objects = Vec::with_capacity(input_objects.len());
-        let mut errors = Vec::new();
-        for (object_kind, object) in input_objects.into_iter().zip(objects) {
-            // All objects must exist in the DB.
-            let object = match object {
-                Some(object) => object,
-                None => {
-                    errors.push(object_kind.object_not_found_error());
-                    continue;
-                }
-            };
-            // Check if the object contents match the type of lock we need for
-            // this object.
-            match self.check_one_lock(
-                transaction,
-                object_kind,
-                &object,
-                &owned_object_authenticators,
-            ) {
-                Ok(()) => all_objects.push((object_kind, object)),
-                Err(e) => {
-                    errors.push(e);
-                }
-            }
-        }
-        // If any errors with the locks were detected, we return all errors to give the client
-        // a chance to update the authority if possible.
-        if !errors.is_empty() {
-            return Err(SuiError::LockErrors { errors });
-        }
-        fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
-        Self::check_gas_requirement(transaction, &all_objects)?;
+        let all_objects =
+            transaction_input_checker::check_locks(transaction, input_objects, objects)?;
         Ok(all_objects)
     }
 
@@ -341,28 +148,11 @@ impl AuthorityState {
             return Ok(transaction_info);
         }
 
-        let owned_objects: Vec<_> = self
-            .check_locks(&transaction)
+        let all_objects: Vec<_> = self
+            .check_locks_and_gas(&transaction)
             .instrument(tracing::trace_span!("tx_check_locks"))
-            .await?
-            .into_iter()
-            .filter_map(|(object_kind, object)| match object_kind {
-                InputObjectKind::MovePackage(_) => None,
-                InputObjectKind::OwnedMoveObject(object_ref) => {
-                    if object.is_read_only() {
-                        None
-                    } else {
-                        Some(object_ref)
-                    }
-                }
-                InputObjectKind::SharedMoveObject(..) => None,
-            })
-            .collect();
-
-        debug!(
-            num_mutable_objects = owned_objects.len(),
-            "Checked locks and found mutable objects"
-        );
+            .await?;
+        let owned_objects = transaction_input_checker::filter_owned_objects(all_objects);
 
         let signed_transaction = SignedTransaction::new(transaction, self.name, &*self.secret);
 
@@ -474,7 +264,7 @@ impl AuthorityState {
         let transaction_digest = *certificate.digest();
         let transaction = &certificate.transaction;
 
-        let objects_by_kind = self.check_locks(transaction).await?;
+        let objects_by_kind = self.check_locks_and_gas(transaction).await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
@@ -894,7 +684,7 @@ impl AuthorityState {
             signed_effects,
             Some(notifier_ticket.seq()),
         )
-        // implicitely we drop the ticket here and that notifes the batch manager
+        // implicitly we drop the ticket here and that notifies the batch manager
     }
 
     /// Get a read reference to an object/seq lock
