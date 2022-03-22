@@ -92,7 +92,7 @@ export O_GAS=2110ADFB7BAF889A05EA6F5889AF7724299F9BED
 ```
 
 ## Publish the TicTacToe game on Sui
-We implemented a TicTacToe game in [TicTacToe.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move). To publish the game, we run the publish command and specify the path to the game package. As described in the earlier [setup section](#setup), we assume that Sui repository was cloned locally - *let us further assume that it was cloned into `"$SUI_ROOT"/sui` directory* **Adjust the `--path` to match your own environment**.
+We implemented a TicTacToe game in [TicTacToe.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games/sources/TicTacToe.move). To publish the game, we run the publish command and specify the path to the game package. As described in the earlier [setup section](#setup), we assume that Sui repository was cloned locally - *let us further assume that it was cloned into `"$SUI_ROOT"/sui` directory* **Adjust the `--path` to match your own environment if you used different paths**.
 ```
 $ wallet --no-shell publish --path "$SUI_ROOT"/sui/sui_programmability/examples/games --gas $ADMIN_GAS --gas-budget 30000
 ----- Certificate ----
