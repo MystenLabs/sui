@@ -13,7 +13,8 @@ With thousands of companies working in SoWork’s Workplace Metaverse - includin
 
 SoWork will start with launching two features on Sui:
 
-**Employee Achievement NFTs:**
+### Employee Achievement NFTs
+
 A system where companies can reward employees with NFT awards, based on customizable criteria with unlock-able perks. Awards can be merit-based, value-based, or events driven. In addition, leaders and teammates can purchase these NFTs and gift them to each other, further boosting teamwork and rapport.
 
 In this system, awards are tied to each employee’s avatar, or identities. As awards are owned by each employee, they are able to freely display within their SoWork office, trade with each other, or list them in marketplaces.
@@ -24,7 +25,8 @@ In this system, awards are tied to each employee’s avatar, or identities. As a
 
 ![Minted NFT Award in Profile](/static/6%20-%20Award%20in%20profile.png "Minted NFT Award in Profile")
 
-**Minting NFTs via Mapmaker:**
+### Minting NFTs via Mapmaker
+
 Utilizing SoWork’s Mapmaker, creators can mint custom, mutable NFTs to import into their metaverse. Customs can include anything from clothing, decor, to furniture. Minting and import happens all at once, creating a seamless experience for the creator.
 
   
@@ -37,7 +39,7 @@ Utilizing SoWork’s Mapmaker, creators can mint custom, mutable NFTs to import 
 >For SoWork specifically, we use Sui to deliver fast, efficient, cost-effective minting of composable, mutable NFTs to our customers, which just isn’t possible with older blockchain technology. One of our favorite use-cases is SoWork’s ‘Teammate Awards’ feature, which lets our workplace customers reward their employees in a fun, engaging manner via mutable NFTs.”
 
  
-## Why This Matters
+## Why this matters
 
 * Companies can utilize NFT to create unique and custom economies to drive better employee engagement, culture and incentives.
 * Employees can receive and give unique rewards.
