@@ -23,12 +23,21 @@ impl Borrow<[u8]> for &Item {
     }
 }
 
+
+/* 
+   A MulHash accumulator: each element is mapped to a 
+   point on an eliptic curve on which the DL problem is 
+   hard. The accumulator is the sum of all points.
+*/
+
 #[derive(Default, Clone, PartialEq, Eq)]
 pub struct Accumulator {
     accumulator: RistrettoPoint,
 }
 
 impl Accumulator {
+
+    /// Insert one item in the accumulator
     pub fn insert<I>(&mut self, item: &I)
     where
         I: Borrow<[u8]>,
@@ -37,6 +46,7 @@ impl Accumulator {
         self.accumulator += point;
     }
 
+    // Insert all items from an iterator into the accumulator
     pub fn insert_all<I, It>(&mut self, items: It)
     where
         It: Iterator<Item = I>,
@@ -48,6 +58,11 @@ impl Accumulator {
     }
 }
 
+/*
+    A way point represents a sequential point in a stream that summarizes
+    all elements so far. Waypoints with increasing sequence numbers should
+    contain all element in previous waypoints and expand them.
+*/
 #[derive(PartialEq, Eq, Clone)]
 pub struct Waypoint {
     pub sequence_number: u64,
@@ -55,6 +70,8 @@ pub struct Waypoint {
 }
 
 impl Waypoint {
+
+    /// Make a new waypoint.
     pub fn new(sequence_number: u64) -> Waypoint {
         Waypoint {
             sequence_number,
@@ -62,10 +79,18 @@ impl Waypoint {
         }
     }
 
+    /// Inserts an element into the accumulator
     pub fn insert(&mut self, item: &Item) {
         self.accumulator.insert(item);
     }
 }
+
+/*
+    A structure to hold a waypoint, associated items,
+    and is indexed by a key provided. Such a structure
+    may be used to represent checkpoints or differences
+    of checkpoints.
+*/
 
 #[derive(Clone)]
 pub struct CheckpointWithItems<K>
@@ -89,20 +114,27 @@ where
         }
     }
 
+    /// Insert an element in the accumulator and list of items
     pub fn insert_full(&mut self, item: Item) {
         self.waypoint.accumulator.insert(&item);
         self.items.insert(item);
     }
 
+    /// Insert an element in the accumulator only
     pub fn insert_accumulator(&mut self, item: &Item) {
         self.waypoint.accumulator.insert(item);
     }
 
+    /// Insert an element in the items only
     pub fn insert_item(&mut self, item: Item) {
         self.items.insert(item);
     }
 }
 
+/* 
+    Represents the difference between two waypoints
+    and elements that make up this difference. 
+*/
 #[derive(Clone)]
 pub struct WaypointDiff<K>
 where
@@ -144,6 +176,7 @@ where
         }
     }
 
+    /// Swap the two waypoints.
     pub fn swap(self) -> WaypointDiff<K> {
         WaypointDiff {
             first: self.second,
@@ -151,6 +184,9 @@ where
         }
     }
 
+    /// Check the internal invarients: ie that adding to both
+    /// waypoints the missing elements makes them point to the 
+    /// accumulated same set.
     pub fn check(&self) -> bool {
         // Check the waypoints are for the same sequence numbers.
         if self.first.waypoint.sequence_number != self.second.waypoint.sequence_number {
@@ -167,6 +203,11 @@ where
     }
 }
 
+/*
+    A global checkpoint is the collection of differences
+    fully connecting 2f+1 by stake authorities, with diffs
+    that can be derived between all of them.
+*/
 #[derive(Clone)]
 pub struct GlobalCheckpoint<K>
 where
@@ -268,6 +309,8 @@ where
         true
     }
 
+    /// Provides the set of element that need to be added to the first party
+    /// to catch up with the checkpoint (and maybe surpass it).
     pub fn catch_up_items(&self, diff: WaypointDiff<K>) -> BTreeSet<Item> {
         // If the authority is one of the participants in the checkpoint
         // just read the different.
