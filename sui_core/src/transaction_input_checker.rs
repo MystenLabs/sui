@@ -14,7 +14,7 @@ use tracing::debug;
 
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
-pub fn check_locks(
+pub async fn check_locks(
     transaction: &Transaction,
     input_objects: Vec<InputObjectKind>,
     objects: Vec<Option<Object>>,
@@ -79,16 +79,16 @@ pub fn check_locks(
     Ok(all_objects)
 }
 
-pub fn filter_owned_objects(all_objects: Vec<(InputObjectKind, Object)>) -> Vec<ObjectRef> {
+pub fn filter_owned_objects(all_objects: &[(InputObjectKind, Object)]) -> Vec<ObjectRef> {
     let owned_objects: Vec<_> = all_objects
-        .into_iter()
+        .iter()
         .filter_map(|(object_kind, object)| match object_kind {
             InputObjectKind::MovePackage(_) => None,
             InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
                 if object.is_read_only() {
                     None
                 } else {
-                    Some(object_ref)
+                    Some(*object_ref)
                 }
             }
             InputObjectKind::MutSharedMoveObject(..) => None,

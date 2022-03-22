@@ -1124,10 +1124,7 @@ where
         Ok((new_certificate, response))
     }
 
-    pub async fn get_object_info_execute(
-        &self,
-        object_id: ObjectID,
-    ) -> Result<ObjectRead, anyhow::Error> {
+    pub async fn get_object_info_execute(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
         let (object_map, cert_map) = self
             .get_object_by_id(object_id, AUTHORITY_REQUEST_TIMEOUT)
             .await?;
@@ -1166,6 +1163,7 @@ where
                         return Ok(ObjectRead::Exists(obj_ref, obj, layout_option));
                     }
                     None => {
+                        // TODO: Figure out how to find out object being wrapped instead of deleted.
                         return Ok(ObjectRead::Deleted(obj_ref));
                     }
                 };

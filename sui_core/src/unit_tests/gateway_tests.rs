@@ -23,14 +23,13 @@ use sui_adapter::genesis;
 use sui_framework::build_move_package_to_bytes;
 use sui_types::crypto::Signature;
 use sui_types::crypto::{get_key_pair, KeyPair};
-use sui_types::error::SuiError::ObjectNotFound;
+
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::Transaction;
 use sui_types::object::{Data, Object, Owner, GAS_VALUE_FOR_TESTING};
 
 use crate::authority::{AuthorityState, AuthorityStore};
-use crate::gateway_state::gateway_store::AccountStore;
-use crate::gateway_state::{AccountState, GatewayAPI, GatewayState};
+use crate::gateway_state::{GatewayAPI, GatewayState};
 
 use super::*;
 
@@ -395,7 +394,7 @@ async fn fund_account(
             let object = Object::with_id_owner_for_testing(object_id, address);
             let client_ref = authority.0.as_ref().try_lock().unwrap();
             created_objects.insert(object_id, object.clone());
-            client_ref.insert_object(object).await;
+            client_ref.insert_genesis_object(object).await;
         }
     }
     client.sync_account_state(address).await.unwrap();
@@ -462,10 +461,6 @@ async fn init_local_client_and_fund_account_bad(
     client
 }
 
-fn get_account(client: &GatewayState<LocalAuthorityClient>, address: SuiAddress) -> &AccountState {
-    client.get_managed_address_states().get(&address).unwrap()
-}
-
 #[tokio::test]
 async fn test_initiating_valid_transfer() {
     let recipient = get_new_address();
@@ -501,14 +496,11 @@ async fn test_initiating_valid_transfer() {
         .to_effect_response()
         .unwrap();
 
-    let account = get_account(&client, sender);
     assert_eq!(
-        account.highest_known_version(&object_id_1),
-        Err(SuiError::ObjectNotFound {
-            object_id: object_id_1
-        })
+        client.highest_known_version(&object_id_1),
+        Ok(SequenceNumber::from(1))
     );
-    assert!(account.store().pending_transactions.is_empty());
+    assert!(client.store().pending_transactions().is_empty());
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id_1).await,
         (recipient, SequenceNumber::from(1))
@@ -554,12 +546,11 @@ async fn test_initiating_valid_transfer_despite_bad_authority() {
         .to_effect_response()
         .unwrap();
 
-    let account = get_account(&client, sender);
     assert_eq!(
-        account.highest_known_version(&object_id),
-        Err(ObjectNotFound { object_id })
+        client.highest_known_version(&object_id),
+        Ok(SequenceNumber::from(1)),
     );
-    assert!(account.store().pending_transactions.is_empty());
+    assert!(client.store().pending_transactions().is_empty());
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id).await,
         (recipient, SequenceNumber::from(1))
@@ -602,10 +593,9 @@ async fn test_initiating_transfer_low_funds() {
     .await;
 
     assert!(transfer.is_err());
-    let account = get_account(&client, sender);
     // Trying to overspend does not block an account.
     assert_eq!(
-        account.highest_known_version(&object_id_2),
+        client.highest_known_version(&object_id_2),
         Ok(SequenceNumber::from(0))
     );
     // assert_eq!(sender.pending_transfer, None);
@@ -661,8 +651,7 @@ async fn test_bidirectional_transfer() {
         .to_effect_response()
         .unwrap();
 
-    let account1 = get_account(&client, addr1);
-    assert!(account1.store().pending_transactions.is_empty());
+    assert!(client.store().pending_transactions().is_empty());
     // Confirm client1 lose ownership of the object.
     assert_eq!(
         client.get_authorities().get_latest_owner(object_id).await,
@@ -705,8 +694,7 @@ async fn test_bidirectional_transfer() {
         .await
         .unwrap();
 
-    let account2 = get_account(&client, addr2);
-    assert!((account2.store().pending_transactions.is_empty()));
+    assert!((client.store().pending_transactions().is_empty()));
 
     // Confirm client2 lose ownership of the object.
     assert_eq!(
@@ -727,53 +715,16 @@ async fn test_bidirectional_transfer() {
     );
 
     // Should fail if Client 2 double spend the object
-    assert!(client
+    let data = client
         .transfer_coin(addr2, object_id, gas_object2, addr1)
         .await
+        .unwrap();
+
+    let signature = key2.sign(&data.to_bytes());
+    assert!(client
+        .execute_transaction(Transaction::new(data, signature))
+        .await
         .is_err());
-}
-
-#[tokio::test]
-async fn test_client_state_sync() {
-    let object_ids = (0..20)
-        .map(|_| ObjectID::random())
-        .collect::<Vec<ObjectID>>();
-    let authority_objects = (0..10).map(|_| object_ids.clone()).collect();
-
-    let sender = get_new_address();
-    let mut client = init_local_client_and_fund_account(sender, authority_objects).await;
-
-    let account = get_account(&client, sender);
-    let old_object_refs: BTreeMap<_, _> = account.store().object_refs.iter().collect();
-    let old_certificates: BTreeMap<_, _> = account.store().certificates.iter().collect();
-
-    // Remove all client-side data
-    account.store().certificates.clear().unwrap();
-    account.store().object_refs.clear().unwrap();
-    assert!(account.get_owned_objects().is_empty());
-
-    // Sync client state
-    client.sync_account_state(sender).await.unwrap();
-
-    let account = get_account(&client, sender);
-    // Confirm data are the same after sync
-    assert!(!account.get_owned_objects().is_empty());
-    assert_eq!(
-        &old_object_refs,
-        &account.store().object_refs.iter().collect()
-    );
-    for tx_digest in old_certificates.keys() {
-        // valid since our test authority should not lead us to download new certs
-        compare_certified_transactions(
-            old_certificates.get(tx_digest).unwrap(),
-            &account
-                .store()
-                .certificates
-                .get(tx_digest)
-                .unwrap()
-                .unwrap(),
-        );
-    }
 }
 
 #[tokio::test]
@@ -807,22 +758,8 @@ async fn test_client_state_sync_with_transferred_object() {
         (addr2, SequenceNumber::from(1))
     );
 
-    // Client 2's local object_id and cert should be empty before sync
-    // Query `addr2` once so the client state is created internally in the account manager
-    assert!(client.get_owned_objects(addr2).is_empty());
-    let account2 = get_account(&client, addr2);
-    assert!(account2.get_owned_objects().is_empty());
-    assert!(account2.store().object_refs.is_empty());
-    assert!(&account2.store().certificates.is_empty());
-
-    // Sync client state
-    client.sync_account_state(addr2).await.unwrap();
-
-    // Confirm client 2 received the new object id and cert
-    let account2 = get_account(&client, addr2);
-    assert_eq!(1, account2.get_owned_objects().len());
-    assert_eq!(1, account2.store().object_refs.iter().count());
-    assert_eq!(1, account2.store().certificates.iter().count());
+    // Confirm client 2 received the new object id
+    assert_eq!(1, client.get_owned_objects(addr2).len());
 }
 
 #[tokio::test]
@@ -1399,318 +1336,29 @@ async fn test_transfer_object_error() {
         .await
         .unwrap();
 
-    let result = client
+    let data = client
         .transfer_coin(sender, object_id, gas_object, recipient)
+        .await
+        .unwrap();
+
+    let signature = sender_key.sign(&data.to_bytes());
+    let result = client
+        .execute_transaction(Transaction::new(data, signature))
         .await;
 
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err().downcast_ref(),
-        Some(SuiError::ObjectNotFound { .. })
+        Some(SuiError::LockErrors { .. })
     ));
 
     // Test 2: Object not known to authorities
     let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender);
-    get_account(&client, sender)
-        .store()
-        .object_refs
-        .insert(&obj.id(), &obj.compute_object_reference())
-        .unwrap();
 
     let result = client
         .transfer_coin(sender, obj.id(), gas_object, recipient)
         .await;
     assert!(result.is_err());
-
-    // Test 3: invalid object digest
-    let object_id = *objects.next().unwrap();
-
-    // give object an incorrect object digest
-    get_account(&client, sender)
-        .store()
-        .object_refs
-        .insert(
-            &object_id,
-            &(object_id, SequenceNumber::new(), ObjectDigest([0; 32])),
-        )
-        .unwrap();
-
-    let data = client
-        .transfer_coin(sender, object_id, gas_object, recipient)
-        .await
-        .unwrap();
-    let signature = sender_key.sign(&data.to_bytes());
-    let result = client
-        .execute_transaction(Transaction::new(data, signature))
-        .await;
-
-    assert!(result.is_err());
-
-    // Test 4: Used to detect a mismatch between the object reference in `object_refs`, on the one hand, and
-    // the sequence number table (then part of the client state), used in executing the transaction, on the other hand.
-    // There is now one single table.
-
-    // Test 5: The client does not allow concurrent transfer;
-    let object_id = *objects.next().unwrap();
-    // Fabricate a fake pending transfer
-    get_account(&client, sender)
-        .lock_pending_transaction_objects(&to_transaction(
-            TransactionData::new_transfer(
-                SuiAddress::random_for_testing_only(),
-                (object_id, Default::default(), ObjectDigest::new([0; 32])),
-                sender,
-                (gas_object, Default::default(), ObjectDigest::new([0; 32])),
-            ),
-            &get_key_pair().1,
-        ))
-        .unwrap();
-
-    let data = client
-        .transfer_coin(sender, object_id, gas_object, recipient)
-        .await
-        .unwrap();
-
-    let signature = sender_key.sign(&data.to_bytes());
-    let result = client
-        .execute_transaction(Transaction::new(data, signature))
-        .await;
-
-    assert!(result.is_err());
-}
-
-#[tokio::test]
-async fn test_gateway_store() {
-    let store =
-        AccountStore::new(env::temp_dir().join(format!("CLIENT_DB_{:?}", ObjectID::random())));
-
-    // Make random sequence numbers
-    let keys_vals = (0..100)
-        .map(|i| {
-            let oid = ObjectID::random();
-            (oid, (oid, SequenceNumber::from(i), ObjectDigest::random()))
-        })
-        .collect::<Vec<_>>();
-    // Try insert batch
-    store
-        .object_refs
-        .multi_insert(keys_vals.clone().into_iter())
-        .unwrap();
-
-    // Check the size
-    assert_eq!(store.object_refs.iter().count(), 100);
-
-    // Check that the items are all correct
-    keys_vals.iter().for_each(|(k, v)| {
-        assert_eq!(*v, store.object_refs.get(k).unwrap().unwrap());
-    });
-
-    // Check that are removed
-    store
-        .object_refs
-        .multi_remove(keys_vals.into_iter().map(|(k, _)| k))
-        .unwrap();
-
-    assert!(store.object_refs.is_empty());
-}
-
-#[tokio::test]
-async fn test_object_store() {
-    // Init the states
-    // We need admin account as we will be calling initializers on
-    // modules which check if the caller/publisher is the admin
-    // account.
-    let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = make_admin_account();
-
-    let gas_object_id = ObjectID::random();
-
-    // Populate authorities with gas obj data
-    let gas_object =
-        fund_account_with_same_objects(authority_clients, &mut client, addr1, vec![gas_object_id])
-            .await
-            .iter()
-            .next()
-            .unwrap()
-            .1
-            .clone();
-    let gas_object_ref = gas_object.clone().compute_object_reference();
-    // Ensure that object store is empty
-    assert!(get_account(&client, addr1).store().objects.is_empty());
-
-    // Run a few syncs to retrieve objects ids
-    for _ in 0..4 {
-        let _ = client.sync_account_state(addr1).await.unwrap();
-    }
-    // Try to download objects which are not already in storage
-    client
-        .download_owned_objects_not_in_db(addr1)
-        .await
-        .unwrap();
-
-    // Gas object should be in storage now
-    assert_eq!(
-        get_account(&client, addr1).store().objects.iter().count(),
-        1
-    );
-
-    // Verify that we indeed have the object
-    let gas_obj_from_store = get_account(&client, addr1)
-        .store()
-        .objects
-        .get(&gas_object_ref)
-        .unwrap()
-        .unwrap();
-    assert_eq!(gas_obj_from_store, gas_object);
-
-    // Provide path to well formed package sources
-    let mut hero_path = env!("CARGO_MANIFEST_DIR").to_owned();
-    hero_path.push_str("/src/unit_tests/data/hero/");
-
-    let compiled_modules = build_move_package_to_bytes(Path::new(&hero_path), false).unwrap();
-    let data = client
-        .publish(
-            addr1,
-            compiled_modules,
-            gas_object_ref,
-            GAS_VALUE_FOR_TESTING / 2,
-        )
-        .await
-        .unwrap();
-
-    let signature = key1.sign(&data.to_bytes());
-    let response = client
-        .execute_transaction(Transaction::new(data, signature))
-        .await
-        .unwrap()
-        .to_publish_response()
-        .unwrap();
-
-    // Two objects resulting from two
-    // initializer runs in different modules should be created.
-    assert_eq!(response.created_objects.len(), 2);
-
-    // Verify gas obj
-    assert_eq!(response.updated_gas.id(), gas_object_ref.0);
-
-    // New gas object should be in storage, so 1 new items, plus 3 from before
-    // The published package is not in the store because it's not owned by anyone.
-    assert_eq!(
-        get_account(&client, addr1).store().objects.iter().count(),
-        4
-    );
-
-    // TODO: Verify that we have new_obj in the local store once we can store shared immutable objects.
-}
-
-#[tokio::test]
-async fn test_object_store_transfer() {
-    let (mut client, authority_clients) = make_address_manager(4).await;
-    let (addr1, key1) = get_key_pair();
-    let (addr2, key2) = get_key_pair();
-
-    let object_id = ObjectID::random();
-    let gas_object1 = ObjectID::random();
-    let gas_object2 = ObjectID::random();
-
-    fund_account_with_same_objects(
-        authority_clients.clone(),
-        &mut client,
-        addr1,
-        vec![object_id, gas_object1],
-    )
-    .await;
-    fund_account_with_same_objects(authority_clients, &mut client, addr2, vec![gas_object2]).await;
-
-    // Clients should not have retrieved objects
-    assert_eq!(
-        get_account(&client, addr1).store().objects.iter().count(),
-        0
-    );
-    assert_eq!(
-        get_account(&client, addr2).store().objects.iter().count(),
-        0
-    );
-
-    // Run a few syncs to populate object ids
-    for _ in 0..4 {
-        let _ = client.sync_account_state(addr1).await.unwrap();
-        let _ = client.sync_account_state(addr2).await.unwrap();
-    }
-
-    // Try to download objects which are not already in storage
-    client
-        .download_owned_objects_not_in_db(addr1)
-        .await
-        .unwrap();
-    client
-        .download_owned_objects_not_in_db(addr2)
-        .await
-        .unwrap();
-
-    // Gas object and another object should be in storage now for client 1
-    assert_eq!(
-        get_account(&client, addr1).store().objects.iter().count(),
-        2
-    );
-
-    // Only gas object should be in storage now for client 2
-    assert_eq!(
-        get_account(&client, addr2).store().objects.iter().count(),
-        1
-    );
-
-    // Transfer object to client.
-    let data = client
-        .transfer_coin(addr1, object_id, gas_object1, addr2)
-        .await
-        .unwrap();
-
-    let signature = key1.sign(&data.to_bytes());
-    let _certificate = client
-        .execute_transaction(Transaction::new(data, signature))
-        .await
-        .unwrap();
-
-    // Update client2's local object data.
-    client.sync_account_state(addr2).await.unwrap();
-
-    // Client 1 should not have lost its objects
-    // Plus it should have a new gas object
-    assert_eq!(
-        get_account(&client, addr1).store().objects.iter().count(),
-        3
-    );
-    // Client 2 should now have the new object
-    assert_eq!(
-        get_account(&client, addr2).store().objects.iter().count(),
-        1
-    );
-
-    // Transfer the object back to Client1
-    let data = client
-        .transfer_coin(addr2, object_id, gas_object2, addr1)
-        .await
-        .unwrap();
-
-    let signature = key2.sign(&data.to_bytes());
-    let _certificate = client
-        .execute_transaction(Transaction::new(data, signature))
-        .await
-        .unwrap();
-
-    // Update client1's local object data.
-    client.sync_account_state(addr1).await.unwrap();
-
-    // Client 1 should have a new version of the object back
-    assert_eq!(
-        get_account(&client, addr1).store().objects.iter().count(),
-        3
-    );
-    // Client 2 should have new gas object version
-    assert_eq!(
-        get_account(&client, addr2).store().objects.iter().count(),
-        2
-    );
 }
 
 // A helper function to make tests less verbose
@@ -2217,7 +1865,12 @@ async fn test_process_certificate() {
     do_transaction(&auth_vec[2], &create1).await;
 
     // Get a cert
-    let cert1 = extract_cert(&auth_vec, &client.authorities().committee, create1.digest()).await;
+    let cert1 = extract_cert(
+        &auth_vec,
+        &client.get_authorities().committee,
+        create1.digest(),
+    )
+    .await;
 
     // Submit the cert to 1 authority.
     let new_ref_1 = do_cert(&auth_vec[0], &cert1).await.created[0].0;
@@ -2236,7 +1889,12 @@ async fn test_process_certificate() {
     do_transaction(&auth_vec[1], &create2).await;
     do_transaction(&auth_vec[2], &create2).await;
 
-    let cert2 = extract_cert(&auth_vec, &client.authorities().committee, create2.digest()).await;
+    let cert2 = extract_cert(
+        &auth_vec,
+        &client.get_authorities().committee,
+        create2.digest(),
+    )
+    .await;
 
     // Test: process the certificate, including bring up to date authority 3.
     //       which is 2 certs behind.
@@ -2291,18 +1949,10 @@ async fn test_transfer_pending_transactions() {
         .unwrap();
 
     // Pending transaction should be cleared
-    assert!(get_account(&client, sender)
-        .store()
-        .pending_transactions
-        .is_empty());
+    assert!(client.store().pending_transactions().is_empty());
 
     // Test 2: Object not known to authorities. This has no side effect
     let obj = Object::with_id_owner_for_testing(ObjectID::random(), sender);
-    get_account(&client, sender)
-        .store()
-        .object_refs
-        .insert(&obj.id(), &obj.compute_object_reference())
-        .unwrap();
 
     let result = client
         .transfer_coin(sender, obj.id(), gas_object, recipient)
@@ -2311,173 +1961,7 @@ async fn test_transfer_pending_transactions() {
     // assert!(matches!(result.unwrap_err().downcast_ref(),
     //        Some(SuiError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [SuiError::ObjectNotFound{..}, ..])));
     // Pending transaction should be cleared
-    assert!(get_account(&client, sender)
-        .store()
-        .pending_transactions
-        .is_empty());
-
-    // Test 3: invalid object digest. This also has no side effect
-    let object_id = *objects.next().unwrap();
-
-    // give object an incorrect object digest
-    get_account(&client, sender)
-        .store()
-        .object_refs
-        .insert(
-            &object_id,
-            &(object_id, SequenceNumber::new(), ObjectDigest([0; 32])),
-        )
-        .unwrap();
-
-    let data = client
-        .transfer_coin(sender, object_id, gas_object, recipient)
-        .await
-        .unwrap();
-    let signature = sender_key.sign(&data.to_bytes());
-    let result = client
-        .execute_transaction(Transaction::new(data, signature))
-        .await;
-    assert!(result.is_err());
-    //assert!(matches!(result.unwrap_err().downcast_ref(),
-    //        Some(SuiError::QuorumNotReached {errors, ..}) if matches!(errors.as_slice(), [SuiError::LockErrors{..}, ..])));
-
-    // Pending transaction should be cleared
-    assert!(get_account(&client, sender)
-        .store()
-        .pending_transactions
-        .is_empty());
-
-    // Test 4: Conflicting transactions touching same objects
-    let object_id = *objects.next().unwrap();
-    // Fabricate a fake pending transfer and simulate locking some objects
-    get_account(&client, sender)
-        .lock_pending_transaction_objects(&to_transaction(
-            TransactionData::new_transfer(
-                SuiAddress::random_for_testing_only(),
-                (object_id, Default::default(), ObjectDigest::new([0; 32])),
-                sender,
-                (gas_object, Default::default(), ObjectDigest::new([0; 32])),
-            ),
-            &get_key_pair().1,
-        ))
-        .unwrap();
-    // Try to use those objects in another transaction
-    let data = client
-        .transfer_coin(sender, object_id, gas_object, recipient)
-        .await
-        .unwrap();
-
-    let signature = sender_key.sign(&data.to_bytes());
-    let result = client
-        .execute_transaction(Transaction::new(data, signature))
-        .await;
-
-    assert!(result.is_err());
-    assert!(matches!(
-        result.unwrap_err().downcast_ref(),
-        Some(SuiError::ConcurrentTransactionError)
-    ));
-    // clear the pending transactions
-    get_account(&client, sender)
-        .store()
-        .pending_transactions
-        .clear()
-        .unwrap();
-    assert_eq!(
-        get_account(&client, sender)
-            .store()
-            .pending_transactions
-            .iter()
-            .count(),
-        0
-    );
-}
-
-#[tokio::test]
-async fn test_address_manager() {
-    let (mut address_manager, authority_clients) = make_address_manager(4).await;
-
-    // Ensure nothing being managed
-    assert!(address_manager.get_managed_address_states().is_empty());
-
-    // Try adding new addresses to manage
-    let (address, secret) = get_key_pair();
-    let _secret2 = secret.copy();
-    let gas_object1 = ObjectID::random();
-    let gas_object2 = ObjectID::random();
-
-    fund_account_with_same_objects(
-        authority_clients.clone(),
-        &mut address_manager,
-        address,
-        vec![gas_object1, gas_object2],
-    )
-    .await;
-
-    address_manager.sync_account_state(address).await.unwrap();
-    address_manager
-        .download_owned_objects_not_in_db(address)
-        .await
-        .unwrap();
-
-    // Confirm expected behavior
-    assert_eq!(
-        get_account(&address_manager, address)
-            .store()
-            .objects
-            .iter()
-            .count(),
-        2
-    );
-    let framework_obj_ref = address_manager.get_framework_object_ref().await.unwrap();
-    let sample_auth = &authority_clients[0];
-
-    // Make a transaction
-    let gas_ref_1 = get_latest_ref(sample_auth, gas_object1).await;
-    let pure_args = vec![
-        bcs::to_bytes(&100u64).unwrap(),
-        bcs::to_bytes(&AccountAddress::from(address)).unwrap(),
-    ];
-    let data = address_manager
-        .move_call(
-            address,
-            framework_obj_ref,
-            ident_str!("ObjectBasics").to_owned(),
-            ident_str!("create").to_owned(),
-            Vec::new(),
-            gas_ref_1,
-            Vec::new(),
-            vec![],
-            pure_args,
-            GAS_VALUE_FOR_TESTING - 1, // Make sure budget is less than gas value
-        )
-        .await
-        .unwrap();
-
-    let signature = secret.sign(&data.to_bytes());
-    let call_response = address_manager
-        .execute_transaction(Transaction::new(data, signature))
-        .await
-        .unwrap()
-        .to_effect_response();
-
-    // Check effects are good
-    let (_, transaction_effects) = call_response.unwrap();
-    // Status flag should be success
-    assert!(matches!(
-        transaction_effects.status,
-        ExecutionStatus::Success { .. }
-    ));
-
-    assert_eq!(transaction_effects.created.len(), 1);
-    assert_eq!(
-        get_account(&address_manager, address)
-            .store()
-            .objects
-            .iter()
-            .count(),
-        4
-    );
+    assert!(client.store().pending_transactions().is_empty());
 }
 
 #[tokio::test]
