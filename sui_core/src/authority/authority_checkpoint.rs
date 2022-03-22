@@ -2,11 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::borrow::Borrow;
+use std::fmt::Debug;
+use thiserror::Error;
 
 use super::*;
 
 use curve25519_dalek::ristretto::RistrettoPoint;
 use ed25519_dalek::Sha512;
+
+#[derive(Eq, PartialEq, Clone, Debug, Error)]
+#[allow(clippy::large_enum_variant)]
+pub enum WaypointError {
+    #[error("Waypoint error: {:?}", msg)]
+    Generic { msg: String },
+}
+
+impl WaypointError {
+    pub fn generic(msg: String) -> WaypointError {
+        WaypointError::Generic { msg }
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Item([u8; 8]);
@@ -23,20 +38,17 @@ impl Borrow<[u8]> for &Item {
     }
 }
 
-
-/* 
-   A MulHash accumulator: each element is mapped to a 
-   point on an eliptic curve on which the DL problem is 
+/*
+   A MulHash accumulator: each element is mapped to a
+   point on an eliptic curve on which the DL problem is
    hard. The accumulator is the sum of all points.
 */
-
 #[derive(Default, Clone, PartialEq, Eq)]
 pub struct Accumulator {
     accumulator: RistrettoPoint,
 }
 
 impl Accumulator {
-
     /// Insert one item in the accumulator
     pub fn insert<I>(&mut self, item: &I)
     where
@@ -70,7 +82,6 @@ pub struct Waypoint {
 }
 
 impl Waypoint {
-
     /// Make a new waypoint.
     pub fn new(sequence_number: u64) -> Waypoint {
         Waypoint {
@@ -131,9 +142,9 @@ where
     }
 }
 
-/* 
+/*
     Represents the difference between two waypoints
-    and elements that make up this difference. 
+    and elements that make up this difference.
 */
 #[derive(Clone)]
 pub struct WaypointDiff<K>
@@ -185,10 +196,9 @@ where
     }
 
     /// Check the internal invarients: ie that adding to both
-    /// waypoints the missing elements makes them point to the 
+    /// waypoints the missing elements makes them point to the
     /// accumulated same set.
     pub fn check(&self) -> bool {
-
         let mut first_plus = self.first.waypoint.accumulator.clone();
         first_plus.insert_all(self.first.items.iter());
 
@@ -224,19 +234,23 @@ where
         }
     }
 
-    pub fn insert(&mut self, diff: WaypointDiff<K>) {
+    pub fn insert(&mut self, diff: WaypointDiff<K>) -> Result<(), WaypointError> {
         if !diff.check() {
-            panic!("Bad waypoint diff");
+            return Err(WaypointError::generic("Bad waypoint diff".to_string()));
         }
 
         // Check the waypoints are for the same sequence numbers.
         if diff.first.waypoint.sequence_number != diff.second.waypoint.sequence_number {
-            panic!("Different sequence numbers (diff)");
+            return Err(WaypointError::generic(
+                "Different sequence numbers (diff)".to_string(),
+            ));
         }
 
         // Check the waypoints are for the same sequence numbers.
         if diff.first.waypoint.sequence_number != self.reference_waypoint.sequence_number {
-            panic!("Different sequence numbers (checkpoint)");
+            return Err(WaypointError::generic(
+                "Different sequence numbers (checkpoint)".to_string(),
+            ));
         }
 
         // The first link we add to the checkpoint does not need to be
@@ -264,11 +278,13 @@ where
             if !(self.authority_waypoints.contains_key(&diff.first.key)
                 && self.authority_waypoints[&diff.first.key].waypoint == diff.first.waypoint)
             {
-                panic!("Diff does not connect.")
+                return Err(WaypointError::generic("Diff does not connect.".to_string()));
             }
 
             if self.authority_waypoints.contains_key(&diff.second.key) {
-                panic!("Both parts of diff in checkpoint");
+                return Err(WaypointError::generic(
+                    "Both parts of diff in checkpoint".to_string(),
+                ));
             }
 
             let WaypointDiff { first, mut second } = diff;
@@ -300,6 +316,8 @@ where
 
             debug_assert!(self.check());
         }
+
+        Ok(())
     }
 
     pub fn check(&self) -> bool {
@@ -317,16 +335,18 @@ where
 
     /// Provides the set of element that need to be added to the first party
     /// to catch up with the checkpoint (and maybe surpass it).
-    pub fn catch_up_items(&self, diff: WaypointDiff<K>) -> BTreeSet<Item> {
+    pub fn catch_up_items(&self, diff: WaypointDiff<K>) -> Result<BTreeSet<Item>, WaypointError> {
         // If the authority is one of the participants in the checkpoint
         // just read the different.
         if self.authority_waypoints.contains_key(&diff.first.key) {
-            return self.authority_waypoints[&diff.first.key].items.clone();
+            return Ok(self.authority_waypoints[&diff.first.key].items.clone());
         }
 
         // If not then we need to compute the difference.
         if !self.authority_waypoints.contains_key(&diff.second.key) {
-            panic!("Need the second key at least to link into the checkpoint.")
+            return Err(WaypointError::generic(
+                "Need the second key at least to link into the checkpoint.".to_string(),
+            ));
         }
         let item_sum: BTreeSet<_> = diff
             .first
@@ -343,12 +363,11 @@ where
             first_root.insert_all(item_sum.iter());
 
             let mut ck2 = self.clone();
-            ck2.insert(diff.clone().swap());
-
-            first_root == ck2.reference_waypoint.accumulator
+            ck2.insert(diff.clone().swap()).is_ok()
+                && first_root == ck2.reference_waypoint.accumulator
         });
 
-        item_sum
+        Ok(item_sum)
     }
 }
 
@@ -435,9 +454,9 @@ mod tests {
         assert!(diff2.check());
 
         let mut ck = GlobalCheckpoint::new(10);
-        ck.insert(diff1);
+        assert!(ck.insert(diff1).is_ok());
         assert!(ck.check());
-        ck.insert(diff2);
+        assert!(ck.insert(diff2).is_ok());
         assert!(ck.check());
 
         // Now test catch_up_items
@@ -457,6 +476,6 @@ mod tests {
         );
         assert!(diff3.check());
 
-        ck.catch_up_items(diff3);
+        assert!(ck.catch_up_items(diff3).is_ok());
     }
 }
