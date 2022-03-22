@@ -260,7 +260,7 @@ The output shows a confirmation after the account has been created:
 Created new keypair for address : F456EBEF195E4A231488DF56B762AC90695BE2DD
 ```
 
-### Add existing accounts to `wallet.conf` manually.
+### Add existing accounts to `wallet.conf` manually
 
 If you have an existing key pair from an old wallet config, you can copy the account
 address manually to the new `wallet.conf`'s accounts section, and add the key pair to the keystore file;
