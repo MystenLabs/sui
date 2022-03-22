@@ -282,6 +282,6 @@ Use:
 * Refer to [Run in Postman](https://learning.postman.com/docs/publishing-your-api/run-in-postman/introduction-run-button/) documentation for more information on running the app.
 * Refer to [Postman](https://learning.postman.com/docs/getting-started/introduction/) documentation for more general usage information.
 
-## Connect to Remote REST Server
+## Connect to remote REST server
 
-Coming soon - alternative ways of working with Sui's REST API. Connect to Sui devnet, testnet, or mainnet! 
+Coming soon - alternative ways of working with Sui's REST API. Connect to Sui devnet, testnet, or mainnet!
