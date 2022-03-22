@@ -19,11 +19,17 @@ View projects built by third parties demonstrating the power of Sui.
 <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/sAMT5x8W3B8?autoplay=0"  frameborder="0"></iframe>
 </section>
 
+<br/>
+<br/>
+
 [Panzerdogs x Sui](../explore/panzerdogs.md) - an example of how the Sui infrastructure delivers a more integrated feedback loop between gameplay and NFT ownership.
 <section class="sui-dev-video">
  
 <iframe id="ytplayer" type="text/html" src="https://www.youtube.com/embed/Nx7hTb8dOb4?autoplay=0" frameborder="0"></iframe>
 </section>
+
+<br/>
+<br/>
 
 [SoWork x Sui](../explore/sowork.md) - building features on Sui to power creative employee rewards and custom NFT mints via SoWork's mapmaker.
 <section class="sui-dev-video">
