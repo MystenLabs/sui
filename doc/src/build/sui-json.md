@@ -58,7 +58,7 @@ Unsigned Integer (128 bit max)
   <tr>
    <td>Array
    </td>
-   <td>Must be homogenous and of SuiJSON type
+   <td>Must be homogenous JSON and of SuiJSON type
    </td>
    <td>Vector
    </td>
@@ -95,6 +95,8 @@ Due to the loosely typed nature of JSON/SuiJSON and the strongly typed nature of
 For example `SuiJSON::Number` can represent both *U8* and *U64*. This means we have to coerce and sometimes convert types.
 
 Which type we coerce depends on the expected Move type. For example, if the Move function expects a U8, we must have received a `SuiJSON::Number` with a value less than 256. More importantly, we have no way to easily express Move addresses in JSON, so we encode them as hex strings prefixed by `0x`.
+
+Additionally, Move supports U128 but JSON doesn't. As a result we allow encoding numbers as strings.
 
 ## Type coercion rules
 
@@ -260,9 +262,12 @@ Two formats are supported
 <code>[[3,600],[],[0,7,4]]</code>: nested U64 vector
 
    </td>
-   <td><code>[1,2,3,false]</code>: not homogenous
+   <td><code>[1,2,3,false]</code>: not homogenous JSON
 
 <code>[1,2,null,4]</code>: invalid elements
+
+<code>[1,2,"7"]</code>: although we allow encoding numbers as strings meaning this array can evaluate to <code>[1,2,7]</code>, the array is still ambiguous so it fails the homogeneity check.
+
    </td>
   </tr>
   <tr>

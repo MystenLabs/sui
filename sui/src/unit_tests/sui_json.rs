@@ -19,6 +19,9 @@ fn test_json_is_homogenous() {
     let checks = vec![
         (json!([1, 2, 3, true, 5, 6, 7]), false),
         (json!([1, 2, 3, 4, 5, 6, 7]), true),
+        // Although we can encode numbers as strings, we do not allow mixing primitive
+        // numbers and string encoded numbers
+        (json!([1, 2, "4", 4, 5, 6, 7]), false),
         (json!([1, 2, 3, 4, "", 6, 7]), false),
         (json!([]), true),
         (json!([[], 2, 3, 5, 6, 7]), false),
@@ -50,7 +53,7 @@ fn test_json_is_valid_sui_json() {
         (json!([1, 2, 3, true, 5, 6, 7]), false),
         // Homogenous
         (json!([1, 2, 3, 4, 5, 6, 7]), true),
-        // String not allowed
+        // String allowed
         (json!("a string"), true),
         // Float not allowed
         (json!(1.3), false),
