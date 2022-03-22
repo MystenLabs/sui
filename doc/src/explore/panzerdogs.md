@@ -55,5 +55,3 @@ With SuiEcho, users can easily bring in their NFTs to Sui and unlock new functio
 ## What’s next?
 
 This is just the beginning. Sui is built to deliver NFTs with utility, ensuring their value rises not just out of scarcity but also because users can unlock cool new experiences and functionality with them. For example, in the future we will likely see the Panzerdogs NFTs evolve based on what happens in the game. The Sui platform will be able to fully take advantage of these features by recording the mutations on-chain and ensuring a tight flywheel between gameplay, NFT ownership, and the game’s economy.
-
-
