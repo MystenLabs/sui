@@ -278,7 +278,6 @@ fn check_and_serialize_pure_args(
         match curr.to_bcs_bytes(expected_pure_arg_type) {
             Ok(a) => {
                 pure_args_serialized.push(a.clone());
-                println!("{:?} {:?}", expected_pure_arg_type, a);
             }
             Err(e) => return Err(anyhow!("Unable to parse arg at pos: {}, err: {:?}", idx, e)),
         }
