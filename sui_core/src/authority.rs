@@ -160,7 +160,7 @@ impl AuthorityState {
         // The call to self.set_transaction_lock checks the lock is not conflicting,
         // and returns ConflictingTransaction error in case there is a lock on a different
         // existing transaction.
-        self.set_transaction_lock(&owned_objects, signed_transaction)
+        self.set_transaction_lock(&owned_objects, transaction_digest, signed_transaction)
             .instrument(tracing::trace_span!("db_set_transaction_lock"))
             .await?;
 
@@ -663,10 +663,11 @@ impl AuthorityState {
     pub async fn set_transaction_lock(
         &self,
         mutable_input_objects: &[ObjectRef],
+        tx_digest: TransactionDigest,
         signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
         self._database
-            .set_transaction_lock(mutable_input_objects, signed_transaction)
+            .set_transaction_lock(mutable_input_objects, tx_digest, signed_transaction)
     }
 
     /// Update state and signals that a new transactions has been processed
