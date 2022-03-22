@@ -24,36 +24,32 @@ pub enum TransactionResponse {
 
 impl TransactionResponse {
     pub fn to_publish_response(self) -> Result<PublishResponse, SuiError> {
-        if let TransactionResponse::PublishResponse(resp) = self {
-            Ok(resp)
-        } else {
-            Err(SuiError::UnexpectedMessage)
+        match self {
+            TransactionResponse::PublishResponse(resp) => Ok(resp),
+            _ => Err(SuiError::UnexpectedMessage),
         }
     }
 
     pub fn to_merge_coin_response(self) -> Result<MergeCoinResponse, SuiError> {
-        if let TransactionResponse::MergeCoinResponse(resp) = self {
-            Ok(resp)
-        } else {
-            Err(SuiError::UnexpectedMessage)
+        match self {
+            TransactionResponse::MergeCoinResponse(resp) => Ok(resp),
+            _ => Err(SuiError::UnexpectedMessage),
         }
     }
 
     pub fn to_split_coin_response(self) -> Result<SplitCoinResponse, SuiError> {
-        if let TransactionResponse::SplitCoinResponse(resp) = self {
-            Ok(resp)
-        } else {
-            Err(SuiError::UnexpectedMessage)
+        match self {
+            TransactionResponse::SplitCoinResponse(resp) => Ok(resp),
+            _ => Err(SuiError::UnexpectedMessage),
         }
     }
 
     pub fn to_effect_response(
         self,
     ) -> Result<(CertifiedTransaction, TransactionEffects), SuiError> {
-        if let TransactionResponse::EffectResponse(cert, effects) = self {
-            Ok((cert, effects))
-        } else {
-            Err(SuiError::UnexpectedMessage)
+        match self {
+            TransactionResponse::EffectResponse(cert, effects) => Ok((cert, effects)),
+            _ => Err(SuiError::UnexpectedMessage),
         }
     }
 }

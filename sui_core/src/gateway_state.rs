@@ -611,7 +611,7 @@ where
         Ok(())
     }
 
-    async fn to_publish_response(
+    async fn create_publish_response(
         &self,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
@@ -659,7 +659,7 @@ where
         }))
     }
 
-    async fn to_split_coin_response(
+    async fn create_split_coin_response(
         &self,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
@@ -708,7 +708,7 @@ where
         }))
     }
 
-    async fn to_merge_coin_response(
+    async fn create_merge_coin_response(
         &self,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
@@ -771,7 +771,7 @@ where
         if let TransactionKind::Single(tx_kind) = tx_kind {
             match tx_kind {
                 SingleTransactionKind::Publish(_) => {
-                    return self.to_publish_response(certificate, effects).await
+                    return self.create_publish_response(certificate, effects).await
                 }
                 // Work out if the transaction is split coin or merge coin transaction
                 SingleTransactionKind::Call(move_call) => {
@@ -779,9 +779,9 @@ where
                         && move_call.module.as_ref() == coin::COIN_MODULE_NAME
                     {
                         if move_call.function.as_ref() == coin::COIN_SPLIT_VEC_FUNC_NAME {
-                            return self.to_split_coin_response(certificate, effects).await;
+                            return self.create_split_coin_response(certificate, effects).await;
                         } else if move_call.function.as_ref() == coin::COIN_JOIN_FUNC_NAME {
-                            return self.to_merge_coin_response(certificate, effects).await;
+                            return self.create_merge_coin_response(certificate, effects).await;
                         }
                     }
                 }
