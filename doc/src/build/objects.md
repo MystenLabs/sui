@@ -16,7 +16,7 @@ All Sui objects have the following metadata:
 
 In addition to common metadata, objects have a category-specific, variable-sized *contents* field. For a data value, this contains the Move type of the object and its [Binary Canonical Serialization (BCS)](https://docs.rs/bcs/latest/bcs/)-encoded payload. For a package value, this contains the bytecode modules in the package.
 
-## Object Ownership
+## Object ownership
 Every object has a *owner* field that indicates how this object is being owned. The ownership dictates how an object can be used in transactions. There are 4 different types of ownership:
 
 **Owned by an account address**
