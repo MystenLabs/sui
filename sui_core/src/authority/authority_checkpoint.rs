@@ -93,7 +93,7 @@ impl Waypoint {
 */
 
 #[derive(Clone)]
-pub struct CheckpointWithItems<K>
+pub struct WaypointWithItems<K>
 where
     K: Clone,
 {
@@ -102,12 +102,12 @@ where
     pub items: BTreeSet<Item>,
 }
 
-impl<K> CheckpointWithItems<K>
+impl<K> WaypointWithItems<K>
 where
     K: Clone,
 {
-    pub fn new(key: K, sequence_number: u64) -> CheckpointWithItems<K> {
-        CheckpointWithItems {
+    pub fn new(key: K, sequence_number: u64) -> WaypointWithItems<K> {
+        WaypointWithItems {
             key,
             waypoint: Waypoint::new(sequence_number),
             items: BTreeSet::new(),
@@ -140,8 +140,8 @@ pub struct WaypointDiff<K>
 where
     K: Clone,
 {
-    pub first: CheckpointWithItems<K>,
-    pub second: CheckpointWithItems<K>,
+    pub first: WaypointWithItems<K>,
+    pub second: WaypointWithItems<K>,
 }
 
 impl<K> WaypointDiff<K>
@@ -159,12 +159,12 @@ where
     where
         V: Iterator<Item = Item>,
     {
-        let w1 = CheckpointWithItems {
+        let w1 = WaypointWithItems {
             key: first_key,
             waypoint: first,
             items: missing_from_first.collect(),
         };
-        let w2 = CheckpointWithItems {
+        let w2 = WaypointWithItems {
             key: second_key,
             waypoint: second,
             items: missing_from_second.collect(),
@@ -188,10 +188,6 @@ where
     /// waypoints the missing elements makes them point to the 
     /// accumulated same set.
     pub fn check(&self) -> bool {
-        // Check the waypoints are for the same sequence numbers.
-        if self.first.waypoint.sequence_number != self.second.waypoint.sequence_number {
-            return false;
-        }
 
         let mut first_plus = self.first.waypoint.accumulator.clone();
         first_plus.insert_all(self.first.items.iter());
@@ -214,7 +210,7 @@ where
     K: Clone,
 {
     pub reference_waypoint: Waypoint,
-    pub authority_waypoints: BTreeMap<K, CheckpointWithItems<K>>,
+    pub authority_waypoints: BTreeMap<K, WaypointWithItems<K>>,
 }
 
 impl<K> GlobalCheckpoint<K>
@@ -231,6 +227,16 @@ where
     pub fn insert(&mut self, diff: WaypointDiff<K>) {
         if !diff.check() {
             panic!("Bad waypoint diff");
+        }
+
+        // Check the waypoints are for the same sequence numbers.
+        if diff.first.waypoint.sequence_number != diff.second.waypoint.sequence_number {
+            panic!("Different sequence numbers (diff)");
+        }
+
+        // Check the waypoints are for the same sequence numbers.
+        if diff.first.waypoint.sequence_number != self.reference_waypoint.sequence_number {
+            panic!("Different sequence numbers (checkpoint)");
         }
 
         // The first link we add to the checkpoint does not need to be
