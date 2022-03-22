@@ -53,3 +53,12 @@ cargo install --path sui/sui
 
 Either method will install `sui`, `wallet`, `sui-move`, and `rest_server`
 binaries in a `~/.cargo/bin` directory that can be executed directly.
+
+## Next steps
+
+Continue your journey through:
+
+* [Smart Contracts with Move](move.md)
+* [Wallet Quick Start](wallet.md)
+* [REST Server API](rest-api.md)
+* [End-to-End tutorial](../explore/tutorials.md)
