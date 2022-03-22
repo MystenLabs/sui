@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use move_core_types::identifier::Identifier;
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -15,13 +15,23 @@ use sui_types::{
 // Alias the type names for clarity
 use move_binary_format::normalized::{Function as MoveFunction, Type as NormalizedMoveType};
 use serde_json::Value as JsonValue;
-use serde_value::Value as SerdeValue;
 
 const HEX_PREFIX: &str = "0x";
 
 #[cfg(test)]
 #[path = "unit_tests/sui_json.rs"]
 mod base_types_tests;
+
+#[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize)]
+pub enum IntermediateValue {
+    Bool(bool),
+    U8(u8),
+    U64(u64),
+    U128(u128),
+    Address(SuiAddress),
+    ObjectID(ObjectID),
+    Vector(Vec<IntermediateValue>),
+}
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SuiJsonValue(JsonValue);
@@ -49,35 +59,33 @@ impl SuiJsonValue {
     }
 
     pub fn to_bcs_bytes(&self, typ: &NormalizedMoveType) -> Result<Vec<u8>, anyhow::Error> {
-        let serde_val = Self::to_serde_value(&self.0, typ)?;
+        let intermediate_val = Self::to_intermediate_value(&self.0, typ)?;
 
         fn inner_serialize(
-            ser_val: SerdeValue,
+            inter_val: IntermediateValue,
             ty: &NormalizedMoveType,
         ) -> Result<Vec<u8>, anyhow::Error> {
-            let ret = match ty {
-                NormalizedMoveType::Address => bcs::to_bytes(&ser_val)?[1..].to_vec(),
-                NormalizedMoveType::Vector(t) => {
+            let ser = match (inter_val.clone(), ty) {
+                (IntermediateValue::Bool(b), NormalizedMoveType::Bool) => bcs::to_bytes(&b)?,
+                (IntermediateValue::U8(n), NormalizedMoveType::U8) => bcs::to_bytes(&n)?,
+                (IntermediateValue::U64(n), NormalizedMoveType::U64) => bcs::to_bytes(&n)?,
+                (IntermediateValue::U128(n), NormalizedMoveType::U128) => bcs::to_bytes(&n)?,
+
+                (IntermediateValue::Address(a), NormalizedMoveType::Address) => {
+                    bcs::to_bytes(&AccountAddress::from(a))?
+                }
+
+                // Not currently used
+                // (IntermediateValue::ObjectID(a), NormalizedMoveType::Address) => {
+                //     bcs::to_bytes(&AccountAddress::from(a))?
+                // }
+                (IntermediateValue::Vector(v), NormalizedMoveType::Vector(move_type)) => {
                     let mut inner_ser = vec![];
-                    // This must be an array. Checked in previous step
-
-                    let arr_len = match ser_val {
-                        SerdeValue::Seq(s) => {
-                            let l = s.len();
-                            for i in s {
-                                // Serialize each
-                                inner_ser.append(&mut inner_serialize(i, t)?);
-                            }
-                            l
-                        }
-                        SerdeValue::Bytes(b) => {
-                            let l = b.len();
-
-                            inner_ser.extend(b);
-                            l
-                        }
-                        _ => return Err(anyhow!("Unable to serialize {:?} as vector", ser_val)),
-                    };
+                    let arr_len = v.len();
+                    for i in v {
+                        // Serialize each
+                        inner_ser.append(&mut inner_serialize(i, move_type)?);
+                    }
                     // The data is already serialized, so ideally we just append
                     // First serialize the types like they u8s
                     // We use this to create the ULEB128 length prefix
@@ -87,38 +95,55 @@ impl SuiJsonValue {
                     ser_container.truncate(ser_container.len() - arr_len);
                     // Append the actual data data
                     ser_container.append(&mut inner_ser);
+
                     ser_container
                 }
-
-                _ => bcs::to_bytes(&ser_val)?,
+                _ => {
+                    return Err(anyhow!(
+                        "Unable to serialize {:?}. Expected {}",
+                        inter_val,
+                        ty
+                    ))
+                }
             };
-            Ok(ret)
+            Ok(ser)
         }
-
-        inner_serialize(serde_val, typ)
+        inner_serialize(intermediate_val, typ)
     }
 
     pub fn to_json_value(&self) -> JsonValue {
         self.0.clone()
     }
 
-    fn to_serde_value(
+    fn to_intermediate_value(
         val: &JsonValue,
         typ: &NormalizedMoveType,
-    ) -> Result<SerdeValue, anyhow::Error> {
+    ) -> Result<IntermediateValue, anyhow::Error> {
         let new_serde_value = match (val, typ.clone()) {
             // Bool to Bool is simple
-            (JsonValue::Bool(b), NormalizedMoveType::Bool) => SerdeValue::Bool(*b),
+            (JsonValue::Bool(b), NormalizedMoveType::Bool) => IntermediateValue::Bool(*b),
 
-            // In constructor, we have already checked that the number is unsigned int of at most U64
+            // In constructor, we have already checked that the JSON number is unsigned int of at most U64
             // Hence it is okay to unwrap() numbers
             (JsonValue::Number(n), NormalizedMoveType::U8) => {
-                SerdeValue::U8(u8::try_from(n.as_u64().unwrap())?)
+                IntermediateValue::U8(u8::try_from(n.as_u64().unwrap())?)
             }
-            (JsonValue::Number(n), NormalizedMoveType::U64) => SerdeValue::U64(n.as_u64().unwrap()),
+            (JsonValue::Number(n), NormalizedMoveType::U64) => {
+                IntermediateValue::U64(n.as_u64().unwrap())
+            }
 
-            // U128 Not allowed for now
-            (_, NormalizedMoveType::U128) => unimplemented!("U128 not supported yet."),
+            // u8, u64, u128 can be encoded as String
+            (JsonValue::String(s), NormalizedMoveType::U8) => {
+                IntermediateValue::U8(u8::try_from(convert_string_to_u128(s.as_str())?)?)
+            }
+            (JsonValue::String(s), NormalizedMoveType::U64) => {
+                IntermediateValue::U64(u64::try_from(convert_string_to_u128(s.as_str())?)?)
+            }
+            (JsonValue::String(s), NormalizedMoveType::U128) => {
+                IntermediateValue::U128(convert_string_to_u128(s.as_str())?)
+            }
+
+            // U256 Not allowed for now
 
             // We can encode U8 Vector as string in 2 ways
             // 1. If it starts with 0x, we treat it as hex strings, where each pair is a byte
@@ -136,16 +161,16 @@ impl SuiJsonValue {
                     // Else raw bytes
                     s.as_bytes().to_vec()
                 };
-                SerdeValue::Bytes(vec)
+                IntermediateValue::Vector(vec.iter().map(|q| IntermediateValue::U8(*q)).collect())
             }
 
             // We have already checked that the array is homogeneous in the constructor
             (JsonValue::Array(a), NormalizedMoveType::Vector(t)) => {
-                // Recursively build a SerdeValue array
-                SerdeValue::Seq(
+                // Recursively build an IntermediateValue array
+                IntermediateValue::Vector(
                     a.iter()
-                        .map(|i| Self::to_serde_value(i, &t))
-                        .collect::<Result<Vec<SerdeValue>, _>>()?,
+                        .map(|i| Self::to_intermediate_value(i, &t))
+                        .collect::<Result<Vec<IntermediateValue>, _>>()?,
                 )
             }
 
@@ -155,7 +180,7 @@ impl SuiJsonValue {
                     return Err(anyhow!("Address hex string must start with 0x.",));
                 }
                 let r: SuiAddress = decode_bytes_hex(s.trim_start_matches(HEX_PREFIX))?;
-                SerdeValue::Bytes(r.to_vec())
+                IntermediateValue::Address(r)
             }
             _ => return Err(anyhow!("Unexpected arg {} for expected type {}", val, typ)),
         };
@@ -251,7 +276,9 @@ fn check_and_serialize_pure_args(
         // Check that the args are what we expect or can be converted
         // Then return the serialized bcs value
         match curr.to_bcs_bytes(expected_pure_arg_type) {
-            Ok(a) => pure_args_serialized.push(a),
+            Ok(a) => {
+                pure_args_serialized.push(a.clone());
+            }
             Err(e) => return Err(anyhow!("Unable to parse arg at pos: {}, err: {:?}", idx, e)),
         }
     }
@@ -344,4 +371,21 @@ pub fn resolve_move_function_args(
     )?;
 
     Ok((obj_args, pure_args_serialized))
+}
+
+fn convert_string_to_u128(s: &str) -> Result<u128, anyhow::Error> {
+    // Try as normal number
+    if let Ok(v) = s.parse::<u128>() {
+        return Ok(v);
+    }
+
+    // Check prefix
+    // For now only Hex supported
+    // TODO: add support for bin and octal?
+
+    let s = s.trim().to_lowercase();
+    if !s.starts_with(HEX_PREFIX) {
+        return Err(anyhow!("Unable to convert {s} to unsigned int.",));
+    }
+    u128::from_str_radix(s.trim_start_matches(HEX_PREFIX), 16).map_err(|e| e.into())
 }
