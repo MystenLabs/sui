@@ -879,17 +879,17 @@ entire source code for the package we have developed (with all the
 tests properly adjusted) can be found in
 [M1.move](https://github.com/MystenLabs/sui/tree/main/sui_programmability/tutorial/sources/M1.move).
 
-## Sui Move Library
+## Sui Move library
 Sui provides a list of Move library functions that allows us to manipulate objects in Sui.
 
-### Object Ownership
+### Object ownership
 Objects in Sui can have different ownership types. Specifically, they are:
 - Exclusively owned by an account address.
 - Exclusively owned by another object.
 - Shared and immutable.
 - Shared and mutable (work-in-progress).
 
-**Transfer to Address**
+#### Transfer to address
 The [`Transfer`](https://github.com/MystenLabs/sui/tree/main/sui_programmability/framework/sources/Transfer.move) module provides all the APIs needed to manipuate the ownership of objects.
 
 The most common case is to transfer an object to an account address. For example, when a new object is created, it is typically transferred to an account address so that the address owns the object. To transfer an object `obj` to an account address `recipient`:
@@ -901,7 +901,7 @@ Transfer::transfer(obj, recipient);
 This call will fully consume the object, making it no longer accessible in the current transaction.
 Once an account address owns an object, for any future use (either read or write) of this object, the signer of the transaction must be the owner of the object.
 
-**Transfer to Object**
+#### Transfer to object
 We can also transfer an object to be owned by another object. Note that the ownership is only tracked in Sui. From Move's perspective, these two objects are still more or less independent, in that the child object isn't part of the parent object in terms of data store.
 Once an object is owned by another object, it is required that for any such object referenced in the entry function, its owner must also be one of the argument objects. For instance, if we have a chain of ownership: account address `Addr` owns object `a`, object `a` owns object `b`, and `b` owns object `c`, in order to use object `c` in a Move call, the entry function must also include both `b` and `a`, and the signer of the transaction must be `Addr1`, like this:
 ```
@@ -941,14 +941,14 @@ After this transfer, the object will be owned by `recipient`.
 More examples of how objects can be transferred and owned can be found in
 [ObjectOwner.move](https://github.com/MystenLabs/sui/tree/main/sui_core/src/unit_tests/data/object_owner/sources/ObjectOwner.move).
 
-**Freeze an object**
+#### Freeze an object
 To make an object `obj` shared and immutable, one can call:
 ```
 Transfer::freeze_object(obj);
 ```
 After this call, `obj` becomes immutable which means it can never be mutated or deleted. This process is also irreversible: once an object is frozen, it will stay frozen forever. An shared immutable object can be used as reference by anyone in their Move call.
 
-**Share an object (experimental)**
+#### Share an object (experimental)
 This feature is still in development. It only works in Move for demo purpose, and doesn't yet work in Sui.
 
 To make an object `obj` shared and mutable, one can call:
@@ -959,7 +959,7 @@ After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyon
 
 Shared mutable object can be powerful in that it will make programming a lot simpler in many cases. However shared object is also more expensive to use: it requires a full sequencer (a.k.a. a consensus engine) to order the transactions that touch the shared object, which means longer latency/lower throughput and higher gas cost. One can see the difference of the two programming schemes between not using shared object vs using shared object by looking at the two different implementations of TicTacToe: [No Shared Object](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/TicTacToe.move) vs. [Shared Object](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/SharedTicTacToe.move).
 
-### Transaction Context
+### Transaction context
 `TxContext` module provides a few important APIs that operate based on the current transaction context.
 
 To create a new ID for a new object:
@@ -976,7 +976,6 @@ TxContext::sender(ctx)
 ```
 
 ## Next steps
-
 Now that you are familiar with the Move language, as well as with how
 to develop and test Move code, you are ready to start looking at and
 playing with some larger
