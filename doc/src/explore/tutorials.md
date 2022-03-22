@@ -6,7 +6,7 @@ In this tutorial, we demonstrate the end-to-end process for starting a
 Sui network locally, connecting to it through our [wallet](../build/wallet.md)
 app, publishing a TicTacToe game on Sui, and playing it to the end.
 
-## Setup
+## Set up
 
 1. [Install Sui binaries](../build/install.md) and clone the repository
    as described in the installation instructions as this tutorial assumes
