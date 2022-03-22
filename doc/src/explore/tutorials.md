@@ -27,7 +27,7 @@ configuration files generated during Sui genesis state creation are
 stored in the `"$SUI_ROOT"/sui_instance` directory.
 
 *IMPORTANT*: For the remainder of this tutorial, we will assume that you are
-executing the `wallet` command in the `"$SUI_ROOT"/sui_instance` directory.
+executing the `wallet` command in the `"$SUI_ROOT"/sui_instance` directory as well.
 Adjust your paths accordingly.
 
 ## Gather Accounts and Gas Objects
