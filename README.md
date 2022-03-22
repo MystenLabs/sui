@@ -1,8 +1,13 @@
 # Sui README
 
-![Sui icon](doc/static/Sui_Icon_Brand.png)
-
-Welcome to Sui, a next generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by the [Move](https://github.com/MystenLabs/awesome-move) programming language! Find everything you need within the [Sui Developer Guides](doc/src/learn/index.md) and supporting materials.
+<table border="0">
+    <tr>
+        <td>Welcome to Sui, a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by the <a href="https://github.com/MystenLabs/awesome-move">Move programming language</a>! Find everything you need within the <a href="doc/src/learn/index.md">Sui Developer Guides</a> and supporting materials below.
+        </td>
+        <td><img src="doc/static/Sui_Icon_Brand.png"/>
+        </td>
+    </tr>
+</table>
 
 ## Quick links
 
