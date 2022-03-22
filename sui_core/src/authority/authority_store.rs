@@ -99,7 +99,7 @@ pub struct SuiDataStore<const ALL_OBJ_VER: bool> {
 
     /// The following table is used to store a single value (the corresponding key is a constant). The value
     /// represents the index of the latest consensus message this authority processed. This field is written
-    /// by a single process acting as consensus (light) client. It is used to ensure the authority processes  
+    /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
     last_consensus_index: DBMap<u64, SequenceNumber>,
 
@@ -515,9 +515,9 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
     pub fn set_transaction_lock(
         &self,
         owned_input_objects: &[ObjectRef],
+        tx_digest: TransactionDigest,
         signed_transaction: SignedTransaction,
     ) -> Result<(), SuiError> {
-        let tx_digest = signed_transaction.transaction.digest();
         let lock_batch = self
             .transaction_lock
             .batch()
@@ -840,7 +840,7 @@ impl<const ALL_OBJ_VER: bool> SuiDataStore<ALL_OBJ_VER> {
         global_certificate_index: SequenceNumber,
     ) -> Result<(), SuiError> {
         // Make an iterator to save the certificate.
-        let transaction_digest = certificate.transaction.digest();
+        let transaction_digest = *certificate.digest();
         let certificate_to_write = std::iter::once((transaction_digest, &certificate));
 
         // Make an iterator to update the locks of the transaction's shared objects.
