@@ -122,6 +122,10 @@ ConsensusOutput:
     - message: BYTES
     - sequencer_number:
         TYPENAME: SequenceNumber
+ConsensusSync:
+  STRUCT:
+    - sequencer_number:
+        TYPENAME: SequenceNumber
 Data:
   ENUM:
     0:
@@ -377,6 +381,10 @@ SerializedMessage:
       ConsensusOutput:
         NEWTYPE:
           TYPENAME: ConsensusOutput
+    13:
+      ConsensusSync:
+        NEWTYPE:
+          TYPENAME: ConsensusSync
 Signature:
   NEWTYPESTRUCT: BYTES
 SignedBatch:
@@ -743,6 +751,8 @@ SuiError:
           - error: STR
     91:
       OnlyOneConsensusClientPermitted: UNIT
+    92:
+      RequireSyncWithConsensus: UNIT
 Transaction:
   STRUCT:
     - data:

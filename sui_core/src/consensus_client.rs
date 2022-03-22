@@ -8,10 +8,11 @@ use std::net::SocketAddr;
 use std::sync::atomic::Ordering as AtomicOrdering;
 use std::sync::Arc;
 use sui_network::transport;
+use sui_network::transport::TcpDataStream;
 use sui_types::base_types::SequenceNumber;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::{ConfirmationTransaction, ConsensusOutput};
-use sui_types::serialize::{deserialize_message, SerializedMessage};
+use sui_types::messages::{ConfirmationTransaction, ConsensusOutput, ConsensusSync};
+use sui_types::serialize::{deserialize_message, serialize_consensus_sync, SerializedMessage};
 use sui_types::{fp_bail, fp_ensure};
 use tokio::task::JoinHandle;
 
@@ -64,18 +65,22 @@ impl ConsensusClient {
         buffer_size: usize,
     ) -> JoinHandle<SuiResult<()>> {
         log::info!("Consensus client connecting to {}", address);
-        tokio::spawn(async move {
-            handler.synchronize().await?;
-            handler.run(address, buffer_size).await?;
-            Ok(())
-        })
+        tokio::spawn(async move { handler.run(address, buffer_size).await })
     }
 
     /// Synchronize with the consensus in case we missed part of its output sequence.
     /// It is safety-critical that we process the consensus outputs in the right order.
-    async fn synchronize(&mut self) -> SuiResult<()> {
-        // TODO [issue #932]: [liveness-critical] Implement the synchronizer.
-        Ok(())
+    async fn synchronize(&mut self, connection: &mut TcpDataStream) -> SuiResult<()> {
+        let request = ConsensusSync {
+            sequencer_number: self.last_consensus_index,
+        };
+        let bytes = serialize_consensus_sync(&request);
+        connection
+            .write_data(&bytes)
+            .await
+            .map_err(|e| SuiError::ClientIoError {
+                error: e.to_string(),
+            })
     }
 
     /// Process a single sequenced certificate.
@@ -110,8 +115,7 @@ impl ConsensusClient {
             }
             Ordering::Less => {
                 log::debug!("Authority is synchronizing missed sequenced certificates");
-                self.synchronize().await?;
-                return Ok(());
+                return Err(SuiError::RequireSyncWithConsensus);
             }
             Ordering::Equal => (),
         }
@@ -192,6 +196,13 @@ impl ConsensusClient {
                         // is however safe to ask for that certificate again and re-process
                         // it (the core is idempotent).
                         fp_bail!(SuiError::StorageError(e));
+                    }
+                    // The authority missed some consensus outputs and needs to sync.
+                    Err(SuiError::RequireSyncWithConsensus) => {
+                        if let Err(e) = self.synchronize(&mut connection).await {
+                            log::warn!("Failed to send sync request to consensus: {}", e);
+                            continue 'main;
+                        }
                     }
                     // Log the errors that are the client's fault (not ours). This is
                     // only for debug purposes: all correct authorities will do the same.
