@@ -259,7 +259,7 @@ curl --location --request POST $SUI_GATEWAY_HOST/sync \
 ```
 
 You should replace `{{address}}` in the command above with an actual
-address values, for example one obtained from [`GET
+address value, for example one obtained from [`GET
 /addresses`](#get-addresses) (without quotes).
 
 This will fetch the latest information on all objects owned by each
