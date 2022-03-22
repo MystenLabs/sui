@@ -5,12 +5,12 @@
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::future;
-
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::value::MoveStructLayout;
@@ -31,15 +31,6 @@ use sui_types::{
 
 use crate::gateway_state::gateway_store::GatewayStore;
 use crate::{authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI};
-use std::collections::btree_map::Entry;
-use std::path::PathBuf;
-
-use std::sync::Arc;
-use std::time::Duration;
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    pin::Pin,
-};
 
 use self::gateway_responses::*;
 
