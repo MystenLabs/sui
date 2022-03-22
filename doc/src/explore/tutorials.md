@@ -30,7 +30,7 @@ stored in the `"$SUI_ROOT"/sui_instance` directory.
 executing the `wallet` command in the `"$SUI_ROOT"/sui_instance` directory as well.
 Adjust your paths accordingly.
 
-## Gather Accounts and Gas Objects
+## Gather accounts and gas objects
 
 After completing the [Setup section](#setup) you should have a Sui instance running in a terminal window. Now switch to a new terminal window and keep the first terminal running.
 Make sure that you run the `wallet` command in the directory
