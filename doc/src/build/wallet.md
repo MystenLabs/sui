@@ -9,15 +9,12 @@ Sui wallet and execute wallet commands through its command line
 interface, *Wallet CLI*.
 
 
-## Setup
+## Install
 
 1. Follow the instructions to [install Sui binaries](install.md).
-1. Create a directory where all of your Sui-related work will reside.
-1. Create a $SUI_ROOT` environment variable pointing to that new directory:
-   ```
-   export SUI_ROOT=/path/to/directory
-   ```
-1. Create a `sui_instance` subdirectory in `$SUI_ROOT`:
+
+1. Create a `sui_instance` subdirectory in your desired Sui-specific
+directory. Assuming you followed recommended setup, run:
    ```shell
    cd "$SUI_ROOT"
    mkdir sui_instance
@@ -25,11 +22,15 @@ interface, *Wallet CLI*.
 
 ## Genesis
 
-```shell
-cd "$SUI_ROOT"/sui_instance
-sui genesis
-```
-NOTE: For logs, set `RUST_LOG=debug` before invoking `sui genesis`.
+1. Navigate to that new directory:
+   ```shell
+   cd "$SUI_ROOT"/sui_instance
+   ```
+1. Optionally, set `RUST_LOG=debug` for verbose logging.
+1. Initiate `genesis`:
+   ```shell
+   sui genesis
+   ```
 
 The `genesis` command creates four authorities and five user accounts
 each with five gas objects. These are Sui [objects](objects.md) used
