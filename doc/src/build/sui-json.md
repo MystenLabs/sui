@@ -26,7 +26,7 @@ This table shows the restrictions placed on JSON types to make them SuiJSON comp
 
 U64
 
-(U128 not supported yet)
+(U128 is encoded as String)
    </td>
   </tr>
   <tr>
@@ -41,6 +41,10 @@ Address
 ObjectID
 
 TypeTag
+
+Identifier
+
+Unsigned Integer (128 bit max)
    </td>
   </tr>
   <tr>
@@ -88,7 +92,7 @@ TypeTag
 ## Type coercion reasoning
 
 Due to the loosely typed nature of JSON/SuiJSON and the strongly typed nature of Move types, we sometimes need to overload SuiJSON types to represent multiple Move types. \
-For example `SuiJSON::Number` can represent both _U8_ and _U64_. This means we have to coerce and sometimes convert types.
+For example `SuiJSON::Number` can represent both *U8* and *U64*. This means we have to coerce and sometimes convert types.
 
 Which type we coerce depends on the expected Move type. For example, if the Move function expects a U8, we must have received a `SuiJSON::Number` with a value less than 256. More importantly, we have no way to easily express Move addresses in JSON, so we encode them as hex strings prefixed by `0x`.
 
@@ -98,7 +102,7 @@ Which type we coerce depends on the expected Move type. For example, if the Move
   <tr>
    <th>Move Type
    </th>
-   <th>SuiJSON
+   <th>SuiJSON Representations
    </th>
    <th>Valid Examples
    </th>
@@ -118,9 +122,20 @@ Which type we coerce depends on the expected Move type. For example, if the Move
   <tr>
    <td>U8
    </td>
-   <td>Unsigned number &lt; 256
+   <td>
+Three formats are supported
+
+* Unsigned number &lt; 256.
+* Decimal string with value &lt; 256.
+* One byte hex string prefixed with `0x`.
    </td>
-   <td>7
+   <td>
+
+   <code>7</code>
+
+   <code>"70"</code>
+
+   <code>"0x43"</code>
    </td>
    <td><code>-5</code>: negative not allowed
 
@@ -130,34 +145,57 @@ Which type we coerce depends on the expected Move type. For example, if the Move
 
 <code>300</code>: U8 must be less than 256
 
+<code>" 9"</code>: Spaces not allowed in string
+
+<code>"9A"</code>: Hex num must be prefixed with `0x`
+
+<code>"0x09CD"</code>: Too large for U8
+
    </td>
   </tr>
   <tr>
    <td>U64
    </td>
-   <td>Unsigned number &lt; U64::MAX
+   <td>
+Similarly to U8, three formats are supported
+
+* Unsigned number &lt; U64::MAX.
+* Decimal string with value &lt; U64::MAX.
+* Up to 8 byte hex string prefixed with `0x`.
+
    </td>
-   <td><code>12345</code>
+   <td>Extrapolate above examples
    </td>
-   <td><code>184467440737095516159</code>: must be less than U64::MAX
+   <td>Extrapolate above examples
    </td>
   </tr>
   <tr>
    <td>U128
    </td>
-   <td>Not supported yet
-   </td>
-   <td>N/A
+   <td>
+
+Two formats are supported
+
+* Decimal string with value &lt; U128::MAX.
+* Up to 16 byte hex string prefixed with `0x`.
+
    </td>
    <td>
+   <code>"74794734937420002470"</code>
+
+   <code>"0x2B1A39A1514E1D8A7CE"</code>
+
    </td>
+   <td><code>34</code>: Although this is a valid u128 number, it must be encoded as a string
+   </td>
+
   </tr>
   <tr>
    <td>Address
    </td>
     <td>20 byte hex string prefixed with <code>0x</code>
    </td>
-   <td><code>0x2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E011</code>
+   <td><code>"0x2B1A39A1514E1D8A7CE45919CFEB4FEE70B4E011"</code>
    </td>
    <td><code>0x2B1A39</code>: string too short
 
@@ -171,11 +209,47 @@ Which type we coerce depends on the expected Move type. For example, if the Move
    </td>
    <td>16 byte hex string prefixed with <code>0x</code>
    </td>
-   <td><code>0x2B1A39A1514E1D8A7CE45919CFEB4FEE</code>
+   <td><code>"0x2B1A39A1514E1D8A7CE45919CFEB4FEE"</code>
    </td>
    <td>Similar to above
    </td>
   </tr>
+  <tr>
+   <td>Identifier
+   </td>
+   <td>Typically used for module and function names. Encoded as one of the following:
+
+   1. A String whose first character is a letter and the remaining characters are letters, digits or underscore.
+
+   2. A String whose first character is an underscore, and there is at least one further letter, digit or underscore
+
+   <td>
+   <code>"function"</code>,
+
+   <code>"_function"</code>,
+
+   <code>"some_name"</code>,
+
+   <code>"\___\_some_name"</code>,
+
+   <code>"Another"</code>
+   </td>
+
+   <td>
+
+   <code>"_"</code>: missing trailing underscore, digit or letter,
+
+   <code>"8name"</code>: cannot start with digit,
+
+   <code>".function"</code>: cannot start with period,
+
+   <code>" "</code>: cannot be empty space,
+
+   <code>"func name"</code>: cannot have spaces
+
+   </td>
+  </tr>
+
   <tr>
    <td>Vector&lt;Move Type>
    </td>
@@ -199,9 +273,9 @@ Which type we coerce depends on the expected Move type. For example, if the Move
 U8 vectors represented as UTF-8 (and ASCII) strings.
 
    </td>
-   <td><code>√®ˆbo72 √∂†∆˚–œ∑π2ie</code>: UTF-8
+   <td><code>"√®ˆbo72 √∂†∆˚–œ∑π2ie"</code>: UTF-8
 
-   <code>abcdE738-2 _=?</code>: ASCII
+   <code>"abcdE738-2 _=?"</code>: ASCII
 
    </td>
    <td>

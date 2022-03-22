@@ -85,6 +85,7 @@ fn test_basic_args_linter_pure_args() {
     let good_utf8_str = "enbeuf√12∫∆∂3456789hdπ˚ffwfof libgude ˚ø˙ßƒçß +_))@+";
     let good_hex_val = "0x1234ABCD";
     let bad_hex_val = "0x1234AB  CD";
+    let u128_val = u64::MAX as u128 + 0xff;
 
     let checks = vec![
         // Expected Bool match
@@ -105,6 +106,65 @@ fn test_basic_args_linter_pure_args() {
             Type::U8,
             Some(bcs::to_bytes(&9u8).unwrap()),
         ),
+        // U8 value encoded as str
+        (
+            Value::from("89"),
+            Type::U8,
+            Some(bcs::to_bytes(&89u8).unwrap()),
+        ),
+        // U8 value encoded as str promoted to U64
+        (
+            Value::from("89"),
+            Type::U64,
+            Some(bcs::to_bytes(&89u64).unwrap()),
+        ),
+        // U64 value encoded as str
+        (
+            Value::from("890"),
+            Type::U64,
+            Some(bcs::to_bytes(&890u64).unwrap()),
+        ),
+        // U128 value encoded as str
+        (
+            Value::from(format!("{}", u128_val)),
+            Type::U128,
+            Some(bcs::to_bytes(&u128_val).unwrap()),
+        ),
+        // U8 value encoded as hex str
+        (
+            Value::from("0x12"),
+            Type::U8,
+            Some(bcs::to_bytes(&0x12u8).unwrap()),
+        ),
+        // U8 value encoded as hex str promoted to U64
+        (
+            Value::from("0x12"),
+            Type::U64,
+            Some(bcs::to_bytes(&0x12u64).unwrap()),
+        ),
+        // U64 value encoded as hex str
+        (
+            Value::from("0x890"),
+            Type::U64,
+            Some(bcs::to_bytes(&0x890u64).unwrap()),
+        ),
+        // U128 value encoded as hex str
+        (
+            Value::from(format!("0x{:02x}", u128_val)),
+            Type::U128,
+            Some(bcs::to_bytes(&u128_val).unwrap()),
+        ),
+        // Space not allowed
+        (Value::from(" 9"), Type::U8, None),
+        // Hex must start with 0x
+        (Value::from("AB"), Type::U8, None),
+        // Too large
+        (Value::from("123456789"), Type::U8, None),
+        // Too large
+        (Value::from("123456789123456789123456789123456789"), Type::U64, None),
+        // Too large
+        (Value::from("123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789"), Type::U128, None),
+
         // U64 value greater than 255 cannot be used as U8
         (Value::from(900u64), Type::U8, None),
         // floats cannot be used as U8
